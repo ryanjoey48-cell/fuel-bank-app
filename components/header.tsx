@@ -22,11 +22,11 @@ export function Header({ title, description, showSignOut = false }: HeaderProps)
   };
 
   return (
-    <header className="rounded-[2rem] border border-white/60 bg-white/90 p-4 shadow-soft backdrop-blur sm:p-5">
+    <header className="surface-card p-3.5 sm:p-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-14 shrink-0 items-center justify-center sm:h-12 sm:w-16">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-11 shrink-0 items-center justify-center rounded-lg border border-white/70 bg-white/78 shadow-[0_1px_2px_rgba(0,0,0,0.04)] sm:h-10 sm:w-12">
               <Image
                 src="/logo.png"
                 alt={t.common.appName}
@@ -37,20 +37,24 @@ export function Header({ title, description, showSignOut = false }: HeaderProps)
               />
             </div>
             <div className="min-w-0">
-              <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-brand-600">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-brand-700">
                 {t.common.operations}
               </p>
-              <h2 className="mt-1 text-xl font-semibold text-slate-950 sm:text-2xl">{title}</h2>
+              <h2 className="mt-0.5 text-[17px] font-semibold tracking-tight text-slate-950 sm:text-[1.3rem]">
+                {title}
+              </h2>
             </div>
           </div>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500">{description}</p>
+          <p className="mt-2 max-w-2xl text-sm leading-5 text-slate-500">
+            {description}
+          </p>
         </div>
 
         {showSignOut ? (
           <button
             onClick={handleLogout}
             type="button"
-            className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 sm:w-auto"
+            className="btn-secondary w-full gap-2 sm:w-auto"
           >
             <LogOut className="h-4 w-4" />
             {t.common.signOut}

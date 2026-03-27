@@ -54,7 +54,7 @@ export default function DashboardLayout({
   if (checkingAuth) {
     return (
       <main className="flex min-h-screen items-center justify-center px-4">
-        <div className="rounded-[2rem] border border-white/60 bg-white/90 px-6 py-5 text-sm text-slate-600 shadow-soft">
+        <div className="surface-card px-6 py-5 text-sm text-slate-600">
           {t.common.sessionCheck}
         </div>
       </main>
@@ -65,7 +65,7 @@ export default function DashboardLayout({
     <div className="min-h-screen">
       <Sidebar />
       <div className="md:pl-72">
-        <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-4 px-4 pb-8 pt-20 sm:gap-5 md:px-6 md:pb-10 md:pt-8 lg:px-8">
+        <main className="mx-auto flex min-h-screen w-full max-w-[1440px] flex-col gap-4 px-4 pb-7 pt-20 sm:gap-4.5 md:px-6 md:pt-8 lg:px-8">
           <SetupNotice />
           {children}
         </main>

@@ -1,11 +1,16 @@
 "use client";
 
-import { CalendarClock, Download, FileText, Route, TrendingUp } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { CalendarClock, Download, Gauge, Route, Trash2, Truck, Users } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { Header } from "@/components/header";
 import { StatCard } from "@/components/stat-card";
-import { fetchDrivers, fetchWeeklyMileage, saveWeeklyMileage } from "@/lib/data";
+import {
+  deleteWeeklyMileage,
+  fetchDrivers,
+  fetchWeeklyMileage,
+  saveWeeklyMileage
+} from "@/lib/data";
 import { exportToXlsx } from "@/lib/export";
 import { useLanguage } from "@/lib/language-provider";
 import { formatDate, formatNumber } from "@/lib/utils";
@@ -22,9 +27,139 @@ const initialForm = {
 
 type WeeklyTrendRow = {
   weekEnding: string;
-  mileage: number;
-  submitted: number;
+  vehiclesSubmitted: number;
+  driversSubmitted: number;
+  highestOdometer: number | null;
+  lowestOdometer: number | null;
+  weeklyDistanceCovered: number | null;
+  comparableVehicles: number;
 };
+
+type WeeklyDistanceByDriverRow = {
+  driver: string;
+  vehicleReg: string;
+  latestWeekOdometer: number;
+  previousWeekOdometer: number;
+  weeklyDistanceCovered: number;
+};
+
+function getUniqueDriverCount(entries: WeeklyMileageEntry[]) {
+  return new Set(
+    entries
+      .map((entry) => (entry.driver || "").trim())
+      .filter(Boolean)
+      .map((name) => name.toLowerCase())
+  ).size;
+}
+
+function buildWeeklyTrendRows(entries: WeeklyMileageEntry[]) {
+  const sortedEntries = [...entries].sort((a, b) => {
+    const dateDiff = new Date(b.week_ending).getTime() - new Date(a.week_ending).getTime();
+    if (dateDiff !== 0) {
+      return dateDiff;
+    }
+    return String(b.id).localeCompare(String(a.id));
+  });
+
+  const weeks = Array.from(new Set(sortedEntries.map((entry) => entry.week_ending)));
+
+  return weeks.map((weekEnding) => {
+    const weekEntries = sortedEntries.filter((entry) => entry.week_ending === weekEnding);
+    const vehiclesSubmitted = new Set(
+      weekEntries.map((entry) => entry.vehicle_reg || String(entry.driver_id))
+    ).size;
+    const driversSubmitted = getUniqueDriverCount(weekEntries);
+
+    const highestEntry = weekEntries.reduce<WeeklyMileageEntry | null>((highest, entry) => {
+      if (!highest || Number(entry.mileage || 0) > Number(highest.mileage || 0)) {
+        return entry;
+      }
+      return highest;
+    }, null);
+
+    const lowestEntry = weekEntries.reduce<WeeklyMileageEntry | null>((lowest, entry) => {
+      if (!lowest || Number(entry.mileage || 0) < Number(lowest.mileage || 0)) {
+        return entry;
+      }
+      return lowest;
+    }, null);
+
+    let weeklyDistanceTotal = 0;
+    let comparableVehicles = 0;
+
+    weekEntries.forEach((entry) => {
+      const previousEntry = sortedEntries.find(
+        (candidate) =>
+          candidate.vehicle_reg === entry.vehicle_reg &&
+          candidate.week_ending < entry.week_ending
+      );
+
+      if (!previousEntry) {
+        return;
+      }
+
+      const difference = Number(entry.mileage || 0) - Number(previousEntry.mileage || 0);
+      if (difference >= 0) {
+        weeklyDistanceTotal += difference;
+        comparableVehicles += 1;
+      }
+    });
+
+    return {
+      weekEnding,
+      vehiclesSubmitted,
+      driversSubmitted,
+      highestOdometer: highestEntry ? Number(highestEntry.mileage || 0) : null,
+      lowestOdometer: lowestEntry ? Number(lowestEntry.mileage || 0) : null,
+      weeklyDistanceCovered: comparableVehicles > 0 ? weeklyDistanceTotal : null,
+      comparableVehicles
+    };
+  });
+}
+
+function buildWeeklyDistanceByDriverRows(
+  latestWeekEntries: WeeklyMileageEntry[],
+  allEntries: WeeklyMileageEntry[]
+) {
+  const sortedEntries = [...allEntries].sort((a, b) => {
+    const dateDiff = new Date(b.week_ending).getTime() - new Date(a.week_ending).getTime();
+    if (dateDiff !== 0) {
+      return dateDiff;
+    }
+    return String(b.id).localeCompare(String(a.id));
+  });
+
+  return latestWeekEntries
+    .map((entry) => {
+      const previousEntry = sortedEntries.find(
+        (candidate) =>
+          candidate.vehicle_reg === entry.vehicle_reg &&
+          candidate.week_ending < entry.week_ending
+      );
+
+      if (!previousEntry) {
+        return null;
+      }
+
+      const latestWeekOdometer = Number(entry.mileage || 0);
+      const previousWeekOdometer = Number(previousEntry.mileage || 0);
+      const weeklyDistanceCovered = latestWeekOdometer - previousWeekOdometer;
+
+      if (weeklyDistanceCovered < 0) {
+        return null;
+      }
+
+      return {
+        driver: entry.driver || "-",
+        vehicleReg: entry.vehicle_reg || "-",
+        latestWeekOdometer,
+        previousWeekOdometer,
+        weeklyDistanceCovered
+      };
+    })
+    .filter((row): row is WeeklyDistanceByDriverRow => row != null)
+    .sort((a, b) => b.weeklyDistanceCovered - a.weeklyDistanceCovered);
+}
 
 export default function WeeklyMileagePage() {
   const { language, t } = useLanguage();
@@ -33,9 +168,50 @@ export default function WeeklyMileagePage() {
   const [form, setForm] = useState(initialForm);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [comparisonDriverId, setComparisonDriverId] = useState("");
+  const [selectedWeek, setSelectedWeek] = useState("");
 
   const isEditing = Boolean(form.id);
+  const labels = {
+    latestReportingWeek: t.weeklyMileage.latestReportingWeek,
+    latestReportingWeekHelper: t.weeklyMileage.latestReportingWeekHelper,
+    vehiclesSubmittedThisWeek: t.weeklyMileage.vehiclesSubmittedThisWeek,
+    vehiclesSubmittedThisWeekHelper: t.weeklyMileage.vehiclesSubmittedThisWeekHelper,
+    driversSubmittedThisWeek: t.weeklyMileage.driversSubmittedThisWeek,
+    driversSubmittedThisWeekHelper: t.weeklyMileage.driversSubmittedThisWeekHelper,
+    highestOdometerThisWeek: t.weeklyMileage.highestOdometerThisWeek,
+    highestOdometerThisWeekHelper: t.weeklyMileage.highestOdometerThisWeekHelper,
+    lowestOdometerThisWeek: t.weeklyMileage.lowestOdometerThisWeek,
+    lowestOdometerThisWeekHelper: t.weeklyMileage.lowestOdometerThisWeekHelper,
+    weeklyDistanceCovered: t.weeklyMileage.weeklyDistanceCovered,
+    weeklyDistanceCoveredHelper: t.weeklyMileage.weeklyDistanceCoveredHelper,
+    weeklyDistanceCoveredUnavailable: t.weeklyMileage.weeklyDistanceCoveredUnavailable,
+    reportingWeekSummary: t.weeklyMileage.reportingWeekSummary,
+    reportingWeekSummaryDescription: t.weeklyMileage.reportingWeekSummaryDescription,
+    weeklyDistanceByDriver: t.weeklyMileage.weeklyDistanceByDriver,
+    weeklyDistanceByDriverDescription: t.weeklyMileage.weeklyDistanceByDriverDescription,
+    notEnoughDataYet: t.weeklyMileage.weeklyDistanceCoveredUnavailable,
+    noWeeklyRecordsForDriver: t.weeklyMileage.noWeeklyRecordsForDriver,
+    compareDriver: t.weeklyMileage.compareDriver,
+    selectDriverToCompare: t.weeklyMileage.selectDriverToCompare,
+    currentReportingWeek: t.weeklyMileage.currentReportingWeek,
+    previousReportingWeek: t.weeklyMileage.previousReportingWeek,
+    currentOdometer: t.weeklyMileage.currentOdometer,
+    previousOdometer: t.weeklyMileage.previousOdometer,
+    selectedVehicleReg: t.weeklyMileage.selectedVehicleReg,
+    recordsForWeek: t.weeklyMileage.recordsForWeek,
+    recordsForWeekDescription: t.weeklyMileage.recordsForWeekDescription,
+    selectWeek: t.weeklyMileage.selectWeek,
+    previousWeek: t.weeklyMileage.previousWeek,
+    nextWeek: t.weeklyMileage.nextWeek,
+    showingWeek: t.weeklyMileage.showingWeek,
+    weeklyComparisonHistory: t.weeklyMileage.weeklyComparisonHistory,
+    weeklyComparisonHistoryDescription: t.weeklyMileage.weeklyComparisonHistoryDescription,
+    notEnoughHistoricalData: t.weeklyMileage.notEnoughHistoricalData,
+    comparableVehicles: t.weeklyMileage.comparableVehicles
+  };
 
   const selectedDriver = useMemo(
     () => drivers.find((driver) => String(driver.id) === String(form.driver_id)),
@@ -52,42 +228,112 @@ export default function WeeklyMileagePage() {
     });
   }, [entries]);
 
-  const weeklyTrendRows = useMemo(() => {
-    return Array.from(
-      sortedEntries.reduce((map, entry) => {
-        const current = map.get(entry.week_ending) ?? {
-          weekEnding: entry.week_ending,
-          mileage: 0,
-          submittedVehicles: new Set<string>()
-        };
-        current.mileage += Number(entry.mileage || 0);
-        current.submittedVehicles.add(entry.vehicle_reg || String(entry.driver_id));
-        map.set(entry.week_ending, current);
-        return map;
-      }, new Map<string, { weekEnding: string; mileage: number; submittedVehicles: Set<string> }>())
-    )
-      .map(([, value]) => ({
-        weekEnding: value.weekEnding,
-        mileage: value.mileage,
-        submitted: value.submittedVehicles.size
-      }))
-      .sort((a, b) => new Date(b.weekEnding).getTime() - new Date(a.weekEnding).getTime())
-      .slice(0, 8);
+  const allWeeklyTrendRows = useMemo(() => {
+    return buildWeeklyTrendRows(sortedEntries);
   }, [sortedEntries]);
 
-  const latestWeekRow = weeklyTrendRows[0] ?? null;
-  const latestWeekEntries = latestWeekRow
-    ? sortedEntries.filter((entry) => entry.week_ending === latestWeekRow.weekEnding)
-    : [];
+  const availableWeeks = useMemo(() => {
+    return Array.from(new Set(sortedEntries.map((entry) => entry.week_ending)));
+  }, [sortedEntries]);
 
-  const totalMileageThisWeek = latestWeekRow?.mileage ?? 0;
-  const totalReportingWeeks = new Set(sortedEntries.map((entry) => entry.week_ending)).size;
+  const latestWeekRow = allWeeklyTrendRows[0] ?? null;
+  const latestWeekEntries = useMemo(() => {
+    return latestWeekRow
+      ? sortedEntries.filter((entry) => entry.week_ending === latestWeekRow.weekEnding)
+      : [];
+  }, [latestWeekRow, sortedEntries]);
+  const selectedWeekValue = selectedWeek || availableWeeks[0] || "";
+  const selectedWeekEntries = useMemo(() => {
+    return selectedWeekValue
+      ? sortedEntries.filter((entry) => entry.week_ending === selectedWeekValue)
+      : [];
+  }, [selectedWeekValue, sortedEntries]);
+  const selectedWeekSummaryRow =
+    allWeeklyTrendRows.find((row) => row.weekEnding === selectedWeekValue) ?? latestWeekRow;
+  const selectedWeekIndex = availableWeeks.findIndex((week) => week === selectedWeekValue);
+  const previousWeekValue =
+    selectedWeekIndex >= 0 && selectedWeekIndex < availableWeeks.length - 1
+      ? availableWeeks[selectedWeekIndex + 1]
+      : null;
+  const nextWeekValue = selectedWeekIndex > 0 ? availableWeeks[selectedWeekIndex - 1] : null;
+
   const vehiclesSubmittedThisWeek = new Set(
     latestWeekEntries.map((entry) => entry.vehicle_reg || String(entry.driver_id))
   ).size;
+  const driversSubmittedThisWeek = getUniqueDriverCount(latestWeekEntries);
   const lastUpdatedWeekLabel = latestWeekRow ? formatDate(latestWeekRow.weekEnding, language) : "-";
+  const highestOdometerEntry = latestWeekEntries.reduce<WeeklyMileageEntry | null>((highest, entry) => {
+    if (!highest || Number(entry.mileage) > Number(highest.mileage)) {
+      return entry;
+    }
+    return highest;
+  }, null);
 
-  const loadData = async () => {
+  const weeklyDistanceCovered = useMemo(() => {
+    if (!latestWeekEntries.length) {
+      return { total: 0, comparableVehicles: 0 };
+    }
+
+    let total = 0;
+    let comparableVehicles = 0;
+
+    latestWeekEntries.forEach((entry) => {
+      const previousEntry = sortedEntries.find(
+        (candidate) =>
+          candidate.vehicle_reg === entry.vehicle_reg &&
+          candidate.week_ending < entry.week_ending
+      );
+
+      if (!previousEntry) {
+        return;
+      }
+
+      const difference = Number(entry.mileage || 0) - Number(previousEntry.mileage || 0);
+      if (difference >= 0) {
+        total += difference;
+        comparableVehicles += 1;
+      }
+    });
+
+    return { total, comparableVehicles };
+  }, [latestWeekEntries, sortedEntries]);
+
+  const weeklyDistanceByDriverRows = useMemo(() => {
+    return buildWeeklyDistanceByDriverRows(selectedWeekEntries, sortedEntries);
+  }, [selectedWeekEntries, sortedEntries]);
+
+  const comparisonDrivers = useMemo(() => {
+    return drivers
+      .filter((driver) =>
+        sortedEntries.some((entry) => String(entry.driver_id) === String(driver.id))
+      )
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [drivers, sortedEntries]);
+
+  const selectedComparisonEntries = useMemo(() => {
+    if (!comparisonDriverId) {
+      return [];
+    }
+
+    return sortedEntries.filter(
+      (entry) => String(entry.driver_id) === String(comparisonDriverId)
+    );
+  }, [comparisonDriverId, sortedEntries]);
+
+  const selectedComparisonCurrent = selectedComparisonEntries[0] ?? null;
+  const selectedComparisonPrevious = selectedComparisonEntries[1] ?? null;
+  const selectedComparisonDistance =
+    selectedComparisonCurrent && selectedComparisonPrevious
+      ? Number(selectedComparisonCurrent.mileage || 0) -
+        Number(selectedComparisonPrevious.mileage || 0)
+      : null;
+  const hasValidSelectedComparison =
+    selectedComparisonCurrent &&
+    selectedComparisonPrevious &&
+    selectedComparisonDistance != null &&
+    selectedComparisonDistance >= 0;
+
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -96,15 +342,15 @@ export default function WeeklyMileagePage() {
       setDrivers(driverRows);
       setEntries(mileageRows);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t.weeklyMileage.errorLoad);
+      setError(t.weeklyMileage.errorLoad);
     } finally {
       setLoading(false);
     }
-  };
+  }, [t.weeklyMileage.errorLoad]);
 
   useEffect(() => {
     void loadData();
-  }, [t.weeklyMileage.errorLoad]);
+  }, [loadData]);
 
   useEffect(() => {
     if (!selectedDriver) {
@@ -117,6 +363,19 @@ export default function WeeklyMileagePage() {
       vehicle_reg: selectedDriver.vehicle_reg
     }));
   }, [selectedDriver]);
+
+  useEffect(() => {
+    if (!availableWeeks.length) {
+      if (selectedWeek) {
+        setSelectedWeek("");
+      }
+      return;
+    }
+
+    if (!selectedWeek || !availableWeeks.includes(selectedWeek)) {
+      setSelectedWeek(availableWeeks[0]);
+    }
+  }, [availableWeeks, selectedWeek]);
 
   const resetForm = () => {
     setForm(initialForm);
@@ -164,7 +423,7 @@ export default function WeeklyMileagePage() {
       resetForm();
       await loadData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t.weeklyMileage.errorSave);
+      setError(t.weeklyMileage.errorSave);
     } finally {
       setSaving(false);
     }
@@ -183,41 +442,80 @@ export default function WeeklyMileagePage() {
     );
   };
 
+  const handleDelete = async (id: string) => {
+    if (!window.confirm(t.weeklyMileage.deleteConfirm)) {
+      return;
+    }
+
+    try {
+      setDeletingId(id);
+      setError(null);
+      await deleteWeeklyMileage(id);
+
+      if (form.id === id) {
+        resetForm();
+      }
+
+      await loadData();
+    } catch (err) {
+      setError(t.weeklyMileage.deleteError);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const summaryCards = [
     {
-      label: t.weeklyMileage.totalMileageThisWeek,
-      value: latestWeekRow ? formatNumber(totalMileageThisWeek, language) : "-",
+      label: labels.latestReportingWeek,
+      value: lastUpdatedWeekLabel,
       helper: latestWeekRow
-        ? `${t.weeklyMileage.totalMileageThisWeekHelper} ${lastUpdatedWeekLabel}`
+        ? labels.latestReportingWeekHelper
         : t.weeklyMileage.noDataDescription,
-      icon: <Route className="h-5 w-5" />
+      icon: <CalendarClock className="h-5 w-5" />
     },
     {
-      label: t.weeklyMileage.reportsInSystem,
-      value: formatNumber(totalReportingWeeks, language),
-      helper:
-        totalReportingWeeks > 0
-          ? t.weeklyMileage.reportsInSystemHelper
-          : t.weeklyMileage.noDataDescription,
-      icon: <TrendingUp className="h-5 w-5" />
-    },
-    {
-      label: t.weeklyMileage.vehiclesSubmittedThisWeek,
+      label: labels.vehiclesSubmittedThisWeek,
       value: latestWeekRow ? formatNumber(vehiclesSubmittedThisWeek, language) : "-",
       helper:
         latestWeekRow
-          ? t.weeklyMileage.vehiclesSubmittedThisWeekHelper
+          ? labels.vehiclesSubmittedThisWeekHelper
           : t.weeklyMileage.noDataDescription,
-      icon: <FileText className="h-5 w-5" />
+      icon: <Truck className="h-5 w-5" />
     },
     {
-      label: t.weeklyMileage.lastUpdatedWeek,
-      value: lastUpdatedWeekLabel,
+      label: labels.driversSubmittedThisWeek,
+      value: latestWeekRow ? formatNumber(driversSubmittedThisWeek, language) : "-",
       helper:
         latestWeekRow
-          ? t.weeklyMileage.lastUpdatedWeekHelper
+          ? labels.driversSubmittedThisWeekHelper
           : t.weeklyMileage.noDataDescription,
-      icon: <CalendarClock className="h-5 w-5" />
+      icon: <Users className="h-5 w-5" />
+    },
+    {
+      label: labels.highestOdometerThisWeek,
+      value: highestOdometerEntry ? formatNumber(highestOdometerEntry.mileage, language) : "-",
+      helper:
+        latestWeekRow
+          ? highestOdometerEntry?.vehicle_reg
+            ? `${labels.highestOdometerThisWeekHelper} ${highestOdometerEntry.vehicle_reg}`
+            : labels.highestOdometerThisWeekHelper
+          : t.weeklyMileage.noDataDescription,
+      icon: <Gauge className="h-5 w-5" />
+    },
+    {
+      label: labels.weeklyDistanceCovered,
+      value:
+        weeklyDistanceCovered.comparableVehicles > 0
+          ? formatNumber(weeklyDistanceCovered.total, language)
+          : labels.weeklyDistanceCoveredUnavailable,
+      helper:
+        weeklyDistanceCovered.comparableVehicles > 0
+          ? `${labels.weeklyDistanceCoveredHelper} ${formatNumber(
+              weeklyDistanceCovered.comparableVehicles,
+              language
+            )}`
+          : labels.weeklyDistanceCoveredUnavailable,
+      icon: <Route className="h-5 w-5" />
     }
   ];
 
@@ -227,7 +525,7 @@ export default function WeeklyMileagePage() {
         <Header title={t.weeklyMileage.title} description={t.weeklyMileage.description} />
       </div>
 
-      <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {summaryCards.map((card) => (
           <StatCard
             key={card.label}
@@ -239,232 +537,284 @@ export default function WeeklyMileagePage() {
         ))}
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[390px_minmax(0,1fr)]">
-        <form
-          onSubmit={handleSubmit}
-          className="h-fit rounded-3xl border border-slate-200 bg-white p-5 shadow-md sm:p-6"
-        >
-          <div className="mb-5">
-            <h3 className="text-lg font-semibold text-slate-900">
-              {isEditing ? t.weeklyMileage.editEntry : t.weeklyMileage.addEntry}
-            </h3>
-            <p className="mt-1 text-sm text-slate-500">
-              {isEditing ? t.weeklyMileage.helperEdit : t.weeklyMileage.helperAdd}
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                {t.weeklyMileage.weekEnding}
-              </label>
-              <input
-                type="date"
-                required
-                value={form.week_ending}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, week_ending: event.target.value }))
-                }
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black"
-              />
+      <section className="surface-card p-3.5 sm:p-4 lg:p-4.5">
+        <form onSubmit={handleSubmit} className="w-full">
+          <div className="max-w-[780px]">
+            <div className="mb-4">
+              <h3 className="section-title">
+                {isEditing ? t.weeklyMileage.editEntry : t.weeklyMileage.addEntry}
+              </h3>
+              <p className="section-subtitle">
+                {isEditing ? t.weeklyMileage.helperEdit : t.weeklyMileage.helperAdd}
+              </p>
             </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                {t.weeklyMileage.driver}
-              </label>
-              <select
-                required
-                value={form.driver_id}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, driver_id: event.target.value }))
-                }
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black"
-              >
-                <option value="">{t.weeklyMileage.selectDriver}</option>
-                {drivers.map((driver) => (
-                  <option key={driver.id} value={String(driver.id)}>
-                    {driver.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <div className="subtle-panel p-3.5 sm:p-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="form-field">
+                  <label className="form-label">{t.weeklyMileage.weekEnding}</label>
+                  <input
+                    type="date"
+                    required
+                    value={form.week_ending}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, week_ending: event.target.value }))
+                    }
+                    className="form-input bg-white"
+                  />
+                </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                {t.weeklyMileage.driverName}
-              </label>
-              <input
-                readOnly
-                value={form.driver}
-                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600 focus:outline-none"
-              />
-            </div>
+                <div className="form-field">
+                  <label className="form-label">{t.weeklyMileage.driver}</label>
+                  <select
+                    required
+                    value={form.driver_id}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, driver_id: event.target.value }))
+                    }
+                    className="form-input bg-white"
+                  >
+                    <option value="">{t.weeklyMileage.selectDriver}</option>
+                    {drivers.map((driver) => (
+                      <option key={driver.id} value={String(driver.id)}>
+                        {driver.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                {t.weeklyMileage.vehicleReg}
-              </label>
-              <input
-                readOnly
-                value={form.vehicle_reg}
-                className="w-full rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600 focus:outline-none"
-              />
-            </div>
+                <div className="form-field">
+                  <label className="form-label">{t.weeklyMileage.driverName}</label>
+                  <input
+                    readOnly
+                    value={form.driver}
+                    className="form-input-readonly bg-slate-50/90"
+                  />
+                </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                {t.weeklyMileage.mileage}
-              </label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                required
-                placeholder={t.weeklyMileage.mileagePlaceholder}
-                value={form.mileage}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, mileage: event.target.value }))
-                }
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black"
-              />
-            </div>
+                <div className="form-field">
+                  <label className="form-label">{t.weeklyMileage.vehicleReg}</label>
+                  <input
+                    readOnly
+                    value={form.vehicle_reg}
+                    className="form-input-readonly bg-slate-50/90"
+                  />
+                </div>
+              </div>
 
-            {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+              <div className="mt-4 form-field">
+                <label className="form-label">{t.weeklyMileage.mileage}</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  required
+                  placeholder={t.weeklyMileage.mileagePlaceholder}
+                  value={form.mileage}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, mileage: event.target.value }))
+                  }
+                  className="form-input bg-white"
+                />
+              </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <button
-                type="submit"
-                disabled={saving}
-                className="flex-1 rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-70"
-              >
-                {saving
-                  ? t.common.saving
-                  : isEditing
-                    ? t.weeklyMileage.updateEntry
-                    : t.weeklyMileage.saveEntry}
-              </button>
+              {error ? <p className="mt-3 text-sm text-rose-600">{error}</p> : null}
 
-              {isEditing ? (
+              <div className="mt-3 flex flex-col gap-2.5 sm:flex-row sm:items-center">
                 <button
-                  type="button"
-                  onClick={resetForm}
-                  className="w-full rounded-xl border border-slate-300 px-5 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 sm:w-auto"
+                  type="submit"
+                  disabled={saving}
+                  className="btn-primary min-w-[240px] justify-center disabled:opacity-70"
                 >
-                  {t.common.cancel}
+                  {saving
+                    ? t.common.saving
+                    : isEditing
+                      ? t.weeklyMileage.updateEntry
+                      : t.weeklyMileage.saveEntry}
                 </button>
-              ) : null}
+
+                {isEditing ? (
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    className="btn-secondary w-full sm:w-auto"
+                  >
+                    {t.common.cancel}
+                  </button>
+                ) : null}
+              </div>
             </div>
           </div>
         </form>
+      </section>
 
-        <section className="min-w-0 rounded-3xl border border-slate-200 bg-white p-5 shadow-md sm:p-6">
+      <section className="surface-card mt-4 min-w-0 p-3.5 sm:p-4 lg:p-4.5">
+        <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-slate-900">
-                  {t.weeklyMileage.reportingTableTitle}
-                </h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  {t.weeklyMileage.reportingTableDescription}
-                </p>
+            <h3 className="section-title">{labels.recordsForWeek}</h3>
+            <p className="section-subtitle">{labels.recordsForWeekDescription}</p>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => previousWeekValue && setSelectedWeek(previousWeekValue)}
+                disabled={!previousWeekValue}
+                className="btn-secondary px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {labels.previousWeek}
+              </button>
+
+              <div className="min-w-[220px] form-field">
+                <label className="sr-only">{labels.selectWeek}</label>
+                <select
+                  value={selectedWeekValue}
+                  onChange={(event) => setSelectedWeek(event.target.value)}
+                  className="form-input bg-white"
+                >
+                  {availableWeeks.map((week) => (
+                    <option key={week} value={week}>
+                      {formatDate(week, language)}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <button
                 type="button"
-                onClick={exportWeeklyMileage}
-                disabled={!sortedEntries.length}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                onClick={() => nextWeekValue && setSelectedWeek(nextWeekValue)}
+                disabled={!nextWeekValue}
+                className="btn-secondary px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Download className="h-4 w-4" />
-                {t.common.export}
+                {labels.nextWeek}
               </button>
             </div>
 
-            {loading ? (
-              <EmptyState title={t.common.loading} description={t.weeklyMileage.loading} />
-            ) : sortedEntries.length === 0 ? (
-              <EmptyState
-                title={t.weeklyMileage.noDataTitle}
-                description={t.weeklyMileage.noDataDescription}
-              />
-            ) : (
-              <>
-                <div className="space-y-3 md:hidden">
-                  {sortedEntries.map((entry) => (
-                    <div key={entry.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-slate-900">{entry.driver || "-"}</p>
-                          <p className="mt-1 text-sm text-slate-500">{entry.vehicle_reg || "-"}</p>
-                        </div>
-                        <p className="text-sm font-medium text-slate-900">
-                          {formatDate(entry.week_ending, language)}
-                        </p>
-                      </div>
-                      <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                        {t.weeklyMileage.table.mileage}
-                      </p>
-                      <p className="mt-1 text-base font-semibold text-slate-950">
-                        {formatNumber(entry.mileage, language)}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setForm({
-                            id: String(entry.id),
-                            week_ending: entry.week_ending,
-                            driver_id: String(entry.driver_id),
-                            driver: entry.driver,
-                            vehicle_reg: entry.vehicle_reg,
-                            mileage: String(entry.mileage)
-                          })
-                        }
-                        className="mt-4 inline-flex w-full items-center justify-center rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                      >
-                        {t.common.edit}
-                      </button>
-                    </div>
-                  ))}
-                </div>
+            <button
+              type="button"
+              onClick={exportWeeklyMileage}
+              disabled={!sortedEntries.length}
+              className="btn-secondary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            >
+              <Download className="h-4 w-4" />
+              {t.common.export}
+            </button>
+          </div>
+        </div>
 
-                <div className="hidden -mx-5 overflow-x-auto px-5 md:block md:mx-0 md:px-0">
-                  <div className="rounded-2xl border border-slate-200">
-                  <table className="w-full min-w-[720px] text-sm">
-                    <thead>
-                      <tr className="bg-slate-100 text-slate-600">
-                        <th className="px-4 py-3 text-left font-semibold">
-                          {t.weeklyMileage.table.weekEnding}
-                        </th>
-                        <th className="px-4 py-3 text-left font-semibold">
-                          {t.weeklyMileage.table.driver}
-                        </th>
-                        <th className="px-4 py-3 text-left font-semibold">
-                          {t.weeklyMileage.table.vehicleReg}
-                        </th>
-                        <th className="px-4 py-3 text-left font-semibold">
-                          {t.weeklyMileage.table.mileage}
-                        </th>
-                        <th className="px-4 py-3 text-left font-semibold">
-                          {t.weeklyMileage.table.action}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sortedEntries.map((entry) => (
-                        <tr
-                          key={entry.id}
-                          className="border-b border-slate-200 transition last:border-none hover:bg-slate-50"
-                        >
-                          <td className="px-4 py-3 font-medium text-slate-900">
-                            {formatDate(entry.week_ending, language)}
-                          </td>
-                          <td className="px-4 py-3 text-slate-700">{entry.driver || "-"}</td>
-                          <td className="px-4 py-3 text-slate-700">{entry.vehicle_reg || "-"}</td>
-                          <td className="px-4 py-3 text-slate-700">
-                            {formatNumber(entry.mileage, language)}
-                          </td>
-                          <td className="px-4 py-3">
+        {selectedWeekValue ? (
+          <div className="mb-4 flex items-center gap-2">
+            <span className="badge-muted">{labels.showingWeek}</span>
+            <p className="text-sm font-medium text-slate-700">
+              {formatDate(selectedWeekValue, language)}
+            </p>
+          </div>
+        ) : null}
+
+        {loading ? (
+          <EmptyState title={t.common.loading} description={t.weeklyMileage.loading} />
+        ) : selectedWeekEntries.length === 0 ? (
+          <EmptyState
+            title={t.weeklyMileage.noDataTitle}
+            description={t.weeklyMileage.noDataDescription}
+          />
+        ) : (
+          <>
+            <div className="space-y-2.5 md:hidden">
+              {selectedWeekEntries.map((entry) => (
+                <div key={entry.id} className="subtle-panel p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">{entry.driver || "-"}</p>
+                      <p className="mt-1 text-sm text-slate-500">{entry.vehicle_reg || "-"}</p>
+                    </div>
+                    <p className="text-sm font-medium text-slate-900">
+                      {formatDate(entry.week_ending, language)}
+                    </p>
+                  </div>
+                  <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    {t.weeklyMileage.table.mileage}
+                  </p>
+                  <p className="mt-1 text-base font-semibold text-slate-950">
+                    {formatNumber(entry.mileage, language)}
+                  </p>
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setForm({
+                          id: String(entry.id),
+                          week_ending: entry.week_ending,
+                          driver_id: String(entry.driver_id),
+                          driver: entry.driver,
+                          vehicle_reg: entry.vehicle_reg,
+                          mileage: String(entry.mileage)
+                        })
+                      }
+                      className="btn-secondary flex-1"
+                    >
+                      {t.common.edit}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleDelete(String(entry.id))}
+                      disabled={deletingId === String(entry.id)}
+                      className="btn-danger flex-1 gap-2 disabled:opacity-50"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      {deletingId === String(entry.id) ? t.common.deleting : t.common.delete}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
+              <div className="table-shell rounded-2xl">
+                <table className="w-full min-w-[760px] text-sm">
+                  <colgroup>
+                    <col className="w-[19%]" />
+                    <col className="w-[28%]" />
+                    <col className="w-[21%]" />
+                    <col className="w-[16%]" />
+                    <col className="w-[16%]" />
+                  </colgroup>
+                  <thead>
+                    <tr className="bg-slate-50/70 text-slate-600">
+                      <th className="px-4 py-2 text-left font-semibold">
+                        {t.weeklyMileage.table.weekEnding}
+                      </th>
+                      <th className="px-4 py-2 text-left font-semibold">
+                        {t.weeklyMileage.table.driver}
+                      </th>
+                      <th className="px-4 py-2 text-left font-semibold">
+                        {t.weeklyMileage.table.vehicleReg}
+                      </th>
+                      <th className="px-3 py-2 text-right font-semibold">
+                        {t.weeklyMileage.table.mileage}
+                      </th>
+                      <th className="px-3 py-2 text-left font-semibold">
+                        {t.weeklyMileage.table.action}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedWeekEntries.map((entry) => (
+                      <tr
+                        key={entry.id}
+                        className="border-b border-slate-100/60 transition last:border-none hover:bg-slate-50/55"
+                      >
+                        <td className="px-4 py-2 font-medium text-slate-900">
+                          {formatDate(entry.week_ending, language)}
+                        </td>
+                        <td className="px-4 py-2 text-slate-700">{entry.driver || "-"}</td>
+                        <td className="px-4 py-2 text-slate-700">{entry.vehicle_reg || "-"}</td>
+                        <td className="px-3 py-2 text-right font-medium text-slate-800">
+                          {formatNumber(entry.mileage, language)}
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-1.5 whitespace-nowrap">
                             <button
                               type="button"
                               onClick={() =>
@@ -477,106 +827,282 @@ export default function WeeklyMileagePage() {
                                   mileage: String(entry.mileage)
                                 })
                               }
-                              className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                              className="btn-secondary px-3 py-1.5 text-xs"
                             >
                               {t.common.edit}
                             </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  </div>
-                </div>
-              </>
-            )}
+                            <button
+                              type="button"
+                              onClick={() => void handleDelete(String(entry.id))}
+                              disabled={deletingId === String(entry.id)}
+                              className="btn-danger px-3 py-1.5 text-xs disabled:opacity-50"
+                            >
+                              {deletingId === String(entry.id) ? t.common.deleting : t.common.delete}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
+
+      </section>
+
+      <section className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+        <section className="surface-card min-w-0 p-3.5 sm:p-4">
+          <div className="mb-4">
+            <h3 className="section-title">{labels.reportingWeekSummary}</h3>
+            <p className="section-subtitle">{labels.reportingWeekSummaryDescription}</p>
           </div>
 
-          <div className="mt-6 border-t border-slate-200 pt-6">
-            <div className="mb-4">
-              <h3 className="text-lg font-semibold text-slate-900">
-                {t.weeklyMileage.trendTableTitle}
-              </h3>
-              <p className="mt-1 text-sm text-slate-500">{t.weeklyMileage.trendTableDescription}</p>
-            </div>
+          {loading ? (
+            <EmptyState title={t.common.loading} description={t.weeklyMileage.loading} />
+          ) : !selectedWeekSummaryRow ? (
+            <EmptyState
+              title={labels.noWeeklyRecordsForDriver}
+              description={t.weeklyMileage.noDataDescription}
+            />
+          ) : (
+            <div className="space-y-3">
+              <div className="subtle-panel p-3.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                      {labels.currentReportingWeek}
+                    </p>
+                    <p className="mt-1 text-lg font-semibold text-slate-950">
+                      {formatDate(selectedWeekSummaryRow.weekEnding, language)}
+                    </p>
+                  </div>
+                  <span className="badge-muted">
+                    {formatNumber(selectedWeekEntries.length, language)} {t.common.entries}
+                  </span>
+                </div>
+              </div>
 
-            {loading ? (
-              <EmptyState title={t.common.loading} description={t.weeklyMileage.loading} />
-            ) : weeklyTrendRows.length === 0 ? (
-              <EmptyState
-                title={t.weeklyMileage.noDataTitle}
-                description={t.weeklyMileage.noDataDescription}
-              />
-            ) : (
-              <>
-                <div className="space-y-3 md:hidden">
-                  {weeklyTrendRows.map((row) => (
-                    <div key={row.weekEnding} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                      <p className="text-sm font-semibold text-slate-900">
-                        {formatDate(row.weekEnding, language)}
-                      </p>
-                      <div className="mt-3 grid grid-cols-2 gap-3">
-                        <div>
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                            {t.dashboard.table.mileage}
-                          </p>
-                          <p className="mt-1 text-sm font-medium text-slate-900">
-                            {formatNumber(row.mileage, language)}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="subtle-panel p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    {labels.vehiclesSubmittedThisWeek}
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-slate-950">
+                    {formatNumber(selectedWeekSummaryRow.vehiclesSubmitted, language)}
+                  </p>
+                </div>
+
+                <div className="subtle-panel p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    {labels.driversSubmittedThisWeek}
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-slate-950">
+                    {formatNumber(selectedWeekSummaryRow.driversSubmitted, language)}
+                  </p>
+                </div>
+
+                <div className="subtle-panel p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    {labels.highestOdometerThisWeek}
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-slate-950">
+                    {selectedWeekSummaryRow.highestOdometer != null
+                      ? formatNumber(selectedWeekSummaryRow.highestOdometer, language)
+                      : "-"}
+                  </p>
+                </div>
+
+                <div className="subtle-panel p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    {labels.lowestOdometerThisWeek}
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-slate-950">
+                    {selectedWeekSummaryRow.lowestOdometer != null
+                      ? formatNumber(selectedWeekSummaryRow.lowestOdometer, language)
+                      : "-"}
+                  </p>
+                </div>
+
+                <div className="subtle-panel p-3 sm:col-span-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    {labels.weeklyDistanceCovered}
+                  </p>
+                  <div className="mt-1 flex items-end justify-between gap-3">
+                    <p className="text-lg font-semibold text-slate-950">
+                      {selectedWeekSummaryRow.weeklyDistanceCovered != null
+                        ? formatNumber(selectedWeekSummaryRow.weeklyDistanceCovered, language)
+                        : labels.notEnoughDataYet}
+                    </p>
+                    <p className="text-sm text-slate-500">
+                      {selectedWeekSummaryRow.comparableVehicles > 0
+                        ? `${formatNumber(selectedWeekSummaryRow.comparableVehicles, language)} ${labels.comparableVehicles}`
+                        : labels.notEnoughDataYet}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+
+        <section className="surface-card min-w-0 p-3.5 sm:p-4">
+          <div className="mb-4">
+            <h3 className="section-title">{labels.weeklyDistanceByDriver}</h3>
+            <p className="section-subtitle">{labels.weeklyDistanceByDriverDescription}</p>
+          </div>
+
+          {loading ? (
+            <EmptyState title={t.common.loading} description={t.weeklyMileage.loading} />
+          ) : (
+            <div className="space-y-3">
+              <div className="grid gap-3 lg:grid-cols-[minmax(240px,280px)_minmax(0,1fr)]">
+                <div className="form-field">
+                  <label className="form-label">{labels.compareDriver}</label>
+                  <select
+                    value={comparisonDriverId}
+                    onChange={(event) => setComparisonDriverId(event.target.value)}
+                    className="form-input bg-white"
+                  >
+                    <option value="">{t.weeklyMileage.selectDriver}</option>
+                    {comparisonDrivers.map((driver) => (
+                      <option key={driver.id} value={String(driver.id)}>
+                        {driver.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="subtle-panel p-3">
+                  <p className="text-sm font-semibold text-slate-900">{labels.weeklyDistanceCovered}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {selectedWeekValue ? formatDate(selectedWeekValue, language) : labels.notEnoughDataYet}
+                  </p>
+                  {weeklyDistanceByDriverRows.length === 0 ? (
+                    <p className="mt-3 text-sm text-slate-500">{labels.notEnoughDataYet}</p>
+                  ) : (
+                    <div className="mt-3 space-y-2">
+                      {weeklyDistanceByDriverRows.slice(0, 3).map((row) => (
+                        <div
+                          key={`${row.driver}-${row.vehicleReg}`}
+                          className="flex items-center justify-between gap-3 border-b border-slate-100/70 pb-2 last:border-b-0 last:pb-0"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-slate-800">{row.driver}</p>
+                            <p className="mt-0.5 text-xs text-slate-400">{row.vehicleReg}</p>
+                          </div>
+                          <p className="text-sm font-semibold text-slate-950">
+                            {formatNumber(row.weeklyDistanceCovered, language)}
                           </p>
                         </div>
-                        <div>
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                            {t.weeklyMileage.vehiclesSubmittedThisWeek}
-                          </p>
-                          <p className="mt-1 text-sm font-medium text-slate-900">
-                            {formatNumber(row.submitted, language)}
-                          </p>
-                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {!comparisonDriverId ? (
+                <div className="subtle-panel flex min-h-[260px] items-center justify-center p-4">
+                  <EmptyState
+                    title={labels.compareDriver}
+                    description={labels.selectDriverToCompare}
+                  />
+                </div>
+              ) : !hasValidSelectedComparison ? (
+                <div className="subtle-panel flex min-h-[260px] items-center justify-center p-4">
+                  <EmptyState
+                    title={labels.notEnoughHistoricalData}
+                    description={labels.weeklyComparisonHistoryDescription}
+                  />
+                </div>
+              ) : (
+                <div className="grid gap-3 xl:grid-cols-[minmax(0,1.05fr)_minmax(260px,0.95fr)]">
+                  <div className="subtle-panel p-3.5">
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                          {labels.currentReportingWeek}
+                        </p>
+                        <p className="mt-1 text-base font-semibold text-slate-950">
+                          {formatDate(selectedComparisonCurrent.week_ending, language)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                          {labels.currentOdometer}
+                        </p>
+                        <p className="mt-1 text-base font-semibold text-slate-950">
+                          {formatNumber(selectedComparisonCurrent.mileage, language)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                          {labels.selectedVehicleReg}
+                        </p>
+                        <p className="mt-1 text-base font-semibold text-slate-950">
+                          {selectedComparisonCurrent.vehicle_reg || "-"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                          {labels.previousReportingWeek}
+                        </p>
+                        <p className="mt-1 text-base font-semibold text-slate-950">
+                          {formatDate(selectedComparisonPrevious.week_ending, language)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                          {labels.previousOdometer}
+                        </p>
+                        <p className="mt-1 text-base font-semibold text-slate-950">
+                          {formatNumber(selectedComparisonPrevious.mileage, language)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                          {labels.weeklyDistanceCovered}
+                        </p>
+                        <p className="mt-1 text-base font-semibold text-slate-950">
+                          {formatNumber(selectedComparisonDistance, language)}
+                        </p>
                       </div>
                     </div>
-                  ))}
-                </div>
+                  </div>
 
-                <div className="hidden -mx-5 overflow-x-auto px-5 md:block md:mx-0 md:px-0">
-                  <div className="rounded-2xl border border-slate-200">
-                  <table className="w-full min-w-[520px] text-sm">
-                    <thead>
-                      <tr className="bg-slate-100 text-slate-600">
-                        <th className="px-4 py-3 text-left font-semibold">
-                          {t.dashboard.table.weekEnding}
-                        </th>
-                        <th className="px-4 py-3 text-left font-semibold">
-                          {t.dashboard.table.mileage}
-                        </th>
-                        <th className="px-4 py-3 text-left font-semibold">
-                          {t.weeklyMileage.vehiclesSubmittedThisWeek}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {weeklyTrendRows.map((row) => (
-                        <tr
-                          key={row.weekEnding}
-                          className="border-b border-slate-200 transition last:border-none hover:bg-slate-50"
+                  <div className="subtle-panel p-3.5">
+                    <p className="text-sm font-semibold text-slate-900">
+                      {labels.weeklyComparisonHistory}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {labels.weeklyComparisonHistoryDescription}
+                    </p>
+                    <div className="mt-3 space-y-2">
+                      {selectedComparisonEntries.slice(0, 5).map((entry) => (
+                        <div
+                          key={entry.id}
+                          className="flex items-center justify-between gap-3 border-b border-slate-100/70 pb-2 last:border-b-0 last:pb-0"
                         >
-                          <td className="px-4 py-3 font-medium text-slate-900">
-                            {formatDate(row.weekEnding, language)}
-                          </td>
-                          <td className="px-4 py-3 text-slate-700">
-                            {formatNumber(row.mileage, language)}
-                          </td>
-                          <td className="px-4 py-3 text-slate-700">
-                            {formatNumber(row.submitted, language)}
-                          </td>
-                        </tr>
+                          <div>
+                            <p className="text-sm font-medium text-slate-800">
+                              {formatDate(entry.week_ending, language)}
+                            </p>
+                            <p className="mt-0.5 text-xs text-slate-400">
+                              {entry.vehicle_reg || "-"}
+                            </p>
+                          </div>
+                          <p className="text-sm font-semibold text-slate-950">
+                            {formatNumber(entry.mileage, language)}
+                          </p>
+                        </div>
                       ))}
-                    </tbody>
-                  </table>
+                    </div>
                   </div>
                 </div>
-              </>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </section>
       </section>
     </>

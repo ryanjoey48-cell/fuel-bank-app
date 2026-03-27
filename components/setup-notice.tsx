@@ -13,7 +13,7 @@ export function SetupNotice() {
   }
 
   return (
-    <div className="rounded-3xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900 shadow-soft">
+    <div className="rounded-3xl border border-accent-200/90 bg-accent-50/92 px-5 py-4 text-sm text-amber-900 shadow-[0_12px_28px_rgba(249,115,22,0.1)] backdrop-blur">
       {t.common.setupNotice}
     </div>
   );

@@ -1,7 +1,8 @@
 "use client";
 
-import { Download, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { CarFront, Download, Search, Trash2, Users } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { Header } from "@/components/header";
 import { deleteDriver, fetchDrivers, saveDriver } from "@/lib/data";
@@ -15,6 +16,37 @@ const initialForm = {
   vehicle_reg: ""
 };
 
+function DriverSummaryCard({
+  label,
+  value,
+  helper,
+  icon: Icon
+}: {
+  label: string;
+  value: string;
+  helper: string;
+  icon: LucideIcon;
+}) {
+  return (
+    <article className="surface-card-soft flex h-full min-h-[138px] flex-col p-3.5 sm:min-h-[144px] sm:p-3.5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+            {label}
+          </p>
+          <p className="mt-2 text-[1.45rem] font-semibold tracking-[-0.035em] text-slate-950 sm:text-[1.65rem]">
+            {value}
+          </p>
+        </div>
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-brand-100 bg-brand-50 text-brand-700 shadow-[0_8px_20px_rgba(109,40,217,0.08)]">
+          <Icon className="h-4.5 w-4.5" />
+        </div>
+      </div>
+      <p className="mt-3 text-[12px] leading-5 text-slate-500">{helper}</p>
+    </article>
+  );
+}
+
 export default function DriversPage() {
   const { t } = useLanguage();
   const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -23,8 +55,44 @@ export default function DriversPage() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [driverFilter, setDriverFilter] = useState("");
 
   const isEditing = Boolean(form.id);
+  const labels = {
+    totalDrivers: t.drivers.totalDrivers,
+    totalDriversHelper: t.drivers.totalDriversHelper,
+    totalVehiclesAssigned: t.drivers.totalVehiclesAssigned,
+    totalVehiclesAssignedHelper: t.drivers.totalVehiclesAssignedHelper,
+    searchDrivers: t.drivers.searchDrivers,
+    searchPlaceholder: t.drivers.searchPlaceholder,
+    filterDriver: t.drivers.filterDriver,
+    allDrivers: t.drivers.allDrivers
+  };
+
+  const sortedDrivers = useMemo(
+    () => [...drivers].sort((a, b) => a.name.localeCompare(b.name)),
+    [drivers]
+  );
+
+  const uniqueVehiclesAssigned = useMemo(
+    () => new Set(drivers.map((driver) => driver.vehicle_reg.trim()).filter(Boolean)).size,
+    [drivers]
+  );
+
+  const filteredDrivers = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    return sortedDrivers.filter((driver) => {
+      const matchesQuery =
+        !query ||
+        driver.name.toLowerCase().includes(query) ||
+        driver.vehicle_reg.toLowerCase().includes(query);
+      const matchesFilter = !driverFilter || driver.name === driverFilter;
+
+      return matchesQuery && matchesFilter;
+    });
+  }, [driverFilter, searchQuery, sortedDrivers]);
 
   const load = async () => {
     try {
@@ -32,7 +100,7 @@ export default function DriversPage() {
       setError(null);
       setDrivers(await fetchDrivers());
     } catch (err) {
-      setError(err instanceof Error ? err.message : t.drivers.unableToLoadDrivers);
+      setError(t.drivers.unableToLoadDrivers);
     } finally {
       setLoading(false);
     }
@@ -62,7 +130,7 @@ export default function DriversPage() {
       resetForm();
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t.drivers.unableToSaveDriver);
+      setError(t.drivers.unableToSaveDriver);
     } finally {
       setSaving(false);
     }
@@ -84,7 +152,7 @@ export default function DriversPage() {
 
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t.drivers.unableToDeleteDriver);
+      setError(t.drivers.unableToDeleteDriver);
     } finally {
       setDeletingId(null);
     }
@@ -107,25 +175,38 @@ export default function DriversPage() {
         <Header title={t.drivers.title} description={t.drivers.description} />
       </div>
 
-      <section className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
+      <section className="mb-4.5 grid gap-3.5 sm:grid-cols-2 xl:max-w-[720px]">
+        <DriverSummaryCard
+          label={labels.totalDrivers}
+          value={String(drivers.length)}
+          helper={labels.totalDriversHelper}
+          icon={Users}
+        />
+        <DriverSummaryCard
+          label={labels.totalVehiclesAssigned}
+          value={String(uniqueVehiclesAssigned)}
+          helper={labels.totalVehiclesAssignedHelper}
+          icon={CarFront}
+        />
+      </section>
+
+      <section className="grid gap-4.5 xl:grid-cols-[minmax(360px,0.95fr)_minmax(0,1.78fr)] 2xl:grid-cols-[minmax(380px,0.92fr)_minmax(0,1.82fr)]">
         <form
           onSubmit={submit}
-          className="rounded-3xl border border-slate-200 bg-white p-5 shadow-md sm:p-6"
+          className="surface-card-soft h-fit p-4 sm:p-4.5 lg:p-5"
         >
-          <div className="mb-5">
-            <h3 className="text-lg font-semibold text-slate-900">
+          <div className="mb-6">
+            <h3 className="section-title">
               {isEditing ? t.drivers.editDriver : t.drivers.addDriver}
             </h3>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="section-subtitle mt-1.5 max-w-md">
               {isEditing ? t.drivers.updateDriver : t.drivers.description}
             </p>
           </div>
 
-          <div className="space-y-4">
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                {t.drivers.name}
-              </label>
+          <div className="space-y-3.5">
+            <div className="form-field">
+              <label className="form-label">{t.drivers.name}</label>
               <input
                 required
                 placeholder={t.drivers.name}
@@ -133,14 +214,12 @@ export default function DriversPage() {
                 onChange={(event) =>
                   setForm((current) => ({ ...current, name: event.target.value }))
                 }
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+                className="form-input w-full"
               />
             </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
-                {t.drivers.vehicle}
-              </label>
+            <div className="form-field">
+              <label className="form-label">{t.drivers.vehicle}</label>
               <input
                 required
                 placeholder={t.drivers.vehicle}
@@ -148,17 +227,17 @@ export default function DriversPage() {
                 onChange={(event) =>
                   setForm((current) => ({ ...current, vehicle_reg: event.target.value }))
                 }
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+                className="form-input w-full"
               />
             </div>
 
             {error ? <p className="text-sm text-rose-600">{error}</p> : null}
 
-            <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="pt-2">
               <button
                 type="submit"
                 disabled={saving}
-                className="flex-1 rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-70"
+                className="btn-primary w-full disabled:opacity-70"
               >
                 {saving
                   ? t.common.saving
@@ -171,7 +250,7 @@ export default function DriversPage() {
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="w-full rounded-xl border border-slate-300 px-5 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 sm:w-auto"
+                  className="btn-secondary mt-2 w-full"
                 >
                   {t.common.cancel}
                 </button>
@@ -180,42 +259,82 @@ export default function DriversPage() {
           </div>
         </form>
 
-        <section className="min-w-0 rounded-3xl border border-slate-200 bg-white p-5 shadow-md sm:p-6">
-          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900">{t.common.drivers}</h3>
-              <p className="mt-1 text-sm text-slate-500">{t.drivers.tableDescription}</p>
+        <section className="surface-card min-w-0 p-4 sm:p-4.5 lg:p-5">
+          <div className="mb-4 flex flex-col gap-3.5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0 space-y-1.5">
+                <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+                  <h3 className="section-title">{t.common.drivers}</h3>
+                  <span className="badge-muted px-2.5 py-1 text-[11px]">
+                    {filteredDrivers.length} {t.common.entries}
+                  </span>
+                </div>
+                <p className="section-subtitle max-w-2xl">{t.drivers.tableDescription}</p>
+              </div>
+
+              <div className="flex w-full shrink-0 lg:w-auto lg:justify-end">
+                <button
+                  type="button"
+                  onClick={exportDrivers}
+                  disabled={!drivers.length}
+                  className="btn-secondary w-full gap-2 px-3.5 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                >
+                  <Download className="h-4 w-4" />
+                  {t.common.export}
+                </button>
+              </div>
             </div>
 
-            <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
-              <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">
-                {drivers.length} {t.common.entries}
-              </span>
+            <div className="rounded-2xl border border-slate-200/80 bg-slate-50/55 p-3">
+              <div className="grid gap-3 xl:grid-cols-[minmax(0,1.45fr)_minmax(220px,0.55fr)] xl:items-end">
+                <div className="form-field">
+                  <label className="form-label">{labels.searchDrivers}</label>
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      value={searchQuery}
+                      onChange={(event) => setSearchQuery(event.target.value)}
+                      placeholder={labels.searchPlaceholder}
+                      className="form-input w-full bg-white pl-9"
+                    />
+                  </div>
+                </div>
 
-              <button
-                type="button"
-                onClick={exportDrivers}
-                disabled={!drivers.length}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-              >
-                <Download className="h-4 w-4" />
-                {t.common.export}
-              </button>
+                <div className="form-field xl:max-w-[240px] xl:justify-self-end">
+                  <label className="form-label">{labels.filterDriver}</label>
+                  <select
+                    value={driverFilter}
+                    onChange={(event) => setDriverFilter(event.target.value)}
+                    className="form-input w-full bg-white"
+                  >
+                    <option value="">{labels.allDrivers}</option>
+                    {sortedDrivers.map((driver) => (
+                      <option key={driver.id} value={driver.name}>
+                        {driver.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </div>
           </div>
 
           {loading ? (
             <p className="text-sm text-slate-500">{t.drivers.loadingDrivers}</p>
-          ) : drivers.length === 0 ? (
+          ) : filteredDrivers.length === 0 ? (
             <EmptyState
-              title={t.drivers.noDriversYet}
-              description={t.drivers.noDriversDescription}
+              title={drivers.length === 0 ? t.drivers.noDriversYet : labels.searchDrivers}
+              description={
+                drivers.length === 0
+                  ? t.drivers.noDriversDescription
+                  : labels.searchPlaceholder
+              }
             />
           ) : (
             <>
               <div className="space-y-3 md:hidden">
-                {drivers.map((driver) => (
-                  <div key={driver.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                {filteredDrivers.map((driver) => (
+                  <div key={driver.id} className="subtle-panel p-3.5">
                     <p className="text-sm font-semibold text-slate-900">{driver.name}</p>
                     <p className="mt-1 text-sm text-slate-500">{driver.vehicle_reg}</p>
                     <div className="mt-4 flex flex-col gap-2">
@@ -228,7 +347,7 @@ export default function DriversPage() {
                             vehicle_reg: driver.vehicle_reg
                           })
                         }
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                        className="btn-secondary w-full"
                       >
                         {t.common.edit}
                       </button>
@@ -237,7 +356,7 @@ export default function DriversPage() {
                         type="button"
                         onClick={() => void handleDelete(String(driver.id))}
                         disabled={deletingId === driver.id}
-                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 px-3 py-2.5 text-sm font-medium text-rose-700 transition hover:bg-rose-50 disabled:opacity-50"
+                        className="btn-danger w-full gap-2 disabled:opacity-50"
                       >
                         <Trash2 className="h-4 w-4" />
                         {deletingId === driver.id ? t.common.deleting : t.common.delete}
@@ -247,55 +366,60 @@ export default function DriversPage() {
                 ))}
               </div>
 
-              <div className="hidden -mx-5 overflow-x-auto px-5 md:block md:mx-0 md:px-0">
-                <div className="rounded-2xl border border-slate-200">
-                <table className="w-full min-w-[760px] text-sm">
-                  <thead>
-                    <tr className="bg-slate-100 text-slate-600">
-                      <th className="px-4 py-3 text-left font-semibold">{t.drivers.name}</th>
-                      <th className="px-4 py-3 text-left font-semibold">{t.drivers.vehicle}</th>
-                      <th className="px-4 py-3 text-left font-semibold">{t.common.action}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {drivers.map((driver) => (
-                      <tr
-                        key={driver.id}
-                        className="border-b border-slate-200 last:border-none hover:bg-slate-50 transition"
-                      >
-                        <td className="px-4 py-3 font-medium text-slate-900">{driver.name}</td>
-                        <td className="px-4 py-3 text-slate-700">{driver.vehicle_reg}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex flex-col gap-2 sm:flex-row">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setForm({
-                                  id: String(driver.id),
-                                  name: driver.name,
-                                  vehicle_reg: driver.vehicle_reg
-                                })
-                              }
-                              className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                            >
-                              {t.common.edit}
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => void handleDelete(String(driver.id))}
-                              disabled={deletingId === driver.id}
-                              className="inline-flex items-center gap-2 rounded-xl border border-rose-200 px-3 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-50 disabled:opacity-50"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                              {deletingId === driver.id ? t.common.deleting : t.common.delete}
-                            </button>
-                          </div>
-                        </td>
+              <div className="hidden overflow-x-auto md:block">
+                <div className="table-shell rounded-2xl">
+                  <table className="w-full min-w-[760px] text-sm">
+                    <colgroup>
+                      <col className="w-[35%]" />
+                      <col className="w-[29%]" />
+                      <col className="w-[36%]" />
+                    </colgroup>
+                    <thead>
+                      <tr className="bg-slate-50/80 text-slate-600">
+                        <th className="px-5 py-2.5 text-left font-semibold">{t.drivers.name}</th>
+                        <th className="px-5 py-2.5 text-left font-semibold">{t.drivers.vehicle}</th>
+                        <th className="px-5 py-2.5 text-left font-semibold">{t.common.action}</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {filteredDrivers.map((driver) => (
+                        <tr
+                          key={driver.id}
+                          className="border-b border-slate-100/70 transition last:border-none hover:bg-slate-50/55"
+                        >
+                          <td className="px-5 py-2.5 font-medium text-slate-900">{driver.name}</td>
+                          <td className="px-5 py-2.5 text-slate-700">{driver.vehicle_reg}</td>
+                          <td className="px-5 py-2.5">
+                            <div className="flex h-9 flex-row items-center gap-1.5 whitespace-nowrap">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setForm({
+                                    id: String(driver.id),
+                                    name: driver.name,
+                                    vehicle_reg: driver.vehicle_reg
+                                  })
+                                }
+                                className="btn-secondary min-w-[78px] px-3 py-1.5 text-xs"
+                              >
+                                {t.common.edit}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => void handleDelete(String(driver.id))}
+                                disabled={deletingId === driver.id}
+                                className="btn-danger min-w-[86px] gap-1.5 px-3 py-1.5 text-xs disabled:opacity-50"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                {deletingId === driver.id ? t.common.deleting : t.common.delete}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </>

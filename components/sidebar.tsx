@@ -24,7 +24,7 @@ export function Sidebar() {
   return (
     <>
       <button
-        className="fixed left-3 top-3 z-50 rounded-2xl bg-slate-950 p-3 text-white shadow-soft md:hidden"
+        className="fixed left-3 top-3 z-50 rounded-lg border border-white/80 bg-white/92 p-2.5 text-slate-900 shadow-[0_10px_24px_rgba(15,23,42,0.08)] backdrop-blur md:hidden"
         onClick={() => setOpen((value) => !value)}
         type="button"
         aria-label={t.nav.openMenu}
@@ -34,11 +34,11 @@ export function Sidebar() {
 
       <aside
         className={clsx(
-          "fixed inset-y-0 left-0 z-40 w-[86vw] max-w-72 border-r border-white/60 bg-slate-950 px-4 py-5 text-white shadow-soft transition-transform sm:px-5 sm:py-6 md:translate-x-0",
+          "fixed inset-y-0 left-0 z-40 w-[86vw] max-w-72 border-r border-[#312e81]/30 bg-[linear-gradient(180deg,#15162d_0%,#1f1b3d_100%)] px-4 py-4 text-white shadow-[0_22px_48px_rgba(15,23,42,0.28)] transition-transform sm:px-5 sm:py-5 md:translate-x-0",
           open ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="mb-8 rounded-3xl border border-white/10 bg-white/[0.03] px-4 py-5">
+        <div className="mb-8 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
           <div className="flex flex-col items-center justify-center text-center">
             <div className="flex h-[98px] w-full items-center justify-center sm:h-[108px]">
               <Image
@@ -50,18 +50,18 @@ export function Sidebar() {
                 priority
               />
             </div>
-            <div className="mt-5 flex max-w-[224px] flex-col items-center">
-              <p className="text-center text-[11px] font-medium uppercase tracking-[0.2em] text-slate-400 sm:text-xs">
+            <div className="mt-4 flex max-w-[224px] flex-col items-center">
+              <p className="text-center text-[11px] font-medium uppercase tracking-[0.2em] text-slate-300 sm:text-xs">
                 {t.common.appSubtitle}
               </p>
-              <h1 className="mt-3 text-center text-[12.5px] font-semibold uppercase leading-[1.35] tracking-[0.04em] text-white sm:text-[13px]">
+              <h1 className="mt-2.5 text-center text-[12px] font-semibold uppercase leading-[1.35] tracking-[0.03em] text-white sm:text-[12.5px]">
                 {t.common.appName}
               </h1>
             </div>
           </div>
         </div>
 
-        <nav className="space-y-2">
+        <nav className="space-y-2.5">
           {navItems.map(({ href, label, icon: Icon }) => {
             const active = pathname === href;
 
@@ -70,21 +70,21 @@ export function Sidebar() {
                 key={href}
                 href={href}
                 className={clsx(
-                  "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition",
+                  "flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition duration-200",
                   active
-                    ? "bg-white text-slate-950"
-                    : "text-slate-300 hover:bg-white/10 hover:text-white"
+                    ? "border-l-2 border-brand-400 bg-brand-400/10 pl-[10px] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+                    : "text-slate-300 hover:bg-white/[0.03] hover:text-white"
                 )}
                 onClick={() => setOpen(false)}
               >
-                <Icon className="h-5 w-5" />
+                <Icon className={clsx("h-4.5 w-4.5", active ? "text-brand-200" : "text-slate-400")} />
                 {label}
               </Link>
             );
           })}
         </nav>
 
-        <div className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-4">
+        <div className="mt-8 rounded-lg border border-white/10 bg-white/[0.04] p-3">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
             {t.common.language}
           </p>
@@ -93,10 +93,10 @@ export function Sidebar() {
               type="button"
               onClick={() => setLanguage("en")}
               className={clsx(
-                "rounded-2xl px-4 py-2 text-sm font-semibold",
+                "rounded-lg px-4 py-2 text-sm font-semibold",
                 language === "en"
                   ? "bg-white text-slate-950"
-                  : "bg-white/5 text-slate-300 hover:bg-white/10"
+                  : "bg-white/5 text-slate-300 hover:bg-brand-400/10 hover:text-white"
               )}
             >
               EN
@@ -105,10 +105,10 @@ export function Sidebar() {
               type="button"
               onClick={() => setLanguage("th")}
               className={clsx(
-                "rounded-2xl px-4 py-2 text-sm font-semibold",
+                "rounded-lg px-4 py-2 text-sm font-semibold",
                 language === "th"
                   ? "bg-white text-slate-950"
-                  : "bg-white/5 text-slate-300 hover:bg-white/10"
+                  : "bg-white/5 text-slate-300 hover:bg-brand-400/10 hover:text-white"
               )}
             >
               TH
@@ -119,7 +119,7 @@ export function Sidebar() {
 
       {open ? (
         <button
-          className="fixed inset-0 z-30 bg-slate-950/50 md:hidden"
+          className="fixed inset-0 z-30 bg-slate-950/40 backdrop-blur-[2px] md:hidden"
           onClick={() => setOpen(false)}
           type="button"
           aria-label={t.nav.closeSidebar}

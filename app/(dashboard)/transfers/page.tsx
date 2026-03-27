@@ -4,28 +4,37 @@ import { Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { Header } from "@/components/header";
+import {
+  getTransferTypeLabel,
+  normalizeTransferTypeKey,
+  TRANSFER_TYPE_KEYS
+} from "@/lib/localized-values";
 import { deleteTransfer, fetchDrivers, fetchTransfers, saveTransfer } from "@/lib/data";
 import { useLanguage } from "@/lib/language-provider";
 import { formatCurrency, formatDate, today } from "@/lib/utils";
 import type { BankTransferWithDriver, Driver } from "@/types/database";
 
-const transferTypes = ["Driver Advance", "Fuel Reimbursement", "Maintenance", "Other"];
-
-const initialForm = {
-  id: "",
-  date: today(),
-  driver_id: "",
-  vehicle_reg: "",
-  amount: "",
-  transfer_type: transferTypes[0],
-  notes: ""
-};
+function createInitialForm(defaultTransferType: string) {
+  return {
+    id: "",
+    date: today(),
+    driver_id: "",
+    vehicle_reg: "",
+    amount: "",
+    transfer_type: defaultTransferType,
+    notes: ""
+  };
+}
 
 export default function TransfersPage() {
   const { language, t } = useLanguage();
+  const transferTypeOptions = TRANSFER_TYPE_KEYS.map((value) => ({
+    value,
+    label: t.transfer.type[value]
+  }));
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [transfers, setTransfers] = useState<BankTransferWithDriver[]>([]);
-  const [form, setForm] = useState(initialForm);
+  const [form, setForm] = useState(() => createInitialForm(transferTypeOptions[0].value));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -55,7 +64,7 @@ export default function TransfersPage() {
       setDrivers(driverRows);
       setTransfers(transferRows);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t.transfers.unableToLoadTransferData);
+      setError(t.transfers.unableToLoadTransferData);
     } finally {
       setLoading(false);
     }
@@ -77,7 +86,7 @@ export default function TransfersPage() {
   }, [selectedDriver]);
 
   const resetForm = () => {
-    setForm(initialForm);
+    setForm(createInitialForm(transferTypeOptions[0].value));
     setError(null);
   };
 
@@ -89,19 +98,18 @@ export default function TransfersPage() {
     try {
       await saveTransfer({
         id: form.id || undefined,
-        date: form.date,
+        transfer_date: form.date,
         driver_id: form.driver_id,
-        driver: selectedDriver?.name ?? form.driver_id,
-        vehicle_reg: form.vehicle_reg,
+        vehicle_reg: form.vehicle_reg.trim(),
         amount: Number(form.amount),
         transfer_type: form.transfer_type,
-        notes: form.notes || null
+        notes: form.notes.trim() || null
       });
 
       resetForm();
       await loadData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t.transfers.unableToSaveTransfer);
+      setError(t.transfers.unableToSaveTransfer);
     } finally {
       setSaving(false);
     }
@@ -123,7 +131,7 @@ export default function TransfersPage() {
 
       await loadData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t.transfers.unableToDeleteTransfer);
+      setError(t.transfers.unableToDeleteTransfer);
     } finally {
       setDeletingId(null);
     }
@@ -135,21 +143,21 @@ export default function TransfersPage() {
         <Header title={t.transfers.title} description={t.transfers.description} />
       </div>
 
-      <section className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
+      <section className="mt-1">
         <form
           onSubmit={handleSubmit}
-          className="rounded-3xl border border-slate-200 bg-white p-5 shadow-md sm:p-6"
+          className="surface-card-soft w-full p-3 sm:p-3.5 lg:p-4"
         >
           <div className="mb-5">
-            <h3 className="text-lg font-semibold text-slate-900">
+            <h3 className="section-title">
               {isEditing ? t.transfers.editTransfer : t.transfers.addTransfer}
             </h3>
-            <p className="mt-1 text-sm text-slate-500">{t.transfers.description}</p>
+            <p className="section-subtitle">{t.transfers.description}</p>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
+          <div className="grid gap-2.5 md:grid-cols-2 lg:grid-cols-3 lg:gap-x-5">
+            <div className="form-field">
+              <label className="form-label">
                 {t.transfers.date}
               </label>
               <input
@@ -159,12 +167,12 @@ export default function TransfersPage() {
                 onChange={(event) =>
                   setForm((current) => ({ ...current, date: event.target.value }))
                 }
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+                className="form-input w-full"
               />
             </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
+            <div className="form-field">
+              <label className="form-label">
                 {t.transfers.driver}
               </label>
               <select
@@ -173,7 +181,7 @@ export default function TransfersPage() {
                 onChange={(event) =>
                   setForm((current) => ({ ...current, driver_id: event.target.value }))
                 }
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+                className="form-input w-full"
               >
                 <option value="">{t.fuelLogs.selectDriver}</option>
                 {drivers.map((driver) => (
@@ -184,8 +192,8 @@ export default function TransfersPage() {
               </select>
             </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
+            <div className="form-field">
+              <label className="form-label">
                 {t.fuelLogs.vehicleReg}
               </label>
               <input
@@ -194,13 +202,13 @@ export default function TransfersPage() {
                 onChange={(event) =>
                   setForm((current) => ({ ...current, vehicle_reg: event.target.value }))
                 }
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black"
-                placeholder="ABC-1234"
+                className="form-input w-full"
+                placeholder={t.transfers.vehicleRegPlaceholder}
               />
             </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
+            <div className="form-field">
+              <label className="form-label">
                 {t.transfers.amount}
               </label>
               <input
@@ -212,13 +220,13 @@ export default function TransfersPage() {
                 onChange={(event) =>
                   setForm((current) => ({ ...current, amount: event.target.value }))
                 }
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black"
-                placeholder="0.00"
+                className="form-input w-full"
+                placeholder={t.transfers.amountPlaceholder}
               />
             </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">
+            <div className="form-field">
+              <label className="form-label">
                 {t.transfers.type}
               </label>
               <select
@@ -226,18 +234,19 @@ export default function TransfersPage() {
                 onChange={(event) =>
                   setForm((current) => ({ ...current, transfer_type: event.target.value }))
                 }
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+                className="form-input w-full"
               >
-                {transferTypes.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
+                <option value="">{t.transfers.typeSelect}</option>
+                {transferTypeOptions.map((type) => (
+                  <option key={type.value} value={type.value}>
+                    {type.label}
                   </option>
                 ))}
               </select>
             </div>
 
-            <div className="md:col-span-2 xl:col-span-1">
-              <label className="mb-2 block text-sm font-medium text-slate-700">
+            <div className="form-field md:col-span-2 lg:col-span-3">
+              <label className="form-label">
                 {t.transfers.notes}
               </label>
               <textarea
@@ -246,7 +255,7 @@ export default function TransfersPage() {
                 onChange={(event) =>
                   setForm((current) => ({ ...current, notes: event.target.value }))
                 }
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+                className="form-textarea w-full"
                 placeholder={t.fuelLogs.optionalNotes}
               />
             </div>
@@ -254,11 +263,11 @@ export default function TransfersPage() {
 
           {error ? <p className="mt-4 text-sm text-rose-600">{error}</p> : null}
 
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+          <div className="mt-4.5 flex flex-col gap-2 sm:flex-row sm:items-center">
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 rounded-xl bg-black px-5 py-3 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-70"
+              className="btn-primary min-w-[180px] flex-1 sm:flex-none disabled:opacity-70"
             >
               {saving
                 ? t.common.saving
@@ -268,27 +277,29 @@ export default function TransfersPage() {
             </button>
 
             {isEditing ? (
-              <button
-                type="button"
-                onClick={resetForm}
-                className="w-full rounded-xl border border-slate-300 px-5 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 sm:w-auto"
-              >
-                {t.common.cancel}
-              </button>
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="btn-secondary w-full sm:w-auto"
+                >
+                  {t.common.cancel}
+                </button>
             ) : null}
           </div>
         </form>
+      </section>
 
-        <section className="min-w-0 rounded-3xl border border-slate-200 bg-white p-5 shadow-md sm:p-6">
-          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <section className="mt-5">
+        <section className="surface-card min-w-0 p-3 sm:p-3.5 lg:p-4">
+          <div className="mb-3.5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h3 className="text-lg font-semibold text-slate-900">
+              <h3 className="section-title">
                 {t.transfers.transferHistory}
               </h3>
-              <p className="mt-1 text-sm text-slate-500">{t.transfers.tableDescription}</p>
+              <p className="section-subtitle">{t.transfers.tableDescription}</p>
             </div>
 
-            <span className="inline-flex w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-600">
+            <span className="badge-muted w-fit">
               {transfers.length} {t.common.entries}
             </span>
           </div>
@@ -304,7 +315,7 @@ export default function TransfersPage() {
             <>
               <div className="space-y-3 md:hidden">
                 {sortedTransfers.map((transfer) => (
-                  <div key={transfer.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div key={transfer.id} className="subtle-panel p-3">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-slate-900">{transfer.driver}</p>
@@ -314,7 +325,9 @@ export default function TransfersPage() {
                         {formatDate(transfer.date, language)}
                       </p>
                     </div>
-                    <p className="mt-3 text-sm text-slate-600">{transfer.transfer_type}</p>
+                    <p className="mt-3 text-sm text-slate-600">
+                      {getTransferTypeLabel(t, transfer.transfer_type)}
+                    </p>
                     <p className="mt-1 text-base font-semibold text-slate-950">
                       {formatCurrency(transfer.amount, language)}
                     </p>
@@ -329,11 +342,13 @@ export default function TransfersPage() {
                             driver_id: String(transfer.driver_id),
                             vehicle_reg: transfer.vehicle_reg,
                             amount: String(transfer.amount),
-                            transfer_type: transfer.transfer_type,
+                            transfer_type:
+                              normalizeTransferTypeKey(transfer.transfer_type) ??
+                              transferTypeOptions[0].value,
                             notes: transfer.notes || ""
                           })
                         }
-                        className="w-full rounded-xl border border-slate-300 px-3 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                        className="btn-secondary w-full"
                       >
                         {t.common.edit}
                       </button>
@@ -342,7 +357,7 @@ export default function TransfersPage() {
                         type="button"
                         onClick={() => void handleDelete(String(transfer.id))}
                         disabled={deletingId === transfer.id}
-                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200 px-3 py-2.5 text-sm font-medium text-rose-700 transition hover:bg-rose-50 disabled:opacity-50"
+                        className="btn-danger w-full gap-2 disabled:opacity-50"
                       >
                         <Trash2 className="h-4 w-4" />
                         {deletingId === transfer.id ? t.common.deleting : t.common.delete}
@@ -353,78 +368,80 @@ export default function TransfersPage() {
               </div>
 
               <div className="hidden -mx-5 overflow-x-auto px-5 md:block md:mx-0 md:px-0">
-                <div className="rounded-2xl border border-slate-200">
-                <table className="w-full min-w-[980px] text-sm">
-                  <thead>
-                    <tr className="bg-slate-100 text-slate-600">
-                      <th className="px-4 py-3 text-left font-semibold">{t.transfers.date}</th>
-                      <th className="px-4 py-3 text-left font-semibold">{t.transfers.driver}</th>
-                      <th className="px-4 py-3 text-left font-semibold">{t.fuelLogs.vehicleReg}</th>
-                      <th className="px-4 py-3 text-left font-semibold">{t.transfers.type}</th>
-                      <th className="px-4 py-3 text-left font-semibold">{t.transfers.amount}</th>
-                      <th className="px-4 py-3 text-left font-semibold">{t.transfers.notes}</th>
-                      <th className="px-4 py-3 text-left font-semibold">{t.common.action}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedTransfers.map((transfer) => (
-                      <tr
-                        key={transfer.id}
-                        className="border-b border-slate-200 last:border-none hover:bg-slate-50 transition"
-                      >
-                        <td className="px-4 py-3 text-slate-700 whitespace-nowrap">
-                          {formatDate(transfer.date, language)}
-                        </td>
-                        <td className="px-4 py-3 font-medium text-slate-900 whitespace-nowrap">
-                          {transfer.driver}
-                        </td>
-                        <td className="px-4 py-3 text-slate-700 whitespace-nowrap">
-                          {transfer.vehicle_reg}
-                        </td>
-                        <td className="px-4 py-3 text-slate-700 whitespace-nowrap">
-                          {transfer.transfer_type}
-                        </td>
-                        <td className="px-4 py-3 font-medium text-slate-900 whitespace-nowrap">
-                          {formatCurrency(transfer.amount, language)}
-                        </td>
-                        <td className="px-4 py-3 text-slate-600 min-w-[180px]">
-                          {transfer.notes || "-"}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex flex-col gap-2 sm:flex-row">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setForm({
-                                  id: String(transfer.id),
-                                  date: transfer.date,
-                                  driver_id: String(transfer.driver_id),
-                                  vehicle_reg: transfer.vehicle_reg,
-                                  amount: String(transfer.amount),
-                                  transfer_type: transfer.transfer_type,
-                                  notes: transfer.notes || ""
-                                })
-                              }
-                              className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                            >
-                              {t.common.edit}
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => void handleDelete(String(transfer.id))}
-                              disabled={deletingId === transfer.id}
-                              className="inline-flex items-center gap-2 rounded-xl border border-rose-200 px-3 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-50 disabled:opacity-50"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                              {deletingId === transfer.id ? t.common.deleting : t.common.delete}
-                            </button>
-                          </div>
-                        </td>
+                <div className="table-shell rounded-2xl">
+                  <table className="w-full min-w-[920px] text-sm">
+                    <thead>
+                      <tr className="bg-slate-50/70 text-slate-600">
+                        <th className="px-4 py-2 text-left font-semibold">{t.transfers.date}</th>
+                        <th className="px-4 py-2 text-left font-semibold">{t.transfers.driver}</th>
+                        <th className="px-4 py-2 text-left font-semibold">{t.fuelLogs.vehicleReg}</th>
+                        <th className="px-4 py-2 text-left font-semibold">{t.transfers.type}</th>
+                        <th className="px-4 py-2 text-right font-semibold">{t.transfers.amount}</th>
+                        <th className="px-4 py-2 text-left font-semibold">{t.transfers.notes}</th>
+                        <th className="px-4 py-2 text-left font-semibold">{t.common.action}</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {sortedTransfers.map((transfer) => (
+                        <tr
+                          key={transfer.id}
+                          className="border-b border-slate-100/60 transition last:border-none hover:bg-slate-50/55"
+                        >
+                          <td className="whitespace-nowrap px-4 py-2 text-slate-700">
+                            {formatDate(transfer.date, language)}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-2 font-medium text-slate-900">
+                            {transfer.driver}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-2 text-slate-700">
+                            {transfer.vehicle_reg}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-2 text-slate-700">
+                            {getTransferTypeLabel(t, transfer.transfer_type)}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-2 text-right font-semibold text-slate-950">
+                            {formatCurrency(transfer.amount, language)}
+                          </td>
+                          <td className="min-w-[220px] px-4 py-2 text-slate-600">
+                            {transfer.notes || "-"}
+                          </td>
+                          <td className="px-4 py-2">
+                            <div className="flex flex-col gap-2 sm:flex-row">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setForm({
+                                    id: String(transfer.id),
+                                    date: transfer.date,
+                                    driver_id: String(transfer.driver_id),
+                                    vehicle_reg: transfer.vehicle_reg,
+                                    amount: String(transfer.amount),
+                                    transfer_type:
+                                      normalizeTransferTypeKey(transfer.transfer_type) ??
+                                      transferTypeOptions[0].value,
+                                    notes: transfer.notes || ""
+                                  })
+                                }
+                                className="btn-secondary"
+                              >
+                                {t.common.edit}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => void handleDelete(String(transfer.id))}
+                                disabled={deletingId === transfer.id}
+                                className="btn-danger gap-2 disabled:opacity-50"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                {deletingId === transfer.id ? t.common.deleting : t.common.delete}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </>

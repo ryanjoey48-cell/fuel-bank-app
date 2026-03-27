@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useLanguage } from "@/lib/language-provider";
 import { supabase } from "@/lib/supabase";
 
 export function AuthForm() {
   const router = useRouter();
+  const { t } = useLanguage();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"login" | "signup">("login");
@@ -25,15 +27,15 @@ export function AuthForm() {
     const { error } = await action;
 
     if (error) {
-      setMessage(error.message);
+      setMessage(mode === "login" ? t.login.loginError : t.login.signupError);
       setLoading(false);
       return;
     }
 
     setMessage(
       mode === "signup"
-        ? "Account created. If email confirmation is enabled, verify your inbox first."
-        : "Login successful. Redirecting..."
+        ? t.login.signupSuccess
+        : t.login.loginSuccess
     );
 
     setLoading(false);
@@ -44,62 +46,70 @@ export function AuthForm() {
   };
 
   return (
-    <div className="w-full max-w-md rounded-[2rem] border border-white/60 bg-white/90 p-8 shadow-soft backdrop-blur">
-      <div className="mb-8 flex rounded-2xl bg-slate-100 p-1">
+    <div className="surface-card w-full max-w-md p-8">
+      <div className="mb-8 flex rounded-2xl border border-slate-200/80 bg-slate-100/90 p-1">
         <button
           type="button"
           className={`flex-1 rounded-2xl px-4 py-3 text-sm font-medium ${
-            mode === "login" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500"
+            mode === "login"
+              ? "bg-white text-brand-700 shadow-[0_10px_20px_rgba(109,40,217,0.12)]"
+              : "text-slate-500"
           }`}
           onClick={() => setMode("login")}
         >
-          Login
+          {t.login.loginTab}
         </button>
         <button
           type="button"
           className={`flex-1 rounded-2xl px-4 py-3 text-sm font-medium ${
-            mode === "signup" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500"
+            mode === "signup"
+              ? "bg-white text-brand-700 shadow-[0_10px_20px_rgba(109,40,217,0.12)]"
+              : "text-slate-500"
           }`}
           onClick={() => setMode("signup")}
         >
-          Create Account
+          {t.login.signupTab}
         </button>
       </div>
 
       <form className="space-y-4" onSubmit={handleSubmit}>
         <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700">Email</label>
+          <label className="mb-2 block text-sm font-medium text-slate-700">{t.login.email}</label>
           <input
             type="email"
             required
-            placeholder="ops@company.com"
+            placeholder={t.login.emailPlaceholder}
             value={email}
             onChange={(event) => setEmail(event.target.value)}
           />
         </div>
 
         <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700">Password</label>
+          <label className="mb-2 block text-sm font-medium text-slate-700">
+            {t.login.password}
+          </label>
           <input
             type="password"
             required
             minLength={6}
-            placeholder="Minimum 6 characters"
+            placeholder={t.login.passwordPlaceholder}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
           />
         </div>
 
         {message ? (
-          <p className="rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-700">{message}</p>
+          <p className="rounded-2xl border border-brand-100 bg-brand-50/80 px-4 py-3 text-sm text-brand-800">
+            {message}
+          </p>
         ) : null}
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+          className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-70"
         >
-          {loading ? "Please wait..." : mode === "login" ? "Sign In" : "Create Account"}
+          {loading ? t.login.waiting : mode === "login" ? t.login.signIn : t.login.createAccount}
         </button>
       </form>
     </div>
