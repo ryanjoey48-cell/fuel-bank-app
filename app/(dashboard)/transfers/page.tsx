@@ -1,7 +1,7 @@
 "use client";
 
 import { Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { Header } from "@/components/header";
 import {
@@ -55,7 +55,7 @@ export default function TransfersPage() {
     });
   }, [transfers]);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -68,11 +68,11 @@ export default function TransfersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [t.transfers.unableToLoadTransferData]);
 
   useEffect(() => {
     void loadData();
-  }, [t.transfers.unableToLoadTransferData]);
+  }, [loadData]);
 
   useEffect(() => {
     if (!selectedDriver) {
@@ -146,7 +146,7 @@ export default function TransfersPage() {
       <section className="mt-1">
         <form
           onSubmit={handleSubmit}
-          className="surface-card-soft w-full p-3 sm:p-3.5 lg:p-4"
+          className="surface-card-soft w-full p-4 sm:p-5 lg:p-5.5"
         >
           <div className="mb-5">
             <h3 className="section-title">
@@ -155,7 +155,7 @@ export default function TransfersPage() {
             <p className="section-subtitle">{t.transfers.description}</p>
           </div>
 
-          <div className="grid gap-2.5 md:grid-cols-2 lg:grid-cols-3 lg:gap-x-5">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 lg:gap-x-5">
             <div className="form-field">
               <label className="form-label">
                 {t.transfers.date}
@@ -263,11 +263,11 @@ export default function TransfersPage() {
 
           {error ? <p className="mt-4 text-sm text-rose-600">{error}</p> : null}
 
-          <div className="mt-4.5 flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="mt-4.5 flex flex-col gap-2.5 sm:flex-row sm:items-center">
             <button
               type="submit"
               disabled={saving}
-              className="btn-primary min-w-[180px] flex-1 sm:flex-none disabled:opacity-70"
+              className="btn-primary w-full min-w-[180px] flex-1 sm:w-auto sm:flex-none disabled:opacity-70"
             >
               {saving
                 ? t.common.saving
@@ -277,20 +277,20 @@ export default function TransfersPage() {
             </button>
 
             {isEditing ? (
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="btn-secondary w-full sm:w-auto"
-                >
-                  {t.common.cancel}
-                </button>
+              <button
+                type="button"
+                onClick={resetForm}
+                className="btn-secondary w-full sm:w-auto"
+              >
+                {t.common.cancel}
+              </button>
             ) : null}
           </div>
         </form>
       </section>
 
       <section className="mt-5">
-        <section className="surface-card min-w-0 p-3 sm:p-3.5 lg:p-4">
+        <section className="surface-card min-w-0 p-4 sm:p-5 lg:p-5">
           <div className="mb-3.5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="section-title">
@@ -313,10 +313,10 @@ export default function TransfersPage() {
             />
           ) : (
             <>
-              <div className="space-y-3 md:hidden">
+              <div className="space-y-3.5 md:hidden">
                 {sortedTransfers.map((transfer) => (
-                  <div key={transfer.id} className="subtle-panel p-3">
-                    <div className="flex items-start justify-between gap-3">
+                  <div key={transfer.id} className="subtle-panel p-4">
+                    <div className="flex flex-col gap-2.5 min-[400px]:flex-row min-[400px]:items-start min-[400px]:justify-between">
                       <div>
                         <p className="text-sm font-semibold text-slate-900">{transfer.driver}</p>
                         <p className="mt-1 text-sm text-slate-500">{transfer.vehicle_reg}</p>
@@ -325,9 +325,9 @@ export default function TransfersPage() {
                         {formatDate(transfer.date, language)}
                       </p>
                     </div>
-                    <p className="mt-3 text-sm text-slate-600">
+                    <div className="mt-3 inline-flex rounded-full border border-slate-200/80 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-600">
                       {getTransferTypeLabel(t, transfer.transfer_type)}
-                    </p>
+                    </div>
                     <p className="mt-1 text-base font-semibold text-slate-950">
                       {formatCurrency(transfer.amount, language)}
                     </p>

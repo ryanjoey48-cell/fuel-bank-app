@@ -22,32 +22,33 @@ export function Header({ title, description, showSignOut = false }: HeaderProps)
   };
 
   return (
-    <header className="surface-card p-3.5 sm:p-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+    <header className="surface-card overflow-hidden p-4 sm:p-5">
+      <div className="absolute inset-x-0 top-0 h-16 bg-[linear-gradient(135deg,rgba(109,40,217,0.08),rgba(249,115,22,0.04)_55%,transparent)]" />
+      <div className="relative flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-11 shrink-0 items-center justify-center rounded-lg border border-white/70 bg-white/78 shadow-[0_1px_2px_rgba(0,0,0,0.04)] sm:h-10 sm:w-12">
+          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/88 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 shadow-[0_8px_18px_rgba(15,23,42,0.05)]">
+            {t.common.operations}
+          </div>
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/80 bg-white shadow-[0_14px_28px_rgba(15,23,42,0.08)] sm:h-12 sm:w-12">
               <Image
                 src="/logo.png"
                 alt={t.common.appName}
                 width={64}
                 height={48}
-                className="h-full w-auto object-contain"
+                className="h-8 w-8 object-contain"
                 priority
               />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-brand-700">
-                {t.common.operations}
-              </p>
-              <h2 className="mt-0.5 text-[17px] font-semibold tracking-tight text-slate-950 sm:text-[1.3rem]">
+              <h2 className="text-[1.35rem] font-semibold tracking-[-0.04em] text-slate-950 sm:text-[1.7rem]">
                 {title}
               </h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500 sm:text-[15px]">
+                {description}
+              </p>
             </div>
           </div>
-          <p className="mt-2 max-w-2xl text-sm leading-5 text-slate-500">
-            {description}
-          </p>
         </div>
 
         {showSignOut ? (

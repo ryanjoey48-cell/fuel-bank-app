@@ -46,8 +46,17 @@ export function AuthForm() {
   };
 
   return (
-    <div className="surface-card w-full max-w-md p-8">
-      <div className="mb-8 flex rounded-2xl border border-slate-200/80 bg-slate-100/90 p-1">
+    <div className="surface-card w-full max-w-md p-5 sm:p-8">
+      <div className="mb-6">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+          Fuel &amp; Bank App
+        </p>
+        <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-slate-950">
+          {mode === "login" ? t.login.signIn : t.login.createAccount}
+        </h2>
+      </div>
+
+      <div className="mb-8 flex rounded-[1.25rem] border border-slate-200/80 bg-slate-100/90 p-1">
         <button
           type="button"
           className={`flex-1 rounded-2xl px-4 py-3 text-sm font-medium ${
@@ -72,9 +81,9 @@ export function AuthForm() {
         </button>
       </div>
 
-      <form className="space-y-4" onSubmit={handleSubmit}>
+      <form className="space-y-5" onSubmit={handleSubmit}>
         <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700">{t.login.email}</label>
+          <label className="mb-2 block text-sm font-semibold text-slate-700">{t.login.email}</label>
           <input
             type="email"
             required
@@ -85,7 +94,7 @@ export function AuthForm() {
         </div>
 
         <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700">
+          <label className="mb-2 block text-sm font-semibold text-slate-700">
             {t.login.password}
           </label>
           <input
@@ -99,7 +108,7 @@ export function AuthForm() {
         </div>
 
         {message ? (
-          <p className="rounded-2xl border border-brand-100 bg-brand-50/80 px-4 py-3 text-sm text-brand-800">
+          <p className="rounded-[1.25rem] border border-brand-100 bg-brand-50/80 px-4 py-3 text-sm text-brand-800 shadow-[0_12px_24px_rgba(109,40,217,0.08)]">
             {message}
           </p>
         ) : null}

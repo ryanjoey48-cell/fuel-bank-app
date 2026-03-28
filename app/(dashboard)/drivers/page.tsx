@@ -2,7 +2,7 @@
 
 import { CarFront, Download, Search, Trash2, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { Header } from "@/components/header";
 import { deleteDriver, fetchDrivers, saveDriver } from "@/lib/data";
@@ -28,21 +28,22 @@ function DriverSummaryCard({
   icon: LucideIcon;
 }) {
   return (
-    <article className="surface-card-soft flex h-full min-h-[138px] flex-col p-3.5 sm:min-h-[144px] sm:p-3.5">
+    <article className="surface-card-soft flex h-full min-h-[148px] flex-col overflow-hidden p-4 sm:min-h-[152px] sm:p-4">
+      <div className="absolute inset-x-0 top-0 h-14 bg-[linear-gradient(135deg,rgba(63,60,187,0.06),rgba(249,115,22,0.04)_72%,transparent)]" />
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
             {label}
           </p>
-          <p className="mt-2 text-[1.45rem] font-semibold tracking-[-0.035em] text-slate-950 sm:text-[1.65rem]">
+          <p className="mt-2 text-[1.55rem] font-semibold tracking-[-0.04em] text-slate-950 sm:text-[1.7rem]">
             {value}
           </p>
         </div>
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-brand-100 bg-brand-50 text-brand-700 shadow-[0_8px_20px_rgba(109,40,217,0.08)]">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/80 bg-white text-brand-700 shadow-[0_12px_24px_rgba(63,60,187,0.08)]">
           <Icon className="h-4.5 w-4.5" />
         </div>
       </div>
-      <p className="mt-3 text-[12px] leading-5 text-slate-500">{helper}</p>
+      <p className="mt-4 text-[13px] leading-6 text-slate-500">{helper}</p>
     </article>
   );
 }
@@ -94,7 +95,7 @@ export default function DriversPage() {
     });
   }, [driverFilter, searchQuery, sortedDrivers]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -104,11 +105,11 @@ export default function DriversPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [t.drivers.unableToLoadDrivers]);
 
   useEffect(() => {
     void load();
-  }, [t.drivers.unableToLoadDrivers]);
+  }, [load]);
 
   const resetForm = () => {
     setForm(initialForm);
@@ -175,7 +176,7 @@ export default function DriversPage() {
         <Header title={t.drivers.title} description={t.drivers.description} />
       </div>
 
-      <section className="mb-4.5 grid gap-3.5 sm:grid-cols-2 xl:max-w-[720px]">
+      <section className="mb-4.5 grid gap-4 sm:grid-cols-2 xl:max-w-[720px]">
         <DriverSummaryCard
           label={labels.totalDrivers}
           value={String(drivers.length)}
@@ -190,11 +191,8 @@ export default function DriversPage() {
         />
       </section>
 
-      <section className="grid gap-4.5 xl:grid-cols-[minmax(360px,0.95fr)_minmax(0,1.78fr)] 2xl:grid-cols-[minmax(380px,0.92fr)_minmax(0,1.82fr)]">
-        <form
-          onSubmit={submit}
-          className="surface-card-soft h-fit p-4 sm:p-4.5 lg:p-5"
-        >
+      <section className="grid items-start gap-4 xl:grid-cols-[minmax(360px,0.95fr)_minmax(0,1.78fr)] 2xl:grid-cols-[minmax(380px,0.92fr)_minmax(0,1.82fr)]">
+        <form onSubmit={submit} className="surface-card-soft h-fit p-4 sm:p-5 lg:p-5.5">
           <div className="mb-6">
             <h3 className="section-title">
               {isEditing ? t.drivers.editDriver : t.drivers.addDriver}
@@ -204,7 +202,7 @@ export default function DriversPage() {
             </p>
           </div>
 
-          <div className="space-y-3.5">
+          <div className="space-y-4">
             <div className="form-field">
               <label className="form-label">{t.drivers.name}</label>
               <input
@@ -259,7 +257,7 @@ export default function DriversPage() {
           </div>
         </form>
 
-        <section className="surface-card min-w-0 p-4 sm:p-4.5 lg:p-5">
+        <section className="surface-card min-w-0 p-4 sm:p-5 lg:p-5.5">
           <div className="mb-4 flex flex-col gap-3.5">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0 space-y-1.5">
@@ -332,11 +330,14 @@ export default function DriversPage() {
             />
           ) : (
             <>
-              <div className="space-y-3 md:hidden">
+              <div className="space-y-3.5 md:hidden">
                 {filteredDrivers.map((driver) => (
-                  <div key={driver.id} className="subtle-panel p-3.5">
+                  <div key={driver.id} className="subtle-panel p-4">
                     <p className="text-sm font-semibold text-slate-900">{driver.name}</p>
                     <p className="mt-1 text-sm text-slate-500">{driver.vehicle_reg}</p>
+                    <div className="mt-3 inline-flex rounded-full border border-slate-200/80 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                      {t.drivers.vehicle}
+                    </div>
                     <div className="mt-4 flex flex-col gap-2">
                       <button
                         type="button"

@@ -537,9 +537,9 @@ export default function WeeklyMileagePage() {
         ))}
       </section>
 
-      <section className="surface-card p-3.5 sm:p-4 lg:p-4.5">
+      <section className="surface-card p-4 sm:p-5 lg:p-5.5">
         <form onSubmit={handleSubmit} className="w-full">
-          <div className="max-w-[780px]">
+          <div className="w-full max-w-[780px]">
             <div className="mb-4">
               <h3 className="section-title">
                 {isEditing ? t.weeklyMileage.editEntry : t.weeklyMileage.addEntry}
@@ -549,7 +549,7 @@ export default function WeeklyMileagePage() {
               </p>
             </div>
 
-            <div className="subtle-panel p-3.5 sm:p-4">
+            <div className="subtle-panel p-4 sm:p-4.5">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="form-field">
                   <label className="form-label">{t.weeklyMileage.weekEnding}</label>
@@ -624,7 +624,7 @@ export default function WeeklyMileagePage() {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="btn-primary min-w-[240px] justify-center disabled:opacity-70"
+                  className="btn-primary w-full min-w-[240px] justify-center sm:w-auto disabled:opacity-70"
                 >
                   {saving
                     ? t.common.saving
@@ -648,25 +648,25 @@ export default function WeeklyMileagePage() {
         </form>
       </section>
 
-      <section className="surface-card mt-4 min-w-0 p-3.5 sm:p-4 lg:p-4.5">
-        <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+      <section className="surface-card mt-4 min-w-0 p-4 sm:p-5 lg:p-5.5">
+        <div className="mb-4 flex flex-col gap-3.5 xl:flex-row xl:items-end xl:justify-between">
           <div>
             <h3 className="section-title">{labels.recordsForWeek}</h3>
             <p className="section-subtitle">{labels.recordsForWeekDescription}</p>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="flex items-center gap-2">
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
+            <div className="grid gap-2.5 sm:flex sm:items-center">
               <button
                 type="button"
                 onClick={() => previousWeekValue && setSelectedWeek(previousWeekValue)}
                 disabled={!previousWeekValue}
-                className="btn-secondary px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn-secondary w-full px-3 py-2 sm:w-auto disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {labels.previousWeek}
               </button>
 
-              <div className="min-w-[220px] form-field">
+              <div className="form-field w-full sm:min-w-[220px]">
                 <label className="sr-only">{labels.selectWeek}</label>
                 <select
                   value={selectedWeekValue}
@@ -685,7 +685,7 @@ export default function WeeklyMileagePage() {
                 type="button"
                 onClick={() => nextWeekValue && setSelectedWeek(nextWeekValue)}
                 disabled={!nextWeekValue}
-                className="btn-secondary px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn-secondary w-full px-3 py-2 sm:w-auto disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {labels.nextWeek}
               </button>
@@ -704,7 +704,7 @@ export default function WeeklyMileagePage() {
         </div>
 
         {selectedWeekValue ? (
-          <div className="mb-4 flex items-center gap-2">
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
             <span className="badge-muted">{labels.showingWeek}</span>
             <p className="text-sm font-medium text-slate-700">
               {formatDate(selectedWeekValue, language)}
@@ -721,10 +721,10 @@ export default function WeeklyMileagePage() {
           />
         ) : (
           <>
-            <div className="space-y-2.5 md:hidden">
+            <div className="space-y-3.5 md:hidden">
               {selectedWeekEntries.map((entry) => (
-                <div key={entry.id} className="subtle-panel p-3">
-                  <div className="flex items-start justify-between gap-3">
+                <div key={entry.id} className="subtle-panel p-4">
+                  <div className="flex flex-col gap-2.5 min-[400px]:flex-row min-[400px]:items-start min-[400px]:justify-between">
                     <div>
                       <p className="text-sm font-semibold text-slate-900">{entry.driver || "-"}</p>
                       <p className="mt-1 text-sm text-slate-500">{entry.vehicle_reg || "-"}</p>
@@ -739,7 +739,7 @@ export default function WeeklyMileagePage() {
                   <p className="mt-1 text-base font-semibold text-slate-950">
                     {formatNumber(entry.mileage, language)}
                   </p>
-                  <div className="mt-3 flex gap-2">
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                     <button
                       type="button"
                       onClick={() =>
@@ -853,7 +853,7 @@ export default function WeeklyMileagePage() {
       </section>
 
       <section className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-        <section className="surface-card min-w-0 p-3.5 sm:p-4">
+        <section className="surface-card min-w-0 p-4 sm:p-5">
           <div className="mb-4">
             <h3 className="section-title">{labels.reportingWeekSummary}</h3>
             <p className="section-subtitle">{labels.reportingWeekSummaryDescription}</p>
@@ -868,8 +868,8 @@ export default function WeeklyMileagePage() {
             />
           ) : (
             <div className="space-y-3">
-              <div className="subtle-panel p-3.5">
-                <div className="flex items-center justify-between gap-3">
+              <div className="subtle-panel p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
                       {labels.currentReportingWeek}
@@ -885,7 +885,7 @@ export default function WeeklyMileagePage() {
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <div className="subtle-panel p-3">
+                <div className="subtle-panel p-4">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
                     {labels.vehiclesSubmittedThisWeek}
                   </p>
@@ -894,7 +894,7 @@ export default function WeeklyMileagePage() {
                   </p>
                 </div>
 
-                <div className="subtle-panel p-3">
+                <div className="subtle-panel p-4">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
                     {labels.driversSubmittedThisWeek}
                   </p>
@@ -903,7 +903,7 @@ export default function WeeklyMileagePage() {
                   </p>
                 </div>
 
-                <div className="subtle-panel p-3">
+                <div className="subtle-panel p-4">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
                     {labels.highestOdometerThisWeek}
                   </p>
@@ -914,7 +914,7 @@ export default function WeeklyMileagePage() {
                   </p>
                 </div>
 
-                <div className="subtle-panel p-3">
+                <div className="subtle-panel p-4">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
                     {labels.lowestOdometerThisWeek}
                   </p>
@@ -925,11 +925,11 @@ export default function WeeklyMileagePage() {
                   </p>
                 </div>
 
-                <div className="subtle-panel p-3 sm:col-span-2">
+                <div className="subtle-panel p-4 sm:col-span-2">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
                     {labels.weeklyDistanceCovered}
                   </p>
-                  <div className="mt-1 flex items-end justify-between gap-3">
+                  <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                     <p className="text-lg font-semibold text-slate-950">
                       {selectedWeekSummaryRow.weeklyDistanceCovered != null
                         ? formatNumber(selectedWeekSummaryRow.weeklyDistanceCovered, language)
@@ -947,7 +947,7 @@ export default function WeeklyMileagePage() {
           )}
         </section>
 
-        <section className="surface-card min-w-0 p-3.5 sm:p-4">
+        <section className="surface-card min-w-0 p-4 sm:p-5">
           <div className="mb-4">
             <h3 className="section-title">{labels.weeklyDistanceByDriver}</h3>
             <p className="section-subtitle">{labels.weeklyDistanceByDriverDescription}</p>
@@ -957,7 +957,7 @@ export default function WeeklyMileagePage() {
             <EmptyState title={t.common.loading} description={t.weeklyMileage.loading} />
           ) : (
             <div className="space-y-3">
-              <div className="grid gap-3 lg:grid-cols-[minmax(240px,280px)_minmax(0,1fr)]">
+              <div className="grid gap-3.5 lg:grid-cols-[minmax(240px,280px)_minmax(0,1fr)]">
                 <div className="form-field">
                   <label className="form-label">{labels.compareDriver}</label>
                   <select
@@ -974,7 +974,7 @@ export default function WeeklyMileagePage() {
                   </select>
                 </div>
 
-                <div className="subtle-panel p-3">
+                <div className="subtle-panel p-4">
                   <p className="text-sm font-semibold text-slate-900">{labels.weeklyDistanceCovered}</p>
                   <p className="mt-1 text-xs text-slate-500">
                     {selectedWeekValue ? formatDate(selectedWeekValue, language) : labels.notEnoughDataYet}
@@ -986,7 +986,7 @@ export default function WeeklyMileagePage() {
                       {weeklyDistanceByDriverRows.slice(0, 3).map((row) => (
                         <div
                           key={`${row.driver}-${row.vehicleReg}`}
-                          className="flex items-center justify-between gap-3 border-b border-slate-100/70 pb-2 last:border-b-0 last:pb-0"
+                          className="flex flex-col gap-1.5 border-b border-slate-100/70 pb-2 last:border-b-0 last:pb-0 min-[400px]:flex-row min-[400px]:items-center min-[400px]:justify-between"
                         >
                           <div className="min-w-0">
                             <p className="truncate text-sm font-medium text-slate-800">{row.driver}</p>
@@ -1003,22 +1003,22 @@ export default function WeeklyMileagePage() {
               </div>
 
               {!comparisonDriverId ? (
-                <div className="subtle-panel flex min-h-[260px] items-center justify-center p-4">
+                  <div className="subtle-panel flex min-h-[260px] items-center justify-center p-5">
                   <EmptyState
                     title={labels.compareDriver}
                     description={labels.selectDriverToCompare}
                   />
                 </div>
               ) : !hasValidSelectedComparison ? (
-                <div className="subtle-panel flex min-h-[260px] items-center justify-center p-4">
+                <div className="subtle-panel flex min-h-[260px] items-center justify-center p-5">
                   <EmptyState
                     title={labels.notEnoughHistoricalData}
                     description={labels.weeklyComparisonHistoryDescription}
                   />
                 </div>
               ) : (
-                <div className="grid gap-3 xl:grid-cols-[minmax(0,1.05fr)_minmax(260px,0.95fr)]">
-                  <div className="subtle-panel p-3.5">
+                <div className="grid gap-3.5 xl:grid-cols-[minmax(0,1.05fr)_minmax(260px,0.95fr)]">
+                  <div className="subtle-panel p-4">
                     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                       <div>
                         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
@@ -1071,7 +1071,7 @@ export default function WeeklyMileagePage() {
                     </div>
                   </div>
 
-                  <div className="subtle-panel p-3.5">
+                  <div className="subtle-panel p-4">
                     <p className="text-sm font-semibold text-slate-900">
                       {labels.weeklyComparisonHistory}
                     </p>
@@ -1082,7 +1082,7 @@ export default function WeeklyMileagePage() {
                       {selectedComparisonEntries.slice(0, 5).map((entry) => (
                         <div
                           key={entry.id}
-                          className="flex items-center justify-between gap-3 border-b border-slate-100/70 pb-2 last:border-b-0 last:pb-0"
+                          className="flex flex-col gap-1.5 border-b border-slate-100/70 pb-2 last:border-b-0 last:pb-0 min-[400px]:flex-row min-[400px]:items-center min-[400px]:justify-between"
                         >
                           <div>
                             <p className="text-sm font-medium text-slate-800">

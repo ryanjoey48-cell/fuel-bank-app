@@ -133,19 +133,20 @@ function KpiCard({
   icon: typeof Wallet;
 }) {
   return (
-    <article className="surface-card-soft flex h-full min-h-[148px] flex-col p-3.5 sm:min-h-[160px] sm:p-4">
+    <article className="surface-card-soft flex h-full min-h-[164px] min-w-0 flex-col overflow-hidden p-4 sm:min-h-[170px] sm:p-4.5">
+      <div className="absolute inset-x-0 top-0 h-16 bg-[linear-gradient(135deg,rgba(63,60,187,0.07),rgba(249,115,22,0.04)_72%,transparent)]" />
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <p className="text-[12px] font-medium leading-5 text-slate-400">{label}</p>
-          <p className="mt-2 overflow-hidden text-ellipsis whitespace-nowrap text-[1.5rem] font-semibold tracking-[-0.035em] text-slate-900 sm:text-[1.8rem]">
+          <p className="text-[11px] font-semibold uppercase leading-5 tracking-[0.16em] text-slate-400">{label}</p>
+          <p className="mt-2 overflow-hidden text-ellipsis whitespace-nowrap text-[1.55rem] font-semibold tracking-[-0.045em] text-slate-900 sm:text-[1.85rem]">
             {value}
           </p>
         </div>
-        <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-brand-100 bg-brand-50 text-brand-700 shadow-[0_8px_20px_rgba(109,40,217,0.08)] sm:h-10 sm:w-10">
+        <div className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/80 bg-white text-brand-700 shadow-[0_12px_24px_rgba(63,60,187,0.08)]">
           <Icon className="h-5 w-5" />
         </div>
       </div>
-      <p className="mt-auto pt-3 text-[12px] leading-5 text-slate-500">{helper}</p>
+      <p className="mt-auto pt-4 text-[13px] leading-6 text-slate-500">{helper}</p>
     </article>
   );
 }
@@ -342,8 +343,8 @@ export default function DashboardPage() {
         <Header title={t.dashboard.title} description={t.dashboard.description} />
       </div>
 
-      <section className="surface-card p-3.5 sm:p-4">
-        <div className="mb-3.5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+      <section className="surface-card p-4 sm:p-5">
+        <div className="mb-4 flex flex-col gap-3.5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h3 className="text-base font-semibold text-slate-900">{t.dashboard.filtersTitle}</h3>
             <p className="mt-1 text-sm text-slate-500">{t.dashboard.filtersDescription}</p>
@@ -358,8 +359,8 @@ export default function DashboardPage() {
           </button>
         </div>
 
-        <div className="grid gap-3.5 md:grid-cols-3">
-          <div>
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="space-y-2">
             <label className="mb-2 block text-sm font-medium text-slate-500">
               {t.dashboard.driverFilter}
             </label>
@@ -376,7 +377,7 @@ export default function DashboardPage() {
             </select>
           </div>
 
-          <div>
+          <div className="space-y-2">
             <label className="mb-2 block text-sm font-medium text-slate-500">
               {t.dashboard.startDate}
             </label>
@@ -387,7 +388,7 @@ export default function DashboardPage() {
             />
           </div>
 
-          <div>
+          <div className="space-y-2">
             <label className="mb-2 block text-sm font-medium text-slate-500">
               {t.dashboard.endDate}
             </label>
@@ -406,13 +407,13 @@ export default function DashboardPage() {
         <EmptyState title={t.common.loading} description={t.dashboard.loadingData} />
       ) : (
         <>
-          <section className="grid gap-4.5 sm:grid-cols-2 xl:grid-cols-3">
+          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {kpiCards.map((card) => (
               <KpiCard key={card.label} {...card} />
             ))}
           </section>
 
-          <section className="surface-card p-3.5 sm:p-4">
+          <section className="surface-card p-4 sm:p-5">
             <div className="mb-3.5">
               <h3 className="text-base font-semibold text-slate-900">
                 {t.dashboard.weeklySummaryTitle}
@@ -456,7 +457,61 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                <div className="overflow-x-auto md:overflow-x-visible">
+                <div className="space-y-3.5 p-3 md:hidden">
+                  {weeklySummaryRows.map((row) => (
+                    <article key={row.weekEnding} className="subtle-panel p-4">
+                      <div className="flex flex-col gap-2.5 min-[400px]:flex-row min-[400px]:items-start min-[400px]:justify-between">
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                            {t.dashboard.table.weekEnding}
+                          </p>
+                          <p className="mt-1 text-sm font-semibold text-slate-950">
+                            {formatDate(row.weekEnding, language)}
+                          </p>
+                        </div>
+                        <span className="badge-muted px-2.5 py-1">
+                          {formatNumber(row.vehiclesSubmitted, language)} {t.dashboard.vehiclesSubmitted}
+                        </span>
+                      </div>
+                      <div className="mt-3 grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                            {t.dashboard.table.driver}
+                          </p>
+                          <p className="mt-1 text-sm text-slate-700">
+                            {formatNumber(row.driversSubmitted, language)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                            {t.dashboard.weeklyDistance}
+                          </p>
+                          <p className="mt-1 text-sm font-semibold text-slate-950">
+                            {formatCompactNumber(row.weeklyDistance, language)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                            {t.dashboard.highestOdometer}
+                          </p>
+                          <p className="mt-1 text-sm text-slate-700">
+                            {formatCompactNumber(row.highestOdometer, language)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                            {t.dashboard.lowestOdometer}
+                          </p>
+                          <p className="mt-1 text-sm text-slate-700">
+                            {formatCompactNumber(row.lowestOdometer, language)}
+                          </p>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+
+                <div className="hidden overflow-x-auto md:block md:overflow-x-visible">
                   <table className="w-full min-w-[720px] table-fixed md:min-w-0">
                     <thead>
                       <tr>
@@ -501,7 +556,7 @@ export default function DashboardPage() {
             )}
           </section>
 
-          <section className="surface-card p-3.5 sm:p-4">
+          <section className="surface-card p-4 sm:p-5">
             <div className="mb-3.5">
               <h3 className="text-base font-semibold text-slate-900">
                 {t.dashboard.watchlistTitle}
@@ -512,7 +567,7 @@ export default function DashboardPage() {
             </div>
 
             <div className="grid gap-4 md:grid-cols-3">
-              <div className="subtle-panel px-4 py-3.5">
+              <div className="subtle-panel px-4 py-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                     {t.dashboard.topFuelDriver}
                   </p>
@@ -526,7 +581,7 @@ export default function DashboardPage() {
                   </p>
               </div>
 
-              <div className="subtle-panel px-4 py-3.5">
+              <div className="subtle-panel px-4 py-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                     {t.dashboard.averagePricePerLitre}
                   </p>
@@ -540,7 +595,7 @@ export default function DashboardPage() {
                   </p>
               </div>
 
-              <div className="subtle-panel px-4 py-3.5">
+              <div className="subtle-panel px-4 py-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                     {t.dashboard.largestTransfer}
                   </p>
@@ -561,8 +616,8 @@ export default function DashboardPage() {
             </div>
           </section>
 
-          <section className="grid gap-5 xl:grid-cols-2">
-            <section className="surface-card p-3.5 sm:p-4">
+          <section className="grid gap-4 xl:grid-cols-2">
+            <section className="surface-card p-4 sm:p-5">
               <div className="mb-3.5">
                 <h3 className="text-base font-semibold text-slate-900">
                   {t.dashboard.latestFuelActivity}
@@ -578,41 +633,67 @@ export default function DashboardPage() {
                   description={t.dashboard.noFuelDescription}
                 />
               ) : (
-                <div className="table-shell">
-                  <table className="w-full">
-                    <thead>
-                      <tr>
-                        <th className="px-3.5 py-2.5">{t.dashboard.table.date}</th>
-                        <th className="px-3.5 py-2.5">{t.dashboard.table.driver}</th>
-                        <th className="px-3.5 py-2.5">{t.dashboard.table.vehicle}</th>
-                        <th className="px-3.5 py-2.5 text-right">{t.dashboard.table.cost}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {latestFuelLogs.map((log) => (
-                        <tr
-                          key={log.id}
-                          className="border-b border-slate-100 transition hover:bg-slate-50"
-                        >
-                          <td className="px-3.5 py-2.5 text-slate-700">
+                <>
+                  <div className="space-y-3.5 md:hidden">
+                    {latestFuelLogs.map((log) => (
+                      <article key={log.id} className="subtle-panel p-4">
+                        <div className="flex flex-col gap-2.5 min-[400px]:flex-row min-[400px]:items-start min-[400px]:justify-between">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-slate-900">{log.driver || "-"}</p>
+                            <p className="mt-1 text-sm text-slate-500">{log.vehicle_reg || "-"}</p>
+                          </div>
+                          <p className="shrink-0 text-sm font-medium text-slate-900">
                             {formatDate(log.date, language)}
-                          </td>
-                          <td className="px-3.5 py-2.5 font-medium text-slate-900">
-                            {log.driver || "-"}
-                          </td>
-                          <td className="px-3.5 py-2.5 text-slate-700">{log.vehicle_reg || "-"}</td>
-                          <td className="px-3.5 py-2.5 text-right whitespace-nowrap font-medium text-slate-950">
-                            {formatCurrency(Number(log.total_cost || 0), language)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                          </p>
+                        </div>
+                        <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                          {t.dashboard.table.cost}
+                        </p>
+                        <p className="mt-1 text-base font-semibold text-slate-950">
+                          {formatCurrency(Number(log.total_cost || 0), language)}
+                        </p>
+                      </article>
+                    ))}
+                  </div>
+
+                  <div className="hidden md:block">
+                    <div className="table-shell">
+                      <table className="w-full">
+                        <thead>
+                          <tr>
+                            <th className="px-3.5 py-2.5">{t.dashboard.table.date}</th>
+                            <th className="px-3.5 py-2.5">{t.dashboard.table.driver}</th>
+                            <th className="px-3.5 py-2.5">{t.dashboard.table.vehicle}</th>
+                            <th className="px-3.5 py-2.5 text-right">{t.dashboard.table.cost}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {latestFuelLogs.map((log) => (
+                            <tr
+                              key={log.id}
+                              className="border-b border-slate-100 transition hover:bg-slate-50"
+                            >
+                              <td className="px-3.5 py-2.5 text-slate-700">
+                                {formatDate(log.date, language)}
+                              </td>
+                              <td className="px-3.5 py-2.5 font-medium text-slate-900">
+                                {log.driver || "-"}
+                              </td>
+                              <td className="px-3.5 py-2.5 text-slate-700">{log.vehicle_reg || "-"}</td>
+                              <td className="px-3.5 py-2.5 text-right whitespace-nowrap font-medium text-slate-950">
+                                {formatCurrency(Number(log.total_cost || 0), language)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
               )}
             </section>
 
-            <section className="surface-card p-3.5 sm:p-4">
+            <section className="surface-card p-4 sm:p-5">
               <div className="mb-3.5">
                 <h3 className="text-base font-semibold text-slate-900">
                   {t.dashboard.latestTransfers}
@@ -628,39 +709,67 @@ export default function DashboardPage() {
                   description={t.dashboard.noTransferDescription}
                 />
               ) : (
-                <div className="table-shell">
-                  <table className="w-full">
-                    <thead>
-                      <tr>
-                        <th className="px-3.5 py-2.5">{t.dashboard.table.date}</th>
-                        <th className="px-3.5 py-2.5">{t.dashboard.table.driver}</th>
-                        <th className="px-3.5 py-2.5">{t.dashboard.table.type}</th>
-                        <th className="px-3.5 py-2.5 text-right">{t.dashboard.table.amount}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {latestTransfers.map((transfer) => (
-                        <tr
-                          key={transfer.id}
-                          className="border-b border-slate-100 transition hover:bg-slate-50"
-                        >
-                          <td className="px-3.5 py-2.5 text-slate-700">
+                <>
+                  <div className="space-y-3.5 md:hidden">
+                    {latestTransfers.map((transfer) => (
+                      <article key={transfer.id} className="subtle-panel p-4">
+                        <div className="flex flex-col gap-2.5 min-[400px]:flex-row min-[400px]:items-start min-[400px]:justify-between">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-slate-900">{transfer.driver || "-"}</p>
+                            <p className="mt-1 text-sm text-slate-500">
+                              {getTransferTypeLabel(t, transfer.transfer_type)}
+                            </p>
+                          </div>
+                          <p className="shrink-0 text-sm font-medium text-slate-900">
                             {formatDate(transfer.date, language)}
-                          </td>
-                          <td className="px-3.5 py-2.5 font-medium text-slate-900">
-                            {transfer.driver || "-"}
-                          </td>
-                          <td className="px-3.5 py-2.5 text-slate-700">
-                            {getTransferTypeLabel(t, transfer.transfer_type)}
-                          </td>
-                          <td className="px-3.5 py-2.5 text-right whitespace-nowrap font-medium text-slate-950">
-                            {formatCurrency(Number(transfer.amount || 0), language)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                          </p>
+                        </div>
+                        <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                          {t.dashboard.table.amount}
+                        </p>
+                        <p className="mt-1 text-base font-semibold text-slate-950">
+                          {formatCurrency(Number(transfer.amount || 0), language)}
+                        </p>
+                      </article>
+                    ))}
+                  </div>
+
+                  <div className="hidden md:block">
+                    <div className="table-shell">
+                      <table className="w-full">
+                        <thead>
+                          <tr>
+                            <th className="px-3.5 py-2.5">{t.dashboard.table.date}</th>
+                            <th className="px-3.5 py-2.5">{t.dashboard.table.driver}</th>
+                            <th className="px-3.5 py-2.5">{t.dashboard.table.type}</th>
+                            <th className="px-3.5 py-2.5 text-right">{t.dashboard.table.amount}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {latestTransfers.map((transfer) => (
+                            <tr
+                              key={transfer.id}
+                              className="border-b border-slate-100 transition hover:bg-slate-50"
+                            >
+                              <td className="px-3.5 py-2.5 text-slate-700">
+                                {formatDate(transfer.date, language)}
+                              </td>
+                              <td className="px-3.5 py-2.5 font-medium text-slate-900">
+                                {transfer.driver || "-"}
+                              </td>
+                              <td className="px-3.5 py-2.5 text-slate-700">
+                                {getTransferTypeLabel(t, transfer.transfer_type)}
+                              </td>
+                              <td className="px-3.5 py-2.5 text-right whitespace-nowrap font-medium text-slate-950">
+                                {formatCurrency(Number(transfer.amount || 0), language)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
               )}
             </section>
           </section>

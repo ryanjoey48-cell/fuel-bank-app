@@ -5,13 +5,17 @@ import { Droplets, LayoutDashboard, Menu, Route, Truck, Wallet } from "lucide-re
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLanguage } from "@/lib/language-provider";
 
 export function Sidebar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const { language, setLanguage, t } = useLanguage();
+
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
 
   const navItems = [
     { href: "/dashboard", label: t.nav.dashboard, icon: LayoutDashboard },
@@ -24,10 +28,11 @@ export function Sidebar() {
   return (
     <>
       <button
-        className="fixed left-3 top-3 z-50 rounded-lg border border-white/80 bg-white/92 p-2.5 text-slate-900 shadow-[0_10px_24px_rgba(15,23,42,0.08)] backdrop-blur md:hidden"
+        className="mobile-menu-trigger fixed z-50 flex h-12 w-12 items-center justify-center rounded-2xl border border-white/80 bg-white/94 text-slate-900 shadow-[0_14px_30px_rgba(15,23,42,0.12)] backdrop-blur md:hidden"
         onClick={() => setOpen((value) => !value)}
         type="button"
         aria-label={t.nav.openMenu}
+        aria-expanded={open}
       >
         <Menu className="h-5 w-5" />
       </button>
@@ -70,7 +75,7 @@ export function Sidebar() {
                 key={href}
                 href={href}
                 className={clsx(
-                  "flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition duration-200",
+                  "flex min-h-[48px] items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px] font-medium transition duration-200",
                   active
                     ? "border-l-2 border-brand-400 bg-brand-400/10 pl-[10px] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
                     : "text-slate-300 hover:bg-white/[0.03] hover:text-white"

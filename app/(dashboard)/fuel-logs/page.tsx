@@ -1,7 +1,7 @@
 "use client";
 
 import { Clock3, Download, Droplets, ReceiptText, TrendingUp, Wallet } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { Header } from "@/components/header";
 import { StatCard } from "@/components/stat-card";
@@ -202,7 +202,7 @@ export default function FuelLogsPage() {
     return sortedFuelLogs.slice(startIndex, startIndex + ENTRIES_PER_PAGE);
   }, [sortedFuelLogs, currentPage]);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -214,11 +214,11 @@ export default function FuelLogsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [t.fuelLogs.unableToLoadFuelData]);
 
   useEffect(() => {
     void loadData();
-  }, [t.fuelLogs.unableToLoadFuelData]);
+  }, [loadData]);
 
   useEffect(() => {
     if (!selectedDriver) {
@@ -250,7 +250,7 @@ export default function FuelLogsPage() {
         price_per_litre: ""
       }));
     }
-  }, [form.litres, form.total_cost]);
+  }, [form.litres, form.total_cost, form.price_per_litre]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -372,7 +372,7 @@ export default function FuelLogsPage() {
         <Header title={t.fuelLogs.title} description={t.fuelLogs.description} />
       </div>
 
-      <section className="mb-4.5 grid grid-cols-1 gap-4.5 sm:grid-cols-2 sm:gap-4.5 xl:grid-cols-4">
+      <section className="mb-4.5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label={labels.fuelSpendToday}
           value={formatCurrency(fuelSpendToday, language)}
@@ -403,7 +403,7 @@ export default function FuelLogsPage() {
         />
       </section>
 
-      <section className="surface-card mb-4.5 p-2.5 sm:p-3">
+      <section className="surface-card mb-4.5 p-4 sm:p-5">
         <div className="mb-2.5">
           <h3 className="section-title">{labels.todaysFuelActivity}</h3>
           <p className="section-subtitle">{labels.todaysFuelActivityDescription}</p>
@@ -417,33 +417,36 @@ export default function FuelLogsPage() {
             description={labels.noTodayFuelDescription}
           />
         ) : (
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
-            <div className="space-y-1.5">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
+            <div className="space-y-3">
               {todaysActivityFeed.map((log) => (
                 <div
                   key={log.id}
-                  className="rounded-xl border border-slate-100/80 bg-white/70 px-2.5 py-2 transition hover:bg-slate-50/70"
+                  className="subtle-panel px-4 py-4 transition hover:bg-slate-50/70"
                 >
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-                      <span className="truncate font-medium text-slate-800">{log.driver || "-"}</span>
-                      <span className="text-slate-300">-</span>
-                      <span className="font-semibold text-slate-950">
-                        {formatCurrency(Number(log.total_cost || 0), language)}
-                      </span>
-                      <span className="text-slate-400">
-                        ({formatNumber(Number(log.litres || 0), language, 2)}L)
-                      </span>
+                  <div className="flex flex-col gap-2.5 min-[400px]:flex-row min-[400px]:items-start min-[400px]:justify-between">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-900">{log.driver || "-"}</p>
+                      <p className="mt-1 text-sm text-slate-500">{log.vehicle_reg || "-"}</p>
                     </div>
-                    <p className="mt-0.5 text-xs font-medium text-slate-400">
+                    <span className="shrink-0 text-sm font-semibold text-slate-950">
+                        {formatCurrency(Number(log.total_cost || 0), language)}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400">
+                    <span>{formatNumber(Number(log.litres || 0), language, 2)}L</span>
+                    <span className="text-slate-300">-</span>
+                    <span>{formatTimeLabel(getLogTimestamp(log), language)}</span>
+                    <span className="text-slate-300">-</span>
+                    <span className="font-medium text-slate-500">
                       {formatDate(log.date, language)}
-                    </p>
+                    </span>
                   </div>
                 </div>
               ))}
             </div>
 
-            <div className="subtle-panel p-3">
+            <div className="subtle-panel p-4">
               <div className="mb-2.5">
                 <p className="text-sm font-semibold text-slate-900">{labels.topDriversToday}</p>
                 <p className="mt-1 text-xs text-slate-500">{formatDate(todayValue, language)}</p>
@@ -472,15 +475,15 @@ export default function FuelLogsPage() {
         )}
       </section>
 
-      <section className="surface-card mb-4.5 p-3.5 sm:p-4">
+      <section className="surface-card mb-4.5 p-4 sm:p-5">
         <div className="mb-3.5">
           <h3 className="text-base font-semibold text-slate-900">{labels.spendByDayTitle}</h3>
           <p className="mt-1 text-sm text-slate-500">{labels.spendByDayDescription}</p>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {last7DayRows.map((row) => (
-            <div key={row.date} className="subtle-panel p-3">
+            <div key={row.date} className="subtle-panel p-4">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-semibold text-slate-900">{formatDate(row.date, language)}</p>
                 <Clock3 className="h-4 w-4 text-slate-400" />
@@ -504,7 +507,7 @@ export default function FuelLogsPage() {
       <section className="mt-5">
         <form
           onSubmit={handleSubmit}
-          className="surface-card-soft w-full p-3 sm:p-3.5 lg:p-4"
+          className="surface-card-soft w-full p-4 sm:p-5 lg:p-5.5"
         >
           <div className="mb-5">
             <h3 className="section-title">
@@ -513,8 +516,8 @@ export default function FuelLogsPage() {
             <p className="section-subtitle">{t.fuelLogs.description}</p>
           </div>
 
-          <div className="grid gap-2.5 md:grid-cols-2 md:gap-x-5 lg:gap-x-6">
-            <div className="space-y-2.5">
+          <div className="grid gap-4 md:grid-cols-2 md:gap-x-5 lg:gap-x-6">
+            <div className="space-y-4">
               <div className="form-field">
                 <label className="form-label">
                   {t.fuelLogs.logDate}
@@ -602,7 +605,7 @@ export default function FuelLogsPage() {
               </div>
             </div>
 
-            <div className="space-y-2.5">
+            <div className="space-y-4">
               <div className="form-field">
                 <label className="form-label">
                   {t.fuelLogs.pricePerLitre}
@@ -710,7 +713,7 @@ export default function FuelLogsPage() {
           {error ? <p className="mt-4 text-sm text-rose-600">{error}</p> : null}
           {successMessage ? <p className="mt-4 text-sm text-emerald-600">{successMessage}</p> : null}
 
-          <div className="mt-4.5 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="mt-4.5 flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center">
             {!isEditing ? (
               <button
                 type="submit"
@@ -724,7 +727,7 @@ export default function FuelLogsPage() {
               </button>
             ) : null}
 
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
               <button
                 type="submit"
                 disabled={saving}
@@ -753,7 +756,7 @@ export default function FuelLogsPage() {
       </section>
 
       <section className="mt-5">
-        <section className="surface-card min-w-0 p-3 sm:p-3.5">
+        <section className="surface-card min-w-0 p-4 sm:p-5">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="section-title">{t.fuelLogs.fuelEntries}</h3>
@@ -786,18 +789,22 @@ export default function FuelLogsPage() {
             />
           ) : (
             <>
-              <div className="space-y-3 md:hidden">
-                {paginatedFuelLogs.map((log) => (
-                  <div key={log.id} className="subtle-panel p-3">
-                    <div className="flex items-start justify-between gap-3">
+                <div className="space-y-3.5 md:hidden">
+                  {paginatedFuelLogs.map((log) => (
+                  <div key={log.id} className="subtle-panel p-4">
+                    <div className="flex flex-col gap-2.5 min-[400px]:flex-row min-[400px]:items-start min-[400px]:justify-between">
                       <div>
                         <p className="text-sm font-semibold text-slate-900">{log.driver}</p>
                         <p className="mt-1 text-sm text-slate-500">{log.vehicle_reg}</p>
                       </div>
-                      <p className="text-sm font-medium text-slate-900">{formatDate(log.date, language)}</p>
+                      <p className="shrink-0 text-sm font-medium text-slate-900">{formatDate(log.date, language)}</p>
                     </div>
 
-                    <div className="mt-4 grid grid-cols-2 gap-3">
+                    <div className="mt-3 inline-flex rounded-full border border-brand-100 bg-brand-50/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-700">
+                      {getFuelTypeLabel(t, log.fuel_type)}
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-1 gap-3 min-[400px]:grid-cols-2">
                       <div>
                         <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
                           {t.fuelLogs.totalCost}
@@ -977,17 +984,17 @@ export default function FuelLogsPage() {
                   {sortedFuelLogs.length}
                 </p>
 
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex w-full flex-col gap-2 min-[400px]:w-auto min-[400px]:flex-row min-[400px]:items-center">
                   <button
                     type="button"
                     onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
                     disabled={currentPage === 1}
-                    className="btn-secondary disabled:cursor-not-allowed disabled:opacity-50"
+                    className="btn-secondary w-full disabled:cursor-not-allowed disabled:opacity-50 min-[400px]:w-auto"
                   >
                     {t.common.previous}
                   </button>
 
-                  <span className="text-sm font-medium text-slate-700">
+                  <span className="text-center text-sm font-medium text-slate-700">
                     {t.common.page} {currentPage} {t.common.of} {totalPages}
                   </span>
 
@@ -995,7 +1002,7 @@ export default function FuelLogsPage() {
                     type="button"
                     onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
                     disabled={currentPage === totalPages}
-                    className="btn-secondary disabled:cursor-not-allowed disabled:opacity-50"
+                    className="btn-secondary w-full disabled:cursor-not-allowed disabled:opacity-50 min-[400px]:w-auto"
                   >
                     {t.common.next}
                   </button>
