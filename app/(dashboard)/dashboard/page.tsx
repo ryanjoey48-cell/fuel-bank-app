@@ -339,7 +339,7 @@ export default function DashboardPage() {
 
   return (
     <>
-      <div className="mb-6">
+      <div className="mb-6 hidden md:block">
         <Header title={t.dashboard.title} description={t.dashboard.description} />
       </div>
 

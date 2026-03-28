@@ -172,7 +172,7 @@ export default function DriversPage() {
 
   return (
     <>
-      <div className="mb-6">
+      <div className="mb-6 hidden md:block">
         <Header title={t.drivers.title} description={t.drivers.description} />
       </div>
 

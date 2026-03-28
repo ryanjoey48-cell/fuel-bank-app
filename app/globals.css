@@ -249,19 +249,15 @@ td {
 
 @media (max-width: 767px) {
   .dashboard-mobile-shell {
-    padding-top: 5.5rem;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 5.75rem);
     padding-left: max(1rem, calc(env(safe-area-inset-left, 0px) + 0.75rem));
     padding-right: max(1rem, calc(env(safe-area-inset-right, 0px) + 0.75rem));
+    padding-bottom: max(1rem, calc(env(safe-area-inset-bottom, 0px) + 0.25rem));
   }
 
   .mobile-app-bar {
     padding-top: env(safe-area-inset-top, 0px);
     padding-left: max(1rem, calc(env(safe-area-inset-left, 0px) + 0.75rem));
     padding-right: max(1rem, calc(env(safe-area-inset-right, 0px) + 0.75rem));
-  }
-
-  .mobile-menu-trigger {
-    top: calc(env(safe-area-inset-top, 0px) + 0.875rem);
-    left: max(1rem, calc(env(safe-area-inset-left, 0px) + 0.25rem));
   }
 }

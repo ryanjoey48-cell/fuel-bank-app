@@ -22,7 +22,7 @@ export function Header({ title, description, showSignOut = false }: HeaderProps)
   };
 
   return (
-    <header className="surface-card overflow-hidden p-4 sm:p-5">
+    <header className="surface-card hidden overflow-hidden p-4 sm:p-5 md:block">
       <div className="absolute inset-x-0 top-0 h-16 bg-[linear-gradient(135deg,rgba(109,40,217,0.08),rgba(249,115,22,0.04)_55%,transparent)]" />
       <div className="relative flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">

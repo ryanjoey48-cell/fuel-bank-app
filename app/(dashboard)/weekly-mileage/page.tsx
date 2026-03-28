@@ -521,7 +521,7 @@ export default function WeeklyMileagePage() {
 
   return (
     <>
-      <div className="mb-6">
+      <div className="mb-6 hidden md:block">
         <Header title={t.weeklyMileage.title} description={t.weeklyMileage.description} />
       </div>
 

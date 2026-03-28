@@ -139,7 +139,7 @@ export default function TransfersPage() {
 
   return (
     <>
-      <div className="mb-6">
+      <div className="mb-6 hidden md:block">
         <Header title={t.transfers.title} description={t.transfers.description} />
       </div>
 

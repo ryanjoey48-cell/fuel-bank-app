@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Sidebar } from "@/components/sidebar";
 import { MobileAppBar } from "@/components/mobile-app-bar";
-import { MobileBottomNav } from "@/components/mobile-bottom-nav";
+import { Sidebar } from "@/components/sidebar";
 import { SetupNotice } from "@/components/setup-notice";
 import { useLanguage } from "@/lib/language-provider";
 import { supabase } from "@/lib/supabase";
@@ -17,6 +16,7 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { t } = useLanguage();
 
   useEffect(() => {
@@ -53,6 +53,18 @@ export default function DashboardLayout({
     };
   }, [pathname, router]);
 
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    document.body.style.overflow = mobileMenuOpen ? "hidden" : "";
+
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileMenuOpen]);
+
   if (checkingAuth) {
     return (
       <main className="flex min-h-screen items-center justify-center px-4">
@@ -65,11 +77,13 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen">
-      <Sidebar />
-      <MobileAppBar />
-      <MobileBottomNav />
+      <Sidebar open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
+      <MobileAppBar
+        open={mobileMenuOpen}
+        onToggle={() => setMobileMenuOpen((current) => !current)}
+      />
       <div className="md:pl-72">
-        <main className="dashboard-mobile-shell mx-auto flex min-h-screen w-full max-w-[1440px] max-w-full flex-col gap-4 pb-[7.5rem] sm:gap-4.5 sm:px-5 sm:pt-20 sm:pb-8 md:px-6 md:pt-8 md:pb-7 lg:px-8">
+        <main className="dashboard-mobile-shell mx-auto flex min-h-screen w-full max-w-[1440px] max-w-full flex-col gap-4 pb-5 sm:gap-4.5 sm:px-5 sm:pt-20 sm:pb-6 md:px-6 md:pt-8 md:pb-7 lg:px-8">
           <SetupNotice />
           {children}
         </main>

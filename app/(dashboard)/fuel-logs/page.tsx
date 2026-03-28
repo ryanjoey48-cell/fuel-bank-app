@@ -368,7 +368,7 @@ export default function FuelLogsPage() {
 
   return (
     <>
-      <div className="mb-6">
+      <div className="mb-6 hidden md:block">
         <Header title={t.fuelLogs.title} description={t.fuelLogs.description} />
       </div>
 
