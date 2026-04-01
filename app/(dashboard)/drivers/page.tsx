@@ -7,7 +7,9 @@ import { EmptyState } from "@/components/empty-state";
 import { Header } from "@/components/header";
 import { deleteDriver, fetchDrivers, saveDriver } from "@/lib/data";
 import { exportToXlsx } from "@/lib/export";
+import { applyRequiredValidationMessage, clearValidationMessage } from "@/lib/form-validation";
 import { useLanguage } from "@/lib/language-provider";
+import { formatNumber } from "@/lib/utils";
 import type { Driver } from "@/types/database";
 
 const initialForm = {
@@ -28,36 +30,44 @@ function DriverSummaryCard({
   icon: LucideIcon;
 }) {
   return (
-    <article className="surface-card-soft flex h-full min-h-[148px] flex-col overflow-hidden p-4 sm:min-h-[152px] sm:p-4">
-      <div className="absolute inset-x-0 top-0 h-14 bg-[linear-gradient(135deg,rgba(63,60,187,0.06),rgba(249,115,22,0.04)_72%,transparent)]" />
-      <div className="flex items-start justify-between gap-3">
+    <article className="surface-card-soft card-metric-shell min-h-[198px] sm:min-h-[210px]">
+      <div className="card-metric-header gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-            {label}
-          </p>
-          <p className="mt-2 text-[1.55rem] font-semibold tracking-[-0.04em] text-slate-950 sm:text-[1.7rem]">
-            {value}
-          </p>
+          <p className="metric-label">{label}</p>
+          <p className="metric-value text-[2.25rem] sm:text-[2.5rem]">{value}</p>
         </div>
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/80 bg-white text-brand-700 shadow-[0_12px_24px_rgba(63,60,187,0.08)]">
-          <Icon className="h-4.5 w-4.5" />
+        <div className="card-metric-icon">
+          <Icon className="h-4 w-4" />
         </div>
       </div>
-      <p className="mt-4 text-[13px] leading-6 text-slate-500">{helper}</p>
+      <p className="metric-helper">{helper}</p>
     </article>
   );
 }
 
 export default function DriversPage() {
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [form, setForm] = useState(initialForm);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [driverFilter, setDriverFilter] = useState("");
+  const actionMessages =
+    language === "th"
+      ? {
+          saved: "บันทึกคนขับเรียบร้อยแล้ว",
+          updated: "อัปเดตคนขับเรียบร้อยแล้ว",
+          deleted: "ลบคนขับเรียบร้อยแล้ว"
+        }
+      : {
+          saved: "Driver saved successfully.",
+          updated: "Driver updated successfully.",
+          deleted: "Driver deleted successfully."
+        };
 
   const isEditing = Boolean(form.id);
   const labels = {
@@ -101,6 +111,7 @@ export default function DriversPage() {
       setError(null);
       setDrivers(await fetchDrivers());
     } catch (err) {
+      console.error("Drivers load error:", err);
       setError(t.drivers.unableToLoadDrivers);
     } finally {
       setLoading(false);
@@ -111,15 +122,28 @@ export default function DriversPage() {
     void load();
   }, [load]);
 
-  const resetForm = () => {
+  useEffect(() => {
+    const handleDataChanged = () => {
+      void load();
+    };
+
+    window.addEventListener("fuel-bank:data-changed", handleDataChanged);
+    return () => window.removeEventListener("fuel-bank:data-changed", handleDataChanged);
+  }, [load]);
+
+  const resetForm = (clearMessages = true) => {
     setForm(initialForm);
     setError(null);
+    if (clearMessages) {
+      setSuccessMessage(null);
+    }
   };
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSaving(true);
     setError(null);
+    setSuccessMessage(null);
 
     try {
       await saveDriver({
@@ -128,13 +152,29 @@ export default function DriversPage() {
         vehicle_reg: form.vehicle_reg.trim()
       });
 
-      resetForm();
+      resetForm(false);
+      setSuccessMessage(isEditing ? actionMessages.updated : actionMessages.saved);
       await load();
     } catch (err) {
-      setError(t.drivers.unableToSaveDriver);
+      console.error("Drivers submit error:", err);
+      if (err instanceof Error && err.message === "DUPLICATE_DRIVER_NAME") {
+        setError(t.drivers.duplicateDriverName);
+      } else if (err instanceof Error && err.message === "DUPLICATE_DRIVER_VEHICLE") {
+        setError(t.drivers.duplicateVehicleAssignment);
+      } else if (err instanceof Error && err.message) {
+        setError(err.message);
+      } else {
+        setError(t.drivers.unableToSaveDriver);
+      }
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleInvalid = (
+    event: React.InvalidEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+  ) => {
+    applyRequiredValidationMessage(event, t.common.requiredField);
   };
 
   const handleDelete = async (id: string) => {
@@ -145,15 +185,18 @@ export default function DriversPage() {
     try {
       setDeletingId(id);
       setError(null);
+      setSuccessMessage(null);
       await deleteDriver(id);
 
       if (form.id === id) {
         resetForm();
       }
 
+      setSuccessMessage(actionMessages.deleted);
       await load();
     } catch (err) {
-      setError(t.drivers.unableToDeleteDriver);
+      console.error("Drivers delete error:", err);
+      setError(err instanceof Error && err.message ? err.message : t.drivers.unableToDeleteDriver);
     } finally {
       setDeletingId(null);
     }
@@ -179,20 +222,20 @@ export default function DriversPage() {
       <section className="mb-4.5 grid gap-4 sm:grid-cols-2 xl:max-w-[720px]">
         <DriverSummaryCard
           label={labels.totalDrivers}
-          value={String(drivers.length)}
+          value={formatNumber(drivers.length, language)}
           helper={labels.totalDriversHelper}
           icon={Users}
         />
         <DriverSummaryCard
           label={labels.totalVehiclesAssigned}
-          value={String(uniqueVehiclesAssigned)}
+          value={formatNumber(uniqueVehiclesAssigned, language)}
           helper={labels.totalVehiclesAssignedHelper}
           icon={CarFront}
         />
       </section>
 
       <section className="grid items-start gap-4 xl:grid-cols-[minmax(360px,0.95fr)_minmax(0,1.78fr)] 2xl:grid-cols-[minmax(380px,0.92fr)_minmax(0,1.82fr)]">
-        <form onSubmit={submit} className="surface-card-soft h-fit p-4 sm:p-5 lg:p-5.5">
+        <form onSubmit={submit} className="surface-card-soft h-fit p-5 sm:p-6 lg:p-6.5">
           <div className="mb-6">
             <h3 className="section-title">
               {isEditing ? t.drivers.editDriver : t.drivers.addDriver}
@@ -202,9 +245,9 @@ export default function DriversPage() {
             </p>
           </div>
 
-          <div className="space-y-4">
+          <div className="space-y-5">
             <div className="form-field">
-              <label className="form-label">{t.drivers.name}</label>
+              <label className="form-label form-label-required">{t.drivers.name}</label>
               <input
                 required
                 placeholder={t.drivers.name}
@@ -212,12 +255,14 @@ export default function DriversPage() {
                 onChange={(event) =>
                   setForm((current) => ({ ...current, name: event.target.value }))
                 }
+                onInvalid={handleInvalid}
+                onInput={clearValidationMessage}
                 className="form-input w-full"
               />
             </div>
 
             <div className="form-field">
-              <label className="form-label">{t.drivers.vehicle}</label>
+              <label className="form-label form-label-required">{t.drivers.vehicle}</label>
               <input
                 required
                 placeholder={t.drivers.vehicle}
@@ -225,11 +270,14 @@ export default function DriversPage() {
                 onChange={(event) =>
                   setForm((current) => ({ ...current, vehicle_reg: event.target.value }))
                 }
+                onInvalid={handleInvalid}
+                onInput={clearValidationMessage}
                 className="form-input w-full"
               />
             </div>
 
-            {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+            {error ? <p className="form-error">{error}</p> : null}
+            {successMessage ? <p className="mt-2 text-sm text-emerald-600">{successMessage}</p> : null}
 
             <div className="pt-2">
               <button
@@ -247,7 +295,7 @@ export default function DriversPage() {
               {isEditing ? (
                 <button
                   type="button"
-                  onClick={resetForm}
+                  onClick={() => resetForm()}
                   className="btn-secondary mt-2 w-full"
                 >
                   {t.common.cancel}
@@ -257,8 +305,8 @@ export default function DriversPage() {
           </div>
         </form>
 
-        <section className="surface-card min-w-0 p-4 sm:p-5 lg:p-5.5">
-          <div className="mb-4 flex flex-col gap-3.5">
+        <section className="surface-card min-w-0 p-5 sm:p-6 lg:p-6.5">
+          <div className="mb-5 flex flex-col gap-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0 space-y-1.5">
                 <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
@@ -283,7 +331,7 @@ export default function DriversPage() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200/80 bg-slate-50/55 p-3">
+            <div className="rounded-[1.4rem] border border-slate-200/80 bg-slate-50/70 p-4">
               <div className="grid gap-3 xl:grid-cols-[minmax(0,1.45fr)_minmax(220px,0.55fr)] xl:items-end">
                 <div className="form-field">
                   <label className="form-label">{labels.searchDrivers}</label>
@@ -367,8 +415,9 @@ export default function DriversPage() {
                 ))}
               </div>
 
-              <div className="hidden overflow-x-auto md:block">
+              <div className="hidden md:block">
                 <div className="table-shell rounded-2xl">
+                  <div className="table-scroll">
                   <table className="w-full min-w-[760px] text-sm">
                     <colgroup>
                       <col className="w-[35%]" />
@@ -377,20 +426,17 @@ export default function DriversPage() {
                     </colgroup>
                     <thead>
                       <tr className="bg-slate-50/80 text-slate-600">
-                        <th className="px-5 py-2.5 text-left font-semibold">{t.drivers.name}</th>
-                        <th className="px-5 py-2.5 text-left font-semibold">{t.drivers.vehicle}</th>
-                        <th className="px-5 py-2.5 text-left font-semibold">{t.common.action}</th>
+                        <th className="table-head-cell text-left">{t.drivers.name}</th>
+                        <th className="table-head-cell text-left">{t.drivers.vehicle}</th>
+                        <th className="table-head-cell text-left">{t.common.action}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filteredDrivers.map((driver) => (
-                        <tr
-                          key={driver.id}
-                          className="border-b border-slate-100/70 transition last:border-none hover:bg-slate-50/55"
-                        >
-                          <td className="px-5 py-2.5 font-medium text-slate-900">{driver.name}</td>
-                          <td className="px-5 py-2.5 text-slate-700">{driver.vehicle_reg}</td>
-                          <td className="px-5 py-2.5">
+                        <tr key={driver.id} className="enterprise-table-row">
+                          <td className="table-body-cell font-medium text-slate-900">{driver.name}</td>
+                          <td className="table-body-cell text-slate-700">{driver.vehicle_reg}</td>
+                          <td className="table-body-cell">
                             <div className="flex h-9 flex-row items-center gap-1.5 whitespace-nowrap">
                               <button
                                 type="button"
@@ -401,7 +447,7 @@ export default function DriversPage() {
                                     vehicle_reg: driver.vehicle_reg
                                   })
                                 }
-                                className="btn-secondary min-w-[78px] px-3 py-1.5 text-xs"
+                                className="table-action-secondary min-w-[82px]"
                               >
                                 {t.common.edit}
                               </button>
@@ -410,7 +456,7 @@ export default function DriversPage() {
                                 type="button"
                                 onClick={() => void handleDelete(String(driver.id))}
                                 disabled={deletingId === driver.id}
-                                className="btn-danger min-w-[86px] gap-1.5 px-3 py-1.5 text-xs disabled:opacity-50"
+                                className="table-action-danger min-w-[92px] gap-1.5 disabled:opacity-50"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
                                 {deletingId === driver.id ? t.common.deleting : t.common.delete}
@@ -421,6 +467,7 @@ export default function DriversPage() {
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 </div>
               </div>
             </>

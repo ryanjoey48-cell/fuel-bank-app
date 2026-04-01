@@ -3,6 +3,7 @@
 import { LogOut } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { useLanguage } from "@/lib/language-provider";
 import { supabase } from "@/lib/supabase";
 
@@ -22,15 +23,15 @@ export function Header({ title, description, showSignOut = false }: HeaderProps)
   };
 
   return (
-    <header className="surface-card hidden overflow-hidden p-4 sm:p-5 md:block">
-      <div className="absolute inset-x-0 top-0 h-16 bg-[linear-gradient(135deg,rgba(109,40,217,0.08),rgba(249,115,22,0.04)_55%,transparent)]" />
-      <div className="relative flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-slate-200/80 bg-white/88 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 shadow-[0_8px_18px_rgba(15,23,42,0.05)]">
+    <header className="surface-card hidden overflow-hidden p-5 sm:p-6 md:block">
+      <div className="absolute inset-x-0 top-0 h-20 bg-[linear-gradient(135deg,rgba(95,51,183,0.065),rgba(242,138,47,0.025)_55%,transparent)]" />
+      <div className="relative flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-brand-100/70 bg-white/92 px-3.5 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-700 shadow-[0_10px_20px_rgba(38,18,78,0.05)]">
             {t.common.operations}
           </div>
-          <div className="flex items-start gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/80 bg-white shadow-[0_14px_28px_rgba(15,23,42,0.08)] sm:h-12 sm:w-12">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[1.2rem] border border-brand-100/70 bg-white shadow-[0_16px_30px_rgba(38,18,78,0.07)] sm:h-[3.25rem] sm:w-[3.25rem]">
               <Image
                 src="/logo.png"
                 alt={t.common.appName}
@@ -41,26 +42,30 @@ export function Header({ title, description, showSignOut = false }: HeaderProps)
               />
             </div>
             <div className="min-w-0">
-              <h2 className="text-[1.35rem] font-semibold tracking-[-0.04em] text-slate-950 sm:text-[1.7rem]">
+              <h2 className="text-[1.45rem] font-semibold tracking-[-0.045em] text-slate-950 sm:text-[1.82rem]">
                 {title}
               </h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500 sm:text-[15px]">
+              <p className="mt-2.5 max-w-2xl text-[13px] leading-7 text-slate-500 sm:text-[15px]">
                 {description}
               </p>
             </div>
           </div>
         </div>
 
-        {showSignOut ? (
-          <button
-            onClick={handleLogout}
-            type="button"
-            className="btn-secondary w-full gap-2 sm:w-auto"
-          >
-            <LogOut className="h-4 w-4" />
-            {t.common.signOut}
-          </button>
-        ) : null}
+        <div className="flex shrink-0 flex-col items-stretch gap-3 md:items-end">
+          <LanguageSwitcher />
+
+          {showSignOut ? (
+            <button
+              onClick={handleLogout}
+              type="button"
+              className="btn-secondary w-full gap-2 sm:w-auto"
+            >
+              <LogOut className="h-4 w-4" />
+              {t.common.signOut}
+            </button>
+          ) : null}
+        </div>
       </div>
     </header>
   );

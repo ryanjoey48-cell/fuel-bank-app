@@ -46,23 +46,23 @@ export function AuthForm() {
   };
 
   return (
-    <div className="surface-card w-full max-w-md p-5 sm:p-8">
-      <div className="mb-6">
+    <div className="surface-card w-full max-w-md p-6 sm:p-8">
+      <div className="mb-7">
         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
           Fuel &amp; Bank App
         </p>
-        <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-slate-950">
+        <h2 className="mt-2.5 text-[1.9rem] font-semibold tracking-[-0.045em] text-slate-950">
           {mode === "login" ? t.login.signIn : t.login.createAccount}
         </h2>
       </div>
 
-      <div className="mb-8 flex rounded-[1.25rem] border border-slate-200/80 bg-slate-100/90 p-1">
+      <div className="mb-8 flex rounded-[1.4rem] border border-brand-100/70 bg-brand-50/65 p-1.5">
         <button
           type="button"
-          className={`flex-1 rounded-2xl px-4 py-3 text-sm font-medium ${
+          className={`flex-1 rounded-[1.05rem] px-4 py-3.5 text-sm font-medium transition ${
             mode === "login"
-              ? "bg-white text-brand-700 shadow-[0_10px_20px_rgba(109,40,217,0.12)]"
-              : "text-slate-500"
+              ? "bg-white text-brand-700 shadow-[0_12px_24px_rgba(95,51,183,0.12)]"
+              : "text-slate-500 hover:text-slate-700"
           }`}
           onClick={() => setMode("login")}
         >
@@ -70,10 +70,10 @@ export function AuthForm() {
         </button>
         <button
           type="button"
-          className={`flex-1 rounded-2xl px-4 py-3 text-sm font-medium ${
+          className={`flex-1 rounded-[1.05rem] px-4 py-3.5 text-sm font-medium transition ${
             mode === "signup"
-              ? "bg-white text-brand-700 shadow-[0_10px_20px_rgba(109,40,217,0.12)]"
-              : "text-slate-500"
+              ? "bg-white text-brand-700 shadow-[0_12px_24px_rgba(95,51,183,0.12)]"
+              : "text-slate-500 hover:text-slate-700"
           }`}
           onClick={() => setMode("signup")}
         >
@@ -81,22 +81,21 @@ export function AuthForm() {
         </button>
       </div>
 
-      <form className="space-y-5" onSubmit={handleSubmit}>
-        <div>
-          <label className="mb-2 block text-sm font-semibold text-slate-700">{t.login.email}</label>
+      <form className="space-y-6" onSubmit={handleSubmit}>
+        <div className="form-field">
+          <label className="form-label">{t.login.email}</label>
           <input
             type="email"
             required
             placeholder={t.login.emailPlaceholder}
             value={email}
             onChange={(event) => setEmail(event.target.value)}
+            className="form-input"
           />
         </div>
 
-        <div>
-          <label className="mb-2 block text-sm font-semibold text-slate-700">
-            {t.login.password}
-          </label>
+        <div className="form-field">
+          <label className="form-label">{t.login.password}</label>
           <input
             type="password"
             required
@@ -104,11 +103,12 @@ export function AuthForm() {
             placeholder={t.login.passwordPlaceholder}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
+            className="form-input"
           />
         </div>
 
         {message ? (
-          <p className="rounded-[1.25rem] border border-brand-100 bg-brand-50/80 px-4 py-3 text-sm text-brand-800 shadow-[0_12px_24px_rgba(109,40,217,0.08)]">
+          <p className="rounded-[1.35rem] border border-brand-100 bg-brand-50/80 px-4.5 py-3.5 text-sm text-brand-800 shadow-[0_12px_24px_rgba(95,51,183,0.08)]">
             {message}
           </p>
         ) : null}

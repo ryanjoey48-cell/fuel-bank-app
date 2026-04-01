@@ -20,13 +20,17 @@ export const translations = {
       deleting: "Deleting...",
       action: "Action",
       language: "Language",
+      navigation: "Navigation",
       setupNotice: "Add your Supabase keys to .env.local before using the app.",
       sessionCheck: "Checking your session...",
       previous: "Previous",
       next: "Next",
       page: "Page",
       of: "of",
-      showingEntries: "Showing entries"
+      showingEntries: "Showing entries",
+      details: "Details",
+      requiredField: "This field is required.",
+      emptyStateHint: "No records yet — start by adding your first entry to unlock insights, reporting, and clearer operational visibility."
     },
     nav: {
       dashboard: "Dashboard",
@@ -72,7 +76,7 @@ export const translations = {
       combinedHelper: "Fuel spend plus bank transfers",
       fuelSpendHelper: "Total value of fuel purchases in the selected view",
       transferSpendHelper: "Total value of bank transfers in the selected view",
-      weeklyMileageHelper: "Total of recorded end-of-week odometer readings in the selected view",
+      weeklyMileageHelper: "Latest valid odometer change using the two most recent reported readings",
       costPerKmHelper: "Fuel spend divided by reported weekly mileage",
       activeDriversHelper: "Drivers with fuel, transfer, or mileage activity in the selected view",
       weeklyReportsEntered: "Weekly Reports Entered",
@@ -106,13 +110,6 @@ export const translations = {
       vehiclesSubmitted: "Vehicles Submitted",
       costPerKmByDriverTitle: "Cost per KM by Driver",
       costPerKmByDriverDescription: "Drivers with the highest fuel spend relative to recorded odometer history.",
-      anomalyTitle: "Operational alerts",
-      anomalyDescription: "Highlights notable movement between the latest week and the previous reporting week.",
-      noAnomaliesTitle: "No sharp week-over-week changes",
-      noAnomaliesDescription: "Fuel spend and mileage remain broadly in line with the previous week.",
-      fuelCostIncreased: "Fuel cost increased",
-      mileageDropped: "Recorded odometer total decreased",
-      comparedWithPreviousWeek: "Compared with the previous reported week.",
       noCostPerKmDataTitle: "Not enough data for cost per KM",
       noCostPerKmDataDescription: "Add both fuel and weekly odometer records to compare driver operating cost.",
       insightsTitle: "Operational insights",
@@ -168,6 +165,8 @@ export const translations = {
       unableToLoadDrivers: "Unable to load drivers.",
       unableToSaveDriver: "Unable to save driver.",
       unableToDeleteDriver: "Unable to delete driver.",
+      duplicateDriverName: "This driver name already exists.",
+      duplicateVehicleAssignment: "This vehicle registration is already assigned to another driver.",
       confirmDelete: "Delete this driver? This may also remove linked records depending on your database rules."
     },
     fuelLogs: {
@@ -227,9 +226,12 @@ export const translations = {
       fuelEntriesEmptyDescription: "Saved refills will appear here once you start tracking them.",
       unableToLoadFuelData: "Unable to load fuel data.",
       unableToSaveFuelLog: "Unable to save fuel log.",
+      unableToDeleteFuelLog: "Unable to delete fuel log.",
       saveSuccessMessage: "Fuel entry saved successfully.",
       saveAndAddAnotherSuccessMessage: "Fuel entry saved. Ready for the next entry.",
       updateSuccessMessage: "Fuel entry updated successfully.",
+      deleteSuccessMessage: "Fuel entry deleted successfully.",
+      deleteConfirm: "Delete this fuel entry?",
       location: "Location",
       mileageValidationError: "Mileage cannot be lower than the previous mileage recorded for this vehicle."
     },
@@ -385,6 +387,9 @@ export const translations = {
   },
   th: {
     common: {
+      navigation: "เมนูนำทาง",
+      requiredField: "กรุณากรอกข้อมูลในช่องนี้",
+      emptyStateHint: "ยังไม่มีรายการในตอนนี้ เริ่มเพิ่มรายการแรกเพื่อปลดล็อกข้อมูลเชิงลึก รายงาน และภาพรวมการปฏิบัติงานที่ชัดเจนยิ่งขึ้น",
       appName: "EXPERT EXPRESS SENDER CO., LTD",
       appSubtitle: "ศูนย์ควบคุมงานขนส่ง",
       operations: "การดำเนินงาน",
@@ -410,7 +415,8 @@ export const translations = {
       next: "ถัดไป",
       page: "หน้า",
       of: "จาก",
-      showingEntries: "กำลังแสดงรายการ"
+      showingEntries: "กำลังแสดงรายการ",
+      details: "รายละเอียด",
     },
     nav: {
       dashboard: "แดชบอร์ด",
@@ -528,6 +534,8 @@ export const translations = {
       }
     },
     drivers: {
+      duplicateDriverName: "มีชื่อคนขับนี้อยู่ในระบบแล้ว",
+      duplicateVehicleAssignment: "ทะเบียนรถนี้ถูกผูกกับคนขับคนอื่นแล้ว",
       title: "จัดการคนขับรถ",
       description: "เพิ่มข้อมูลคนขับและอัปเดตทะเบียนรถที่รับผิดชอบได้ตลอดเวลา",
       addDriver: "เพิ่มคนขับ",
