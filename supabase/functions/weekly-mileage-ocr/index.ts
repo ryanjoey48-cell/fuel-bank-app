@@ -12,6 +12,16 @@ type IncomingImage = {
   source_index?: number;
 };
 
+function jsonResponse(payload: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json"
+    }
+  });
+}
+
 function buildSchema() {
   return {
     name: "weekly_mileage_rows",
@@ -84,17 +94,50 @@ Deno.serve(async (request) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  const executionId = Deno.env.get("SB_EXECUTION_ID") ?? "unknown";
+  const deploymentId = Deno.env.get("DENO_DEPLOYMENT_ID") ?? "unknown";
+
   try {
     const openAiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!openAiKey) {
-      throw new Error("OPENAI_API_KEY is not set for the weekly-mileage-ocr function.");
-    }
-
     const body = (await request.json()) as { images?: IncomingImage[] };
+    const mode = typeof (body as { mode?: unknown }).mode === "string" ? String((body as { mode?: unknown }).mode) : "";
     const images = Array.isArray(body.images) ? body.images : [];
 
+    if (mode === "health") {
+      return jsonResponse({
+        ok: true,
+        message: "weekly-mileage-ocr is reachable.",
+        executionId,
+        deploymentId,
+        hasOpenAiKey: Boolean(openAiKey)
+      });
+    }
+
+    if (!openAiKey) {
+      console.error("weekly-mileage-ocr missing OPENAI_API_KEY", { executionId, deploymentId });
+      return jsonResponse({
+        ok: false,
+        rows: [],
+        error: {
+          code: "MISSING_OPENAI_API_KEY",
+          message: "OPENAI_API_KEY is not set for the weekly-mileage-ocr function.",
+          executionId,
+          deploymentId
+        }
+      });
+    }
+
     if (!images.length) {
-      throw new Error("No images were provided.");
+      return jsonResponse({
+        ok: false,
+        rows: [],
+        error: {
+          code: "NO_IMAGES",
+          message: "No images were provided.",
+          executionId,
+          deploymentId
+        }
+      });
     }
 
     const inputContent = [
@@ -144,32 +187,66 @@ Deno.serve(async (request) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`OpenAI OCR request failed: ${errorText}`);
+      console.error("weekly-mileage-ocr openai error", {
+        executionId,
+        deploymentId,
+        status: response.status,
+        errorText
+      });
+      return jsonResponse({
+        ok: false,
+        rows: [],
+        error: {
+          code: "OPENAI_REQUEST_FAILED",
+          message: "OpenAI OCR request failed.",
+          details: errorText,
+          executionId,
+          deploymentId,
+          status: response.status
+        }
+      });
     }
 
     const payload = (await response.json()) as Record<string, unknown>;
     const outputText = extractOutputText(payload);
-    const parsed = JSON.parse(outputText) as { rows: unknown[] };
+    if (!outputText) {
+      console.error("weekly-mileage-ocr missing output_text", { executionId, deploymentId, payload });
+      return jsonResponse({
+        ok: false,
+        rows: [],
+        error: {
+          code: "EMPTY_MODEL_OUTPUT",
+          message: "The OCR model returned an empty response.",
+          executionId,
+          deploymentId
+        }
+      });
+    }
 
-    return new Response(JSON.stringify({ rows: parsed.rows ?? [] }), {
-      headers: {
-        ...corsHeaders,
-        "Content-Type": "application/json"
-      }
+    const parsed = JSON.parse(outputText) as { rows: unknown[] };
+    return jsonResponse({
+      ok: true,
+      rows: parsed.rows ?? [],
+      executionId,
+      deploymentId
     });
   } catch (error) {
-    console.error("weekly-mileage-ocr error", error);
-    return new Response(
-      JSON.stringify({
-        error: error instanceof Error ? error.message : "Unexpected OCR function error."
-      }),
-      {
-        status: 500,
-        headers: {
-          ...corsHeaders,
-          "Content-Type": "application/json"
-        }
+    const message = error instanceof Error ? error.message : "Unexpected OCR function error.";
+    console.error("weekly-mileage-ocr error", {
+      executionId,
+      deploymentId,
+      message,
+      error
+    });
+    return jsonResponse({
+      ok: false,
+      rows: [],
+      error: {
+        code: "UNEXPECTED_ERROR",
+        message,
+        executionId,
+        deploymentId
       }
-    );
+    });
   }
 });

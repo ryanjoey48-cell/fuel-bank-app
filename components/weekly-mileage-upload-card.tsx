@@ -15,7 +15,6 @@ import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState
 import { saveWeeklyMileage } from "@/lib/data";
 import { exportToCsv } from "@/lib/export";
 import type { Language } from "@/lib/translations";
-import { supabase } from "@/lib/supabase";
 import {
   canSaveMileageRow,
   parseExtractedData,
@@ -26,6 +25,9 @@ import {
 } from "@/lib/weekly-mileage-upload";
 import { formatNumber } from "@/lib/utils";
 import type { Driver, WeeklyMileageEntry } from "@/types/database";
+
+const OCR_FUNCTION_URL = "https://hafouarzfgkkwpzvedvd.supabase.co/functions/v1/weekly-mileage-ocr";
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 
 type UploadPreview = {
   id: string;
@@ -84,6 +86,74 @@ async function fileToDataUrl(file: File) {
     reader.onerror = () => reject(reader.error ?? new Error("Unable to read file."));
     reader.readAsDataURL(file);
   });
+}
+
+function buildProcessingErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (typeof error === "string" && error.trim()) {
+    return error;
+  }
+
+  return "Unable to process uploaded sheets.";
+}
+
+async function requestWeeklyMileageOcr(images: ProcessedImagePayload[]) {
+  if (!SUPABASE_ANON_KEY) {
+    throw new Error("Supabase anon key is missing. Set NEXT_PUBLIC_SUPABASE_ANON_KEY.");
+  }
+
+  const response = await fetch(OCR_FUNCTION_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY
+    },
+    body: JSON.stringify({ images })
+  });
+
+  const payload = (await response.json().catch(() => null)) as
+    | {
+        rows?: ExtractedMileageRow[];
+        error?: {
+          message?: string;
+          code?: string;
+          details?: string;
+          executionId?: string;
+          deploymentId?: string;
+        };
+      }
+    | null;
+
+  if (!response.ok) {
+    const details = [
+      payload?.error?.message,
+      payload?.error?.details,
+      payload?.error?.code ? `Code: ${payload.error.code}` : "",
+      payload?.error?.executionId ? `Execution: ${payload.error.executionId}` : ""
+    ]
+      .filter(Boolean)
+      .join(" | ");
+
+    throw new Error(details || `OCR request failed with status ${response.status}.`);
+  }
+
+  if (payload?.error) {
+    const details = [
+      payload.error.message,
+      payload.error.details,
+      payload.error.code ? `Code: ${payload.error.code}` : "",
+      payload.error.executionId ? `Execution: ${payload.error.executionId}` : ""
+    ]
+      .filter(Boolean)
+      .join(" | ");
+
+    throw new Error(details || "OCR processing failed.");
+  }
+
+  return Array.isArray(payload?.rows) ? payload.rows : [];
 }
 
 async function nextFrame() {
@@ -299,21 +369,13 @@ export function WeeklyMileageUploadCard({
         await nextFrame();
       }
 
-      const { data, error: functionError } = await supabase.functions.invoke("weekly-mileage-ocr", {
-        body: { images }
-      });
-
-      if (functionError) {
-        throw new Error(functionError.message || "OCR processing failed.");
-      }
-
-      const extractedRows = Array.isArray(data?.rows) ? (data.rows as ExtractedMileageRow[]) : [];
+      const extractedRows = await requestWeeklyMileageOcr(images);
       const nextRows = revalidateMileageRows(parseExtractedData(extractedRows), drivers, entries);
       startTransition(() => setRows(nextRows));
     } catch (caughtError) {
       console.error("Weekly mileage OCR error:", caughtError);
       setRows([]);
-      setError(caughtError instanceof Error ? caughtError.message : "Unable to process uploaded sheets.");
+      setError(buildProcessingErrorMessage(caughtError));
     } finally {
       setProcessing(false);
     }
