@@ -35,6 +35,7 @@ import {
   filterShipments
 } from "@/lib/shipment-estimation";
 import { exportToCsv } from "@/lib/export";
+import { fetchJson } from "@/lib/http";
 import { useLanguage } from "@/lib/language-provider";
 import {
   formatCurrency,
@@ -456,6 +457,7 @@ export default function ShipmentsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [estimating, setEstimating] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [distanceMessage, setDistanceMessage] = useState<string | null>(null);
@@ -535,6 +537,16 @@ export default function ShipmentsPage() {
 
       setFuelLogs(fuelRows.status === "fulfilled" ? fuelRows.value : []);
       setWeeklyMileage(mileageRows.status === "fulfilled" ? mileageRows.value : []);
+      console.log("Shipments page load result", {
+        drivers:
+          driverRows.status === "fulfilled" ? driverRows.value.length : "error",
+        shipments:
+          shipmentRows.status === "fulfilled" ? shipmentRows.value.length : "error",
+        fuelLogs:
+          fuelRows.status === "fulfilled" ? fuelRows.value.length : "error",
+        weeklyMileage:
+          mileageRows.status === "fulfilled" ? mileageRows.value.length : "error"
+      });
     } finally {
       setLoading(false);
     }
@@ -675,7 +687,12 @@ export default function ShipmentsPage() {
       let provider = cached?.provider ?? "routes_api";
 
       if (distanceKm == null) {
-        const response = await fetch("/api/distance-estimate", {
+        const result = await fetchJson<{
+          distanceKm?: number;
+          distanceMeters?: number | null;
+          durationSeconds?: number | null;
+          provider?: string;
+        }>("/api/distance-estimate", {
           method: "POST",
           headers: {
             "Content-Type": "application/json"
@@ -686,24 +703,14 @@ export default function ShipmentsPage() {
           })
         });
 
-        const result = (await response.json()) as {
-          error?: string;
-          distanceKm?: number;
-          distanceMeters?: number | null;
-          durationSeconds?: number | null;
-          provider?: string;
-        };
-
-        if (!response.ok || result.distanceKm == null) {
-          throw new Error(
-            result.error || (response.status === 503 ? labels.googleKeyMissing : labels.saveError)
-          );
+        if (result.data?.distanceKm == null) {
+          throw new Error(labels.saveError);
         }
 
-        distanceKm = result.distanceKm;
-        distanceMeters = result.distanceMeters ?? null;
-        durationSeconds = result.durationSeconds ?? null;
-        provider = result.provider ?? "routes_api";
+        distanceKm = result.data.distanceKm;
+        distanceMeters = result.data.distanceMeters ?? null;
+        durationSeconds = result.data.durationSeconds ?? null;
+        provider = result.data.provider ?? "routes_api";
 
         await persistRouteEstimate({
           originLocation: form.start_location.trim(),
@@ -752,11 +759,10 @@ export default function ShipmentsPage() {
     labels.costCalculated,
     labels.distanceCached,
     labels.distancePending,
-      labels.estimateComplete,
-      labels.googleKeyMissing,
-      labels.routeKeyMissing,
-      labels.saveError
-    ]);
+    labels.estimateComplete,
+    labels.routeKeyMissing,
+    labels.saveError
+  ]);
 
   const handleDeleteShipment = async (shipmentId: string) => {
     if (!window.confirm(labels.deleteConfirm)) {
@@ -912,6 +918,12 @@ export default function ShipmentsPage() {
     () => filterShipments(baseFilteredShipments, deferredSearchTerm),
     [baseFilteredShipments, deferredSearchTerm]
   );
+  const totalPages = Math.max(1, Math.ceil(filteredShipments.length / 25));
+  const pagedShipments = useMemo(() => {
+    const safePage = Math.min(currentPage, totalPages);
+    const startIndex = (safePage - 1) * 25;
+    return filteredShipments.slice(startIndex, startIndex + 25);
+  }, [currentPage, filteredShipments, totalPages]);
 
   const now = useMemo(() => new Date(), []);
   const weekStartKey = toDateKey(startOfWeek(now));
@@ -1102,6 +1114,10 @@ export default function ShipmentsPage() {
     }
   ];
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [deferredSearchTerm, endDateFilter, selectedDriverFilter, startDateFilter]);
+
   return (
     <>
       <GoogleMapsLoader />
@@ -1109,56 +1125,60 @@ export default function ShipmentsPage() {
         <Header title={labels.title} description={labels.description} />
       </div>
 
-      <section className="mb-4.5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {summaryCards.map((card) => (
-          <StatCard
-            key={card.label}
-            label={card.label}
-            value={card.value}
-            helper={card.helper}
-            icon={card.icon}
-          />
-        ))}
-      </section>
-
-      <section className="surface-card mb-5 overflow-hidden p-5 sm:p-6">
-        <div className="absolute inset-x-0 top-0 h-24 bg-[linear-gradient(135deg,rgba(95,51,183,0.08),rgba(242,138,47,0.04)_65%,transparent)]" />
-        <div className="relative">
-          <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <div className="badge-muted">{labels.selectedPeriodSummary}</div>
-              <h3 className="mt-3 text-[1.72rem] font-semibold tracking-[-0.05em] text-slate-950">
-                {labels.selectedPeriodValue}
-              </h3>
-              <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-500">
-                {labels.selectedPeriodDescription}
-              </p>
-            </div>
-            <div className="subtle-panel min-w-[220px] p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                {labels.selectedPeriodLabel}
-              </p>
-              <p className="mt-1 text-lg font-semibold text-slate-950">
-                {labels.selectedPeriodValue}
-              </p>
-            </div>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {summaryHighlights.map((item) => (
-              <div key={item.label} className="subtle-panel p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                  {item.label}
-                </p>
-                <p className="mt-2 text-[1.55rem] font-semibold tracking-[-0.04em] text-slate-950">
-                  {item.value}
-                </p>
-                <p className="mt-2 text-sm text-slate-500">{item.helper}</p>
-              </div>
+      {baseFilteredShipments.length > 0 ? (
+        <>
+          <section className="mb-4.5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {summaryCards.map((card) => (
+              <StatCard
+                key={card.label}
+                label={card.label}
+                value={card.value}
+                helper={card.helper}
+                icon={card.icon}
+              />
             ))}
-          </div>
-        </div>
-      </section>
+          </section>
+
+          <section className="surface-card mb-5 overflow-hidden p-5 sm:p-6">
+            <div className="absolute inset-x-0 top-0 h-24 bg-[linear-gradient(135deg,rgba(95,51,183,0.08),rgba(242,138,47,0.04)_65%,transparent)]" />
+            <div className="relative">
+              <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <div className="badge-muted">{labels.selectedPeriodSummary}</div>
+                  <h3 className="mt-3 text-[1.72rem] font-semibold tracking-[-0.05em] text-slate-950">
+                    {labels.selectedPeriodValue}
+                  </h3>
+                  <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-500">
+                    {labels.selectedPeriodDescription}
+                  </p>
+                </div>
+                <div className="subtle-panel min-w-[220px] p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    {labels.selectedPeriodLabel}
+                  </p>
+                  <p className="mt-1 text-lg font-semibold text-slate-950">
+                    {labels.selectedPeriodValue}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {summaryHighlights.map((item) => (
+                  <div key={item.label} className="subtle-panel p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                      {item.label}
+                    </p>
+                    <p className="mt-2 text-[1.55rem] font-semibold tracking-[-0.04em] text-slate-950">
+                      {item.value}
+                    </p>
+                    <p className="mt-2 text-sm text-slate-500">{item.helper}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        </>
+      ) : null}
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]">
         <section className="surface-card p-5 sm:p-6">
@@ -1738,11 +1758,29 @@ export default function ShipmentsPage() {
         {loading ? (
           <EmptyState title={labels.loading} description={labels.tableDescription} />
         ) : filteredShipments.length === 0 ? (
-          <EmptyState title={labels.noShipments} description={labels.noShipmentsDescription} />
+          shipments.length === 0 ? (
+            <div className="premium-empty-state">
+              <h3 className="text-2xl font-semibold tracking-[-0.04em] text-slate-950">
+                No shipment data yet
+              </h3>
+              <p className="empty-state-description">
+                Create your first shipment to track fuel cost per job.
+              </p>
+              <button
+                type="button"
+                onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+                className="btn-primary mt-6"
+              >
+                + Create Shipment
+              </button>
+            </div>
+          ) : (
+            <EmptyState title={labels.noShipments} description={labels.noShipmentsDescription} />
+          )
         ) : (
           <>
             <div className="space-y-3.5 md:hidden">
-              {filteredShipments.map((shipment) => {
+              {pagedShipments.map((shipment) => {
                 const shipmentCostFlag = getShipmentCostFlag(
                   shipment,
                   overallAverageShipmentCost,
@@ -1869,7 +1907,7 @@ export default function ShipmentsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredShipments.map((shipment) => {
+                      {pagedShipments.map((shipment) => {
                         const shipmentCostFlag = getShipmentCostFlag(
                           shipment,
                           overallAverageShipmentCost,
@@ -1898,7 +1936,7 @@ export default function ShipmentsPage() {
                             </td>
                             <td className="table-body-cell text-slate-700">
                               <div>
-                                <p>{shipment.driver || "-"}</p>
+                                <p className="table-driver-name">{shipment.driver || "-"}</p>
                                 <p className="mt-0.5 text-xs text-slate-400">
                                   {shipment.vehicle_reg || "-"}
                                 </p>
@@ -1959,6 +1997,29 @@ export default function ShipmentsPage() {
                     </tbody>
                   </table>
                 </div>
+              </div>
+            </div>
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-slate-500">
+                Page {formatNumber(Math.min(currentPage, totalPages), language)} of {formatNumber(totalPages, language)}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                  disabled={currentPage === 1}
+                  className="btn-secondary disabled:opacity-50"
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                  disabled={currentPage >= totalPages}
+                  className="btn-secondary disabled:opacity-50"
+                >
+                  Next
+                </button>
               </div>
             </div>
           </>

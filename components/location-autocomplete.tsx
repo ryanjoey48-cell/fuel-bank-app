@@ -2,6 +2,7 @@
 
 import { MapPinned } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
+import { fetchJson } from "@/lib/http";
 
 type LocationSuggestion = {
   placeId: string;
@@ -51,14 +52,16 @@ export function LocationAutocomplete({
 
     const loadConfiguration = async () => {
       try {
-        const response = await fetch(`/api/location-autocomplete?language=${language}`);
-        const result = (await response.json()) as { configured?: boolean };
+        const result = await fetchJson<{
+          configured?: boolean;
+          suggestions?: LocationSuggestion[];
+        }>(`/api/location-autocomplete?language=${language}`);
 
         if (!cancelled) {
-          const configured = Boolean(result.configured);
+          const configured = Boolean(result.data?.configured);
           setMapsConfigured(configured);
           onConfigurationChange?.(configured);
-          if (result.configured === false) {
+          if (result.data?.configured === false) {
             setStatusMessage(configMissingMessage);
           }
         }
@@ -97,20 +100,18 @@ export function LocationAutocomplete({
     const timeoutId = setTimeout(async () => {
       try {
         setLoading(true);
-        const response = await fetch(
+        const result = await fetchJson<{
+          configured?: boolean;
+          suggestions?: LocationSuggestion[];
+        }>(
           `/api/location-autocomplete?input=${encodeURIComponent(query)}&language=${language}&sessionToken=${encodeURIComponent(sessionToken)}`
         );
-        const result = (await response.json()) as {
-          configured?: boolean;
-          error?: string;
-          suggestions?: LocationSuggestion[];
-        };
 
         if (requestIdRef.current !== nextRequestId) {
           return;
         }
 
-        if (result.configured === false || response.status === 503) {
+        if (result.data?.configured === false) {
           setMapsConfigured(false);
           onConfigurationChange?.(false);
           setSuggestions([]);
@@ -119,17 +120,10 @@ export function LocationAutocomplete({
           return;
         }
 
-        if (!response.ok) {
-          setSuggestions([]);
-          setStatusMessage(result.error ?? helperText ?? null);
-          setIsOpen(true);
-          return;
-        }
-
         setMapsConfigured(true);
         onConfigurationChange?.(true);
         setStatusMessage(helperText ?? null);
-        setSuggestions(result.suggestions ?? []);
+        setSuggestions(result.data?.suggestions ?? []);
         setIsOpen(true);
         setActiveIndex(-1);
       } catch {

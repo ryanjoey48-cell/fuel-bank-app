@@ -109,7 +109,9 @@ export default function DriversPage() {
     try {
       setLoading(true);
       setError(null);
-      setDrivers(await fetchDrivers());
+      const driverRows = await fetchDrivers();
+      console.log("Drivers page load success", { rowCount: driverRows.length });
+      setDrivers(driverRows);
     } catch (err) {
       console.error("Drivers load error:", err);
       setError(t.drivers.unableToLoadDrivers);
@@ -312,7 +314,7 @@ export default function DriversPage() {
                 <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
                   <h3 className="section-title">{t.common.drivers}</h3>
                   <span className="badge-muted px-2.5 py-1 text-[11px]">
-                    {filteredDrivers.length} {t.common.entries}
+                    {formatNumber(filteredDrivers.length, language)} {t.common.entries}
                   </span>
                 </div>
                 <p className="section-subtitle max-w-2xl">{t.drivers.tableDescription}</p>
@@ -434,7 +436,7 @@ export default function DriversPage() {
                     <tbody>
                       {filteredDrivers.map((driver) => (
                         <tr key={driver.id} className="enterprise-table-row">
-                          <td className="table-body-cell font-medium text-slate-900">{driver.name}</td>
+                          <td className="table-body-cell table-driver-name">{driver.name}</td>
                           <td className="table-body-cell text-slate-700">{driver.vehicle_reg}</td>
                           <td className="table-body-cell">
                             <div className="flex h-9 flex-row items-center gap-1.5 whitespace-nowrap">

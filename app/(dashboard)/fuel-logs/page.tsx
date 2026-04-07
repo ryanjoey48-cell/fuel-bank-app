@@ -294,7 +294,9 @@ export default function FuelLogsPage() {
 
   const loadDrivers = useCallback(async () => {
     try {
-      setDrivers(await fetchDrivers());
+      const driverRows = await fetchDrivers();
+      console.log("Fuel logs drivers load success", { drivers: driverRows.length });
+      setDrivers(driverRows);
     } catch (err) {
       console.error("Fuel logs loadDrivers error:", err);
       setError(t.fuelLogs.unableToLoadFuelData);
@@ -315,18 +317,23 @@ export default function FuelLogsPage() {
       setLoading(true);
       setError(null);
       try {
-        const [{ rows, totalCount: nextTotalCount }] = await Promise.all([
-          fetchFuelLogsPage({
-            page,
+      const [{ rows, totalCount: nextTotalCount }] = await Promise.all([
+        fetchFuelLogsPage({
+          page,
             pageSize: PAGE_SIZE,
             sortKey,
             sortDirection,
-            filters
-          }),
-          loadSummaryData()
-        ]);
+          filters
+        }),
+        loadSummaryData()
+      ]);
+      console.log("Fuel logs page load success", {
+        rows: rows.length,
+        totalCount: nextTotalCount,
+        page
+      });
 
-        const nextTotalPages = Math.max(1, Math.ceil(nextTotalCount / PAGE_SIZE));
+      const nextTotalPages = Math.max(1, Math.ceil(nextTotalCount / PAGE_SIZE));
         if (page > nextTotalPages) {
           setCurrentPage(nextTotalPages);
           return;
@@ -875,7 +882,7 @@ export default function FuelLogsPage() {
                         {fuelLogs.map((log) => (
                           <tr key={log.id} className={`enterprise-table-row ${highlightedFuelLogId === String(log.id) ? "bg-amber-50/70" : ""}`}>
                             <td className="table-body-cell font-medium text-slate-700"><Highlight text={formatDate(log.date, language)} query={filters.search ?? ""} /></td>
-                            <td className="table-body-cell whitespace-nowrap font-medium text-slate-900"><Highlight text={log.driver} query={filters.search ?? ""} /></td>
+                            <td className="table-body-cell whitespace-nowrap table-driver-name"><Highlight text={log.driver} query={filters.search ?? ""} /></td>
                             <td className="table-body-cell whitespace-nowrap text-slate-700"><Highlight text={log.vehicle_reg} query={filters.search ?? ""} /></td>
                             <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800"><Highlight text={formatNumber(Number(log.litres || 0), language, 2)} query={filters.search ?? ""} /></td>
                             <td className="table-body-cell whitespace-nowrap text-right font-semibold text-slate-950"><Highlight text={formatCurrency(Number(log.total_cost || 0), language)} query={filters.search ?? ""} /></td>

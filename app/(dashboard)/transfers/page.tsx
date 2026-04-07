@@ -88,6 +88,11 @@ export default function TransfersPage() {
         fetchFuelLogs()
       ]);
 
+      console.log("Transfers page load success", {
+        drivers: driverRows.length,
+        transfers: transferRows.length,
+        fuelLogs: fuelRows.length
+      });
       setDrivers(driverRows);
       setTransfers(transferRows);
       setFuelLogs(fuelRows);
@@ -110,10 +115,6 @@ export default function TransfersPage() {
     window.addEventListener("fuel-bank:data-changed", handleDataChanged);
     return () => window.removeEventListener("fuel-bank:data-changed", handleDataChanged);
   }, [loadData]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [sortedTransfers.length]);
 
   const resetForm = (clearMessages = true) => {
     setForm(createInitialForm(transferTypeOptions[0].value));
@@ -370,12 +371,12 @@ export default function TransfersPage() {
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <span className="badge-muted w-fit">
-                {formatNumber(sortedTransfers.length, language)} {t.common.entries}
+                  {formatNumber(sortedTransfers.length, language)} {t.common.entries}
               </span>
               <button
                 type="button"
                 onClick={exportTransfers}
-                disabled={!sortedTransfers.length}
+                disabled={!transfers.length}
                 className="btn-secondary w-full gap-2 disabled:opacity-50 sm:w-auto"
               >
                 <Download className="h-4 w-4" />
@@ -386,12 +387,12 @@ export default function TransfersPage() {
 
           {loading ? (
             <p className="text-sm text-slate-500">{t.transfers.loadingTransfers}</p>
-          ) : sortedTransfers.length === 0 ? (
+            ) : sortedTransfers.length === 0 ? (
             <EmptyState title={t.transfers.noTransfersYet} description={t.transfers.noTransfersDescription} />
           ) : (
             <>
               <div className="space-y-3.5 md:hidden">
-                {pagedTransfers.map((transfer) => (
+                {transfers.map((transfer) => (
                   <div key={transfer.id} className="subtle-panel p-4">
                     <div className="flex flex-col gap-2.5 min-[400px]:flex-row min-[400px]:items-start min-[400px]:justify-between">
                       <div>
@@ -467,10 +468,10 @@ export default function TransfersPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {pagedTransfers.map((transfer) => (
+                        {transfers.map((transfer) => (
                           <tr key={transfer.id} className="enterprise-table-row">
                             <td className="table-body-cell supporting-date-strong">{formatDate(transfer.date, language)}</td>
-                            <td className="table-body-cell whitespace-nowrap font-medium text-slate-900">{transfer.driver}</td>
+                            <td className="table-body-cell whitespace-nowrap table-driver-name">{transfer.driver}</td>
                             <td className="table-body-cell whitespace-nowrap text-slate-700">{transfer.vehicle_reg}</td>
                             <td className="table-body-cell whitespace-nowrap text-slate-700">
                               {getTransferTypeLabel(t, transfer.transfer_type)}

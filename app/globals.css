@@ -16,7 +16,8 @@
   --brand-primary-soft: #f4efff;
   --brand-primary-border: #ddd1fb;
   --brand-accent: #f28a2f;
-  --table-row-hover: #faf7ff;
+  --table-row-hover: #f8f6fc;
+  --table-row-zebra: rgba(15, 23, 42, 0.024);
 }
 
 html {
@@ -274,11 +275,11 @@ td {
   }
 
   .table-shell tbody .enterprise-table-row:nth-child(even) {
-    background: rgba(15, 23, 42, 0.012);
+    background: var(--table-row-zebra);
   }
 
   .enterprise-table-row:hover {
-    background: rgba(248, 250, 252, 0.96);
+    background: var(--table-row-hover);
   }
 
   .table-action-secondary {
@@ -299,7 +300,7 @@ td {
   }
 
   .table-body-cell {
-    @apply px-5 py-5 align-middle text-[13px] leading-6;
+    @apply px-5 py-5.5 align-middle text-[13px] leading-6;
   }
 
   .table-head-cell {
@@ -319,7 +320,7 @@ td {
   }
 
   .metric-value {
-    @apply mt-3 break-words text-[2.35rem] font-semibold tracking-[-0.06em] text-slate-950 sm:text-[2.7rem];
+    @apply mt-3 break-words text-[2.55rem] font-semibold tracking-[-0.07em] text-slate-950 sm:text-[3rem];
     font-variant-numeric: tabular-nums;
   }
 
@@ -329,7 +330,7 @@ td {
   }
 
   .metric-helper {
-    @apply mt-auto pt-6 text-[13px] leading-6 text-slate-600;
+    @apply mt-auto pt-5 text-[12px] leading-5 text-slate-600;
   }
 
   .supporting-date {
@@ -353,7 +354,7 @@ td {
   }
 
   .card-metric-shell {
-    @apply flex h-full min-h-[208px] min-w-0 flex-col justify-between p-6 sm:min-h-[224px] sm:p-6;
+    @apply flex h-full min-h-[188px] min-w-0 flex-col justify-between p-5 sm:min-h-[204px] sm:p-6;
   }
 
   .card-metric-header {
@@ -380,6 +381,14 @@ td {
 
   .empty-state-note {
     @apply mx-auto mt-5 max-w-md text-[13px] leading-6 text-slate-400;
+  }
+
+  .table-driver-name {
+    @apply font-semibold text-slate-900;
+  }
+
+  .loading-inline {
+    @apply inline-flex items-center gap-2 text-sm text-slate-500;
   }
 }
 

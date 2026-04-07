@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
 import { getServerGoogleMapsApiKey } from "@/lib/google-maps";
+import { createApiError, createApiSuccess, parseJsonSafely } from "@/lib/http";
 
 type PlacesAutocompleteNewResponse = {
   suggestions?: Array<{
@@ -25,34 +25,38 @@ type PlacesAutocompleteNewResponse = {
 };
 
 export async function GET(request: Request) {
-  const apiKey = getServerGoogleMapsApiKey();
-  const { searchParams } = new URL(request.url);
-  const input = searchParams.get("input")?.trim() ?? "";
-  const language = searchParams.get("language")?.trim() ?? "en";
-  const sessionToken = searchParams.get("sessionToken")?.trim() ?? "";
-
-  if (!input) {
-    return NextResponse.json({
-      configured: Boolean(apiKey),
-      suggestions: []
-    });
-  }
-
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "Google Maps not configured — autocomplete unavailable" },
-      { status: 503 }
-    );
-  }
-
-  if (input.length < 2) {
-    return NextResponse.json({
-      configured: true,
-      suggestions: []
-    });
-  }
-
   try {
+    const apiKey = getServerGoogleMapsApiKey();
+    const { searchParams } = new URL(request.url);
+    const input = searchParams.get("input")?.trim() ?? "";
+    const language = searchParams.get("language")?.trim() ?? "en";
+    const sessionToken = searchParams.get("sessionToken")?.trim() ?? "";
+
+    if (!input) {
+      return Response.json(
+        createApiSuccess({
+          configured: Boolean(apiKey),
+          suggestions: []
+        })
+      );
+    }
+
+    if (!apiKey) {
+      return Response.json(
+        createApiError("Google Maps not configured - autocomplete unavailable"),
+        { status: 503 }
+      );
+    }
+
+    if (input.length < 2) {
+      return Response.json(
+        createApiSuccess({
+          configured: true,
+          suggestions: []
+        })
+      );
+    }
+
     const response = await fetch("https://places.googleapis.com/v1/places:autocomplete", {
       method: "POST",
       headers: {
@@ -71,46 +75,47 @@ export async function GET(request: Request) {
     });
 
     if (!response.ok) {
-      const errorBody = (await response.json().catch(() => null)) as
-        | PlacesAutocompleteNewResponse
-        | null;
+      const errorBody = await parseJsonSafely<PlacesAutocompleteNewResponse | null>(
+        response
+      ).catch(() => null);
 
-      return NextResponse.json(
-        {
-          error:
-            errorBody?.error?.message ||
+      return Response.json(
+        createApiError(
+          errorBody?.error?.message ||
             "Unable to reach Google Maps autocomplete service."
-        },
+        ),
         { status: 502 }
       );
     }
 
-    const result = (await response.json()) as PlacesAutocompleteNewResponse;
+    const result = await parseJsonSafely<PlacesAutocompleteNewResponse>(response);
 
-    return NextResponse.json({
-      configured: true,
-      suggestions: (result.suggestions ?? [])
-        .map((suggestion) => suggestion.placePrediction)
-        .filter((prediction): prediction is NonNullable<typeof prediction> => Boolean(prediction))
-        .slice(0, 5)
-        .map((prediction) => ({
-          placeId: prediction.placeId ?? prediction.place ?? prediction.text?.text ?? "",
-          description:
-            prediction.text?.text ??
-            [
-              prediction.structuredFormat?.mainText?.text ?? "",
-              prediction.structuredFormat?.secondaryText?.text ?? ""
-            ]
-              .filter(Boolean)
-              .join(", "),
-          mainText:
-            prediction.structuredFormat?.mainText?.text ?? prediction.text?.text ?? "",
-          secondaryText: prediction.structuredFormat?.secondaryText?.text ?? ""
-        }))
-    });
+    return Response.json(
+      createApiSuccess({
+        configured: true,
+        suggestions: (result.suggestions ?? [])
+          .map((suggestion) => suggestion.placePrediction)
+          .filter((prediction): prediction is NonNullable<typeof prediction> => Boolean(prediction))
+          .slice(0, 5)
+          .map((prediction) => ({
+            placeId: prediction.placeId ?? prediction.place ?? prediction.text?.text ?? "",
+            description:
+              prediction.text?.text ??
+              [
+                prediction.structuredFormat?.mainText?.text ?? "",
+                prediction.structuredFormat?.secondaryText?.text ?? ""
+              ]
+                .filter(Boolean)
+                .join(", "),
+            mainText:
+              prediction.structuredFormat?.mainText?.text ?? prediction.text?.text ?? "",
+            secondaryText: prediction.structuredFormat?.secondaryText?.text ?? ""
+          }))
+      })
+    );
   } catch {
-    return NextResponse.json(
-      { error: "Unable to load location suggestions right now." },
+    return Response.json(
+      createApiError("Unable to load location suggestions right now."),
       { status: 500 }
     );
   }

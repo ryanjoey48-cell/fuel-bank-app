@@ -40,3 +40,22 @@ export function normalizeComparableText(value: string | null | undefined) {
 export function normalizeLocationKey(value: string | null | undefined) {
   return normalizeComparableText(value).replace(/\s*,\s*/g, ", ");
 }
+
+export function normalizeDisplayName(value: string | null | undefined) {
+  return (value ?? "").trim().replace(/\s+/g, " ");
+}
+
+export function normalizeVehicleRegistration(value: string | null | undefined) {
+  const normalized = normalizeDisplayName(value);
+  if (!normalized) {
+    return "";
+  }
+
+  const tempVehicleMatch = normalized.match(/^temp\s+vehicle(?:\s+(.+))?$/i);
+  if (tempVehicleMatch) {
+    const suffix = tempVehicleMatch[1]?.trim();
+    return suffix ? `Temp Vehicle ${suffix}` : "Temp Vehicle";
+  }
+
+  return normalized.toUpperCase();
+}

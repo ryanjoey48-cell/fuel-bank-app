@@ -1,7 +1,11 @@
 "use client";
 
 import { supabase } from "@/lib/supabase";
-import { normalizeComparableText } from "@/lib/utils";
+import {
+  normalizeComparableText,
+  normalizeDisplayName,
+  normalizeVehicleRegistration
+} from "@/lib/utils";
 import {
   normalizeFuelTypeKey,
   normalizePaymentMethodKey,
@@ -133,7 +137,59 @@ function findTransferFuelLogMatch(
   return candidates[0]?.log ?? null;
 }
 
+const READ_CACHE_TTL_MS = 30_000;
+
+type CacheEntry<T> = {
+  expiresAt: number;
+  promise?: Promise<T>;
+  value?: T;
+};
+
+const readCache = new Map<string, CacheEntry<unknown>>();
+
+function clearReadCache() {
+  readCache.clear();
+}
+
+async function readThroughCache<T>(
+  key: string,
+  fetcher: () => Promise<T>,
+  ttlMs = READ_CACHE_TTL_MS
+) {
+  const now = Date.now();
+  const cached = readCache.get(key) as CacheEntry<T> | undefined;
+
+  if (cached?.value !== undefined && cached.expiresAt > now) {
+    return cached.value;
+  }
+
+  if (cached?.promise) {
+    return cached.promise;
+  }
+
+  const promise = fetcher()
+    .then((value) => {
+      readCache.set(key, {
+        value,
+        expiresAt: Date.now() + ttlMs
+      });
+      return value;
+    })
+    .catch((error) => {
+      readCache.delete(key);
+      throw error;
+    });
+
+  readCache.set(key, {
+    expiresAt: now + ttlMs,
+    promise
+  });
+
+  return promise;
+}
+
 function dispatchDataChange(resource: string) {
+  clearReadCache();
   if (typeof window === "undefined") {
     return;
   }
@@ -142,7 +198,30 @@ function dispatchDataChange(resource: string) {
 }
 
 function buildDriverLookup(rows: Array<{ id: string; name: string | null }>) {
-  return new Map(rows.map((driver) => [String(driver.id), driver.name ?? ""]));
+  return new Map(
+    rows.map((driver) => [String(driver.id), normalizeDisplayName(driver.name)])
+  );
+}
+
+function normalizeDriverRow(driver: Driver) {
+  return {
+    ...driver,
+    name: normalizeDisplayName(driver.name),
+    vehicle_reg: normalizeVehicleRegistration(driver.vehicle_reg)
+  };
+}
+
+function resolveShipmentDriverName(
+  shipment: Pick<Shipment, "driver_id" | "driver">,
+  driverLookup: Map<string, string>
+) {
+  const linkedDriverName =
+    shipment.driver_id != null && String(shipment.driver_id).trim()
+      ? driverLookup.get(String(shipment.driver_id)) ?? ""
+      : "";
+  const storedDriverValue = normalizeDisplayName(shipment.driver);
+
+  return linkedDriverName || storedDriverValue || "Unassigned";
 }
 
 const FUEL_LOG_SELECT_COLUMNS =
@@ -170,7 +249,8 @@ function mapFuelLogRows(
   return rows.map((log) => ({
     ...log,
     driver_id: log.driver_id != null ? String(log.driver_id) : "",
-    driver: log.driver ?? "Unknown driver",
+    driver: normalizeDisplayName(log.driver) || "Unknown driver",
+    vehicle_reg: normalizeVehicleRegistration(log.vehicle_reg),
     mileage:
       log.mileage != null
         ? Number(log.mileage)
@@ -270,11 +350,11 @@ function findDriverNameFallback(
       : undefined;
 
   if (linkedDriver?.name?.trim()) {
-    return linkedDriver.name.trim();
+    return normalizeDisplayName(linkedDriver.name);
   }
 
   if (storedDriverName?.trim()) {
-    return storedDriverName.trim();
+    return normalizeDisplayName(storedDriverName);
   }
 
   const vehicleMatch = vehicleReg
@@ -285,52 +365,62 @@ function findDriverNameFallback(
     : undefined;
 
   if (vehicleMatch?.name?.trim()) {
-    return vehicleMatch.name.trim();
+    return normalizeDisplayName(vehicleMatch.name);
   }
 
   return "Unknown driver";
 }
 
 async function fetchDriverLookup() {
-  const { data, error } = await supabase.from("drivers").select("id, name");
+  return readThroughCache("drivers:lookup", async () => {
+    const { data, error } = await supabase.from("drivers").select("id, name");
 
-  if (error) {
-    logDataError("fetchDriverLookup error:", error);
-    throw error;
-  }
+    if (error) {
+      logDataError("fetchDriverLookup error:", error);
+      throw error;
+    }
 
-  return buildDriverLookup((data ?? []) as Array<{ id: string; name: string | null }>);
+    return buildDriverLookup((data ?? []) as Array<{ id: string; name: string | null }>);
+  });
 }
 
 export async function fetchDrivers() {
-  const { data, error } = await supabase
-    .from("drivers")
-    .select("*")
-    .order("name", { ascending: true });
+  return readThroughCache("drivers:all", async () => {
+    const { data, error } = await supabase
+      .from("drivers")
+      .select("*")
+      .order("name", { ascending: true });
 
-  if (error) {
-    logDataError("fetchDrivers error:", error);
-    throw error;
-  }
+    if (error) {
+      logDataError("fetchDrivers error:", error);
+      throw error;
+    }
 
-  return (data ?? []) as Driver[];
+    console.log("fetchDrivers success", { rowCount: (data ?? []).length });
+
+    return ((data ?? []) as Driver[]).map(normalizeDriverRow);
+  });
 }
 
 export async function fetchFuelLogs() {
-  const fuelLogQuery = await supabase
-    .from("fuel_logs")
-    .select(FUEL_LOG_SELECT_COLUMNS)
-    .order("date", { ascending: false })
-    .order("id", { ascending: false });
+  return readThroughCache("fuel_logs:all", async () => {
+    const fuelLogQuery = await supabase
+      .from("fuel_logs")
+      .select(FUEL_LOG_SELECT_COLUMNS)
+      .order("date", { ascending: false })
+      .order("id", { ascending: false });
 
-  if (fuelLogQuery.error) {
-    logDataError("fetchFuelLogs error:", fuelLogQuery.error);
-    throw fuelLogQuery.error;
-  }
+    if (fuelLogQuery.error) {
+      logDataError("fetchFuelLogs error:", fuelLogQuery.error);
+      throw fuelLogQuery.error;
+    }
 
-  return mapFuelLogRows(
-    (fuelLogQuery.data ?? []) as Parameters<typeof mapFuelLogRows>[0]
-  );
+    console.log("fetchFuelLogs success", { rowCount: (fuelLogQuery.data ?? []).length });
+
+    return mapFuelLogRows(
+      (fuelLogQuery.data ?? []) as Parameters<typeof mapFuelLogRows>[0]
+    );
+  });
 }
 
 export async function fetchFuelLogsPage({
@@ -381,57 +471,61 @@ export async function fetchFuelLogsPage({
 }
 
 export async function fetchFuelLogTodayRows(currentDate: string) {
-  const query = await supabase
-    .from("fuel_logs")
-    .select("id, date, driver_id, driver, vehicle_reg, odometer, litres, total_cost, price_per_litre, mileage, location, created_at")
-    .eq("date", currentDate)
-    .order("date", { ascending: false })
-    .order("id", { ascending: false });
+  return readThroughCache(`fuel_logs:today:${currentDate}`, async () => {
+    const query = await supabase
+      .from("fuel_logs")
+      .select("id, date, driver_id, driver, vehicle_reg, odometer, litres, total_cost, price_per_litre, mileage, location, created_at")
+      .eq("date", currentDate)
+      .order("date", { ascending: false })
+      .order("id", { ascending: false });
 
-  if (query.error) {
-    logDataError("fetchFuelLogTodayRows error:", query.error, { currentDate });
-    throw query.error;
-  }
+    if (query.error) {
+      logDataError("fetchFuelLogTodayRows error:", query.error, { currentDate });
+      throw query.error;
+    }
 
-  return mapFuelLogRows((query.data ?? []) as Parameters<typeof mapFuelLogRows>[0]);
+    return mapFuelLogRows((query.data ?? []) as Parameters<typeof mapFuelLogRows>[0]);
+  });
 }
 
 export async function fetchFuelLogRecentDaySummaries(days: number) {
-  const startDate = new Date();
-  startDate.setHours(0, 0, 0, 0);
-  startDate.setDate(startDate.getDate() - (days - 1));
-  const startKey = startDate.toISOString().slice(0, 10);
+  return readThroughCache(`fuel_logs:recent:${days}`, async () => {
+    const startDate = new Date();
+    startDate.setHours(0, 0, 0, 0);
+    startDate.setDate(startDate.getDate() - (days - 1));
+    const startKey = startDate.toISOString().slice(0, 10);
 
-  const query = await supabase
-    .from("fuel_logs")
-    .select("date, litres, total_cost")
-    .gte("date", startKey)
-    .order("date", { ascending: false });
+    const query = await supabase
+      .from("fuel_logs")
+      .select("date, litres, total_cost")
+      .gte("date", startKey)
+      .order("date", { ascending: false });
 
-  if (query.error) {
-    logDataError("fetchFuelLogRecentDaySummaries error:", query.error, { days, startKey });
-    throw query.error;
-  }
+    if (query.error) {
+      logDataError("fetchFuelLogRecentDaySummaries error:", query.error, { days, startKey });
+      throw query.error;
+    }
 
-  const totals = new Map<string, FuelLogDaySummary>();
+    const totals = new Map<string, FuelLogDaySummary>();
 
-  for (let index = 0; index < days; index += 1) {
-    const day = new Date();
-    day.setHours(0, 0, 0, 0);
-    day.setDate(day.getDate() - index);
-    const key = day.toISOString().slice(0, 10);
-    totals.set(key, { date: key, spend: 0, litres: 0, entries: 0 });
-  }
+    for (let index = 0; index < days; index += 1) {
+      const day = new Date();
+      day.setHours(0, 0, 0, 0);
+      day.setDate(day.getDate() - index);
+      const key = day.toISOString().slice(0, 10);
+      totals.set(key, { date: key, spend: 0, litres: 0, entries: 0 });
+    }
 
-  for (const row of (query.data ?? []) as Array<{ date: string; litres: number; total_cost: number }>) {
-    const bucket = totals.get(row.date);
-    if (!bucket) continue;
-    bucket.spend += Number(row.total_cost || 0);
-    bucket.litres += Number(row.litres || 0);
-    bucket.entries += 1;
-  }
+    for (const row of (query.data ?? []) as Array<{ date: string; litres: number; total_cost: number }>) {
+      const bucket = totals.get(row.date);
+      if (!bucket) continue;
+      bucket.spend += Number(row.total_cost || 0);
+      bucket.litres += Number(row.litres || 0);
+      bucket.entries += 1;
+    }
 
-  return Array.from(totals.values()).sort((left, right) => right.date.localeCompare(left.date));
+    return Array.from(totals.values()).sort((left, right) => right.date.localeCompare(left.date));
+  });
 }
 
 export async function fetchFuelLogComparisonEntry({
@@ -506,6 +600,7 @@ export async function fetchTransfers() {
     .order("id", { ascending: false });
 
   if (!modernQuery.error) {
+    console.log("fetchTransfers success", { rowCount: (modernQuery.data ?? []).length });
     const driverRows = await fetchDrivers();
 
     return ((modernQuery.data ?? []) as Array<{
@@ -528,6 +623,7 @@ export async function fetchTransfers() {
         null,
         transfer.vehicle_reg
       ),
+      vehicle_reg: normalizeVehicleRegistration(transfer.vehicle_reg),
       transfer_type: normalizeTransferTypeKey(transfer.transfer_type) ?? transfer.transfer_type,
       fuel_log_id: transfer.fuel_log_id ?? null,
       receipt_status: normalizeTransferReceiptStatus(transfer.receipt_status)
@@ -550,6 +646,7 @@ export async function fetchTransfers() {
     throw legacyQuery.error;
   }
 
+  console.log("fetchTransfers legacy success", { rowCount: (legacyQuery.data ?? []).length });
   const driverRows = await fetchDrivers();
 
   return ((legacyQuery.data ?? []) as Array<{
@@ -571,7 +668,7 @@ export async function fetchTransfers() {
       transfer.driver,
       transfer.vehicle_reg
     ),
-    vehicle_reg: transfer.vehicle_reg,
+    vehicle_reg: normalizeVehicleRegistration(transfer.vehicle_reg),
     amount: Number(transfer.amount || 0),
     transfer_type: normalizeTransferTypeKey(transfer.transfer_type) ?? transfer.transfer_type,
     notes: transfer.notes,
@@ -590,6 +687,7 @@ export async function fetchWeeklyMileage() {
     .order("id", { ascending: false });
 
   if (!modernQuery.error) {
+    console.log("fetchWeeklyMileage success", { rowCount: (modernQuery.data ?? []).length });
     const driverLookup = await fetchDriverLookup();
 
     return ((modernQuery.data ?? []) as Array<{
@@ -603,6 +701,7 @@ export async function fetchWeeklyMileage() {
     }>).map((entry) => ({
       ...entry,
       driver: driverLookup.get(String(entry.driver_id)) ?? "",
+      vehicle_reg: normalizeVehicleRegistration(entry.vehicle_reg),
       mileage: Number(entry.odometer_reading || 0)
     })) as WeeklyMileageEntry[];
   }
@@ -626,6 +725,7 @@ export async function fetchWeeklyMileage() {
     throw legacyQuery.error;
   }
 
+  console.log("fetchWeeklyMileage legacy success", { rowCount: (legacyQuery.data ?? []).length });
   return ((legacyQuery.data ?? []) as Array<{
     id: string;
     week_ending: string;
@@ -642,8 +742,9 @@ export async function fetchWeeklyMileage() {
 
     return {
       ...entry,
-      driver: entry.driver ?? matchedDriver?.name ?? "",
+      driver: normalizeDisplayName(entry.driver) || matchedDriver?.name || "",
       driver_id: matchedDriver ? String(matchedDriver.id) : "",
+      vehicle_reg: normalizeVehicleRegistration(entry.vehicle_reg),
       odometer_reading: Number(entry.mileage || 0),
       user_id: ""
     };
@@ -665,17 +766,14 @@ export async function fetchShipments() {
     );
   }
 
-  const { data: driverRows } = await supabase.from("drivers").select("id, name");
-  const driverLookup = buildDriverLookup(
-    (driverRows ?? []) as Array<{ id: string; name: string | null }>
-  );
+  console.log("fetchShipments success", { rowCount: (shipmentRows ?? []).length });
+  const driverRows = await fetchDrivers();
+  const driverLookup = new Map(driverRows.map((driver) => [String(driver.id), driver.name]));
 
   return ((shipmentRows ?? []) as Shipment[]).map((shipment) => ({
     ...shipment,
-    driver:
-      (shipment.driver_id ? driverLookup.get(String(shipment.driver_id)) : "") ??
-      shipment.driver ??
-      ""
+    driver: resolveShipmentDriverName(shipment, driverLookup),
+    vehicle_reg: normalizeVehicleRegistration(shipment.vehicle_reg)
   })) as ShipmentWithDriver[];
 }
 
@@ -683,21 +781,23 @@ export async function fetchRouteDistanceEstimate(
   originKey: string,
   destinationKey: string
 ) {
-  const { data, error } = await supabase
-    .from("route_distance_estimates")
-    .select("*")
-    .eq("origin_key", originKey)
-    .eq("destination_key", destinationKey)
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  return readThroughCache(`route_estimate:${originKey}:${destinationKey}`, async () => {
+    const { data, error } = await supabase
+      .from("route_distance_estimates")
+      .select("*")
+      .eq("origin_key", originKey)
+      .eq("destination_key", destinationKey)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-  if (error) {
-    logDataError("fetchRouteDistanceEstimate error:", error);
-    throw error;
-  }
+    if (error) {
+      logDataError("fetchRouteDistanceEstimate error:", error);
+      throw error;
+    }
 
-  return (data ?? null) as RouteDistanceEstimate | null;
+    return (data ?? null) as RouteDistanceEstimate | null;
+  });
 }
 
 export async function saveDriver(payload: Partial<Driver>) {

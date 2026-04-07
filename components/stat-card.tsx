@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { memo, ReactNode } from "react";
 
 type StatCardProps = {
   label: string;
@@ -8,7 +8,7 @@ type StatCardProps = {
   valueVariant?: "default" | "date";
 };
 
-export function StatCard({ label, value, helper, icon, valueVariant = "default" }: StatCardProps) {
+function StatCardComponent({ label, value, helper, icon, valueVariant = "default" }: StatCardProps) {
   return (
     <div className="surface-card-soft card-metric-shell">
       <div className="card-metric-header">
@@ -26,3 +26,5 @@ export function StatCard({ label, value, helper, icon, valueVariant = "default" 
     </div>
   );
 }
+
+export const StatCard = memo(StatCardComponent);

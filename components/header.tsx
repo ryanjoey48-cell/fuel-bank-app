@@ -3,6 +3,7 @@
 import { LogOut } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { memo } from "react";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { useLanguage } from "@/lib/language-provider";
 import { supabase } from "@/lib/supabase";
@@ -13,7 +14,7 @@ type HeaderProps = {
   showSignOut?: boolean;
 };
 
-export function Header({ title, description, showSignOut = false }: HeaderProps) {
+function HeaderComponent({ title, description, showSignOut = false }: HeaderProps) {
   const router = useRouter();
   const { t } = useLanguage();
 
@@ -70,3 +71,5 @@ export function Header({ title, description, showSignOut = false }: HeaderProps)
     </header>
   );
 }
+
+export const Header = memo(HeaderComponent);
