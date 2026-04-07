@@ -26,8 +26,7 @@ import {
 import { formatNumber } from "@/lib/utils";
 import type { Driver, WeeklyMileageEntry } from "@/types/database";
 
-const OCR_FUNCTION_URL = "https://hafouarzfgkkwpzvedvd.supabase.co/functions/v1/weekly-mileage-ocr";
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+const OCR_URL = "https://hafoaurzfgkkwpvzedvd.supabase.co/functions/v1/weekly-mileage-ocr";
 
 type UploadPreview = {
   id: string;
@@ -99,63 +98,6 @@ function buildProcessingErrorMessage(error: unknown) {
 
   return "Unable to process uploaded sheets.";
 }
-
-async function requestWeeklyMileageOcr(images: ProcessedImagePayload[]) {
-  if (!SUPABASE_ANON_KEY) {
-    throw new Error("Supabase anon key is missing. Set NEXT_PUBLIC_SUPABASE_ANON_KEY.");
-  }
-
-  const response = await fetch(OCR_FUNCTION_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY
-    },
-    body: JSON.stringify({ images })
-  });
-
-  const payload = (await response.json().catch(() => null)) as
-    | {
-        rows?: ExtractedMileageRow[];
-        error?: {
-          message?: string;
-          code?: string;
-          details?: string;
-          executionId?: string;
-          deploymentId?: string;
-        };
-      }
-    | null;
-
-  if (!response.ok) {
-    const details = [
-      payload?.error?.message,
-      payload?.error?.details,
-      payload?.error?.code ? `Code: ${payload.error.code}` : "",
-      payload?.error?.executionId ? `Execution: ${payload.error.executionId}` : ""
-    ]
-      .filter(Boolean)
-      .join(" | ");
-
-    throw new Error(details || `OCR request failed with status ${response.status}.`);
-  }
-
-  if (payload?.error) {
-    const details = [
-      payload.error.message,
-      payload.error.details,
-      payload.error.code ? `Code: ${payload.error.code}` : "",
-      payload.error.executionId ? `Execution: ${payload.error.executionId}` : ""
-    ]
-      .filter(Boolean)
-      .join(" | ");
-
-    throw new Error(details || "OCR processing failed.");
-  }
-
-  return Array.isArray(payload?.rows) ? payload.rows : [];
-}
-
 async function nextFrame() {
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 }
@@ -369,13 +311,62 @@ export function WeeklyMileageUploadCard({
         await nextFrame();
       }
 
-      const extractedRows = await requestWeeklyMileageOcr(images);
+      const payload = { images };
+      console.log("Calling OCR:", OCR_URL);
+      console.log("Payload size:", JSON.stringify(payload).length);
+
+      const response = await fetch(OCR_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        },
+        body: JSON.stringify(payload)
+      });
+
+      console.log("Response status:", response.status);
+
+      const rawText = await response.text();
+      console.log("OCR RAW RESPONSE:", rawText);
+
+      let data:
+        | {
+            rows?: ExtractedMileageRow[];
+            error?: string | { message?: string };
+          }
+        | undefined;
+
+      try {
+        data = JSON.parse(rawText) as {
+          rows?: ExtractedMileageRow[];
+          error?: string | { message?: string };
+        };
+      } catch {
+        setError(rawText || "Invalid OCR response");
+        return;
+      }
+
+      if (!response.ok) {
+        const apiError =
+          typeof data?.error === "string" ? data.error : data?.error?.message;
+        setError(apiError || rawText || "OCR failed");
+        return;
+      }
+
+      if (data?.error) {
+        const apiError =
+          typeof data.error === "string" ? data.error : data.error.message;
+        setError(apiError || rawText || "OCR failed");
+        return;
+      }
+
+      const extractedRows = Array.isArray(data?.rows) ? data.rows : [];
       const nextRows = revalidateMileageRows(parseExtractedData(extractedRows), drivers, entries);
       startTransition(() => setRows(nextRows));
-    } catch (caughtError) {
-      console.error("Weekly mileage OCR error:", caughtError);
+    } catch (error) {
+      console.error("UPLOAD ERROR:", error);
       setRows([]);
-      setError(buildProcessingErrorMessage(caughtError));
+      setError(buildProcessingErrorMessage(error));
     } finally {
       setProcessing(false);
     }
