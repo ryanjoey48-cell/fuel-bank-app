@@ -22,6 +22,10 @@ function jsonResponse(payload: Record<string, unknown>, status = 200) {
   });
 }
 
+function getSelectedModel() {
+  return globalThis.process?.env?.OPENAI_OCR_MODEL ?? Deno.env.get("OPENAI_OCR_MODEL") ?? "gpt-4.1-mini";
+}
+
 function buildSchema() {
   return {
     name: "weekly_mileage_rows",
@@ -99,9 +103,18 @@ Deno.serve(async (request) => {
 
   try {
     const openAiKey = Deno.env.get("OPENAI_API_KEY");
+    const selectedModel = getSelectedModel();
     const body = (await request.json()) as { images?: IncomingImage[] };
     const mode = typeof (body as { mode?: unknown }).mode === "string" ? String((body as { mode?: unknown }).mode) : "";
     const images = Array.isArray(body.images) ? body.images : [];
+
+    console.log("weekly-mileage-ocr request", {
+      model: selectedModel,
+      imageCount: images.length,
+      hasOpenAiKey: Boolean(openAiKey),
+      executionId,
+      deploymentId
+    });
 
     if (mode === "health") {
       return jsonResponse({
@@ -109,7 +122,8 @@ Deno.serve(async (request) => {
         message: "weekly-mileage-ocr is reachable.",
         executionId,
         deploymentId,
-        hasOpenAiKey: Boolean(openAiKey)
+        hasOpenAiKey: Boolean(openAiKey),
+        model: selectedModel
       });
     }
 
@@ -162,32 +176,55 @@ Deno.serve(async (request) => {
       })
     ];
 
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${openAiKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: Deno.env.get("OPENAI_OCR_MODEL") ?? "gpt-4.1-mini",
-        input: [
-          {
-            role: "user",
-            content: inputContent
+    let response: Response;
+
+    try {
+      response = await fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${openAiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: selectedModel,
+          input: [
+            {
+              role: "user",
+              content: inputContent
+            }
+          ],
+          text: {
+            format: {
+              type: "json_schema",
+              ...buildSchema()
+            }
           }
-        ],
-        text: {
-          format: {
-            type: "json_schema",
-            ...buildSchema()
-          }
-        }
-      })
-    });
+        })
+      });
+    } catch (error) {
+      const exactMessage = error instanceof Error ? error.message : String(error);
+      console.error("weekly-mileage-ocr openai request threw", {
+        model: selectedModel,
+        imageCount: images.length,
+        hasOpenAiKey: Boolean(openAiKey),
+        exactMessage,
+        executionId,
+        deploymentId
+      });
+      return jsonResponse(
+        {
+          success: false,
+          error: exactMessage,
+          model: selectedModel
+        },
+        500
+      );
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error("weekly-mileage-ocr openai error", {
+        model: selectedModel,
         executionId,
         deploymentId,
         status: response.status,
@@ -200,6 +237,7 @@ Deno.serve(async (request) => {
           code: "OPENAI_REQUEST_FAILED",
           message: "OpenAI OCR request failed.",
           details: errorText,
+          model: selectedModel,
           executionId,
           deploymentId,
           status: response.status
@@ -217,6 +255,7 @@ Deno.serve(async (request) => {
         error: {
           code: "EMPTY_MODEL_OUTPUT",
           message: "The OCR model returned an empty response.",
+          model: selectedModel,
           executionId,
           deploymentId
         }
@@ -227,6 +266,7 @@ Deno.serve(async (request) => {
     return jsonResponse({
       ok: true,
       rows: parsed.rows ?? [],
+      model: selectedModel,
       executionId,
       deploymentId
     });
