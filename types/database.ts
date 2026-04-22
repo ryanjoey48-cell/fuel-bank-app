@@ -2,6 +2,9 @@ export type Driver = {
   id: string;
   name: string;
   vehicle_reg: string;
+  vehicle_type: DriverVehicleType | null;
+  assigned_vehicle_id: string | null;
+  active: boolean;
   created_at: string;
   user_id: string;
 };
@@ -15,6 +18,42 @@ export type WeeklyMileageEntry = {
   odometer_reading: number;
   mileage: number;
   created_at: string;
+  user_id?: string;
+};
+
+export type Vehicle = {
+  id: string;
+  user_id: string;
+  company_id?: string | null;
+  vehicle_reg: string;
+  registration?: string;
+  vehicle_name: string;
+  vehicle_category: string;
+  vehicle_type?: DriverVehicleType | string | null;
+  fuel_type?: string | null;
+  standard_km_per_litre?: number | null;
+  default_driver_cost?: number | null;
+  active: boolean;
+  last_oil_change_odometer: number | null;
+  last_oil_change_date: string | null;
+  oil_change_interval_km: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type VehicleServiceLog = {
+  id: string;
+  vehicle_id: string | null;
+  vehicle_reg: string;
+  service_type: "oil_change" | string;
+  service_date: string;
+  odometer: number;
+  service_odometer?: number;
+  interval_km: number | null;
+  vehicle_type_snapshot?: DriverVehicleType | string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at?: string;
   user_id?: string;
 };
 
@@ -86,9 +125,34 @@ export type FuelLogDaySummary = {
 
 export type BankTransferWithDriver = BankTransfer;
 
+export type DriverVehicleType =
+  | "EIGHTEEN_WHEELER"
+  | "SIX_PLUS_SIX_WHEELER"
+  | "SIX_WHEEL_TRUCK"
+  | "FOUR_WHEEL_TRUCK";
+
 export type Shipment = {
   id: string;
   job_reference: string;
+  customer_name?: string | null;
+  goods_description?: string | null;
+  pickup_location?: string | null;
+  dropoff_location?: string | null;
+  vehicle_type?: string | null;
+  standard_km_per_litre?: number | null;
+  estimated_fuel_litres?: number | null;
+  fuel_price_per_litre?: number | null;
+  diesel_price?: number | null;
+  estimated_fuel_cost?: number | null;
+  fuel_cost?: number | null;
+  toll_estimate?: number | null;
+  toll_cost?: number | null;
+  other_costs?: number | null;
+  driver_cost?: number | null;
+  subtotal_cost?: number | null;
+  final_price?: number | null;
+  quoted_price?: number | null;
+  status?: "Draft" | "Quoted" | "Accepted" | "Assigned" | null;
   driver_id: string | null;
   driver: string;
   vehicle_reg: string | null;

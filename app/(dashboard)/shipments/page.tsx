@@ -1,13 +1,12 @@
 "use client";
 
 import {
-  Calculator,
-  Download,
+  CalendarClock,
+  Fuel,
   MapPinned,
   Package,
   Search,
-  Sparkles,
-  TrendingUp,
+  TimerReset,
   Truck,
   Wallet
 } from "lucide-react";
@@ -20,537 +19,550 @@ import { StatCard } from "@/components/stat-card";
 import {
   deleteShipment,
   fetchDrivers,
-  fetchFuelLogs,
   fetchRouteDistanceEstimate,
   fetchShipments,
-  fetchWeeklyMileage,
   saveRouteDistanceEstimate,
   saveShipment
 } from "@/lib/data";
-import {
-  buildHistoricalFuelCostBenchmark,
-  buildShipmentRouteKey,
-  buildShipmentRouteLabel,
-  estimateShipmentFuelCost,
-  filterShipments
-} from "@/lib/shipment-estimation";
-import { exportToCsv } from "@/lib/export";
 import { fetchJson } from "@/lib/http";
 import { useLanguage } from "@/lib/language-provider";
+import { buildShipmentRouteKey, filterShipments } from "@/lib/shipment-estimation";
 import {
   formatCurrency,
   formatDate,
   formatNumber,
   normalizeLocationKey,
+  normalizeVehicleRegistration,
   today
 } from "@/lib/utils";
-import type {
-  Driver,
-  FuelLogWithDriver,
-  ShipmentWithDriver,
-  WeeklyMileageEntry
-} from "@/types/database";
+import type { Driver, ShipmentWithDriver } from "@/types/database";
 
-const initialForm = {
-  id: "",
-  job_reference: "",
-  driver_id: "",
-  vehicle_reg: "",
-  shipment_date: today(),
-  start_location: "",
-  end_location: "",
-  estimated_distance_km: "",
-  estimated_fuel_cost_thb: "",
-  cost_estimation_status: "pending" as "ready" | "pending",
-  cost_estimation_note: "",
-  notes: ""
+const PAGE_SIZE = 8;
+const DEFAULT_KM_PER_LITRE = "3.5";
+const DEFAULT_FUEL_PRICE = "32";
+const STORAGE_KEYS = {
+  kmPerLitre: "fuel-bank:shipments:last-km-per-litre",
+  fuelPrice: "fuel-bank:shipments:last-fuel-price"
+} as const;
+
+const STATUS_OPTIONS = [
+  { value: "Draft", label: { en: "Draft", th: "ฉบับร่าง" } },
+  { value: "Quoted", label: { en: "Estimated", th: "ประเมินแล้ว" } },
+  { value: "Assigned", label: { en: "Assigned", th: "มอบหมายแล้ว" } },
+  { value: "Accepted", label: { en: "Approved", th: "อนุมัติแล้ว" } }
+] as const;
+
+type FormState = {
+  id: string;
+  job_reference: string;
+  customer_name: string;
+  goods_description: string;
+  shipment_date: string;
+  start_location: string;
+  end_location: string;
+  estimated_distance_km: string;
+  estimated_duration_minutes: string;
+  standard_km_per_litre: string;
+  fuel_price_per_litre: string;
+  toll_estimate: string;
+  other_costs: string;
+  driver_cost: string;
+  driver_id: string;
+  vehicle_reg: string;
+  notes: string;
+  status: "Draft" | "Quoted" | "Assigned" | "Accepted";
+  cost_estimation_status: "ready" | "pending";
+  cost_estimation_note: string;
 };
+
+function createInitialForm(
+  defaultKmPerLitre = DEFAULT_KM_PER_LITRE,
+  defaultFuelPrice = DEFAULT_FUEL_PRICE
+): FormState {
+  return {
+    id: "",
+    job_reference: "",
+    customer_name: "",
+    goods_description: "",
+    shipment_date: today(),
+    start_location: "",
+    end_location: "",
+    estimated_distance_km: "",
+    estimated_duration_minutes: "",
+    standard_km_per_litre: defaultKmPerLitre,
+    fuel_price_per_litre: defaultFuelPrice,
+    toll_estimate: "",
+    other_costs: "",
+    driver_cost: "",
+    driver_id: "",
+    vehicle_reg: "",
+    notes: "",
+    status: "Draft",
+    cost_estimation_status: "pending",
+    cost_estimation_note: ""
+  };
+}
 
 const copy = {
   en: {
     title: "Shipments",
     description:
-      "Estimate likely fuel cost by shipment using Google Maps route distance and your own historical fleet cost per kilometre.",
-    benchmark: "Historical Fuel Cost / KM",
-    benchmarkHelperReady:
-      "Based on the last 90 days of fuel spend and comparable weekly mileage history.",
-    benchmarkHelperPending:
-      "Distance can still be captured now. Cost estimates appear once enough fuel and mileage history exists.",
-    totalWeek: "Estimated Shipment Fuel Cost This Week",
-    totalMonth: "Estimated Shipment Fuel Cost This Month",
-    averageMonth: "Average Estimated Cost / Shipment",
-    mostExpensive: "Most Expensive Shipment",
-    shipmentsMonth: "Shipments This Month",
-    selectedPeriodSummary: "Shipment cost summary",
-    selectedPeriodDescription:
-      "A fast management view of estimated fuel cost, shipment volume, and the jobs driving spend this month.",
-    selectedPeriodLabel: "Selected period",
-    selectedPeriodValue: "This month",
-    totalEstimatedLabel: "Total estimated shipment fuel cost",
-    shipmentCountLabel: "Number of shipments",
-    averageCostLabel: "Average fuel cost per shipment",
-    mostExpensiveLabel: "Most expensive shipment",
-    benchmarkPanelTitle: "Estimation method",
-    benchmarkPanelDescription:
-      "A practical management estimate using Google Maps route distance and recent internal operating data.",
-    benchmarkPanelDistance: "Comparable mileage distance",
-    benchmarkPanelSpend: "Fuel spend in benchmark",
-    benchmarkPanelEntries: "Mileage comparisons",
-    topDriverTitle: "Top driver this month",
-    topRouteTitle: "Highest-cost route this month",
-    simpleInsightsTitle: "Management insights",
-    simpleInsightsDescription:
-      "Simple signals that help management see where shipment fuel cost is concentrated.",
-    mostExpensiveInsight: "Most expensive shipment",
-    averageShipmentInsight: "Average shipment cost",
-    highestCostDriverInsight: "Highest cost driver this period",
-    topCostDriver: "Top cost driver",
-    lowestCostDriver: "Lowest cost driver",
-    driverComparisonTitle: "Driver comparison",
-    driverComparisonDescription:
-      "Compare total estimated shipment fuel cost by driver for the selected period.",
-    topDriverEmpty: "No estimated shipment cost yet this month.",
-    topRouteEmpty: "Route trends will appear once shipments are saved.",
-    formTitleAdd: "Create shipment",
-    formTitleEdit: "Edit shipment",
-    editingHint: "You are editing an existing shipment. Update the details below or cancel to add a new shipment.",
-    formDescription:
-      "Save the shipment once the route distance has been estimated. The fuel cost estimate uses the current fleet benchmark when available.",
-    routeSection: "Shipment details",
-    routeSectionDescription:
-      "Use clear typed locations so Google Maps can return a reliable driving estimate.",
-    estimateSection: "Route estimate",
-    estimateSectionDescription:
-      "The app reuses saved route estimates first to avoid unnecessary Google Maps calls.",
-    shipmentId: "Shipment ID / Job reference",
-    shipmentDate: "Date",
+      "Fast route, fuel, and job-cost workflow built around Google Maps distance and simple transport job creation.",
+    summaryHelper: "Based on the shipments shown below.",
+    summaryEmptyJobs: "No shipment jobs yet",
+    summaryEmptyDistance: "Estimate your first route",
+    summaryEmptyFuel: "Fuel cost appears after route estimate",
+    summaryEmptyCost: "Total job cost appears after costing",
+    summaryEmptyActive: "No active jobs yet",
+    summaryJobsHelper: "Live shipment count from real records.",
+    summaryDistanceHelper: "Combined distance from saved jobs.",
+    summaryFuelHelper: "Combined estimated fuel cost from saved jobs.",
+    summaryCostHelper: "Combined estimated total job cost from saved jobs.",
+    summaryActiveHelper: "Jobs today plus jobs still in progress.",
+    totalJobs: "Total Jobs",
+    totalDistance: "Total Distance",
+    estimatedFuelCost: "Estimated Fuel Cost",
+    estimatedJobCost: "Estimated Job Cost",
+    jobsToday: "Jobs Today / Active",
+    createJob: "Create Transport Job",
+    updateJob: "Update Transport Job",
+    routeTitle: "1. Route",
+    routeDescription: "Enter pickup and drop-off, then estimate the route with Google Maps.",
+    pickup: "Pickup location",
+    dropoff: "Drop-off location",
+    routeHint: "Use autocomplete when available, or type the full address manually.",
+    estimateRoute: "Estimate Route",
+    estimating: "Estimating...",
+    routeSummary: "Route Summary",
+    routeSummaryHint: "Distance and travel time update after route estimate.",
+    distance: "Distance",
+    duration: "Estimated travel time",
+    distanceUnavailable: "Not estimated yet",
+    durationUnavailable: "Not estimated yet",
+    routeReady: "Route estimate ready.",
+    routeChanged: "Locations changed. Estimate route again to refresh distance and cost.",
+    routeKeyMissing: "Enter both pickup and drop-off before estimating the route.",
+    estimateRequired: "Estimate the route before saving, or enter distance manually if Maps is unavailable.",
+    manualDistance: "Manual distance (KM)",
+    costTitle: "2. Cost",
+    costDescription: "Fuel usage and job cost update live from the route distance.",
+    kmPerLitre: "Truck efficiency (KM per litre)",
+    fuelPrice: "Fuel price per litre",
+    tolls: "Tolls",
+    otherCosts: "Parking / other costs",
+    driverCost: "Driver / helper cost",
+    fuelLitres: "Estimated fuel litres",
+    fuelCost: "Fuel cost",
+    totalCost: "Total Job Cost",
+    defaultsHelper: "Last used KM/L and fuel price are pre-filled automatically.",
+    jobDetailsTitle: "3. Job Details",
+    jobDetailsDescription: "Keep only the basic details needed to create the job quickly.",
+    shipmentRef: "Job reference",
+    customer: "Customer / company",
+    goods: "Job description",
+    notes: "Notes",
+    notesPlaceholder: "Optional delivery note or handling detail.",
+    assignmentTitle: "4. Assignment",
+    assignmentDescription: "Assign the driver and vehicle before saving.",
     driver: "Driver",
     selectDriver: "Select driver",
-    vehicle: "Assigned vehicle",
-    startLocation: "Start location",
-    endLocation: "End location",
-    notes: "Notes",
-    notesPlaceholder: "Optional delivery context, cargo notes, or route remarks",
-    estimateButton: "Estimate distance & cost",
-    estimating: "Estimating...",
-    distance: "Estimated distance",
-    fuelCost: "Estimated fuel cost",
-    saveShipment: "Save shipment",
-    updateShipment: "Update shipment",
-    searchPlaceholder: "Search by shipment ID, driver, or route",
-    tableTitle: "Shipment summary",
-    tableDescription:
-      "Latest shipments first, with route distance and practical estimated fuel cost for management review.",
-    noShipments: "No shipments yet",
-    noShipmentsDescription:
-      "Add your first shipment to start estimating fuel cost by job.",
-    distancePending:
-      "Distance available. Estimated fuel cost will appear once enough fuel and mileage history has been recorded.",
-    distanceSuccess: "Distance estimated successfully.",
-    distanceCached: "Saved route distance loaded successfully.",
-    costCalculated: "Estimated fuel cost calculated.",
-    shipmentSaved: "Shipment saved successfully.",
-    shipmentUpdated: "Shipment updated successfully.",
-    shipmentDeleted: "Shipment deleted successfully.",
-    duplicateShipment: "This shipment ID / job reference already exists.",
+    vehicle: "Vehicle registration",
+    saveShipment: "Save",
+    saving: "Saving...",
+    cancel: "Cancel",
+    edit: "Edit",
+    delete: "Delete",
+    deleteConfirm: "Delete this shipment?",
+    duplicateShipment: "This job reference already exists.",
     loadError: "Unable to load shipment data.",
     saveError: "Unable to save shipment.",
     deleteError: "Unable to delete shipment.",
-    driverRequired: "Select a driver before saving this shipment.",
-    noDriversAvailable: "No drivers available — add drivers first",
-    driverLoadError: "Unable to load drivers right now.",
-    shipmentPermissionError:
-      "You do not have permission to change this shipment. Please sign in again and retry.",
-    shipmentDriverMissingError:
-      "The selected driver is no longer available. Please choose another driver.",
-    shipmentRequiredFieldsError:
-      "Some required shipment details are missing. Please review the form and try again.",
-    shipmentSchemaError:
-      "Shipment setup is incomplete in Supabase. Please apply the latest shipments migration.",
-    routeKeyMissing: "Enter both start and end locations to estimate the route.",
-    routeRefreshNeeded:
-      "Locations changed. Re-estimate the route before saving for the most accurate result.",
-    googleKeyMissing:
-      "Google Maps distance estimation is not configured yet. Add a Google Maps API key to enable route estimation.",
-    autocompleteUnavailable: "Google Maps not configured — autocomplete unavailable",
-    autocompleteHelper:
-      "Start typing to search for a route. You can still type the full address manually.",
+    shipmentSaved: "Shipment saved successfully.",
+    shipmentUpdated: "Shipment updated successfully.",
+    autocompleteUnavailable: "Google Maps not configured - autocomplete unavailable",
+    autocompleteHelper: "Start typing to search, or paste the full location manually.",
     loadingSuggestions: "Loading location suggestions...",
-    estimateComplete: "Estimate complete. Distance and shipment cost are ready.",
-    estimateRequired: "Enter the route details and run the estimate to calculate distance.",
-    costAwaitingEstimate: "Estimate the route first to calculate shipment cost.",
-    tableShipment: "Shipment",
-    tableDriver: "Driver",
-    tableDate: "Date",
-    tableStart: "Start",
-    tableEnd: "End",
-    tableDistance: "Distance",
-    tableCost: "Est. fuel cost",
-    tableAction: "Action",
-    routeLabel: "Route",
-    costPerKm: "Cost / km",
-    aboveAverageCost: "Above average cost",
-    highCostRoute: "High cost route",
-    driverPerformingAboveAverage: "Driver performing above average",
-    driverHigherCostThanAverage: "Driver higher cost than average",
-    filtersTitle: "Filters",
-    filtersDescription: "Keep the view focused by driver and shipment date.",
-    filterDriver: "Filter by driver",
+    tableTitle: "Shipment List",
+    tableDescription: "Searchable transport jobs with clean route, assignment, and estimated cost visibility.",
+    searchPlaceholder: "Search by ref, customer, route, driver, vehicle, or status",
+    filterStatus: "Status",
+    filterDriver: "Driver",
+    filterVehicle: "Vehicle",
+    filterFromDate: "From date",
+    filterToDate: "To date",
+    allStatuses: "All statuses",
     allDrivers: "All drivers",
-    filterStartDate: "Start date",
-    filterEndDate: "End date",
-    resetFilters: "Reset",
-    exportCsv: "Export CSV",
-    routeInsightsTitle: "Route frequency & cost",
-    routeInsightsDescription:
-      "See which repeated routes are being used most often and how much they cost on average.",
-    usedTimes: "used",
-    averageRouteCost: "Average route cost",
-    noRouteInsights: "Route patterns will appear once repeated shipment routes are recorded.",
-    pending: "Pending",
-    unavailable: "Unavailable",
-    edit: "Edit",
-    delete: "Delete",
-    deleteConfirm: "Are you sure you want to delete this shipment?",
-    routeEstimateReady: "Route estimate ready",
-    countShipments: "shipments",
-    countComparisons: "comparable periods",
-    searchResults: "results",
-    saving: "Saving...",
-    cancel: "Cancel",
-    loading: "Loading...",
-    noShipmentsDemo:
-      "No shipments yet — add your first shipment to see estimated fuel costs by job.",
-    lowDataMessage:
-      "Distance calculated. Fuel cost will appear once enough historical data is available."
+    allVehicles: "All vehicles",
+    resetFilters: "Reset filters",
+    loading: "Loading shipments...",
+    noShipments: "No shipment jobs yet",
+    noShipmentsDescription: "Create the first job by estimating a route, reviewing cost, assigning the driver, and saving.",
+    costUnavailable: "Not calculated yet",
+    page: "Page",
+    of: "of",
+    previous: "Previous",
+    next: "Next",
+    table: {
+      ref: "Job Ref",
+      date: "Date",
+      customer: "Customer",
+      route: "Route",
+      distance: "Distance",
+      driver: "Driver",
+      vehicle: "Vehicle",
+      cost: "Estimated Cost",
+      status: "Status",
+      action: "Action"
+    }
   },
   th: {
     title: "งานขนส่ง",
     description:
-      "ประเมินต้นทุนน้ำมันรายงานขนส่งจากระยะทาง Google Maps และต้นทุนน้ำมันต่อกิโลเมตรจากข้อมูลจริงในระบบ",
-    benchmark: "ต้นทุนน้ำมันย้อนหลัง / กม.",
-    benchmarkHelperReady:
-      "อ้างอิงข้อมูลค่าน้ำมันและระยะทางจากประวัติ 90 วันล่าสุดของบริษัท",
-    benchmarkHelperPending:
-      "ยังบันทึกระยะทางงานได้ตามปกติ และต้นทุนจะปรากฏเมื่อมีข้อมูลน้ำมันและเลขไมล์เพียงพอ",
-    totalWeek: "ต้นทุนน้ำมันงานขนส่งประมาณการสัปดาห์นี้",
-    totalMonth: "ต้นทุนน้ำมันงานขนส่งประมาณการเดือนนี้",
-    averageMonth: "ต้นทุนประมาณการเฉลี่ย / งาน",
-    mostExpensive: "งานที่ต้นทุนสูงสุด",
-    shipmentsMonth: "จำนวนงานเดือนนี้",
-    selectedPeriodSummary: "สรุปต้นทุนงานขนส่ง",
-    selectedPeriodDescription:
-      "มุมมองสำหรับผู้บริหารเพื่อดูต้นทุนน้ำมันประมาณการ ปริมาณงาน และงานที่ใช้ต้นทุนสูงในเดือนนี้",
-    selectedPeriodLabel: "ช่วงเวลาที่เลือก",
-    selectedPeriodValue: "เดือนนี้",
-    totalEstimatedLabel: "ต้นทุนน้ำมันงานขนส่งประมาณการรวม",
-    shipmentCountLabel: "จำนวนงานขนส่ง",
-    averageCostLabel: "ต้นทุนน้ำมันเฉลี่ยต่อหนึ่งงาน",
-    mostExpensiveLabel: "งานที่ต้นทุนสูงสุด",
-    benchmarkPanelTitle: "วิธีประเมิน",
-    benchmarkPanelDescription:
-      "ใช้ระยะทางขับรถจาก Google Maps ร่วมกับต้นทุนน้ำมันต่อกิโลเมตรจากข้อมูลปฏิบัติการจริง",
-    benchmarkPanelDistance: "ระยะทางที่ใช้เทียบ",
-    benchmarkPanelSpend: "ค่าน้ำมันที่ใช้คำนวณ",
-    benchmarkPanelEntries: "จำนวนช่วงข้อมูลที่เทียบได้",
-    topDriverTitle: "คนขับที่ต้นทุนสูงสุดเดือนนี้",
-    topRouteTitle: "เส้นทางที่ต้นทุนสูงสุดเดือนนี้",
-    simpleInsightsTitle: "มุมมองผู้บริหาร",
-    simpleInsightsDescription:
-      "สัญญาณสำคัญแบบสั้น ๆ เพื่อดูว่าต้นทุนงานขนส่งกระจุกอยู่ที่งานหรือคนขับใด",
-    mostExpensiveInsight: "งานที่ต้นทุนสูงสุด",
-    averageShipmentInsight: "ต้นทุนงานเฉลี่ย",
-    highestCostDriverInsight: "คนขับที่ต้นทุนสูงสุดในช่วงนี้",
-    topCostDriver: "คนขับต้นทุนสูงสุด",
-    lowestCostDriver: "คนขับต้นทุนต่ำสุด",
-    driverComparisonTitle: "เปรียบเทียบตามคนขับ",
-    driverComparisonDescription:
-      "เปรียบเทียบต้นทุนน้ำมันงานขนส่งประมาณการรวมของแต่ละคนขับในช่วงเวลาที่เลือก",
-    topDriverEmpty: "ยังไม่มีต้นทุนงานขนส่งประมาณการในเดือนนี้",
-    topRouteEmpty: "เมื่อบันทึกงานขนส่งแล้ว แนวโน้มเส้นทางจะแสดงที่นี่",
-    formTitleAdd: "เพิ่มงานขนส่ง",
-    formTitleEdit: "แก้ไขงานขนส่ง",
-    editingHint: "กำลังแก้ไขงานขนส่งที่บันทึกไว้ สามารถอัปเดตข้อมูลหรือกดยกเลิกเพื่อกลับไปเพิ่มงานใหม่ได้",
-    formDescription:
-      "บันทึกงานหลังจากประเมินระยะทางเสร็จแล้ว ระบบจะคำนวณต้นทุนน้ำมันจากค่าเฉลี่ยของกองรถเมื่อมีข้อมูลเพียงพอ",
-    routeSection: "รายละเอียดงาน",
-    routeSectionDescription:
-      "กรอกจุดเริ่มต้นและปลายทางให้ชัดเจนเพื่อให้ Google Maps ประเมินเส้นทางได้แม่นยำ",
-    estimateSection: "ผลการประเมินเส้นทาง",
-    estimateSectionDescription:
-      "ระบบจะใช้ระยะทางที่เคยประเมินไว้ก่อน เพื่อลดการเรียก Google Maps ซ้ำโดยไม่จำเป็น",
-    shipmentId: "รหัสงาน / Job reference",
-    shipmentDate: "วันที่",
+      "เวิร์กโฟลว์งานขนส่งแบบรวดเร็วสำหรับคำนวณเส้นทาง น้ำมัน และต้นทุนงาน โดยคง Google Maps และการสร้างงานที่ใช้งานง่ายไว้",
+    summaryHelper: "อ้างอิงจากรายการงานขนส่งด้านล่าง",
+    summaryEmptyJobs: "ยังไม่มีงานขนส่ง",
+    summaryEmptyDistance: "เริ่มจากประเมินเส้นทางแรก",
+    summaryEmptyFuel: "ค่าน้ำมันจะแสดงหลังประเมินเส้นทาง",
+    summaryEmptyCost: "ต้นทุนรวมจะแสดงหลังคำนวณต้นทุน",
+    summaryEmptyActive: "ยังไม่มีงานที่กำลังดำเนินการ",
+    summaryJobsHelper: "จำนวนงานจากข้อมูลจริง",
+    summaryDistanceHelper: "ระยะทางรวมจากงานที่บันทึกไว้",
+    summaryFuelHelper: "ค่าน้ำมันรวมจากงานที่บันทึกไว้",
+    summaryCostHelper: "ต้นทุนรวมจากงานที่บันทึกไว้",
+    summaryActiveHelper: "งานวันนี้รวมกับงานที่ยังไม่ปิด",
+    totalJobs: "จำนวนงานทั้งหมด",
+    totalDistance: "ระยะทางรวม",
+    estimatedFuelCost: "ค่าน้ำมันประมาณการ",
+    estimatedJobCost: "ต้นทุนงานประมาณการ",
+    jobsToday: "งานวันนี้ / งานที่ยังเปิดอยู่",
+    createJob: "สร้างงานขนส่ง",
+    updateJob: "อัปเดตงานขนส่ง",
+    routeTitle: "1. เส้นทาง",
+    routeDescription: "กรอกจุดรับและจุดส่ง แล้วประเมินเส้นทางด้วย Google Maps",
+    pickup: "จุดรับ",
+    dropoff: "จุดส่ง",
+    routeHint: "ใช้ autocomplete เมื่อพร้อมใช้งาน หรือพิมพ์ที่อยู่เต็มได้เอง",
+    estimateRoute: "ประเมินเส้นทาง",
+    estimating: "กำลังประเมิน...",
+    routeSummary: "สรุปเส้นทาง",
+    routeSummaryHint: "ระยะทางและเวลาเดินทางจะอัปเดตหลังประเมินเส้นทาง",
+    distance: "ระยะทาง",
+    duration: "เวลาเดินทางประมาณการ",
+    distanceUnavailable: "ยังไม่ได้ประเมิน",
+    durationUnavailable: "ยังไม่ได้ประเมิน",
+    routeReady: "ประเมินเส้นทางเรียบร้อยแล้ว",
+    routeChanged: "มีการเปลี่ยนจุดรับหรือจุดส่ง กรุณาประเมินเส้นทางอีกครั้งเพื่ออัปเดตต้นทุน",
+    routeKeyMissing: "กรอกจุดรับและจุดส่งก่อนประเมินเส้นทาง",
+    estimateRequired: "กรุณาประเมินเส้นทางก่อนบันทึก หรือกรอกระยะทางเองเมื่อ Google Maps ใช้งานไม่ได้",
+    manualDistance: "ระยะทางเอง (กม.)",
+    costTitle: "2. ต้นทุน",
+    costDescription: "ปริมาณน้ำมันและต้นทุนงานจะคำนวณสดจากระยะทางที่ประเมินได้",
+    kmPerLitre: "อัตราสิ้นเปลืองรถ (กม. / ลิตร)",
+    fuelPrice: "ราคาน้ำมันต่อลิตร",
+    tolls: "ค่าทางด่วน",
+    otherCosts: "ค่าจอด / ค่าใช้จ่ายอื่น",
+    driverCost: "ค่าแรงคนขับ / ผู้ช่วย",
+    fuelLitres: "ปริมาณน้ำมันประมาณการ",
+    fuelCost: "ค่าน้ำมัน",
+    totalCost: "ต้นทุนงานรวม",
+    defaultsHelper: "ระบบจะเติมค่า กม./ลิตร และราคาน้ำมันล่าสุดให้อัตโนมัติ",
+    jobDetailsTitle: "3. รายละเอียดงาน",
+    jobDetailsDescription: "เก็บเฉพาะข้อมูลพื้นฐานที่จำเป็นต่อการสร้างงานอย่างรวดเร็ว",
+    shipmentRef: "เลขงาน",
+    customer: "ลูกค้า / บริษัท",
+    goods: "รายละเอียดงาน",
+    notes: "หมายเหตุ",
+    notesPlaceholder: "หมายเหตุเพิ่มเติมหรือข้อกำชับสำหรับงานนี้",
+    assignmentTitle: "4. การมอบหมาย",
+    assignmentDescription: "กำหนดคนขับและรถก่อนบันทึกงาน",
     driver: "คนขับ",
     selectDriver: "เลือกคนขับ",
-    vehicle: "รถที่ผูกกับคนขับ",
-    startLocation: "จุดเริ่มต้น",
-    endLocation: "ปลายทาง",
-    notes: "หมายเหตุ",
-    notesPlaceholder: "หมายเหตุงาน รายละเอียดสินค้า หรือข้อสังเกตของเส้นทาง",
-    estimateButton: "ประเมินระยะทางและต้นทุน",
-    estimating: "กำลังประเมิน...",
-    distance: "ระยะทางประมาณการ",
-    fuelCost: "ต้นทุนน้ำมันประมาณการ",
-    saveShipment: "บันทึกงานขนส่ง",
-    updateShipment: "อัปเดตงานขนส่ง",
-    searchPlaceholder: "ค้นหาด้วยรหัสงาน คนขับ หรือเส้นทาง",
-    tableTitle: "สรุปรายการงานขนส่ง",
-    tableDescription:
-      "เรียงจากรายการล่าสุด พร้อมระยะทางและต้นทุนน้ำมันประมาณการสำหรับผู้บริหาร",
-    noShipments: "ยังไม่มีงานขนส่ง",
-    noShipmentsDescription:
-      "เพิ่มงานขนส่งรายการแรกเพื่อเริ่มประเมินต้นทุนน้ำมันรายงาน",
-    distancePending:
-      "มีข้อมูลระยะทางแล้ว ต้นทุนน้ำมันประมาณการจะแสดงเมื่อมีข้อมูลน้ำมันและเลขไมล์ย้อนหลังเพียงพอ",
-    distanceSuccess: "ประเมินระยะทางสำเร็จ",
-    distanceCached: "โหลดระยะทางที่เคยประเมินไว้สำเร็จ",
-    costCalculated: "คำนวณต้นทุนน้ำมันประมาณการแล้ว",
-    shipmentSaved: "บันทึกงานขนส่งสำเร็จ",
-    shipmentUpdated: "อัปเดตงานขนส่งสำเร็จ",
-    duplicateShipment: "รหัสงานนี้ถูกใช้แล้ว",
-    loadError: "ไม่สามารถโหลดข้อมูลงานขนส่งได้",
-    saveError: "ไม่สามารถบันทึกงานขนส่งได้",
-    routeKeyMissing: "กรอกจุดเริ่มต้นและปลายทางก่อนประเมินเส้นทาง",
-    routeRefreshNeeded:
-      "มีการเปลี่ยนสถานที่ กรุณาประเมินเส้นทางใหม่ก่อนบันทึกเพื่อให้ผลล่าสุด",
-    googleKeyMissing:
-      "ยังไม่ได้ตั้งค่า Google Maps API key จึงยังประเมินระยะทางไม่ได้",
-    tableShipment: "งาน",
-    tableDriver: "คนขับ",
-    tableDate: "วันที่",
-    tableStart: "ต้นทาง",
-    tableEnd: "ปลายทาง",
-    tableDistance: "ระยะทาง",
-    tableCost: "ต้นทุนน้ำมันประมาณการ",
-    tableAction: "จัดการ",
-    routeLabel: "เส้นทาง",
-    costPerKm: "ต้นทุน / กม.",
-    aboveAverageCost: "ต้นทุนสูงกว่าค่าเฉลี่ย",
-    highCostRoute: "เส้นทางต้นทุนสูง",
-    driverPerformingAboveAverage: "คนขับมีต้นทุนดีกว่าค่าเฉลี่ย",
-    driverHigherCostThanAverage: "คนขับมีต้นทุนสูงกว่าค่าเฉลี่ย",
-    filtersTitle: "ตัวกรอง",
-    filtersDescription: "คัดมุมมองตามคนขับและช่วงวันที่ของงานขนส่ง",
-    filterDriver: "กรองตามคนขับ",
-    allDrivers: "คนขับทั้งหมด",
-    filterStartDate: "วันที่เริ่มต้น",
-    filterEndDate: "วันที่สิ้นสุด",
-    resetFilters: "ล้างตัวกรอง",
-    exportCsv: "ส่งออก CSV",
-    routeInsightsTitle: "ความถี่และต้นทุนของเส้นทาง",
-    routeInsightsDescription:
-      "ดูว่าเส้นทางใดถูกใช้งานบ่อย และมีต้นทุนเฉลี่ยเท่าใด",
-    usedTimes: "ครั้ง",
-    averageRouteCost: "ต้นทุนเฉลี่ยของเส้นทาง",
-    noRouteInsights: "เมื่อมีเส้นทางที่ใช้ซ้ำ ข้อมูลรูปแบบเส้นทางจะแสดงที่นี่",
-    pending: "รอข้อมูล",
-    unavailable: "ยังไม่พร้อม",
-    edit: "แก้ไข",
-    routeEstimateReady: "พร้อมใช้งาน",
-    countShipments: "งาน",
-    countComparisons: "ช่วงเปรียบเทียบ",
-    searchResults: "ผลลัพธ์",
+    vehicle: "ทะเบียนรถ",
+    saveShipment: "บันทึก",
     saving: "กำลังบันทึก...",
     cancel: "ยกเลิก",
-    loading: "กำลังโหลด...",
-    noShipmentsDemo:
-      "ยังไม่มีงานขนส่ง — เพิ่มงานแรกเพื่อดูต้นทุนน้ำมันประมาณการแยกตามงาน",
-    lowDataMessage:
-      "คำนวณระยะทางแล้ว ต้นทุนน้ำมันจะแสดงเมื่อมีข้อมูลย้อนหลังเพียงพอ"
+    edit: "แก้ไข",
+    delete: "ลบ",
+    deleteConfirm: "ต้องการลบงานขนส่งนี้หรือไม่",
+    duplicateShipment: "เลขงานนี้ถูกใช้งานแล้ว",
+    loadError: "ไม่สามารถโหลดข้อมูลงานขนส่งได้",
+    saveError: "ไม่สามารถบันทึกงานขนส่งได้",
+    deleteError: "ไม่สามารถลบงานขนส่งได้",
+    shipmentSaved: "บันทึกงานขนส่งเรียบร้อยแล้ว",
+    shipmentUpdated: "อัปเดตงานขนส่งเรียบร้อยแล้ว",
+    autocompleteUnavailable: "ยังไม่ได้ตั้งค่า Google Maps - autocomplete ใช้งานไม่ได้",
+    autocompleteHelper: "เริ่มพิมพ์เพื่อค้นหา หรือวางที่อยู่เต็มได้โดยตรง",
+    loadingSuggestions: "กำลังโหลดคำแนะนำสถานที่...",
+    tableTitle: "รายการงานขนส่ง",
+    tableDescription: "ค้นหาและติดตามงานขนส่งพร้อมเส้นทาง การมอบหมาย และต้นทุนประมาณการอย่างชัดเจน",
+    searchPlaceholder: "ค้นหาจากเลขงาน ลูกค้า เส้นทาง คนขับ รถ หรือสถานะ",
+    filterStatus: "สถานะ",
+    filterDriver: "คนขับ",
+    filterVehicle: "รถ",
+    filterFromDate: "จากวันที่",
+    filterToDate: "ถึงวันที่",
+    allStatuses: "ทุกสถานะ",
+    allDrivers: "คนขับทั้งหมด",
+    allVehicles: "รถทั้งหมด",
+    resetFilters: "ล้างตัวกรอง",
+    loading: "กำลังโหลดงานขนส่ง...",
+    noShipments: "ยังไม่มีงานขนส่ง",
+    noShipmentsDescription: "เริ่มจากประเมินเส้นทาง ตรวจสอบต้นทุน มอบหมายคนขับ แล้วบันทึกงานแรก",
+    costUnavailable: "ยังไม่คำนวณ",
+    page: "หน้า",
+    of: "จาก",
+    previous: "ก่อนหน้า",
+    next: "ถัดไป",
+    table: {
+      ref: "เลขงาน",
+      date: "วันที่",
+      customer: "ลูกค้า",
+      route: "เส้นทาง",
+      distance: "ระยะทาง",
+      driver: "คนขับ",
+      vehicle: "รถ",
+      cost: "ต้นทุนประมาณการ",
+      status: "สถานะ",
+      action: "จัดการ"
+    }
   }
 } as const;
 
-type ShipmentLabels = {
-  [Key in keyof (typeof copy)["en"]]: string;
-};
-
-function startOfWeek(value: Date) {
-  const date = new Date(value);
-  date.setHours(0, 0, 0, 0);
-  const day = date.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  date.setDate(date.getDate() + diff);
-  return date;
+function SectionCard({
+  title,
+  description,
+  children
+}: {
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-[1.6rem] border border-slate-200/80 bg-white p-4 shadow-[0_18px_40px_-34px_rgba(15,23,42,0.45)] sm:p-5">
+      <div className="mb-4">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{title}</p>
+        <p className="mt-1 text-sm text-slate-600">{description}</p>
+      </div>
+      {children}
+    </section>
+  );
 }
 
-function toDateKey(value: Date) {
-  return value.toISOString().slice(0, 10);
+function parseNumber(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
-function formatDistance(value: number | null, language: "en" | "th") {
-  if (value == null) {
-    return "-";
+function formatInputNumber(value: number | null | undefined, digits = 2) {
+  if (value == null || !Number.isFinite(value)) {
+    return "";
   }
 
-  return `${formatNumber(value, language, 1)} km`;
+  return Number(value).toFixed(digits).replace(/\.00$/, "").replace(/(\.\d*[1-9])0+$/, "$1");
 }
 
-function getShipmentCostPerKm(shipment: ShipmentWithDriver) {
-  const cost = Number(shipment.estimated_fuel_cost_thb || 0);
-  const distance = Number(shipment.estimated_distance_km || 0);
+function formatDistance(value: number | null | undefined, language: "en" | "th", fallback: string) {
+  return value == null ? fallback : `${formatNumber(value, language, 1)} km`;
+}
 
-  if (cost <= 0 || distance <= 0) {
+function formatDuration(minutes: number | null | undefined, language: "en" | "th", fallback: string) {
+  if (minutes == null) return fallback;
+  if (minutes < 60) return `${formatNumber(minutes, language, 0)} min`;
+  const hours = Math.floor(minutes / 60);
+  const remaining = minutes % 60;
+  return remaining ? `${hours}h ${formatNumber(remaining, language, 0)}m` : `${hours}h`;
+}
+
+function getStatusLabel(value: string | null | undefined, language: "en" | "th") {
+  const option = STATUS_OPTIONS.find((status) => status.value === value);
+  return option ? option.label[language] : value || STATUS_OPTIONS[0].label[language];
+}
+
+function getStatusBadgeClass(status: string | null | undefined) {
+  switch (status) {
+    case "Assigned":
+      return "border-sky-200 bg-sky-50 text-sky-700";
+    case "Accepted":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "Quoted":
+      return "border-amber-200 bg-amber-50 text-amber-700";
+    default:
+      return "border-slate-200 bg-slate-100 text-slate-700";
+  }
+}
+
+function getEstimatedJobCost(shipment: ShipmentWithDriver) {
+  const explicitTotal = shipment.final_price ?? shipment.quoted_price ?? shipment.subtotal_cost;
+  if (explicitTotal != null) {
+    return explicitTotal;
+  }
+
+  const fallbackTotal =
+    Number(
+      shipment.estimated_fuel_cost ?? shipment.fuel_cost ?? shipment.estimated_fuel_cost_thb ?? 0
+    ) +
+    Number(shipment.toll_estimate ?? shipment.toll_cost ?? 0) +
+    Number(shipment.other_costs ?? 0) +
+    Number(shipment.driver_cost ?? 0);
+
+  return fallbackTotal > 0 ? fallbackTotal : null;
+}
+
+function shortenRouteLabel(startLocation: string, endLocation: string) {
+  const shorten = (value: string) => {
+    const cleaned = value.trim();
+    if (!cleaned) return "-";
+    const parts = cleaned.split(",").map((part) => part.trim()).filter(Boolean);
+    const first = parts[0] || cleaned;
+    return first.length > 28 ? `${first.slice(0, 28)}...` : first;
+  };
+
+  return `${shorten(startLocation)} -> ${shorten(endLocation)}`;
+}
+
+function getStoredValue(key: string) {
+  if (typeof window === "undefined") {
     return null;
   }
 
-  return cost / distance;
+  const value = window.localStorage.getItem(key);
+  return value && value.trim() ? value : null;
 }
 
-function getShipmentCostFlag(
-  shipment: ShipmentWithDriver,
-  overallAverage: number | null,
-  labels: ShipmentLabels
-) {
-  const cost = Number(shipment.estimated_fuel_cost_thb || 0);
+function getRouteDefaults(shipments: ShipmentWithDriver[]) {
+  const storedKmPerLitre = getStoredValue(STORAGE_KEYS.kmPerLitre);
+  const storedFuelPrice = getStoredValue(STORAGE_KEYS.fuelPrice);
 
-  if (!overallAverage || cost <= 0) {
-    return null;
-  }
+  const latestWithDefaults = shipments.find(
+    (shipment) =>
+      shipment.standard_km_per_litre != null ||
+      shipment.fuel_price_per_litre != null ||
+      shipment.diesel_price != null
+  );
 
-  if (cost >= overallAverage * 1.35) {
-    return labels.highCostRoute;
-  }
-
-  if (cost > overallAverage) {
-    return labels.aboveAverageCost;
-  }
-
-  return null;
-}
-
-function getDriverEfficiencyLabel(
-  shipment: ShipmentWithDriver,
-  overallAverage: number | null,
-  driverAverageLookup: Map<string, number | null>,
-  labels: ShipmentLabels
-) {
-  const driverAverage = driverAverageLookup.get(shipment.driver || "");
-
-  if (!overallAverage || driverAverage == null) {
-    return null;
-  }
-
-  if (driverAverage > overallAverage) {
-    return labels.driverHigherCostThanAverage;
-  }
-
-  if (driverAverage < overallAverage) {
-    return labels.driverPerformingAboveAverage;
-  }
-
-  return null;
+  return {
+    kmPerLitre:
+      storedKmPerLitre ||
+      formatInputNumber(latestWithDefaults?.standard_km_per_litre, 2) ||
+      DEFAULT_KM_PER_LITRE,
+    fuelPrice:
+      storedFuelPrice ||
+      formatInputNumber(
+        latestWithDefaults?.fuel_price_per_litre ?? latestWithDefaults?.diesel_price,
+        2
+      ) ||
+      DEFAULT_FUEL_PRICE
+  };
 }
 
 export default function ShipmentsPage() {
   const { language } = useLanguage();
-  const labels = { ...copy.en, ...copy[language] };
+  const labels = copy[language];
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [shipments, setShipments] = useState<ShipmentWithDriver[]>([]);
-  const [fuelLogs, setFuelLogs] = useState<FuelLogWithDriver[]>([]);
-  const [weeklyMileage, setWeeklyMileage] = useState<WeeklyMileageEntry[]>([]);
-  const [form, setForm] = useState(initialForm);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedDriverFilter, setSelectedDriverFilter] = useState("");
-  const [startDateFilter, setStartDateFilter] = useState("");
-  const [endDateFilter, setEndDateFilter] = useState("");
+  const [form, setForm] = useState<FormState>(() => createInitialForm());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [estimating, setEstimating] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [googleMapsConfigured, setGoogleMapsConfigured] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [distanceMessage, setDistanceMessage] = useState<string | null>(null);
-  const [costMessage, setCostMessage] = useState<string | null>(null);
   const [lastEstimatedRouteKey, setLastEstimatedRouteKey] = useState("");
-  const [driversLoadError, setDriversLoadError] = useState<string | null>(null);
-  const [googleMapsConfigured, setGoogleMapsConfigured] = useState<boolean | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [selectedDriverFilter, setSelectedDriverFilter] = useState("");
+  const [selectedVehicleFilter, setSelectedVehicleFilter] = useState("");
+  const [startDateFilter, setStartDateFilter] = useState("");
+  const [endDateFilter, setEndDateFilter] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [defaultsReady, setDefaultsReady] = useState(false);
   const formRef = useRef<HTMLFormElement | null>(null);
   const deferredSearchTerm = useDeferredValue(searchTerm);
 
-  const isEditing = Boolean(form.id);
   const selectedDriver = useMemo(
-    () => drivers.find((driver) => String(driver.id) === String(form.driver_id)),
+    () => drivers.find((driver) => String(driver.id) === String(form.driver_id)) ?? null,
     [drivers, form.driver_id]
   );
-  const autoFillVehicleLabel =
-    language === "th"
-      ? "กรอกจากคนขับโดยอัตโนมัติ (แก้ไขได้)"
-      : "Auto-filled based on driver (can be changed)";
-  const noVehicleAssignedLabel =
-    language === "th"
-      ? "ยังไม่ได้ผูกรถกับคนขับ โปรดเลือกเอง"
-      : "No vehicle assigned – please select manually";
-  const benchmark = useMemo(
-    () => buildHistoricalFuelCostBenchmark(fuelLogs, weeklyMileage),
-    [fuelLogs, weeklyMileage]
+
+  const estimatedDistanceKm = useMemo(() => parseNumber(form.estimated_distance_km), [form.estimated_distance_km]);
+  const estimatedDurationMinutes = useMemo(
+    () => parseNumber(form.estimated_duration_minutes),
+    [form.estimated_duration_minutes]
   );
+  const kmPerLitre = useMemo(() => parseNumber(form.standard_km_per_litre), [form.standard_km_per_litre]);
+  const fuelPricePerLitre = useMemo(
+    () => parseNumber(form.fuel_price_per_litre),
+    [form.fuel_price_per_litre]
+  );
+  const tollEstimate = useMemo(() => parseNumber(form.toll_estimate) ?? 0, [form.toll_estimate]);
+  const otherCosts = useMemo(() => parseNumber(form.other_costs) ?? 0, [form.other_costs]);
+  const driverCost = useMemo(() => parseNumber(form.driver_cost) ?? 0, [form.driver_cost]);
+
+  const estimatedFuelLitres = useMemo(() => {
+    if (estimatedDistanceKm == null || kmPerLitre == null || kmPerLitre <= 0) {
+      return null;
+    }
+
+    return estimatedDistanceKm / kmPerLitre;
+  }, [estimatedDistanceKm, kmPerLitre]);
+
+  const estimatedFuelCost = useMemo(() => {
+    if (estimatedFuelLitres == null || fuelPricePerLitre == null) {
+      return null;
+    }
+
+    return estimatedFuelLitres * fuelPricePerLitre;
+  }, [estimatedFuelLitres, fuelPricePerLitre]);
+
+  const totalEstimatedJobCost = useMemo(() => {
+    return (estimatedFuelCost ?? 0) + tollEstimate + otherCosts + driverCost;
+  }, [driverCost, estimatedFuelCost, otherCosts, tollEstimate]);
 
   const currentRouteKey = useMemo(
     () => buildShipmentRouteKey(form.start_location, form.end_location),
-    [form.start_location, form.end_location]
+    [form.end_location, form.start_location]
   );
-  const hasRouteInputs = Boolean(
-    normalizeLocationKey(form.start_location) && normalizeLocationKey(form.end_location)
-  );
+
   const routeEstimateStale =
     Boolean(form.estimated_distance_km) &&
     Boolean(lastEstimatedRouteKey) &&
-    hasRouteInputs &&
     currentRouteKey !== lastEstimatedRouteKey;
-  const noDriversAvailable = !loading && !driversLoadError && drivers.length === 0;
-  const canSave =
-    !saving &&
-    !estimating &&
-    Boolean(form.job_reference.trim()) &&
-    Boolean(form.shipment_date) &&
-    Boolean(form.start_location.trim()) &&
-    Boolean(form.end_location.trim()) &&
-    Boolean(selectedDriver);
+
+  const applyDefaultsToFreshForm = useCallback((shipmentRows: ShipmentWithDriver[]) => {
+    const defaults = getRouteDefaults(shipmentRows);
+    setForm((current) => {
+      if (current.id || current.standard_km_per_litre.trim() || current.fuel_price_per_litre.trim()) {
+        return current;
+      }
+
+      return {
+        ...current,
+        standard_km_per_litre: defaults.kmPerLitre,
+        fuel_price_per_litre: defaults.fuelPrice
+      };
+    });
+    setDefaultsReady(true);
+    return defaults;
+  }, []);
 
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      setDriversLoadError(null);
-
-      const [driverRows, shipmentRows, fuelRows, mileageRows] = await Promise.allSettled([
-        fetchDrivers(),
-        fetchShipments(),
-        fetchFuelLogs(),
-        fetchWeeklyMileage()
-      ]);
-
-      if (driverRows.status === "fulfilled") {
-        setDrivers(driverRows.value);
-      } else {
-        setDrivers([]);
-        setDriversLoadError(labels.driverLoadError);
-      }
-
-      if (shipmentRows.status === "fulfilled") {
-        setShipments(shipmentRows.value);
-      } else {
-        setShipments([]);
-        setError(labels.loadError);
-      }
-
-      setFuelLogs(fuelRows.status === "fulfilled" ? fuelRows.value : []);
-      setWeeklyMileage(mileageRows.status === "fulfilled" ? mileageRows.value : []);
-      console.log("Shipments page load result", {
-        drivers:
-          driverRows.status === "fulfilled" ? driverRows.value.length : "error",
-        shipments:
-          shipmentRows.status === "fulfilled" ? shipmentRows.value.length : "error",
-        fuelLogs:
-          fuelRows.status === "fulfilled" ? fuelRows.value.length : "error",
-        weeklyMileage:
-          mileageRows.status === "fulfilled" ? mileageRows.value.length : "error"
-      });
+      const [driverRows, shipmentRows] = await Promise.all([fetchDrivers(), fetchShipments()]);
+      setDrivers(driverRows);
+      setShipments(shipmentRows);
+      applyDefaultsToFreshForm(shipmentRows);
+    } catch (loadError) {
+      console.error(loadError);
+      setError(labels.loadError);
     } finally {
       setLoading(false);
     }
-  }, [labels.driverLoadError, labels.loadError]);
+  }, [applyDefaultsToFreshForm, labels.loadError]);
 
   useEffect(() => {
     void loadData();
@@ -566,339 +578,287 @@ export default function ShipmentsPage() {
   }, [loadData]);
 
   useEffect(() => {
-    if (!benchmark.available || !form.estimated_distance_km || routeEstimateStale) {
+    if (selectedDriver?.vehicle_reg) {
+      setForm((current) => ({
+        ...current,
+        vehicle_reg: current.vehicle_reg || normalizeVehicleRegistration(selectedDriver.vehicle_reg)
+      }));
+    }
+  }, [selectedDriver]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [deferredSearchTerm, endDateFilter, selectedDriverFilter, selectedVehicleFilter, startDateFilter, statusFilter]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
       return;
     }
 
-    const estimatedFuelCost = estimateShipmentFuelCost(
-      Number(form.estimated_distance_km),
-      benchmark
-    );
+    if (form.standard_km_per_litre.trim()) {
+      window.localStorage.setItem(STORAGE_KEYS.kmPerLitre, form.standard_km_per_litre.trim());
+    }
+  }, [form.standard_km_per_litre]);
 
-    if (estimatedFuelCost == null) {
+  useEffect(() => {
+    if (typeof window === "undefined") {
       return;
     }
 
-    setForm((current) => ({
-      ...current,
-      estimated_fuel_cost_thb: estimatedFuelCost.toFixed(2),
-      cost_estimation_status: "ready",
-      cost_estimation_note: ""
-    }));
-  }, [benchmark, form.estimated_distance_km, routeEstimateStale]);
+    if (form.fuel_price_per_litre.trim()) {
+      window.localStorage.setItem(STORAGE_KEYS.fuelPrice, form.fuel_price_per_litre.trim());
+    }
+  }, [form.fuel_price_per_litre]);
 
-  const resetForm = () => {
-    setForm({ ...initialForm, shipment_date: today() });
+  const resetForm = useCallback(() => {
+    const defaults = getRouteDefaults(shipments);
+    setForm(createInitialForm(defaults.kmPerLitre, defaults.fuelPrice));
+    setError(null);
     setSuccessMessage(null);
     setDistanceMessage(null);
-    setCostMessage(null);
-    setError(null);
     setLastEstimatedRouteKey("");
-  };
+  }, [shipments]);
 
-  const startEditingShipment = (shipment: ShipmentWithDriver) => {
-    setForm({
-      id: shipment.id,
-      job_reference: shipment.job_reference,
-      driver_id: shipment.driver_id ?? "",
-      vehicle_reg: shipment.vehicle_reg ?? "",
-      shipment_date: shipment.shipment_date,
-      start_location: shipment.start_location,
-      end_location: shipment.end_location,
-      estimated_distance_km:
-        shipment.estimated_distance_km != null ? String(shipment.estimated_distance_km) : "",
-      estimated_fuel_cost_thb:
-        shipment.estimated_fuel_cost_thb != null ? String(shipment.estimated_fuel_cost_thb) : "",
-      cost_estimation_status: shipment.cost_estimation_status,
-      cost_estimation_note: shipment.cost_estimation_note ?? "",
-      notes: shipment.notes ?? ""
-    });
-    setLastEstimatedRouteKey(
-      buildShipmentRouteKey(shipment.start_location, shipment.end_location)
-    );
-    setSuccessMessage(null);
-    setDistanceMessage(null);
-    setCostMessage(null);
-    setError(null);
-    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
+  const estimateRoute = useCallback(async () => {
+    const origin = form.start_location.trim();
+    const destination = form.end_location.trim();
 
-  const persistRouteEstimate = async ({
-    existingId,
-    originLocation,
-    destinationLocation,
-    originKey,
-    destinationKey,
-    distanceKm,
-    distanceMeters,
-    durationSeconds,
-    provider
-  }: {
-    existingId?: string;
-    originLocation: string;
-    destinationLocation: string;
-    originKey: string;
-    destinationKey: string;
-    distanceKm: number;
-    distanceMeters: number | null;
-    durationSeconds: number | null;
-    provider: string;
-  }) => {
-    try {
-      await saveRouteDistanceEstimate({
-        id: existingId,
-        origin_location: originLocation,
-        destination_location: destinationLocation,
-        origin_key: originKey,
-        destination_key: destinationKey,
-        distance_km: distanceKm,
-        distance_meters: distanceMeters,
-        duration_seconds: durationSeconds,
-        provider
-      });
-    } catch {
-      // Route caching should never block shipment work.
-    }
-  };
-
-  const estimateRouteAndCost = useCallback(async () => {
-    if (!hasRouteInputs) {
+    if (!origin || !destination) {
       throw new Error(labels.routeKeyMissing);
     }
 
-    setEstimating(true);
-    setError(null);
-    setSuccessMessage(null);
+    const originKey = normalizeLocationKey(origin);
+    const destinationKey = normalizeLocationKey(destination);
+    const cached = await fetchRouteDistanceEstimate(originKey, destinationKey).catch(() => null);
 
-    const originKey = normalizeLocationKey(form.start_location);
-    const destinationKey = normalizeLocationKey(form.end_location);
-
-    try {
-      let cached = null;
-      try {
-        cached = await fetchRouteDistanceEstimate(originKey, destinationKey);
-      } catch {
-        cached = null;
-      }
-
-      let distanceKm = cached?.distance_km ?? null;
-      let distanceMeters = cached?.distance_meters ?? null;
-      let durationSeconds = cached?.duration_seconds ?? null;
-      let provider = cached?.provider ?? "routes_api";
-
-      if (distanceKm == null) {
-        const result = await fetchJson<{
-          distanceKm?: number;
-          distanceMeters?: number | null;
-          durationSeconds?: number | null;
-          provider?: string;
-        }>("/api/distance-estimate", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            origin: form.start_location.trim(),
-            destination: form.end_location.trim()
-          })
-        });
-
-        if (result.data?.distanceKm == null) {
-          throw new Error(labels.saveError);
-        }
-
-        distanceKm = result.data.distanceKm;
-        distanceMeters = result.data.distanceMeters ?? null;
-        durationSeconds = result.data.durationSeconds ?? null;
-        provider = result.data.provider ?? "routes_api";
-
-        await persistRouteEstimate({
-          originLocation: form.start_location.trim(),
-          destinationLocation: form.end_location.trim(),
-          originKey,
-          destinationKey,
-          distanceKm,
-          distanceMeters,
-          durationSeconds,
-          provider
-        });
-      }
-
-      const estimatedFuelCost = estimateShipmentFuelCost(distanceKm, benchmark);
-      const costStatus: "ready" | "pending" =
-        estimatedFuelCost != null ? "ready" : "pending";
-      const costNote = estimatedFuelCost == null ? labels.distancePending : "";
+    if (cached?.distance_km != null) {
+      const durationMinutes =
+        cached.duration_seconds != null ? Math.max(1, Math.round(cached.duration_seconds / 60)) : null;
 
       setForm((current) => ({
         ...current,
-        estimated_distance_km: distanceKm.toFixed(2),
-        estimated_fuel_cost_thb:
-          estimatedFuelCost != null ? estimatedFuelCost.toFixed(2) : "",
-        cost_estimation_status: costStatus,
-        cost_estimation_note: costNote
+        estimated_distance_km: formatInputNumber(Number(cached.distance_km), 1),
+        estimated_duration_minutes:
+          durationMinutes != null ? String(durationMinutes) : current.estimated_duration_minutes,
+        cost_estimation_status: "ready",
+        cost_estimation_note: labels.routeReady
       }));
       setLastEstimatedRouteKey(currentRouteKey);
-      setDistanceMessage(cached ? labels.distanceCached : labels.estimateComplete);
-      setCostMessage(estimatedFuelCost != null ? labels.costCalculated : labels.distancePending);
-
-      return {
-        distanceKm,
-        estimatedFuelCost,
-        costStatus,
-        costNote
-      };
-    } finally {
-      setEstimating(false);
-    }
-  }, [
-    benchmark,
-    currentRouteKey,
-    form.end_location,
-    form.start_location,
-    hasRouteInputs,
-    labels.costCalculated,
-    labels.distanceCached,
-    labels.distancePending,
-    labels.estimateComplete,
-    labels.routeKeyMissing,
-    labels.saveError
-  ]);
-
-  const handleDeleteShipment = async (shipmentId: string) => {
-    if (!window.confirm(labels.deleteConfirm)) {
+      setDistanceMessage(labels.routeReady);
       return;
     }
 
-    try {
-      setError(null);
-      setSuccessMessage(null);
-      await deleteShipment(shipmentId);
-      setShipments((current) => current.filter((shipment) => shipment.id !== shipmentId));
-      if (form.id === shipmentId) {
-        resetForm();
-      }
-      setSuccessMessage(labels.shipmentDeleted);
-      await loadData();
-    } catch (err) {
-      console.error("handleDeleteShipment error:", err);
-      const message =
-        err instanceof Error && err.message === "SHIPMENT_PERMISSION_DENIED"
-          ? labels.shipmentPermissionError
-          : err instanceof Error && err.message
-            ? err.message
-            : labels.deleteError;
-      setError(message);
-    }
-  };
+    const result = await fetchJson<{
+      distanceKm?: number;
+      durationSeconds?: number | null;
+      provider?: string;
+      distanceMeters?: number | null;
+    }>("/api/distance-estimate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ origin, destination })
+    });
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setSaving(true);
+    if (result.data?.distanceKm == null) {
+      throw new Error(labels.routeKeyMissing);
+    }
+
+    const distanceKm = result.data.distanceKm;
+    const durationMinutes =
+      result.data.durationSeconds != null
+        ? Math.max(1, Math.round(result.data.durationSeconds / 60))
+        : null;
+
+    setForm((current) => ({
+      ...current,
+      estimated_distance_km: formatInputNumber(distanceKm, 1),
+      estimated_duration_minutes:
+        durationMinutes != null ? String(durationMinutes) : current.estimated_duration_minutes,
+      cost_estimation_status: "ready",
+      cost_estimation_note: labels.routeReady
+    }));
+    setLastEstimatedRouteKey(currentRouteKey);
+    setDistanceMessage(labels.routeReady);
+
+    await saveRouteDistanceEstimate({
+      origin_location: origin,
+      destination_location: destination,
+      origin_key: originKey,
+      destination_key: destinationKey,
+      distance_km: distanceKm,
+      duration_seconds: result.data.durationSeconds ?? null,
+      distance_meters: result.data.distanceMeters ?? null,
+      provider: result.data.provider ?? "routes_api"
+    }).catch(() => undefined);
+  }, [currentRouteKey, form.end_location, form.start_location, labels.routeKeyMissing, labels.routeReady]);
+
+  const handleEstimateRoute = useCallback(async () => {
+    try {
+      setEstimating(true);
+      setError(null);
+      await estimateRoute();
+    } catch (estimateError) {
+      console.error(estimateError);
+      setError(estimateError instanceof Error ? estimateError.message : labels.routeKeyMissing);
+    } finally {
+      setEstimating(false);
+    }
+  }, [estimateRoute, labels.routeKeyMissing]);
+
+  const startEditingShipment = useCallback((shipment: ShipmentWithDriver) => {
+    setForm({
+      id: shipment.id,
+      job_reference: shipment.job_reference,
+      customer_name: shipment.customer_name ?? "",
+      goods_description: shipment.goods_description ?? "",
+      shipment_date: shipment.shipment_date,
+      start_location: shipment.pickup_location ?? shipment.start_location,
+      end_location: shipment.dropoff_location ?? shipment.end_location,
+      estimated_distance_km: formatInputNumber(shipment.estimated_distance_km, 1),
+      estimated_duration_minutes: "",
+      standard_km_per_litre: formatInputNumber(shipment.standard_km_per_litre, 2),
+      fuel_price_per_litre: formatInputNumber(
+        shipment.fuel_price_per_litre ?? shipment.diesel_price,
+        2
+      ),
+      toll_estimate: formatInputNumber(shipment.toll_estimate ?? shipment.toll_cost, 2),
+      other_costs: formatInputNumber(shipment.other_costs, 2),
+      driver_cost: formatInputNumber(shipment.driver_cost, 2),
+      driver_id: shipment.driver_id ?? "",
+      vehicle_reg: shipment.vehicle_reg ?? "",
+      notes: shipment.notes ?? "",
+      status: (shipment.status ?? "Draft") as FormState["status"],
+      cost_estimation_status: shipment.cost_estimation_status ?? "pending",
+      cost_estimation_note: shipment.cost_estimation_note ?? ""
+    });
+    setLastEstimatedRouteKey(
+      buildShipmentRouteKey(
+        shipment.pickup_location ?? shipment.start_location,
+        shipment.dropoff_location ?? shipment.end_location
+      )
+    );
+    setDistanceMessage(null);
     setError(null);
     setSuccessMessage(null);
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
 
-    try {
-      if (!selectedDriver) {
-        throw new Error("SHIPMENT_DRIVER_REQUIRED");
+  const handleDeleteShipment = useCallback(
+    async (id: string) => {
+      if (!window.confirm(labels.deleteConfirm)) {
+        return;
       }
 
-      let estimatedDistanceKm =
-        form.estimated_distance_km && !routeEstimateStale
-          ? Number(form.estimated_distance_km)
-          : null;
-      let estimatedFuelCostThb =
-        form.estimated_fuel_cost_thb && !routeEstimateStale
-          ? Number(form.estimated_fuel_cost_thb)
-          : null;
-      let costEstimationStatus = form.cost_estimation_status;
-      let costEstimationNote = form.cost_estimation_note;
+      try {
+        await deleteShipment(id);
+        setSuccessMessage(labels.shipmentUpdated);
+        await loadData();
+      } catch (deleteError) {
+        console.error(deleteError);
+        setError(labels.deleteError);
+      }
+    },
+    [labels.deleteConfirm, labels.deleteError, labels.shipmentUpdated, loadData]
+  );
 
-      if (hasRouteInputs && googleMapsConfigured === false && estimatedDistanceKm == null) {
-        costEstimationStatus = "pending";
-        costEstimationNote = labels.googleKeyMissing;
+  const canSave =
+    Boolean(form.job_reference.trim()) &&
+    Boolean(form.start_location.trim()) &&
+    Boolean(form.end_location.trim()) &&
+    (Boolean(form.estimated_distance_km.trim()) || googleMapsConfigured === false);
+
+  const handleSubmit = useCallback(
+    async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+
+      if (!form.estimated_distance_km.trim() && googleMapsConfigured !== false) {
+        setError(labels.estimateRequired);
+        return;
+      }
+
+      try {
+        setSaving(true);
+        setError(null);
+
+        await saveShipment({
+          id: form.id || undefined,
+          job_reference: form.job_reference.trim(),
+          customer_name: form.customer_name.trim() || null,
+          goods_description: form.goods_description.trim() || null,
+          shipment_date: form.shipment_date,
+          start_location: form.start_location.trim(),
+          end_location: form.end_location.trim(),
+          pickup_location: form.start_location.trim(),
+          dropoff_location: form.end_location.trim(),
+          estimated_distance_km: parseNumber(form.estimated_distance_km),
+          standard_km_per_litre: parseNumber(form.standard_km_per_litre),
+          estimated_fuel_litres: estimatedFuelLitres,
+          fuel_price_per_litre: parseNumber(form.fuel_price_per_litre),
+          diesel_price: parseNumber(form.fuel_price_per_litre),
+          estimated_fuel_cost: estimatedFuelCost,
+          fuel_cost: estimatedFuelCost,
+          estimated_fuel_cost_thb: estimatedFuelCost,
+          toll_estimate: parseNumber(form.toll_estimate),
+          other_costs: parseNumber(form.other_costs),
+          driver_cost: parseNumber(form.driver_cost),
+          subtotal_cost: totalEstimatedJobCost,
+          final_price: totalEstimatedJobCost,
+          quoted_price: totalEstimatedJobCost,
+          driver_id: form.driver_id || null,
+          vehicle_reg: form.vehicle_reg.trim() || null,
+          status: form.id ? form.status : (form.driver_id ? "Assigned" : "Draft"),
+          notes: form.notes.trim() || null,
+          cost_estimation_status: form.cost_estimation_status,
+          cost_estimation_note: routeEstimateStale ? labels.routeChanged : form.cost_estimation_note
+        });
+
+        setSuccessMessage(form.id ? labels.shipmentUpdated : labels.shipmentSaved);
+        resetForm();
+        await loadData();
+      } catch (saveError) {
+        console.error(saveError);
+        if (saveError instanceof Error && saveError.message === "DUPLICATE_SHIPMENT_REFERENCE") {
+          setError(labels.duplicateShipment);
+        } else {
+          setError(labels.saveError);
+        }
+      } finally {
+        setSaving(false);
+      }
+    },
+    [
+      estimatedFuelCost,
+      estimatedFuelLitres,
+      form,
+      googleMapsConfigured,
+      labels.duplicateShipment,
+      labels.estimateRequired,
+      labels.routeChanged,
+      labels.saveError,
+      labels.shipmentSaved,
+      labels.shipmentUpdated,
+      loadData,
+      resetForm,
+      routeEstimateStale,
+      totalEstimatedJobCost
+    ]
+  );
+
+  const filteredShipments = useMemo(() => {
+    const searchFiltered = filterShipments(shipments, deferredSearchTerm);
+    return searchFiltered.filter((shipment) => {
+      if (selectedDriverFilter && String(shipment.driver_id ?? "") !== selectedDriverFilter) {
+        return false;
       }
 
       if (
-        hasRouteInputs &&
-        googleMapsConfigured !== false &&
-        (estimatedDistanceKm == null || routeEstimateStale)
+        selectedVehicleFilter &&
+        normalizeVehicleRegistration(shipment.vehicle_reg) !== selectedVehicleFilter
       ) {
-        const result = await estimateRouteAndCost();
-        estimatedDistanceKm = result.distanceKm;
-        estimatedFuelCostThb = result.estimatedFuelCost;
-        costEstimationStatus = result.costStatus;
-        costEstimationNote = result.costNote;
+        return false;
       }
 
-      const savedShipment = await saveShipment({
-        id: form.id || undefined,
-        job_reference: form.job_reference.trim(),
-        driver_id: form.driver_id || null,
-        driver: selectedDriver?.name ?? "",
-        vehicle_reg: form.vehicle_reg.trim() || selectedDriver?.vehicle_reg || null,
-        shipment_date: form.shipment_date,
-        start_location: form.start_location.trim(),
-        end_location: form.end_location.trim(),
-        estimated_distance_km: estimatedDistanceKm,
-        estimated_fuel_cost_thb: estimatedFuelCostThb,
-        cost_per_km_snapshot_thb: benchmark.costPerKm,
-        cost_estimation_status: costEstimationStatus,
-        cost_estimation_note: costEstimationNote || null,
-        notes: form.notes.trim() || null
-      });
-
-      const nextShipment: ShipmentWithDriver = {
-        ...savedShipment,
-        driver: selectedDriver?.name ?? savedShipment.driver ?? "",
-        vehicle_reg:
-          form.vehicle_reg.trim() || savedShipment.vehicle_reg || selectedDriver?.vehicle_reg || null
-      };
-
-      setShipments((current) => {
-        const withoutCurrent = current.filter((shipment) => shipment.id !== nextShipment.id);
-        return [nextShipment, ...withoutCurrent].sort((left, right) => {
-          if (left.shipment_date !== right.shipment_date) {
-            return right.shipment_date.localeCompare(left.shipment_date);
-          }
-
-          return right.created_at.localeCompare(left.created_at);
-        });
-      });
-
-      resetForm();
-      setSuccessMessage(isEditing ? labels.shipmentUpdated : labels.shipmentSaved);
-      await loadData();
-    } catch (err) {
-      console.error("handleSubmit shipment error:", err);
-      const message =
-        err instanceof Error && err.message === "DUPLICATE_SHIPMENT_REFERENCE"
-          ? labels.duplicateShipment
-          : err instanceof Error && err.message === "SHIPMENT_DRIVER_REQUIRED"
-            ? labels.driverRequired
-            : err instanceof Error && err.message === "SHIPMENT_PERMISSION_DENIED"
-              ? labels.shipmentPermissionError
-              : err instanceof Error && err.message === "SHIPMENT_DRIVER_NOT_FOUND"
-                ? labels.shipmentDriverMissingError
-                : err instanceof Error && err.message === "SHIPMENT_REQUIRED_FIELDS_MISSING"
-                  ? labels.shipmentRequiredFieldsError
-                  : err instanceof Error && err.message === "SHIPMENT_SCHEMA_MISMATCH"
-                    ? labels.shipmentSchemaError
-          : err instanceof Error && err.message
-            ? err.message
-            : labels.saveError;
-      setError(message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const baseFilteredShipments = useMemo(() => {
-    return shipments.filter((shipment) => {
-      const driverMatch =
-        !selectedDriverFilter ||
-        String(shipment.driver_id || "") === String(selectedDriverFilter);
-
-      if (!driverMatch) {
+      if (statusFilter && String(shipment.status ?? "Draft") !== statusFilter) {
         return false;
       }
 
@@ -912,736 +872,435 @@ export default function ShipmentsPage() {
 
       return true;
     });
-  }, [endDateFilter, selectedDriverFilter, shipments, startDateFilter]);
+  }, [
+    deferredSearchTerm,
+    endDateFilter,
+    selectedDriverFilter,
+    selectedVehicleFilter,
+    shipments,
+    startDateFilter,
+    statusFilter
+  ]);
 
-  const filteredShipments = useMemo(
-    () => filterShipments(baseFilteredShipments, deferredSearchTerm),
-    [baseFilteredShipments, deferredSearchTerm]
-  );
-  const totalPages = Math.max(1, Math.ceil(filteredShipments.length / 25));
-  const pagedShipments = useMemo(() => {
-    const safePage = Math.min(currentPage, totalPages);
-    const startIndex = (safePage - 1) * 25;
-    return filteredShipments.slice(startIndex, startIndex + 25);
-  }, [currentPage, filteredShipments, totalPages]);
-
-  const now = useMemo(() => new Date(), []);
-  const weekStartKey = toDateKey(startOfWeek(now));
-  const thisWeekShipments = useMemo(
-    () => baseFilteredShipments.filter((shipment) => shipment.shipment_date >= weekStartKey),
-    [baseFilteredShipments, weekStartKey]
+  const vehicleOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(shipments.map((shipment) => normalizeVehicleRegistration(shipment.vehicle_reg)).filter(Boolean))
+      ),
+    [shipments]
   );
 
-  const totalEstimatedWeek = thisWeekShipments.reduce(
-    (sum, shipment) => sum + Number(shipment.estimated_fuel_cost_thb || 0),
-    0
+  const summary = useMemo(() => {
+    const todayKey = today();
+    const activeJobs = filteredShipments.filter(
+      (shipment) => shipment.shipment_date === todayKey || shipment.status !== "Accepted"
+    ).length;
+
+    return {
+      totalJobs: filteredShipments.length,
+      totalDistance: filteredShipments.reduce(
+        (sum, shipment) => sum + Number(shipment.estimated_distance_km ?? 0),
+        0
+      ),
+      estimatedFuelCost: filteredShipments.reduce(
+        (sum, shipment) =>
+          sum +
+          Number(
+            shipment.estimated_fuel_cost ?? shipment.fuel_cost ?? shipment.estimated_fuel_cost_thb ?? 0
+          ),
+        0
+      ),
+      estimatedJobCost: filteredShipments.reduce(
+        (sum, shipment) => sum + Number(getEstimatedJobCost(shipment) ?? 0),
+        0
+      ),
+      activeJobs
+    };
+  }, [filteredShipments]);
+
+  const statCards = useMemo(() => {
+    const hasJobs = filteredShipments.length > 0;
+    return [
+      {
+        label: labels.totalJobs,
+        value: hasJobs ? formatNumber(summary.totalJobs, language) : labels.summaryEmptyJobs,
+        helper: hasJobs ? labels.summaryJobsHelper : labels.summaryHelper,
+        icon: <Package className="h-4.5 w-4.5" />
+      },
+      {
+        label: labels.totalDistance,
+        value: hasJobs
+          ? `${formatNumber(summary.totalDistance, language, 1)} km`
+          : labels.summaryEmptyDistance,
+        helper: hasJobs ? labels.summaryDistanceHelper : labels.summaryHelper,
+        icon: <MapPinned className="h-4.5 w-4.5" />
+      },
+      {
+        label: labels.estimatedFuelCost,
+        value: hasJobs ? formatCurrency(summary.estimatedFuelCost, language) : labels.summaryEmptyFuel,
+        helper: hasJobs ? labels.summaryFuelHelper : labels.summaryHelper,
+        icon: <Fuel className="h-4.5 w-4.5" />
+      },
+      {
+        label: labels.estimatedJobCost,
+        value: hasJobs ? formatCurrency(summary.estimatedJobCost, language) : labels.summaryEmptyCost,
+        helper: hasJobs ? labels.summaryCostHelper : labels.summaryHelper,
+        icon: <Wallet className="h-4.5 w-4.5" />
+      },
+      {
+        label: labels.jobsToday,
+        value: hasJobs ? formatNumber(summary.activeJobs, language) : labels.summaryEmptyActive,
+        helper: hasJobs ? labels.summaryActiveHelper : labels.summaryHelper,
+        icon: <CalendarClock className="h-4.5 w-4.5" />
+      }
+    ];
+  }, [filteredShipments.length, labels, language, summary]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredShipments.length / PAGE_SIZE));
+  const pagedShipments = filteredShipments.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
   );
-  const totalEstimatedMonth = baseFilteredShipments.reduce(
-    (sum, shipment) => sum + Number(shipment.estimated_fuel_cost_thb || 0),
-    0
-  );
-  const estimatedMonthShipments = baseFilteredShipments.filter(
-    (shipment) => shipment.estimated_fuel_cost_thb != null
-  );
-  const averageEstimatedMonth =
-    estimatedMonthShipments.length > 0
-      ? totalEstimatedMonth / estimatedMonthShipments.length
-      : null;
-  const mostExpensiveShipment =
-    [...estimatedMonthShipments].sort(
-      (a, b) =>
-        Number(b.estimated_fuel_cost_thb || 0) - Number(a.estimated_fuel_cost_thb || 0)
-    )[0] ?? null;
-
-  const topRouteThisMonth = useMemo(() => {
-    const totals = new Map<string, { route: string; amount: number }>();
-
-    estimatedMonthShipments.forEach((shipment) => {
-      const route = buildShipmentRouteLabel(
-        shipment.start_location,
-        shipment.end_location
-      );
-      const key = buildShipmentRouteKey(shipment.start_location, shipment.end_location);
-      const current = totals.get(key) ?? { route, amount: 0 };
-      current.amount += Number(shipment.estimated_fuel_cost_thb || 0);
-      totals.set(key, current);
-    });
-
-    return [...totals.values()].sort((a, b) => b.amount - a.amount)[0] ?? null;
-  }, [estimatedMonthShipments]);
-
-  const driverTotalsThisMonth = useMemo(() => {
-    const totals = new Map<string, { driver: string; amount: number; shipments: number }>();
-
-    estimatedMonthShipments.forEach((shipment) => {
-      const key = shipment.driver || shipment.driver_id || shipment.id;
-      const current = totals.get(key) ?? {
-        driver: shipment.driver || "-",
-        amount: 0,
-        shipments: 0
-      };
-      current.amount += Number(shipment.estimated_fuel_cost_thb || 0);
-      current.shipments += 1;
-      totals.set(key, current);
-    });
-
-    return [...totals.values()].sort((a, b) => b.amount - a.amount);
-  }, [estimatedMonthShipments]);
-
-  const highestCostDriver = driverTotalsThisMonth[0] ?? null;
-  const lowestCostDriver = driverTotalsThisMonth[driverTotalsThisMonth.length - 1] ?? null;
-  const overallAverageShipmentCost =
-    estimatedMonthShipments.length > 0 ? totalEstimatedMonth / estimatedMonthShipments.length : null;
-
-  const driverAverageLookup = useMemo(() => {
-    return new Map(
-      driverTotalsThisMonth.map((entry) => [
-        entry.driver,
-        entry.shipments > 0 ? entry.amount / entry.shipments : null
-      ])
-    );
-  }, [driverTotalsThisMonth]);
-
-  const routeInsights = useMemo(() => {
-    const totals = new Map<
-      string,
-      { route: string; count: number; totalCost: number; averageCost: number | null }
-    >();
-
-    estimatedMonthShipments.forEach((shipment) => {
-      const key = buildShipmentRouteKey(shipment.start_location, shipment.end_location);
-      const route = buildShipmentRouteLabel(shipment.start_location, shipment.end_location);
-      const current = totals.get(key) ?? {
-        route,
-        count: 0,
-        totalCost: 0,
-        averageCost: null
-      };
-      current.count += 1;
-      current.totalCost += Number(shipment.estimated_fuel_cost_thb || 0);
-      totals.set(key, current);
-    });
-
-    return [...totals.values()]
-      .map((entry) => ({
-        ...entry,
-        averageCost: entry.count > 0 ? entry.totalCost / entry.count : null
-      }))
-      .sort((a, b) => b.totalCost - a.totalCost);
-  }, [estimatedMonthShipments]);
-
-  const summaryCards = [
-    {
-      label: labels.benchmark,
-      value:
-        benchmark.costPerKm != null ? formatCurrency(benchmark.costPerKm, language) : labels.pending,
-      helper: benchmark.available ? labels.benchmarkHelperReady : labels.benchmarkHelperPending,
-      icon: <Calculator className="h-5 w-5" />
-    },
-    {
-      label: labels.totalWeek,
-      value: formatCurrency(totalEstimatedWeek, language),
-      helper: `${formatNumber(thisWeekShipments.length, language)} ${labels.countShipments}`,
-      icon: <Wallet className="h-5 w-5" />
-    },
-    {
-      label: labels.totalMonth,
-      value: formatCurrency(totalEstimatedMonth, language),
-      helper: `${formatNumber(baseFilteredShipments.length, language)} ${labels.countShipments}`,
-      icon: <TrendingUp className="h-5 w-5" />
-    },
-    {
-      label: labels.averageMonth,
-      value:
-        averageEstimatedMonth != null
-          ? formatCurrency(averageEstimatedMonth, language)
-          : labels.unavailable,
-      helper:
-        estimatedMonthShipments.length > 0
-          ? `${formatNumber(estimatedMonthShipments.length, language)} ${labels.countShipments}`
-          : labels.benchmarkHelperPending,
-      icon: <Sparkles className="h-5 w-5" />
-    },
-    {
-      label: labels.mostExpensive,
-      value:
-        mostExpensiveShipment?.estimated_fuel_cost_thb != null
-          ? formatCurrency(Number(mostExpensiveShipment.estimated_fuel_cost_thb), language)
-          : labels.unavailable,
-      helper:
-        mostExpensiveShipment != null
-          ? mostExpensiveShipment.job_reference
-          : labels.topDriverEmpty,
-      icon: <Package className="h-5 w-5" />
-    },
-    {
-      label: labels.shipmentsMonth,
-      value: formatNumber(baseFilteredShipments.length, language),
-      helper: `${formatNumber(filteredShipments.length, language)} ${labels.searchResults}`,
-      icon: <Truck className="h-5 w-5" />
-    }
-  ];
-
-  const summaryHighlights = [
-    {
-      label: labels.totalEstimatedLabel,
-      value: formatCurrency(totalEstimatedMonth, language),
-      helper: labels.selectedPeriodValue
-    },
-    {
-      label: labels.shipmentCountLabel,
-      value: formatNumber(baseFilteredShipments.length, language),
-      helper: labels.countShipments
-    },
-    {
-      label: labels.averageCostLabel,
-      value:
-        averageEstimatedMonth != null
-          ? formatCurrency(averageEstimatedMonth, language)
-          : labels.unavailable,
-      helper:
-        estimatedMonthShipments.length > 0
-          ? `${formatNumber(estimatedMonthShipments.length, language)} ${labels.countShipments}`
-          : labels.lowDataMessage
-    },
-    {
-      label: labels.mostExpensiveLabel,
-      value:
-        mostExpensiveShipment?.estimated_fuel_cost_thb != null
-          ? formatCurrency(Number(mostExpensiveShipment.estimated_fuel_cost_thb), language)
-          : labels.unavailable,
-      helper: mostExpensiveShipment?.job_reference ?? labels.topDriverEmpty
-    }
-  ];
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [deferredSearchTerm, endDateFilter, selectedDriverFilter, startDateFilter]);
 
   return (
     <>
       <GoogleMapsLoader />
+
       <div className="mb-6 hidden md:block">
         <Header title={labels.title} description={labels.description} />
       </div>
 
-      {baseFilteredShipments.length > 0 ? (
-        <>
-          <section className="mb-4.5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {summaryCards.map((card) => (
-              <StatCard
-                key={card.label}
-                label={card.label}
-                value={card.value}
-                helper={card.helper}
-                icon={card.icon}
-              />
-            ))}
-          </section>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        {statCards.map((card) => (
+          <StatCard
+            key={card.label}
+            label={card.label}
+            value={card.value}
+            helper={card.helper}
+            icon={card.icon}
+          />
+        ))}
+      </div>
 
-          <section className="surface-card mb-5 overflow-hidden p-5 sm:p-6">
-            <div className="absolute inset-x-0 top-0 h-24 bg-[linear-gradient(135deg,rgba(95,51,183,0.08),rgba(242,138,47,0.04)_65%,transparent)]" />
-            <div className="relative">
-              <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                <div>
-                  <div className="badge-muted">{labels.selectedPeriodSummary}</div>
-                  <h3 className="mt-3 text-[1.72rem] font-semibold tracking-[-0.05em] text-slate-950">
-                    {labels.selectedPeriodValue}
-                  </h3>
-                  <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-500">
-                    {labels.selectedPeriodDescription}
-                  </p>
-                </div>
-                <div className="subtle-panel min-w-[220px] p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                    {labels.selectedPeriodLabel}
-                  </p>
-                  <p className="mt-1 text-lg font-semibold text-slate-950">
-                    {labels.selectedPeriodValue}
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                {summaryHighlights.map((item) => (
-                  <div key={item.label} className="subtle-panel p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                      {item.label}
-                    </p>
-                    <p className="mt-2 text-[1.55rem] font-semibold tracking-[-0.04em] text-slate-950">
-                      {item.value}
-                    </p>
-                    <p className="mt-2 text-sm text-slate-500">{item.helper}</p>
-                  </div>
-                ))}
-              </div>
+      <section ref={formRef} className="mt-5 surface-card overflow-hidden p-5 sm:p-6">
+        <div className="absolute inset-x-0 top-0 h-28 bg-[linear-gradient(135deg,rgba(15,118,110,0.08),rgba(249,115,22,0.04)_55%,transparent)]" />
+        <div className="relative">
+          <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h3 className="section-title">{form.id ? labels.updateJob : labels.createJob}</h3>
+              <p className="section-subtitle">{labels.routeDescription}</p>
             </div>
-          </section>
-        </>
-      ) : null}
-
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]">
-        <section className="surface-card p-5 sm:p-6">
-          <div className="mb-4">
-            <h3 className="section-title">{labels.benchmarkPanelTitle}</h3>
-            <p className="section-subtitle">{labels.benchmarkPanelDescription}</p>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="subtle-panel p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                {labels.benchmarkPanelSpend}
-              </p>
-              <p className="mt-1 text-lg font-semibold text-slate-950">
-                {formatCurrency(benchmark.totalFuelSpend, language)}
-              </p>
-            </div>
-
-            <div className="subtle-panel p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                {labels.benchmarkPanelDistance}
-              </p>
-              <p className="mt-1 text-lg font-semibold text-slate-950">
-                {formatDistance(benchmark.totalDistanceKm, language)}
-              </p>
-            </div>
-
-            <div className="subtle-panel p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                {labels.benchmarkPanelEntries}
-              </p>
-              <p className="mt-1 text-lg font-semibold text-slate-950">
-                {formatNumber(benchmark.comparableMileageEntries, language)}
-              </p>
-              <p className="mt-1 text-xs text-slate-500">{labels.countComparisons}</p>
+            <div className="inline-flex items-center gap-2 rounded-full border border-teal-100 bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-700">
+              <Truck className="h-4 w-4" />
+              {formatDate(form.shipment_date, language)}
             </div>
           </div>
-        </section>
 
-        <section className="surface-card p-5 sm:p-6">
-          <div className="mb-4">
-            <h3 className="section-title">{labels.simpleInsightsTitle}</h3>
-            <p className="section-subtitle">{labels.simpleInsightsDescription}</p>
-          </div>
-
-          <div className="grid gap-3">
-            <div className="subtle-panel p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                {labels.mostExpensiveInsight}
-              </p>
-              <p className="mt-1 text-base font-semibold text-slate-950">
-                {mostExpensiveShipment?.job_reference ?? "-"}
-              </p>
-              <p className="mt-2 text-sm text-slate-500">
-                {mostExpensiveShipment?.estimated_fuel_cost_thb != null
-                  ? formatCurrency(Number(mostExpensiveShipment.estimated_fuel_cost_thb), language)
-                  : labels.topDriverEmpty}
-              </p>
-            </div>
-
-            <div className="subtle-panel p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                {labels.averageShipmentInsight}
-              </p>
-              <p className="mt-1 text-base font-semibold text-slate-950">
-                {averageEstimatedMonth != null
-                  ? formatCurrency(averageEstimatedMonth, language)
-                  : labels.unavailable}
-              </p>
-              <p className="mt-2 text-sm text-slate-500">
-                {estimatedMonthShipments.length > 0
-                  ? labels.selectedPeriodValue
-                  : labels.lowDataMessage}
-              </p>
-            </div>
-
-            <div className="subtle-panel p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                {labels.highestCostDriverInsight}
-              </p>
-              <p className="mt-1 text-base font-semibold text-slate-950">
-                {highestCostDriver?.driver ?? "-"}
-              </p>
-              <p className="mt-2 text-sm text-slate-500">
-                {highestCostDriver
-                  ? formatCurrency(highestCostDriver.amount, language)
-                  : labels.topDriverEmpty}
-              </p>
-            </div>
-
-            <div className="subtle-panel p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                {labels.topRouteTitle}
-              </p>
-              <p className="mt-1 text-base font-semibold text-slate-950">
-                {topRouteThisMonth?.route ?? "-"}
-              </p>
-              <p className="mt-2 text-sm text-slate-500">
-                {topRouteThisMonth
-                  ? formatCurrency(topRouteThisMonth.amount, language)
-                  : labels.topRouteEmpty}
-              </p>
-            </div>
-          </div>
-        </section>
-      </section>
-
-      <section className="mt-5 surface-card p-5 sm:p-6">
-        <div className="mb-4">
-          <h3 className="section-title">{labels.driverComparisonTitle}</h3>
-          <p className="section-subtitle">{labels.driverComparisonDescription}</p>
-        </div>
-
-        {driverTotalsThisMonth.length === 0 ? (
-          <div className="subtle-panel p-4 text-sm text-slate-500">{labels.topDriverEmpty}</div>
-        ) : (
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="subtle-panel p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                  {labels.topCostDriver}
-                </p>
-                <p className="mt-1 text-lg font-semibold text-slate-950">
-                  {highestCostDriver?.driver ?? "-"}
-                </p>
-                <p className="mt-2 text-sm text-slate-500">
-                  {highestCostDriver
-                    ? formatCurrency(highestCostDriver.amount, language)
-                    : labels.topDriverEmpty}
-                </p>
-              </div>
-
-              <div className="subtle-panel p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                  {labels.lowestCostDriver}
-                </p>
-                <p className="mt-1 text-lg font-semibold text-slate-950">
-                  {lowestCostDriver?.driver ?? "-"}
-                </p>
-                <p className="mt-2 text-sm text-slate-500">
-                  {lowestCostDriver
-                    ? formatCurrency(lowestCostDriver.amount, language)
-                    : labels.topDriverEmpty}
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-3">
-              {driverTotalsThisMonth.slice(0, 4).map((driverRow) => (
-                <div
-                  key={driverRow.driver}
-                  className="subtle-panel flex flex-col gap-2 p-4 min-[520px]:flex-row min-[520px]:items-center min-[520px]:justify-between"
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-slate-950">{driverRow.driver}</p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      {formatNumber(driverRow.shipments, language)} {labels.countShipments}
-                    </p>
-                  </div>
-                  <p className="text-base font-semibold text-slate-950">
-                    {formatCurrency(driverRow.amount, language)}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </section>
-
-      <section className="mt-5 surface-card p-5 sm:p-6">
-        <div className="mb-4">
-          <h3 className="section-title">{labels.routeInsightsTitle}</h3>
-          <p className="section-subtitle">{labels.routeInsightsDescription}</p>
-        </div>
-
-        {routeInsights.length === 0 ? (
-          <div className="subtle-panel p-4 text-sm text-slate-500">{labels.noRouteInsights}</div>
-        ) : (
-          <div className="grid gap-3">
-            {routeInsights.slice(0, 5).map((route) => (
-              <div
-                key={route.route}
-                className="subtle-panel flex flex-col gap-2 p-4 min-[560px]:flex-row min-[560px]:items-center min-[560px]:justify-between"
-              >
-                <div>
-                  <p className="text-sm font-semibold text-slate-950">{route.route}</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {route.count} {labels.usedTimes}
-                  </p>
-                </div>
-                <div className="min-[560px]:text-right">
-                  <p className="text-base font-semibold text-slate-950">
-                    {formatCurrency(route.totalCost, language)}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {labels.averageRouteCost}:{" "}
-                    {route.averageCost != null
-                      ? formatCurrency(route.averageCost, language)
-                      : labels.unavailable}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="mt-5">
-        <form
-          ref={formRef}
-          onSubmit={handleSubmit}
-          className="surface-card-soft p-5 sm:p-6 lg:p-6.5"
-        >
-          <div className="mb-5">
-            <h3 className="section-title">
-              {isEditing ? labels.formTitleEdit : labels.formTitleAdd}
-            </h3>
-            <p className="section-subtitle">{labels.formDescription}</p>
-            {isEditing ? (
-              <p className="mt-2 text-sm font-medium text-brand-700">{labels.editingHint}</p>
-            ) : null}
-          </div>
-
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]">
-            <section className="form-section">
-              <div className="mb-4">
-                <h4 className="text-sm font-semibold text-slate-900">{labels.routeSection}</h4>
-                <p className="mt-1 text-sm text-slate-500">
-                  {labels.routeSectionDescription}
-                </p>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="form-field">
-                  <label className="form-label form-label-required">{labels.shipmentId}</label>
-                  <input
-                    required
-                    value={form.job_reference}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, job_reference: event.target.value }))
-                    }
-                    className="form-input bg-white"
-                  />
-                </div>
-
-                <div className="form-field">
-                  <label className="form-label form-label-required">{labels.shipmentDate}</label>
-                  <input
-                    type="date"
-                    required
-                    value={form.shipment_date}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, shipment_date: event.target.value }))
-                    }
-                    className="form-input bg-white"
-                  />
-                </div>
-
-                <div className="form-field">
-                  <label className="form-label form-label-required">{labels.driver}</label>
-                  <select
-                    required
-                    value={form.driver_id}
-                    disabled={noDriversAvailable || Boolean(driversLoadError)}
-                    onChange={(event) => {
-                      const nextDriverId = event.target.value;
-                      const nextDriver = drivers.find(
-                        (driver) => String(driver.id) === String(nextDriverId)
-                      );
-
-                      setForm((current) => ({
-                        ...current,
-                        driver_id: nextDriverId,
-                        vehicle_reg: nextDriver?.vehicle_reg ?? ""
-                      }));
-                    }}
-                    className="form-input bg-white"
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <SectionCard title={labels.routeTitle} description={labels.routeDescription}>
+              <div className="grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
+                <LocationAutocomplete
+                  label={labels.pickup}
+                  value={form.start_location}
+                  onChange={(value) => {
+                    setForm((current) => ({ ...current, start_location: value }));
+                    setDistanceMessage(null);
+                  }}
+                  required
+                  language={language}
+                  configMissingMessage={labels.autocompleteUnavailable}
+                  helperText={labels.autocompleteHelper}
+                  loadingText={labels.loadingSuggestions}
+                  onConfigurationChange={setGoogleMapsConfigured}
+                />
+                <LocationAutocomplete
+                  label={labels.dropoff}
+                  value={form.end_location}
+                  onChange={(value) => {
+                    setForm((current) => ({ ...current, end_location: value }));
+                    setDistanceMessage(null);
+                  }}
+                  required
+                  language={language}
+                  configMissingMessage={labels.autocompleteUnavailable}
+                  helperText={labels.autocompleteHelper}
+                  loadingText={labels.loadingSuggestions}
+                  onConfigurationChange={setGoogleMapsConfigured}
+                />
+                <div className="form-field justify-end">
+                  <label className="form-label opacity-0">{labels.estimateRoute}</label>
+                  <button
+                    type="button"
+                    onClick={() => void handleEstimateRoute()}
+                    disabled={estimating}
+                    className="btn-primary w-full gap-2 lg:min-w-[220px]"
                   >
-                    <option value="">
-                      {noDriversAvailable ? labels.noDriversAvailable : labels.selectDriver}
-                    </option>
-                    {drivers.map((driver) => (
-                      <option key={driver.id} value={String(driver.id)}>
-                        {driver.name}
-                      </option>
-                    ))}
-                  </select>
-                  {driversLoadError ? (
-                    <p className="mt-2 text-sm text-rose-600">{driversLoadError}</p>
-                  ) : noDriversAvailable ? (
-                    <p className="mt-2 text-sm text-amber-700">{labels.noDriversAvailable}</p>
-                  ) : !selectedDriver && form.driver_id ? (
-                    <p className="mt-2 text-sm text-rose-600">
-                      {labels.shipmentDriverMissingError}
+                    <MapPinned className="h-4 w-4" />
+                    {estimating ? labels.estimating : labels.estimateRoute}
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-[1.6rem] border border-slate-200 bg-[linear-gradient(135deg,#ffffff_0%,#f5fbfa_48%,#fff7ed_100%)] p-4 sm:p-5">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                      {labels.routeSummary}
                     </p>
+                    <p className="mt-2 text-sm text-slate-600">
+                      {routeEstimateStale
+                        ? labels.routeChanged
+                        : distanceMessage ?? labels.routeSummaryHint}
+                    </p>
+                  </div>
+                  {googleMapsConfigured === false ? (
+                    <div className="w-full max-w-[220px]">
+                      <label className="form-label">{labels.manualDistance}</label>
+                      <input
+                        value={form.estimated_distance_km}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            estimated_distance_km: event.target.value,
+                            cost_estimation_status: "ready"
+                          }))
+                        }
+                        className="form-input bg-white"
+                        inputMode="decimal"
+                      />
+                    </div>
                   ) : null}
                 </div>
 
-                <div className="form-field">
-                  <label className="form-label">{labels.vehicle}</label>
-                  <input
-                    value={form.vehicle_reg}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, vehicle_reg: event.target.value }))
-                    }
-                    placeholder="-"
-                    className="form-input bg-white"
-                  />
-                  <p className="form-helper">
-                    {selectedDriver?.vehicle_reg?.trim()
-                      ? autoFillVehicleLabel
-                      : noVehicleAssignedLabel}
-                  </p>
-                </div>
-
-                <LocationAutocomplete
-                  label={labels.startLocation}
-                  value={form.start_location}
-                  required
-                  language={language}
-                  helperText={labels.autocompleteHelper}
-                  loadingText={labels.loadingSuggestions}
-                  configMissingMessage={labels.autocompleteUnavailable}
-                  onConfigurationChange={setGoogleMapsConfigured}
-                  onChange={(value) =>
-                    setForm((current) => ({
-                      ...current,
-                      start_location: value
-                    }))
-                  }
-                />
-
-                <LocationAutocomplete
-                  label={labels.endLocation}
-                  value={form.end_location}
-                  required
-                  language={language}
-                  helperText={labels.autocompleteHelper}
-                  loadingText={labels.loadingSuggestions}
-                  configMissingMessage={labels.autocompleteUnavailable}
-                  onConfigurationChange={setGoogleMapsConfigured}
-                  onChange={(value) =>
-                    setForm((current) => ({
-                      ...current,
-                      end_location: value
-                    }))
-                  }
-                />
-
-                <div className="form-field md:col-span-2">
-                  <label className="form-label">{labels.notes}</label>
-                  <textarea
-                    rows={4}
-                    value={form.notes}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, notes: event.target.value }))
-                    }
-                    placeholder={labels.notesPlaceholder}
-                    className="form-textarea bg-white"
-                  />
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-[1.35rem] border border-slate-200 bg-white p-4">
+                    <p className="metric-label">{labels.distance}</p>
+                    <p className="mt-2 text-[1.7rem] font-semibold tracking-[-0.04em] text-slate-950">
+                      {formatDistance(estimatedDistanceKm, language, labels.distanceUnavailable)}
+                    </p>
+                  </div>
+                  <div className="rounded-[1.35rem] border border-slate-200 bg-white p-4">
+                    <p className="metric-label">{labels.duration}</p>
+                    <p className="mt-2 text-[1.7rem] font-semibold tracking-[-0.04em] text-slate-950">
+                      {formatDuration(
+                        estimatedDurationMinutes,
+                        language,
+                        labels.durationUnavailable
+                      )}
+                    </p>
+                  </div>
                 </div>
               </div>
-            </section>
+            </SectionCard>
 
-            <section className="form-section">
-              <div className="mb-4">
-                <h4 className="text-sm font-semibold text-slate-900">{labels.estimateSection}</h4>
-                <p className="mt-1 text-sm text-slate-500">
-                  {labels.estimateSectionDescription}
-                </p>
-              </div>
+            <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+              <SectionCard title={labels.costTitle} description={labels.costDescription}>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="form-field">
+                    <label className="form-label">{labels.kmPerLitre}</label>
+                    <input
+                      value={form.standard_km_per_litre}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          standard_km_per_litre: event.target.value
+                        }))
+                      }
+                      className="form-input bg-white"
+                      inputMode="decimal"
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label className="form-label">{labels.fuelPrice}</label>
+                    <input
+                      value={form.fuel_price_per_litre}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          fuel_price_per_litre: event.target.value
+                        }))
+                      }
+                      className="form-input bg-white"
+                      inputMode="decimal"
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label className="form-label">{labels.tolls}</label>
+                    <input
+                      value={form.toll_estimate}
+                      onChange={(event) =>
+                        setForm((current) => ({ ...current, toll_estimate: event.target.value }))
+                      }
+                      className="form-input bg-white"
+                      inputMode="decimal"
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label className="form-label">{labels.otherCosts}</label>
+                    <input
+                      value={form.other_costs}
+                      onChange={(event) =>
+                        setForm((current) => ({ ...current, other_costs: event.target.value }))
+                      }
+                      className="form-input bg-white"
+                      inputMode="decimal"
+                    />
+                  </div>
+                  <div className="form-field sm:col-span-2">
+                    <label className="form-label">{labels.driverCost}</label>
+                    <input
+                      value={form.driver_cost}
+                      onChange={(event) =>
+                        setForm((current) => ({ ...current, driver_cost: event.target.value }))
+                      }
+                      className="form-input bg-white"
+                      inputMode="decimal"
+                    />
+                  </div>
+                </div>
+
+                <p className="form-helper mt-3">{labels.defaultsHelper}</p>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  <div className="subtle-panel p-4">
+                    <p className="metric-label">{labels.fuelLitres}</p>
+                    <p className="mt-2 text-[1.2rem] font-semibold text-slate-950">
+                      {estimatedFuelLitres != null
+                        ? `${formatNumber(estimatedFuelLitres, language, 2)} L`
+                        : labels.costUnavailable}
+                    </p>
+                  </div>
+                  <div className="subtle-panel p-4">
+                    <p className="metric-label">{labels.fuelCost}</p>
+                    <p className="mt-2 text-[1.2rem] font-semibold text-slate-950">
+                      {estimatedFuelCost != null
+                        ? formatCurrency(estimatedFuelCost, language)
+                        : labels.costUnavailable}
+                    </p>
+                  </div>
+                  <div className="rounded-[1.4rem] border border-teal-100 bg-[linear-gradient(135deg,#ecfeff_0%,#ffffff_45%,#fff7ed_100%)] p-4">
+                    <p className="metric-label">{labels.totalCost}</p>
+                    <p className="mt-2 text-[1.45rem] font-semibold tracking-[-0.04em] text-slate-950">
+                      {totalEstimatedJobCost > 0
+                        ? formatCurrency(totalEstimatedJobCost, language)
+                        : labels.costUnavailable}
+                    </p>
+                  </div>
+                </div>
+              </SectionCard>
 
               <div className="space-y-4">
-                <button
-                  type="button"
-                  onClick={() => void estimateRouteAndCost().catch((err) => setError(err.message))}
-                  disabled={estimating || googleMapsConfigured === false}
-                  className="btn-secondary w-full gap-2 disabled:opacity-60"
+                <SectionCard
+                  title={labels.jobDetailsTitle}
+                  description={labels.jobDetailsDescription}
                 >
-                  <MapPinned className="h-4 w-4" />
-                  {estimating ? labels.estimating : labels.estimateButton}
-                </button>
+                  <div className="grid gap-3">
+                    <div className="form-field">
+                      <label className="form-label form-label-required">{labels.shipmentRef}</label>
+                      <input
+                        value={form.job_reference}
+                        onChange={(event) =>
+                          setForm((current) => ({ ...current, job_reference: event.target.value }))
+                        }
+                        className="form-input bg-white"
+                        required
+                      />
+                    </div>
+                    <div className="form-field">
+                      <label className="form-label">{labels.customer}</label>
+                      <input
+                        value={form.customer_name}
+                        onChange={(event) =>
+                          setForm((current) => ({ ...current, customer_name: event.target.value }))
+                        }
+                        className="form-input bg-white"
+                      />
+                    </div>
+                    <div className="form-field">
+                      <label className="form-label">{labels.goods}</label>
+                      <textarea
+                        value={form.goods_description}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            goods_description: event.target.value
+                          }))
+                        }
+                        rows={3}
+                        className="form-textarea bg-white"
+                      />
+                    </div>
+                    <div className="form-field">
+                      <label className="form-label">{labels.notes}</label>
+                      <textarea
+                        value={form.notes}
+                        onChange={(event) =>
+                          setForm((current) => ({ ...current, notes: event.target.value }))
+                        }
+                        rows={3}
+                        placeholder={labels.notesPlaceholder}
+                        className="form-textarea bg-white"
+                      />
+                    </div>
+                  </div>
+                </SectionCard>
 
-                {googleMapsConfigured === false ? (
-                  <p className="text-sm text-amber-700">
-                    {labels.autocompleteUnavailable}. {labels.googleKeyMissing}
-                  </p>
-                ) : null}
-
-                <div className="subtle-panel p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                    {labels.distance}
-                  </p>
-                  <p className="mt-1 text-lg font-semibold text-slate-950">
-                    {form.estimated_distance_km
-                      ? formatDistance(Number(form.estimated_distance_km), language)
-                      : "-"}
-                  </p>
-                  <p className="mt-2 text-sm text-slate-500">
-                    {routeEstimateStale
-                      ? labels.routeRefreshNeeded
-                      : distanceMessage ??
-                        (form.estimated_distance_km ? labels.routeEstimateReady : labels.estimateRequired)}
-                  </p>
-                </div>
-
-                <div className="subtle-panel p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                    {labels.fuelCost}
-                  </p>
-                  <p className="mt-1 text-lg font-semibold text-slate-950">
-                    {form.estimated_fuel_cost_thb
-                      ? formatCurrency(Number(form.estimated_fuel_cost_thb), language)
-                      : labels.unavailable}
-                  </p>
-                  <p className="mt-2 text-sm text-slate-500">
-                    {routeEstimateStale
-                      ? labels.routeRefreshNeeded
-                      : costMessage ??
-                        (form.estimated_distance_km
-                          ? benchmark.available
-                            ? labels.distancePending
-                            : labels.lowDataMessage
-                          : labels.costAwaitingEstimate)}
-                  </p>
-                </div>
-
-                <div className="rounded-[1.4rem] border border-brand-100/80 bg-brand-50/70 px-4 py-3 text-sm text-brand-900">
-                  {benchmark.available
-                    ? labels.benchmarkHelperReady
-                    : labels.benchmarkHelperPending}
-                </div>
+                <SectionCard
+                  title={labels.assignmentTitle}
+                  description={labels.assignmentDescription}
+                >
+                  <div className="grid gap-3">
+                    <div className="form-field">
+                      <label className="form-label">{labels.driver}</label>
+                      <select
+                        value={form.driver_id}
+                        onChange={(event) =>
+                          setForm((current) => ({ ...current, driver_id: event.target.value }))
+                        }
+                        className="form-input bg-white"
+                      >
+                        <option value="">{labels.selectDriver}</option>
+                        {drivers.map((driver) => (
+                          <option key={driver.id} value={String(driver.id)}>
+                            {driver.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-field">
+                      <label className="form-label">{labels.vehicle}</label>
+                      <input
+                        value={form.vehicle_reg}
+                        onChange={(event) =>
+                          setForm((current) => ({ ...current, vehicle_reg: event.target.value }))
+                        }
+                        className="form-input bg-white"
+                      />
+                    </div>
+                  </div>
+                </SectionCard>
               </div>
-            </section>
-          </div>
+            </div>
 
-          {error ? <p className="form-error mt-4">{error}</p> : null}
-          {successMessage ? <p className="mt-4 text-sm text-emerald-600">{successMessage}</p> : null}
+            {error ? <p className="form-error">{error}</p> : null}
+            {successMessage ? <p className="text-sm text-emerald-600">{successMessage}</p> : null}
 
-          <div className="mt-4.5 flex flex-col gap-2.5 sm:flex-row sm:items-center">
-            <button
-              type="submit"
-              disabled={!canSave}
-              className="btn-primary min-w-[190px] disabled:opacity-70 sm:flex-none"
-            >
-              {saving
-                ? labels.saving
-                : isEditing
-                  ? labels.updateShipment
-                  : labels.saveShipment}
-            </button>
-
-            {isEditing ? (
+            <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
               <button
-                type="button"
-                onClick={resetForm}
-                className="btn-secondary sm:flex-none"
+                type="submit"
+                disabled={!canSave || saving || !defaultsReady}
+                className="btn-primary min-w-[180px] disabled:opacity-70"
               >
-                {labels.cancel}
+                {saving ? labels.saving : labels.saveShipment}
               </button>
-            ) : null}
-          </div>
-        </form>
+              {form.id ? (
+                <button type="button" onClick={resetForm} className="btn-secondary">
+                  {labels.cancel}
+                </button>
+              ) : null}
+            </div>
+          </form>
+        </div>
       </section>
 
       <section className="mt-5 surface-card p-5 sm:p-6">
@@ -1650,59 +1309,34 @@ export default function ShipmentsPage() {
             <h3 className="section-title">{labels.tableTitle}</h3>
             <p className="section-subtitle">{labels.tableDescription}</p>
           </div>
-
-          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
-            <div className="relative w-full sm:w-[320px]">
-              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder={labels.searchPlaceholder}
-                className="form-input bg-white pl-11"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() =>
-                exportToCsv(
-                  filteredShipments.map((shipment) => ({
-                    Shipment: shipment.job_reference,
-                    Driver: shipment.driver || "-",
-                    Date: shipment.shipment_date,
-                    Route: buildShipmentRouteLabel(
-                      shipment.start_location,
-                      shipment.end_location
-                    ),
-                    DistanceKm: shipment.estimated_distance_km ?? "",
-                    EstimatedFuelCostThb: shipment.estimated_fuel_cost_thb ?? "",
-                    CostPerKm:
-                      getShipmentCostPerKm(shipment) != null
-                        ? Number(getShipmentCostPerKm(shipment)?.toFixed(2))
-                        : "",
-                    Notes: shipment.notes ?? ""
-                  })),
-                  "shipments-report"
-                )
-              }
-              disabled={!filteredShipments.length}
-              className="btn-secondary w-full gap-2 disabled:opacity-50 sm:w-auto"
-            >
-              <Download className="h-4 w-4" />
-              {labels.exportCsv}
-            </button>
-            <span className="badge-muted">
-              {formatNumber(filteredShipments.length, language)} {labels.searchResults}
-            </span>
+          <div className="relative w-full lg:max-w-[360px]">
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder={labels.searchPlaceholder}
+              className="form-input bg-white pl-11"
+            />
           </div>
         </div>
 
         <div className="mb-5 subtle-panel p-4">
-          <div className="mb-3 flex flex-col gap-1">
-            <h4 className="text-sm font-semibold text-slate-900">{labels.filtersTitle}</h4>
-            <p className="text-sm text-slate-500">{labels.filtersDescription}</p>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-4">
+          <div className="grid gap-3 md:grid-cols-5">
+            <div className="form-field">
+              <label className="form-label">{labels.filterStatus}</label>
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+                className="form-input bg-white"
+              >
+                <option value="">{labels.allStatuses}</option>
+                {STATUS_OPTIONS.map((status) => (
+                  <option key={status.value} value={status.value}>
+                    {status.label[language]}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="form-field">
               <label className="form-label">{labels.filterDriver}</label>
               <select
@@ -1718,9 +1352,23 @@ export default function ShipmentsPage() {
                 ))}
               </select>
             </div>
-
             <div className="form-field">
-              <label className="form-label">{labels.filterStartDate}</label>
+              <label className="form-label">{labels.filterVehicle}</label>
+              <select
+                value={selectedVehicleFilter}
+                onChange={(event) => setSelectedVehicleFilter(event.target.value)}
+                className="form-input bg-white"
+              >
+                <option value="">{labels.allVehicles}</option>
+                {vehicleOptions.map((vehicle) => (
+                  <option key={vehicle} value={vehicle}>
+                    {vehicle}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-field">
+              <label className="form-label">{labels.filterFromDate}</label>
               <input
                 type="date"
                 value={startDateFilter}
@@ -1728,9 +1376,8 @@ export default function ShipmentsPage() {
                 className="form-input bg-white"
               />
             </div>
-
             <div className="form-field">
-              <label className="form-label">{labels.filterEndDate}</label>
+              <label className="form-label">{labels.filterToDate}</label>
               <input
                 type="date"
                 value={endDateFilter}
@@ -1738,270 +1385,212 @@ export default function ShipmentsPage() {
                 className="form-input bg-white"
               />
             </div>
+          </div>
 
-            <div className="flex items-end">
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedDriverFilter("");
-                  setStartDateFilter("");
-                  setEndDateFilter("");
-                }}
-                className="btn-secondary w-full"
-              >
-                {labels.resetFilters}
-              </button>
-            </div>
+          <div className="mt-3 flex justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                setStatusFilter("");
+                setSelectedDriverFilter("");
+                setSelectedVehicleFilter("");
+                setStartDateFilter("");
+                setEndDateFilter("");
+              }}
+              className="btn-secondary gap-2"
+            >
+              <TimerReset className="h-4 w-4" />
+              {labels.resetFilters}
+            </button>
           </div>
         </div>
 
         {loading ? (
           <EmptyState title={labels.loading} description={labels.tableDescription} />
         ) : filteredShipments.length === 0 ? (
-          shipments.length === 0 ? (
-            <div className="premium-empty-state">
-              <h3 className="text-2xl font-semibold tracking-[-0.04em] text-slate-950">
-                No shipment data yet
-              </h3>
-              <p className="empty-state-description">
-                Create your first shipment to track fuel cost per job.
-              </p>
-              <button
-                type="button"
-                onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-                className="btn-primary mt-6"
-              >
-                + Create Shipment
-              </button>
-            </div>
-          ) : (
-            <EmptyState title={labels.noShipments} description={labels.noShipmentsDescription} />
-          )
+          <EmptyState title={labels.noShipments} description={labels.noShipmentsDescription} />
         ) : (
           <>
             <div className="space-y-3.5 md:hidden">
-              {pagedShipments.map((shipment) => {
-                const shipmentCostFlag = getShipmentCostFlag(
-                  shipment,
-                  overallAverageShipmentCost,
-                  labels
-                );
-                const driverEfficiencyLabel = getDriverEfficiencyLabel(
-                  shipment,
-                  overallAverageShipmentCost,
-                  driverAverageLookup,
-                  labels
-                );
-                const costPerKm = getShipmentCostPerKm(shipment);
-
-                return (
-                  <article key={shipment.id} className="subtle-panel p-4">
-                    <div className="flex flex-col gap-2 min-[400px]:flex-row min-[400px]:items-start min-[400px]:justify-between">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-slate-900">
-                          {shipment.job_reference}
-                        </p>
-                        <p className="mt-1 text-sm text-slate-500">
-                          {shipment.driver || "-"}{shipment.vehicle_reg ? ` | ${shipment.vehicle_reg}` : ""}
-                        </p>
-                      </div>
-                      <p className="supporting-date-strong shrink-0">
-                        {formatDate(shipment.shipment_date, language)}
+              {pagedShipments.map((shipment) => (
+                <article key={shipment.id} className="subtle-panel p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-900">
+                        {shipment.job_reference}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        {shipment.customer_name || "-"}
                       </p>
                     </div>
+                    <span
+                      className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getStatusBadgeClass(shipment.status)}`}
+                    >
+                      {getStatusLabel(shipment.status, language)}
+                    </span>
+                  </div>
 
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {shipmentCostFlag ? (
-                        <span className="badge-muted">{shipmentCostFlag}</span>
-                      ) : null}
-                      {driverEfficiencyLabel ? (
-                        <span className="badge-muted">{driverEfficiencyLabel}</span>
-                      ) : null}
-                    </div>
+                  <div className="mt-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                      {labels.table.route}
+                    </p>
+                    <p className="mt-1 text-sm font-medium text-slate-900">
+                      {shortenRouteLabel(
+                        shipment.pickup_location ?? shipment.start_location,
+                        shipment.dropoff_location ?? shipment.end_location
+                      )}
+                    </p>
+                  </div>
 
-                    <div className="mt-3 grid gap-3">
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                          {labels.routeLabel}
-                        </p>
-                        <p className="mt-1 text-sm font-medium text-slate-900">
-                          {buildShipmentRouteLabel(
-                            shipment.start_location,
-                            shipment.end_location
-                          )}
-                        </p>
-                      </div>
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                        {labels.table.distance}
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-slate-950">
+                        {formatDistance(
+                          shipment.estimated_distance_km,
+                          language,
+                          labels.distanceUnavailable
+                        )}
+                      </p>
                     </div>
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                        {labels.table.cost}
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-slate-950">
+                        {getEstimatedJobCost(shipment) != null
+                          ? formatCurrency(Number(getEstimatedJobCost(shipment)), language)
+                          : labels.costUnavailable}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                        {labels.table.driver}
+                      </p>
+                      <p className="mt-1 text-sm font-medium text-slate-900">
+                        {shipment.driver || "-"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                        {labels.table.vehicle}
+                      </p>
+                      <p className="mt-1 text-sm font-medium text-slate-900">
+                        {shipment.vehicle_reg || "-"}
+                      </p>
+                    </div>
+                  </div>
 
-                    <div className="mt-4 grid grid-cols-3 gap-3">
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                          {labels.tableDistance}
-                        </p>
-                        <p className="mt-1 text-sm font-semibold text-slate-950">
-                          {formatDistance(shipment.estimated_distance_km, language)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                          {labels.costPerKm}
-                        </p>
-                        <p className="mt-1 text-sm font-semibold text-slate-950">
-                          {costPerKm != null
-                            ? formatCurrency(costPerKm, language)
-                            : labels.unavailable}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                          {labels.tableCost}
-                        </p>
-                        <p className="mt-1 text-base font-semibold tracking-[-0.03em] text-slate-950">
-                          {shipment.estimated_fuel_cost_thb != null
-                            ? formatCurrency(Number(shipment.estimated_fuel_cost_thb), language)
-                            : labels.unavailable}
-                        </p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          {shipment.estimated_fuel_cost_thb != null
-                            ? labels.routeEstimateReady
-                            : labels.lowDataMessage}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                      <button
-                        type="button"
-                        className="btn-secondary w-full sm:min-h-[44px]"
-                        onClick={() => startEditingShipment(shipment)}
-                      >
-                        {labels.edit}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-danger w-full sm:min-h-[44px]"
-                        onClick={() => void handleDeleteShipment(shipment.id)}
-                      >
-                        {labels.delete}
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
+                  <div className="mt-4 flex gap-2">
+                    <button
+                      type="button"
+                      className="btn-secondary w-full"
+                      onClick={() => startEditingShipment(shipment)}
+                    >
+                      {labels.edit}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-danger w-full"
+                      onClick={() => void handleDeleteShipment(shipment.id)}
+                    >
+                      {labels.delete}
+                    </button>
+                  </div>
+                </article>
+              ))}
             </div>
 
             <div className="hidden md:block">
               <div className="table-shell rounded-2xl">
                 <div className="table-scroll">
-                  <table className="w-full min-w-[1180px] text-sm">
+                  <table className="w-full min-w-[1100px] text-sm">
                     <thead>
                       <tr>
-                        <th className="table-head-cell">{labels.tableShipment}</th>
-                        <th className="table-head-cell">{labels.tableDriver}</th>
-                        <th className="table-head-cell">{labels.tableDate}</th>
-                        <th className="table-head-cell">{labels.routeLabel}</th>
-                        <th className="table-head-cell text-right">{labels.tableDistance}</th>
-                        <th className="table-head-cell text-right">{labels.costPerKm}</th>
-                        <th className="table-head-cell text-right">{labels.tableCost}</th>
-                        <th className="table-head-cell">{labels.tableAction}</th>
+                        <th className="table-head-cell">{labels.table.ref}</th>
+                        <th className="table-head-cell">{labels.table.date}</th>
+                        <th className="table-head-cell">{labels.table.customer}</th>
+                        <th className="table-head-cell">{labels.table.route}</th>
+                        <th className="table-head-cell text-right">{labels.table.distance}</th>
+                        <th className="table-head-cell">{labels.table.driver}</th>
+                        <th className="table-head-cell">{labels.table.vehicle}</th>
+                        <th className="table-head-cell text-right">{labels.table.cost}</th>
+                        <th className="table-head-cell">{labels.table.status}</th>
+                        <th className="table-head-cell">{labels.table.action}</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {pagedShipments.map((shipment) => {
-                        const shipmentCostFlag = getShipmentCostFlag(
-                          shipment,
-                          overallAverageShipmentCost,
-                          labels
-                        );
-                        const driverEfficiencyLabel = getDriverEfficiencyLabel(
-                          shipment,
-                          overallAverageShipmentCost,
-                          driverAverageLookup,
-                          labels
-                        );
-                        const costPerKm = getShipmentCostPerKm(shipment);
-
-                        return (
-                          <tr key={shipment.id} className="enterprise-table-row">
-                            <td className="table-body-cell font-medium text-slate-900">
-                              <p>{shipment.job_reference}</p>
-                              <div className="mt-2 flex flex-wrap gap-1.5">
-                                {shipmentCostFlag ? (
-                                  <span className="badge-muted">{shipmentCostFlag}</span>
-                                ) : null}
-                                {driverEfficiencyLabel ? (
-                                  <span className="badge-muted">{driverEfficiencyLabel}</span>
-                                ) : null}
-                              </div>
-                            </td>
-                            <td className="table-body-cell text-slate-700">
-                              <div>
-                                <p className="table-driver-name">{shipment.driver || "-"}</p>
-                                <p className="mt-0.5 text-xs text-slate-400">
-                                  {shipment.vehicle_reg || "-"}
-                                </p>
-                              </div>
-                            </td>
-                            <td className="table-body-cell supporting-date-strong">
-                              {formatDate(shipment.shipment_date, language)}
-                            </td>
-                            <td className="table-body-cell text-slate-700">
-                              <p className="font-medium text-slate-900">
-                                {buildShipmentRouteLabel(
-                                  shipment.start_location,
-                                  shipment.end_location
-                                )}
-                              </p>
-                            </td>
-                            <td className="table-body-cell text-right font-medium text-slate-800">
-                              {formatDistance(shipment.estimated_distance_km, language)}
-                            </td>
-                            <td className="table-body-cell text-right font-medium text-slate-800">
-                              {costPerKm != null
-                                ? formatCurrency(costPerKm, language)
-                                : labels.unavailable}
-                            </td>
-                            <td className="table-body-cell text-right">
-                              <p className="text-[1.02rem] font-semibold tracking-[-0.03em] text-slate-950">
-                                {shipment.estimated_fuel_cost_thb != null
-                                  ? formatCurrency(Number(shipment.estimated_fuel_cost_thb), language)
-                                  : labels.unavailable}
-                              </p>
-                              <p className="mt-1 text-xs text-slate-500">
-                                {shipment.estimated_fuel_cost_thb != null
-                                  ? labels.routeEstimateReady
-                                  : labels.lowDataMessage}
-                              </p>
-                            </td>
-                            <td className="table-body-cell">
-                              <div className="flex flex-wrap gap-2">
-                                <button
-                                  type="button"
-                                  className="table-action-secondary min-w-[84px]"
-                                  onClick={() => startEditingShipment(shipment)}
-                                >
-                                  {labels.edit}
-                                </button>
-                                <button
-                                  type="button"
-                                  className="table-action-danger min-w-[84px]"
-                                  onClick={() => void handleDeleteShipment(shipment.id)}
-                                >
-                                  {labels.delete}
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                      {pagedShipments.map((shipment) => (
+                        <tr key={shipment.id} className="enterprise-table-row">
+                          <td className="table-body-cell font-medium text-slate-900">
+                            <p>{shipment.job_reference}</p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              {shipment.goods_description || "-"}
+                            </p>
+                          </td>
+                          <td className="table-body-cell">
+                            {formatDate(shipment.shipment_date, language)}
+                          </td>
+                          <td className="table-body-cell">{shipment.customer_name || "-"}</td>
+                          <td className="table-body-cell">
+                            {shortenRouteLabel(
+                              shipment.pickup_location ?? shipment.start_location,
+                              shipment.dropoff_location ?? shipment.end_location
+                            )}
+                          </td>
+                          <td className="table-body-cell text-right">
+                            {formatDistance(
+                              shipment.estimated_distance_km,
+                              language,
+                              labels.distanceUnavailable
+                            )}
+                          </td>
+                          <td className="table-body-cell">{shipment.driver || "-"}</td>
+                          <td className="table-body-cell">{shipment.vehicle_reg || "-"}</td>
+                          <td className="table-body-cell text-right font-semibold text-slate-950">
+                            {getEstimatedJobCost(shipment) != null
+                              ? formatCurrency(Number(getEstimatedJobCost(shipment)), language)
+                              : labels.costUnavailable}
+                          </td>
+                          <td className="table-body-cell">
+                            <span
+                              className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getStatusBadgeClass(shipment.status)}`}
+                            >
+                              {getStatusLabel(shipment.status, language)}
+                            </span>
+                          </td>
+                          <td className="table-body-cell">
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                className="table-action-secondary"
+                                onClick={() => startEditingShipment(shipment)}
+                              >
+                                {labels.edit}
+                              </button>
+                              <button
+                                type="button"
+                                className="table-action-danger"
+                                onClick={() => void handleDeleteShipment(shipment.id)}
+                              >
+                                {labels.delete}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
               </div>
             </div>
-            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+
+            <div className="mt-5 flex items-center justify-between">
               <p className="text-sm text-slate-500">
-                Page {formatNumber(Math.min(currentPage, totalPages), language)} of {formatNumber(totalPages, language)}
+                {labels.page} {formatNumber(Math.min(currentPage, totalPages), language)} {labels.of}{" "}
+                {formatNumber(totalPages, language)}
               </p>
               <div className="flex gap-2">
                 <button
@@ -2010,7 +1599,7 @@ export default function ShipmentsPage() {
                   disabled={currentPage === 1}
                   className="btn-secondary disabled:opacity-50"
                 >
-                  Previous
+                  {labels.previous}
                 </button>
                 <button
                   type="button"
@@ -2018,7 +1607,7 @@ export default function ShipmentsPage() {
                   disabled={currentPage >= totalPages}
                   className="btn-secondary disabled:opacity-50"
                 >
-                  Next
+                  {labels.next}
                 </button>
               </div>
             </div>

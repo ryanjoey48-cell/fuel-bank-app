@@ -2,9 +2,16 @@
 
 import type {
   BankTransferWithDriver,
+  Driver,
   FuelLogWithDriver,
+  Vehicle,
   WeeklyMileageEntry
 } from "@/types/database";
+import {
+  getOilChangeIntervalForVehicleType,
+  getVehicleTypeLabel,
+  type OilChangeIntervalSource
+} from "@/lib/oil-change-service";
 
 export type FuelCalculationField = "litres" | "total_cost" | "price_per_litre";
 
@@ -60,6 +67,32 @@ export type DriverWeeklyComparisonRow = {
   history: WeeklyMileageEntry[];
 };
 
+export type OilChangeStatus = "ok" | "due_soon" | "urgent" | "overdue" | "not_set" | "no_odometer" | "review_required";
+
+export type OilChangeAlertRow = {
+  vehicleId: string | null;
+  registration: string;
+  vehicleName: string;
+  driverName: string | null;
+  vehicleType: string | null;
+  vehicleTypeLabel: string;
+  lastOilChangeDate: string | null;
+  lastOilChangeOdometer: number | null;
+  oilChangeIntervalKm: number | null;
+  intervalSource: OilChangeIntervalSource;
+  reviewReasons: string[];
+  currentOdometer: number | null;
+  currentOdometerDate: string | null;
+  nextOilChangeDueOdometer: number | null;
+  kmRemaining: number | null;
+  overdueKm: number | null;
+  status: OilChangeStatus;
+  sortRank: number;
+};
+
+const OIL_CHANGE_DUE_SOON_THRESHOLD_KM = 3000;
+const OIL_CHANGE_URGENT_THRESHOLD_KM = 1000;
+
 function toRoundedNumber(value: number, digits = 2) {
   if (!Number.isFinite(value)) {
     return 0;
@@ -102,6 +135,200 @@ function getWeekEntrySortValue(entry: WeeklyMileageEntry) {
 function getNormalizedOdometer(entry: WeeklyMileageEntry) {
   const value = Number(entry.odometer_reading ?? entry.mileage);
   return Number.isFinite(value) ? value : null;
+}
+
+function getLatestWeeklyMileageByVehicle(entries: WeeklyMileageEntry[]) {
+  const latestByVehicle = new Map<string, WeeklyMileageEntry>();
+
+  for (const entry of entries) {
+    const vehicleKey = getVehicleKey(entry.vehicle_reg);
+    const odometer = getNormalizedOdometer(entry);
+
+    if (!vehicleKey || !entry.week_ending || odometer == null) {
+      continue;
+    }
+
+    const previous = latestByVehicle.get(vehicleKey);
+    if (
+      !previous ||
+      getWeekEntrySortValue(entry).localeCompare(getWeekEntrySortValue(previous)) > 0
+    ) {
+      latestByVehicle.set(vehicleKey, entry);
+    }
+  }
+
+  return latestByVehicle;
+}
+
+function buildOilChangeRow({
+  vehicleId,
+  registration,
+  vehicleName,
+  driverName,
+  vehicleType,
+  lastOilChangeDate,
+  lastOilChangeOdometer,
+  oilChangeIntervalKm,
+  latestMileage
+}: {
+  vehicleId: string | null;
+  registration: string;
+  vehicleName: string;
+  driverName?: string | null;
+  vehicleType?: string | null;
+  lastOilChangeDate: string | null;
+  lastOilChangeOdometer: number | null;
+  oilChangeIntervalKm: number | null | undefined;
+  latestMileage: WeeklyMileageEntry | null;
+}): OilChangeAlertRow {
+  const explicitInterval =
+    oilChangeIntervalKm != null && Number.isFinite(Number(oilChangeIntervalKm)) && Number(oilChangeIntervalKm) > 0
+      ? Number(oilChangeIntervalKm)
+      : null;
+  const vehicleTypeInterval = getOilChangeIntervalForVehicleType(vehicleType);
+  const interval = explicitInterval ?? vehicleTypeInterval;
+  const intervalSource: OilChangeIntervalSource =
+    explicitInterval != null
+      ? "vehicle_baseline"
+      : vehicleTypeInterval != null
+        ? "vehicle_type"
+        : "missing";
+  const reviewReasons = [
+    !vehicleType ? "Missing vehicle type" : "",
+    interval == null ? "Missing oil change interval" : ""
+  ].filter(Boolean);
+  const currentOdometer = latestMileage ? getNormalizedOdometer(latestMileage) : null;
+  const lastOdometer =
+    lastOilChangeOdometer != null && Number.isFinite(Number(lastOilChangeOdometer))
+      ? Number(lastOilChangeOdometer)
+      : null;
+  const nextDue =
+    lastOdometer != null && interval != null ? Math.trunc(lastOdometer + interval) : null;
+  const kmRemaining =
+    nextDue != null && currentOdometer != null ? Math.trunc(nextDue - currentOdometer) : null;
+  const overdueKm = kmRemaining != null && kmRemaining < 0 ? Math.abs(kmRemaining) : null;
+  const status: OilChangeStatus =
+    reviewReasons.length > 0
+      ? "review_required"
+      : lastOdometer == null
+      ? "not_set"
+      : currentOdometer == null
+        ? "no_odometer"
+        : kmRemaining! < 0
+          ? "overdue"
+          : kmRemaining! <= OIL_CHANGE_URGENT_THRESHOLD_KM
+            ? "urgent"
+            : kmRemaining! <= OIL_CHANGE_DUE_SOON_THRESHOLD_KM
+              ? "due_soon"
+              : "ok";
+  const sortRank: Record<OilChangeStatus, number> = {
+    overdue: 0,
+    urgent: 1,
+    due_soon: 2,
+    review_required: 3,
+    not_set: 4,
+    no_odometer: 5,
+    ok: 6
+  };
+
+  return {
+    vehicleId,
+    registration,
+    vehicleName: vehicleName || registration,
+    driverName: driverName ?? null,
+    vehicleType: vehicleType ?? null,
+    vehicleTypeLabel: getVehicleTypeLabel(vehicleType),
+    lastOilChangeDate,
+    lastOilChangeOdometer: lastOdometer,
+    oilChangeIntervalKm: interval,
+    intervalSource,
+    reviewReasons,
+    currentOdometer,
+    currentOdometerDate: latestMileage?.week_ending ?? null,
+    nextOilChangeDueOdometer: nextDue,
+    kmRemaining,
+    overdueKm,
+    status,
+    sortRank: sortRank[status]
+  };
+}
+
+export function buildOilChangeAlertRows({
+  vehicles,
+  weeklyMileage,
+  drivers = []
+}: {
+  vehicles: Vehicle[];
+  weeklyMileage: WeeklyMileageEntry[];
+  drivers?: Driver[];
+}) {
+  const latestByVehicle = getLatestWeeklyMileageByVehicle(weeklyMileage);
+  const rowsByVehicleKey = new Map<string, OilChangeAlertRow>();
+
+  for (const vehicle of vehicles) {
+    const registration = vehicle.vehicle_reg || vehicle.registration || "";
+    const vehicleKey = getVehicleKey(registration);
+    if (!vehicleKey) {
+      continue;
+    }
+    const matchedDriver =
+      drivers.find((driver) => String(driver.assigned_vehicle_id || "") === String(vehicle.id)) ??
+      drivers.find((driver) => getVehicleKey(driver.vehicle_reg) === vehicleKey) ??
+      null;
+
+    rowsByVehicleKey.set(
+      vehicleKey,
+      buildOilChangeRow({
+        vehicleId: String(vehicle.id),
+        registration,
+        vehicleName: vehicle.vehicle_name,
+        driverName: matchedDriver?.name ?? null,
+        vehicleType: matchedDriver?.vehicle_type ?? vehicle.vehicle_type ?? null,
+        lastOilChangeDate: vehicle.last_oil_change_date,
+        lastOilChangeOdometer: vehicle.last_oil_change_odometer,
+        oilChangeIntervalKm: vehicle.oil_change_interval_km,
+        latestMileage: latestByVehicle.get(vehicleKey) ?? null
+      })
+    );
+  }
+
+  for (const driver of drivers) {
+    const registration = driver.vehicle_reg || "";
+    const vehicleKey = getVehicleKey(registration);
+    if (!vehicleKey || rowsByVehicleKey.has(vehicleKey)) {
+      continue;
+    }
+
+    const assignedVehicle = driver.assigned_vehicle_id
+      ? vehicles.find((vehicle) => String(vehicle.id) === String(driver.assigned_vehicle_id))
+      : null;
+
+    rowsByVehicleKey.set(
+      vehicleKey,
+      buildOilChangeRow({
+        vehicleId: assignedVehicle ? String(assignedVehicle.id) : null,
+        registration,
+        vehicleName: assignedVehicle?.vehicle_name || driver.name || registration,
+        driverName: driver.name || null,
+        vehicleType: driver.vehicle_type ?? null,
+        lastOilChangeDate: assignedVehicle?.last_oil_change_date ?? null,
+        lastOilChangeOdometer: assignedVehicle?.last_oil_change_odometer ?? null,
+        oilChangeIntervalKm: assignedVehicle?.oil_change_interval_km ?? null,
+        latestMileage: latestByVehicle.get(vehicleKey) ?? null
+      })
+    );
+  }
+
+  return Array.from(rowsByVehicleKey.values()).sort((left, right) => {
+    const priorityDiff = left.sortRank - right.sortRank;
+    if (priorityDiff !== 0) return priorityDiff;
+
+    const leftRemaining = left.kmRemaining ?? Number.POSITIVE_INFINITY;
+    const rightRemaining = right.kmRemaining ?? Number.POSITIVE_INFINITY;
+    if (leftRemaining !== rightRemaining) return leftRemaining - rightRemaining;
+
+    return left.registration.localeCompare(right.registration);
+  });
 }
 
 export function calculateFuelFields({

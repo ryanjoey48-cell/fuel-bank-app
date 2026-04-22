@@ -120,9 +120,11 @@ export function filterShipments(
     const fields = [
       shipment.job_reference,
       shipment.driver,
-      shipment.start_location,
-      shipment.end_location,
-      shipment.vehicle_reg ?? ""
+      shipment.pickup_location ?? shipment.start_location,
+      shipment.dropoff_location ?? shipment.end_location,
+      shipment.vehicle_reg ?? "",
+      shipment.vehicle_type ?? "",
+      shipment.status ?? ""
     ];
 
     return fields.some((field) => normalizeLocationKey(field).includes(normalizedQuery));

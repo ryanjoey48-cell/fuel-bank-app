@@ -28,6 +28,7 @@ import {
   fetchDrivers,
   fetchFuelLogComparisonEntry,
   fetchFuelLogDuplicateMatches,
+  fetchFuelLogsForExport,
   fetchFuelLogRecentDaySummaries,
   fetchFuelLogTodayRows,
   fetchFuelLogsPage,
@@ -48,6 +49,8 @@ import type {
 } from "@/types/database";
 
 const PAGE_SIZE = 25;
+const DEFAULT_FUEL_TYPE = "diesel";
+const DEFAULT_PAYMENT_METHOD = "company_card";
 
 const initialForm = {
   id: "",
@@ -59,8 +62,8 @@ const initialForm = {
   total_cost: "",
   price_per_litre: "",
   location: "",
-  fuel_type: "",
-  payment_method: "",
+  fuel_type: DEFAULT_FUEL_TYPE,
+  payment_method: DEFAULT_PAYMENT_METHOD,
   notes: ""
 };
 
@@ -169,6 +172,14 @@ function SortButton({
   );
 }
 
+function getFuelTypeLabelWithFallback(t: ReturnType<typeof useLanguage>["t"], value: string | null | undefined) {
+  return getFuelTypeLabel(t, normalizeFuelTypeKey(value) ?? DEFAULT_FUEL_TYPE);
+}
+
+function getPaymentMethodLabelWithFallback(t: ReturnType<typeof useLanguage>["t"], value: string | null | undefined) {
+  return getPaymentMethodLabel(t, normalizePaymentMethodKey(value) ?? DEFAULT_PAYMENT_METHOD);
+}
+
 export default function FuelLogsPage() {
   const { language, t } = useLanguage();
   const copy = {
@@ -225,6 +236,16 @@ export default function FuelLogsPage() {
     ofLabel: language === "th" ? "จาก" : "of"
   };
 
+  const exportButtonLabel = language === "th" ? "กำลังส่งออก..." : "Exporting...";
+  const exportSuccessMessage =
+    language === "th"
+      ? "ส่งออกรายการเติมน้ำมันสำเร็จ"
+      : "Fuel logs exported successfully.";
+  const exportErrorMessage =
+    language === "th"
+      ? "ไม่สามารถส่งออกรายการเติมน้ำมันได้"
+      : "Unable to export fuel logs.";
+
   const fuelTypeOptions = FUEL_TYPE_KEYS.map((value) => ({ value, label: t.fuel.type[value] }));
   const paymentMethodOptions = PAYMENT_METHOD_KEYS.map((value) => ({
     value,
@@ -243,6 +264,7 @@ export default function FuelLogsPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -441,8 +463,8 @@ export default function FuelLogsPage() {
       total_cost: log.total_cost != null ? String(log.total_cost) : "",
       price_per_litre: log.price_per_litre != null ? String(log.price_per_litre) : "",
       location: log.location || "",
-      fuel_type: normalizeFuelTypeKey(log.fuel_type) ?? "",
-      payment_method: normalizePaymentMethodKey(log.payment_method) ?? "",
+      fuel_type: normalizeFuelTypeKey(log.fuel_type) ?? DEFAULT_FUEL_TYPE,
+      payment_method: normalizePaymentMethodKey(log.payment_method) ?? DEFAULT_PAYMENT_METHOD,
       notes: log.notes || ""
     });
     setLastEditedFuelField("total_cost");
@@ -492,11 +514,11 @@ export default function FuelLogsPage() {
             date: form.date,
             driver_id: form.driver_id,
             vehicle_reg: form.vehicle_reg,
-            fuel_type: form.fuel_type,
-            payment_method: form.payment_method
+            fuel_type: DEFAULT_FUEL_TYPE,
+            payment_method: DEFAULT_PAYMENT_METHOD
           }
         : { ...initialForm, date: form.date },
-    [form.date, form.driver_id, form.fuel_type, form.payment_method, form.vehicle_reg]
+    [form.date, form.driver_id, form.vehicle_reg]
   );
 
   const buildDraft = useCallback(
@@ -621,23 +643,41 @@ export default function FuelLogsPage() {
     }
   };
 
-  const exportFuelLogs = () =>
-    exportToCsv(
-      fuelLogs.map((log) => ({
-        [t.fuelLogs.date]: formatDate(log.date, language),
-        [t.fuelLogs.driver]: log.driver,
-        [t.fuelLogs.vehicleReg]: log.vehicle_reg,
-        [t.fuelLogs.mileage]: log.mileage ?? "",
-        [t.fuelLogs.litres]: log.litres,
-        [t.fuelLogs.totalCost]: log.total_cost,
-        [t.fuelLogs.pricePerLitre]: log.price_per_litre ?? "",
-        [t.fuelLogs.location]: log.location,
-        [t.fuelLogs.fuelType]: getFuelTypeLabel(t, log.fuel_type),
-        [t.fuelLogs.paymentMethod]: getPaymentMethodLabel(t, log.payment_method),
-        [t.fuelLogs.notes]: log.notes ?? ""
-      })),
-      "fuel-logs-report"
-    );
+  const handleExportFuelLogs = async () => {
+    setExporting(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const exportRows = await fetchFuelLogsForExport(filters);
+
+      exportToCsv(
+        exportRows.map((log) => ({
+          [t.fuelLogs.date]: formatDate(log.date, language),
+          [t.fuelLogs.driver]: log.driver,
+          [t.fuelLogs.vehicleReg]: log.vehicle_reg,
+          [t.fuelLogs.mileage]: log.mileage ?? "",
+          [t.fuelLogs.litres]: log.litres,
+          [t.fuelLogs.totalCost]: log.total_cost,
+          [t.fuelLogs.pricePerLitre]: log.price_per_litre ?? "",
+          [t.fuelLogs.location]: log.location,
+          [t.fuelLogs.fuelType]: getFuelTypeLabelWithFallback(t, log.fuel_type),
+          [t.fuelLogs.paymentMethod]: getPaymentMethodLabelWithFallback(t, log.payment_method),
+          [t.fuelLogs.notes]: log.notes ?? ""
+        })),
+        "fuel-logs-report"
+      );
+
+      setSuccessMessage(
+        `${exportSuccessMessage} (${formatNumber(exportRows.length, language)} ${copy.matches})`
+      );
+    } catch (err) {
+      console.error("Fuel logs handleExportFuelLogs error:", err);
+      setError(err instanceof Error && err.message ? err.message : exportErrorMessage);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const avgPriceToday = stats.litresToday > 0 ? stats.fuelSpendToday / stats.litresToday : 0;
 
@@ -811,7 +851,7 @@ export default function FuelLogsPage() {
               </div>
               <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
                 <div className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">{formatNumber(totalCount, language)} {copy.matches}</div>
-                <button type="button" onClick={exportFuelLogs} disabled={!fuelLogs.length} className="btn-secondary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"><Download className="h-4 w-4" />{t.common.export}</button>
+                <button type="button" onClick={() => void handleExportFuelLogs()} disabled={!totalCount || exporting || loading} className="btn-secondary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"><Download className="h-4 w-4" />{exporting ? exportButtonLabel : t.common.export}</button>
               </div>
             </div>
           </div>

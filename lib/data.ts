@@ -11,6 +11,7 @@ import {
   normalizePaymentMethodKey,
   normalizeTransferTypeKey
 } from "@/lib/localized-values";
+import { getOilChangeIntervalForVehicleType } from "@/lib/oil-change-service";
 import type {
   BankTransfer,
   BankTransferWithDriver,
@@ -25,6 +26,8 @@ import type {
   RouteDistanceEstimate,
   Shipment,
   ShipmentWithDriver,
+  Vehicle,
+  VehicleServiceLog,
   WeeklyMileageEntry
 } from "@/types/database";
 
@@ -81,6 +84,22 @@ function isMissingColumnError(error: unknown) {
   return (
     record.code === "42703" ||
     String(record.message ?? "").toLowerCase().includes("does not exist")
+  );
+}
+
+function isMissingTableError(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const record = error as Record<string, unknown>;
+  const message = String(record.message ?? "").toLowerCase();
+
+  return (
+    record.code === "PGRST205" ||
+    record.code === "42P01" ||
+    message.includes("could not find the table") ||
+    message.includes("relation") && message.includes("does not exist")
   );
 }
 
@@ -209,6 +228,74 @@ function normalizeDriverRow(driver: Driver) {
     name: normalizeDisplayName(driver.name),
     vehicle_reg: normalizeVehicleRegistration(driver.vehicle_reg)
   };
+}
+
+function normalizeVehicleRow(vehicle: Vehicle) {
+  const vehicleReg = normalizeVehicleRegistration(vehicle.vehicle_reg ?? vehicle.registration);
+  return {
+    ...vehicle,
+    vehicle_reg: vehicleReg,
+    registration: vehicleReg,
+    last_oil_change_odometer:
+      vehicle.last_oil_change_odometer != null ? Number(vehicle.last_oil_change_odometer) : null,
+    oil_change_interval_km:
+      vehicle.oil_change_interval_km != null && Number.isFinite(Number(vehicle.oil_change_interval_km))
+        ? Number(vehicle.oil_change_interval_km)
+        : null
+  };
+}
+
+function normalizeServiceLogRow(log: VehicleServiceLog) {
+  const odometer = Number(log.odometer ?? log.service_odometer ?? 0);
+  return {
+    ...log,
+    vehicle_id: log.vehicle_id ?? null,
+    vehicle_reg: normalizeVehicleRegistration(log.vehicle_reg),
+    odometer,
+    service_odometer: odometer,
+    interval_km:
+      log.interval_km != null && Number.isFinite(Number(log.interval_km))
+        ? Number(log.interval_km)
+        : null,
+    vehicle_type_snapshot: log.vehicle_type_snapshot ?? null,
+    notes: log.notes ?? null
+  };
+}
+
+function getServiceSchemaSetupMessage(error: unknown) {
+  if (isMissingTableError(error)) {
+    return "Oil Change Service Management is not set up in Supabase yet. Apply migration 20260421_add_oil_change_alert_fields.sql, then refresh the page.";
+  }
+
+  if (isMissingColumnError(error)) {
+    return "Oil Change Service Management database columns are out of date. Apply the latest Supabase migration, then refresh the page.";
+  }
+
+  if (error && typeof error === "object") {
+    const record = error as Record<string, unknown>;
+    const message = String(record.message ?? "").toLowerCase();
+    if (record.code === "42501" || message.includes("row-level security") || message.includes("permission")) {
+      return "Oil Change Service Management is blocked by Supabase permissions. Apply the latest RLS policy migration for vehicles and vehicle_service_logs.";
+    }
+  }
+
+  return null;
+}
+
+async function getCurrentUserId() {
+  const { data, error } = await supabase.auth.getUser();
+  if (error) {
+    const message = String(error.message ?? "").toLowerCase();
+    if (message.includes("auth session missing") || message.includes("missing")) {
+      console.warn("getCurrentUserId warning: no active auth session; saving with nullable user_id for legacy schema support.");
+      return null;
+    }
+
+    logDataError("getCurrentUserId error:", error);
+    throw error;
+  }
+
+  return data.user?.id ?? null;
 }
 
 function resolveShipmentDriverName(
@@ -398,8 +485,305 @@ export async function fetchDrivers() {
 
     console.log("fetchDrivers success", { rowCount: (data ?? []).length });
 
-    return ((data ?? []) as Driver[]).map(normalizeDriverRow);
+    return ((data ?? []) as Driver[])
+      .filter((driver) => driver.active !== false)
+      .map(normalizeDriverRow);
   });
+}
+
+export async function fetchVehicles() {
+  return readThroughCache("vehicles:all", async () => {
+    const { data, error } = await supabase
+      .from("vehicles")
+      .select("*")
+      .order("vehicle_reg", { ascending: true });
+
+    if (error) {
+      if (isMissingTableError(error)) {
+        console.warn("fetchVehicles optional table unavailable:", serializeError(error));
+        return [] as Vehicle[];
+      }
+
+      logDataError("fetchVehicles error:", error);
+      throw error;
+    }
+
+    console.log("fetchVehicles success", { rowCount: (data ?? []).length });
+
+    return ((data ?? []) as Vehicle[]).map(normalizeVehicleRow);
+  });
+}
+
+export async function fetchVehicleServiceLogs() {
+  return readThroughCache("vehicle_service_logs:all", async () => {
+    const { data, error } = await supabase
+      .from("vehicle_service_logs")
+      .select("*")
+      .order("service_date", { ascending: false })
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      if (isMissingTableError(error)) {
+        console.warn("fetchVehicleServiceLogs optional table unavailable:", serializeError(error));
+        return [] as VehicleServiceLog[];
+      }
+
+      logDataError("fetchVehicleServiceLogs error:", error);
+      throw error;
+    }
+
+    return ((data ?? []) as VehicleServiceLog[]).map(normalizeServiceLogRow);
+  });
+}
+
+async function ensureVehicleForService({
+  vehicleId,
+  registration,
+  vehicleName,
+  vehicleType
+}: {
+  vehicleId?: string | null;
+  registration: string;
+  vehicleName?: string | null;
+  vehicleType?: string | null;
+}) {
+  const normalizedRegistration = normalizeVehicleRegistration(registration);
+
+  if (!normalizedRegistration) {
+    throw new Error("Vehicle registration is required.");
+  }
+
+  if (vehicleId) {
+    const { data, error } = await supabase
+      .from("vehicles")
+      .select("*")
+      .eq("id", vehicleId)
+      .maybeSingle();
+
+    if (error) {
+      logDataError("ensureVehicleForService existing vehicle error:", error, { vehicleId });
+      throw new Error(getServiceSchemaSetupMessage(error) ?? String(error.message ?? "Unable to load vehicle for service."));
+    }
+
+    if (data) {
+      return normalizeVehicleRow(data as Vehicle);
+    }
+  }
+
+  const existing = await supabase
+    .from("vehicles")
+    .select("*")
+    .ilike("vehicle_reg", normalizedRegistration)
+    .limit(1)
+    .maybeSingle();
+
+  if (existing.error) {
+    logDataError("ensureVehicleForService lookup error:", existing.error, { registration: normalizedRegistration });
+    throw new Error(getServiceSchemaSetupMessage(existing.error) ?? String(existing.error.message ?? "Unable to load vehicle for service."));
+  }
+
+  if (existing.data) {
+    const existingVehicle = normalizeVehicleRow(existing.data as Vehicle);
+    if (vehicleType && !existingVehicle.vehicle_type) {
+      const updated = await supabase
+        .from("vehicles")
+        .update({ vehicle_type: vehicleType })
+        .eq("id", existingVehicle.id)
+        .select()
+        .single();
+      if (!updated.error && updated.data) {
+        return normalizeVehicleRow(updated.data as Vehicle);
+      }
+    }
+    return existingVehicle;
+  }
+
+  const userId = await getCurrentUserId();
+  const created = await supabase
+    .from("vehicles")
+    .insert({
+      user_id: userId,
+      vehicle_reg: normalizedRegistration,
+      vehicle_name: vehicleName?.trim() || normalizedRegistration,
+      vehicle_category: "SMALL_VAN",
+      vehicle_type: vehicleType || null,
+      fuel_type: "DIESEL",
+      oil_change_interval_km: vehicleType ? getOilChangeIntervalForVehicleType(vehicleType) : null,
+      active: true
+    })
+    .select()
+    .single();
+
+  if (created.error) {
+    logDataError("ensureVehicleForService create error:", created.error, { registration: normalizedRegistration });
+    if ((created.error as { code?: string }).code === "23505") {
+      const recovered = await supabase
+        .from("vehicles")
+        .select("*")
+        .ilike("vehicle_reg", normalizedRegistration)
+        .limit(1)
+        .maybeSingle();
+
+      if (!recovered.error && recovered.data) {
+        return normalizeVehicleRow(recovered.data as Vehicle);
+      }
+    }
+    throw new Error(getServiceSchemaSetupMessage(created.error) ?? String(created.error.message ?? "Unable to create vehicle for service."));
+  }
+
+  return normalizeVehicleRow(created.data as Vehicle);
+}
+
+export async function saveOilChangeService(payload: {
+  vehicleId?: string | null;
+  vehicleReg: string;
+  vehicleName?: string | null;
+  serviceDate: string;
+  serviceOdometer: number;
+  intervalKm: number;
+  vehicleType?: string | null;
+  notes?: string | null;
+  serviceLogId?: string | null;
+  updateExistingLog?: boolean;
+}) {
+  console.groupCollapsed("Oil change service save");
+  console.log("incoming payload", payload);
+  const serviceDate = payload.serviceDate?.trim();
+  const serviceOdometer = Math.trunc(Number(payload.serviceOdometer));
+  const intervalKm = Math.trunc(
+    Number(payload.intervalKm || getOilChangeIntervalForVehicleType(payload.vehicleType) || 30000)
+  );
+
+  try {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(serviceDate)) {
+      throw new Error("Last oil change date must be saved in YYYY-MM-DD format.");
+    }
+    if (!Number.isFinite(serviceOdometer) || serviceOdometer < 0) {
+      throw new Error("Oil change odometer must be a valid number.");
+    }
+    if (!Number.isFinite(intervalKm) || intervalKm <= 0) {
+      throw new Error("Interval KM must be greater than zero.");
+    }
+
+    console.log("step", "ensure vehicle", {
+      table: "vehicles",
+      vehicleId: payload.vehicleId,
+      registration: payload.vehicleReg
+    });
+    const vehicle = await ensureVehicleForService({
+      vehicleId: payload.vehicleId,
+      registration: payload.vehicleReg,
+      vehicleName: payload.vehicleName,
+      vehicleType: payload.vehicleType
+    });
+    const userId = await getCurrentUserId();
+    const servicePayload = {
+      user_id: userId,
+      vehicle_id: vehicle.id,
+      vehicle_reg: vehicle.vehicle_reg,
+      service_type: "oil_change",
+      service_date: serviceDate,
+      odometer: serviceOdometer,
+      interval_km: intervalKm,
+      vehicle_type_snapshot: payload.vehicleType ?? null,
+      notes: payload.notes?.trim() || null
+    };
+    const serviceOperation = payload.updateExistingLog && payload.serviceLogId ? "update" : "insert";
+    console.log("step", "write service log", {
+      table: "vehicle_service_logs",
+      operation: serviceOperation,
+      payload: servicePayload,
+      serviceLogId: payload.serviceLogId
+    });
+
+    let serviceResult =
+      serviceOperation === "update"
+        ? await supabase
+            .from("vehicle_service_logs")
+            .update(servicePayload)
+            .eq("id", payload.serviceLogId!)
+            .select()
+            .single()
+        : await supabase
+            .from("vehicle_service_logs")
+            .select("*")
+            .eq("vehicle_id", vehicle.id)
+            .eq("service_type", "oil_change")
+            .eq("service_date", serviceDate)
+            .eq("odometer", serviceOdometer)
+            .limit(1)
+            .maybeSingle();
+
+    if (serviceOperation === "insert" && !serviceResult.error && !serviceResult.data) {
+      serviceResult = await supabase
+        .from("vehicle_service_logs")
+        .insert(servicePayload)
+        .select()
+        .single();
+    }
+
+    if (serviceResult.error) {
+      if (serviceOperation === "insert" && (serviceResult.error as { code?: string }).code === "23505") {
+        const recovered = await supabase
+          .from("vehicle_service_logs")
+          .select("*")
+          .eq("vehicle_id", vehicle.id)
+          .eq("service_type", "oil_change")
+          .eq("service_date", serviceDate)
+          .eq("odometer", serviceOdometer)
+          .limit(1)
+          .maybeSingle();
+
+        if (!recovered.error && recovered.data) {
+          serviceResult = recovered;
+        }
+      }
+    }
+
+    if (serviceResult.error || !serviceResult.data) {
+      logDataError("saveOilChangeService log error:", serviceResult.error, servicePayload);
+      throw new Error(getServiceSchemaSetupMessage(serviceResult.error) ?? serviceResult.error?.message ?? "Failed to save service record - try again.");
+    }
+
+    const baselinePayload = {
+      last_oil_change_date: serviceDate,
+      last_oil_change_odometer: serviceOdometer,
+      oil_change_interval_km: intervalKm,
+      ...(payload.vehicleType ? { vehicle_type: payload.vehicleType } : {})
+    };
+    console.log("step", "update active baseline", {
+      table: "vehicles",
+      operation: "update",
+      vehicleId: vehicle.id,
+      payload: baselinePayload
+    });
+    const vehicleResult = await supabase
+      .from("vehicles")
+      .update(baselinePayload)
+      .eq("id", vehicle.id)
+      .select()
+      .single();
+
+    if (vehicleResult.error) {
+      logDataError("saveOilChangeService vehicle baseline error:", vehicleResult.error, { vehicleId: vehicle.id });
+      throw new Error(getServiceSchemaSetupMessage(vehicleResult.error) ?? vehicleResult.error.message ?? "Service saved, but baseline update failed.");
+    }
+
+    dispatchDataChange("vehicle_service_logs");
+    console.log("success", {
+      vehicle: vehicleResult.data,
+      serviceLog: serviceResult.data
+    });
+    return {
+      vehicle: normalizeVehicleRow(vehicleResult.data as Vehicle),
+      serviceLog: normalizeServiceLogRow(serviceResult.data as VehicleServiceLog)
+    };
+  } catch (error) {
+    console.error("Oil change service save failed", serializeError(error));
+    throw error;
+  } finally {
+    console.groupEnd();
+  }
 }
 
 export async function fetchFuelLogs() {
@@ -468,6 +852,44 @@ export async function fetchFuelLogsPage({
     page: safePage,
     pageSize
   } satisfies PaginatedFuelLogsResult;
+}
+
+export async function fetchFuelLogsForExport(filters: FuelLogFilters = {}) {
+  const batchSize = 1000;
+  const allRows: Parameters<typeof mapFuelLogRows>[0] = [];
+  let from = 0;
+
+  while (true) {
+    const to = from + batchSize - 1;
+    const fuelLogQuery = await applyFuelLogFilters(
+      supabase
+        .from("fuel_logs")
+        .select(FUEL_LOG_SELECT_COLUMNS)
+        .order("date", { ascending: false })
+        .order("id", { ascending: false }),
+      filters
+    ).range(from, to);
+
+    if (fuelLogQuery.error) {
+      logDataError("fetchFuelLogsForExport error:", fuelLogQuery.error, {
+        filters,
+        from,
+        to
+      });
+      throw fuelLogQuery.error;
+    }
+
+    const rows = (fuelLogQuery.data ?? []) as Parameters<typeof mapFuelLogRows>[0];
+    allRows.push(...rows);
+
+    if (rows.length < batchSize) {
+      break;
+    }
+
+    from += batchSize;
+  }
+
+  return mapFuelLogRows(allRows);
 }
 
 export async function fetchFuelLogTodayRows(currentDate: string) {
@@ -688,7 +1110,13 @@ export async function fetchWeeklyMileage() {
 
   if (!modernQuery.error) {
     console.log("fetchWeeklyMileage success", { rowCount: (modernQuery.data ?? []).length });
-    const driverLookup = await fetchDriverLookup();
+    let driverLookup = new Map<string, string>();
+
+    try {
+      driverLookup = await fetchDriverLookup();
+    } catch (lookupError) {
+      logDataError("fetchWeeklyMileage driver lookup warning:", lookupError);
+    }
 
     return ((modernQuery.data ?? []) as Array<{
       id: string;
@@ -712,7 +1140,10 @@ export async function fetchWeeklyMileage() {
   }
 
   const [driverRows, legacyQuery] = await Promise.all([
-    fetchDrivers(),
+    fetchDrivers().catch((driverError) => {
+      logDataError("fetchWeeklyMileage legacy driver lookup warning:", driverError);
+      return [] as Driver[];
+    }),
     supabase
       .from("weekly_mileage")
       .select("id, week_ending, driver, vehicle_reg, mileage, created_at")
@@ -772,6 +1203,32 @@ export async function fetchShipments() {
 
   return ((shipmentRows ?? []) as Shipment[]).map((shipment) => ({
     ...shipment,
+    customer_name: shipment.customer_name ?? null,
+    goods_description: shipment.goods_description ?? null,
+    pickup_location: shipment.pickup_location ?? shipment.start_location,
+    dropoff_location: shipment.dropoff_location ?? shipment.end_location,
+    standard_km_per_litre: shipment.standard_km_per_litre ?? null,
+    estimated_fuel_litres: shipment.estimated_fuel_litres ?? null,
+    fuel_price_per_litre: shipment.fuel_price_per_litre ?? shipment.diesel_price ?? null,
+    diesel_price: shipment.diesel_price ?? shipment.fuel_price_per_litre ?? null,
+    estimated_fuel_cost:
+      shipment.estimated_fuel_cost ??
+      shipment.fuel_cost ??
+      shipment.estimated_fuel_cost_thb ??
+      null,
+    fuel_cost:
+      shipment.fuel_cost ??
+      shipment.estimated_fuel_cost ??
+      shipment.estimated_fuel_cost_thb ??
+      null,
+    toll_estimate: shipment.toll_estimate ?? shipment.toll_cost ?? 0,
+    toll_cost: shipment.toll_cost ?? shipment.toll_estimate ?? 0,
+    other_costs: shipment.other_costs ?? 0,
+    driver_cost: shipment.driver_cost ?? 0,
+    subtotal_cost: shipment.subtotal_cost ?? null,
+    final_price: shipment.final_price ?? shipment.quoted_price ?? shipment.subtotal_cost ?? null,
+    quoted_price: shipment.quoted_price ?? shipment.final_price ?? shipment.subtotal_cost ?? null,
+    status: shipment.status ?? "Draft",
     driver: resolveShipmentDriverName(shipment, driverLookup),
     vehicle_reg: normalizeVehicleRegistration(shipment.vehicle_reg)
   })) as ShipmentWithDriver[];
@@ -1145,11 +1602,27 @@ export async function saveShipment(payload: Partial<Shipment>) {
   const shipmentPayload = stripUndefined({
     shipment_id: shipmentIdValue || undefined,
     job_reference: jobReferenceValue || shipmentIdValue || undefined,
+    customer_name:
+      typeof shipmentRecord.customer_name === "string"
+        ? shipmentRecord.customer_name.trim() || null
+        : shipmentRecord.customer_name,
+    goods_description:
+      typeof shipmentRecord.goods_description === "string"
+        ? shipmentRecord.goods_description.trim() || null
+        : shipmentRecord.goods_description,
     shipment_date: shipmentRecord.shipment_date,
     driver: driverText || undefined,
     vehicle: vehicleText || assignedVehicleText || vehicleRegText || undefined,
     assigned_vehicle: assignedVehicleText || vehicleText || vehicleRegText || undefined,
     vehicle_reg: vehicleRegText || assignedVehicleText || vehicleText || undefined,
+    pickup_location:
+      typeof shipmentRecord.pickup_location === "string"
+        ? shipmentRecord.pickup_location.trim()
+        : shipmentRecord.pickup_location,
+    dropoff_location:
+      typeof shipmentRecord.dropoff_location === "string"
+        ? shipmentRecord.dropoff_location.trim()
+        : shipmentRecord.dropoff_location,
     start_location:
       typeof shipmentRecord.start_location === "string"
         ? shipmentRecord.start_location.trim()
@@ -1158,6 +1631,28 @@ export async function saveShipment(payload: Partial<Shipment>) {
       typeof shipmentRecord.end_location === "string"
         ? shipmentRecord.end_location.trim()
         : shipmentRecord.end_location,
+    standard_km_per_litre: shipmentRecord.standard_km_per_litre,
+    estimated_fuel_litres: shipmentRecord.estimated_fuel_litres,
+    fuel_price_per_litre:
+      shipmentRecord.fuel_price_per_litre ?? shipmentRecord.diesel_price,
+    diesel_price:
+      shipmentRecord.diesel_price ?? shipmentRecord.fuel_price_per_litre,
+    estimated_fuel_cost:
+      shipmentRecord.estimated_fuel_cost ??
+      shipmentRecord.fuel_cost ??
+      shipmentRecord.estimated_fuel_cost_thb,
+    fuel_cost:
+      shipmentRecord.fuel_cost ??
+      shipmentRecord.estimated_fuel_cost ??
+      shipmentRecord.estimated_fuel_cost_thb,
+    toll_estimate: shipmentRecord.toll_estimate ?? shipmentRecord.toll_cost,
+    toll_cost: shipmentRecord.toll_cost ?? shipmentRecord.toll_estimate,
+    other_costs: shipmentRecord.other_costs,
+    driver_cost: shipmentRecord.driver_cost,
+    subtotal_cost: shipmentRecord.subtotal_cost,
+    final_price: shipmentRecord.final_price ?? shipmentRecord.quoted_price,
+    quoted_price: shipmentRecord.quoted_price ?? shipmentRecord.final_price,
+    status: shipmentRecord.status,
     notes: notesText || null,
     estimated_distance_km: shipmentRecord.estimated_distance_km,
     estimated_fuel_cost_thb: shipmentRecord.estimated_fuel_cost_thb,
@@ -1323,4 +1818,46 @@ export async function deleteWeeklyMileage(id: string) {
   }
 
   dispatchDataChange("weekly_mileage");
+}
+
+export async function markVehicleOilChanged({
+  vehicleId,
+  odometer,
+  date
+}: {
+  vehicleId: string;
+  odometer: number;
+  date?: string;
+}) {
+  if (!vehicleId) {
+    throw new Error("Vehicle record is required.");
+  }
+
+  if (!Number.isFinite(Number(odometer))) {
+    throw new Error("Current odometer is required before marking oil changed.");
+  }
+
+  const serviceDate = date ?? new Date().toISOString().slice(0, 10);
+  const { data, error } = await supabase
+    .from("vehicles")
+    .update({
+      last_oil_change_date: serviceDate,
+      last_oil_change_odometer: Math.trunc(Number(odometer))
+    })
+    .eq("id", vehicleId)
+    .select()
+    .single();
+
+  if (error) {
+    logDataError("markVehicleOilChanged error:", error, { vehicleId, odometer, serviceDate });
+    throw new Error(
+      error.message ||
+        error.details ||
+        error.hint ||
+        "Unable to mark oil changed."
+    );
+  }
+
+  dispatchDataChange("vehicles");
+  return normalizeVehicleRow(data as Vehicle);
 }

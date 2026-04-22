@@ -1,18 +1,19 @@
 "use client";
 
-import { ArrowRightLeft, Fuel, Truck, Wallet } from "lucide-react";
+import { ArrowRightLeft, Droplet, Fuel, Truck, Wallet } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { Header } from "@/components/header";
-import { fetchDrivers, fetchFuelLogs, fetchTransfers, fetchWeeklyMileage } from "@/lib/data";
+import { fetchDrivers, fetchFuelLogs, fetchTransfers, fetchVehicles, fetchWeeklyMileage } from "@/lib/data";
 import { getTransferTypeLabel } from "@/lib/localized-values";
 import { useLanguage } from "@/lib/language-provider";
-import { buildWeeklyMileageSummary } from "@/lib/operations";
+import { buildOilChangeAlertRows, buildWeeklyMileageSummary } from "@/lib/operations";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/utils";
 import type {
   BankTransferWithDriver,
   Driver,
   FuelLogWithDriver,
+  Vehicle,
   WeeklyMileageEntry
 } from "@/types/database";
 
@@ -53,6 +54,7 @@ const KpiCard = memo(function KpiCard({
 export default function DashboardPage() {
   const { language, t } = useLanguage();
   const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [fuelLogs, setFuelLogs] = useState<FuelLogWithDriver[]>([]);
   const [transfers, setTransfers] = useState<BankTransferWithDriver[]>([]);
   const [weeklyMileage, setWeeklyMileage] = useState<WeeklyMileageEntry[]>([]);
@@ -73,8 +75,9 @@ export default function DashboardPage() {
         }
         setError(null);
 
-        const [driverRows, fuelRows, transferRows, mileageRows] = await Promise.all([
+        const [driverRows, vehicleRows, fuelRows, transferRows, mileageRows] = await Promise.all([
           fetchDrivers(),
+          fetchVehicles(),
           fetchFuelLogs(),
           fetchTransfers(),
           fetchWeeklyMileage()
@@ -82,12 +85,14 @@ export default function DashboardPage() {
 
         console.log("Dashboard load success", {
           drivers: driverRows.length,
+          vehicles: vehicleRows.length,
           fuelLogs: fuelRows.length,
           transfers: transferRows.length,
           weeklyMileage: mileageRows.length
         });
 
         setDrivers(driverRows);
+        setVehicles(vehicleRows);
         setFuelLogs(fuelRows);
         setTransfers(transferRows);
         setWeeklyMileage(mileageRows);
@@ -181,6 +186,18 @@ export default function DashboardPage() {
     [filteredTransfers]
   );
 
+  const oilChangeRows = useMemo(
+    () => buildOilChangeAlertRows({ vehicles, weeklyMileage, drivers }),
+    [drivers, vehicles, weeklyMileage]
+  );
+  const oilDueSoonRows = oilChangeRows.filter((row) => row.status === "due_soon");
+  const oilUrgentRows = oilChangeRows.filter((row) => row.status === "urgent");
+  const oilOverdueRows = oilChangeRows.filter((row) => row.status === "overdue");
+  const oilReviewRows = oilChangeRows.filter((row) => row.status === "review_required");
+  const oilActionRows = oilChangeRows
+    .filter((row) => row.status === "overdue" || row.status === "urgent" || row.status === "due_soon" || row.status === "review_required")
+    .slice(0, 4);
+
   const kpiCards = [
     {
       label: t.dashboard.totalFuelSpend,
@@ -269,6 +286,74 @@ export default function DashboardPage() {
             {kpiCards.map((card) => (
               <KpiCard key={card.label} {...card} />
             ))}
+          </section>
+
+          <section className="surface-card overflow-hidden p-0">
+            <div className="border-b border-slate-100 bg-slate-950 px-5 py-4 text-white sm:px-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">Service alerts</p>
+                  <h3 className="mt-1 text-lg font-semibold">Oil change watchlist</h3>
+                </div>
+                <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-slate-100">
+                  <Droplet className="h-4 w-4" />
+                  Type-based intervals
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-0 md:grid-cols-[0.9fr_1.1fr]">
+              <div className="grid grid-cols-5 divide-x divide-slate-100 border-b border-slate-100 md:border-b-0 md:border-r">
+                <div className="p-4 sm:p-5">
+                  <p className="metric-label">Total</p>
+                  <p className="mt-2 text-2xl font-semibold text-slate-950">{formatNumber(oilChangeRows.length, language)}</p>
+                </div>
+                <div className="p-4 sm:p-5">
+                  <p className="metric-label">Urgent</p>
+                  <p className="mt-2 text-2xl font-semibold text-orange-700">{formatNumber(oilUrgentRows.length, language)}</p>
+                </div>
+                <div className="p-4 sm:p-5">
+                  <p className="metric-label">Due Soon</p>
+                  <p className="mt-2 text-2xl font-semibold text-amber-700">{formatNumber(oilDueSoonRows.length, language)}</p>
+                </div>
+                <div className="p-4 sm:p-5">
+                  <p className="metric-label">Review</p>
+                  <p className="mt-2 text-2xl font-semibold text-sky-700">{formatNumber(oilReviewRows.length, language)}</p>
+                </div>
+                <div className="p-4 sm:p-5">
+                  <p className="metric-label">Overdue</p>
+                  <p className="mt-2 text-2xl font-semibold text-rose-700">{formatNumber(oilOverdueRows.length, language)}</p>
+                </div>
+              </div>
+
+              <div className="p-4 sm:p-5">
+                {oilActionRows.length === 0 ? (
+                  <div className="flex min-h-[96px] items-center justify-center rounded-lg border border-emerald-100 bg-emerald-50/70 px-4 text-sm font-medium text-emerald-700">
+                    No vehicles are due soon or overdue in this view.
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {oilActionRows.map((row) => (
+                      <div key={row.registration} className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2.5 last:border-b-0 last:pb-0">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-slate-950">{row.registration}</p>
+                          <p className="mt-0.5 text-xs text-slate-500">
+                            {row.status === "review_required"
+                              ? row.reviewReasons.join("; ") || "Review required"
+                              : row.status === "overdue"
+                              ? `${formatNumber(row.overdueKm ?? 0, language)} KM overdue`
+                              : `${formatNumber(row.kmRemaining ?? 0, language)} KM remaining`}
+                          </p>
+                        </div>
+                        <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold ${row.status === "overdue" ? "border-rose-200 bg-rose-50 text-rose-700" : row.status === "urgent" ? "border-orange-200 bg-orange-50 text-orange-800" : row.status === "review_required" ? "border-sky-200 bg-sky-50 text-sky-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
+                          {row.status === "overdue" ? "Overdue" : row.status === "urgent" ? "Urgent" : row.status === "review_required" ? "Review" : "Due Soon"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </section>
 
           <section className="surface-card p-5 sm:p-6">

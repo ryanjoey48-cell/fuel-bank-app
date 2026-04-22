@@ -15,6 +15,7 @@ type LocationAutocompleteProps = {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  placeholder?: string;
   required?: boolean;
   language?: "en" | "th";
   disabled?: boolean;
@@ -28,6 +29,7 @@ export function LocationAutocomplete({
   label,
   value,
   onChange,
+  placeholder,
   required = false,
   language = "en",
   disabled = false,
@@ -169,7 +171,7 @@ export function LocationAutocomplete({
 
   return (
     <div className="form-field md:col-span-2">
-      <label className="form-label form-label-required">{label}</label>
+      <label className={required ? "form-label form-label-required" : "form-label"}>{label}</label>
       <div className="relative">
         <MapPinned className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
         <input
@@ -223,6 +225,7 @@ export function LocationAutocomplete({
             }
           }}
           className="form-input bg-white pl-11"
+          placeholder={placeholder ?? "Type location"}
         />
 
         {isOpen && suggestions.length > 0 ? (
@@ -263,10 +266,10 @@ export function LocationAutocomplete({
 
       <p className="mt-2 text-sm text-slate-500">
         {mapsConfigured === false
-          ? configMissingMessage
+          ? `${configMissingMessage}. You can still type the full location manually.`
           : loading
             ? loadingText
-            : statusMessage ?? helperText ?? ""}
+            : statusMessage ?? helperText ?? "Type at least 2 characters, or paste the full location manually."}
       </p>
     </div>
   );

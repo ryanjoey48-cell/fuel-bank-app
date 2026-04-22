@@ -1,21 +1,27 @@
 "use client";
 
-import { CarFront, Download, Search, Trash2, Users } from "lucide-react";
+import { AlertTriangle, CarFront, Download, Search, Trash2, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { Header } from "@/components/header";
+import {
+  DRIVER_VEHICLE_TYPE_OPTIONS,
+  getDriverVehicleTypeLabel
+} from "@/lib/driver-vehicle-types";
 import { deleteDriver, fetchDrivers, saveDriver } from "@/lib/data";
 import { exportToXlsx } from "@/lib/export";
 import { applyRequiredValidationMessage, clearValidationMessage } from "@/lib/form-validation";
 import { useLanguage } from "@/lib/language-provider";
 import { formatNumber } from "@/lib/utils";
-import type { Driver } from "@/types/database";
+import type { Driver, DriverVehicleType } from "@/types/database";
 
 const initialForm = {
   id: "",
   name: "",
-  vehicle_reg: ""
+  vehicle_reg: "",
+  vehicle_type: "" as DriverVehicleType | "",
+  active: true
 };
 
 function DriverSummaryCard({
@@ -53,6 +59,7 @@ export default function DriversPage() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pageNotice, setPageNotice] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [driverFilter, setDriverFilter] = useState("");
@@ -70,24 +77,16 @@ export default function DriversPage() {
         };
 
   const isEditing = Boolean(form.id);
-  const labels = {
-    totalDrivers: t.drivers.totalDrivers,
-    totalDriversHelper: t.drivers.totalDriversHelper,
-    totalVehiclesAssigned: t.drivers.totalVehiclesAssigned,
-    totalVehiclesAssignedHelper: t.drivers.totalVehiclesAssignedHelper,
-    searchDrivers: t.drivers.searchDrivers,
-    searchPlaceholder: t.drivers.searchPlaceholder,
-    filterDriver: t.drivers.filterDriver,
-    allDrivers: t.drivers.allDrivers
-  };
-
   const sortedDrivers = useMemo(
     () => [...drivers].sort((a, b) => a.name.localeCompare(b.name)),
     [drivers]
   );
-
   const uniqueVehiclesAssigned = useMemo(
     () => new Set(drivers.map((driver) => driver.vehicle_reg.trim()).filter(Boolean)).size,
+    [drivers]
+  );
+  const driversMissingVehicleType = useMemo(
+    () => drivers.filter((driver) => !driver.vehicle_type).length,
     [drivers]
   );
 
@@ -98,7 +97,10 @@ export default function DriversPage() {
       const matchesQuery =
         !query ||
         driver.name.toLowerCase().includes(query) ||
-        driver.vehicle_reg.toLowerCase().includes(query);
+        driver.vehicle_reg.toLowerCase().includes(query) ||
+        (getDriverVehicleTypeLabel(driver.vehicle_type) || "missing vehicle type")
+          .toLowerCase()
+          .includes(query);
       const matchesFilter = !driverFilter || driver.name === driverFilter;
 
       return matchesQuery && matchesFilter;
@@ -109,16 +111,16 @@ export default function DriversPage() {
     try {
       setLoading(true);
       setError(null);
-      const driverRows = await fetchDrivers();
-      console.log("Drivers page load success", { rowCount: driverRows.length });
-      setDrivers(driverRows);
+      setPageNotice(null);
+      setDrivers(await fetchDrivers());
     } catch (err) {
       console.error("Drivers load error:", err);
-      setError(t.drivers.unableToLoadDrivers);
+      setPageNotice("Drivers could not fully load. Showing available data.");
+      setDrivers([]);
     } finally {
       setLoading(false);
     }
-  }, [t.drivers.unableToLoadDrivers]);
+  }, []);
 
   useEffect(() => {
     void load();
@@ -151,7 +153,9 @@ export default function DriversPage() {
       await saveDriver({
         id: form.id || undefined,
         name: form.name.trim(),
-        vehicle_reg: form.vehicle_reg.trim()
+        vehicle_reg: form.vehicle_reg.trim(),
+        vehicle_type: form.vehicle_type || null,
+        active: form.active
       });
 
       resetForm(false);
@@ -163,6 +167,8 @@ export default function DriversPage() {
         setError(t.drivers.duplicateDriverName);
       } else if (err instanceof Error && err.message === "DUPLICATE_DRIVER_VEHICLE") {
         setError(t.drivers.duplicateVehicleAssignment);
+      } else if (err instanceof Error && err.message === "VALIDATION_DRIVER_VEHICLE_TYPE_REQUIRED") {
+        setError("Vehicle type is required before saving a driver.");
       } else if (err instanceof Error && err.message) {
         setError(err.message);
       } else {
@@ -208,7 +214,8 @@ export default function DriversPage() {
     exportToXlsx(
       drivers.map((driver) => ({
         [t.drivers.name]: driver.name,
-        [t.drivers.vehicle]: driver.vehicle_reg
+        [t.drivers.vehicle]: driver.vehicle_reg,
+        "Vehicle Type": driver.vehicle_type ? getDriverVehicleTypeLabel(driver.vehicle_type) : ""
       })),
       "drivers-report",
       "Drivers"
@@ -221,18 +228,24 @@ export default function DriversPage() {
         <Header title={t.drivers.title} description={t.drivers.description} />
       </div>
 
-      <section className="mb-4.5 grid gap-4 sm:grid-cols-2 xl:max-w-[720px]">
+      <section className="mb-4.5 grid gap-4 sm:grid-cols-3 xl:max-w-[1080px]">
         <DriverSummaryCard
-          label={labels.totalDrivers}
+          label={t.drivers.totalDrivers}
           value={formatNumber(drivers.length, language)}
-          helper={labels.totalDriversHelper}
+          helper={t.drivers.totalDriversHelper}
           icon={Users}
         />
         <DriverSummaryCard
-          label={labels.totalVehiclesAssigned}
+          label={t.drivers.totalVehiclesAssigned}
           value={formatNumber(uniqueVehiclesAssigned, language)}
-          helper={labels.totalVehiclesAssignedHelper}
+          helper={t.drivers.totalVehiclesAssignedHelper}
           icon={CarFront}
+        />
+        <DriverSummaryCard
+          label="Missing Vehicle Type"
+          value={formatNumber(driversMissingVehicleType, language)}
+          helper="Legacy records can still be edited, but every save now requires a vehicle type."
+          icon={AlertTriangle}
         />
       </section>
 
@@ -243,7 +256,7 @@ export default function DriversPage() {
               {isEditing ? t.drivers.editDriver : t.drivers.addDriver}
             </h3>
             <p className="section-subtitle mt-1.5 max-w-md">
-              {isEditing ? t.drivers.updateDriver : t.drivers.description}
+              Driver records are now the source of truth for vehicle registration and type used in logistics quotations.
             </p>
           </div>
 
@@ -267,7 +280,7 @@ export default function DriversPage() {
               <label className="form-label form-label-required">{t.drivers.vehicle}</label>
               <input
                 required
-                placeholder={t.drivers.vehicle}
+                placeholder="Vehicle registration"
                 value={form.vehicle_reg}
                 onChange={(event) =>
                   setForm((current) => ({ ...current, vehicle_reg: event.target.value }))
@@ -276,6 +289,30 @@ export default function DriversPage() {
                 onInput={clearValidationMessage}
                 className="form-input w-full"
               />
+            </div>
+
+            <div className="form-field">
+              <label className="form-label form-label-required">Vehicle type</label>
+              <select
+                required
+                value={form.vehicle_type}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    vehicle_type: event.target.value as DriverVehicleType | ""
+                  }))
+                }
+                onInvalid={handleInvalid}
+                onInput={clearValidationMessage}
+                className="form-input w-full bg-white"
+              >
+                <option value="">Select vehicle type</option>
+                {DRIVER_VEHICLE_TYPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {error ? <p className="form-error">{error}</p> : null}
@@ -308,6 +345,12 @@ export default function DriversPage() {
         </form>
 
         <section className="surface-card min-w-0 p-5 sm:p-6 lg:p-6.5">
+          {pageNotice ? (
+            <div className="mb-4 rounded-[1rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              {pageNotice}
+            </div>
+          ) : null}
+
           <div className="mb-5 flex flex-col gap-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0 space-y-1.5">
@@ -317,7 +360,9 @@ export default function DriversPage() {
                     {formatNumber(filteredDrivers.length, language)} {t.common.entries}
                   </span>
                 </div>
-                <p className="section-subtitle max-w-2xl">{t.drivers.tableDescription}</p>
+                <p className="section-subtitle max-w-2xl">
+                  Manage driver, vehicle registration, and vehicle type so quotations inherit the right diesel efficiency standard automatically.
+                </p>
               </div>
 
               <div className="flex w-full shrink-0 lg:w-auto lg:justify-end">
@@ -336,26 +381,26 @@ export default function DriversPage() {
             <div className="rounded-[1.4rem] border border-slate-200/80 bg-slate-50/70 p-4">
               <div className="grid gap-3 xl:grid-cols-[minmax(0,1.45fr)_minmax(220px,0.55fr)] xl:items-end">
                 <div className="form-field">
-                  <label className="form-label">{labels.searchDrivers}</label>
+                  <label className="form-label">{t.drivers.searchDrivers}</label>
                   <div className="relative">
                     <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     <input
                       value={searchQuery}
                       onChange={(event) => setSearchQuery(event.target.value)}
-                      placeholder={labels.searchPlaceholder}
+                      placeholder="Search by driver, registration, or vehicle type"
                       className="form-input w-full bg-white pl-9"
                     />
                   </div>
                 </div>
 
                 <div className="form-field xl:max-w-[240px] xl:justify-self-end">
-                  <label className="form-label">{labels.filterDriver}</label>
+                  <label className="form-label">{t.drivers.filterDriver}</label>
                   <select
                     value={driverFilter}
                     onChange={(event) => setDriverFilter(event.target.value)}
                     className="form-input w-full bg-white"
                   >
-                    <option value="">{labels.allDrivers}</option>
+                    <option value="">{t.drivers.allDrivers}</option>
                     {sortedDrivers.map((driver) => (
                       <option key={driver.id} value={driver.name}>
                         {driver.name}
@@ -371,104 +416,144 @@ export default function DriversPage() {
             <p className="text-sm text-slate-500">{t.drivers.loadingDrivers}</p>
           ) : filteredDrivers.length === 0 ? (
             <EmptyState
-              title={drivers.length === 0 ? t.drivers.noDriversYet : labels.searchDrivers}
+              title={drivers.length === 0 ? t.drivers.noDriversYet : t.drivers.searchDrivers}
               description={
                 drivers.length === 0
                   ? t.drivers.noDriversDescription
-                  : labels.searchPlaceholder
+                  : "Try a different driver, registration, or vehicle type."
               }
             />
           ) : (
             <>
               <div className="space-y-3.5 md:hidden">
-                {filteredDrivers.map((driver) => (
-                  <div key={driver.id} className="subtle-panel p-4">
-                    <p className="text-sm font-semibold text-slate-900">{driver.name}</p>
-                    <p className="mt-1 text-sm text-slate-500">{driver.vehicle_reg}</p>
-                    <div className="mt-3 inline-flex rounded-full border border-slate-200/80 bg-slate-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                      {t.drivers.vehicle}
-                    </div>
-                    <div className="mt-4 flex flex-col gap-2">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setForm({
-                            id: String(driver.id),
-                            name: driver.name,
-                            vehicle_reg: driver.vehicle_reg
-                          })
-                        }
-                        className="btn-secondary w-full"
-                      >
-                        {t.common.edit}
-                      </button>
+                {filteredDrivers.map((driver) => {
+                  const missingVehicleType = !driver.vehicle_type;
 
-                      <button
-                        type="button"
-                        onClick={() => void handleDelete(String(driver.id))}
-                        disabled={deletingId === driver.id}
-                        className="btn-danger w-full gap-2 disabled:opacity-50"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        {deletingId === driver.id ? t.common.deleting : t.common.delete}
-                      </button>
+                  return (
+                    <div
+                      key={driver.id}
+                      className={`subtle-panel p-4 ${missingVehicleType ? "border-amber-200 bg-amber-50/70" : ""}`}
+                    >
+                      <p className="text-sm font-semibold text-slate-900">{driver.name}</p>
+                      <p className="mt-1 text-sm text-slate-500">{driver.vehicle_reg || "Not assigned"}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                          {driver.vehicle_type ? getDriverVehicleTypeLabel(driver.vehicle_type) : "Missing vehicle type"}
+                        </p>
+                        {missingVehicleType ? (
+                          <span className="rounded-full border border-amber-300 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-700">
+                            Missing vehicle type
+                          </span>
+                        ) : null}
+                      </div>
+                      {missingVehicleType ? (
+                        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                          This legacy driver record needs a vehicle type before it can support quotation calculations.
+                        </div>
+                      ) : null}
+                      <div className="mt-4 flex flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setForm({
+                              id: String(driver.id),
+                              name: driver.name,
+                              vehicle_reg: driver.vehicle_reg,
+                              vehicle_type: driver.vehicle_type ?? "",
+                              active: driver.active
+                            })
+                          }
+                          className="btn-secondary w-full"
+                        >
+                          {t.common.edit}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => void handleDelete(String(driver.id))}
+                          disabled={deletingId === driver.id}
+                          className="btn-danger w-full gap-2 disabled:opacity-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          {deletingId === driver.id ? t.common.deleting : t.common.delete}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               <div className="hidden md:block">
                 <div className="table-shell rounded-2xl">
                   <div className="table-scroll">
-                  <table className="w-full min-w-[760px] text-sm">
-                    <colgroup>
-                      <col className="w-[35%]" />
-                      <col className="w-[29%]" />
-                      <col className="w-[36%]" />
-                    </colgroup>
-                    <thead>
-                      <tr className="bg-slate-50/80 text-slate-600">
-                        <th className="table-head-cell text-left">{t.drivers.name}</th>
-                        <th className="table-head-cell text-left">{t.drivers.vehicle}</th>
-                        <th className="table-head-cell text-left">{t.common.action}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredDrivers.map((driver) => (
-                        <tr key={driver.id} className="enterprise-table-row">
-                          <td className="table-body-cell table-driver-name">{driver.name}</td>
-                          <td className="table-body-cell text-slate-700">{driver.vehicle_reg}</td>
-                          <td className="table-body-cell">
-                            <div className="flex h-9 flex-row items-center gap-1.5 whitespace-nowrap">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setForm({
-                                    id: String(driver.id),
-                                    name: driver.name,
-                                    vehicle_reg: driver.vehicle_reg
-                                  })
-                                }
-                                className="table-action-secondary min-w-[82px]"
-                              >
-                                {t.common.edit}
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => void handleDelete(String(driver.id))}
-                                disabled={deletingId === driver.id}
-                                className="table-action-danger min-w-[92px] gap-1.5 disabled:opacity-50"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                                {deletingId === driver.id ? t.common.deleting : t.common.delete}
-                              </button>
-                            </div>
-                          </td>
+                    <table className="w-full min-w-[920px] text-sm">
+                      <thead>
+                        <tr className="bg-slate-50/80 text-slate-600">
+                          <th className="table-head-cell text-left">{t.drivers.name}</th>
+                          <th className="table-head-cell text-left">{t.drivers.vehicle}</th>
+                          <th className="table-head-cell text-left">Vehicle Type</th>
+                          <th className="table-head-cell text-left">{t.common.action}</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {filteredDrivers.map((driver) => {
+                          const missingVehicleType = !driver.vehicle_type;
+
+                          return (
+                            <tr
+                              key={driver.id}
+                              className={`enterprise-table-row ${missingVehicleType ? "bg-amber-50/60" : ""}`}
+                            >
+                              <td className="table-body-cell table-driver-name">{driver.name}</td>
+                              <td className="table-body-cell text-slate-700">{driver.vehicle_reg || "Not assigned"}</td>
+                              <td className="table-body-cell text-slate-700">
+                                {driver.vehicle_type ? (
+                                  <p>{getDriverVehicleTypeLabel(driver.vehicle_type)}</p>
+                                ) : (
+                                  <span className="inline-flex rounded-full border border-amber-300 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-700">
+                                    Missing vehicle type
+                                  </span>
+                                )}
+                                {missingVehicleType ? (
+                                  <p className="mt-1 text-xs text-amber-700">
+                                    Update this legacy record to unlock quotation defaults.
+                                  </p>
+                                ) : null}
+                              </td>
+                              <td className="table-body-cell">
+                                <div className="flex h-9 flex-row items-center gap-1.5 whitespace-nowrap">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setForm({
+                                        id: String(driver.id),
+                                        name: driver.name,
+                                        vehicle_reg: driver.vehicle_reg,
+                                        vehicle_type: driver.vehicle_type ?? "",
+                                        active: driver.active
+                                      })
+                                    }
+                                    className="table-action-secondary min-w-[82px]"
+                                  >
+                                    {t.common.edit}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleDelete(String(driver.id))}
+                                    disabled={deletingId === driver.id}
+                                    className="table-action-danger min-w-[92px] gap-1.5 disabled:opacity-50"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    {deletingId === driver.id ? t.common.deleting : t.common.delete}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </div>
