@@ -9,12 +9,12 @@ import {
   normalizeTransferTypeKey,
   TRANSFER_TYPE_KEYS
 } from "@/lib/localized-values";
-import { deleteTransfer, fetchDrivers, fetchFuelLogs, fetchTransfers, saveTransfer } from "@/lib/data";
+import { deleteTransfer, fetchDrivers, fetchTransfers, saveTransfer } from "@/lib/data";
 import { exportToCsv } from "@/lib/export";
 import { applyRequiredValidationMessage, clearValidationMessage } from "@/lib/form-validation";
 import { useLanguage } from "@/lib/language-provider";
 import { formatCurrency, formatDate, formatNumber, today } from "@/lib/utils";
-import type { BankTransferWithDriver, Driver, FuelLogWithDriver } from "@/types/database";
+import type { BankTransferWithDriver, Driver } from "@/types/database";
 
 const PAGE_SIZE = 25;
 
@@ -45,7 +45,6 @@ export default function TransfersPage() {
 
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [transfers, setTransfers] = useState<BankTransferWithDriver[]>([]);
-  const [fuelLogs, setFuelLogs] = useState<FuelLogWithDriver[]>([]);
   const [form, setForm] = useState(() => createInitialForm(transferTypeOptions[0].value));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -58,10 +57,6 @@ export default function TransfersPage() {
   const selectedDriver = useMemo(
     () => drivers.find((driver) => String(driver.id) === String(form.driver_id)),
     [drivers, form.driver_id]
-  );
-  const fuelLogLookup = useMemo(
-    () => new Map(fuelLogs.map((log) => [String(log.id), log])),
-    [fuelLogs]
   );
   const sortedTransfers = useMemo(
     () =>
@@ -82,20 +77,17 @@ export default function TransfersPage() {
       setLoading(true);
       setError(null);
 
-      const [driverRows, transferRows, fuelRows] = await Promise.all([
+      const [driverRows, transferRows] = await Promise.all([
         fetchDrivers(),
-        fetchTransfers(),
-        fetchFuelLogs()
+        fetchTransfers()
       ]);
 
       console.log("Transfers page load success", {
         drivers: driverRows.length,
-        transfers: transferRows.length,
-        fuelLogs: fuelRows.length
+        transfers: transferRows.length
       });
       setDrivers(driverRows);
       setTransfers(transferRows);
-      setFuelLogs(fuelRows);
     } catch {
       setError(t.transfers.unableToLoadTransferData);
     } finally {
@@ -413,9 +405,7 @@ export default function TransfersPage() {
                       {formatCurrency(transfer.amount, language)}
                     </p>
                     <p className="mt-2 text-sm leading-6 text-slate-500">
-                      {transfer.fuel_log_id && fuelLogLookup.get(String(transfer.fuel_log_id))
-                        ? `Linked fuel log ${fuelLogLookup.get(String(transfer.fuel_log_id))?.vehicle_reg} | ${formatDate(fuelLogLookup.get(String(transfer.fuel_log_id))?.date ?? "", language)}`
-                        : transfer.notes || "-"}
+                      {transfer.notes || "-"}
                     </p>
                     <div className="mt-4 flex flex-col gap-2">
                       <button
@@ -483,9 +473,7 @@ export default function TransfersPage() {
                               {formatCurrency(transfer.amount, language)}
                             </td>
                             <td className="table-body-cell min-w-[220px] text-slate-600">
-                              {transfer.fuel_log_id && fuelLogLookup.get(String(transfer.fuel_log_id))
-                                ? `Linked fuel log ${fuelLogLookup.get(String(transfer.fuel_log_id))?.vehicle_reg} | ${formatDate(fuelLogLookup.get(String(transfer.fuel_log_id))?.date ?? "", language)}`
-                                : transfer.notes || "-"}
+                              {transfer.notes || "-"}
                             </td>
                             <td className="table-body-cell">
                               <div className="flex flex-col gap-2 sm:flex-row">

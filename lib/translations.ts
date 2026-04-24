@@ -1,3 +1,5 @@
+import { shipmentTranslations } from "./shipment-translations";
+
 export const translations = {
   en: {
     common: {
@@ -292,6 +294,7 @@ export const translations = {
         other: "Other"
       }
     },
+    shipments: shipmentTranslations.en,
     weeklyMileage: {
       title: "Weekly Mileage",
       description: "Track end-of-week odometer readings by driver and vehicle for reporting and review.",

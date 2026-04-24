@@ -21,7 +21,7 @@ export async function POST(request: Request) {
       });
     }
 
-    let body: { origin?: string; destination?: string } = {};
+    let body: { origin?: string; destination?: string; waypoints?: string[] } = {};
 
     try {
       body = (await request.json()) as typeof body;
@@ -31,6 +31,9 @@ export async function POST(request: Request) {
 
     const origin = body.origin?.trim();
     const destination = body.destination?.trim();
+    const waypoints = Array.isArray(body.waypoints)
+      ? body.waypoints.map((waypoint) => waypoint.trim()).filter(Boolean)
+      : [];
 
     if (!origin || !destination) {
       return Response.json(createApiError("Origin and destination are required."), {
@@ -52,6 +55,9 @@ export async function POST(request: Request) {
         destination: {
           address: destination
         },
+        intermediates: waypoints.map((waypoint) => ({
+          address: waypoint
+        })),
         travelMode: "DRIVE",
         routingPreference: "TRAFFIC_UNAWARE",
         languageCode: "en-US",

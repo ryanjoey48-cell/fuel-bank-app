@@ -8,13 +8,29 @@ export const formatCurrency = (value: number, language: Language = "en") =>
     maximumFractionDigits: 2
   }).format(value || 0);
 
+function parseDateValue(value: string) {
+  if (!value) {
+    return null;
+  }
+
+  const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch;
+    const parsed = new Date(Number(year), Number(month) - 1, Number(day));
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 export const formatDate = (value: string, language: Language = "en") => {
   if (!value) {
     return "-";
   }
 
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
+  const parsed = parseDateValue(value);
+  if (!parsed) {
     return "-";
   }
 
@@ -31,7 +47,11 @@ export const formatNumber = (value: number, language: Language = "en", digits = 
     maximumFractionDigits: digits
   }).format(value || 0);
 
-export const today = () => new Date().toISOString().slice(0, 10);
+export const today = () => {
+  const now = new Date();
+  const timezoneOffsetMs = now.getTimezoneOffset() * 60 * 1000;
+  return new Date(now.getTime() - timezoneOffsetMs).toISOString().slice(0, 10);
+};
 
 export function normalizeComparableText(value: string | null | undefined) {
   return (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();

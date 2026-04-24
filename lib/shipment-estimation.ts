@@ -1,5 +1,6 @@
 import { normalizeLocationKey } from "@/lib/utils";
 import { buildShipmentBenchmark, computeWeeklyMileageByVehicle } from "@/lib/operations";
+import { normalizeShipment } from "@/lib/shipment-normalization";
 import type {
   FuelLogWithDriver,
   ShipmentWithDriver,
@@ -117,14 +118,17 @@ export function filterShipments(
   }
 
   return shipments.filter((shipment) => {
+    const normalized = normalizeShipment(shipment);
     const fields = [
-      shipment.job_reference,
-      shipment.driver,
-      shipment.pickup_location ?? shipment.start_location,
-      shipment.dropoff_location ?? shipment.end_location,
-      shipment.vehicle_reg ?? "",
-      shipment.vehicle_type ?? "",
-      shipment.status ?? ""
+      normalized.jobReference,
+      normalized.customerName,
+      normalized.jobDescription,
+      normalized.driverName,
+      normalized.pickupLocation,
+      normalized.dropoffLocation,
+      normalized.vehicleReg,
+      normalized.vehicleType,
+      normalized.status
     ];
 
     return fields.some((field) => normalizeLocationKey(field).includes(normalizedQuery));

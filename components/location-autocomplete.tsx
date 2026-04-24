@@ -47,6 +47,7 @@ export function LocationAutocomplete({
   const [sessionToken, setSessionToken] = useState(() => crypto.randomUUID());
   const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestIdRef = useRef(0);
+  const userEditedRef = useRef(false);
   const listboxId = useId();
 
   useEffect(() => {
@@ -82,7 +83,7 @@ export function LocationAutocomplete({
   }, [configMissingMessage, language, onConfigurationChange]);
 
   useEffect(() => {
-    if (disabled || mapsConfigured === false) {
+    if (disabled || mapsConfigured === false || !userEditedRef.current) {
       setSuggestions([]);
       setLoading(false);
       return;
@@ -161,6 +162,7 @@ export function LocationAutocomplete({
   }, []);
 
   const selectSuggestion = (suggestion: LocationSuggestion) => {
+    userEditedRef.current = false;
     onChange(suggestion.description);
     setSuggestions([]);
     setIsOpen(false);
@@ -185,6 +187,7 @@ export function LocationAutocomplete({
           aria-haspopup="listbox"
           aria-controls={listboxId}
           onChange={(event) => {
+            userEditedRef.current = true;
             onChange(event.target.value);
             setIsOpen(true);
           }}

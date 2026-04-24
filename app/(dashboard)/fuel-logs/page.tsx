@@ -28,11 +28,13 @@ import {
   fetchDrivers,
   fetchFuelLogComparisonEntry,
   fetchFuelLogDuplicateMatches,
+  fetchFuelLogReceiptSummary,
   fetchFuelLogsForExport,
   fetchFuelLogRecentDaySummaries,
   fetchFuelLogTodayRows,
   fetchFuelLogsPage,
-  saveFuelLog
+  saveFuelLog,
+  updateFuelLogReceiptCheck
 } from "@/lib/data";
 import { exportToCsv } from "@/lib/export";
 import { applyRequiredValidationMessage, clearValidationMessage } from "@/lib/form-validation";
@@ -43,6 +45,7 @@ import type {
   Driver,
   FuelLogDaySummary,
   FuelLogFilters,
+  FuelLogReceiptSummary,
   FuelLogSortDirection,
   FuelLogSortKey,
   FuelLogWithDriver
@@ -75,6 +78,7 @@ const initialFilters: FuelLogFilters = {
   vehicleReg: "",
   fuelType: "",
   paymentMethod: "",
+  receiptCheckedStatus: "",
   totalCostMin: "",
   totalCostMax: ""
 };
@@ -110,6 +114,20 @@ function formatTimeLabel(value: string | null | undefined, language: "en" | "th"
     hour: "2-digit",
     minute: "2-digit"
   }).format(parsed);
+}
+
+function getReceiptCheckLabel(checked: boolean, language: "en" | "th") {
+  if (language === "th") {
+    return checked ? "ตรวจแล้ว" : "ยังไม่ตรวจ";
+  }
+
+  return checked ? "Checked" : "Not checked";
+}
+
+function getReceiptCheckBadgeClass(checked: boolean) {
+  return checked
+    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+    : "border-slate-200 bg-slate-100 text-slate-600";
 }
 
 function findDuplicates(logs: FuelLogWithDriver[], draft: FuelDraft, excludeId?: string) {
@@ -246,6 +264,20 @@ export default function FuelLogsPage() {
       ? "ไม่สามารถส่งออกรายการเติมน้ำมันได้"
       : "Unable to export fuel logs.";
 
+  const receiptCopy = {
+    filterLabel: language === "th" ? "สถานะตรวจใบเสร็จ" : "Receipt check",
+    checked: language === "th" ? "ตรวจแล้ว" : "Checked",
+    notChecked: language === "th" ? "ยังไม่ตรวจ" : "Not checked",
+    markChecked: language === "th" ? "ทำเครื่องหมายว่าตรวจแล้ว" : "Mark checked",
+    markUnchecked: language === "th" ? "ยกเลิกเครื่องหมายตรวจแล้ว" : "Mark unchecked",
+    updated: language === "th" ? "อัปเดตสถานะตรวจใบเสร็จแล้ว" : "Receipt check status updated.",
+    error:
+      language === "th" ? "ไม่สามารถอัปเดตสถานะตรวจใบเสร็จได้" : "Unable to update receipt check status.",
+    totalCount: language === "th" ? "รายการเติมน้ำมันทั้งหมด" : "Total fuel logs",
+    checkedCount: language === "th" ? "ตรวจแล้ว" : "Checked",
+    notCheckedCount: language === "th" ? "ยังไม่ตรวจ" : "Not checked"
+  };
+
   const fuelTypeOptions = FUEL_TYPE_KEYS.map((value) => ({ value, label: t.fuel.type[value] }));
   const paymentMethodOptions = PAYMENT_METHOD_KEYS.map((value) => ({
     value,
@@ -266,6 +298,7 @@ export default function FuelLogsPage() {
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [togglingReceiptId, setTogglingReceiptId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [submitMode, setSubmitMode] = useState<"save" | "addAnother">("save");
@@ -274,6 +307,11 @@ export default function FuelLogsPage() {
   const [duplicateMatches, setDuplicateMatches] = useState<FuelLogWithDriver[]>([]);
   const [highlightedFuelLogId, setHighlightedFuelLogId] = useState<string | null>(null);
   const [comparisonEntry, setComparisonEntry] = useState<FuelLogWithDriver | null>(null);
+  const [receiptSummary, setReceiptSummary] = useState<FuelLogReceiptSummary>({
+    total: 0,
+    checked: 0,
+    notChecked: 0
+  });
 
   const isEditing = Boolean(form.id);
   const todayValue = today();
@@ -326,13 +364,15 @@ export default function FuelLogsPage() {
   }, [t.fuelLogs.unableToLoadFuelData]);
 
   const loadSummaryData = useCallback(async () => {
-    const [todayRows, recentDayRows] = await Promise.all([
+    const [todayRows, recentDayRows, receiptSummaryRows] = await Promise.all([
       fetchFuelLogTodayRows(todayValue),
-      fetchFuelLogRecentDaySummaries(7)
+      fetchFuelLogRecentDaySummaries(7),
+      fetchFuelLogReceiptSummary(filters)
     ]);
     setTodayLogs(todayRows);
     setLast7DayRows(recentDayRows);
-  }, [todayValue]);
+    setReceiptSummary(receiptSummaryRows);
+  }, [filters, todayValue]);
 
   const loadFuelLogPage = useCallback(
     async (page = currentPage) => {
@@ -663,6 +703,9 @@ export default function FuelLogsPage() {
           [t.fuelLogs.location]: log.location,
           [t.fuelLogs.fuelType]: getFuelTypeLabelWithFallback(t, log.fuel_type),
           [t.fuelLogs.paymentMethod]: getPaymentMethodLabelWithFallback(t, log.payment_method),
+          [receiptCopy.filterLabel]: getReceiptCheckLabel(log.receipt_checked, language),
+          receipt_checked: log.receipt_checked ? "true" : "false",
+          receipt_checked_at: log.receipt_checked_at ?? "",
           [t.fuelLogs.notes]: log.notes ?? ""
         })),
         "fuel-logs-report"
@@ -680,6 +723,64 @@ export default function FuelLogsPage() {
   };
 
   const avgPriceToday = stats.litresToday > 0 ? stats.fuelSpendToday / stats.litresToday : 0;
+
+  const handleReceiptToggle = useCallback(
+    async (log: FuelLogWithDriver, checked: boolean) => {
+      const logId = String(log.id);
+      const optimisticTimestamp = checked ? new Date().toISOString() : null;
+
+      setTogglingReceiptId(logId);
+      setError(null);
+      setSuccessMessage(null);
+
+      setFuelLogs((current) =>
+        current.map((row) =>
+          String(row.id) === logId
+            ? {
+                ...row,
+                receipt_checked: checked,
+                receipt_checked_at: optimisticTimestamp
+              }
+            : row
+        )
+      );
+
+      try {
+        const updated = await updateFuelLogReceiptCheck(logId, checked);
+        setFuelLogs((current) =>
+          current.map((row) =>
+            String(row.id) === logId
+              ? {
+                  ...row,
+                  receipt_checked: updated.receipt_checked,
+                  receipt_checked_at: updated.receipt_checked_at
+                }
+              : row
+          )
+        );
+        setSuccessMessage(receiptCopy.updated);
+        await refreshCurrentPage(currentPage);
+      } catch (err) {
+        console.error("Fuel logs handleReceiptToggle error:", err);
+        setFuelLogs((current) =>
+          current.map((row) =>
+            String(row.id) === logId
+              ? {
+                  ...row,
+                  receipt_checked: log.receipt_checked,
+                  receipt_checked_at: log.receipt_checked_at
+                }
+              : row
+          )
+        );
+        await refreshCurrentPage(currentPage);
+        setError(err instanceof Error && err.message ? err.message : receiptCopy.error);
+      } finally {
+        setTogglingReceiptId(null);
+      }
+    },
+    [currentPage, receiptCopy.error, receiptCopy.updated, refreshCurrentPage]
+  );
 
   return (
     <>
@@ -766,6 +867,27 @@ export default function FuelLogsPage() {
             </div>
           ))}
         </div>
+      </section>
+
+      <section className="mb-4.5 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <StatCard
+          label={receiptCopy.totalCount}
+          value={formatNumber(receiptSummary.total, language)}
+          helper={language === "th" ? "รวมตามตัวกรองปัจจุบัน" : "Based on the current filters."}
+          icon={<ReceiptText className="h-5 w-5" />}
+        />
+        <StatCard
+          label={receiptCopy.checkedCount}
+          value={formatNumber(receiptSummary.checked, language)}
+          helper={language === "th" ? "ตรวจเทียบใบเสร็จแล้ว" : "Marked as checked against receipt."}
+          icon={<TrendingUp className="h-5 w-5" />}
+        />
+        <StatCard
+          label={receiptCopy.notCheckedCount}
+          value={formatNumber(receiptSummary.notChecked, language)}
+          helper={language === "th" ? "ยังรอตรวจเทียบใบเสร็จ" : "Still pending receipt check."}
+          icon={<AlertTriangle className="h-5 w-5" />}
+        />
       </section>
 
       <section className="mt-5 grid gap-5">
@@ -867,6 +989,7 @@ export default function FuelLogsPage() {
               <div className="md:col-span-3 lg:col-span-2"><label className="form-label">{copy.vehicle}</label><select value={filters.vehicleReg ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, vehicleReg: event.target.value }))} className="form-input bg-white"><option value="">{copy.all}</option>{vehicleOptions.map((vehicleReg) => <option key={vehicleReg} value={vehicleReg}>{vehicleReg}</option>)}</select></div>
               <div className="md:col-span-3 lg:col-span-2"><label className="form-label">{copy.fuelType}</label><select value={filters.fuelType ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, fuelType: event.target.value }))} className="form-input bg-white"><option value="">{copy.all}</option>{fuelTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
               <div className="md:col-span-3 lg:col-span-2"><label className="form-label">{copy.payment}</label><select value={filters.paymentMethod ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, paymentMethod: event.target.value }))} className="form-input bg-white"><option value="">{copy.all}</option>{paymentMethodOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
+              <div className="md:col-span-3 lg:col-span-2"><label className="form-label">{receiptCopy.filterLabel}</label><select value={filters.receiptCheckedStatus ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, receiptCheckedStatus: event.target.value as FuelLogFilters["receiptCheckedStatus"] }))} className="form-input bg-white"><option value="">{copy.all}</option><option value="checked">{receiptCopy.checked}</option><option value="not_checked">{receiptCopy.notChecked}</option></select></div>
               <div className="md:col-span-6 lg:col-span-3"><label className="form-label">{copy.totalCostRange}</label><div className="grid grid-cols-2 gap-2"><input type="number" min="0" step="0.01" value={filters.totalCostMin ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, totalCostMin: event.target.value }))} placeholder={copy.min} className="form-input bg-white" /><input type="number" min="0" step="0.01" value={filters.totalCostMax ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, totalCostMax: event.target.value }))} placeholder={copy.max} className="form-input bg-white" /></div></div>
             </div>
           </div>
@@ -893,8 +1016,10 @@ export default function FuelLogsPage() {
                       <div><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.pricePerLitre}</p><p className="mt-1 text-sm font-medium text-slate-900">{log.price_per_litre != null ? formatCurrency(Number(log.price_per_litre), language) : "-"}</p></div>
                       <div><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.mileage}</p><p className="mt-1 text-sm font-medium text-slate-900">{log.mileage ?? "-"}</p></div>
                       <div><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.location}</p><p className="mt-1 text-sm font-medium text-slate-900">{log.location || "-"}</p></div>
+                      <div><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{receiptCopy.filterLabel}</p><span className={`mt-1 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getReceiptCheckBadgeClass(log.receipt_checked)}`}>{getReceiptCheckLabel(log.receipt_checked, language)}</span></div>
                     </div>
                     <div className="mt-4 flex gap-2">
+                      <button type="button" onClick={() => void handleReceiptToggle(log, !log.receipt_checked)} disabled={togglingReceiptId === String(log.id)} className="btn-secondary min-h-[46px] flex-1 px-4 py-2.5 disabled:opacity-50">{togglingReceiptId === String(log.id) ? t.common.saving : log.receipt_checked ? receiptCopy.markUnchecked : receiptCopy.markChecked}</button>
                       <button type="button" onClick={() => populateForm(log)} className="btn-secondary min-h-[46px] flex-1 px-4 py-2.5">{t.common.edit}</button>
                       <button type="button" onClick={() => void handleDelete(String(log.id))} disabled={deletingId === String(log.id)} className="btn-danger min-h-[46px] flex-1 px-4 py-2.5 disabled:opacity-50">{deletingId === String(log.id) ? t.common.deleting : t.common.delete}</button>
                     </div>
@@ -915,6 +1040,7 @@ export default function FuelLogsPage() {
                           <th className="table-head-cell text-right">{t.fuelLogs.pricePerLitre}</th>
                           <th className="table-head-cell text-right">{t.fuelLogs.mileage}</th>
                           <th className="table-head-cell text-left">{t.fuelLogs.location}</th>
+                          <th className="table-head-cell text-left">{receiptCopy.filterLabel}</th>
                           <th className="table-head-cell text-left">{t.common.action}</th>
                         </tr>
                       </thead>
@@ -929,7 +1055,8 @@ export default function FuelLogsPage() {
                             <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800">{log.price_per_litre != null ? formatCurrency(Number(log.price_per_litre), language) : "-"}</td>
                             <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800">{log.mileage ?? "-"}</td>
                             <td className="table-body-cell min-w-[140px] text-slate-700"><Highlight text={log.location || "-"} query={filters.search ?? ""} /></td>
-                            <td className="table-body-cell"><div className="flex gap-2"><button type="button" onClick={() => populateForm(log)} className="table-action-secondary min-w-[78px]">{t.common.edit}</button><button type="button" onClick={() => void handleDelete(String(log.id))} disabled={deletingId === String(log.id)} className="table-action-danger min-w-[78px] disabled:opacity-50">{deletingId === String(log.id) ? t.common.deleting : t.common.delete}</button></div></td>
+                            <td className="table-body-cell"><span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getReceiptCheckBadgeClass(log.receipt_checked)}`}>{getReceiptCheckLabel(log.receipt_checked, language)}</span></td>
+                            <td className="table-body-cell"><div className="flex gap-2"><button type="button" onClick={() => void handleReceiptToggle(log, !log.receipt_checked)} disabled={togglingReceiptId === String(log.id)} className="table-action-secondary min-w-[118px] disabled:opacity-50">{togglingReceiptId === String(log.id) ? t.common.saving : log.receipt_checked ? receiptCopy.markUnchecked : receiptCopy.markChecked}</button><button type="button" onClick={() => populateForm(log)} className="table-action-secondary min-w-[78px]">{t.common.edit}</button><button type="button" onClick={() => void handleDelete(String(log.id))} disabled={deletingId === String(log.id)} className="table-action-danger min-w-[78px] disabled:opacity-50">{deletingId === String(log.id) ? t.common.deleting : t.common.delete}</button></div></td>
                           </tr>
                         ))}
                       </tbody>

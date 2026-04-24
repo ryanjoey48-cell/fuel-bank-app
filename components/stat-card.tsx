@@ -13,10 +13,10 @@ function StatCardComponent({ label, value, helper, icon, valueVariant = "default
     <div className="surface-card-soft card-metric-shell">
       <div className="card-metric-header">
         <div className="min-w-0 flex-1">
-          <p className="metric-label">{label}</p>
           <p className={valueVariant === "date" ? "metric-value-date" : "metric-value"}>
             {value}
           </p>
+          <p className="metric-label">{label}</p>
         </div>
         <div className="card-metric-icon">
           {icon}

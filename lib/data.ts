@@ -19,6 +19,7 @@ import type {
   FuelLogDaySummary,
   FuelLogFilters,
   FuelLog,
+  FuelLogReceiptSummary,
   FuelLogSortDirection,
   FuelLogSortKey,
   FuelLogWithDriver,
@@ -73,6 +74,138 @@ function logDataError(scope: string, error: unknown, meta?: unknown) {
   }
 
   console.error(scope, serializeError(error));
+}
+
+function getMissingColumnName(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return null;
+  }
+
+  const record = error as Record<string, unknown>;
+  const message = String(record.message ?? record.details ?? record.hint ?? "");
+  const match =
+    message.match(/column "([^"]+)"/i) ||
+    message.match(/'([^']+)' column/i) ||
+    message.match(/Could not find the '([^']+)' column/i) ||
+    message.match(/Could not find the "([^"]+)" column/i);
+
+  return match?.[1] ?? null;
+}
+
+async function writeShipmentWithSchemaFallback({
+  id,
+  payload
+}: {
+  id?: string;
+  payload: Record<string, unknown>;
+}) {
+  const optionalColumns = new Set([
+    "customer_name",
+    "goods_description",
+    "pickup_location",
+    "dropoff_location",
+    "vehicle_type",
+    "standard_km_per_litre",
+    "estimated_fuel_litres",
+    "fuel_price_per_litre",
+    "diesel_price",
+    "estimated_fuel_cost",
+    "fuel_cost",
+    "toll_estimate",
+    "toll_cost",
+    "driver_cost",
+    "subtotal_cost",
+    "margin_percent",
+    "final_price",
+    "quoted_price",
+    "total_distance_km",
+    "total_operational_distance_km",
+    "quoted_distance_km",
+    "estimated_fuel_cost_thb",
+    "cost_per_km_snapshot_thb",
+    "company_id",
+    "vehicle_id"
+  ]);
+
+  let activePayload = { ...payload };
+  const removedColumns: string[] = [];
+
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    console.log("Shipment save payload attempt:", {
+      attempt: attempt + 1,
+      removedColumns,
+      payload: activePayload
+    });
+
+    const result = id
+      ? await supabase.from("shipments").update(activePayload).eq("id", id).select().single()
+      : await supabase.from("shipments").insert(activePayload).select().single();
+
+    if (!result.error) {
+      return result;
+    }
+
+    const missingColumn = getMissingColumnName(result.error);
+    if (missingColumn && optionalColumns.has(missingColumn) && missingColumn in activePayload) {
+      logDataError("saveShipment optional column missing; retrying without it:", result.error, {
+        missingColumn
+      });
+      const { [missingColumn]: _removed, ...nextPayload } = activePayload;
+      activePayload = nextPayload;
+      removedColumns.push(missingColumn);
+      continue;
+    }
+
+    const errorText = `${String(result.error.message ?? "")} ${String(
+      result.error.details ?? ""
+    )} ${String(result.error.hint ?? "")}`.toLowerCase();
+
+    if (
+      activePayload.status &&
+      errorText.includes("shipments_status_check") &&
+      !["Draft", "Quoted", "Accepted", "Assigned"].includes(String(activePayload.status))
+    ) {
+      logDataError("saveShipment status unsupported by DB constraint; retrying with Quoted:", result.error, {
+        status: activePayload.status
+      });
+      activePayload = {
+        ...activePayload,
+        status: activePayload.status === "Cancelled" ? "Draft" : "Quoted"
+      };
+      removedColumns.push("status:new_lifecycle_value");
+      continue;
+    }
+
+    return result;
+  }
+
+  return id
+    ? await supabase.from("shipments").update(activePayload).eq("id", id).select().single()
+    : await supabase.from("shipments").insert(activePayload).select().single();
+}
+
+const LIVE_SHIPMENT_WRITE_COLUMNS = new Set([
+  "job_reference",
+  "shipment_date",
+  "driver_id",
+  "driver",
+  "vehicle_reg",
+  "start_location",
+  "end_location",
+  "estimated_distance_km",
+  "estimated_fuel_cost_thb",
+  "estimated_fuel_cost",
+  "cost_per_km_snapshot_thb",
+  "cost_estimation_status",
+  "cost_estimation_note",
+  "notes",
+  "vehicle_id"
+]);
+
+function pickLiveShipmentPayload(payload: Record<string, unknown>) {
+  return Object.fromEntries(
+    Object.entries(payload).filter(([key]) => LIVE_SHIPMENT_WRITE_COLUMNS.has(key))
+  );
 }
 
 function isMissingColumnError(error: unknown) {
@@ -311,8 +444,9 @@ function resolveShipmentDriverName(
   return linkedDriverName || storedDriverValue || "Unassigned";
 }
 
-const FUEL_LOG_SELECT_COLUMNS =
+const FUEL_LOG_BASE_SELECT_COLUMNS =
   "id, date, driver_id, driver, vehicle_reg, odometer, litres, total_cost, price_per_litre, mileage, location, fuel_type, payment_method, notes, created_at";
+const FUEL_LOG_RECEIPT_SELECT_COLUMNS = `${FUEL_LOG_BASE_SELECT_COLUMNS}, receipt_checked, receipt_checked_at`;
 
 function mapFuelLogRows(
   rows: Array<{
@@ -329,6 +463,8 @@ function mapFuelLogRows(
     location: string;
     fuel_type: string | null;
     payment_method: string | null;
+    receipt_checked?: boolean | null;
+    receipt_checked_at?: string | null;
     notes: string | null;
     created_at?: string;
   }>
@@ -347,8 +483,25 @@ function mapFuelLogRows(
     station: log.location,
     price_per_litre: log.price_per_litre,
     fuel_type: normalizeFuelTypeKey(log.fuel_type) ?? log.fuel_type,
-    payment_method: normalizePaymentMethodKey(log.payment_method) ?? log.payment_method
+    payment_method: normalizePaymentMethodKey(log.payment_method) ?? log.payment_method,
+    receipt_checked: Boolean(log.receipt_checked),
+    receipt_checked_at: log.receipt_checked_at ?? null
   })) as FuelLogWithDriver[];
+}
+
+async function runFuelLogQueryWithReceiptFallback<T>(
+  queryFactory: (columns: string) => PromiseLike<{ data: T | null; error: unknown; count?: number | null }>
+) {
+  const preferredResult = await queryFactory(FUEL_LOG_RECEIPT_SELECT_COLUMNS);
+  if (!preferredResult.error) {
+    return preferredResult;
+  }
+
+  if (!isMissingColumnError(preferredResult.error)) {
+    return preferredResult;
+  }
+
+  return queryFactory(FUEL_LOG_BASE_SELECT_COLUMNS);
 }
 
 function applyFuelLogFilters<TQuery extends { gte: Function; lte: Function; eq: Function; or: Function }>(
@@ -362,6 +515,7 @@ function applyFuelLogFilters<TQuery extends { gte: Function; lte: Function; eq: 
   const vehicleReg = filters.vehicleReg?.trim();
   const fuelType = filters.fuelType?.trim();
   const paymentMethod = filters.paymentMethod?.trim();
+  const receiptCheckedStatus = filters.receiptCheckedStatus?.trim();
   const totalCostMin = filters.totalCostMin?.trim();
   const totalCostMax = filters.totalCostMax?.trim();
 
@@ -382,6 +536,12 @@ function applyFuelLogFilters<TQuery extends { gte: Function; lte: Function; eq: 
   }
   if (paymentMethod) {
     nextQuery = nextQuery.eq("payment_method", paymentMethod);
+  }
+  if (receiptCheckedStatus === "checked") {
+    nextQuery = nextQuery.eq("receipt_checked", true);
+  }
+  if (receiptCheckedStatus === "not_checked") {
+    nextQuery = nextQuery.eq("receipt_checked", false);
   }
   if (totalCostMin) {
     nextQuery = nextQuery.gte("total_cost", Number(totalCostMin));
@@ -788,11 +948,13 @@ export async function saveOilChangeService(payload: {
 
 export async function fetchFuelLogs() {
   return readThroughCache("fuel_logs:all", async () => {
-    const fuelLogQuery = await supabase
-      .from("fuel_logs")
-      .select(FUEL_LOG_SELECT_COLUMNS)
-      .order("date", { ascending: false })
-      .order("id", { ascending: false });
+    const fuelLogQuery = await runFuelLogQueryWithReceiptFallback((columns) =>
+      supabase
+        .from("fuel_logs")
+        .select(columns)
+        .order("date", { ascending: false })
+        .order("id", { ascending: false })
+    );
 
     if (fuelLogQuery.error) {
       logDataError("fetchFuelLogs error:", fuelLogQuery.error);
@@ -801,9 +963,7 @@ export async function fetchFuelLogs() {
 
     console.log("fetchFuelLogs success", { rowCount: (fuelLogQuery.data ?? []).length });
 
-    return mapFuelLogRows(
-      (fuelLogQuery.data ?? []) as Parameters<typeof mapFuelLogRows>[0]
-    );
+    return mapFuelLogRows((fuelLogQuery.data ?? []) as unknown as Parameters<typeof mapFuelLogRows>[0]);
   });
 }
 
@@ -824,16 +984,18 @@ export async function fetchFuelLogsPage({
   const from = (safePage - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  const fuelLogQuery = await applyFuelLogOrdering(
-    applyFuelLogFilters(
-      supabase
-        .from("fuel_logs")
-        .select(FUEL_LOG_SELECT_COLUMNS, { count: "exact" }),
-      filters
-    ),
-    sortKey,
-    sortDirection
-  ).range(from, to);
+  const fuelLogQuery = await runFuelLogQueryWithReceiptFallback((columns) =>
+    applyFuelLogOrdering(
+      applyFuelLogFilters(
+        supabase
+          .from("fuel_logs")
+          .select(columns, { count: "exact" }),
+        filters
+      ),
+      sortKey,
+      sortDirection
+    ).range(from, to)
+  );
 
   if (fuelLogQuery.error) {
     logDataError("fetchFuelLogsPage error:", fuelLogQuery.error, {
@@ -847,7 +1009,7 @@ export async function fetchFuelLogsPage({
   }
 
   return {
-    rows: mapFuelLogRows((fuelLogQuery.data ?? []) as Parameters<typeof mapFuelLogRows>[0]),
+    rows: mapFuelLogRows((fuelLogQuery.data ?? []) as unknown as Parameters<typeof mapFuelLogRows>[0]),
     totalCount: fuelLogQuery.count ?? 0,
     page: safePage,
     pageSize
@@ -861,14 +1023,16 @@ export async function fetchFuelLogsForExport(filters: FuelLogFilters = {}) {
 
   while (true) {
     const to = from + batchSize - 1;
-    const fuelLogQuery = await applyFuelLogFilters(
-      supabase
-        .from("fuel_logs")
-        .select(FUEL_LOG_SELECT_COLUMNS)
-        .order("date", { ascending: false })
-        .order("id", { ascending: false }),
-      filters
-    ).range(from, to);
+    const fuelLogQuery = await runFuelLogQueryWithReceiptFallback((columns) =>
+      applyFuelLogFilters(
+        supabase
+          .from("fuel_logs")
+          .select(columns)
+          .order("date", { ascending: false })
+          .order("id", { ascending: false }),
+        filters
+      ).range(from, to)
+    );
 
     if (fuelLogQuery.error) {
       logDataError("fetchFuelLogsForExport error:", fuelLogQuery.error, {
@@ -879,7 +1043,7 @@ export async function fetchFuelLogsForExport(filters: FuelLogFilters = {}) {
       throw fuelLogQuery.error;
     }
 
-    const rows = (fuelLogQuery.data ?? []) as Parameters<typeof mapFuelLogRows>[0];
+    const rows = (fuelLogQuery.data ?? []) as unknown as Parameters<typeof mapFuelLogRows>[0];
     allRows.push(...rows);
 
     if (rows.length < batchSize) {
@@ -890,6 +1054,45 @@ export async function fetchFuelLogsForExport(filters: FuelLogFilters = {}) {
   }
 
   return mapFuelLogRows(allRows);
+}
+
+export async function fetchFuelLogReceiptSummary(filters: FuelLogFilters = {}) {
+  const baseFilters: FuelLogFilters = {
+    ...filters,
+    receiptCheckedStatus: ""
+  };
+
+  const totalQuery = await applyFuelLogFilters(
+    supabase.from("fuel_logs").select("id", { count: "exact", head: true }),
+    baseFilters
+  );
+
+  if (totalQuery.error) {
+    logDataError("fetchFuelLogReceiptSummary total error:", totalQuery.error, { filters: baseFilters });
+    throw totalQuery.error;
+  }
+
+  const checkedQuery = await applyFuelLogFilters(
+    supabase.from("fuel_logs").select("id", { count: "exact", head: true }),
+    {
+      ...baseFilters,
+      receiptCheckedStatus: "checked"
+    }
+  );
+
+  if (checkedQuery.error) {
+    logDataError("fetchFuelLogReceiptSummary checked error:", checkedQuery.error, { filters: baseFilters });
+    throw checkedQuery.error;
+  }
+
+  const total = totalQuery.count ?? 0;
+  const checked = checkedQuery.count ?? 0;
+
+  return {
+    total,
+    checked,
+    notChecked: Math.max(total - checked, 0)
+  } satisfies FuelLogReceiptSummary;
 }
 
 export async function fetchFuelLogTodayRows(currentDate: string) {
@@ -993,7 +1196,7 @@ export async function fetchFuelLogDuplicateMatches({
 }) {
   let query = supabase
     .from("fuel_logs")
-    .select(FUEL_LOG_SELECT_COLUMNS)
+    .select(FUEL_LOG_RECEIPT_SELECT_COLUMNS)
     .eq("date", date)
     .ilike("vehicle_reg", vehicleReg.trim())
     .order("id", { ascending: false })
@@ -1016,7 +1219,7 @@ export async function fetchTransfers() {
   const modernQuery = await supabase
     .from("bank_transfers")
     .select(
-      "id, date, driver_id, vehicle_reg, amount, transfer_type, notes, fuel_log_id, receipt_status, created_at, user_id"
+      "id, date, driver_id, vehicle_reg, amount, transfer_type, notes, receipt_status, created_at, user_id"
     )
     .order("date", { ascending: false })
     .order("id", { ascending: false });
@@ -1033,7 +1236,6 @@ export async function fetchTransfers() {
       amount: number;
       transfer_type: string;
       notes: string | null;
-      fuel_log_id?: string | null;
       receipt_status?: string | null;
       created_at: string;
       user_id: string;
@@ -1047,7 +1249,6 @@ export async function fetchTransfers() {
       ),
       vehicle_reg: normalizeVehicleRegistration(transfer.vehicle_reg),
       transfer_type: normalizeTransferTypeKey(transfer.transfer_type) ?? transfer.transfer_type,
-      fuel_log_id: transfer.fuel_log_id ?? null,
       receipt_status: normalizeTransferReceiptStatus(transfer.receipt_status)
     })) as BankTransferWithDriver[];
   }
@@ -1094,7 +1295,6 @@ export async function fetchTransfers() {
     amount: Number(transfer.amount || 0),
     transfer_type: normalizeTransferTypeKey(transfer.transfer_type) ?? transfer.transfer_type,
     notes: transfer.notes,
-    fuel_log_id: null,
     receipt_status: "pending",
     created_at: "",
     user_id: ""
@@ -1207,6 +1407,7 @@ export async function fetchShipments() {
     goods_description: shipment.goods_description ?? null,
     pickup_location: shipment.pickup_location ?? shipment.start_location,
     dropoff_location: shipment.dropoff_location ?? shipment.end_location,
+    vehicle_type: shipment.vehicle_type ?? null,
     standard_km_per_litre: shipment.standard_km_per_litre ?? null,
     estimated_fuel_litres: shipment.estimated_fuel_litres ?? null,
     fuel_price_per_litre: shipment.fuel_price_per_litre ?? shipment.diesel_price ?? null,
@@ -1223,11 +1424,23 @@ export async function fetchShipments() {
       null,
     toll_estimate: shipment.toll_estimate ?? shipment.toll_cost ?? 0,
     toll_cost: shipment.toll_cost ?? shipment.toll_estimate ?? 0,
-    other_costs: shipment.other_costs ?? 0,
     driver_cost: shipment.driver_cost ?? 0,
     subtotal_cost: shipment.subtotal_cost ?? null,
+    margin_percent: shipment.margin_percent ?? null,
     final_price: shipment.final_price ?? shipment.quoted_price ?? shipment.subtotal_cost ?? null,
     quoted_price: shipment.quoted_price ?? shipment.final_price ?? shipment.subtotal_cost ?? null,
+    total_distance_km: shipment.total_distance_km ?? shipment.estimated_distance_km ?? null,
+    total_operational_distance_km:
+      shipment.total_operational_distance_km ??
+      shipment.total_distance_km ??
+      shipment.estimated_distance_km ??
+      null,
+    quoted_distance_km:
+      shipment.quoted_distance_km ??
+      shipment.total_operational_distance_km ??
+      shipment.total_distance_km ??
+      shipment.estimated_distance_km ??
+      null,
     status: shipment.status ?? "Draft",
     driver: resolveShipmentDriverName(shipment, driverLookup),
     vehicle_reg: normalizeVehicleRegistration(shipment.vehicle_reg)
@@ -1331,6 +1544,8 @@ export async function saveFuelLog(payload: Partial<FuelLog>) {
     location: rest.location ?? rest.station,
     fuel_type: normalizeFuelTypeKey(rest.fuel_type) ?? rest.fuel_type,
     payment_method: normalizePaymentMethodKey(rest.payment_method) ?? rest.payment_method,
+    receipt_checked: rest.receipt_checked,
+    receipt_checked_at: rest.receipt_checked_at ?? null,
     notes: rest.notes ?? null
   });
 
@@ -1357,8 +1572,35 @@ export async function saveFuelLog(payload: Partial<FuelLog>) {
       Number((result.data as FuelLog).odometer || 0),
     station: (result.data as { location?: string }).location,
     location: (result.data as { location?: string }).location,
-    price_per_litre: (result.data as { price_per_litre?: number | null }).price_per_litre ?? null
+    price_per_litre: (result.data as { price_per_litre?: number | null }).price_per_litre ?? null,
+    receipt_checked: Boolean((result.data as { receipt_checked?: boolean | null }).receipt_checked),
+    receipt_checked_at: (result.data as { receipt_checked_at?: string | null }).receipt_checked_at ?? null
   } as FuelLog;
+}
+
+export async function updateFuelLogReceiptCheck(id: string, checked: boolean) {
+  const payload = {
+    receipt_checked: checked,
+    receipt_checked_at: checked ? new Date().toISOString() : null
+  };
+
+  const result = await supabase.from("fuel_logs").update(payload).eq("id", id).select().single();
+
+  if (result.error) {
+    logDataError("updateFuelLogReceiptCheck error:", result.error, { id, checked });
+    throw new Error(
+      result.error.message ||
+        result.error.details ||
+        result.error.hint ||
+        "Unable to update receipt check status."
+    );
+  }
+
+  dispatchDataChange("fuel_logs");
+  return {
+    receipt_checked: Boolean((result.data as { receipt_checked?: boolean | null }).receipt_checked),
+    receipt_checked_at: (result.data as { receipt_checked_at?: string | null }).receipt_checked_at ?? null
+  };
 }
 
 export async function deleteFuelLog(id: string) {
@@ -1376,25 +1618,7 @@ export async function saveTransfer(
   payload: Partial<BankTransfer> & { transfer_date?: string }
 ) {
   const { id, ...rest } = payload;
-  const fuelLogs = await fetchFuelLogs();
-  const matchedFuelLog =
-    rest.fuel_log_id != null
-      ? fuelLogs.find((log) => String(log.id) === String(rest.fuel_log_id)) ?? null
-      : findTransferFuelLogMatch(fuelLogs, {
-          id,
-          date: rest.transfer_date ?? rest.date,
-          vehicle_reg: rest.vehicle_reg,
-          amount: rest.amount
-        });
-  const matchedFuelAmount = Number(matchedFuelLog?.total_cost || 0);
-  const transferAmount = Number(rest.amount || 0);
-  const inferredReceiptStatus =
-    rest.receipt_status ??
-    (matchedFuelLog
-      ? transferAmount > 0 && transferAmount >= matchedFuelAmount
-        ? "approved"
-        : "submitted"
-      : "pending");
+  const receiptStatus = normalizeTransferReceiptStatus(rest.receipt_status ?? "pending");
   const modernPayload = stripUndefined({
     date: rest.transfer_date ?? rest.date,
     driver_id: rest.driver_id,
@@ -1402,8 +1626,7 @@ export async function saveTransfer(
     amount: rest.amount,
     transfer_type: normalizeTransferTypeKey(rest.transfer_type) ?? rest.transfer_type,
     notes: rest.notes ?? null,
-    fuel_log_id: matchedFuelLog?.id ?? rest.fuel_log_id ?? null,
-    receipt_status: normalizeTransferReceiptStatus(inferredReceiptStatus)
+    receipt_status: receiptStatus
   });
 
   const modernResult = id
@@ -1415,13 +1638,8 @@ export async function saveTransfer(
     return {
       ...(modernResult.data as BankTransfer),
       driver: "",
-      fuel_log_id:
-        (modernResult.data as { fuel_log_id?: string | null }).fuel_log_id ??
-        matchedFuelLog?.id ??
-        null,
       receipt_status: normalizeTransferReceiptStatus(
-        (modernResult.data as { receipt_status?: string | null }).receipt_status ??
-          inferredReceiptStatus
+        (modernResult.data as { receipt_status?: string | null }).receipt_status ?? receiptStatus
       )
     } as BankTransfer;
   }
@@ -1469,8 +1687,7 @@ export async function saveTransfer(
     ...(legacyResult.data as BankTransfer),
     driver: driverName,
     date: String((legacyResult.data as { transfer_date?: string }).transfer_date ?? rest.transfer_date ?? rest.date ?? ""),
-    fuel_log_id: matchedFuelLog?.id ?? null,
-    receipt_status: normalizeTransferReceiptStatus(inferredReceiptStatus)
+    receipt_status: receiptStatus
   } as BankTransfer;
 }
 
@@ -1580,8 +1797,6 @@ export async function saveWeeklyMileage(payload: Partial<WeeklyMileageEntry>) {
 export async function saveShipment(payload: Partial<Shipment>) {
   const { id, ...rest } = payload;
   const shipmentRecord = stripUndefined(rest as Record<string, unknown>);
-  const shipmentIdValue =
-    typeof shipmentRecord.shipment_id === "string" ? shipmentRecord.shipment_id.trim() : "";
   const jobReferenceValue =
     typeof shipmentRecord.job_reference === "string" ? shipmentRecord.job_reference.trim() : "";
   const driverIdValue =
@@ -1589,40 +1804,44 @@ export async function saveShipment(payload: Partial<Shipment>) {
   const vehicleIdValue =
     typeof shipmentRecord.vehicle_id === "string" ? shipmentRecord.vehicle_id.trim() : "";
   const driverText = typeof shipmentRecord.driver === "string" ? shipmentRecord.driver.trim() : "";
-  const vehicleText =
-    typeof shipmentRecord.vehicle === "string" ? shipmentRecord.vehicle.trim() : "";
-  const assignedVehicleText =
-    typeof shipmentRecord.assigned_vehicle === "string"
-      ? shipmentRecord.assigned_vehicle.trim()
-      : "";
   const vehicleRegText =
     typeof shipmentRecord.vehicle_reg === "string" ? shipmentRecord.vehicle_reg.trim() : "";
   const notesText =
     typeof shipmentRecord.notes === "string" ? shipmentRecord.notes.trim() : shipmentRecord.notes;
-  const shipmentPayload = stripUndefined({
-    shipment_id: shipmentIdValue || undefined,
-    job_reference: jobReferenceValue || shipmentIdValue || undefined,
-    customer_name:
-      typeof shipmentRecord.customer_name === "string"
-        ? shipmentRecord.customer_name.trim() || null
-        : shipmentRecord.customer_name,
-    goods_description:
-      typeof shipmentRecord.goods_description === "string"
-        ? shipmentRecord.goods_description.trim() || null
-        : shipmentRecord.goods_description,
+  const driverName = driverIdValue
+    ? (await fetchDrivers()).find((driver) => String(driver.id) === driverIdValue)?.name ?? ""
+    : driverText;
+  const unsupportedDetails = [
+    typeof shipmentRecord.customer_name === "string" && shipmentRecord.customer_name.trim()
+      ? `Customer: ${shipmentRecord.customer_name.trim()}`
+      : "",
+    typeof shipmentRecord.goods_description === "string" && shipmentRecord.goods_description.trim()
+      ? `Job description: ${shipmentRecord.goods_description.trim()}`
+      : "",
+    typeof shipmentRecord.pickup_location === "string" && shipmentRecord.pickup_location.trim()
+      ? `Pickup: ${shipmentRecord.pickup_location.trim()}`
+      : "",
+    typeof shipmentRecord.dropoff_location === "string" && shipmentRecord.dropoff_location.trim()
+      ? `Main drop-off: ${shipmentRecord.dropoff_location.trim()}`
+      : "",
+    shipmentRecord.fuel_price_per_litre != null
+      ? `Fuel price per litre: ${shipmentRecord.fuel_price_per_litre}`
+      : "",
+    shipmentRecord.toll_estimate != null ? `Tolls: ${shipmentRecord.toll_estimate}` : "",
+    shipmentRecord.driver_cost != null ? `Driver cost: ${shipmentRecord.driver_cost}` : "",
+    shipmentRecord.quoted_price != null
+      ? `System recommended quote: ${shipmentRecord.quoted_price}`
+      : "",
+    shipmentRecord.final_price != null ? `Final quote: ${shipmentRecord.final_price}` : "",
+    shipmentRecord.status != null ? `Requested status: ${shipmentRecord.status}` : "",
+    shipmentRecord.vehicle_type != null ? `Vehicle type: ${shipmentRecord.vehicle_type}` : ""
+  ].filter(Boolean);
+
+  const shipmentPayload = stripUndefined(pickLiveShipmentPayload({
+    job_reference: jobReferenceValue || undefined,
     shipment_date: shipmentRecord.shipment_date,
-    driver: driverText || undefined,
-    vehicle: vehicleText || assignedVehicleText || vehicleRegText || undefined,
-    assigned_vehicle: assignedVehicleText || vehicleText || vehicleRegText || undefined,
-    vehicle_reg: vehicleRegText || assignedVehicleText || vehicleText || undefined,
-    pickup_location:
-      typeof shipmentRecord.pickup_location === "string"
-        ? shipmentRecord.pickup_location.trim()
-        : shipmentRecord.pickup_location,
-    dropoff_location:
-      typeof shipmentRecord.dropoff_location === "string"
-        ? shipmentRecord.dropoff_location.trim()
-        : shipmentRecord.dropoff_location,
+    driver: driverName || "Unassigned",
+    vehicle_reg: vehicleRegText || null,
     start_location:
       typeof shipmentRecord.start_location === "string"
         ? shipmentRecord.start_location.trim()
@@ -1631,67 +1850,23 @@ export async function saveShipment(payload: Partial<Shipment>) {
       typeof shipmentRecord.end_location === "string"
         ? shipmentRecord.end_location.trim()
         : shipmentRecord.end_location,
-    standard_km_per_litre: shipmentRecord.standard_km_per_litre,
-    estimated_fuel_litres: shipmentRecord.estimated_fuel_litres,
-    fuel_price_per_litre:
-      shipmentRecord.fuel_price_per_litre ?? shipmentRecord.diesel_price,
-    diesel_price:
-      shipmentRecord.diesel_price ?? shipmentRecord.fuel_price_per_litre,
     estimated_fuel_cost:
       shipmentRecord.estimated_fuel_cost ??
-      shipmentRecord.fuel_cost ??
       shipmentRecord.estimated_fuel_cost_thb,
-    fuel_cost:
-      shipmentRecord.fuel_cost ??
-      shipmentRecord.estimated_fuel_cost ??
-      shipmentRecord.estimated_fuel_cost_thb,
-    toll_estimate: shipmentRecord.toll_estimate ?? shipmentRecord.toll_cost,
-    toll_cost: shipmentRecord.toll_cost ?? shipmentRecord.toll_estimate,
-    other_costs: shipmentRecord.other_costs,
-    driver_cost: shipmentRecord.driver_cost,
-    subtotal_cost: shipmentRecord.subtotal_cost,
-    final_price: shipmentRecord.final_price ?? shipmentRecord.quoted_price,
-    quoted_price: shipmentRecord.quoted_price ?? shipmentRecord.final_price,
-    status: shipmentRecord.status,
-    notes: notesText || null,
+    notes:
+      [notesText, unsupportedDetails.length ? unsupportedDetails.join("\n") : ""]
+        .filter(Boolean)
+        .join("\n") || null,
     estimated_distance_km: shipmentRecord.estimated_distance_km,
     estimated_fuel_cost_thb: shipmentRecord.estimated_fuel_cost_thb,
     cost_per_km_snapshot_thb: shipmentRecord.cost_per_km_snapshot_thb,
     cost_estimation_status: shipmentRecord.cost_estimation_status,
     cost_estimation_note: shipmentRecord.cost_estimation_note,
-    company_id: shipmentRecord.company_id,
     ...(isUuid(driverIdValue) ? { driver_id: driverIdValue } : {}),
     ...(isUuid(vehicleIdValue) ? { vehicle_id: vehicleIdValue } : {})
-  });
+  }));
 
-  if (shipmentIdValue) {
-    const duplicateQuery = await supabase
-      .from("shipments")
-      .select("*")
-      .eq("shipment_id", shipmentIdValue)
-      .maybeSingle();
-
-    if (duplicateQuery.error) {
-      logDataError("saveShipment duplicate check error:", duplicateQuery.error, {
-        column: "shipment_id",
-        value: shipmentIdValue
-      });
-
-      throw new Error(
-        duplicateQuery.error.message ||
-          duplicateQuery.error.details ||
-          duplicateQuery.error.hint ||
-          "Unable to validate shipment reference."
-      );
-    }
-
-    const existingShipment = duplicateQuery.data as Shipment | null;
-    console.log("Duplicate check result:", existingShipment);
-
-    if (existingShipment && (!id || String(existingShipment.id) !== String(id))) {
-      throw new Error("DUPLICATE_SHIPMENT_REFERENCE");
-    }
-  } else if (jobReferenceValue) {
+  if (jobReferenceValue) {
     const duplicateQuery = await supabase
       .from("shipments")
       .select("*")
@@ -1720,11 +1895,10 @@ export async function saveShipment(payload: Partial<Shipment>) {
     }
   }
 
-  console.log("Shipment insert payload:", shipmentPayload);
-
-  const { data, error } = id
-    ? await supabase.from("shipments").update(shipmentPayload).eq("id", id).select().single()
-    : await supabase.from("shipments").insert(shipmentPayload).select().single();
+  const { data, error } = await writeShipmentWithSchemaFallback({
+    id,
+    payload: shipmentPayload
+  });
 
   if (error) {
     logDataError("saveShipment error:", error, shipmentPayload);

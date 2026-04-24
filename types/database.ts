@@ -72,6 +72,8 @@ export type FuelLog = {
   location: string;
   fuel_type: string | null;
   payment_method: string | null;
+  receipt_checked: boolean;
+  receipt_checked_at: string | null;
   notes: string | null;
   created_at: string;
   user_id: string;
@@ -86,7 +88,6 @@ export type BankTransfer = {
   amount: number;
   transfer_type: string;
   notes: string | null;
-  fuel_log_id?: string | null;
   receipt_status?: "pending" | "submitted" | "approved" | null;
   created_at: string;
   user_id: string;
@@ -105,6 +106,7 @@ export type FuelLogFilters = {
   vehicleReg?: string;
   fuelType?: string;
   paymentMethod?: string;
+  receiptCheckedStatus?: "" | "checked" | "not_checked";
   totalCostMin?: string;
   totalCostMax?: string;
 };
@@ -121,6 +123,12 @@ export type FuelLogDaySummary = {
   spend: number;
   litres: number;
   entries: number;
+};
+
+export type FuelLogReceiptSummary = {
+  total: number;
+  checked: number;
+  notChecked: number;
 };
 
 export type BankTransferWithDriver = BankTransfer;
@@ -147,12 +155,15 @@ export type Shipment = {
   fuel_cost?: number | null;
   toll_estimate?: number | null;
   toll_cost?: number | null;
-  other_costs?: number | null;
   driver_cost?: number | null;
   subtotal_cost?: number | null;
+  margin_percent?: number | null;
   final_price?: number | null;
   quoted_price?: number | null;
-  status?: "Draft" | "Quoted" | "Accepted" | "Assigned" | null;
+  total_distance_km?: number | null;
+  total_operational_distance_km?: number | null;
+  quoted_distance_km?: number | null;
+  status?: "Draft" | "Quoted" | "Confirmed" | "In Progress" | "Delivered" | "Completed" | "Cancelled" | "Accepted" | "Assigned" | null;
   driver_id: string | null;
   driver: string;
   vehicle_reg: string | null;
