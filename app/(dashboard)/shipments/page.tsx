@@ -63,9 +63,8 @@ const LEGACY_STATUS_OPTIONS = [
 const STATUS_OPTIONS = [
   { value: "Draft" },
   { value: "Quoted" },
-  { value: "Confirmed" },
+  { value: "Approved" },
   { value: "In Progress" },
-  { value: "Delivered" },
   { value: "Completed" },
   { value: "Cancelled" }
 ] as const;
@@ -448,12 +447,10 @@ function getStatusLabel(value: string | null | undefined, labels: ShipmentTransl
 
 function getStatusBadgeClass(status: string | null | undefined) {
   switch (status) {
-    case "Confirmed":
+    case "Approved":
       return "border-sky-200 bg-sky-50 text-sky-700";
     case "In Progress":
       return "border-indigo-200 bg-indigo-50 text-indigo-700";
-    case "Delivered":
-      return "border-teal-200 bg-teal-50 text-teal-700";
     case "Completed":
       return "border-emerald-200 bg-emerald-50 text-emerald-700";
     case "Cancelled":
@@ -2174,7 +2171,7 @@ export default function ShipmentsPage() {
         const shipmentDateValue = toDateInputValue(normalized.shipmentDate);
         return (
           shipmentDateValue === todayKey ||
-          ["Draft", "Quoted", "Confirmed", "In Progress", "Delivered"].includes(
+          ["Draft", "Quoted", "Approved", "In Progress"].includes(
             normalized.status
           )
         );

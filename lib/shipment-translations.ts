@@ -153,9 +153,8 @@ export const shipmentTranslations = {
     statusLabels: {
       Draft: "Draft",
       Quoted: "Quoted",
-      Confirmed: "Confirmed",
+      Approved: "Approved",
       "In Progress": "In Progress",
-      Delivered: "Delivered",
       Completed: "Completed",
       Cancelled: "Cancelled"
     },
@@ -441,9 +440,8 @@ export const shipmentTranslations = {
     statusLabels: {
       Draft: "แบบร่าง",
       Quoted: "เสนอราคาแล้ว",
-      Confirmed: "ยืนยันแล้ว",
+      Approved: "อนุมัติแล้ว",
       "In Progress": "กำลังดำเนินการ",
-      Delivered: "ส่งมอบแล้ว",
       Completed: "เสร็จสิ้น",
       Cancelled: "ยกเลิก"
     },

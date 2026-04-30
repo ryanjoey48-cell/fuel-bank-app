@@ -160,17 +160,23 @@ async function writeShipmentWithSchemaFallback({
       result.error.details ?? ""
     )} ${String(result.error.hint ?? "")}`.toLowerCase();
 
-    if (
-      activePayload.status &&
-      errorText.includes("shipments_status_check") &&
-      !["Draft", "Quoted", "Accepted", "Assigned"].includes(String(activePayload.status))
-    ) {
+    if (activePayload.status && errorText.includes("shipments_status_check")) {
+      const legacyStatus =
+        activePayload.status === "Approved"
+          ? "Accepted"
+          : activePayload.status === "In Progress"
+            ? "Assigned"
+            : activePayload.status === "Cancelled"
+              ? "Draft"
+              : ["Draft", "Quoted", "Accepted", "Assigned"].includes(String(activePayload.status))
+                ? activePayload.status
+                : "Quoted";
       logDataError("saveShipment status unsupported by DB constraint; retrying with Quoted:", result.error, {
         status: activePayload.status
       });
       activePayload = {
         ...activePayload,
-        status: activePayload.status === "Cancelled" ? "Draft" : "Quoted"
+        status: legacyStatus
       };
       removedColumns.push("status:new_lifecycle_value");
       continue;
@@ -569,6 +575,96 @@ function applyFuelLogFilters<TQuery extends { gte: Function; lte: Function; eq: 
   return nextQuery;
 }
 
+function usesClientFuelLogFilters(filters: FuelLogFilters = {}) {
+  return Boolean(filters.duplicatesOnly || filters.missingMileageOnly);
+}
+
+function getFuelLogDuplicateKey(log: Pick<FuelLogWithDriver, "date" | "driver_id" | "litres" | "total_cost">) {
+  return [
+    String(log.driver_id || ""),
+    log.date,
+    Number(log.litres || 0).toFixed(2),
+    Number(log.total_cost || 0).toFixed(2)
+  ].join("::");
+}
+
+function isFuelLogMissingMileage(log: Pick<FuelLogWithDriver, "mileage">) {
+  return log.mileage == null || Number(log.mileage) <= 0;
+}
+
+function applyClientFuelLogFilters(rows: FuelLogWithDriver[], filters: FuelLogFilters = {}) {
+  let nextRows = rows;
+
+  if (filters.missingMileageOnly) {
+    nextRows = nextRows.filter(isFuelLogMissingMileage);
+  }
+
+  if (filters.duplicatesOnly) {
+    const counts = new Map<string, number>();
+    nextRows.forEach((log) => {
+      const key = getFuelLogDuplicateKey(log);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    });
+    nextRows = nextRows.filter((log) => (counts.get(getFuelLogDuplicateKey(log)) ?? 0) > 1);
+  }
+
+  return nextRows;
+}
+
+function sortFuelLogRows(
+  rows: FuelLogWithDriver[],
+  sortKey: FuelLogSortKey,
+  sortDirection: FuelLogSortDirection
+) {
+  const direction = sortDirection === "asc" ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const left = sortKey === "date" ? new Date(a.date).getTime() : Number(a[sortKey] || 0);
+    const right = sortKey === "date" ? new Date(b.date).getTime() : Number(b[sortKey] || 0);
+    if (left === right) return String(b.id).localeCompare(String(a.id));
+    return left > right ? direction : -direction;
+  });
+}
+
+async function fetchAllFilteredFuelLogRows(filters: FuelLogFilters = {}) {
+  const batchSize = 1000;
+  const allRows: Parameters<typeof mapFuelLogRows>[0] = [];
+  let from = 0;
+
+  while (true) {
+    const to = from + batchSize - 1;
+    const fuelLogQuery = await runFuelLogQueryWithReceiptFallback((columns) =>
+      applyFuelLogFilters(
+        supabase
+          .from("fuel_logs")
+          .select(columns)
+          .order("date", { ascending: false })
+          .order("id", { ascending: false }),
+        filters
+      ).range(from, to)
+    );
+
+    if (fuelLogQuery.error) {
+      logDataError("fetchAllFilteredFuelLogRows error:", fuelLogQuery.error, {
+        filters,
+        from,
+        to
+      });
+      throw fuelLogQuery.error;
+    }
+
+    const rows = (fuelLogQuery.data ?? []) as unknown as Parameters<typeof mapFuelLogRows>[0];
+    allRows.push(...rows);
+
+    if (rows.length < batchSize) {
+      break;
+    }
+
+    from += batchSize;
+  }
+
+  return mapFuelLogRows(allRows);
+}
+
 function applyFuelLogOrdering<TQuery extends { order: Function }>(
   query: TQuery,
   sortKey: FuelLogSortKey,
@@ -810,9 +906,7 @@ export async function saveOilChangeService(payload: {
   console.log("incoming payload", payload);
   const serviceDate = payload.serviceDate?.trim();
   const serviceOdometer = Math.trunc(Number(payload.serviceOdometer));
-  const intervalKm = Math.trunc(
-    Number(payload.intervalKm || getOilChangeIntervalForVehicleType(payload.vehicleType) || 30000)
-  );
+  const intervalKm = Math.trunc(Number(getOilChangeIntervalForVehicleType(payload.vehicleType) || 30000));
 
   try {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(serviceDate)) {
@@ -984,6 +1078,20 @@ export async function fetchFuelLogsPage({
   const from = (safePage - 1) * pageSize;
   const to = from + pageSize - 1;
 
+  if (usesClientFuelLogFilters(filters)) {
+    const filteredRows = sortFuelLogRows(
+      applyClientFuelLogFilters(await fetchAllFilteredFuelLogRows(filters), filters),
+      sortKey,
+      sortDirection
+    );
+    return {
+      rows: filteredRows.slice(from, to + 1),
+      totalCount: filteredRows.length,
+      page: safePage,
+      pageSize
+    } satisfies PaginatedFuelLogsResult;
+  }
+
   const fuelLogQuery = await runFuelLogQueryWithReceiptFallback((columns) =>
     applyFuelLogOrdering(
       applyFuelLogFilters(
@@ -1017,6 +1125,10 @@ export async function fetchFuelLogsPage({
 }
 
 export async function fetchFuelLogsForExport(filters: FuelLogFilters = {}) {
+  if (usesClientFuelLogFilters(filters)) {
+    return applyClientFuelLogFilters(await fetchAllFilteredFuelLogRows(filters), filters);
+  }
+
   const batchSize = 1000;
   const allRows: Parameters<typeof mapFuelLogRows>[0] = [];
   let from = 0;
@@ -1061,6 +1173,16 @@ export async function fetchFuelLogReceiptSummary(filters: FuelLogFilters = {}) {
     ...filters,
     receiptCheckedStatus: ""
   };
+
+  if (usesClientFuelLogFilters(baseFilters)) {
+    const rows = applyClientFuelLogFilters(await fetchAllFilteredFuelLogRows(baseFilters), baseFilters);
+    const checked = rows.filter((log) => log.receipt_checked).length;
+    return {
+      total: rows.length,
+      checked,
+      notChecked: Math.max(rows.length - checked, 0)
+    } satisfies FuelLogReceiptSummary;
+  }
 
   const totalQuery = await applyFuelLogFilters(
     supabase.from("fuel_logs").select("id", { count: "exact", head: true }),
@@ -1187,10 +1309,12 @@ export async function fetchFuelLogComparisonEntry({
 
 export async function fetchFuelLogDuplicateMatches({
   date,
+  driverId,
   vehicleReg,
   excludeId
 }: {
   date: string;
+  driverId?: string;
   vehicleReg: string;
   excludeId?: string;
 }) {
@@ -1198,9 +1322,10 @@ export async function fetchFuelLogDuplicateMatches({
     .from("fuel_logs")
     .select(FUEL_LOG_RECEIPT_SELECT_COLUMNS)
     .eq("date", date)
-    .ilike("vehicle_reg", vehicleReg.trim())
     .order("id", { ascending: false })
     .limit(10);
+
+  query = driverId ? query.eq("driver_id", driverId) : query.ilike("vehicle_reg", vehicleReg.trim());
 
   if (excludeId) {
     query = query.neq("id", excludeId);
@@ -1208,7 +1333,7 @@ export async function fetchFuelLogDuplicateMatches({
 
   const result = await query;
   if (result.error) {
-    logDataError("fetchFuelLogDuplicateMatches error:", result.error, { date, vehicleReg, excludeId });
+    logDataError("fetchFuelLogDuplicateMatches error:", result.error, { date, driverId, vehicleReg, excludeId });
     throw result.error;
   }
 

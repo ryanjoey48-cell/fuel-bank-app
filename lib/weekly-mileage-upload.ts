@@ -234,45 +234,45 @@ export function validateMileageRows(
     const blockingIssues: string[] = [];
     const warnings: string[] = [];
 
-    if (!row.week_ending) blockingIssues.push("Week ending is required.");
-    if (!row.driver_id) blockingIssues.push("Driver selection is required before saving.");
-    if (!row.vehicle_reg) blockingIssues.push("Vehicle reg is required.");
+    if (!row.week_ending) blockingIssues.push("weekEndingRequired");
+    if (!row.driver_id) blockingIssues.push("driverRequired");
+    if (!row.vehicle_reg) blockingIssues.push("vehicleRequired");
     if (row.vehicle_reg && !isLikelyVehicleReg(row.vehicle_reg)) {
-      warnings.push("Vehicle reg format looks unusual. Check that OCR did not mix columns.");
+      warnings.push("vehicleFormatWarning");
     }
 
     const odometer = normalizeOdometerInput(row.odometer_reading);
 
     if (!odometer.corrected) {
-      blockingIssues.push("Odometer reading is required.");
+      blockingIssues.push("odometerRequired");
     } else if (odometer.numeric == null) {
-      blockingIssues.push("Odometer reading must be numeric.");
+      blockingIssues.push("odometerNumeric");
     } else if (!/^\d{5,7}$/.test(String(odometer.numeric))) {
-      warnings.push("Odometer should usually be a 5 to 7 digit number.");
+      warnings.push("odometerDigits");
     }
 
     if (odometer.hadLetters && odometer.numeric != null) {
-      warnings.push("OCR corrected letters inside the odometer reading.");
+      warnings.push("odometerCorrected");
     }
 
     if (odometer.numeric != null && odometer.numeric < MIN_ODOMETER) {
-      warnings.push("Odometer looks unusually small.");
+      warnings.push("odometerSmall");
     }
 
     if (odometer.numeric != null && odometer.numeric > MAX_ODOMETER) {
-      warnings.push("Odometer looks unusually large.");
+      warnings.push("odometerLarge");
     }
 
     if (row.duplicate_with_existing) {
       if (row.duplicate_resolution === "keep-both") {
-        warnings.push("Keep both cannot be saved because the database prevents exact duplicate vehicle/week rows.");
+        warnings.push("duplicateKeepBoth");
       } else {
-        warnings.push("Duplicate already exists for this vehicle and week.");
+        warnings.push("duplicateExisting");
       }
     }
 
     if (row.duplicate_with_upload) {
-      warnings.push("Duplicate also appears in this upload batch.");
+      warnings.push("duplicateUpload");
     }
 
     const vehicleHistory = historyByVehicle.get(normalizeVehicleReg(row.vehicle_reg)) ?? [];
@@ -281,7 +281,7 @@ export function validateMileageRows(
       .sort((a, b) => new Date(b.week_ending).getTime() - new Date(a.week_ending).getTime())[0];
 
     if (previousEntry && odometer.numeric != null && odometer.numeric < Number(previousEntry.mileage ?? 0)) {
-      blockingIssues.push("Odometer is lower than the previous saved reading for this vehicle.");
+      blockingIssues.push("odometerLower");
     }
 
     if (
@@ -290,7 +290,7 @@ export function validateMileageRows(
       odometer.numeric >= Number(previousEntry.mileage ?? 0) &&
       odometer.numeric - Number(previousEntry.mileage ?? 0) > HIGH_WEEKLY_JUMP_KM
     ) {
-      warnings.push("Odometer jumped by more than 2,000 km from the previous week.");
+      warnings.push("odometerJump");
     }
 
     return {

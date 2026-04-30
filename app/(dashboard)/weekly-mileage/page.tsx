@@ -232,12 +232,12 @@ export default function WeeklyMileagePage() {
     }
 
     const criticalFailures = [
-      driverResult.status === "rejected" ? "drivers" : "",
-      mileageResult.status === "rejected" ? "weekly mileage records" : ""
+      driverResult.status === "rejected" ? t.nav.drivers : "",
+      mileageResult.status === "rejected" ? t.weeklyMileage.title : ""
     ].filter(Boolean);
 
     if (criticalFailures.length) {
-      setLoadError(`Unable to load ${criticalFailures.join(" and ")}. Check the console for the Supabase error details.`);
+      setLoadError(t.weeklyMileage.notifications.loadFailed.replace("{items}", criticalFailures.join(language === "th" ? " และ " : " and ")));
     }
 
     console.log("Weekly mileage page load result", {
@@ -248,7 +248,7 @@ export default function WeeklyMileagePage() {
     });
 
     setLoading(false);
-  }, []);
+  }, [language, t.nav.drivers, t.weeklyMileage.notifications.loadFailed, t.weeklyMileage.title]);
 
   useEffect(() => {
     void loadData();
@@ -314,7 +314,7 @@ export default function WeeklyMileagePage() {
       setSelectedWeek(savedEntry.week_ending ?? form.week_ending);
       resetForm(false);
       setSuccessMessage(
-        isEditing ? "Weekly mileage updated successfully." : "Weekly mileage saved successfully."
+        isEditing ? t.weeklyMileage.notifications.updateSuccess : t.weeklyMileage.notifications.saveSuccess
       );
       await loadData();
     } catch (err) {
@@ -333,7 +333,7 @@ export default function WeeklyMileagePage() {
       setSuccessMessage(null);
       await deleteWeeklyMileage(id);
       if (form.id === id) resetForm();
-      setSuccessMessage("Weekly mileage deleted successfully.");
+      setSuccessMessage(t.weeklyMileage.notifications.deleteSuccess);
       await loadData();
     } catch (err) {
       console.error("Weekly mileage delete error:", err);
@@ -344,13 +344,13 @@ export default function WeeklyMileagePage() {
   };
 
   const oilStatusLabel = (status: string) => {
-    if (status === "ok") return "OK";
-    if (status === "due_soon") return "Due Soon";
-    if (status === "urgent") return "Urgent";
-    if (status === "overdue") return "Overdue";
-    if (status === "review_required") return "Review Required";
-    if (status === "no_odometer") return "No odometer data";
-    return "Not set";
+    if (status === "ok") return t.weeklyMileage.oil.filters.ok;
+    if (status === "due_soon") return t.weeklyMileage.oil.filters.dueSoon;
+    if (status === "urgent") return t.weeklyMileage.oil.filters.urgent;
+    if (status === "overdue") return t.weeklyMileage.oil.filters.overdue;
+    if (status === "review_required") return t.weeklyMileage.oil.filters.reviewRequired;
+    if (status === "no_odometer") return t.weeklyMileage.oil.filters.noOdometer;
+    return t.weeklyMileage.oil.filters.notSet;
   };
 
   const oilStatusIcon = (status: string) =>
@@ -405,18 +405,33 @@ export default function WeeklyMileagePage() {
 
   const actionLine = (row: (typeof oilChangeRows)[number]) => {
     if (row.status === "overdue" && row.overdueKm != null) {
-      return `⚠ OVERDUE BY ${formatKmValue(row.overdueKm)} KM`;
+      return t.weeklyMileage.oil.actionOverdueBy.replace("{km}", formatKmValue(row.overdueKm));
     }
     if (row.status === "urgent" && row.kmRemaining != null) {
-      return `⚠ DUE IN ${formatKmValue(row.kmRemaining)} KM`;
+      return t.weeklyMileage.oil.actionDueIn.replace("{km}", formatKmValue(row.kmRemaining));
     }
     if (row.status === "due_soon" && row.kmRemaining != null) {
-      return `⚠ DUE SOON: ${formatKmValue(row.kmRemaining)} KM`;
+      return t.weeklyMileage.oil.actionDueSoon.replace("{km}", formatKmValue(row.kmRemaining));
     }
     if (row.status === "ok") {
-      return "✅ OK";
+      return t.weeklyMileage.oil.filters.ok;
     }
     return oilStatusLabel(row.status);
+  };
+
+  const reviewReasonLabel = (reason: string) => {
+    if (reason === "Missing vehicle type") return t.weeklyMileage.oil.missingVehicleType;
+    if (reason === "Missing oil change interval") return t.weeklyMileage.oil.missingOilChangeInterval;
+    return reason;
+  };
+
+  const vehicleTypeLabel = (vehicleType: string | null) => {
+    if (!vehicleType) return t.weeklyMileage.oil.missingVehicleType;
+    return (
+      t.weeklyMileage.oil.vehicleTypes[
+        vehicleType as keyof typeof t.weeklyMileage.oil.vehicleTypes
+      ] ?? vehicleType
+    );
   };
 
   const formatKmValue = (value: number | null) =>
@@ -444,7 +459,7 @@ export default function WeeklyMileagePage() {
       serviceDate: defaultDate,
       serviceOdometer: defaultOdometer === "" ? "" : String(defaultOdometer),
       intervalKm: defaultInterval != null ? String(defaultInterval) : "",
-      notes: mode === "mark" ? "Oil changed" : ""
+      notes: mode === "mark" ? t.weeklyMileage.oil.oilChangedNote : ""
     });
     setServiceModal({
       mode,
@@ -498,16 +513,16 @@ export default function WeeklyMileagePage() {
       });
       setSuccessMessage(
         serviceModal.mode === "mark"
-          ? "Oil change saved."
+          ? t.weeklyMileage.notifications.oilChangeSaved
           : serviceModal.mode === "edit"
-            ? "Service updated."
-            : "Oil change baseline saved."
+            ? t.weeklyMileage.notifications.serviceUpdated
+            : t.weeklyMileage.notifications.oilBaselineSaved
       );
       setServiceModal(null);
       setServiceForm({ serviceDate: "", serviceOdometer: "", intervalKm: "", notes: "" });
     } catch (err) {
       console.error("Oil service save error:", err);
-      setError(err instanceof Error && err.message ? err.message : "Failed to save - try again.");
+      setError(err instanceof Error && err.message ? err.message : t.weeklyMileage.notifications.serviceSaveFailed);
     } finally {
       setSavingService(false);
     }
@@ -596,15 +611,14 @@ export default function WeeklyMileagePage() {
       <WeeklyMileageUploadCard
         drivers={drivers}
         entries={entries}
-        language={language}
         onSaved={loadData}
       />
 
       <section className="surface-card mb-4 p-4 sm:p-5">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h3 className="section-title">Oil Change Service Management</h3>
-            <p className="section-subtitle">Manage baselines, oil changes, and service history using the latest Weekly Mileage odometer.</p>
+            <h3 className="section-title">{t.weeklyMileage.oil.title}</h3>
+            <p className="section-subtitle">{t.weeklyMileage.oil.description}</p>
           </div>
           <div className="flex flex-wrap gap-2">
             {(["all", "overdue", "urgent", "due_soon", "review_required", "not_set", "ok"] as OilFilter[]).map((filter) => (
@@ -618,7 +632,7 @@ export default function WeeklyMileagePage() {
                     : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
                 }`}
               >
-                {filter === "all" ? "All" : oilStatusLabel(filter)}
+                {filter === "all" ? t.weeklyMileage.oil.filters.all : oilStatusLabel(filter)}
               </button>
             ))}
           </div>
@@ -629,30 +643,30 @@ export default function WeeklyMileagePage() {
         ) : loadError ? (
           <EmptyState title={t.weeklyMileage.errorLoad} description={loadError} />
         ) : oilChangeRows.length === 0 ? (
-          <EmptyState title="No vehicles to review" description="Add vehicles or weekly mileage records to start service tracking." />
+          <EmptyState title={t.weeklyMileage.oil.noVehiclesTitle} description={t.weeklyMileage.oil.noVehiclesDescription} />
         ) : (
           <>
             <div className="mb-5 grid gap-3 md:grid-cols-3">
               {[
                 {
                   key: "overdue",
-                  label: "Overdue Vehicles",
+                  label: t.weeklyMileage.oil.summary.overdueVehicles,
                   value: oilSummary.overdue,
-                  helper: "Requires immediate service",
+                  helper: t.weeklyMileage.oil.summary.requiresImmediateService,
                   className: "border-rose-300 bg-rose-50 text-rose-800 hover:border-rose-400"
                 },
                 {
                   key: "urgent",
-                  label: "Urgent Vehicles",
+                  label: t.weeklyMileage.oil.summary.urgentVehicles,
                   value: oilSummary.urgent,
-                  helper: "Due within 1,000 KM",
+                  helper: t.weeklyMileage.oil.summary.dueWithin1000,
                   className: "border-orange-300 bg-orange-50 text-orange-800 hover:border-orange-400"
                 },
                 {
                   key: "due_soon",
-                  label: "Due Soon Vehicles",
+                  label: t.weeklyMileage.oil.summary.dueSoonVehicles,
                   value: oilSummary.due_soon,
-                  helper: "Due within 3,000 KM",
+                  helper: t.weeklyMileage.oil.summary.dueWithin3000,
                   className: "border-amber-300 bg-amber-50 text-amber-800 hover:border-amber-400"
                 }
               ].map((item) => (
@@ -675,12 +689,15 @@ export default function WeeklyMileagePage() {
             </div>
 
             {filteredOilChangeRows.length === 0 ? (
-              <EmptyState title="No vehicles in this status" description="Choose another filter to review service needs." />
+              <EmptyState title={t.weeklyMileage.oil.noVehiclesInStatusTitle} description={t.weeklyMileage.oil.noVehiclesInStatusDescription} />
             ) : (
               <div className="space-y-4">
                 {filteredOilChangeRows.map((row) => {
                   const vehicleLogs = serviceLogsByVehicle.get(row.registration.trim().toLowerCase()) ?? [];
-                  const primaryAction = row.status === "not_set" ? "Set Baseline" : "Mark Oil Changed";
+                  const primaryAction =
+                    row.status === "not_set"
+                      ? t.weeklyMileage.oil.setBaseline
+                      : t.weeklyMileage.oil.markOilChanged;
                   const progress = getServiceProgress(row);
 
                   return (
@@ -697,27 +714,27 @@ export default function WeeklyMileagePage() {
                             </span>
                           </div>
                           <p className="mt-2 text-sm font-medium text-slate-600">
-                            {row.driverName || "No driver assigned"} · {row.vehicleTypeLabel}
+                            {row.driverName || t.weeklyMileage.oil.noDriverAssigned} | {vehicleTypeLabel(row.vehicleType)}
                           </p>
                           <p className="mt-3 text-base font-bold uppercase text-slate-900">
                             {actionLine(row)}
                           </p>
                           {row.reviewReasons.length ? (
-                            <p className="mt-2 text-xs font-semibold text-sky-700">{row.reviewReasons.join("; ")}</p>
+                            <p className="mt-2 text-xs font-semibold text-sky-700">{row.reviewReasons.map(reviewReasonLabel).join("; ")}</p>
                           ) : null}
                         </div>
 
                         <div className="grid gap-3 sm:grid-cols-3">
                           <div className="rounded-lg border border-white/80 bg-white/70 p-3">
-                            <p className="metric-label">Current Odometer</p>
-                            <p className="mt-1 text-lg font-bold text-slate-950">{row.currentOdometer == null ? "No data" : formatKmValue(row.currentOdometer)}</p>
+                            <p className="metric-label">{t.weeklyMileage.oil.currentOdometer}</p>
+                            <p className="mt-1 text-lg font-bold text-slate-950">{row.currentOdometer == null ? t.weeklyMileage.oil.noData : formatKmValue(row.currentOdometer)}</p>
                           </div>
                           <div className="rounded-lg border border-white/80 bg-white/70 p-3">
-                            <p className="metric-label">Next Service Due</p>
+                            <p className="metric-label">{t.weeklyMileage.nextServiceDue}</p>
                             <p className="mt-1 text-lg font-bold text-slate-950">{formatKmValue(row.nextOilChangeDueOdometer)}</p>
                           </div>
                           <div className="rounded-lg border border-white/80 bg-white/70 p-3">
-                            <p className="metric-label">KM Remaining</p>
+                            <p className="metric-label">{t.weeklyMileage.oil.kmRemaining}</p>
                             <p className={`mt-1 text-2xl font-bold tracking-normal ${kmRemainingClass(row.kmRemaining)}`}>
                               {row.kmRemaining == null ? "-" : formatKmValue(row.kmRemaining)}
                             </p>
@@ -731,19 +748,19 @@ export default function WeeklyMileagePage() {
                           </button>
                           <button type="button" onClick={() => openServiceModal(row.status === "not_set" ? "set" : "edit", row)} className="btn-secondary w-full justify-center gap-2">
                             <Pencil className="h-4 w-4" />
-                            {row.status === "not_set" ? "Set Baseline" : "Edit"}
+                            {row.status === "not_set" ? t.weeklyMileage.oil.setBaseline : t.common.edit}
                           </button>
                           <button type="button" onClick={() => setHistoryVehicleReg(row.registration)} className="btn-secondary w-full justify-center gap-2">
                             <History className="h-4 w-4" />
-                            Service History
+                            {t.weeklyMileage.oil.serviceHistory}
                           </button>
                         </div>
                       </div>
 
                       <div className="mt-4">
                         <div className="mb-2 flex items-center justify-between gap-3 text-xs font-semibold text-slate-500">
-                          <span>Oil service usage</span>
-                          <span>{progress == null ? "Waiting for baseline" : `${progress}% used`}</span>
+                          <span>{t.weeklyMileage.oil.oilServiceUsage}</span>
+                          <span>{progress == null ? t.weeklyMileage.oil.waitingForBaseline : t.weeklyMileage.oil.percentUsed.replace("{percent}", String(progress))}</span>
                         </div>
                         <div className="h-2.5 overflow-hidden rounded-full bg-white/80 ring-1 ring-slate-200/70">
                           <div
@@ -755,24 +772,24 @@ export default function WeeklyMileagePage() {
 
                       <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-5">
                         <div>
-                          <p className="metric-label">Last Oil Change</p>
-                          <p className="mt-1 font-semibold text-slate-900">{row.lastOilChangeDate ? formatDate(row.lastOilChangeDate, language) : "Not set"}</p>
+                          <p className="metric-label">{t.weeklyMileage.lastOilChange}</p>
+                          <p className="mt-1 font-semibold text-slate-900">{row.lastOilChangeDate ? formatDate(row.lastOilChangeDate, language) : t.weeklyMileage.oil.filters.notSet}</p>
                         </div>
                         <div>
-                          <p className="metric-label">Last Odometer</p>
+                          <p className="metric-label">{t.weeklyMileage.oil.lastOdometer}</p>
                           <p className="mt-1 font-semibold text-slate-900">{formatKmValue(row.lastOilChangeOdometer)}</p>
                         </div>
                         <div>
-                          <p className="metric-label">Interval</p>
+                          <p className="metric-label">{t.weeklyMileage.oil.interval}</p>
                           <p className="mt-1 font-semibold text-slate-900">{formatKmValue(row.oilChangeIntervalKm)} KM</p>
                         </div>
                         <div>
-                          <p className="metric-label">Overdue By</p>
+                          <p className="metric-label">{t.weeklyMileage.oil.overdueBy}</p>
                           <p className="mt-1 font-semibold text-rose-700">{row.overdueKm == null ? "-" : formatKmValue(row.overdueKm)}</p>
                         </div>
                         <div>
-                          <p className="metric-label">History</p>
-                          <p className="mt-1 font-semibold text-slate-900">{vehicleLogs.length ? `${formatNumber(vehicleLogs.length, language)} records` : "No records"}</p>
+                          <p className="metric-label">{t.weeklyMileage.oil.history}</p>
+                          <p className="mt-1 font-semibold text-slate-900">{vehicleLogs.length ? `${formatNumber(vehicleLogs.length, language)} ${t.weeklyMileage.oil.records}` : t.weeklyMileage.oil.noRecords}</p>
                         </div>
                       </div>
                     </article>
@@ -845,8 +862,8 @@ export default function WeeklyMileagePage() {
                 />
                 <p className="form-helper">
                   {selectedDriver?.vehicle_reg?.trim()
-                    ? "Auto-filled based on driver"
-                    : "No vehicle assigned. Enter manually if needed."}
+                    ? t.weeklyMileage.autoFilledVehicle
+                    : t.weeklyMileage.noVehicleAssigned}
                 </p>
               </div>
 
@@ -1134,14 +1151,14 @@ export default function WeeklyMileagePage() {
               <div>
                 <h3 className="text-lg font-semibold text-slate-950">
                   {serviceModal.mode === "mark"
-                    ? "Mark Oil Changed"
+                    ? t.weeklyMileage.oil.markOilChanged
                     : serviceModal.mode === "edit"
-                      ? "Edit Oil Change Baseline"
-                      : "Set Oil Change Baseline"}
+                      ? t.weeklyMileage.oil.editBaseline
+                      : t.weeklyMileage.oil.setOilChangeBaseline}
                 </h3>
                 <p className="mt-1 text-sm text-slate-500">{serviceModal.registration} | {serviceModal.vehicleName}</p>
               </div>
-              <button type="button" onClick={closeServiceModal} className="table-action-secondary" aria-label="Close service form">
+              <button type="button" onClick={closeServiceModal} className="table-action-secondary" aria-label={t.weeklyMileage.oil.closeServiceForm}>
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -1149,7 +1166,7 @@ export default function WeeklyMileagePage() {
             <form onSubmit={handleSaveService} className="p-5">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="form-field">
-                  <label className="form-label form-label-required">Last Oil Change Date</label>
+                  <label className="form-label form-label-required">{t.weeklyMileage.oil.lastOilChangeDate}</label>
                   <input
                     type="date"
                     required
@@ -1159,7 +1176,7 @@ export default function WeeklyMileagePage() {
                   />
                 </div>
                 <div className="form-field">
-                  <label className="form-label form-label-required">Last Oil Change Odometer</label>
+                  <label className="form-label form-label-required">{t.weeklyMileage.oil.lastOilChangeOdometer}</label>
                   <input
                     type="number"
                     required
@@ -1171,7 +1188,7 @@ export default function WeeklyMileagePage() {
                   />
                 </div>
                 <div className="form-field">
-                  <label className="form-label form-label-required">Interval KM</label>
+                  <label className="form-label form-label-required">{t.weeklyMileage.oil.intervalKm}</label>
                   <input
                     type="number"
                     required
@@ -1183,11 +1200,11 @@ export default function WeeklyMileagePage() {
                   />
                 </div>
                 <div className="form-field">
-                  <label className="form-label">Notes</label>
+                  <label className="form-label">{t.weeklyMileage.notes}</label>
                   <input
                     value={serviceForm.notes}
                     onChange={(event) => setServiceForm((current) => ({ ...current, notes: event.target.value }))}
-                    placeholder="Optional service note"
+                    placeholder={t.weeklyMileage.oil.optionalServiceNote}
                     className="form-input bg-white"
                   />
                 </div>
@@ -1197,10 +1214,10 @@ export default function WeeklyMileagePage() {
 
               <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                 <button type="button" onClick={closeServiceModal} disabled={savingService} className="btn-secondary disabled:opacity-50">
-                  Cancel
+                  {t.common.cancel}
                 </button>
                 <button type="submit" disabled={savingService} className="btn-primary disabled:opacity-60">
-                  {savingService ? "Saving..." : "Save"}
+                  {savingService ? t.common.saving : t.common.save}
                 </button>
               </div>
             </form>
@@ -1213,16 +1230,16 @@ export default function WeeklyMileagePage() {
           <div className="max-h-[92vh] w-full max-w-[720px] overflow-y-auto rounded-lg bg-white shadow-2xl">
             <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
               <div>
-                <h3 className="text-lg font-semibold text-slate-950">Service History</h3>
+                <h3 className="text-lg font-semibold text-slate-950">{t.weeklyMileage.oil.serviceHistory}</h3>
                 <p className="mt-1 text-sm text-slate-500">{historyVehicleReg}</p>
               </div>
-              <button type="button" onClick={() => setHistoryVehicleReg(null)} className="table-action-secondary" aria-label="Close service history">
+              <button type="button" onClick={() => setHistoryVehicleReg(null)} className="table-action-secondary" aria-label={t.weeklyMileage.oil.closeServiceHistory}>
                 <X className="h-4 w-4" />
               </button>
             </div>
             <div className="p-5">
               {selectedHistoryLogs.length === 0 ? (
-                <EmptyState title="No service history" description="Oil change records will appear here after service is saved." />
+                <EmptyState title={t.weeklyMileage.oil.noServiceHistoryTitle} description={t.weeklyMileage.oil.noServiceHistoryDescription} />
               ) : (
                 <div className="space-y-3">
                   {selectedHistoryLogs.map((log) => (
@@ -1230,17 +1247,17 @@ export default function WeeklyMileagePage() {
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                           <p className="font-semibold text-slate-950">{formatDate(log.service_date, language)}</p>
-                          <p className="mt-1 text-sm text-slate-500">{log.notes || "Oil change"}</p>
+                          <p className="mt-1 text-sm text-slate-500">{log.notes || t.weeklyMileage.oil.oilChangedNote}</p>
                         </div>
-                        <span className="badge-muted">{log.service_type === "oil_change" ? "Oil Change" : log.service_type}</span>
+                        <span className="badge-muted">{log.service_type === "oil_change" ? t.weeklyMileage.oil.oilChange : log.service_type}</span>
                       </div>
                       <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
                         <div>
-                          <p className="metric-label">Service Odometer</p>
+                          <p className="metric-label">{t.weeklyMileage.oil.serviceOdometer}</p>
                           <p className="mt-1 font-semibold text-slate-900">{formatKmValue(log.odometer)}</p>
                         </div>
                         <div>
-                          <p className="metric-label">Interval KM</p>
+                          <p className="metric-label">{t.weeklyMileage.oil.intervalKm}</p>
                           <p className="mt-1 font-semibold text-slate-900">{formatKmValue(log.interval_km)}</p>
                         </div>
                       </div>

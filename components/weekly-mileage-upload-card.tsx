@@ -14,7 +14,7 @@ import Image from "next/image";
 import { startTransition, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { saveWeeklyMileage } from "@/lib/data";
 import { exportToCsv } from "@/lib/export";
-import type { Language } from "@/lib/translations";
+import { useLanguage } from "@/lib/language-provider";
 import {
   canSaveMileageRow,
   parseExtractedData,
@@ -53,7 +53,6 @@ type ProcessedImagePayload = {
 type WeeklyMileageUploadCardProps = {
   drivers: Driver[];
   entries: WeeklyMileageEntry[];
-  language: Language;
   onSaved: () => Promise<void>;
 };
 
@@ -62,13 +61,6 @@ function getStatusClasses(status: MileagePreviewRow["status"]) {
   if (status === "warning") return "border-amber-200 bg-amber-50/70";
   if (status === "ignored") return "border-slate-200 bg-slate-50/80";
   return "border-emerald-200 bg-emerald-50/70";
-}
-
-function getStatusLabel(status: MileagePreviewRow["status"]) {
-  if (status === "error") return "Error";
-  if (status === "warning") return "Warning";
-  if (status === "ignored") return "Ignored";
-  return "Valid";
 }
 
 function getRowHighlightClasses(status: MileagePreviewRow["status"]) {
@@ -87,17 +79,6 @@ async function fileToDataUrl(file: File) {
   });
 }
 
-function buildProcessingErrorMessage(error: unknown) {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  if (typeof error === "string" && error.trim()) {
-    return error;
-  }
-
-  return "Unable to process uploaded sheets.";
-}
 async function nextFrame() {
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 }
@@ -229,9 +210,9 @@ async function preprocessImage(file: File, sourceIndex: number): Promise<Process
 export function WeeklyMileageUploadCard({
   drivers,
   entries,
-  language,
   onSaved
 }: WeeklyMileageUploadCardProps) {
+  const { language, t } = useLanguage();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -242,6 +223,32 @@ export function WeeklyMileageUploadCard({
   const [rows, setRows] = useState<MileagePreviewRow[]>([]);
   const [rowFilter, setRowFilter] = useState<RowFilter>("all");
   const deferredRows = useDeferredValue(rows);
+  const getStatusLabel = (status: MileagePreviewRow["status"]) => {
+    if (status === "error") return t.weeklyMileage.upload.error;
+    if (status === "warning") return t.weeklyMileage.upload.warning;
+    if (status === "ignored") return t.weeklyMileage.upload.ignored;
+    return t.weeklyMileage.upload.valid;
+  };
+  const translateIssue = (issue: string) => {
+    const issueTranslations: Record<string, string> = {
+      weekEndingRequired: t.weeklyMileage.upload.issues.weekEndingRequired,
+      driverRequired: t.weeklyMileage.upload.issues.driverRequired,
+      vehicleRequired: t.weeklyMileage.upload.issues.vehicleRequired,
+      vehicleFormatWarning: t.weeklyMileage.upload.issues.vehicleFormatWarning,
+      odometerRequired: t.weeklyMileage.upload.issues.odometerRequired,
+      odometerNumeric: t.weeklyMileage.upload.issues.odometerNumeric,
+      odometerDigits: t.weeklyMileage.upload.issues.odometerDigits,
+      odometerCorrected: t.weeklyMileage.upload.issues.odometerCorrected,
+      odometerSmall: t.weeklyMileage.upload.issues.odometerSmall,
+      odometerLarge: t.weeklyMileage.upload.issues.odometerLarge,
+      duplicateKeepBoth: t.weeklyMileage.upload.issues.duplicateKeepBoth,
+      duplicateExisting: t.weeklyMileage.upload.issues.duplicateExisting,
+      duplicateUpload: t.weeklyMileage.upload.issues.duplicateUpload,
+      odometerLower: t.weeklyMileage.upload.issues.odometerLower,
+      odometerJump: t.weeklyMileage.upload.issues.odometerJump
+    };
+    return issueTranslations[issue] ?? issue;
+  };
 
   useEffect(() => {
     return () => {
@@ -283,7 +290,7 @@ export function WeeklyMileageUploadCard({
     );
 
     if (!files.length) {
-      setError("Upload JPG, JPEG, or PNG images only.");
+      setError(t.weeklyMileage.upload.imagesOnly);
       return;
     }
 
@@ -342,21 +349,21 @@ export function WeeklyMileageUploadCard({
           error?: string | { message?: string };
         };
       } catch {
-        setError(rawText || "Invalid OCR response");
+        setError(rawText || t.weeklyMileage.upload.invalidOcrResponse);
         return;
       }
 
       if (!response.ok) {
         const apiError =
           typeof data?.error === "string" ? data.error : data?.error?.message;
-        setError(apiError || rawText || "OCR failed");
+        setError(apiError || rawText || t.weeklyMileage.upload.ocrFailed);
         return;
       }
 
       if (data?.error) {
         const apiError =
           typeof data.error === "string" ? data.error : data.error.message;
-        setError(apiError || rawText || "OCR failed");
+        setError(apiError || rawText || t.weeklyMileage.upload.ocrFailed);
         return;
       }
 
@@ -366,7 +373,7 @@ export function WeeklyMileageUploadCard({
     } catch (error) {
       console.error("UPLOAD ERROR:", error);
       setRows([]);
-      setError(buildProcessingErrorMessage(error));
+      setError(t.weeklyMileage.upload.processError);
     } finally {
       setProcessing(false);
     }
@@ -433,12 +440,12 @@ export function WeeklyMileageUploadCard({
   const exportPreview = () => {
     exportToCsv(
       rows.map((row) => ({
-        "Week Ending": row.week_ending,
-        Driver: row.driver_name,
-        "Vehicle Reg": row.vehicle_reg,
-        "Odometer Reading": row.odometer_reading,
-        Status: getStatusLabel(row.status),
-        Issues: row.issues.join(" | ")
+        [t.weeklyMileage.table.weekEnding]: row.week_ending,
+        [t.weeklyMileage.table.driver]: row.driver_name,
+        [t.weeklyMileage.table.vehicleReg]: row.vehicle_reg,
+        [t.weeklyMileage.table.mileage]: row.odometer_reading,
+        [t.weeklyMileage.upload.status]: getStatusLabel(row.status),
+        [t.common.details]: row.issues.map(translateIssue).join(" | ")
       })),
       "weekly-mileage-preview"
     );
@@ -448,9 +455,9 @@ export function WeeklyMileageUploadCard({
     <section className="surface-card mb-4 p-5 sm:p-6">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h3 className="section-title">Upload Weekly Mileage Sheets</h3>
+          <h3 className="section-title">{t.weeklyMileage.upload.title}</h3>
           <p className="section-subtitle">
-            Drag photos in, extract handwritten rows, review them, then save only the records you want.
+            {t.weeklyMileage.upload.description}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -461,7 +468,7 @@ export function WeeklyMileageUploadCard({
             disabled={processing}
           >
             <Upload className="h-4 w-4" />
-            Choose images
+            {t.weeklyMileage.upload.chooseImages}
           </button>
           <button
             type="button"
@@ -470,7 +477,7 @@ export function WeeklyMileageUploadCard({
             disabled={!rows.length}
           >
             <Download className="h-4 w-4" />
-            Export to CSV
+            {t.weeklyMileage.upload.exportCsv}
           </button>
         </div>
       </div>
@@ -516,10 +523,10 @@ export function WeeklyMileageUploadCard({
             )}
           </div>
           <p className="text-base font-semibold text-slate-900">
-            {processing ? "Processing uploaded sheets..." : "Drop JPG, JPEG, or PNG mileage sheets here"}
+            {processing ? t.weeklyMileage.upload.processing : t.weeklyMileage.upload.dropZone}
           </p>
           <p className="mt-1 text-sm text-slate-500">
-            Multiple images are supported. Images are auto-rotated, cropped, and enhanced before OCR so the page stays responsive.
+            {t.weeklyMileage.upload.dropDescription}
           </p>
         </div>
       </div>
@@ -550,18 +557,18 @@ export function WeeklyMileageUploadCard({
 
       {saveSummary ? (
         <div className="mt-4 rounded-[1.4rem] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-          Total rows: {saveSummary.total} | Saved: {saveSummary.saved} | Skipped: {saveSummary.skipped} |
-          Errors: {saveSummary.errors}
+          {t.weeklyMileage.upload.totalRows}: {formatNumber(saveSummary.total, language)} | {t.weeklyMileage.upload.saved}: {formatNumber(saveSummary.saved, language)} | {t.weeklyMileage.upload.skipped}: {formatNumber(saveSummary.skipped, language)} |
+          {t.weeklyMileage.upload.errors}: {formatNumber(saveSummary.errors, language)}
         </div>
       ) : null}
 
       {rows.length ? (
         <>
           <div className="mt-5 flex flex-wrap items-center gap-2">
-            <span className="badge-muted">Valid {formatNumber(stats.valid, language)}</span>
-            <span className="badge-muted">Warning {formatNumber(stats.warning, language)}</span>
-            <span className="badge-muted">Error {formatNumber(stats.error, language)}</span>
-            <span className="badge-muted">Ignored {formatNumber(stats.ignored, language)}</span>
+            <span className="badge-muted">{t.weeklyMileage.upload.valid} {formatNumber(stats.valid, language)}</span>
+            <span className="badge-muted">{t.weeklyMileage.upload.warning} {formatNumber(stats.warning, language)}</span>
+            <span className="badge-muted">{t.weeklyMileage.upload.error} {formatNumber(stats.error, language)}</span>
+            <span className="badge-muted">{t.weeklyMileage.upload.ignored} {formatNumber(stats.ignored, language)}</span>
             <div className="ml-auto flex flex-wrap gap-2">
               <button
                 type="button"
@@ -569,21 +576,21 @@ export function WeeklyMileageUploadCard({
                 className={`btn-secondary min-h-[44px] gap-2 px-4 py-2.5 ${rowFilter === "all" ? "border-violet-300 text-violet-700" : ""}`}
               >
                 <Filter className="h-4 w-4" />
-                All rows
+                {t.weeklyMileage.upload.allRows}
               </button>
               <button
                 type="button"
                 onClick={() => setRowFilter("errors")}
                 className={`btn-secondary min-h-[44px] px-4 py-2.5 ${rowFilter === "errors" ? "border-amber-300 text-amber-700" : ""}`}
               >
-                Errors only
+                {t.weeklyMileage.upload.errorsOnly}
               </button>
               <button
                 type="button"
                 onClick={() => setRowFilter("valid")}
                 className={`btn-secondary min-h-[44px] px-4 py-2.5 ${rowFilter === "valid" ? "border-emerald-300 text-emerald-700" : ""}`}
               >
-                Valid only
+                {t.weeklyMileage.upload.validOnly}
               </button>
             </div>
           </div>
@@ -593,12 +600,12 @@ export function WeeklyMileageUploadCard({
                 <table className="w-full min-w-[1180px] text-sm">
                   <thead>
                     <tr className="bg-slate-50/70 text-slate-600">
-                      <th className="table-head-cell text-left">Week Ending</th>
-                      <th className="table-head-cell text-left">Driver</th>
-                      <th className="table-head-cell text-left">Vehicle Reg</th>
-                      <th className="table-head-cell text-left">Odometer Reading</th>
-                      <th className="table-head-cell text-left">Status</th>
-                      <th className="table-head-cell text-left">Action</th>
+                      <th className="table-head-cell text-left">{t.weeklyMileage.table.weekEnding}</th>
+                      <th className="table-head-cell text-left">{t.weeklyMileage.table.driver}</th>
+                      <th className="table-head-cell text-left">{t.weeklyMileage.table.vehicleReg}</th>
+                      <th className="table-head-cell text-left">{t.weeklyMileage.table.mileage}</th>
+                      <th className="table-head-cell text-left">{t.weeklyMileage.upload.status}</th>
+                      <th className="table-head-cell text-left">{t.weeklyMileage.table.action}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -639,7 +646,7 @@ export function WeeklyMileageUploadCard({
                             }
                             className="form-input min-h-[48px] bg-white px-4 py-3"
                           >
-                            <option value="">Select driver</option>
+                            <option value="">{t.weeklyMileage.selectDriver}</option>
                             {drivers.map((driver) => (
                               <option key={driver.id} value={driver.id}>
                                 {driver.name}
@@ -647,7 +654,7 @@ export function WeeklyMileageUploadCard({
                             ))}
                           </select>
                           {!row.driver_id && row.driver_name ? (
-                            <p className="mt-2 text-xs text-slate-400">OCR: {row.driver_name}</p>
+                            <p className="mt-2 text-xs text-slate-400">{t.weeklyMileage.upload.ocrPrefix}: {row.driver_name}</p>
                           ) : null}
                         </td>
                         <td className="table-body-cell">
@@ -692,7 +699,7 @@ export function WeeklyMileageUploadCard({
                               {getStatusLabel(row.status)}
                             </div>
                             {row.issues.length ? (
-                              <p className="mt-2 text-xs leading-5 text-slate-600">{row.issues.join(" ")}</p>
+                              <p className="mt-2 text-xs leading-5 text-slate-600">{row.issues.map(translateIssue).join(" ")}</p>
                             ) : null}
                             {(row.duplicate_with_existing || row.duplicate_with_upload) && row.status !== "ignored" ? (
                               <select
@@ -711,9 +718,9 @@ export function WeeklyMileageUploadCard({
                                 }
                                 className="form-input mt-3 min-h-[44px] bg-white px-4 py-2.5"
                               >
-                                <option value="skip">Skip duplicate</option>
-                                <option value="replace">Replace existing</option>
-                                <option value="keep-both">Keep both</option>
+                                <option value="skip">{t.weeklyMileage.upload.skipDuplicate}</option>
+                                <option value="replace">{t.weeklyMileage.upload.replaceExisting}</option>
+                                <option value="keep-both">{t.weeklyMileage.upload.keepBoth}</option>
                               </select>
                             ) : null}
                           </div>
@@ -731,7 +738,7 @@ export function WeeklyMileageUploadCard({
                               }
                               className="btn-secondary min-h-[48px]"
                             >
-                              {row.ignored ? "Unignore" : "Ignore"}
+                              {row.ignored ? t.weeklyMileage.upload.unignore : t.weeklyMileage.upload.ignore}
                             </button>
                             <button
                               type="button"
@@ -741,7 +748,7 @@ export function WeeklyMileageUploadCard({
                               className="btn-danger min-h-[48px] gap-2"
                             >
                               <Trash2 className="h-4 w-4" />
-                              Delete
+                              {t.common.delete}
                             </button>
                           </div>
                         </td>
@@ -757,7 +764,7 @@ export function WeeklyMileageUploadCard({
               <div key={row.id} className={`subtle-panel p-4 ${getStatusClasses(row.status)}`}>
                 <div className="grid gap-3">
                   <div>
-                    <label className="form-label">Week Ending</label>
+                    <label className="form-label">{t.weeklyMileage.table.weekEnding}</label>
                     <input
                       type="date"
                       value={row.week_ending}
@@ -772,7 +779,7 @@ export function WeeklyMileageUploadCard({
                     />
                   </div>
                   <div>
-                    <label className="form-label">Driver</label>
+                    <label className="form-label">{t.weeklyMileage.table.driver}</label>
                     <select
                       value={row.driver_id}
                       onChange={(event) =>
@@ -791,7 +798,7 @@ export function WeeklyMileageUploadCard({
                       }
                       className="form-input bg-white"
                     >
-                      <option value="">Select driver</option>
+                      <option value="">{t.weeklyMileage.selectDriver}</option>
                       {drivers.map((driver) => (
                         <option key={driver.id} value={driver.id}>
                           {driver.name}
@@ -800,7 +807,7 @@ export function WeeklyMileageUploadCard({
                     </select>
                   </div>
                   <div>
-                    <label className="form-label">Vehicle Reg</label>
+                    <label className="form-label">{t.weeklyMileage.table.vehicleReg}</label>
                     <input
                       value={row.vehicle_reg}
                       onChange={(event) =>
@@ -814,7 +821,7 @@ export function WeeklyMileageUploadCard({
                     />
                   </div>
                   <div>
-                    <label className="form-label">Odometer Reading</label>
+                    <label className="form-label">{t.weeklyMileage.table.mileage}</label>
                     <input
                       inputMode="numeric"
                       value={row.odometer_reading}
@@ -830,7 +837,7 @@ export function WeeklyMileageUploadCard({
                   </div>
                   {(row.duplicate_with_existing || row.duplicate_with_upload) && row.status !== "ignored" ? (
                     <div>
-                      <label className="form-label">Duplicate handling</label>
+                      <label className="form-label">{t.weeklyMileage.upload.duplicateHandling}</label>
                       <select
                         value={row.duplicate_resolution}
                         onChange={(event) =>
@@ -847,16 +854,16 @@ export function WeeklyMileageUploadCard({
                         }
                         className="form-input bg-white"
                       >
-                        <option value="skip">Skip duplicate</option>
-                        <option value="replace">Replace existing</option>
-                        <option value="keep-both">Keep both</option>
+                        <option value="skip">{t.weeklyMileage.upload.skipDuplicate}</option>
+                        <option value="replace">{t.weeklyMileage.upload.replaceExisting}</option>
+                        <option value="keep-both">{t.weeklyMileage.upload.keepBoth}</option>
                       </select>
                     </div>
                   ) : null}
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">Status: {getStatusLabel(row.status)}</p>
+                    <p className="text-sm font-semibold text-slate-900">{t.weeklyMileage.upload.status}: {getStatusLabel(row.status)}</p>
                     {row.issues.length ? (
-                      <p className="mt-2 text-sm text-slate-600">{row.issues.join(" ")}</p>
+                      <p className="mt-2 text-sm text-slate-600">{row.issues.map(translateIssue).join(" ")}</p>
                     ) : null}
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2">
@@ -871,7 +878,7 @@ export function WeeklyMileageUploadCard({
                       }
                       className="btn-secondary"
                     >
-                      {row.ignored ? "Unignore" : "Ignore"}
+                      {row.ignored ? t.weeklyMileage.upload.unignore : t.weeklyMileage.upload.ignore}
                     </button>
                     <button
                       type="button"
@@ -879,7 +886,7 @@ export function WeeklyMileageUploadCard({
                       className="btn-danger gap-2"
                     >
                       <Trash2 className="h-4 w-4" />
-                      Delete
+                      {t.common.delete}
                     </button>
                   </div>
                 </div>
@@ -888,7 +895,7 @@ export function WeeklyMileageUploadCard({
           </div>
           <div className="mt-4 flex flex-col gap-2.5 rounded-[1.5rem] border border-slate-200/80 bg-white/95 p-3 shadow-[0_10px_30px_rgba(15,23,42,0.08)] backdrop-blur sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-slate-500">
-              Showing {visibleRows.length} of {rows.length} extracted rows.
+              {t.weeklyMileage.upload.showing} {formatNumber(visibleRows.length, language)} {t.common.of} {formatNumber(rows.length, language)} {t.weeklyMileage.upload.extractedRows}.
             </p>
             <button
               type="button"
@@ -896,7 +903,7 @@ export function WeeklyMileageUploadCard({
               disabled={saving}
               className="btn-primary w-full sm:w-auto disabled:opacity-70"
             >
-              {saving ? "Saving..." : "Save Valid Rows"}
+              {saving ? t.common.saving : t.weeklyMileage.upload.saveValidRows}
             </button>
           </div>
         </>

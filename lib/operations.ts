@@ -181,16 +181,10 @@ function buildOilChangeRow({
   oilChangeIntervalKm: number | null | undefined;
   latestMileage: WeeklyMileageEntry | null;
 }): OilChangeAlertRow {
-  const explicitInterval =
-    oilChangeIntervalKm != null && Number.isFinite(Number(oilChangeIntervalKm)) && Number(oilChangeIntervalKm) > 0
-      ? Number(oilChangeIntervalKm)
-      : null;
   const vehicleTypeInterval = getOilChangeIntervalForVehicleType(vehicleType);
-  const interval = explicitInterval ?? vehicleTypeInterval;
+  const interval = vehicleTypeInterval;
   const intervalSource: OilChangeIntervalSource =
-    explicitInterval != null
-      ? "vehicle_baseline"
-      : vehicleTypeInterval != null
+    vehicleTypeInterval != null
         ? "vehicle_type"
         : "missing";
   const reviewReasons = [

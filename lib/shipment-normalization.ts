@@ -205,6 +205,13 @@ export function parseShipmentNotes(notes: string | null | undefined): ParsedShip
 
 export function normalizeShipment(shipment: ShipmentWithDriver): NormalizedShipment {
   const parsedNotes = parseShipmentNotes(shipment.notes);
+  const rawStatus = firstText(parsedNotes.requestedStatus, shipment.status, "Draft");
+  const lifecycleStatus =
+    rawStatus === "Accepted" || rawStatus === "Confirmed"
+      ? "Approved"
+      : rawStatus === "Assigned" || rawStatus === "Delivered"
+        ? rawStatus === "Assigned" ? "In Progress" : "Completed"
+        : rawStatus;
   const distanceKm = firstNumber(
     shipment.estimated_distance_km,
     shipment.total_operational_distance_km,
@@ -280,7 +287,7 @@ export function normalizeShipment(shipment: ShipmentWithDriver): NormalizedShipm
     driverName: firstText(shipment.driver),
     vehicleReg: firstText(shipment.vehicle_reg),
     vehicleType: firstText(shipment.vehicle_type, parsedNotes.vehicleType),
-    status: firstText(parsedNotes.requestedStatus, shipment.status, "Draft"),
+    status: lifecycleStatus,
     notes: parsedNotes.freeTextNotes,
     cargo: {
       weight: parsedNotes.cargo.weight,

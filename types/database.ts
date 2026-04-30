@@ -109,6 +109,8 @@ export type FuelLogFilters = {
   receiptCheckedStatus?: "" | "checked" | "not_checked";
   totalCostMin?: string;
   totalCostMax?: string;
+  duplicatesOnly?: boolean;
+  missingMileageOnly?: boolean;
 };
 
 export type PaginatedFuelLogsResult = {
@@ -163,7 +165,7 @@ export type Shipment = {
   total_distance_km?: number | null;
   total_operational_distance_km?: number | null;
   quoted_distance_km?: number | null;
-  status?: "Draft" | "Quoted" | "Confirmed" | "In Progress" | "Delivered" | "Completed" | "Cancelled" | "Accepted" | "Assigned" | null;
+  status?: "Draft" | "Quoted" | "Approved" | "In Progress" | "Completed" | "Cancelled" | "Confirmed" | "Delivered" | "Accepted" | "Assigned" | null;
   driver_id: string | null;
   driver: string;
   vehicle_reg: string | null;

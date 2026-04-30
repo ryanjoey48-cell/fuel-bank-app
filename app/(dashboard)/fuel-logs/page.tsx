@@ -54,6 +54,7 @@ import type {
 const PAGE_SIZE = 25;
 const DEFAULT_FUEL_TYPE = "diesel";
 const DEFAULT_PAYMENT_METHOD = "company_card";
+const FILTER_STORAGE_KEY = "fuel-bank:fuel-logs-filters";
 
 const initialForm = {
   id: "",
@@ -80,7 +81,9 @@ const initialFilters: FuelLogFilters = {
   paymentMethod: "",
   receiptCheckedStatus: "",
   totalCostMin: "",
-  totalCostMax: ""
+  totalCostMax: "",
+  duplicatesOnly: false,
+  missingMileageOnly: false
 };
 
 type FuelDraft = {
@@ -98,9 +101,6 @@ type FuelDraft = {
   payment_method: string | null;
   notes: string | null;
 };
-
-const normalize = (value: string | number | null | undefined) =>
-  String(value ?? "").trim().toLowerCase();
 
 function getLogTimestamp(log: FuelLogWithDriver) {
   return log.created_at || log.date;
@@ -131,16 +131,38 @@ function getReceiptCheckBadgeClass(checked: boolean) {
 }
 
 function findDuplicates(logs: FuelLogWithDriver[], draft: FuelDraft, excludeId?: string) {
-  if (!draft.date || !draft.vehicle_reg.trim()) return [];
-  const vehicleKey = normalize(draft.vehicle_reg);
+  if (!draft.date || !draft.driver_id) return [];
   return logs.filter((log) => {
     if (excludeId && String(log.id) === String(excludeId)) return false;
     if (log.date !== draft.date) return false;
-    if (normalize(log.vehicle_reg) !== vehicleKey) return false;
-    if (Math.abs(Number(log.total_cost || 0) - Number(draft.total_cost || 0)) > 5) return false;
-    if (Math.abs(Number(log.litres || 0) - Number(draft.litres || 0)) > 1) return false;
+    if (String(log.driver_id || "") !== String(draft.driver_id)) return false;
+    if (Number(log.total_cost || 0) !== Number(draft.total_cost || 0)) return false;
+    if (Number(log.litres || 0) !== Number(draft.litres || 0)) return false;
     return true;
   });
+}
+
+function getFuelLogDuplicateKey(log: Pick<FuelLogWithDriver, "date" | "driver_id" | "litres" | "total_cost">) {
+  return [
+    String(log.driver_id || ""),
+    log.date,
+    Number(log.litres || 0).toFixed(2),
+    Number(log.total_cost || 0).toFixed(2)
+  ].join("::");
+}
+
+function isMissingMileage(log: Pick<FuelLogWithDriver, "mileage">) {
+  return log.mileage == null || Number(log.mileage) <= 0;
+}
+
+function getStoredFilters() {
+  if (typeof window === "undefined") return initialFilters;
+  try {
+    const stored = window.sessionStorage.getItem(FILTER_STORAGE_KEY);
+    return stored ? { ...initialFilters, ...JSON.parse(stored) } : initialFilters;
+  } catch {
+    return initialFilters;
+  }
 }
 
 function Highlight({ text, query }: { text: string | number | null | undefined; query: string }) {
@@ -163,7 +185,6 @@ function Highlight({ text, query }: { text: string | number | null | undefined; 
     </>
   );
 }
-
 function SortButton({
   label,
   active,
@@ -251,7 +272,13 @@ export default function FuelLogsPage() {
     previousPage: language === "th" ? "ก่อนหน้า" : "Previous",
     nextPage: language === "th" ? "ถัดไป" : "Next",
     pageLabel: language === "th" ? "หน้า" : "Page",
-    ofLabel: language === "th" ? "จาก" : "of"
+    ofLabel: language === "th" ? "จาก" : "of",
+    quickFilters: language === "th" ? "ตัวกรองด่วน" : "Quick filters",
+    uncheckedReceipts: language === "th" ? "ใบเสร็จยังไม่ตรวจ" : "Unchecked receipts",
+    possibleDuplicates: language === "th" ? "รายการที่อาจซ้ำ" : "Possible duplicates",
+    missingMileage: language === "th" ? "ไม่มีเลขไมล์" : "Missing mileage",
+    possibleDuplicate: language === "th" ? "อาจเป็นรายการซ้ำ" : "Possible duplicate entry",
+    missingOdometer: language === "th" ? "ไม่มีเลขไมล์" : "Missing mileage"
   };
 
   const exportButtonLabel = language === "th" ? "กำลังส่งออก..." : "Exporting...";
@@ -289,7 +316,7 @@ export default function FuelLogsPage() {
   const [todayLogs, setTodayLogs] = useState<FuelLogWithDriver[]>([]);
   const [last7DayRows, setLast7DayRows] = useState<FuelLogDaySummary[]>([]);
   const [form, setForm] = useState(initialForm);
-  const [filters, setFilters] = useState<FuelLogFilters>(initialFilters);
+  const [filters, setFilters] = useState<FuelLogFilters>(() => getStoredFilters());
   const [sortKey, setSortKey] = useState<FuelLogSortKey>("date");
   const [sortDirection, setSortDirection] = useState<FuelLogSortDirection>("desc");
   const [currentPage, setCurrentPage] = useState(1);
@@ -351,6 +378,23 @@ export default function FuelLogsPage() {
       ).sort(),
     [drivers, fuelLogs]
   );
+
+  const duplicateKeyCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const log of fuelLogs) {
+      const key = getFuelLogDuplicateKey(log);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
+  }, [fuelLogs]);
+
+  const getFuelLogWarnings = (log: FuelLogWithDriver) => {
+    const warnings: string[] = [];
+    const duplicateKey = getFuelLogDuplicateKey(log);
+    if ((duplicateKeyCounts.get(duplicateKey) ?? 0) > 1) warnings.push(copy.possibleDuplicate);
+    if (isMissingMileage(log)) warnings.push(copy.missingOdometer);
+    return warnings;
+  };
 
   const loadDrivers = useCallback(async () => {
     try {
@@ -416,6 +460,14 @@ export default function FuelLogsPage() {
   useEffect(() => {
     void loadDrivers();
   }, [loadDrivers]);
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filters));
+    } catch {
+      // Filter persistence is helpful, but it should never block daily entry work.
+    }
+  }, [filters]);
 
   useEffect(() => {
     void loadFuelLogPage(currentPage);
@@ -639,6 +691,7 @@ export default function FuelLogsPage() {
       if (!isEditing) {
         const nearbyRows = await fetchFuelLogDuplicateMatches({
           date: draft.date,
+          driverId: draft.driver_id,
           vehicleReg: draft.vehicle_reg
         });
         const matches = findDuplicates(nearbyRows, draft);
@@ -781,6 +834,13 @@ export default function FuelLogsPage() {
     },
     [currentPage, receiptCopy.error, receiptCopy.updated, refreshCurrentPage]
   );
+
+  const getQuickFilterClass = (active: boolean) =>
+    active
+      ? "btn-primary min-h-[38px] px-3.5 py-1.5 text-xs shadow-sm"
+      : "btn-secondary min-h-[38px] px-3.5 py-1.5 text-xs";
+  const uncheckedReceiptsActive = filters.receiptCheckedStatus === "not_checked";
+  const uncheckedReceiptsLabel = `${copy.uncheckedReceipts} (${formatNumber(receiptSummary.notChecked, language)})`;
 
   return (
     <>
@@ -977,20 +1037,46 @@ export default function FuelLogsPage() {
               </div>
             </div>
           </div>
-          <div className="mb-6 rounded-[1.75rem] border border-slate-200/80 bg-white/95 p-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)] backdrop-blur sm:p-5">
+          <div className="mb-5 rounded-[1.5rem] border border-slate-200/80 bg-white/95 p-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)] backdrop-blur sm:p-5">
             <div className="mb-4 flex items-center justify-between gap-3">
               <p className="text-sm font-semibold text-slate-900">{copy.filters}</p>
               <button type="button" onClick={() => updateFilters(initialFilters)} className="text-sm font-medium text-slate-500 hover:text-slate-900">{copy.clear}</button>
             </div>
-            <div className="grid gap-3 md:grid-cols-12">
-              <div className="md:col-span-5 lg:col-span-4"><label className="form-label">{copy.searchLabel}</label><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={filters.search ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, search: event.target.value }))} placeholder={copy.searchPlaceholder} className="form-input bg-white pl-10" /></div></div>
-              <div className="md:col-span-4 lg:col-span-3"><label className="form-label">{copy.dateRange}</label><div className="grid grid-cols-2 gap-2"><input type="date" value={filters.fromDate ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, fromDate: event.target.value }))} className="form-input bg-white" /><input type="date" value={filters.toDate ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, toDate: event.target.value }))} className="form-input bg-white" /></div></div>
-              <div className="md:col-span-3 lg:col-span-2"><label className="form-label">{copy.driver}</label><select value={filters.driverId ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, driverId: event.target.value }))} className="form-input bg-white"><option value="">{copy.all}</option>{drivers.map((driver) => <option key={driver.id} value={String(driver.id)}>{driver.name}</option>)}</select></div>
-              <div className="md:col-span-3 lg:col-span-2"><label className="form-label">{copy.vehicle}</label><select value={filters.vehicleReg ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, vehicleReg: event.target.value }))} className="form-input bg-white"><option value="">{copy.all}</option>{vehicleOptions.map((vehicleReg) => <option key={vehicleReg} value={vehicleReg}>{vehicleReg}</option>)}</select></div>
-              <div className="md:col-span-3 lg:col-span-2"><label className="form-label">{copy.fuelType}</label><select value={filters.fuelType ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, fuelType: event.target.value }))} className="form-input bg-white"><option value="">{copy.all}</option>{fuelTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
-              <div className="md:col-span-3 lg:col-span-2"><label className="form-label">{copy.payment}</label><select value={filters.paymentMethod ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, paymentMethod: event.target.value }))} className="form-input bg-white"><option value="">{copy.all}</option>{paymentMethodOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
-              <div className="md:col-span-3 lg:col-span-2"><label className="form-label">{receiptCopy.filterLabel}</label><select value={filters.receiptCheckedStatus ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, receiptCheckedStatus: event.target.value as FuelLogFilters["receiptCheckedStatus"] }))} className="form-input bg-white"><option value="">{copy.all}</option><option value="checked">{receiptCopy.checked}</option><option value="not_checked">{receiptCopy.notChecked}</option></select></div>
-              <div className="md:col-span-6 lg:col-span-3"><label className="form-label">{copy.totalCostRange}</label><div className="grid grid-cols-2 gap-2"><input type="number" min="0" step="0.01" value={filters.totalCostMin ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, totalCostMin: event.target.value }))} placeholder={copy.min} className="form-input bg-white" /><input type="number" min="0" step="0.01" value={filters.totalCostMax ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, totalCostMax: event.target.value }))} placeholder={copy.max} className="form-input bg-white" /></div></div>
+            <div className="space-y-3.5">
+              <div>
+                <label className="form-label">{copy.searchLabel}</label>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input value={filters.search ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, search: event.target.value }))} placeholder={copy.searchPlaceholder} className="form-input bg-white pl-10" />
+                </div>
+              </div>
+              <div className="grid gap-3 md:grid-cols-12">
+                <div className="md:col-span-5 lg:col-span-4"><label className="form-label">{copy.dateRange}</label><div className="grid grid-cols-2 gap-2"><input type="date" value={filters.fromDate ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, fromDate: event.target.value }))} className="form-input bg-white" /><input type="date" value={filters.toDate ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, toDate: event.target.value }))} className="form-input bg-white" /></div></div>
+                <div className="md:col-span-3 lg:col-span-4"><label className="form-label">{copy.driver}</label><select value={filters.driverId ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, driverId: event.target.value }))} className="form-input bg-white"><option value="">{copy.all}</option>{drivers.map((driver) => <option key={driver.id} value={String(driver.id)}>{driver.name}</option>)}</select></div>
+                <div className="md:col-span-4 lg:col-span-4"><label className="form-label">{copy.vehicle}</label><select value={filters.vehicleReg ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, vehicleReg: event.target.value }))} className="form-input bg-white"><option value="">{copy.all}</option>{vehicleOptions.map((vehicleReg) => <option key={vehicleReg} value={vehicleReg}>{vehicleReg}</option>)}</select></div>
+              </div>
+              <div className="grid gap-3 md:grid-cols-12">
+                <div className="md:col-span-4"><label className="form-label">{copy.fuelType}</label><select value={filters.fuelType ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, fuelType: event.target.value }))} className="form-input bg-white"><option value="">{copy.all}</option>{fuelTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
+                <div className="md:col-span-4"><label className="form-label">{copy.payment}</label><select value={filters.paymentMethod ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, paymentMethod: event.target.value }))} className="form-input bg-white"><option value="">{copy.all}</option>{paymentMethodOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
+                <div className="md:col-span-4"><label className="form-label">{receiptCopy.filterLabel}</label><select value={filters.receiptCheckedStatus ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, receiptCheckedStatus: event.target.value as FuelLogFilters["receiptCheckedStatus"] }))} className="form-input bg-white"><option value="">{copy.all}</option><option value="checked">{receiptCopy.checked}</option><option value="not_checked">{receiptCopy.notChecked}</option></select></div>
+              </div>
+              <div className="grid gap-3 md:grid-cols-12">
+                <div className="md:col-span-6 lg:col-span-4"><label className="form-label">{copy.totalCostRange}</label><div className="grid grid-cols-2 gap-2"><input type="number" min="0" step="0.01" value={filters.totalCostMin ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, totalCostMin: event.target.value }))} placeholder={copy.min} className="form-input bg-white" /><input type="number" min="0" step="0.01" value={filters.totalCostMax ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, totalCostMax: event.target.value }))} placeholder={copy.max} className="form-input bg-white" /></div></div>
+              </div>
+              <div className="flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:items-center">
+                <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{copy.quickFilters}</span>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => updateFilters((current) => ({ ...current, receiptCheckedStatus: uncheckedReceiptsActive ? "" : "not_checked" }))} className={getQuickFilterClass(uncheckedReceiptsActive)}>
+                    {uncheckedReceiptsLabel}
+                  </button>
+                  <button type="button" onClick={() => updateFilters((current) => ({ ...current, duplicatesOnly: !current.duplicatesOnly }))} className={getQuickFilterClass(Boolean(filters.duplicatesOnly))}>
+                    {copy.possibleDuplicates}
+                  </button>
+                  <button type="button" onClick={() => updateFilters((current) => ({ ...current, missingMileageOnly: !current.missingMileageOnly }))} className={getQuickFilterClass(Boolean(filters.missingMileageOnly))}>
+                    {copy.missingMileage}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1009,7 +1095,7 @@ export default function FuelLogsPage() {
                         <p className="mt-2 text-sm font-semibold text-slate-900">{log.driver}</p>
                         <p className="mt-1 text-sm text-slate-500">{log.vehicle_reg}</p>
                       </div>
-                      <p className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-700">{formatCurrency(Number(log.total_cost || 0), language)}</p>
+                      <p className="whitespace-nowrap rounded-full bg-slate-100 px-3 py-1 text-base font-bold text-slate-900">{formatCurrency(Number(log.total_cost || 0), language)}</p>
                     </div>
                     <div className="mt-4 grid grid-cols-2 gap-3">
                       <div><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.litres}</p><p className="mt-1 text-sm font-medium text-slate-900">{formatNumber(Number(log.litres || 0), language, 2)}</p></div>
@@ -1018,6 +1104,13 @@ export default function FuelLogsPage() {
                       <div><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.location}</p><p className="mt-1 text-sm font-medium text-slate-900">{log.location || "-"}</p></div>
                       <div><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{receiptCopy.filterLabel}</p><span className={`mt-1 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getReceiptCheckBadgeClass(log.receipt_checked)}`}>{getReceiptCheckLabel(log.receipt_checked, language)}</span></div>
                     </div>
+                    {getFuelLogWarnings(log).length ? (
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {getFuelLogWarnings(log).map((warning) => (
+                          <span key={warning} className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800">{warning}</span>
+                        ))}
+                      </div>
+                    ) : null}
                     <div className="mt-4 flex gap-2">
                       <button type="button" onClick={() => void handleReceiptToggle(log, !log.receipt_checked)} disabled={togglingReceiptId === String(log.id)} className="btn-secondary min-h-[46px] flex-1 px-4 py-2.5 disabled:opacity-50">{togglingReceiptId === String(log.id) ? t.common.saving : log.receipt_checked ? receiptCopy.markUnchecked : receiptCopy.markChecked}</button>
                       <button type="button" onClick={() => populateForm(log)} className="btn-secondary min-h-[46px] flex-1 px-4 py-2.5">{t.common.edit}</button>
@@ -1045,20 +1138,32 @@ export default function FuelLogsPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {fuelLogs.map((log) => (
-                          <tr key={log.id} className={`enterprise-table-row ${highlightedFuelLogId === String(log.id) ? "bg-amber-50/70" : ""}`}>
-                            <td className="table-body-cell font-medium text-slate-700"><Highlight text={formatDate(log.date, language)} query={filters.search ?? ""} /></td>
+                        {fuelLogs.map((log) => {
+                          const warnings = getFuelLogWarnings(log);
+                          return (
+                          <tr key={log.id} className={`enterprise-table-row ${highlightedFuelLogId === String(log.id) || warnings.length ? "bg-amber-50/70" : ""}`}>
+                            <td className="table-body-cell whitespace-nowrap font-medium text-slate-700"><Highlight text={formatDate(log.date, language)} query={filters.search ?? ""} /></td>
                             <td className="table-body-cell whitespace-nowrap table-driver-name"><Highlight text={log.driver} query={filters.search ?? ""} /></td>
-                            <td className="table-body-cell whitespace-nowrap text-slate-700"><Highlight text={log.vehicle_reg} query={filters.search ?? ""} /></td>
+                            <td className="table-body-cell whitespace-nowrap text-slate-700">
+                              <Highlight text={log.vehicle_reg} query={filters.search ?? ""} />
+                              {warnings.length ? (
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {warnings.map((warning) => (
+                                    <span key={warning} className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800">{warning}</span>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </td>
                             <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800"><Highlight text={formatNumber(Number(log.litres || 0), language, 2)} query={filters.search ?? ""} /></td>
-                            <td className="table-body-cell whitespace-nowrap text-right font-semibold text-slate-950"><Highlight text={formatCurrency(Number(log.total_cost || 0), language)} query={filters.search ?? ""} /></td>
+                            <td className="table-body-cell whitespace-nowrap text-right text-base font-bold text-slate-950"><Highlight text={formatCurrency(Number(log.total_cost || 0), language)} query={filters.search ?? ""} /></td>
                             <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800">{log.price_per_litre != null ? formatCurrency(Number(log.price_per_litre), language) : "-"}</td>
                             <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800">{log.mileage ?? "-"}</td>
                             <td className="table-body-cell min-w-[140px] text-slate-700"><Highlight text={log.location || "-"} query={filters.search ?? ""} /></td>
                             <td className="table-body-cell"><span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getReceiptCheckBadgeClass(log.receipt_checked)}`}>{getReceiptCheckLabel(log.receipt_checked, language)}</span></td>
-                            <td className="table-body-cell"><div className="flex gap-2"><button type="button" onClick={() => void handleReceiptToggle(log, !log.receipt_checked)} disabled={togglingReceiptId === String(log.id)} className="table-action-secondary min-w-[118px] disabled:opacity-50">{togglingReceiptId === String(log.id) ? t.common.saving : log.receipt_checked ? receiptCopy.markUnchecked : receiptCopy.markChecked}</button><button type="button" onClick={() => populateForm(log)} className="table-action-secondary min-w-[78px]">{t.common.edit}</button><button type="button" onClick={() => void handleDelete(String(log.id))} disabled={deletingId === String(log.id)} className="table-action-danger min-w-[78px] disabled:opacity-50">{deletingId === String(log.id) ? t.common.deleting : t.common.delete}</button></div></td>
+                            <td className="table-body-cell"><div className="flex gap-1.5"><button type="button" onClick={() => void handleReceiptToggle(log, !log.receipt_checked)} disabled={togglingReceiptId === String(log.id)} className="table-action-secondary min-w-[104px] disabled:opacity-50">{togglingReceiptId === String(log.id) ? t.common.saving : log.receipt_checked ? receiptCopy.markUnchecked : receiptCopy.markChecked}</button><button type="button" onClick={() => populateForm(log)} className="table-action-secondary min-w-[68px]">{t.common.edit}</button><button type="button" onClick={() => void handleDelete(String(log.id))} disabled={deletingId === String(log.id)} className="table-action-danger min-w-[68px] disabled:opacity-50">{deletingId === String(log.id) ? t.common.deleting : t.common.delete}</button></div></td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

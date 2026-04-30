@@ -1,13 +1,12 @@
-import oilChangeIntervals from "@/lib/oil-change-intervals.json";
 import type { DriverVehicleType } from "@/types/database";
 
 export type OilChangeIntervalSource = "service_record" | "vehicle_baseline" | "vehicle_type" | "missing";
 
 export const OIL_CHANGE_INTERVAL_BY_VEHICLE_TYPE: Record<DriverVehicleType, number> = {
-  EIGHTEEN_WHEELER: oilChangeIntervals.EIGHTEEN_WHEELER,
-  SIX_WHEEL_TRUCK: oilChangeIntervals.SIX_WHEEL_TRUCK,
-  SIX_PLUS_SIX_WHEELER: oilChangeIntervals.SIX_PLUS_SIX_WHEELER,
-  FOUR_WHEEL_TRUCK: oilChangeIntervals.FOUR_WHEEL_TRUCK
+  EIGHTEEN_WHEELER: 30000,
+  SIX_WHEEL_TRUCK: 30000,
+  SIX_PLUS_SIX_WHEELER: 30000,
+  FOUR_WHEEL_TRUCK: 8000
 };
 
 export const VEHICLE_TYPE_LABELS: Record<DriverVehicleType, string> = {
@@ -22,7 +21,7 @@ export function getOilChangeIntervalForVehicleType(vehicleType: string | null | 
     return null;
   }
 
-  return OIL_CHANGE_INTERVAL_BY_VEHICLE_TYPE[vehicleType as DriverVehicleType] ?? null;
+  return vehicleType === "FOUR_WHEEL_TRUCK" ? 8000 : 30000;
 }
 
 export function getVehicleTypeLabel(vehicleType: string | null | undefined) {
