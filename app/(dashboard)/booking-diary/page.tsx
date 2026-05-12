@@ -652,7 +652,86 @@ export default function BookingDiaryPage() {
           <EmptyState title={copy.noBookings} description={copy.noBookingsDescription} />
         ) : (
           <>
-            <div className="space-y-3 lg:hidden">
+            <div className="booking-ledger-list lg:hidden">
+              {filteredBookings.map((booking) => (
+                <article
+                  key={booking.id}
+                  className="booking-ledger-entry"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openEdit(booking)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      openEdit(booking);
+                    }
+                  }}
+                >
+                  <div className="booking-ledger-top">
+                    <p className="booking-ledger-date">
+                      <CalendarDays className="booking-ledger-icon text-brand-600" />
+                      {formatDate(booking.booking_date, language)}
+                    </p>
+                    <p className="booking-ledger-status">{copy.updatedLabel} {formatTime(booking.updated_at, language)}</p>
+                  </div>
+
+                  <div className="booking-ledger-route">
+                    <span>{booking.pickup}</span>
+                    <span className="booking-ledger-arrow">-&gt;</span>
+                    <span>{booking.dropoff}</span>
+                  </div>
+
+                  <div className="booking-ledger-row">
+                    <span><Truck className="booking-ledger-icon" />{booking.vehicle || "-"}</span>
+                    <span><UserRound className="booking-ledger-icon" />{booking.driver || "-"}</span>
+                  </div>
+
+                  <div className="booking-ledger-load">
+                    <span>{copy.amountPallets}: <strong>{booking.amount_pallets || "-"}</strong></span>
+                    <span>{copy.weight}: <strong>{booking.weight || "-"}</strong></span>
+                    <span>{copy.dimensions}: <strong>{booking.dimensions || "-"}</strong></span>
+                  </div>
+
+                  {(booking.warehouse_no || booking.notes) ? (
+                    <div className="booking-ledger-extra">
+                      {booking.warehouse_no ? <p>{copy.warehouseNo}: {booking.warehouse_no}</p> : null}
+                      {booking.notes ? <p>{copy.notes}: {booking.notes}</p> : null}
+                    </div>
+                  ) : null}
+
+                  <div className="booking-ledger-bottom">
+                    <p><Clock3 className="booking-ledger-icon" />{booking.modified_by || "-"} • {formatTime(booking.updated_at, language)}</p>
+                    <div className="booking-ledger-actions">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openEdit(booking);
+                        }}
+                        className="booking-entry-edit"
+                        aria-label={copy.editBooking}
+                      >
+                        <Edit3 className="h-3.5 w-3.5" />
+                        {copy.tapToEdit}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setDeleteTarget(booking);
+                        }}
+                        className="booking-card-delete"
+                        aria-label={copy.deleteBooking}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            <div className="hidden">
               {filteredBookings.map((booking) => (
                 <article
                   key={booking.id}
