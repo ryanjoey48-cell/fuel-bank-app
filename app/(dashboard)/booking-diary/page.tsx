@@ -750,7 +750,7 @@ export default function BookingDiaryPage() {
       ) : null}
 
       {modalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-[rgba(26,16,46,0.32)] p-0 backdrop-blur-[6px] lg:items-center lg:p-6">
+        <div className="booking-modal-backdrop fixed inset-0 z-50 flex items-end justify-center bg-[rgba(26,16,46,0.32)] p-0 backdrop-blur-[6px] lg:items-center lg:p-6">
           <div className="booking-sheet max-h-[100dvh] w-full overflow-hidden rounded-t-[1.6rem] border border-brand-100 bg-white shadow-[0_30px_70px_rgba(38,18,78,0.24)] lg:max-h-[96vh] lg:max-w-3xl lg:rounded-[1.6rem]">
             <div className="flex items-center justify-between gap-3 border-b border-slate-200/80 px-4 py-4 sm:px-5">
               <div className="min-w-0">
@@ -762,47 +762,47 @@ export default function BookingDiaryPage() {
               </button>
             </div>
 
-            <form onSubmit={submit} className="max-h-[calc(100dvh-88px)] overflow-y-auto px-4 py-4 sm:px-5 sm:py-5 lg:max-h-[calc(96vh-88px)]">
-              <div className="grid gap-3 md:grid-cols-4">
-                <label className="form-field md:col-span-1">
+            <form onSubmit={submit} className="booking-sheet-form max-h-[calc(100dvh-88px)] overflow-y-auto px-4 py-4 sm:px-5 sm:py-5 lg:max-h-[calc(96vh-88px)]">
+              <div className="booking-form-grid">
+                <label className="form-field lg:col-span-1">
                   <span className="form-label form-label-required">{copy.date}</span>
                   <input ref={firstInputRef} required type="date" value={form.booking_date} onChange={(event) => setField("booking_date", event.target.value)} className={inputClass} />
                 </label>
-                <label className="form-field md:col-span-1">
+                <label className="form-field lg:col-span-1">
                   <span className="form-label">{copy.amountPallets}</span>
                   <input inputMode="decimal" value={form.amount_pallets} onChange={(event) => setField("amount_pallets", event.target.value)} className={inputClass} placeholder="10" />
                 </label>
-                <label className="form-field md:col-span-1">
+                <label className="form-field lg:col-span-1">
                   <span className="form-label">{copy.weight}</span>
                   <input inputMode="decimal" value={form.weight} onChange={(event) => setField("weight", event.target.value)} className={inputClass} placeholder="1200" />
                 </label>
-                <label className="form-field md:col-span-1">
+                <label className="form-field lg:col-span-1">
                   <span className="form-label">{copy.dimensions}</span>
                   <input value={form.dimensions} onChange={(event) => setField("dimensions", event.target.value)} className={inputClass} placeholder="L x W x H" />
                 </label>
-                <label className="form-field md:col-span-2">
+                <label className="form-field lg:col-span-2">
                   <span className="form-label form-label-required">{copy.pickup}</span>
                   <input required value={form.pickup} onChange={(event) => setField("pickup", event.target.value)} className={inputClass} placeholder={copy.pickup} />
                 </label>
-                <label className="form-field md:col-span-1">
+                <label className="form-field lg:col-span-1">
                   <span className="form-label">{copy.warehouseNo}</span>
                   <input value={form.warehouse_no} onChange={(event) => setField("warehouse_no", event.target.value)} className={inputClass} placeholder="WH / NO" />
                 </label>
-                <label className="form-field md:col-span-1">
+                <label className="form-field lg:col-span-1">
                   <span className="form-label form-label-required">{copy.dropoff}</span>
                   <input required value={form.dropoff} onChange={(event) => setField("dropoff", event.target.value)} className={inputClass} placeholder={copy.dropoff} />
                 </label>
-                <label className="form-field md:col-span-1">
+                <label className="form-field lg:col-span-1">
                   <span className="form-label">{copy.vehicle}</span>
                   <input list="booking-vehicles" value={form.vehicle} onChange={(event) => setField("vehicle", event.target.value)} className={inputClass} placeholder={copy.vehicle} />
                   <datalist id="booking-vehicles">{vehicleOptions.map((vehicle) => <option key={vehicle} value={vehicle} />)}</datalist>
                 </label>
-                <label className="form-field md:col-span-1">
+                <label className="form-field lg:col-span-1">
                   <span className="form-label">{copy.driver}</span>
                   <input list="booking-drivers" value={form.driver} onChange={(event) => setField("driver", event.target.value)} className={inputClass} placeholder={copy.driver} />
                   <datalist id="booking-drivers">{driverOptions.map((driver) => <option key={driver} value={driver} />)}</datalist>
                 </label>
-                <label className="form-field md:col-span-4">
+                <label className="form-field lg:col-span-4">
                   <span className="form-label">{copy.notes}</span>
                   <textarea value={form.notes} onChange={(event) => setField("notes", event.target.value)} className="form-textarea min-h-[92px] rounded-[1rem]" placeholder={copy.notes} />
                 </label>
