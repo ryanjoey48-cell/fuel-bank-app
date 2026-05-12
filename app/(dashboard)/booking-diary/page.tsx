@@ -654,50 +654,39 @@ export default function BookingDiaryPage() {
           <>
             <div className="booking-ledger-list lg:hidden">
               {filteredBookings.map((booking) => (
-                <article
+                <details
                   key={booking.id}
                   className="booking-ledger-entry"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => openEdit(booking)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      openEdit(booking);
-                    }
-                  }}
                 >
-                  <div className="booking-ledger-top">
-                    <p className="booking-ledger-date">
-                      <CalendarDays className="booking-ledger-icon text-brand-600" />
-                      {formatDate(booking.booking_date, language)}
-                    </p>
-                    <p className="booking-ledger-status">{copy.updatedLabel} {formatTime(booking.updated_at, language)}</p>
-                  </div>
-
-                  <div className="booking-ledger-route">
-                    <span>{booking.pickup}</span>
-                    <span className="booking-ledger-arrow">-&gt;</span>
-                    <span>{booking.dropoff}</span>
-                  </div>
-
-                  <div className="booking-ledger-row">
-                    <span><Truck className="booking-ledger-icon" />{booking.vehicle || "-"}</span>
-                    <span><UserRound className="booking-ledger-icon" />{booking.driver || "-"}</span>
-                  </div>
-
-                  <div className="booking-ledger-load">
-                    <span>{copy.amountPallets}: <strong>{booking.amount_pallets || "-"}</strong></span>
-                    <span>{copy.weight}: <strong>{booking.weight || "-"}</strong></span>
-                    <span>{copy.dimensions}: <strong>{booking.dimensions || "-"}</strong></span>
-                  </div>
-
-                  {(booking.warehouse_no || booking.notes) ? (
-                    <div className="booking-ledger-extra">
-                      {booking.warehouse_no ? <p>{copy.warehouseNo}: {booking.warehouse_no}</p> : null}
-                      {booking.notes ? <p>{copy.notes}: {booking.notes}</p> : null}
+                  <summary className="booking-ledger-summary">
+                    <div className="min-w-0">
+                      <div className="booking-ledger-route">
+                        <span>{booking.pickup}</span>
+                        <span className="booking-ledger-arrow">-&gt;</span>
+                        <span>{booking.dropoff}</span>
+                      </div>
+                      <div className="booking-ledger-row">
+                        <span><Truck className="booking-ledger-icon" />{booking.vehicle || "-"}</span>
+                        <span><UserRound className="booking-ledger-icon" />{booking.driver || "-"}</span>
+                      </div>
+                      <div className="booking-ledger-load">
+                        <span>{copy.amountPallets}: <strong>{booking.amount_pallets || "-"}</strong></span>
+                        <span>{copy.weight}: <strong>{booking.weight || "-"}</strong></span>
+                      </div>
                     </div>
-                  ) : null}
+                    <div className="booking-ledger-right">
+                      <span>{formatTime(booking.updated_at, language)}</span>
+                      <span aria-label={copy.tapToEdit}>
+                        <Edit3 className="h-3 w-3" />
+                      </span>
+                    </div>
+                  </summary>
+                  <div className="booking-ledger-extra">
+                    <p><span>{copy.date}</span>{formatDate(booking.booking_date, language)}</p>
+                    <p><span>{copy.dimensions}</span>{booking.dimensions || "-"}</p>
+                    <p><span>{copy.warehouseNo}</span>{booking.warehouse_no || "-"}</p>
+                    <p><span>{copy.notes}</span>{booking.notes || "-"}</p>
+                  </div>
 
                   <div className="booking-ledger-bottom">
                     <p><Clock3 className="booking-ledger-icon" />{booking.modified_by || "-"} • {formatTime(booking.updated_at, language)}</p>
@@ -727,7 +716,7 @@ export default function BookingDiaryPage() {
                       </button>
                     </div>
                   </div>
-                </article>
+                </details>
               ))}
             </div>
 
