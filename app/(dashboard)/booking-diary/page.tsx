@@ -120,7 +120,9 @@ const labels = {
     deleteBooking: "Delete Booking",
     tableHint: "Daily operational diary",
     lastChanged: "Last changed",
-    details: "Booking details"
+    details: "Booking details",
+    tapToEdit: "Tap to edit",
+    updatedLabel: "Updated"
   },
   th: {
     title: "สมุดจองงาน",
@@ -177,7 +179,9 @@ const labels = {
     deleteBooking: "Delete Booking",
     tableHint: "สมุดงานประจำวัน",
     lastChanged: "แก้ไขล่าสุด",
-    details: "รายละเอียดงานจอง"
+    details: "รายละเอียดงานจอง",
+    tapToEdit: "แตะเพื่อแก้ไข",
+    updatedLabel: "อัปเดต"
   }
 };
 
@@ -650,14 +654,39 @@ export default function BookingDiaryPage() {
           <>
             <div className="space-y-3 lg:hidden">
               {filteredBookings.map((booking) => (
-                <article key={booking.id} className="booking-mobile-card">
-                  <div className="flex items-start justify-between gap-3">
+                <article
+                  key={booking.id}
+                  className="booking-mobile-card booking-entry"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openEdit(booking)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      openEdit(booking);
+                    }
+                  }}
+                >
+                  <div className="booking-entry-top">
                     <div className="min-w-0">
-                      <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                        <CalendarDays className="h-3.5 w-3.5" />
+                      <p className="booking-entry-date">
+                        <CalendarDays className="booking-card-icon text-brand-600" />
                         {formatDate(booking.booking_date, language)}
                       </p>
                     </div>
+                    <p className="booking-entry-status">{copy.updatedLabel} {formatTime(booking.updated_at, language)}</p>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openEdit(booking);
+                      }}
+                      className="booking-entry-edit"
+                      aria-label={copy.editBooking}
+                    >
+                      <Edit3 className="h-3.5 w-3.5" />
+                      {copy.tapToEdit}
+                    </button>
                     <button
                       type="button"
                       onClick={(event) => {
@@ -670,13 +699,29 @@ export default function BookingDiaryPage() {
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
-                  <button type="button" onClick={() => openEdit(booking)} className="mt-3 w-full text-left active:scale-[0.99]">
-                  <div className="booking-card-measurements">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openEdit(booking);
+                    }}
+                    className="booking-entry-main"
+                  >
+                  <div className="booking-entry-route">
+                    <span>{booking.pickup}</span>
+                    <span className="booking-entry-arrow">→</span>
+                    <span>{booking.dropoff}</span>
+                  </div>
+                  <div className="booking-entry-assignment">
+                    <span><Truck className="booking-card-icon" />{booking.vehicle || "-"}</span>
+                    <span><UserRound className="booking-card-icon" />{booking.driver || "-"}</span>
+                  </div>
+                  <div className="booking-card-measurements booking-entry-load">
                     <p><span>{booking.amount_pallets || "-"}</span>{copy.amountPallets}</p>
                     <p><span>{booking.weight || "-"}</span>{copy.weight}</p>
                     <p><span>{booking.dimensions || "-"}</span>{copy.dimensions}</p>
                   </div>
-                  <div className="booking-card-route">
+                  <div className="booking-card-route booking-entry-extra">
                     <p><MapPin className="booking-card-icon text-brand-600" /> <span>{booking.pickup}</span></p>
                     <p className="booking-card-warehouse">{copy.warehouseNo}: {booking.warehouse_no || "-"}</p>
                     <p><MapPin className="booking-card-icon text-orange-500" /> <span>{booking.dropoff}</span></p>
@@ -704,7 +749,7 @@ export default function BookingDiaryPage() {
                   </thead>
                   <tbody>
                     {filteredBookings.map((booking) => (
-                      <tr key={booking.id} className="enterprise-table-row">
+                      <tr key={booking.id} className="enterprise-table-row cursor-pointer" onClick={() => openEdit(booking)}>
                         <td className="px-3 py-3 align-middle text-[13px] font-semibold text-slate-950 whitespace-nowrap">{formatDate(booking.booking_date, language)}</td>
                         <td className="px-3 py-3 align-middle text-[13px]">{booking.amount_pallets || "-"}</td>
                         <td className="px-3 py-3 align-middle text-[13px]">{booking.weight || "-"}</td>
@@ -719,11 +764,27 @@ export default function BookingDiaryPage() {
                         <td className="px-3 py-3 align-middle text-[13px] whitespace-nowrap">{formatTime(booking.updated_at, language)}</td>
                         <td className="px-3 py-3 align-middle text-right">
                           <div className="flex justify-end gap-1.5">
-                            <button type="button" onClick={() => openEdit(booking)} className="table-action-secondary min-h-[36px] gap-1.5 px-2.5" aria-label={copy.editBooking}>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openEdit(booking);
+                              }}
+                              className="table-action-secondary min-h-[36px] gap-1.5 px-2.5"
+                              aria-label={copy.editBooking}
+                            >
                               <Edit3 className="h-3.5 w-3.5" />
                               Edit
                             </button>
-                            <button type="button" onClick={() => setDeleteTarget(booking)} className="table-action-danger min-h-[36px] gap-1.5 px-2.5" aria-label={copy.deleteBooking}>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setDeleteTarget(booking);
+                              }}
+                              className="table-action-danger min-h-[36px] gap-1.5 px-2.5"
+                              aria-label={copy.deleteBooking}
+                            >
                               <Trash2 className="h-3.5 w-3.5" />
                             </button>
                           </div>

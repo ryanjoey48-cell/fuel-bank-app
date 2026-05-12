@@ -475,16 +475,96 @@ td {
   }
 
   .booking-mobile-card {
-    @apply w-full max-w-full rounded-[1.2rem] border border-brand-100/60 bg-white p-3.5;
-    box-shadow: 0 1px 2px rgba(38,18,78,0.025), 0 12px 28px rgba(38,18,78,0.055);
+    @apply w-full max-w-full rounded-[1.1rem] border border-brand-100/60 bg-white p-3;
+    box-shadow: 0 1px 2px rgba(38,18,78,0.025), 0 10px 24px rgba(38,18,78,0.05);
+  }
+
+  .booking-entry {
+    @apply cursor-pointer outline-none transition duration-200 active:scale-[0.995];
+  }
+
+  .booking-entry:hover,
+  .booking-entry:focus-visible {
+    border-color: rgba(95, 51, 183, 0.26);
+    box-shadow: 0 1px 2px rgba(38,18,78,0.03), 0 14px 30px rgba(38,18,78,0.07);
+  }
+
+  .booking-entry-top {
+    @apply flex min-w-0 items-center gap-2;
+  }
+
+  .booking-entry-date {
+    @apply flex min-w-0 items-center gap-1.5 whitespace-nowrap text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500;
+  }
+
+  .booking-entry-status {
+    @apply ml-auto hidden min-w-0 truncate text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400 min-[390px]:block;
+  }
+
+  .booking-entry-edit {
+    @apply inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-[0.85rem] border border-brand-100 bg-brand-50 px-2.5 text-[11px] font-semibold text-brand-700 active:scale-95;
+  }
+
+  .booking-entry-main {
+    @apply mt-2.5 block w-full min-w-0 text-left;
+  }
+
+  .booking-entry-route {
+    @apply flex min-w-0 items-center gap-2 text-[15px] font-semibold leading-6 text-slate-950;
+  }
+
+  .booking-entry-route span {
+    @apply min-w-0 truncate;
+  }
+
+  .booking-entry-arrow {
+    @apply shrink-0 text-brand-600;
+  }
+
+  .booking-entry-assignment {
+    @apply mt-1.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-slate-600;
+  }
+
+  .booking-entry-assignment span {
+    @apply flex min-w-0 items-center gap-1.5 truncate;
+  }
+
+  .booking-entry-load {
+    @apply mt-2.5;
+  }
+
+  .booking-entry-extra {
+    @apply mt-2 border-t border-slate-100 pt-2;
+  }
+
+  .booking-entry-extra > p:first-child,
+  .booking-entry-extra > p:last-child {
+    @apply hidden;
+  }
+
+  .booking-entry-extra .booking-card-warehouse {
+    @apply block pl-0;
+  }
+
+  .booking-entry .booking-card-meta {
+    @apply mt-2 border-t border-slate-100 pt-2;
+  }
+
+  .booking-entry .booking-card-meta > p:nth-child(1),
+  .booking-entry .booking-card-meta > p:nth-child(2) {
+    @apply hidden;
+  }
+
+  .booking-entry .booking-card-meta > p:last-child {
+    @apply flex items-center gap-1.5 text-[11px] text-slate-400;
   }
 
   .booking-card-delete {
-    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.85rem] border border-rose-100 bg-rose-50 text-rose-600 active:scale-95;
+    @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-[0.85rem] border border-rose-100 bg-rose-50 text-rose-600 active:scale-95;
   }
 
   .booking-card-measurements {
-    @apply grid grid-cols-3 gap-1.5 rounded-[0.95rem] bg-slate-50/85 px-2.5 py-2 text-[10px] font-medium leading-4 text-slate-500;
+    @apply grid grid-cols-3 gap-1.5 rounded-[0.85rem] bg-slate-50/85 px-2.5 py-1.5 text-[10px] font-medium leading-4 text-slate-500;
   }
 
   .booking-card-measurements span {
