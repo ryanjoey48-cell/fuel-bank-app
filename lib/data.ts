@@ -424,6 +424,13 @@ function parseOptionalNumeric(value: unknown) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function generateBookingDiaryId(date = new Date()) {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  const datePart = `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}`;
+  const timePart = `${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+  return `BK-${datePart}-${timePart}`;
+}
+
 function normalizeVehicleRow(vehicle: Vehicle) {
   const vehicleReg = normalizeVehicleRegistration(vehicle.vehicle_reg ?? vehicle.registration);
   return {
@@ -1550,8 +1557,9 @@ export async function saveBookingDiaryEntry(
 ) {
   const { id, ...rest } = payload;
   const audit = await getCurrentUserAudit();
+  const bookingId = id ? rest.booking_id?.trim() : rest.booking_id?.trim() || generateBookingDiaryId();
   const cleaned = stripUndefined({
-    ...(!id && rest.booking_id?.trim() ? { booking_id: rest.booking_id.trim() } : {}),
+    ...(!id ? { booking_id: bookingId } : {}),
     booking_date: rest.booking_date,
     amount_pallets: parseOptionalNumeric(rest.amount_pallets),
     weight: parseOptionalNumeric(rest.weight),
