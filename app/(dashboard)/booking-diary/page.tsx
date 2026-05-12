@@ -476,16 +476,16 @@ export default function BookingDiaryPage() {
     );
   };
 
-  const inputClass = "form-input min-h-[52px] rounded-[1rem] px-4 py-3 text-[15px]";
-  const compactInputClass = "form-input min-h-[48px] rounded-[1rem] px-4 py-3 text-[14px]";
+  const inputClass = "booking-form-control";
+  const compactInputClass = "booking-filter-control";
 
   return (
-    <>
+    <div className="booking-diary-page w-full max-w-full overflow-x-hidden">
       <div className="mb-5 hidden lg:block">
         <Header title={copy.title} description={copy.description} />
       </div>
 
-      <section className="grid gap-3 lg:hidden">
+      <section className="grid max-w-full gap-3 lg:hidden">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="badge-muted w-fit">{copy.live}</p>
@@ -497,21 +497,21 @@ export default function BookingDiaryPage() {
               type="button"
               onClick={exportFilteredBookings}
               disabled={!filteredBookings.length}
-              className="btn-secondary min-h-[48px] w-12 rounded-[1rem] px-0 disabled:cursor-not-allowed disabled:opacity-50"
+              className="booking-icon-button btn-secondary disabled:cursor-not-allowed disabled:opacity-50"
               aria-label={copy.exportExcel}
             >
               <Download className="h-4 w-4" />
             </button>
-            <button type="button" onClick={openCreate} className="btn-primary min-h-[48px] w-12 rounded-[1rem] px-0 shadow-[0_16px_30px_rgba(95,51,183,0.22)]" aria-label={copy.addBooking}>
+            <button type="button" onClick={openCreate} className="booking-icon-button btn-primary" aria-label={copy.addBooking}>
               <Plus className="h-4 w-4" />
             </button>
           </div>
         </div>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-        <div className="surface-card-soft p-4 sm:p-5">
-          <div className="mb-3 flex items-center justify-between gap-3">
+      <section className="grid max-w-full gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+        <div className="booking-filter-panel surface-card-soft">
+          <div className="mb-2.5 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Filter className="h-4 w-4 text-brand-700" />
               <p className="text-sm font-semibold text-slate-800">{copy.quickFilters}</p>
@@ -521,8 +521,8 @@ export default function BookingDiaryPage() {
               {copy.live}
             </div>
           </div>
-          <div className="grid gap-3 xl:grid-cols-[minmax(220px,1.4fr)_repeat(5,minmax(140px,1fr))]">
-            <div className="relative">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-[minmax(220px,1.4fr)_repeat(5,minmax(140px,1fr))]">
+            <div className="relative col-span-2 sm:col-span-3 xl:col-span-1">
               <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
                 value={searchQuery}
@@ -556,14 +556,14 @@ export default function BookingDiaryPage() {
               {driverOptions.map((driver) => <option key={driver} value={driver}>{driver}</option>)}
             </select>
           </div>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-2.5 flex flex-wrap gap-2">
             {(["today", "week", "all"] as const).map((filter) => (
               <button
                 key={filter}
                 type="button"
                 onClick={() => setQuickFilter(filter)}
                 className={clsx(
-                  "min-h-[38px] rounded-full border px-4 text-xs font-semibold",
+                  "booking-filter-chip",
                   quickFilter === filter
                     ? "border-brand-200 bg-brand-50 text-brand-800"
                     : "border-slate-200 bg-white text-slate-600 hover:border-brand-100 hover:text-brand-700"
@@ -576,7 +576,7 @@ export default function BookingDiaryPage() {
               <button
                 type="button"
                 onClick={clearFilters}
-                className="min-h-[38px] rounded-full border border-slate-200 bg-white px-4 text-xs font-semibold text-slate-600 hover:border-rose-100 hover:text-rose-600"
+                className="booking-filter-chip border-slate-200 bg-white text-slate-600 hover:border-rose-100 hover:text-rose-600"
               >
                 {copy.clearFilters}
               </button>
@@ -589,12 +589,12 @@ export default function BookingDiaryPage() {
             type="button"
             onClick={exportFilteredBookings}
             disabled={!filteredBookings.length}
-            className="btn-secondary min-h-[52px] gap-2 rounded-[1rem] px-5 disabled:cursor-not-allowed disabled:opacity-50"
+            className="booking-action-button btn-secondary gap-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Download className="h-4 w-4" />
             {copy.exportExcel}
           </button>
-          <button type="button" onClick={openCreate} className="btn-primary min-h-[52px] gap-2 rounded-[1rem] px-5">
+          <button type="button" onClick={openCreate} className="booking-action-button btn-primary gap-2">
             <PackagePlus className="h-4 w-4" />
             {copy.addBooking}
           </button>
@@ -613,21 +613,21 @@ export default function BookingDiaryPage() {
         </div>
       ) : null}
 
-      <section className="grid gap-2 rounded-[1.25rem] border border-brand-100/70 bg-white/92 p-3 shadow-[0_10px_24px_rgba(38,18,78,0.04)] sm:grid-cols-4">
+      <section className="booking-stats-strip grid grid-cols-2 gap-2 lg:grid-cols-4">
         {[
           { label: copy.totalShown, value: filteredBookings.length },
           { label: copy.todayShown, value: todaysBookingsCount },
           { label: copy.weekShown, value: weekBookingsCount },
           { label: copy.lastChanged, value: lastUpdatedAt ? formatTime(lastUpdatedAt, language) : "-" }
         ].map((item) => (
-          <div key={item.label} className="rounded-[1rem] bg-slate-50/80 px-3 py-2.5">
-            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">{item.label}</p>
-            <p className="mt-1 truncate text-sm font-semibold text-slate-950">{item.value}</p>
+          <div key={item.label} className="booking-stat-cell">
+            <p className="booking-stat-label">{item.label}</p>
+            <p className="booking-stat-value">{item.value}</p>
           </div>
         ))}
       </section>
 
-      <section className="surface-card min-w-0 p-4 sm:p-5 lg:p-6">
+      <section className="surface-card min-w-0 max-w-full p-3.5 sm:p-5 lg:p-6">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -650,10 +650,7 @@ export default function BookingDiaryPage() {
           <>
             <div className="space-y-3 lg:hidden">
               {filteredBookings.map((booking) => (
-                <article
-                  key={booking.id}
-                  className="subtle-panel w-full p-4"
-                >
+                <article key={booking.id} className="booking-mobile-card">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
@@ -667,28 +664,28 @@ export default function BookingDiaryPage() {
                         event.stopPropagation();
                         setDeleteTarget(booking);
                       }}
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.85rem] border border-rose-100 bg-rose-50 text-rose-600"
+                      className="booking-card-delete"
                       aria-label={copy.deleteBooking}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
                   <button type="button" onClick={() => openEdit(booking)} className="mt-3 w-full text-left active:scale-[0.99]">
-                  <div className="grid grid-cols-3 gap-2 rounded-[1rem] bg-slate-50/80 px-3 py-2 text-xs text-slate-600">
-                    <p><span className="block font-semibold text-slate-900">{booking.amount_pallets || "-"}</span>{copy.amountPallets}</p>
-                    <p><span className="block font-semibold text-slate-900">{booking.weight || "-"}</span>{copy.weight}</p>
-                    <p><span className="block truncate font-semibold text-slate-900">{booking.dimensions || "-"}</span>{copy.dimensions}</p>
+                  <div className="booking-card-measurements">
+                    <p><span>{booking.amount_pallets || "-"}</span>{copy.amountPallets}</p>
+                    <p><span>{booking.weight || "-"}</span>{copy.weight}</p>
+                    <p><span>{booking.dimensions || "-"}</span>{copy.dimensions}</p>
                   </div>
-                  <div className="mt-3 grid gap-2 text-sm">
-                    <p className="flex items-start gap-2 text-slate-700"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" /> <span className="line-clamp-2">{booking.pickup}</span></p>
-                    <p className="pl-6 text-xs font-medium text-slate-500">{copy.warehouseNo}: {booking.warehouse_no || "-"}</p>
-                    <p className="flex items-start gap-2 text-slate-700"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-orange-500" /> <span className="line-clamp-2">{booking.dropoff}</span></p>
+                  <div className="booking-card-route">
+                    <p><MapPin className="booking-card-icon text-brand-600" /> <span>{booking.pickup}</span></p>
+                    <p className="booking-card-warehouse">{copy.warehouseNo}: {booking.warehouse_no || "-"}</p>
+                    <p><MapPin className="booking-card-icon text-orange-500" /> <span>{booking.dropoff}</span></p>
                   </div>
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-500">
-                    <p className="flex items-center gap-1.5"><Truck className="h-3.5 w-3.5" />{booking.vehicle || "-"}</p>
-                    <p className="flex items-center gap-1.5"><UserRound className="h-3.5 w-3.5" />{booking.driver || "-"}</p>
+                  <div className="booking-card-meta">
+                    <p><Truck className="booking-card-icon" />{booking.vehicle || "-"}</p>
+                    <p><UserRound className="booking-card-icon" />{booking.driver || "-"}</p>
                     {booking.notes ? <p className="col-span-2 truncate">{copy.notes}: {booking.notes}</p> : null}
-                    <p className="col-span-2 flex items-center gap-1.5"><Clock3 className="h-3.5 w-3.5" />{booking.modified_by || "-"} · {formatTime(booking.updated_at, language)}</p>
+                    <p className="col-span-2"><Clock3 className="booking-card-icon" />{booking.modified_by || "-"} · {formatTime(booking.updated_at, language)}</p>
                   </div>
                   </button>
                 </article>
@@ -745,7 +742,7 @@ export default function BookingDiaryPage() {
         <button
           type="button"
           onClick={openCreate}
-          className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] right-4 z-30 flex h-14 w-14 items-center justify-center rounded-[1.15rem] bg-brand-700 text-white shadow-[0_18px_38px_rgba(95,51,183,0.28)] lg:hidden"
+          className="booking-floating-add"
           aria-label={copy.addBooking}
         >
           <Plus className="h-5 w-5" />
@@ -754,7 +751,7 @@ export default function BookingDiaryPage() {
 
       {modalOpen ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-[rgba(26,16,46,0.32)] p-0 backdrop-blur-[6px] lg:items-center lg:p-6">
-          <div className="max-h-[100dvh] w-full overflow-hidden rounded-t-[1.6rem] border border-brand-100 bg-white shadow-[0_30px_70px_rgba(38,18,78,0.24)] lg:max-h-[96vh] lg:max-w-3xl lg:rounded-[1.6rem]">
+          <div className="booking-sheet max-h-[100dvh] w-full overflow-hidden rounded-t-[1.6rem] border border-brand-100 bg-white shadow-[0_30px_70px_rgba(38,18,78,0.24)] lg:max-h-[96vh] lg:max-w-3xl lg:rounded-[1.6rem]">
             <div className="flex items-center justify-between gap-3 border-b border-slate-200/80 px-4 py-4 sm:px-5">
               <div className="min-w-0">
                 <p className="badge-muted w-fit">{form.id ? copy.editBooking : copy.addBooking}</p>
@@ -765,7 +762,7 @@ export default function BookingDiaryPage() {
               </button>
             </div>
 
-            <form onSubmit={submit} className="max-h-[calc(100dvh-88px)] overflow-y-auto px-4 py-4 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] sm:px-5 sm:py-5 lg:max-h-[calc(96vh-88px)]">
+            <form onSubmit={submit} className="max-h-[calc(100dvh-88px)] overflow-y-auto px-4 py-4 sm:px-5 sm:py-5 lg:max-h-[calc(96vh-88px)]">
               <div className="grid gap-3 md:grid-cols-4">
                 <label className="form-field md:col-span-1">
                   <span className="form-label form-label-required">{copy.date}</span>
@@ -813,11 +810,11 @@ export default function BookingDiaryPage() {
 
               {error ? <p className="form-error mt-4">{error}</p> : null}
 
-              <div className="sticky bottom-0 mt-5 flex flex-col gap-2 border-t border-slate-200/80 bg-white/95 pt-4 backdrop-blur sm:flex-row sm:justify-end">
-                <button type="button" onClick={closeModal} className="btn-secondary min-h-[50px] rounded-[1rem] sm:w-auto">
+              <div className="booking-sheet-actions">
+                <button type="button" onClick={closeModal} className="booking-action-button btn-secondary sm:w-auto">
                   {copy.cancel}
                 </button>
-                <button type="submit" disabled={saving} className="btn-primary min-h-[50px] gap-2 rounded-[1rem] sm:w-auto disabled:opacity-70">
+                <button type="submit" disabled={saving} className="booking-action-button btn-primary gap-2 sm:w-auto disabled:opacity-70">
                   <Save className="h-4 w-4" />
                   {saving ? copy.saving : form.id ? copy.update : copy.save}
                 </button>
@@ -860,6 +857,6 @@ export default function BookingDiaryPage() {
           </div>
         </div>
       ) : null}
-    </>
+    </div>
   );
 }
