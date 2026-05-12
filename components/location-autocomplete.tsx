@@ -11,6 +11,15 @@ type LocationSuggestion = {
   secondaryText: string;
 };
 
+export type StructuredLocation = {
+  label: string;
+  formatted_address: string;
+  place_id: string | null;
+  lat: number;
+  lng: number;
+  manual_text?: string;
+};
+
 type LocationAutocompleteProps = {
   label: string;
   value: string;
@@ -22,6 +31,10 @@ type LocationAutocompleteProps = {
   configMissingMessage: string;
   helperText?: string;
   loadingText?: string;
+  invalidText?: string;
+  selectedLocation?: StructuredLocation | null;
+  onSelectLocation?: (location: StructuredLocation) => void;
+  onManualInput?: (value: string) => void;
   onConfigurationChange?: (configured: boolean) => void;
 };
 
@@ -36,6 +49,10 @@ export function LocationAutocomplete({
   configMissingMessage,
   helperText,
   loadingText = "Loading location suggestions...",
+  invalidText = "Please select a valid location from the Google suggestions.",
+  selectedLocation,
+  onSelectLocation,
+  onManualInput,
   onConfigurationChange
 }: LocationAutocompleteProps) {
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
@@ -161,14 +178,35 @@ export function LocationAutocomplete({
     };
   }, []);
 
-  const selectSuggestion = (suggestion: LocationSuggestion) => {
+  const selectSuggestion = async (suggestion: LocationSuggestion) => {
     userEditedRef.current = false;
-    onChange(suggestion.description);
-    setSuggestions([]);
-    setIsOpen(false);
-    setActiveIndex(-1);
-    setStatusMessage(helperText ?? null);
-    setSessionToken(crypto.randomUUID());
+    setLoading(true);
+    try {
+      const result = await fetchJson<StructuredLocation>(
+        `/api/location-details?placeId=${encodeURIComponent(suggestion.placeId)}&language=${language}`
+      );
+      const location = {
+        label: result.data?.label || suggestion.mainText || suggestion.description,
+        formatted_address: result.data?.formatted_address || suggestion.description,
+        place_id: result.data?.place_id || suggestion.placeId,
+        lat: Number(result.data?.lat),
+        lng: Number(result.data?.lng)
+      };
+      if (!Number.isFinite(location.lat) || !Number.isFinite(location.lng)) {
+        throw new Error(invalidText);
+      }
+      onChange(location.formatted_address || location.label);
+      onSelectLocation?.(location);
+      setSuggestions([]);
+      setIsOpen(false);
+      setActiveIndex(-1);
+      setStatusMessage(helperText ?? null);
+      setSessionToken(crypto.randomUUID());
+    } catch {
+      setStatusMessage(invalidText);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -189,6 +227,7 @@ export function LocationAutocomplete({
           onChange={(event) => {
             userEditedRef.current = true;
             onChange(event.target.value);
+            onManualInput?.(event.target.value);
             setIsOpen(true);
           }}
           onFocus={() => {
@@ -219,7 +258,7 @@ export function LocationAutocomplete({
 
             if (event.key === "Enter" && activeIndex >= 0) {
               event.preventDefault();
-              selectSuggestion(suggestions[activeIndex]);
+              void selectSuggestion(suggestions[activeIndex]);
               return;
             }
 
@@ -246,9 +285,9 @@ export function LocationAutocomplete({
                 }`}
                 onMouseDown={(event) => {
                   event.preventDefault();
-                  selectSuggestion(suggestion);
+                  void selectSuggestion(suggestion);
                 }}
-                onClick={() => selectSuggestion(suggestion)}
+                onClick={() => void selectSuggestion(suggestion)}
               >
                 <MapPinned className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
                 <span className="min-w-0">
@@ -272,7 +311,13 @@ export function LocationAutocomplete({
           ? `${configMissingMessage}. You can still type the full location manually.`
           : loading
             ? loadingText
-            : statusMessage ?? helperText ?? "Type at least 2 characters, or paste the full location manually."}
+            : selectedLocation
+              ? selectedLocation.place_id
+                ? selectedLocation.formatted_address
+                : selectedLocation.manual_text
+                  ? `${selectedLocation.manual_text} - manual/unverified`
+                  : selectedLocation.formatted_address
+              : statusMessage ?? helperText ?? "Type at least 2 characters, or paste the full location manually."}
       </p>
     </div>
   );

@@ -3,6 +3,7 @@
 import clsx from "clsx";
 import {
   ArrowRightLeft,
+  CalendarDays,
   ChevronRight,
   Droplets,
   LayoutDashboard,
@@ -28,14 +29,15 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   const navItems = [
     { href: "/dashboard", label: t.nav.dashboard, icon: LayoutDashboard },
     { href: "/fuel-logs", label: t.nav.fuelLogs, icon: Droplets },
+    { href: "/transfers", label: t.nav.transfers, icon: ArrowRightLeft },
+    { href: "/weekly-mileage", label: t.nav.weeklyMileage, icon: Route },
     {
       href: "/shipments",
       label: language === "th" ? "งานขนส่ง" : "Shipments",
       icon: Package
     },
-    { href: "/transfers", label: t.nav.transfers, icon: ArrowRightLeft },
     { href: "/drivers", label: t.nav.drivers, icon: Truck },
-    { href: "/weekly-mileage", label: t.nav.weeklyMileage, icon: Route }
+    { href: "/booking-diary", label: language === "th" ? "สมุดจองงาน" : "Booking Diary", icon: CalendarDays }
   ];
 
   return (

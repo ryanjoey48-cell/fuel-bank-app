@@ -15,9 +15,11 @@ import { getOilChangeIntervalForVehicleType } from "@/lib/oil-change-service";
 import type {
   BankTransfer,
   BankTransferWithDriver,
+  BookingDiaryEntry,
   Driver,
   FuelLogDaySummary,
   FuelLogFilters,
+  FuelLogEntrySource,
   FuelLog,
   FuelLogReceiptSummary,
   FuelLogSortDirection,
@@ -104,6 +106,10 @@ async function writeShipmentWithSchemaFallback({
     "goods_description",
     "pickup_location",
     "dropoff_location",
+    "start_location_data",
+    "pickup_location_data",
+    "dropoff_location_data",
+    "additional_dropoffs_data",
     "vehicle_type",
     "standard_km_per_litre",
     "estimated_fuel_litres",
@@ -198,6 +204,10 @@ const LIVE_SHIPMENT_WRITE_COLUMNS = new Set([
   "vehicle_reg",
   "start_location",
   "end_location",
+  "start_location_data",
+  "pickup_location_data",
+  "dropoff_location_data",
+  "additional_dropoffs_data",
   "estimated_distance_km",
   "estimated_fuel_cost_thb",
   "estimated_fuel_cost",
@@ -369,6 +379,51 @@ function normalizeDriverRow(driver: Driver) {
   };
 }
 
+function normalizeAuditName(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+async function getCurrentUserAudit() {
+  const { data, error } = await supabase.auth.getUser();
+  if (error) {
+    const message = String(error.message ?? "").toLowerCase();
+    if (message.includes("auth session missing") || message.includes("missing")) {
+      return { id: null, name: null };
+    }
+
+    logDataError("getCurrentUserAudit error:", error);
+    throw error;
+  }
+
+  const user = data.user;
+  const metadata = user?.user_metadata as Record<string, unknown> | undefined;
+  const displayName =
+    normalizeAuditName(metadata?.full_name) ||
+    normalizeAuditName(metadata?.name) ||
+    null;
+  const email = normalizeAuditName(user?.email);
+  const name = displayName && email && displayName !== email ? `${displayName} (${email})` : displayName || email || null;
+
+  return {
+    id: user?.id ?? null,
+    name
+  };
+}
+
+function parseOptionalNumeric(value: unknown) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const normalized = String(value).replace(/,/g, "").replace(/[^0-9.-]/g, "").trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function normalizeVehicleRow(vehicle: Vehicle) {
   const vehicleReg = normalizeVehicleRegistration(vehicle.vehicle_reg ?? vehicle.registration);
   return {
@@ -453,6 +508,19 @@ function resolveShipmentDriverName(
 const FUEL_LOG_BASE_SELECT_COLUMNS =
   "id, date, driver_id, driver, vehicle_reg, odometer, litres, total_cost, price_per_litre, mileage, location, fuel_type, payment_method, notes, created_at";
 const FUEL_LOG_RECEIPT_SELECT_COLUMNS = `${FUEL_LOG_BASE_SELECT_COLUMNS}, receipt_checked, receipt_checked_at`;
+const FUEL_LOG_ENTRY_SOURCE_SELECT_COLUMNS = `${FUEL_LOG_RECEIPT_SELECT_COLUMNS}, entry_source`;
+
+function normalizeFuelLogEntrySource(value: unknown): FuelLogEntrySource {
+  if (value === "direct_from_receipt" || value === "other" || value === "line_message") {
+    return value;
+  }
+
+  if (value === "direct_receipt") {
+    return "direct_from_receipt";
+  }
+
+  return "line_message";
+}
 
 function mapFuelLogRows(
   rows: Array<{
@@ -469,6 +537,7 @@ function mapFuelLogRows(
     location: string;
     fuel_type: string | null;
     payment_method: string | null;
+    entry_source?: string | null;
     receipt_checked?: boolean | null;
     receipt_checked_at?: string | null;
     notes: string | null;
@@ -490,21 +559,27 @@ function mapFuelLogRows(
     price_per_litre: log.price_per_litre,
     fuel_type: normalizeFuelTypeKey(log.fuel_type) ?? log.fuel_type,
     payment_method: normalizePaymentMethodKey(log.payment_method) ?? log.payment_method,
+    entry_source: normalizeFuelLogEntrySource(log.entry_source),
     receipt_checked: Boolean(log.receipt_checked),
     receipt_checked_at: log.receipt_checked_at ?? null
   })) as FuelLogWithDriver[];
 }
 
-async function runFuelLogQueryWithReceiptFallback<T>(
+async function runFuelLogQueryWithOptionalColumnFallback<T>(
   queryFactory: (columns: string) => PromiseLike<{ data: T | null; error: unknown; count?: number | null }>
 ) {
-  const preferredResult = await queryFactory(FUEL_LOG_RECEIPT_SELECT_COLUMNS);
+  const preferredResult = await queryFactory(FUEL_LOG_ENTRY_SOURCE_SELECT_COLUMNS);
   if (!preferredResult.error) {
     return preferredResult;
   }
 
   if (!isMissingColumnError(preferredResult.error)) {
     return preferredResult;
+  }
+
+  const receiptResult = await queryFactory(FUEL_LOG_RECEIPT_SELECT_COLUMNS);
+  if (!receiptResult.error || !isMissingColumnError(receiptResult.error)) {
+    return receiptResult;
   }
 
   return queryFactory(FUEL_LOG_BASE_SELECT_COLUMNS);
@@ -519,8 +594,8 @@ function applyFuelLogFilters<TQuery extends { gte: Function; lte: Function; eq: 
   const toDate = filters.toDate?.trim();
   const driverId = filters.driverId?.trim();
   const vehicleReg = filters.vehicleReg?.trim();
-  const fuelType = filters.fuelType?.trim();
   const paymentMethod = filters.paymentMethod?.trim();
+  const entrySource = filters.entrySource?.trim();
   const receiptCheckedStatus = filters.receiptCheckedStatus?.trim();
   const totalCostMin = filters.totalCostMin?.trim();
   const totalCostMax = filters.totalCostMax?.trim();
@@ -537,11 +612,11 @@ function applyFuelLogFilters<TQuery extends { gte: Function; lte: Function; eq: 
   if (vehicleReg) {
     nextQuery = nextQuery.eq("vehicle_reg", vehicleReg);
   }
-  if (fuelType) {
-    nextQuery = nextQuery.eq("fuel_type", fuelType);
-  }
   if (paymentMethod) {
     nextQuery = nextQuery.eq("payment_method", paymentMethod);
+  }
+  if (entrySource) {
+    nextQuery = nextQuery.eq("entry_source", entrySource);
   }
   if (receiptCheckedStatus === "checked") {
     nextQuery = nextQuery.eq("receipt_checked", true);
@@ -556,113 +631,7 @@ function applyFuelLogFilters<TQuery extends { gte: Function; lte: Function; eq: 
     nextQuery = nextQuery.lte("total_cost", Number(totalCostMax));
   }
 
-  const search = filters.search?.trim();
-  if (search) {
-    const normalizedNumber = Number(search);
-    const orParts = [
-      `driver.ilike.%${search}%`,
-      `vehicle_reg.ilike.%${search}%`,
-      `location.ilike.%${search}%`
-    ];
-
-    if (Number.isFinite(normalizedNumber)) {
-      orParts.push(`total_cost.eq.${normalizedNumber}`, `litres.eq.${normalizedNumber}`);
-    }
-
-    nextQuery = nextQuery.or(orParts.join(","));
-  }
-
   return nextQuery;
-}
-
-function usesClientFuelLogFilters(filters: FuelLogFilters = {}) {
-  return Boolean(filters.duplicatesOnly || filters.missingMileageOnly);
-}
-
-function getFuelLogDuplicateKey(log: Pick<FuelLogWithDriver, "date" | "driver_id" | "litres" | "total_cost">) {
-  return [
-    String(log.driver_id || ""),
-    log.date,
-    Number(log.litres || 0).toFixed(2),
-    Number(log.total_cost || 0).toFixed(2)
-  ].join("::");
-}
-
-function isFuelLogMissingMileage(log: Pick<FuelLogWithDriver, "mileage">) {
-  return log.mileage == null || Number(log.mileage) <= 0;
-}
-
-function applyClientFuelLogFilters(rows: FuelLogWithDriver[], filters: FuelLogFilters = {}) {
-  let nextRows = rows;
-
-  if (filters.missingMileageOnly) {
-    nextRows = nextRows.filter(isFuelLogMissingMileage);
-  }
-
-  if (filters.duplicatesOnly) {
-    const counts = new Map<string, number>();
-    nextRows.forEach((log) => {
-      const key = getFuelLogDuplicateKey(log);
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    });
-    nextRows = nextRows.filter((log) => (counts.get(getFuelLogDuplicateKey(log)) ?? 0) > 1);
-  }
-
-  return nextRows;
-}
-
-function sortFuelLogRows(
-  rows: FuelLogWithDriver[],
-  sortKey: FuelLogSortKey,
-  sortDirection: FuelLogSortDirection
-) {
-  const direction = sortDirection === "asc" ? 1 : -1;
-  return [...rows].sort((a, b) => {
-    const left = sortKey === "date" ? new Date(a.date).getTime() : Number(a[sortKey] || 0);
-    const right = sortKey === "date" ? new Date(b.date).getTime() : Number(b[sortKey] || 0);
-    if (left === right) return String(b.id).localeCompare(String(a.id));
-    return left > right ? direction : -direction;
-  });
-}
-
-async function fetchAllFilteredFuelLogRows(filters: FuelLogFilters = {}) {
-  const batchSize = 1000;
-  const allRows: Parameters<typeof mapFuelLogRows>[0] = [];
-  let from = 0;
-
-  while (true) {
-    const to = from + batchSize - 1;
-    const fuelLogQuery = await runFuelLogQueryWithReceiptFallback((columns) =>
-      applyFuelLogFilters(
-        supabase
-          .from("fuel_logs")
-          .select(columns)
-          .order("date", { ascending: false })
-          .order("id", { ascending: false }),
-        filters
-      ).range(from, to)
-    );
-
-    if (fuelLogQuery.error) {
-      logDataError("fetchAllFilteredFuelLogRows error:", fuelLogQuery.error, {
-        filters,
-        from,
-        to
-      });
-      throw fuelLogQuery.error;
-    }
-
-    const rows = (fuelLogQuery.data ?? []) as unknown as Parameters<typeof mapFuelLogRows>[0];
-    allRows.push(...rows);
-
-    if (rows.length < batchSize) {
-      break;
-    }
-
-    from += batchSize;
-  }
-
-  return mapFuelLogRows(allRows);
 }
 
 function applyFuelLogOrdering<TQuery extends { order: Function }>(
@@ -1042,7 +1011,7 @@ export async function saveOilChangeService(payload: {
 
 export async function fetchFuelLogs() {
   return readThroughCache("fuel_logs:all", async () => {
-    const fuelLogQuery = await runFuelLogQueryWithReceiptFallback((columns) =>
+    const fuelLogQuery = await runFuelLogQueryWithOptionalColumnFallback((columns) =>
       supabase
         .from("fuel_logs")
         .select(columns)
@@ -1078,21 +1047,7 @@ export async function fetchFuelLogsPage({
   const from = (safePage - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  if (usesClientFuelLogFilters(filters)) {
-    const filteredRows = sortFuelLogRows(
-      applyClientFuelLogFilters(await fetchAllFilteredFuelLogRows(filters), filters),
-      sortKey,
-      sortDirection
-    );
-    return {
-      rows: filteredRows.slice(from, to + 1),
-      totalCount: filteredRows.length,
-      page: safePage,
-      pageSize
-    } satisfies PaginatedFuelLogsResult;
-  }
-
-  const fuelLogQuery = await runFuelLogQueryWithReceiptFallback((columns) =>
+  const fuelLogQuery = await runFuelLogQueryWithOptionalColumnFallback((columns) =>
     applyFuelLogOrdering(
       applyFuelLogFilters(
         supabase
@@ -1125,17 +1080,13 @@ export async function fetchFuelLogsPage({
 }
 
 export async function fetchFuelLogsForExport(filters: FuelLogFilters = {}) {
-  if (usesClientFuelLogFilters(filters)) {
-    return applyClientFuelLogFilters(await fetchAllFilteredFuelLogRows(filters), filters);
-  }
-
   const batchSize = 1000;
   const allRows: Parameters<typeof mapFuelLogRows>[0] = [];
   let from = 0;
 
   while (true) {
     const to = from + batchSize - 1;
-    const fuelLogQuery = await runFuelLogQueryWithReceiptFallback((columns) =>
+    const fuelLogQuery = await runFuelLogQueryWithOptionalColumnFallback((columns) =>
       applyFuelLogFilters(
         supabase
           .from("fuel_logs")
@@ -1173,16 +1124,6 @@ export async function fetchFuelLogReceiptSummary(filters: FuelLogFilters = {}) {
     ...filters,
     receiptCheckedStatus: ""
   };
-
-  if (usesClientFuelLogFilters(baseFilters)) {
-    const rows = applyClientFuelLogFilters(await fetchAllFilteredFuelLogRows(baseFilters), baseFilters);
-    const checked = rows.filter((log) => log.receipt_checked).length;
-    return {
-      total: rows.length,
-      checked,
-      notChecked: Math.max(rows.length - checked, 0)
-    } satisfies FuelLogReceiptSummary;
-  }
 
   const totalQuery = await applyFuelLogFilters(
     supabase.from("fuel_logs").select("id", { count: "exact", head: true }),
@@ -1572,6 +1513,90 @@ export async function fetchShipments() {
   })) as ShipmentWithDriver[];
 }
 
+export async function fetchBookingDiaryEntries() {
+  const { data, error } = await supabase
+    .from("booking_diary")
+    .select("*")
+    .order("booking_date", { ascending: false })
+    .order("updated_at", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    logDataError("fetchBookingDiaryEntries error:", error);
+    throw new Error(
+      error.message || error.details || error.hint || "Unable to load booking diary."
+    );
+  }
+
+  return ((data ?? []) as BookingDiaryEntry[]).map((booking) => ({
+    ...booking,
+    amount_pallets: booking.amount_pallets ?? null,
+    weight: booking.weight ?? null,
+    dimensions: booking.dimensions ?? null,
+    warehouse_no: booking.warehouse_no ?? null,
+    vehicle: normalizeVehicleRegistration(booking.vehicle),
+    driver: normalizeDisplayName(booking.driver),
+    notes: booking.notes ?? null,
+    created_by: booking.created_by ?? null,
+    modified_by: booking.modified_by ?? null
+  }));
+}
+
+export async function saveBookingDiaryEntry(
+  payload: Partial<Omit<BookingDiaryEntry, "amount_pallets" | "weight">> & {
+    amount_pallets?: string | number | null;
+    weight?: string | number | null;
+  }
+) {
+  const { id, ...rest } = payload;
+  const audit = await getCurrentUserAudit();
+  const cleaned = stripUndefined({
+    ...(!id && rest.booking_id?.trim() ? { booking_id: rest.booking_id.trim() } : {}),
+    booking_date: rest.booking_date,
+    amount_pallets: parseOptionalNumeric(rest.amount_pallets),
+    weight: parseOptionalNumeric(rest.weight),
+    dimensions: rest.dimensions?.trim() || null,
+    pickup: rest.pickup?.trim(),
+    warehouse_no: rest.warehouse_no?.trim() || null,
+    dropoff: rest.dropoff?.trim(),
+    vehicle: normalizeVehicleRegistration(rest.vehicle) || null,
+    driver: normalizeDisplayName(rest.driver) || null,
+    notes: rest.notes?.trim() || null,
+    modified_by: audit.name,
+    ...(!id ? { created_by: audit.name } : {})
+  });
+
+  const result = id
+    ? await supabase.from("booking_diary").update(cleaned).eq("id", id).select().single()
+    : await supabase.from("booking_diary").insert(cleaned).select().single();
+
+  if (result.error) {
+    logDataError("saveBookingDiaryEntry error:", result.error, cleaned);
+    throw new Error(
+      result.error.message ||
+        result.error.details ||
+        result.error.hint ||
+        "Unable to save booking."
+    );
+  }
+
+  dispatchDataChange("booking_diary");
+  return result.data as BookingDiaryEntry;
+}
+
+export async function deleteBookingDiaryEntry(id: string) {
+  const { error } = await supabase.from("booking_diary").delete().eq("id", id);
+
+  if (error) {
+    logDataError("deleteBookingDiaryEntry error:", error, { id });
+    throw new Error(
+      error.message || error.details || error.hint || "Unable to delete booking."
+    );
+  }
+
+  dispatchDataChange("booking_diary");
+}
+
 export async function fetchRouteDistanceEstimate(
   originKey: string,
   destinationKey: string
@@ -1669,6 +1694,7 @@ export async function saveFuelLog(payload: Partial<FuelLog>) {
     location: rest.location ?? rest.station,
     fuel_type: normalizeFuelTypeKey(rest.fuel_type) ?? rest.fuel_type,
     payment_method: normalizePaymentMethodKey(rest.payment_method) ?? rest.payment_method,
+    entry_source: normalizeFuelLogEntrySource(rest.entry_source),
     receipt_checked: rest.receipt_checked,
     receipt_checked_at: rest.receipt_checked_at ?? null,
     notes: rest.notes ?? null
@@ -1698,6 +1724,7 @@ export async function saveFuelLog(payload: Partial<FuelLog>) {
     station: (result.data as { location?: string }).location,
     location: (result.data as { location?: string }).location,
     price_per_litre: (result.data as { price_per_litre?: number | null }).price_per_litre ?? null,
+    entry_source: normalizeFuelLogEntrySource((result.data as { entry_source?: string | null }).entry_source),
     receipt_checked: Boolean((result.data as { receipt_checked?: boolean | null }).receipt_checked),
     receipt_checked_at: (result.data as { receipt_checked_at?: string | null }).receipt_checked_at ?? null
   } as FuelLog;

@@ -72,12 +72,15 @@ export type FuelLog = {
   location: string;
   fuel_type: string | null;
   payment_method: string | null;
+  entry_source: FuelLogEntrySource;
   receipt_checked: boolean;
   receipt_checked_at: string | null;
   notes: string | null;
   created_at: string;
   user_id: string;
 };
+
+export type FuelLogEntrySource = "line_message" | "direct_from_receipt" | "other";
 
 export type BankTransfer = {
   id: string;
@@ -99,18 +102,15 @@ export type FuelLogSortKey = "date" | "total_cost" | "litres";
 export type FuelLogSortDirection = "asc" | "desc";
 
 export type FuelLogFilters = {
-  search?: string;
   fromDate?: string;
   toDate?: string;
   driverId?: string;
   vehicleReg?: string;
-  fuelType?: string;
   paymentMethod?: string;
+  entrySource?: "" | FuelLogEntrySource;
   receiptCheckedStatus?: "" | "checked" | "not_checked";
   totalCostMin?: string;
   totalCostMax?: string;
-  duplicatesOnly?: boolean;
-  missingMileageOnly?: boolean;
 };
 
 export type PaginatedFuelLogsResult = {
@@ -135,6 +135,25 @@ export type FuelLogReceiptSummary = {
 
 export type BankTransferWithDriver = BankTransfer;
 
+export type BookingDiaryEntry = {
+  id: string;
+  booking_id: string | null;
+  booking_date: string;
+  amount_pallets: number | null;
+  weight: number | null;
+  dimensions: string | null;
+  pickup: string;
+  warehouse_no: string | null;
+  dropoff: string;
+  vehicle: string | null;
+  driver: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  modified_by: string | null;
+};
+
 export type DriverVehicleType =
   | "EIGHTEEN_WHEELER"
   | "SIX_PLUS_SIX_WHEELER"
@@ -148,6 +167,10 @@ export type Shipment = {
   goods_description?: string | null;
   pickup_location?: string | null;
   dropoff_location?: string | null;
+  start_location_data?: unknown | null;
+  pickup_location_data?: unknown | null;
+  dropoff_location_data?: unknown | null;
+  additional_dropoffs_data?: unknown | null;
   vehicle_type?: string | null;
   standard_km_per_litre?: number | null;
   estimated_fuel_litres?: number | null;

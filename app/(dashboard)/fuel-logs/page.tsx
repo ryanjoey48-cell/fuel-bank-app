@@ -7,7 +7,6 @@ import {
   Download,
   Droplets,
   ReceiptText,
-  Search,
   TrendingUp,
   Wallet
 } from "lucide-react";
@@ -44,6 +43,7 @@ import { formatCurrency, formatDate, formatNumber, today } from "@/lib/utils";
 import type {
   Driver,
   FuelLogDaySummary,
+  FuelLogEntrySource,
   FuelLogFilters,
   FuelLogReceiptSummary,
   FuelLogSortDirection,
@@ -54,9 +54,26 @@ import type {
 const PAGE_SIZE = 25;
 const DEFAULT_FUEL_TYPE = "diesel";
 const DEFAULT_PAYMENT_METHOD = "company_card";
+const DEFAULT_ENTRY_SOURCE: FuelLogEntrySource = "line_message";
 const FILTER_STORAGE_KEY = "fuel-bank:fuel-logs-filters";
 
-const initialForm = {
+type FuelLogForm = {
+  id: string;
+  date: string;
+  driver_id: string;
+  vehicle_reg: string;
+  mileage: string;
+  litres: string;
+  total_cost: string;
+  price_per_litre: string;
+  location: string;
+  fuel_type: string;
+  payment_method: string;
+  entry_source: FuelLogEntrySource;
+  notes: string;
+};
+
+const initialForm: FuelLogForm = {
   id: "",
   date: today(),
   driver_id: "",
@@ -68,22 +85,20 @@ const initialForm = {
   location: "",
   fuel_type: DEFAULT_FUEL_TYPE,
   payment_method: DEFAULT_PAYMENT_METHOD,
+  entry_source: DEFAULT_ENTRY_SOURCE,
   notes: ""
 };
 
 const initialFilters: FuelLogFilters = {
-  search: "",
   fromDate: "",
   toDate: "",
   driverId: "",
   vehicleReg: "",
-  fuelType: "",
   paymentMethod: "",
+  entrySource: "",
   receiptCheckedStatus: "",
   totalCostMin: "",
-  totalCostMax: "",
-  duplicatesOnly: false,
-  missingMileageOnly: false
+  totalCostMax: ""
 };
 
 type FuelDraft = {
@@ -99,6 +114,7 @@ type FuelDraft = {
   station: string;
   fuel_type: string | null;
   payment_method: string | null;
+  entry_source: FuelLogEntrySource;
   notes: string | null;
 };
 
@@ -130,6 +146,28 @@ function getReceiptCheckBadgeClass(checked: boolean) {
     : "border-slate-200 bg-slate-100 text-slate-600";
 }
 
+function normalizeEntrySource(value: unknown): FuelLogEntrySource {
+  if (value === "direct_receipt") {
+    return "direct_from_receipt";
+  }
+
+  return value === "direct_from_receipt" || value === "other" || value === "line_message"
+    ? value
+    : DEFAULT_ENTRY_SOURCE;
+}
+
+function getEntrySourceBadgeClass(source: FuelLogEntrySource) {
+  if (source === "direct_from_receipt") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]";
+  }
+
+  if (source === "other") {
+    return "border-slate-200 bg-slate-100 text-slate-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]";
+  }
+
+  return "border-sky-200 bg-sky-50 text-sky-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]";
+}
+
 function findDuplicates(logs: FuelLogWithDriver[], draft: FuelDraft, excludeId?: string) {
   if (!draft.date || !draft.driver_id) return [];
   return logs.filter((log) => {
@@ -155,35 +193,26 @@ function isMissingMileage(log: Pick<FuelLogWithDriver, "mileage">) {
   return log.mileage == null || Number(log.mileage) <= 0;
 }
 
-function getStoredFilters() {
+function getStoredFilters(): FuelLogFilters {
   if (typeof window === "undefined") return initialFilters;
   try {
     const stored = window.sessionStorage.getItem(FILTER_STORAGE_KEY);
-    return stored ? { ...initialFilters, ...JSON.parse(stored) } : initialFilters;
+    const parsed = stored ? JSON.parse(stored) : {};
+    return {
+      ...initialFilters,
+      fromDate: parsed.fromDate ?? "",
+      toDate: parsed.toDate ?? "",
+      driverId: parsed.driverId ?? "",
+      vehicleReg: parsed.vehicleReg ?? "",
+      paymentMethod: parsed.paymentMethod ?? "",
+      entrySource: parsed.entrySource ? normalizeEntrySource(parsed.entrySource) : "",
+      receiptCheckedStatus: parsed.receiptCheckedStatus ?? "",
+      totalCostMin: parsed.totalCostMin ?? "",
+      totalCostMax: parsed.totalCostMax ?? ""
+    };
   } catch {
     return initialFilters;
   }
-}
-
-function Highlight({ text, query }: { text: string | number | null | undefined; query: string }) {
-  const value = String(text ?? "");
-  const search = query.trim();
-  if (!search) return <>{value || "-"}</>;
-  const escapedSearch = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const parts = value.split(new RegExp(`(${escapedSearch})`, "gi"));
-  return (
-    <>
-      {parts.map((part, index) =>
-        part.toLowerCase() === search.toLowerCase() ? (
-          <mark key={`${part}-${index}`} className="rounded bg-amber-200 px-1 text-slate-950">
-            {part}
-          </mark>
-        ) : (
-          <span key={`${part}-${index}`}>{part}</span>
-        )
-      )}
-    </>
-  );
 }
 function SortButton({
   label,
@@ -222,15 +251,9 @@ function getPaymentMethodLabelWithFallback(t: ReturnType<typeof useLanguage>["t"
 export default function FuelLogsPage() {
   const { language, t } = useLanguage();
   const copy = {
-    searchLabel: language === "th" ? "ค้นหา" : "Search",
-    searchPlaceholder:
-      language === "th"
-        ? "ค้นหาคนขับ ทะเบียน สถานที่ ยอดเงิน หรือลิตร"
-        : "Search driver, vehicle, location, total cost, or litres",
     dateRange: language === "th" ? "ช่วงวันที่" : "Date range",
     driver: language === "th" ? "คนขับ" : "Driver",
     vehicle: language === "th" ? "ทะเบียนรถ" : "Vehicle reg",
-    fuelType: language === "th" ? "ประเภทน้ำมัน" : "Fuel type",
     payment: language === "th" ? "วิธีชำระเงิน" : "Payment method",
     totalCostRange: language === "th" ? "ช่วงยอดเงิน" : "Total cost range",
     min: language === "th" ? "ต่ำสุด" : "Min",
@@ -245,7 +268,7 @@ export default function FuelLogsPage() {
     saveAnyway: language === "th" ? "บันทึกต่อ" : "Save anyway",
     cancel: language === "th" ? "ยกเลิก" : "Cancel",
     deleteConfirm: language === "th" ? "ลบรายการนี้ใช่หรือไม่" : "Delete this fuel entry?",
-    filters: language === "th" ? "ค้นหาและตัวกรอง" : "Search & filters",
+    filters: language === "th" ? "ตัวกรอง" : "Filters",
     all: language === "th" ? "ทั้งหมด" : "All",
     noResultsTitle: language === "th" ? "ไม่พบผลลัพธ์" : "No results",
     noResultsDescription:
@@ -273,10 +296,6 @@ export default function FuelLogsPage() {
     nextPage: language === "th" ? "ถัดไป" : "Next",
     pageLabel: language === "th" ? "หน้า" : "Page",
     ofLabel: language === "th" ? "จาก" : "of",
-    quickFilters: language === "th" ? "ตัวกรองด่วน" : "Quick filters",
-    uncheckedReceipts: language === "th" ? "ใบเสร็จยังไม่ตรวจ" : "Unchecked receipts",
-    possibleDuplicates: language === "th" ? "รายการที่อาจซ้ำ" : "Possible duplicates",
-    missingMileage: language === "th" ? "ไม่มีเลขไมล์" : "Missing mileage",
     possibleDuplicate: language === "th" ? "อาจเป็นรายการซ้ำ" : "Possible duplicate entry",
     missingOdometer: language === "th" ? "ไม่มีเลขไมล์" : "Missing mileage"
   };
@@ -309,6 +328,29 @@ export default function FuelLogsPage() {
   const paymentMethodOptions = PAYMENT_METHOD_KEYS.map((value) => ({
     value,
     label: t.payment.method[value]
+  }));
+  const sourceCopy = {
+    label: language === "th" ? "แหล่งที่มา" : "Entry source",
+    filterLabel: language === "th" ? "แหล่งที่มารายการ" : "Log source",
+    all: language === "th" ? "ทุกแหล่งที่มา" : "All sources",
+    quickSelect: language === "th" ? "เลือกเร็ว" : "Quick select",
+    auditHint:
+      language === "th"
+        ? "รายการนี้เพิ่มจากใบเสร็จจริง เหมาะสำหรับตรวจสอบย้อนหลัง"
+        : "Added from a physical receipt for audit/reconciliation.",
+    options: {
+      line_message: language === "th" ? "ข้อความ LINE" : "Line message",
+      direct_from_receipt: language === "th" ? "จากใบเสร็จโดยตรง" : "Direct from receipt",
+      other: language === "th" ? "อื่นๆ" : "Other"
+    } satisfies Record<FuelLogEntrySource, string>
+  };
+  const entrySourceOptions = ([
+    "line_message",
+    "direct_from_receipt",
+    "other"
+  ] as FuelLogEntrySource[]).map((value) => ({
+    value,
+    label: sourceCopy.options[value]
   }));
 
   const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -557,6 +599,7 @@ export default function FuelLogsPage() {
       location: log.location || "",
       fuel_type: normalizeFuelTypeKey(log.fuel_type) ?? DEFAULT_FUEL_TYPE,
       payment_method: normalizePaymentMethodKey(log.payment_method) ?? DEFAULT_PAYMENT_METHOD,
+      entry_source: normalizeEntrySource(log.entry_source),
       notes: log.notes || ""
     });
     setLastEditedFuelField("total_cost");
@@ -607,10 +650,11 @@ export default function FuelLogsPage() {
             driver_id: form.driver_id,
             vehicle_reg: form.vehicle_reg,
             fuel_type: DEFAULT_FUEL_TYPE,
-            payment_method: DEFAULT_PAYMENT_METHOD
+            payment_method: DEFAULT_PAYMENT_METHOD,
+            entry_source: form.entry_source
           }
         : { ...initialForm, date: form.date },
-    [form.date, form.driver_id, form.vehicle_reg]
+    [form.date, form.driver_id, form.entry_source, form.vehicle_reg]
   );
 
   const buildDraft = useCallback(
@@ -627,6 +671,7 @@ export default function FuelLogsPage() {
       station: form.location.trim(),
       fuel_type: form.fuel_type || null,
       payment_method: form.payment_method || null,
+      entry_source: normalizeEntrySource(form.entry_source),
       notes: form.notes.trim() || null
     }),
     [form, selectedDriver]
@@ -756,6 +801,8 @@ export default function FuelLogsPage() {
           [t.fuelLogs.location]: log.location,
           [t.fuelLogs.fuelType]: getFuelTypeLabelWithFallback(t, log.fuel_type),
           [t.fuelLogs.paymentMethod]: getPaymentMethodLabelWithFallback(t, log.payment_method),
+          [sourceCopy.label]: sourceCopy.options[normalizeEntrySource(log.entry_source)],
+          entry_source: normalizeEntrySource(log.entry_source),
           [receiptCopy.filterLabel]: getReceiptCheckLabel(log.receipt_checked, language),
           receipt_checked: log.receipt_checked ? "true" : "false",
           receipt_checked_at: log.receipt_checked_at ?? "",
@@ -834,13 +881,6 @@ export default function FuelLogsPage() {
     },
     [currentPage, receiptCopy.error, receiptCopy.updated, refreshCurrentPage]
   );
-
-  const getQuickFilterClass = (active: boolean) =>
-    active
-      ? "btn-primary min-h-[38px] px-3.5 py-1.5 text-xs shadow-sm"
-      : "btn-secondary min-h-[38px] px-3.5 py-1.5 text-xs";
-  const uncheckedReceiptsActive = filters.receiptCheckedStatus === "not_checked";
-  const uncheckedReceiptsLabel = `${copy.uncheckedReceipts} (${formatNumber(receiptSummary.notChecked, language)})`;
 
   return (
     <>
@@ -993,6 +1033,22 @@ export default function FuelLogsPage() {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="form-field"><label className="form-label form-label-required">{t.fuelLogs.logDate}</label><input type="date" required max={todayValue} value={form.date} onInvalid={handleInvalid} onInput={clearValidationMessage} onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} className="form-input bg-white" /></div>
               <div className="form-field"><label className="form-label form-label-required">{t.fuelLogs.driver}</label><select required value={form.driver_id} onInvalid={handleInvalid} onInput={clearValidationMessage} onChange={(event) => handleDriverChange(event.target.value)} className="form-input bg-white"><option value="">{t.fuelLogs.selectDriver}</option>{drivers.map((driver) => <option key={driver.id} value={String(driver.id)}>{driver.name}</option>)}</select></div>
+              <div className="form-field sm:col-span-2">
+                <label className="form-label">{sourceCopy.label}</label>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <select value={form.entry_source} onChange={(event) => setForm((current) => ({ ...current, entry_source: normalizeEntrySource(event.target.value) }))} className="form-input bg-white sm:max-w-xs">
+                    {entrySourceOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                  <div className="flex flex-wrap gap-2">
+                    {entrySourceOptions.map((option) => (
+                      <button key={option.value} type="button" onClick={() => setForm((current) => ({ ...current, entry_source: option.value }))} className={`inline-flex min-h-[38px] items-center rounded-full border px-3 py-1.5 text-xs font-semibold transition ${form.entry_source === option.value ? getEntrySourceBadgeClass(option.value) : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}>
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {form.entry_source === "direct_from_receipt" ? <p className="form-helper text-emerald-700">{sourceCopy.auditHint}</p> : null}
+              </div>
               <div className="form-field"><label className="form-label form-label-required">{t.fuelLogs.vehicleReg}</label><input required list="fuel-log-vehicle-options" value={form.vehicle_reg} onInvalid={handleInvalid} onInput={clearValidationMessage} onChange={(event) => setForm((current) => ({ ...current, vehicle_reg: event.target.value }))} placeholder={t.fuelLogs.vehiclePlaceholder} className="form-input bg-white" /><p className="form-helper">{selectedDriver?.vehicle_reg?.trim() ? copy.autoFillLabel : copy.noVehicleAssignedLabel}</p></div>
               <div className="form-field"><label className="form-label">{t.fuelLogs.mileage}</label><input type="number" min="0" step="1" value={form.mileage} onChange={(event) => setForm((current) => ({ ...current, mileage: event.target.value }))} placeholder={t.fuelLogs.currentMileage} className="form-input bg-white" /><p className="form-helper">{comparisonEntry ? `${comparisonEntry.vehicle_reg} | ${formatDate(comparisonEntry.date, language)} | ${comparisonEntry.mileage ?? "-"}` : copy.previousEntryHelper}</p>{form.mileage && comparisonEntry?.mileage != null && Number(form.mileage) < Number(comparisonEntry.mileage) ? <div className="mt-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{t.fuelLogs.mileageValidationError}</div> : null}</div>
               <div className="form-field"><label className="form-label form-label-required">{t.fuelLogs.fuelStationLocation}</label><input required value={form.location} onInvalid={handleInvalid} onInput={clearValidationMessage} onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))} placeholder={t.fuelLogs.stationNameOrLocation} className="form-input bg-white" /></div>
@@ -1043,39 +1099,16 @@ export default function FuelLogsPage() {
               <button type="button" onClick={() => updateFilters(initialFilters)} className="text-sm font-medium text-slate-500 hover:text-slate-900">{copy.clear}</button>
             </div>
             <div className="space-y-3.5">
-              <div>
-                <label className="form-label">{copy.searchLabel}</label>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <input value={filters.search ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, search: event.target.value }))} placeholder={copy.searchPlaceholder} className="form-input bg-white pl-10" />
-                </div>
-              </div>
               <div className="grid gap-3 md:grid-cols-12">
                 <div className="md:col-span-5 lg:col-span-4"><label className="form-label">{copy.dateRange}</label><div className="grid grid-cols-2 gap-2"><input type="date" value={filters.fromDate ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, fromDate: event.target.value }))} className="form-input bg-white" /><input type="date" value={filters.toDate ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, toDate: event.target.value }))} className="form-input bg-white" /></div></div>
                 <div className="md:col-span-3 lg:col-span-4"><label className="form-label">{copy.driver}</label><select value={filters.driverId ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, driverId: event.target.value }))} className="form-input bg-white"><option value="">{copy.all}</option>{drivers.map((driver) => <option key={driver.id} value={String(driver.id)}>{driver.name}</option>)}</select></div>
                 <div className="md:col-span-4 lg:col-span-4"><label className="form-label">{copy.vehicle}</label><select value={filters.vehicleReg ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, vehicleReg: event.target.value }))} className="form-input bg-white"><option value="">{copy.all}</option>{vehicleOptions.map((vehicleReg) => <option key={vehicleReg} value={vehicleReg}>{vehicleReg}</option>)}</select></div>
               </div>
               <div className="grid gap-3 md:grid-cols-12">
-                <div className="md:col-span-4"><label className="form-label">{copy.fuelType}</label><select value={filters.fuelType ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, fuelType: event.target.value }))} className="form-input bg-white"><option value="">{copy.all}</option>{fuelTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
-                <div className="md:col-span-4"><label className="form-label">{copy.payment}</label><select value={filters.paymentMethod ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, paymentMethod: event.target.value }))} className="form-input bg-white"><option value="">{copy.all}</option>{paymentMethodOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
-                <div className="md:col-span-4"><label className="form-label">{receiptCopy.filterLabel}</label><select value={filters.receiptCheckedStatus ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, receiptCheckedStatus: event.target.value as FuelLogFilters["receiptCheckedStatus"] }))} className="form-input bg-white"><option value="">{copy.all}</option><option value="checked">{receiptCopy.checked}</option><option value="not_checked">{receiptCopy.notChecked}</option></select></div>
-              </div>
-              <div className="grid gap-3 md:grid-cols-12">
-                <div className="md:col-span-6 lg:col-span-4"><label className="form-label">{copy.totalCostRange}</label><div className="grid grid-cols-2 gap-2"><input type="number" min="0" step="0.01" value={filters.totalCostMin ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, totalCostMin: event.target.value }))} placeholder={copy.min} className="form-input bg-white" /><input type="number" min="0" step="0.01" value={filters.totalCostMax ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, totalCostMax: event.target.value }))} placeholder={copy.max} className="form-input bg-white" /></div></div>
-              </div>
-              <div className="flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:items-center">
-                <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{copy.quickFilters}</span>
-                <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={() => updateFilters((current) => ({ ...current, receiptCheckedStatus: uncheckedReceiptsActive ? "" : "not_checked" }))} className={getQuickFilterClass(uncheckedReceiptsActive)}>
-                    {uncheckedReceiptsLabel}
-                  </button>
-                  <button type="button" onClick={() => updateFilters((current) => ({ ...current, duplicatesOnly: !current.duplicatesOnly }))} className={getQuickFilterClass(Boolean(filters.duplicatesOnly))}>
-                    {copy.possibleDuplicates}
-                  </button>
-                  <button type="button" onClick={() => updateFilters((current) => ({ ...current, missingMileageOnly: !current.missingMileageOnly }))} className={getQuickFilterClass(Boolean(filters.missingMileageOnly))}>
-                    {copy.missingMileage}
-                  </button>
-                </div>
+                <div className="md:col-span-3"><label className="form-label">{copy.payment}</label><select value={filters.paymentMethod ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, paymentMethod: event.target.value }))} className="form-input bg-white"><option value="">{copy.all}</option>{paymentMethodOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
+                <div className="md:col-span-3"><label className="form-label">{sourceCopy.filterLabel}</label><select value={filters.entrySource ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, entrySource: event.target.value as FuelLogFilters["entrySource"] }))} className="form-input bg-white"><option value="">{sourceCopy.all}</option>{entrySourceOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
+                <div className="md:col-span-3"><label className="form-label">{receiptCopy.filterLabel}</label><select value={filters.receiptCheckedStatus ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, receiptCheckedStatus: event.target.value as FuelLogFilters["receiptCheckedStatus"] }))} className="form-input bg-white"><option value="">{copy.all}</option><option value="checked">{receiptCopy.checked}</option><option value="not_checked">{receiptCopy.notChecked}</option></select></div>
+                <div className="md:col-span-3"><label className="form-label">{copy.totalCostRange}</label><div className="grid grid-cols-2 gap-2"><input type="number" min="0" step="0.01" value={filters.totalCostMin ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, totalCostMin: event.target.value }))} placeholder={copy.min} className="form-input bg-white" /><input type="number" min="0" step="0.01" value={filters.totalCostMax ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, totalCostMax: event.target.value }))} placeholder={copy.max} className="form-input bg-white" /></div></div>
               </div>
             </div>
           </div>
@@ -1093,6 +1126,7 @@ export default function FuelLogsPage() {
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{formatDate(log.date, language)}</p>
                         <p className="mt-2 text-sm font-semibold text-slate-900">{log.driver}</p>
+                        <span className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getEntrySourceBadgeClass(normalizeEntrySource(log.entry_source))}`}>{sourceCopy.options[normalizeEntrySource(log.entry_source)]}</span>
                         <p className="mt-1 text-sm text-slate-500">{log.vehicle_reg}</p>
                       </div>
                       <p className="whitespace-nowrap rounded-full bg-slate-100 px-3 py-1 text-base font-bold text-slate-900">{formatCurrency(Number(log.total_cost || 0), language)}</p>
@@ -1122,7 +1156,7 @@ export default function FuelLogsPage() {
               <div className="hidden md:block">
                 <div className="table-shell rounded-2xl">
                   <div className="table-scroll overflow-x-auto overflow-y-auto">
-                    <table className="min-w-[1120px] w-full text-sm">
+                    <table className="min-w-[1240px] w-full text-sm">
                       <thead className="sticky top-0 z-10 bg-slate-50/95 text-slate-600 backdrop-blur">
                         <tr>
                           <th className="table-head-cell text-left"><SortButton label={t.fuelLogs.date} active={sortKey === "date"} direction={sortDirection} onClick={() => handleSortChange("date")} /></th>
@@ -1133,6 +1167,7 @@ export default function FuelLogsPage() {
                           <th className="table-head-cell text-right">{t.fuelLogs.pricePerLitre}</th>
                           <th className="table-head-cell text-right">{t.fuelLogs.mileage}</th>
                           <th className="table-head-cell text-left">{t.fuelLogs.location}</th>
+                          <th className="table-head-cell text-left">{sourceCopy.label}</th>
                           <th className="table-head-cell text-left">{receiptCopy.filterLabel}</th>
                           <th className="table-head-cell text-left">{t.common.action}</th>
                         </tr>
@@ -1142,10 +1177,10 @@ export default function FuelLogsPage() {
                           const warnings = getFuelLogWarnings(log);
                           return (
                           <tr key={log.id} className={`enterprise-table-row ${highlightedFuelLogId === String(log.id) || warnings.length ? "bg-amber-50/70" : ""}`}>
-                            <td className="table-body-cell whitespace-nowrap font-medium text-slate-700"><Highlight text={formatDate(log.date, language)} query={filters.search ?? ""} /></td>
-                            <td className="table-body-cell whitespace-nowrap table-driver-name"><Highlight text={log.driver} query={filters.search ?? ""} /></td>
+                            <td className="table-body-cell whitespace-nowrap font-medium text-slate-700">{formatDate(log.date, language)}</td>
+                            <td className="table-body-cell whitespace-nowrap table-driver-name">{log.driver}</td>
                             <td className="table-body-cell whitespace-nowrap text-slate-700">
-                              <Highlight text={log.vehicle_reg} query={filters.search ?? ""} />
+                              {log.vehicle_reg}
                               {warnings.length ? (
                                 <div className="mt-1 flex flex-wrap gap-1">
                                   {warnings.map((warning) => (
@@ -1154,11 +1189,12 @@ export default function FuelLogsPage() {
                                 </div>
                               ) : null}
                             </td>
-                            <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800"><Highlight text={formatNumber(Number(log.litres || 0), language, 2)} query={filters.search ?? ""} /></td>
-                            <td className="table-body-cell whitespace-nowrap text-right text-base font-bold text-slate-950"><Highlight text={formatCurrency(Number(log.total_cost || 0), language)} query={filters.search ?? ""} /></td>
+                            <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800">{formatNumber(Number(log.litres || 0), language, 2)}</td>
+                            <td className="table-body-cell whitespace-nowrap text-right text-base font-bold text-slate-950">{formatCurrency(Number(log.total_cost || 0), language)}</td>
                             <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800">{log.price_per_litre != null ? formatCurrency(Number(log.price_per_litre), language) : "-"}</td>
                             <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800">{log.mileage ?? "-"}</td>
-                            <td className="table-body-cell min-w-[140px] text-slate-700"><Highlight text={log.location || "-"} query={filters.search ?? ""} /></td>
+                            <td className="table-body-cell min-w-[140px] text-slate-700">{log.location || "-"}</td>
+                            <td className="table-body-cell"><span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getEntrySourceBadgeClass(normalizeEntrySource(log.entry_source))}`}>{sourceCopy.options[normalizeEntrySource(log.entry_source)]}</span></td>
                             <td className="table-body-cell"><span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getReceiptCheckBadgeClass(log.receipt_checked)}`}>{getReceiptCheckLabel(log.receipt_checked, language)}</span></td>
                             <td className="table-body-cell"><div className="flex gap-1.5"><button type="button" onClick={() => void handleReceiptToggle(log, !log.receipt_checked)} disabled={togglingReceiptId === String(log.id)} className="table-action-secondary min-w-[104px] disabled:opacity-50">{togglingReceiptId === String(log.id) ? t.common.saving : log.receipt_checked ? receiptCopy.markUnchecked : receiptCopy.markChecked}</button><button type="button" onClick={() => populateForm(log)} className="table-action-secondary min-w-[68px]">{t.common.edit}</button><button type="button" onClick={() => void handleDelete(String(log.id))} disabled={deletingId === String(log.id)} className="table-action-danger min-w-[68px] disabled:opacity-50">{deletingId === String(log.id) ? t.common.deleting : t.common.delete}</button></div></td>
                           </tr>

@@ -94,7 +94,8 @@ const KNOWN_NOTE_PREFIXES = [
   "Requested status:",
   "Vehicle type:",
   "Travel time minutes:",
-  "Estimated travel time minutes:"
+  "Estimated travel time minutes:",
+  "Location data:"
 ] as const;
 
 function asText(value: unknown) {

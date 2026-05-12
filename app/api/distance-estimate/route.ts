@@ -11,6 +11,38 @@ type ComputeRoutesResponse = {
   };
 };
 
+type RoutePoint = {
+  label?: string;
+  formatted_address?: string;
+  place_id?: string | null;
+  lat?: number;
+  lng?: number;
+};
+
+function toRouteWaypoint(point: string | RoutePoint | undefined) {
+  if (!point) return null;
+  if (typeof point === "string") {
+    const address = point.trim();
+    return address ? { address } : null;
+  }
+
+  const lat = point.lat;
+  const lng = point.lng;
+  if (Number.isFinite(lat) && Number.isFinite(lng) && lat != null && lng != null) {
+    return {
+      location: {
+        latLng: {
+          latitude: lat,
+          longitude: lng
+        }
+      }
+    };
+  }
+
+  const address = point.formatted_address?.trim() || point.label?.trim();
+  return address ? { address } : null;
+}
+
 export async function POST(request: Request) {
   try {
     const apiKey = getServerGoogleMapsApiKey();
@@ -21,7 +53,7 @@ export async function POST(request: Request) {
       });
     }
 
-    let body: { origin?: string; destination?: string; waypoints?: string[] } = {};
+    let body: { origin?: string | RoutePoint; destination?: string | RoutePoint; waypoints?: Array<string | RoutePoint> } = {};
 
     try {
       body = (await request.json()) as typeof body;
@@ -29,10 +61,10 @@ export async function POST(request: Request) {
       return Response.json(createApiError("Invalid request body."), { status: 400 });
     }
 
-    const origin = body.origin?.trim();
-    const destination = body.destination?.trim();
+    const origin = toRouteWaypoint(body.origin);
+    const destination = toRouteWaypoint(body.destination);
     const waypoints = Array.isArray(body.waypoints)
-      ? body.waypoints.map((waypoint) => waypoint.trim()).filter(Boolean)
+      ? body.waypoints.map((waypoint) => toRouteWaypoint(waypoint)).filter((waypoint): waypoint is NonNullable<typeof waypoint> => Boolean(waypoint))
       : [];
 
     if (!origin || !destination) {
@@ -49,15 +81,9 @@ export async function POST(request: Request) {
         "X-Goog-FieldMask": "routes.distanceMeters,routes.duration"
       },
       body: JSON.stringify({
-        origin: {
-          address: origin
-        },
-        destination: {
-          address: destination
-        },
-        intermediates: waypoints.map((waypoint) => ({
-          address: waypoint
-        })),
+        origin,
+        destination,
+        intermediates: waypoints,
         travelMode: "DRIVE",
         routingPreference: "TRAFFIC_UNAWARE",
         languageCode: "en-US",

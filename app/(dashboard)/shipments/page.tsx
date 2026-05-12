@@ -19,7 +19,7 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } f
 import { EmptyState } from "@/components/empty-state";
 import { GoogleMapsLoader } from "@/components/google-maps-loader";
 import { Header } from "@/components/header";
-import { LocationAutocomplete } from "@/components/location-autocomplete";
+import { LocationAutocomplete, type StructuredLocation } from "@/components/location-autocomplete";
 import { StatCard } from "@/components/stat-card";
 import {
   deleteShipment,
@@ -52,6 +52,26 @@ const STORAGE_KEYS = {
   kmPerLitre: "fuel-bank:shipments:last-km-per-litre",
   fuelPrice: "fuel-bank:shipments:last-fuel-price"
 } as const;
+const DEFAULT_DEPOT_LOCATION: StructuredLocation | null = (() => {
+  const lat = Number(process.env.NEXT_PUBLIC_DEFAULT_DEPOT_LAT || process.env.VITE_DEFAULT_DEPOT_LAT);
+  const lng = Number(process.env.NEXT_PUBLIC_DEFAULT_DEPOT_LNG || process.env.VITE_DEFAULT_DEPOT_LNG);
+  const label =
+    process.env.NEXT_PUBLIC_DEFAULT_DEPOT_LABEL ||
+    process.env.VITE_DEFAULT_DEPOT_LABEL ||
+    "Expert Express Sender Depot";
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return null;
+  }
+
+  return {
+    label,
+    formatted_address: label,
+    place_id: null,
+    lat,
+    lng
+  };
+})();
 
 const LEGACY_STATUS_OPTIONS = [
   { value: "Draft", label: { en: "Draft", th: "ฉบับร่าง" } },
@@ -80,8 +100,12 @@ type FormState = {
   route_start_location: string;
   start_location: string;
   end_location: string;
+  route_start_location_data: StructuredLocation | null;
+  start_location_data: StructuredLocation | null;
+  end_location_data: StructuredLocation | null;
   include_return_to_start: boolean;
   additional_dropoffs: string[];
+  additional_dropoff_data: Array<StructuredLocation | null>;
   estimated_distance_km: string;
   estimated_duration_minutes: string;
   vehicle_type: string;
@@ -116,11 +140,15 @@ function createInitialForm(
     customer_name: "",
     goods_description: "",
     shipment_date: today(),
-    route_start_location: "",
+    route_start_location: getLocationDisplay(DEFAULT_DEPOT_LOCATION),
     start_location: "",
     end_location: "",
+    route_start_location_data: DEFAULT_DEPOT_LOCATION,
+    start_location_data: null,
+    end_location_data: null,
     include_return_to_start: false,
     additional_dropoffs: [],
+    additional_dropoff_data: [],
     estimated_distance_km: "",
     estimated_duration_minutes: "",
     vehicle_type: "",
@@ -511,18 +539,106 @@ function shortenRouteLabel(startLocation: string, endLocation: string) {
   return `${shorten(startLocation)} -> ${shorten(endLocation)}`;
 }
 
+function hasCoordinates(location: StructuredLocation | null | undefined) {
+  return Boolean(location && Number.isFinite(location.lat) && Number.isFinite(location.lng));
+}
+
+function getLocationDisplay(location: StructuredLocation | null | undefined, fallback = "") {
+  return (
+    location?.formatted_address?.trim() ||
+    location?.label?.trim() ||
+    location?.manual_text?.trim() ||
+    fallback.trim()
+  );
+}
+
+function createManualLocation(value: string): StructuredLocation | null {
+  const manualText = value.trim();
+  if (!manualText) return null;
+  return {
+    label: manualText,
+    formatted_address: manualText,
+    place_id: null,
+    lat: Number.NaN,
+    lng: Number.NaN,
+    manual_text: manualText
+  };
+}
+
+function asStructuredLocation(value: unknown): StructuredLocation | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Partial<StructuredLocation>;
+  const lat = Number(record.lat);
+  const lng = Number(record.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  const label = String(record.label ?? record.formatted_address ?? "").trim();
+  const formattedAddress = String(record.formatted_address ?? record.label ?? "").trim();
+  if (!label && !formattedAddress) return null;
+  return {
+    label: label || formattedAddress,
+    formatted_address: formattedAddress || label,
+    place_id: record.place_id ?? null,
+    lat,
+    lng,
+    manual_text: record.manual_text
+  };
+}
+
+function locationRouteKey(location: StructuredLocation | null | undefined, fallback = "") {
+  return hasCoordinates(location)
+    ? `${location!.lat.toFixed(6)},${location!.lng.toFixed(6)}`
+    : normalizeLocationKey(getLocationDisplay(location, fallback));
+}
+
+const LOCATION_DATA_PREFIX = "Location data:";
+
+function parseSavedLocationData(notes: string | null | undefined) {
+  const line = String(notes ?? "")
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(LOCATION_DATA_PREFIX));
+
+  if (!line) return null;
+
+  try {
+    return JSON.parse(line.slice(LOCATION_DATA_PREFIX.length).trim()) as {
+      route_start_location?: StructuredLocation | null;
+      start_location?: StructuredLocation | null;
+      end_location?: StructuredLocation | null;
+      additional_dropoffs?: StructuredLocation[];
+    };
+  } catch {
+    return null;
+  }
+}
+
+function buildLocationDataLine(data: {
+  route_start_location: StructuredLocation | null;
+  start_location: StructuredLocation | null;
+  end_location: StructuredLocation | null;
+  additional_dropoffs: StructuredLocation[];
+}) {
+  return `${LOCATION_DATA_PREFIX} ${JSON.stringify(data)}`;
+}
+
 function buildFormRouteKey(input: {
   route_start_location: string;
   start_location: string;
   end_location: string;
+  route_start_location_data?: StructuredLocation | null;
+  start_location_data?: StructuredLocation | null;
+  end_location_data?: StructuredLocation | null;
   additional_dropoffs: string[];
+  additional_dropoff_data?: Array<StructuredLocation | null>;
   include_return_to_start: boolean;
 }) {
   return [
-    normalizeLocationKey(input.start_location),
-    normalizeLocationKey(input.end_location),
-    ...input.additional_dropoffs.map(normalizeLocationKey),
-    normalizeLocationKey(input.route_start_location),
+    locationRouteKey(input.start_location_data, input.start_location),
+    locationRouteKey(input.end_location_data, input.end_location),
+    ...input.additional_dropoffs.map((stop, index) =>
+      locationRouteKey(input.additional_dropoff_data?.[index], stop)
+    ),
+    locationRouteKey(input.route_start_location_data, input.route_start_location),
     input.include_return_to_start ? "return" : "oneway"
   ]
     .filter(Boolean)
@@ -1499,15 +1615,23 @@ export default function ShipmentsPage() {
         route_start_location: form.route_start_location,
         start_location: form.start_location,
         end_location: form.end_location,
+        route_start_location_data: form.route_start_location_data,
+        start_location_data: form.start_location_data,
+        end_location_data: form.end_location_data,
         additional_dropoffs: form.additional_dropoffs,
+        additional_dropoff_data: form.additional_dropoff_data,
         include_return_to_start: form.include_return_to_start
       }),
     [
+      form.additional_dropoff_data,
       form.additional_dropoffs,
       form.end_location,
+      form.end_location_data,
       form.include_return_to_start,
       form.route_start_location,
-      form.start_location
+      form.route_start_location_data,
+      form.start_location,
+      form.start_location_data
     ]
   );
 
@@ -1614,25 +1738,72 @@ export default function ShipmentsPage() {
     setLastEstimatedRouteKey("");
   }, [shipments]);
 
+  const setLocationField = useCallback(
+    (
+      textField: "route_start_location" | "start_location" | "end_location",
+      dataField: "route_start_location_data" | "start_location_data" | "end_location_data",
+      value: string,
+      location: StructuredLocation | null
+    ) => {
+      setForm((current) => ({
+        ...current,
+        [textField]: value,
+        [dataField]: location,
+        cost_estimation_status: "pending",
+        cost_estimation_note: labels.routeChanged
+      }));
+      setDistanceMessage(null);
+    },
+    [labels.routeChanged]
+  );
+
+  const useDepotLocation = useCallback(() => {
+    if (!DEFAULT_DEPOT_LOCATION) {
+      setError(labels.depotMissing);
+      return;
+    }
+
+    setError(null);
+    setLocationField(
+      "route_start_location",
+      "route_start_location_data",
+      getLocationDisplay(DEFAULT_DEPOT_LOCATION),
+      DEFAULT_DEPOT_LOCATION
+    );
+  }, [labels.depotMissing, setLocationField]);
+
   const estimateRoute = useCallback(async () => {
-    const origin = form.route_start_location.trim();
-    const pickup = form.start_location.trim();
-    const mainDropoff = form.end_location.trim();
-    const routeStops = [
-      pickup,
-      mainDropoff,
-      ...form.additional_dropoffs.map((stop) => stop.trim()).filter(Boolean)
-    ];
+    const origin = form.route_start_location_data;
+    const pickup = form.start_location_data;
+    const mainDropoff = form.end_location_data;
+    const additionalDropoffEntries = form.additional_dropoffs
+      .map((stop, index) => ({ stop: stop.trim(), location: form.additional_dropoff_data[index] ?? null }))
+      .filter((entry) => Boolean(entry.stop));
+    const additionalDropoffs = additionalDropoffEntries
+      .map((entry) => entry.location)
+      .filter((location): location is StructuredLocation => Boolean(location));
+    const routeStops = [pickup, mainDropoff, ...additionalDropoffs].filter(
+      (location): location is StructuredLocation => Boolean(location)
+    );
     const destination = form.include_return_to_start ? origin : routeStops[routeStops.length - 1];
     const waypoints = form.include_return_to_start ? routeStops : routeStops.slice(0, -1);
 
-    if (!origin || !pickup || !mainDropoff) {
+    if (!form.route_start_location.trim() || !form.start_location.trim() || !form.end_location.trim()) {
       throw new Error(labels.routeKeyMissing);
     }
 
-    const originKey = normalizeLocationKey(origin);
+    if (
+      !hasCoordinates(origin) ||
+      !hasCoordinates(pickup) ||
+      !hasCoordinates(mainDropoff) ||
+      additionalDropoffEntries.some((entry) => !hasCoordinates(entry.location))
+    ) {
+      throw new Error(labels.validGoogleLocationRequired);
+    }
+
+    const originKey = locationRouteKey(origin, form.route_start_location);
     const destinationKey = normalizeLocationKey(
-      [...waypoints, destination, form.include_return_to_start ? "return" : "oneway"].join(" | ")
+      [...waypoints.map((location) => locationRouteKey(location)), locationRouteKey(destination), form.include_return_to_start ? "return" : "oneway"].join(" | ")
     );
     const cached = await fetchRouteDistanceEstimate(originKey, destinationKey).catch(() => null);
 
@@ -1686,8 +1857,8 @@ export default function ShipmentsPage() {
     setDistanceMessage(labels.routeReady);
 
     await saveRouteDistanceEstimate({
-      origin_location: origin,
-      destination_location: destination,
+      origin_location: getLocationDisplay(origin, form.route_start_location),
+      destination_location: getLocationDisplay(destination),
       origin_key: originKey,
       destination_key: destinationKey,
       distance_km: distanceKm,
@@ -1697,13 +1868,18 @@ export default function ShipmentsPage() {
     }).catch(() => undefined);
   }, [
     currentRouteKey,
+    form.additional_dropoff_data,
     form.additional_dropoffs,
     form.end_location,
+    form.end_location_data,
     form.include_return_to_start,
     form.route_start_location,
+    form.route_start_location_data,
     form.start_location,
+    form.start_location_data,
     labels.routeKeyMissing,
-    labels.routeReady
+    labels.routeReady,
+    labels.validGoogleLocationRequired
   ]);
 
   const handleEstimateRoute = useCallback(async () => {
@@ -1722,6 +1898,10 @@ export default function ShipmentsPage() {
   const startEditingShipment = useCallback((shipment: ShipmentWithDriver) => {
     const normalized = normalizeShipment(shipment);
     const defaults = getRouteDefaults(shipments);
+    const savedLocationData = parseSavedLocationData(shipment.notes);
+    const savedAdditionalDropoffData = Array.isArray(shipment.additional_dropoffs_data)
+      ? shipment.additional_dropoffs_data.map(asStructuredLocation)
+      : savedLocationData?.additional_dropoffs ?? [];
     const status = STATUS_OPTIONS.some((option) => option.value === normalized.status)
       ? normalized.status
       : "Draft";
@@ -1734,8 +1914,24 @@ export default function ShipmentsPage() {
       route_start_location: normalized.startRoute,
       start_location: normalized.pickupLocation,
       end_location: normalized.dropoffLocation,
+      route_start_location_data:
+        asStructuredLocation(shipment.start_location_data) ??
+        savedLocationData?.route_start_location ??
+        createManualLocation(normalized.startRoute),
+      start_location_data:
+        asStructuredLocation(shipment.pickup_location_data) ??
+        savedLocationData?.start_location ??
+        createManualLocation(normalized.pickupLocation),
+      end_location_data:
+        asStructuredLocation(shipment.dropoff_location_data) ??
+        savedLocationData?.end_location ??
+        createManualLocation(normalized.dropoffLocation),
       include_return_to_start: normalized.returnToStart,
       additional_dropoffs: normalized.additionalDropoffs,
+      additional_dropoff_data:
+        normalized.additionalDropoffs.map(
+          (stop, index) => savedAdditionalDropoffData[index] ?? createManualLocation(stop)
+        ),
       estimated_distance_km: formatInputNumber(normalized.distanceKm, 1),
       estimated_duration_minutes: formatInputNumber(normalized.durationMinutes, 0),
       vehicle_type: normalized.vehicleType,
@@ -1951,10 +2147,20 @@ export default function ShipmentsPage() {
 
   const canSave =
     Boolean(form.job_reference.trim()) &&
-    Boolean(form.route_start_location.trim()) &&
-    Boolean(form.start_location.trim()) &&
-    Boolean(form.end_location.trim()) &&
-    (Boolean(form.estimated_distance_km.trim()) || googleMapsConfigured === false);
+    hasCoordinates(form.route_start_location_data) &&
+    hasCoordinates(form.start_location_data) &&
+    hasCoordinates(form.end_location_data) &&
+    form.additional_dropoffs.every((stop, index) =>
+      stop.trim() ? hasCoordinates(form.additional_dropoff_data[index]) : true
+    ) &&
+    Boolean(form.estimated_distance_km.trim());
+  const routeHasManualUnverified =
+    Boolean(form.route_start_location.trim() && !hasCoordinates(form.route_start_location_data)) ||
+    Boolean(form.start_location.trim() && !hasCoordinates(form.start_location_data)) ||
+    Boolean(form.end_location.trim() && !hasCoordinates(form.end_location_data)) ||
+    form.additional_dropoffs.some((stop, index) =>
+      stop.trim() ? !hasCoordinates(form.additional_dropoff_data[index]) : false
+    );
 
   const handleSubmit = useCallback(
     async (event: React.FormEvent<HTMLFormElement>) => {
@@ -1979,6 +2185,18 @@ export default function ShipmentsPage() {
 
       if (!form.start_location.trim() || !form.end_location.trim()) {
         setError(labels.validation.pickupDropoffRequired);
+        return;
+      }
+
+      if (
+        !hasCoordinates(form.route_start_location_data) ||
+        !hasCoordinates(form.start_location_data) ||
+        !hasCoordinates(form.end_location_data) ||
+        form.additional_dropoffs.some((stop, index) =>
+          stop.trim() ? !hasCoordinates(form.additional_dropoff_data[index]) : false
+        )
+      ) {
+        setError(labels.validGoogleLocationRequired);
         return;
       }
 
@@ -2016,6 +2234,12 @@ export default function ShipmentsPage() {
         setSaving(true);
         setError(null);
         const additionalDropoffs = form.additional_dropoffs.map((stop) => stop.trim()).filter(Boolean);
+        const additionalDropoffLocations = form.additional_dropoff_data.filter(
+          (location): location is StructuredLocation => hasCoordinates(location)
+        );
+        const routeStartLabel = getLocationDisplay(form.route_start_location_data, form.route_start_location);
+        const pickupLabel = getLocationDisplay(form.start_location_data, form.start_location);
+        const dropoffLabel = getLocationDisplay(form.end_location_data, form.end_location);
         const statusToSave =
           requestedStatus === "Draft"
             ? "Draft"
@@ -2038,10 +2262,14 @@ export default function ShipmentsPage() {
           customer_name: form.customer_name.trim() || null,
           goods_description: form.goods_description.trim() || form.cargo_type.trim() || null,
           shipment_date: toDateInputValue(form.shipment_date) || today(),
-          start_location: form.route_start_location.trim(),
-          end_location: form.route_start_location.trim(),
-          pickup_location: form.start_location.trim(),
-          dropoff_location: form.end_location.trim(),
+          start_location: routeStartLabel,
+          end_location: routeStartLabel,
+          pickup_location: pickupLabel,
+          dropoff_location: dropoffLabel,
+          start_location_data: form.route_start_location_data,
+          pickup_location_data: form.start_location_data,
+          dropoff_location_data: form.end_location_data,
+          additional_dropoffs_data: additionalDropoffLocations,
           estimated_distance_km: distanceValue,
           total_distance_km: distanceValue,
           total_operational_distance_km: distanceValue,
@@ -2070,8 +2298,14 @@ export default function ShipmentsPage() {
               additionalDropoffs.length
                 ? `${labels.additionalDropoffs}: ${additionalDropoffs.join(" | ")}`
                 : "",
+              buildLocationDataLine({
+                route_start_location: form.route_start_location_data,
+                start_location: form.start_location_data,
+                end_location: form.end_location_data,
+                additional_dropoffs: additionalDropoffLocations
+              }),
               cargoDetails.length ? `${labels.cargoType}: ${cargoDetails.join("; ")}` : "",
-              `${labels.startRoute}: ${form.route_start_location.trim()}`,
+              `${labels.startRoute}: ${routeStartLabel}`,
               `${labels.totalTravelTime}: ${durationValue}`,
               `${labels.parking}: ${parkingCost}`,
               `${labels.returnToStart}: ${
@@ -2362,45 +2596,56 @@ export default function ShipmentsPage() {
                 <LocationAutocomplete
                   label={labels.startRoute}
                   value={form.route_start_location}
-                  onChange={(value) => {
-                    setForm((current) => ({ ...current, route_start_location: value }));
-                    setDistanceMessage(null);
-                  }}
+                  onChange={(value) => setLocationField("route_start_location", "route_start_location_data", value, createManualLocation(value))}
+                  onManualInput={(value) => setLocationField("route_start_location", "route_start_location_data", value, createManualLocation(value))}
+                  onSelectLocation={(location) => setLocationField("route_start_location", "route_start_location_data", getLocationDisplay(location), location)}
+                  selectedLocation={form.route_start_location_data}
                   required
                   language={language}
                   configMissingMessage={labels.autocompleteUnavailable}
                   helperText={labels.startRouteHelper}
+                  invalidText={labels.validGoogleLocationRequired}
                   loadingText={labels.loadingSuggestions}
                   onConfigurationChange={setGoogleMapsConfigured}
                 />
                 <LocationAutocomplete
                   label={labels.pickup}
                   value={form.start_location}
-                  onChange={(value) => {
-                    setForm((current) => ({ ...current, start_location: value }));
-                    setDistanceMessage(null);
-                  }}
+                  onChange={(value) => setLocationField("start_location", "start_location_data", value, createManualLocation(value))}
+                  onManualInput={(value) => setLocationField("start_location", "start_location_data", value, createManualLocation(value))}
+                  onSelectLocation={(location) => setLocationField("start_location", "start_location_data", getLocationDisplay(location), location)}
+                  selectedLocation={form.start_location_data}
                   required
                   language={language}
                   configMissingMessage={labels.autocompleteUnavailable}
                   helperText={labels.autocompleteHelper}
+                  invalidText={labels.validGoogleLocationRequired}
                   loadingText={labels.loadingSuggestions}
                   onConfigurationChange={setGoogleMapsConfigured}
                 />
                 <LocationAutocomplete
                   label={labels.dropoff}
                   value={form.end_location}
-                  onChange={(value) => {
-                    setForm((current) => ({ ...current, end_location: value }));
-                    setDistanceMessage(null);
-                  }}
+                  onChange={(value) => setLocationField("end_location", "end_location_data", value, createManualLocation(value))}
+                  onManualInput={(value) => setLocationField("end_location", "end_location_data", value, createManualLocation(value))}
+                  onSelectLocation={(location) => setLocationField("end_location", "end_location_data", getLocationDisplay(location), location)}
+                  selectedLocation={form.end_location_data}
                   required
                   language={language}
                   configMissingMessage={labels.autocompleteUnavailable}
                   helperText={labels.autocompleteHelper}
+                  invalidText={labels.validGoogleLocationRequired}
                   loadingText={labels.loadingSuggestions}
                   onConfigurationChange={setGoogleMapsConfigured}
                 />
+                <div className="flex flex-col gap-2 rounded-[1rem] border border-slate-200 bg-white/80 p-3 text-xs text-slate-500 lg:col-span-3 lg:flex-row lg:items-center lg:justify-between">
+                  <span>
+                    {DEFAULT_DEPOT_LOCATION ? getLocationDisplay(DEFAULT_DEPOT_LOCATION) : labels.depotMissing}
+                  </span>
+                  <button type="button" onClick={useDepotLocation} className="btn-secondary min-h-[40px] rounded-[0.9rem] px-4 py-2">
+                    {labels.useDepotLocation}
+                  </button>
+                </div>
                 <div className="form-field justify-end lg:col-span-3">
                   <label className="form-label opacity-0">{labels.estimateRoute}</label>
                   <button
@@ -2428,7 +2673,8 @@ export default function ShipmentsPage() {
                     onClick={() =>
                       setForm((current) => ({
                         ...current,
-                        additional_dropoffs: [...current.additional_dropoffs, ""]
+                        additional_dropoffs: [...current.additional_dropoffs, ""],
+                        additional_dropoff_data: [...current.additional_dropoff_data, null]
                       }))
                     }
                     className="btn-secondary min-h-[44px] gap-2 rounded-[1rem] px-4"
@@ -2450,13 +2696,48 @@ export default function ShipmentsPage() {
                               ...current,
                               additional_dropoffs: current.additional_dropoffs.map((item, itemIndex) =>
                                 itemIndex === index ? value : item
-                              )
+                              ),
+                              additional_dropoff_data: current.additional_dropoff_data.map((item, itemIndex) =>
+                                itemIndex === index ? createManualLocation(value) : item
+                              ),
+                              cost_estimation_status: "pending",
+                              cost_estimation_note: labels.routeChanged
                             }));
                             setDistanceMessage(null);
                           }}
+                          onManualInput={(value) => {
+                            setForm((current) => ({
+                              ...current,
+                              additional_dropoffs: current.additional_dropoffs.map((item, itemIndex) =>
+                                itemIndex === index ? value : item
+                              ),
+                              additional_dropoff_data: current.additional_dropoff_data.map((item, itemIndex) =>
+                                itemIndex === index ? createManualLocation(value) : item
+                              ),
+                              cost_estimation_status: "pending",
+                              cost_estimation_note: labels.routeChanged
+                            }));
+                            setDistanceMessage(null);
+                          }}
+                          onSelectLocation={(location) => {
+                            setForm((current) => ({
+                              ...current,
+                              additional_dropoffs: current.additional_dropoffs.map((item, itemIndex) =>
+                                itemIndex === index ? getLocationDisplay(location) : item
+                              ),
+                              additional_dropoff_data: current.additional_dropoff_data.map((item, itemIndex) =>
+                                itemIndex === index ? location : item
+                              ),
+                              cost_estimation_status: "pending",
+                              cost_estimation_note: labels.routeChanged
+                            }));
+                            setDistanceMessage(null);
+                          }}
+                          selectedLocation={form.additional_dropoff_data[index]}
                           language={language}
                           configMissingMessage={labels.autocompleteUnavailable}
                           helperText={labels.autocompleteHelper}
+                          invalidText={labels.validGoogleLocationRequired}
                           loadingText={labels.loadingSuggestions}
                           onConfigurationChange={setGoogleMapsConfigured}
                         />
@@ -2467,6 +2748,9 @@ export default function ShipmentsPage() {
                               setForm((current) => ({
                                 ...current,
                                 additional_dropoffs: current.additional_dropoffs.filter(
+                                  (_, itemIndex) => itemIndex !== index
+                                ),
+                                additional_dropoff_data: current.additional_dropoff_data.filter(
                                   (_, itemIndex) => itemIndex !== index
                                 )
                               }))
@@ -2515,6 +2799,15 @@ export default function ShipmentsPage() {
                         ? labels.routeChanged
                         : distanceMessage ?? labels.routeSummaryHint}
                     </p>
+                    {googleMapsConfigured === false ? (
+                      <p className="mt-2 text-xs font-semibold text-amber-700">
+                        {labels.mapsUnavailableManualOnly}
+                      </p>
+                    ) : routeHasManualUnverified ? (
+                      <p className="mt-2 text-xs font-semibold text-amber-700">
+                        {labels.manualLocationWarning}
+                      </p>
+                    ) : null}
                   </div>
                   {googleMapsConfigured === false ? (
                     <div className="w-full max-w-[220px]">

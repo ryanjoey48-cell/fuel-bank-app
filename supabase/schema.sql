@@ -25,6 +25,7 @@ create table if not exists public.fuel_logs (
   price_per_litre numeric(12, 2),
   fuel_type text,
   payment_method text,
+  entry_source text not null default 'line_message' check (entry_source in ('line_message', 'direct_from_receipt', 'other')),
   notes text,
   created_at timestamptz not null default now()
 );
@@ -582,3 +583,52 @@ drop trigger if exists set_route_distance_estimates_updated_at on public.route_d
 create trigger set_route_distance_estimates_updated_at
 before update on public.route_distance_estimates
 for each row execute function public.set_updated_at();
+
+create table if not exists public.booking_diary (
+  id uuid primary key default gen_random_uuid(),
+  booking_id text,
+  booking_date date not null,
+  amount_pallets numeric,
+  weight numeric,
+  dimensions text,
+  pickup text not null,
+  warehouse_no text,
+  dropoff text not null,
+  vehicle text,
+  driver text,
+  notes text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  created_by text,
+  modified_by text
+);
+
+create index if not exists booking_diary_booking_date_idx
+  on public.booking_diary (booking_date);
+
+create index if not exists booking_diary_vehicle_idx
+  on public.booking_diary (vehicle);
+
+create index if not exists booking_diary_driver_idx
+  on public.booking_diary (driver);
+
+create index if not exists booking_diary_booking_id_idx
+  on public.booking_diary (booking_id);
+
+alter table public.booking_diary disable row level security;
+
+drop trigger if exists set_booking_diary_updated_at on public.booking_diary;
+create trigger set_booking_diary_updated_at
+before update on public.booking_diary
+for each row execute function public.set_updated_at();
+
+do $$
+begin
+  alter publication supabase_realtime add table public.booking_diary;
+exception
+  when duplicate_object then null;
+  when undefined_object then null;
+end;
+$$;
+
+notify pgrst, 'reload schema';
