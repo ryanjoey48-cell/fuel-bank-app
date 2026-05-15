@@ -501,7 +501,7 @@ td {
   }
 
   .booking-date-heading {
-    @apply flex items-center gap-2 pb-1 text-[12px] font-bold uppercase tracking-[0.11em] text-slate-500;
+    @apply flex items-center gap-2 pb-1 pl-[60px] text-[12px] font-bold uppercase tracking-[0.11em] text-slate-500;
   }
 
   .booking-date-heading::after {
@@ -514,7 +514,7 @@ td {
   }
 
   .booking-diary-line {
-    @apply block w-full min-w-0 border-b border-slate-200/80 px-0 py-2 text-left outline-none transition active:bg-brand-50/40;
+    @apply block w-full min-w-0 border-b border-slate-200/80 px-0 py-1.5 text-left outline-none transition active:bg-brand-50/40;
   }
 
   .booking-diary-line:focus-visible {
@@ -523,15 +523,23 @@ td {
   }
 
   .booking-line-main {
-    @apply grid min-w-0 grid-cols-[42px_minmax(0,1fr)_auto] items-baseline gap-2;
+    @apply grid min-w-0 grid-cols-[52px_minmax(0,1fr)] items-start gap-2;
+  }
+
+  .booking-line-time-block {
+    @apply flex w-[52px] shrink-0 flex-col items-start leading-none;
+  }
+
+  .booking-line-time-label {
+    @apply mb-0.5 text-[8px] font-bold uppercase tracking-[0.11em] text-slate-400;
   }
 
   .booking-line-time {
-    @apply whitespace-nowrap text-[12px] font-semibold tabular-nums text-slate-500;
+    @apply whitespace-nowrap font-mono text-[14px] font-bold leading-5 tabular-nums text-brand-800;
   }
 
   .booking-line-route {
-    @apply min-w-0 truncate text-[14px] font-semibold leading-5 text-slate-950;
+    @apply min-w-0 truncate text-[15px] font-semibold leading-5 text-slate-950;
   }
 
   .booking-line-route span {
@@ -539,15 +547,15 @@ td {
   }
 
   .booking-line-status {
-    @apply whitespace-nowrap text-[9px] font-bold uppercase tracking-[0.09em] text-slate-400;
+    @apply rounded-full border border-brand-100 bg-brand-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em] text-brand-700;
   }
 
   .booking-line-meta {
-    @apply mt-0.5 flex min-w-0 flex-wrap gap-x-0 gap-y-0.5 pl-[50px] text-[11px] font-medium leading-4 text-slate-600;
+    @apply mt-0.5 flex min-w-0 flex-wrap gap-x-0 gap-y-0.5 pl-[60px] text-[11px] font-medium leading-4 text-slate-600;
   }
 
   .booking-line-meta span {
-    @apply inline-flex max-w-[46%] min-w-0 items-center truncate;
+    @apply inline-flex max-w-[64%] min-w-0 items-center truncate;
   }
 
   .booking-line-meta span + span::before {
@@ -556,7 +564,11 @@ td {
   }
 
   .booking-line-extra {
-    @apply mt-0.5 truncate pl-[50px] text-[11px] leading-4 text-slate-400;
+    @apply hidden;
+  }
+
+  .booking-line-meta span + span::before {
+    content: "\2022";
   }
 
   .booking-stats-strip {

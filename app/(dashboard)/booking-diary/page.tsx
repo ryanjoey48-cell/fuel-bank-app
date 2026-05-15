@@ -46,7 +46,6 @@ type BookingForm = {
   vehicle: string;
   driver: string;
   notes: string;
-  status: string;
 };
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
@@ -63,8 +62,7 @@ const emptyForm = (): BookingForm => ({
   dropoff: "",
   vehicle: "",
   driver: "",
-  notes: "",
-  status: ""
+  notes: ""
 });
 
 const labels = {
@@ -100,7 +98,7 @@ const labels = {
     modifiedBy: "Modified by",
     modifiedTime: "Modified time",
     save: "Save booking",
-    update: "Update booking",
+    update: "Update Booking",
     saving: "Saving...",
     cancel: "Cancel",
     close: "Close",
@@ -135,8 +133,7 @@ const labels = {
     extra: "Extra",
     route: "Route",
     actions: "Actions",
-    notesStatus: "Notes / Status",
-    status: "Status"
+    notesStatus: "Notes"
   },
   th: {
     title: "สมุดจองงาน",
@@ -205,8 +202,7 @@ const labels = {
     extra: "เพิ่มเติม",
     route: "เส้นทาง",
     actions: "จัดการ",
-    notesStatus: "หมายเหตุ / สถานะ",
-    status: "สถานะ"
+    notesStatus: "หมายเหตุ"
   }
 };
 
@@ -223,8 +219,7 @@ function mapBookingToForm(booking: BookingDiaryEntry): BookingForm {
     dropoff: booking.dropoff,
     vehicle: booking.vehicle ?? "",
     driver: booking.driver ?? "",
-    notes: booking.notes ?? "",
-    status: booking.status ?? ""
+    notes: booking.notes ?? ""
   };
 }
 
@@ -280,6 +275,7 @@ export default function BookingDiaryPage() {
   const [driverFilter, setDriverFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [editingBookingId, setEditingBookingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BookingDiaryEntry | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -363,8 +359,7 @@ export default function BookingDiaryPage() {
           booking.vehicle,
           booking.driver,
           booking.warehouse_no,
-          booking.notes,
-          booking.status
+          booking.notes
         ]
           .filter(Boolean)
           .join(" ")
@@ -421,13 +416,20 @@ export default function BookingDiaryPage() {
 
   const openCreate = () => {
     setForm(emptyForm());
+    setEditingBookingId(null);
     setError(null);
     setNotice(null);
     setModalOpen(true);
   };
 
   const openEdit = (booking: BookingDiaryEntry) => {
+    if (!booking.id) {
+      setError(copy.saveError);
+      console.error("Booking diary edit error: missing booking id", booking);
+      return;
+    }
     setForm(mapBookingToForm(booking));
+    setEditingBookingId(booking.id);
     setError(null);
     setNotice(null);
     setModalOpen(true);
@@ -436,6 +438,7 @@ export default function BookingDiaryPage() {
   const closeModal = () => {
     if (saving) return;
     setModalOpen(false);
+    setEditingBookingId(null);
   };
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -448,8 +451,9 @@ export default function BookingDiaryPage() {
     try {
       setSaving(true);
       setError(null);
+      const targetId = (editingBookingId ?? form.id.trim()) || undefined;
       await saveBookingDiaryEntry({
-        id: form.id || undefined,
+        id: targetId,
         booking_date: form.booking_date,
         pickup_time: form.pickup_time,
         amount_pallets: form.amount_pallets,
@@ -460,15 +464,15 @@ export default function BookingDiaryPage() {
         dropoff: form.dropoff,
         vehicle: form.vehicle,
         driver: form.driver,
-        notes: form.notes,
-        status: form.status
+        notes: form.notes
       });
-      setNotice(form.id ? copy.updated : copy.saved);
+      setNotice(targetId ? copy.updated : copy.saved);
+      setEditingBookingId(null);
       setModalOpen(false);
       await load(false);
     } catch (err) {
-      console.error(form.id ? "Booking diary update error:" : "Booking diary save error:", {
-        id: form.id || null,
+      console.error(editingBookingId ? "Booking diary update error:" : "Booking diary save error:", {
+        id: (editingBookingId ?? form.id) || null,
         error: err
       });
       setError(err instanceof Error && err.message ? err.message : copy.saveError);
@@ -517,7 +521,6 @@ export default function BookingDiaryPage() {
         Vehicle: booking.vehicle,
         Driver: booking.driver,
         Notes: booking.notes,
-        Status: booking.status,
         "Created By": booking.created_by,
         "Created At": booking.created_at,
         "Modified By": booking.modified_by,
@@ -531,6 +534,7 @@ export default function BookingDiaryPage() {
   const inputClass = "booking-form-control";
   const compactInputClass = "booking-filter-control";
   const bookingTitle = language === "th" ? "Booking Diary" : copy.title;
+  const activeEditingId = editingBookingId || form.id.trim();
   const filterControls = (
     <>
       <div className="relative col-span-1 sm:col-span-3 xl:col-span-1">
@@ -730,23 +734,28 @@ export default function BookingDiaryPage() {
                         className="booking-diary-line"
                       >
                         <div className="booking-line-main">
-                          <span className="booking-line-time">{formatPickupTime(booking.pickup_time)}</span>
+                          <span className="booking-line-time-block">
+                            <span className="booking-line-time-label">PICKUP</span>
+                            <span className="booking-line-time">{formatPickupTime(booking.pickup_time) || "--:--"}</span>
+                          </span>
                           <span className="booking-line-route">{booking.pickup} <span>-&gt;</span> {booking.dropoff}</span>
-                          {booking.status ? <span className="booking-line-status">{booking.status}</span> : null}
                         </div>
                         {(() => {
-                          const meta = [booking.vehicle, booking.driver, booking.amount_pallets ? `${booking.amount_pallets} PLT` : "", booking.weight ? `${booking.weight}kg` : ""].filter(Boolean);
+                          const meta = [
+                            booking.vehicle,
+                            booking.driver,
+                            booking.amount_pallets ? `${booking.amount_pallets} PLT` : "",
+                            booking.weight ? `${booking.weight}kg` : "",
+                            booking.dimensions ? `Size: ${booking.dimensions}` : "",
+                            booking.warehouse_no ? `Warehouse: ${booking.warehouse_no}` : "",
+                            booking.notes ? `Notes: ${booking.notes}` : ""
+                          ].filter(Boolean);
                           return meta.length ? (
                             <div className="booking-line-meta">
                               {meta.map((item, index) => <span key={`${item}-${index}`}>{item}</span>)}
                             </div>
                           ) : null;
                         })()}
-                        {(booking.warehouse_no || booking.notes) ? (
-                          <div className="booking-line-extra">
-                            {[booking.warehouse_no, booking.notes].filter(Boolean).join(" / ")}
-                          </div>
-                        ) : null}
                       </button>
                     ))}
                   </div>
@@ -980,8 +989,8 @@ export default function BookingDiaryPage() {
           <div className="booking-sheet max-h-[100dvh] w-full overflow-hidden rounded-t-[1.6rem] border border-brand-100 bg-white shadow-[0_30px_70px_rgba(38,18,78,0.24)] lg:max-h-[96vh] lg:max-w-3xl lg:rounded-[1.6rem]">
             <div className="flex items-center justify-between gap-3 border-b border-slate-200/80 px-4 py-4 sm:px-5">
               <div className="min-w-0">
-                <p className="badge-muted w-fit">{form.id ? copy.editBooking : copy.addBooking}</p>
-                <h3 className="mt-2 truncate text-lg font-semibold text-slate-950">{form.id ? formatDate(form.booking_date, language) : copy.addBooking}</h3>
+                <p className="badge-muted w-fit">{activeEditingId ? copy.editBooking : copy.addBooking}</p>
+                <h3 className="mt-2 truncate text-lg font-semibold text-slate-950">{activeEditingId ? formatDate(form.booking_date, language) : copy.addBooking}</h3>
               </div>
               <button type="button" onClick={closeModal} className="btn-secondary min-h-[42px] w-11 rounded-[1rem] px-0" aria-label={copy.close}>
                 <X className="h-4 w-4" />
@@ -993,21 +1002,21 @@ export default function BookingDiaryPage() {
                 <fieldset className="booking-form-section">
                   <legend>{copy.job}</legend>
                   <div className="booking-form-grid">
-                    <label className="form-field lg:col-span-1">
-                      <span className="form-label form-label-required">{copy.date}</span>
-                      <input ref={firstInputRef} required type="date" value={form.booking_date} onChange={(event) => setField("booking_date", event.target.value)} className={inputClass} />
+                    <label className="form-field lg:col-span-2">
+                      <span className="form-label form-label-required">{copy.pickup}</span>
+                      <input ref={firstInputRef} required value={form.pickup} onChange={(event) => setField("pickup", event.target.value)} className={inputClass} placeholder={copy.pickup} />
+                    </label>
+                    <label className="form-field lg:col-span-2">
+                      <span className="form-label form-label-required">{copy.dropoff}</span>
+                      <input required value={form.dropoff} onChange={(event) => setField("dropoff", event.target.value)} className={inputClass} placeholder={copy.dropoff} />
                     </label>
                     <label className="form-field lg:col-span-1">
                       <span className="form-label form-label-required">{copy.pickupTime}</span>
                       <input required type="time" value={form.pickup_time} onChange={(event) => setField("pickup_time", event.target.value)} className={inputClass} />
                     </label>
-                    <label className="form-field lg:col-span-2">
-                      <span className="form-label form-label-required">{copy.pickup}</span>
-                      <input required value={form.pickup} onChange={(event) => setField("pickup", event.target.value)} className={inputClass} placeholder={copy.pickup} />
-                    </label>
-                    <label className="form-field lg:col-span-2">
-                      <span className="form-label form-label-required">{copy.dropoff}</span>
-                      <input required value={form.dropoff} onChange={(event) => setField("dropoff", event.target.value)} className={inputClass} placeholder={copy.dropoff} />
+                    <label className="form-field lg:col-span-1">
+                      <span className="form-label form-label-required">{copy.date}</span>
+                      <input required type="date" value={form.booking_date} onChange={(event) => setField("booking_date", event.target.value)} className={inputClass} />
                     </label>
                   </div>
                 </fieldset>
@@ -1047,10 +1056,6 @@ export default function BookingDiaryPage() {
                       <span className="form-label">{copy.warehouseNo}</span>
                       <input value={form.warehouse_no} onChange={(event) => setField("warehouse_no", event.target.value)} className={inputClass} placeholder="WH / NO" />
                     </label>
-                    <label className="form-field lg:col-span-2">
-                      <span className="form-label">{copy.status}</span>
-                      <input value={form.status} onChange={(event) => setField("status", event.target.value)} className={inputClass} placeholder={copy.status} />
-                    </label>
                     <label className="form-field lg:col-span-4">
                       <span className="form-label">{copy.notes}</span>
                       <textarea value={form.notes} onChange={(event) => setField("notes", event.target.value)} className="form-textarea min-h-[86px] rounded-[0.9rem]" placeholder={copy.notes} />
@@ -1062,11 +1067,11 @@ export default function BookingDiaryPage() {
               {error ? <p className="form-error mt-4">{error}</p> : null}
 
               <div className="booking-sheet-actions">
-                {form.id ? (
+                {activeEditingId ? (
                   <button
                     type="button"
                     onClick={() => {
-                      const target = bookings.find((booking) => booking.id === form.id);
+                      const target = bookings.find((booking) => booking.id === activeEditingId);
                       if (target) {
                         setDeleteTarget(target);
                         setModalOpen(false);
@@ -1083,7 +1088,7 @@ export default function BookingDiaryPage() {
                 </button>
                 <button type="submit" disabled={saving} className="booking-action-button btn-primary gap-2 sm:w-auto disabled:opacity-70">
                   <Save className="h-4 w-4" />
-                  {saving ? copy.saving : form.id ? copy.update : copy.save}
+                  {saving ? copy.saving : activeEditingId ? copy.update : copy.save}
                 </button>
               </div>
             </form>

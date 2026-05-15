@@ -1546,7 +1546,6 @@ export async function fetchBookingDiaryEntries() {
     vehicle: normalizeVehicleRegistration(booking.vehicle),
     driver: normalizeDisplayName(booking.driver),
     notes: booking.notes ?? null,
-    status: booking.status ?? null,
     created_by: booking.created_by ?? null,
     modified_by: booking.modified_by ?? null
   }));
@@ -1574,7 +1573,6 @@ export async function saveBookingDiaryEntry(
     vehicle: normalizeVehicleRegistration(rest.vehicle) || null,
     driver: normalizeDisplayName(rest.driver) || null,
     notes: rest.notes?.trim() || null,
-    status: rest.status?.trim() || null,
     modified_by: audit.name,
     ...(!id ? { created_by: audit.name } : {})
   });
