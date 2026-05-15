@@ -1067,6 +1067,13 @@ export default function BookingDiaryPage() {
               {error ? <p className="form-error mt-4">{error}</p> : null}
 
               <div className="booking-sheet-actions">
+                <button type="button" onClick={closeModal} className="booking-action-button btn-secondary booking-cancel-action sm:w-auto">
+                  {copy.cancel}
+                </button>
+                <button type="submit" disabled={saving} className="booking-action-button btn-primary gap-2 sm:w-auto disabled:opacity-70">
+                  <Save className="h-4 w-4" />
+                  {saving ? copy.saving : activeEditingId ? copy.update : copy.save}
+                </button>
                 {activeEditingId ? (
                   <button
                     type="button"
@@ -1077,19 +1084,12 @@ export default function BookingDiaryPage() {
                         setModalOpen(false);
                       }
                     }}
-                    className="booking-action-button btn-danger col-span-2 sm:mr-auto sm:w-auto"
+                    className="booking-delete-link sm:ml-2"
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 className="h-3.5 w-3.5" />
                     {copy.deleteBooking}
                   </button>
                 ) : null}
-                <button type="button" onClick={closeModal} className="booking-action-button btn-secondary booking-cancel-action sm:w-auto">
-                  {copy.cancel}
-                </button>
-                <button type="submit" disabled={saving} className="booking-action-button btn-primary gap-2 sm:w-auto disabled:opacity-70">
-                  <Save className="h-4 w-4" />
-                  {saving ? copy.saving : activeEditingId ? copy.update : copy.save}
-                </button>
               </div>
             </form>
           </div>

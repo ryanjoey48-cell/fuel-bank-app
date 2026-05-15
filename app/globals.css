@@ -493,28 +493,33 @@ td {
   }
 
   .booking-paper-diary {
-    @apply grid gap-2;
+    @apply grid gap-2.5;
   }
 
   .booking-date-section {
-    @apply min-w-0;
+    @apply min-w-0 pt-1 first:pt-0;
   }
 
   .booking-date-heading {
-    @apply flex items-center gap-2 pb-1 pl-[60px] text-[12px] font-bold uppercase tracking-[0.11em] text-slate-500;
+    @apply flex items-center gap-2 pb-0.5 text-center text-[11px] font-bold uppercase tracking-[0.13em] text-slate-500;
+  }
+
+  .booking-date-heading::before {
+    content: "";
+    @apply h-px flex-1 bg-slate-200/80;
   }
 
   .booking-date-heading::after {
     content: "";
-    @apply h-px flex-1 bg-slate-200;
+    @apply h-px flex-1 bg-slate-200/80;
   }
 
   .booking-date-lines {
-    @apply border-t border-slate-200;
+    @apply border-t border-slate-100;
   }
 
   .booking-diary-line {
-    @apply block w-full min-w-0 border-b border-slate-200/80 px-0 py-1.5 text-left outline-none transition active:bg-brand-50/40;
+    @apply block w-full min-w-0 border-b border-slate-100 px-0 py-[0.32rem] text-left outline-none transition active:bg-brand-50/30;
   }
 
   .booking-diary-line:focus-visible {
@@ -531,7 +536,7 @@ td {
   }
 
   .booking-line-time-label {
-    @apply mb-0.5 text-[8px] font-bold uppercase tracking-[0.11em] text-slate-400;
+    @apply mb-0.5 text-[7px] font-semibold uppercase tracking-[0.12em] text-slate-400;
   }
 
   .booking-line-time {
@@ -569,6 +574,7 @@ td {
 
   .booking-line-meta span + span::before {
     content: "\2022";
+    @apply mx-1.5 text-slate-300;
   }
 
   .booking-stats-strip {
@@ -912,7 +918,7 @@ td {
 
   .booking-form-sections {
     @apply grid gap-3;
-    padding-bottom: 6rem;
+    padding-bottom: 7.25rem;
   }
 
   .booking-form-section {
@@ -939,9 +945,10 @@ td {
   }
 
   .booking-sheet-actions {
-    @apply sticky bottom-0 mt-auto grid grid-cols-[0.72fr_1.28fr] gap-2 border-t border-slate-200/80 pt-2.5 backdrop-blur sm:flex sm:flex-row sm:justify-end;
-    background: rgba(255, 255, 255, 0.96);
-    padding-bottom: max(0.75rem, calc(env(safe-area-inset-bottom, 0px) + 0.7rem));
+    @apply sticky bottom-0 z-10 mt-auto grid grid-cols-[0.72fr_1.28fr] gap-2 border-t border-slate-200/90 pt-2.5 sm:flex sm:flex-row sm:items-center sm:justify-end;
+    background: #fff;
+    box-shadow: 0 -12px 30px rgba(15, 23, 42, 0.08);
+    padding-bottom: max(0.85rem, calc(env(safe-area-inset-bottom, 0px) + 0.85rem));
     width: 100%;
     max-width: 100%;
     overflow-x: hidden;
@@ -958,6 +965,10 @@ td {
 
   .booking-sheet-actions .booking-cancel-action {
     @apply px-3 text-xs;
+  }
+
+  .booking-delete-link {
+    @apply col-span-2 inline-flex min-h-[34px] items-center justify-center gap-1.5 rounded-[0.75rem] px-2 text-xs font-semibold text-rose-600 sm:min-h-[40px];
   }
 }
 
