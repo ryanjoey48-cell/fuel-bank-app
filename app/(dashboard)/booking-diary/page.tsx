@@ -736,7 +736,9 @@ export default function BookingDiaryPage() {
                         <div className="booking-line-main">
                           <span className="booking-line-time-block">
                             <span className="booking-line-time-label">PICKUP</span>
-                            <span className="booking-line-time">{formatPickupTime(booking.pickup_time) || "--:--"}</span>
+                            <span className={clsx("booking-line-time", !booking.pickup_time && "booking-line-time-empty")}>
+                              {formatPickupTime(booking.pickup_time) || "No time"}
+                            </span>
                           </span>
                           <span className="booking-line-route">{booking.pickup} <span>-&gt;</span> {booking.dropoff}</span>
                         </div>
@@ -745,10 +747,7 @@ export default function BookingDiaryPage() {
                             booking.vehicle,
                             booking.driver,
                             booking.amount_pallets ? `${booking.amount_pallets} PLT` : "",
-                            booking.weight ? `${booking.weight}kg` : "",
-                            booking.dimensions ? `Size: ${booking.dimensions}` : "",
-                            booking.warehouse_no ? `Warehouse: ${booking.warehouse_no}` : "",
-                            booking.notes ? `Notes: ${booking.notes}` : ""
+                            booking.weight ? `${booking.weight}kg` : ""
                           ].filter(Boolean);
                           return meta.length ? (
                             <div className="booking-line-meta">
@@ -756,6 +755,12 @@ export default function BookingDiaryPage() {
                             </div>
                           ) : null;
                         })()}
+                        {(booking.warehouse_no || booking.notes) ? (
+                          <div className="booking-line-support">
+                            {booking.warehouse_no ? <span>Warehouse: {booking.warehouse_no}</span> : null}
+                            {booking.notes ? <span>Notes: {booking.notes}</span> : null}
+                          </div>
+                        ) : null}
                       </button>
                     ))}
                   </div>

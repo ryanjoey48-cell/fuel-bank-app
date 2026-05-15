@@ -497,11 +497,11 @@ td {
   }
 
   .booking-date-section {
-    @apply min-w-0 pt-1 first:pt-0;
+    @apply min-w-0 pt-3 first:pt-0;
   }
 
   .booking-date-heading {
-    @apply flex items-center gap-2 pb-0.5 text-center text-[11px] font-bold uppercase tracking-[0.13em] text-slate-500;
+    @apply flex items-center gap-2 pb-1 text-center text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500;
   }
 
   .booking-date-heading::before {
@@ -519,7 +519,7 @@ td {
   }
 
   .booking-diary-line {
-    @apply block w-full min-w-0 border-b border-slate-100 px-0 py-[0.32rem] text-left outline-none transition active:bg-brand-50/30;
+    @apply block w-full min-w-0 border-b border-slate-100 px-0 py-[0.26rem] text-left outline-none transition active:bg-brand-50/30;
   }
 
   .booking-diary-line:focus-visible {
@@ -528,19 +528,23 @@ td {
   }
 
   .booking-line-main {
-    @apply grid min-w-0 grid-cols-[52px_minmax(0,1fr)] items-start gap-2;
+    @apply grid min-w-0 grid-cols-[44px_minmax(0,1fr)] items-start gap-2;
   }
 
   .booking-line-time-block {
-    @apply flex w-[52px] shrink-0 flex-col items-start leading-none;
+    @apply flex w-[44px] shrink-0 flex-col items-start leading-none;
   }
 
   .booking-line-time-label {
-    @apply mb-0.5 text-[7px] font-semibold uppercase tracking-[0.12em] text-slate-400;
+    @apply mb-0.5 text-[6px] font-medium uppercase tracking-[0.1em] text-slate-400;
   }
 
   .booking-line-time {
-    @apply whitespace-nowrap font-mono text-[14px] font-bold leading-5 tabular-nums text-brand-800;
+    @apply whitespace-nowrap font-mono text-[13px] font-bold leading-5 tabular-nums text-brand-800;
+  }
+
+  .booking-line-time-empty {
+    @apply text-[10px] font-semibold text-slate-400;
   }
 
   .booking-line-route {
@@ -556,7 +560,7 @@ td {
   }
 
   .booking-line-meta {
-    @apply mt-0.5 flex min-w-0 flex-wrap gap-x-0 gap-y-0.5 pl-[60px] text-[11px] font-medium leading-4 text-slate-600;
+    @apply mt-0.5 flex min-w-0 flex-wrap gap-x-0 gap-y-0.5 pl-[52px] text-[11px] font-medium leading-4 text-slate-600;
   }
 
   .booking-line-meta span {
@@ -570,6 +574,14 @@ td {
 
   .booking-line-extra {
     @apply hidden;
+  }
+
+  .booking-line-support {
+    @apply mt-0.5 flex min-w-0 flex-wrap gap-x-2 gap-y-0.5 pl-[52px] text-[10.5px] font-medium leading-4 text-slate-500;
+  }
+
+  .booking-line-support span {
+    @apply max-w-full truncate;
   }
 
   .booking-line-meta span + span::before {
@@ -918,7 +930,7 @@ td {
 
   .booking-form-sections {
     @apply grid gap-3;
-    padding-bottom: 7.25rem;
+    padding-bottom: 180px;
   }
 
   .booking-form-section {
@@ -945,10 +957,10 @@ td {
   }
 
   .booking-sheet-actions {
-    @apply sticky bottom-0 z-10 mt-auto grid grid-cols-[0.72fr_1.28fr] gap-2 border-t border-slate-200/90 pt-2.5 sm:flex sm:flex-row sm:items-center sm:justify-end;
+    @apply fixed left-0 right-0 z-[9999] grid grid-cols-[0.72fr_1.28fr] gap-2 border-t border-slate-200/90 px-4 py-3 sm:flex sm:flex-row sm:items-center sm:justify-end;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 72px);
     background: #fff;
     box-shadow: 0 -12px 30px rgba(15, 23, 42, 0.08);
-    padding-bottom: max(0.85rem, calc(env(safe-area-inset-bottom, 0px) + 0.85rem));
     width: 100%;
     max-width: 100%;
     overflow-x: hidden;
@@ -983,6 +995,16 @@ td {
 
   .booking-sheet-actions > button {
     width: auto;
+  }
+
+  .booking-sheet-actions {
+    position: sticky;
+    left: auto;
+    right: auto;
+    bottom: 0;
+    z-index: 10;
+    padding-left: 0;
+    padding-right: 0;
   }
 }
 
