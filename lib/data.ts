@@ -1525,6 +1525,7 @@ export async function fetchBookingDiaryEntries() {
     .from("booking_diary")
     .select("*")
     .order("booking_date", { ascending: false })
+    .order("pickup_time", { ascending: true, nullsFirst: false })
     .order("updated_at", { ascending: false })
     .order("created_at", { ascending: false });
 
@@ -1537,6 +1538,7 @@ export async function fetchBookingDiaryEntries() {
 
   return ((data ?? []) as BookingDiaryEntry[]).map((booking) => ({
     ...booking,
+    pickup_time: booking.pickup_time ?? null,
     amount_pallets: booking.amount_pallets ?? null,
     weight: booking.weight ?? null,
     dimensions: booking.dimensions ?? null,
@@ -1544,6 +1546,7 @@ export async function fetchBookingDiaryEntries() {
     vehicle: normalizeVehicleRegistration(booking.vehicle),
     driver: normalizeDisplayName(booking.driver),
     notes: booking.notes ?? null,
+    status: booking.status ?? null,
     created_by: booking.created_by ?? null,
     modified_by: booking.modified_by ?? null
   }));
@@ -1561,6 +1564,7 @@ export async function saveBookingDiaryEntry(
   const cleaned = stripUndefined({
     ...(!id ? { booking_id: bookingId } : {}),
     booking_date: rest.booking_date,
+    pickup_time: rest.pickup_time || null,
     amount_pallets: parseOptionalNumeric(rest.amount_pallets),
     weight: parseOptionalNumeric(rest.weight),
     dimensions: rest.dimensions?.trim() || null,
@@ -1570,6 +1574,7 @@ export async function saveBookingDiaryEntry(
     vehicle: normalizeVehicleRegistration(rest.vehicle) || null,
     driver: normalizeDisplayName(rest.driver) || null,
     notes: rest.notes?.trim() || null,
+    status: rest.status?.trim() || null,
     modified_by: audit.name,
     ...(!id ? { created_by: audit.name } : {})
   });
@@ -1579,13 +1584,18 @@ export async function saveBookingDiaryEntry(
     : await supabase.from("booking_diary").insert(cleaned).select().single();
 
   if (result.error) {
-    logDataError("saveBookingDiaryEntry error:", result.error, cleaned);
+    logDataError("saveBookingDiaryEntry error:", result.error, { id, payload: cleaned });
     throw new Error(
       result.error.message ||
         result.error.details ||
         result.error.hint ||
         "Unable to save booking."
     );
+  }
+
+  if (id && !result.data) {
+    logDataError("saveBookingDiaryEntry update returned no row:", null, { id, payload: cleaned });
+    throw new Error("Unable to update booking. Please refresh and try again.");
   }
 
   dispatchDataChange("booking_diary");

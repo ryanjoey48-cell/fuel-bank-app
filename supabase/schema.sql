@@ -588,6 +588,7 @@ create table if not exists public.booking_diary (
   id uuid primary key default gen_random_uuid(),
   booking_id text,
   booking_date date not null,
+  pickup_time time,
   amount_pallets numeric,
   weight numeric,
   dimensions text,
@@ -597,6 +598,7 @@ create table if not exists public.booking_diary (
   vehicle text,
   driver text,
   notes text,
+  status text,
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
   created_by text,
@@ -605,6 +607,9 @@ create table if not exists public.booking_diary (
 
 create index if not exists booking_diary_booking_date_idx
   on public.booking_diary (booking_date);
+
+create index if not exists booking_diary_pickup_time_idx
+  on public.booking_diary (pickup_time);
 
 create index if not exists booking_diary_vehicle_idx
   on public.booking_diary (vehicle);

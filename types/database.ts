@@ -139,6 +139,7 @@ export type BookingDiaryEntry = {
   id: string;
   booking_id: string | null;
   booking_date: string;
+  pickup_time: string | null;
   amount_pallets: number | null;
   weight: number | null;
   dimensions: string | null;
@@ -148,6 +149,7 @@ export type BookingDiaryEntry = {
   vehicle: string | null;
   driver: string | null;
   notes: string | null;
+  status: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;

@@ -36,6 +36,7 @@ import type { BookingDiaryEntry, Driver, Vehicle } from "@/types/database";
 type BookingForm = {
   id: string;
   booking_date: string;
+  pickup_time: string;
   amount_pallets: string;
   weight: string;
   dimensions: string;
@@ -45,6 +46,7 @@ type BookingForm = {
   vehicle: string;
   driver: string;
   notes: string;
+  status: string;
 };
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
@@ -52,6 +54,7 @@ const todayKey = () => new Date().toISOString().slice(0, 10);
 const emptyForm = (): BookingForm => ({
   id: "",
   booking_date: todayKey(),
+  pickup_time: "",
   amount_pallets: "",
   weight: "",
   dimensions: "",
@@ -60,7 +63,8 @@ const emptyForm = (): BookingForm => ({
   dropoff: "",
   vehicle: "",
   driver: "",
-  notes: ""
+  notes: "",
+  status: ""
 });
 
 const labels = {
@@ -78,6 +82,7 @@ const labels = {
     search: "Search bookings",
     searchPlaceholder: "Search pickup, dropoff, vehicle, driver, notes",
     date: "Date",
+    pickupTime: "Pickup time",
     pickup: "Pickup",
     dropoff: "Dropoff",
     vehicle: "Vehicle",
@@ -109,7 +114,7 @@ const labels = {
     loadError: "Unable to load booking diary.",
     saveError: "Unable to save booking.",
     deleteError: "Unable to delete booking.",
-    required: "Date, pickup, and dropoff are required.",
+    required: "Date, pickup time, pickup, and dropoff are required.",
     clearFilters: "Clear filters",
     totalShown: "Total shown",
     todayShown: "Today",
@@ -128,9 +133,10 @@ const labels = {
     load: "Load",
     assignment: "Assignment",
     extra: "Extra",
-    returnTrip: "Return",
     route: "Route",
-    actions: "Actions"
+    actions: "Actions",
+    notesStatus: "Notes / Status",
+    status: "Status"
   },
   th: {
     title: "สมุดจองงาน",
@@ -146,6 +152,7 @@ const labels = {
     search: "ค้นหางานจอง",
     searchPlaceholder: "ค้นหาต้นทาง ปลายทาง รถ คนขับ หมายเหตุ",
     date: "วันที่",
+    pickupTime: "เวลารับของ",
     pickup: "รับของ",
     dropoff: "ส่งของ",
     vehicle: "รถ",
@@ -177,7 +184,7 @@ const labels = {
     loadError: "โหลดสมุดจองงานไม่ได้",
     saveError: "บันทึกงานจองไม่ได้",
     deleteError: "Unable to delete booking.",
-    required: "กรุณากรอกวันที่ จุดรับ และจุดส่ง",
+    required: "กรุณากรอกวันที่ เวลารับของ จุดรับ และจุดส่ง",
     clearFilters: "Clear filters",
     totalShown: "Total shown",
     todayShown: "Today",
@@ -196,9 +203,10 @@ const labels = {
     load: "สินค้า",
     assignment: "รถ / คนขับ",
     extra: "เพิ่มเติม",
-    returnTrip: "เที่ยวกลับ",
     route: "เส้นทาง",
-    actions: "จัดการ"
+    actions: "จัดการ",
+    notesStatus: "หมายเหตุ / สถานะ",
+    status: "สถานะ"
   }
 };
 
@@ -206,6 +214,7 @@ function mapBookingToForm(booking: BookingDiaryEntry): BookingForm {
   return {
     id: booking.id,
     booking_date: booking.booking_date,
+    pickup_time: booking.pickup_time ?? "",
     amount_pallets: booking.amount_pallets != null ? String(booking.amount_pallets) : "",
     weight: booking.weight != null ? String(booking.weight) : "",
     dimensions: booking.dimensions ?? "",
@@ -214,7 +223,8 @@ function mapBookingToForm(booking: BookingDiaryEntry): BookingForm {
     dropoff: booking.dropoff,
     vehicle: booking.vehicle ?? "",
     driver: booking.driver ?? "",
-    notes: booking.notes ?? ""
+    notes: booking.notes ?? "",
+    status: booking.status ?? ""
   };
 }
 
@@ -228,13 +238,9 @@ function formatTime(value: string, language: "en" | "th") {
   }).format(new Date(value));
 }
 
-function formatClock(value: string, language: "en" | "th") {
-  if (!value) return "-";
-  return new Intl.DateTimeFormat(language === "th" ? "th-TH" : "en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false
-  }).format(new Date(value));
+function formatPickupTime(value: string | null | undefined) {
+  if (!value) return "";
+  return value.slice(0, 5);
 }
 
 function uniqueSorted(values: Array<string | null | undefined>) {
@@ -357,7 +363,8 @@ export default function BookingDiaryPage() {
           booking.vehicle,
           booking.driver,
           booking.warehouse_no,
-          booking.notes
+          booking.notes,
+          booking.status
         ]
           .filter(Boolean)
           .join(" ")
@@ -392,7 +399,14 @@ export default function BookingDiaryPage() {
       entries.push(booking);
       groups.set(booking.booking_date, entries);
     });
-    return [...groups.entries()].sort(([dateA], [dateB]) => dateA.localeCompare(dateB));
+    return [...groups.entries()]
+      .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+      .map(([date, entries]) => [
+        date,
+        [...entries].sort((a, b) =>
+          (a.pickup_time || "99:99").localeCompare(b.pickup_time || "99:99")
+        )
+      ] as const);
   }, [filteredBookings]);
 
   const clearFilters = () => {
@@ -426,7 +440,7 @@ export default function BookingDiaryPage() {
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!form.booking_date || !form.pickup.trim() || !form.dropoff.trim()) {
+    if (!form.booking_date || !form.pickup_time || !form.pickup.trim() || !form.dropoff.trim()) {
       setError(copy.required);
       return;
     }
@@ -437,6 +451,7 @@ export default function BookingDiaryPage() {
       await saveBookingDiaryEntry({
         id: form.id || undefined,
         booking_date: form.booking_date,
+        pickup_time: form.pickup_time,
         amount_pallets: form.amount_pallets,
         weight: form.weight,
         dimensions: form.dimensions,
@@ -445,13 +460,17 @@ export default function BookingDiaryPage() {
         dropoff: form.dropoff,
         vehicle: form.vehicle,
         driver: form.driver,
-        notes: form.notes
+        notes: form.notes,
+        status: form.status
       });
       setNotice(form.id ? copy.updated : copy.saved);
       setModalOpen(false);
       await load(false);
     } catch (err) {
-      console.error("Booking diary save error:", err);
+      console.error(form.id ? "Booking diary update error:" : "Booking diary save error:", {
+        id: form.id || null,
+        error: err
+      });
       setError(err instanceof Error && err.message ? err.message : copy.saveError);
     } finally {
       setSaving(false);
@@ -488,6 +507,7 @@ export default function BookingDiaryPage() {
     exportToXlsx(
       filteredBookings.map((booking) => ({
         Date: booking.booking_date,
+        "Pickup Time": booking.pickup_time,
         "Amount / Pallets": booking.amount_pallets,
         Weight: booking.weight,
         Dimensions: booking.dimensions,
@@ -497,6 +517,7 @@ export default function BookingDiaryPage() {
         Vehicle: booking.vehicle,
         Driver: booking.driver,
         Notes: booking.notes,
+        Status: booking.status,
         "Created By": booking.created_by,
         "Created At": booking.created_at,
         "Modified By": booking.modified_by,
@@ -709,9 +730,9 @@ export default function BookingDiaryPage() {
                         className="booking-diary-line"
                       >
                         <div className="booking-line-main">
-                          <span className="booking-line-time">{formatClock(booking.updated_at, language)}</span>
+                          <span className="booking-line-time">{formatPickupTime(booking.pickup_time)}</span>
                           <span className="booking-line-route">{booking.pickup} <span>-&gt;</span> {booking.dropoff}</span>
-                          <span className="booking-line-status">{copy.updatedLabel}</span>
+                          <span className="booking-line-status">{booking.status || ""}</span>
                         </div>
                         {(() => {
                           const meta = [booking.vehicle, booking.driver, booking.amount_pallets ? `${booking.amount_pallets} PLT` : "", booking.weight ? `${booking.weight}kg` : ""].filter(Boolean);
@@ -899,7 +920,7 @@ export default function BookingDiaryPage() {
                   <tbody>
                     {filteredBookings.map((booking) => (
                       <tr key={booking.id} className="enterprise-table-row cursor-pointer" onClick={() => openEdit(booking)}>
-                        <td className="px-3 py-3 align-middle text-[13px] font-semibold text-slate-950 whitespace-nowrap">{formatClock(booking.updated_at, language)}</td>
+                        <td className="px-3 py-3 align-middle text-[13px] font-semibold text-slate-950 whitespace-nowrap">{formatPickupTime(booking.pickup_time) || "-"}</td>
                         <td className="max-w-[280px] px-3 py-3 align-middle text-[13px] font-semibold text-slate-900" title={`${booking.pickup} -> ${booking.dropoff}`}><span className="block truncate">{booking.pickup} <span className="text-brand-600">-&gt;</span> {booking.dropoff}</span></td>
                         <td className="px-3 py-3 align-middle text-[13px] whitespace-nowrap">{booking.vehicle || "-"}</td>
                         <td className="px-3 py-3 align-middle text-[13px] whitespace-nowrap">{booking.driver || "-"}</td>
@@ -976,6 +997,10 @@ export default function BookingDiaryPage() {
                       <span className="form-label form-label-required">{copy.date}</span>
                       <input ref={firstInputRef} required type="date" value={form.booking_date} onChange={(event) => setField("booking_date", event.target.value)} className={inputClass} />
                     </label>
+                    <label className="form-field lg:col-span-1">
+                      <span className="form-label form-label-required">{copy.pickupTime}</span>
+                      <input required type="time" value={form.pickup_time} onChange={(event) => setField("pickup_time", event.target.value)} className={inputClass} />
+                    </label>
                     <label className="form-field lg:col-span-2">
                       <span className="form-label form-label-required">{copy.pickup}</span>
                       <input required value={form.pickup} onChange={(event) => setField("pickup", event.target.value)} className={inputClass} placeholder={copy.pickup} />
@@ -984,16 +1009,22 @@ export default function BookingDiaryPage() {
                       <span className="form-label form-label-required">{copy.dropoff}</span>
                       <input required value={form.dropoff} onChange={(event) => setField("dropoff", event.target.value)} className={inputClass} placeholder={copy.dropoff} />
                     </label>
-                    <label className="booking-return-toggle lg:col-span-1">
-                      <input type="checkbox" />
-                      <span>{copy.returnTrip}</span>
-                    </label>
                   </div>
                 </fieldset>
 
                 <fieldset className="booking-form-section">
                   <legend>{copy.load}</legend>
                   <div className="booking-form-grid">
+                    <label className="form-field lg:col-span-2">
+                      <span className="form-label">{copy.vehicle}</span>
+                      <input list="booking-vehicles" value={form.vehicle} onChange={(event) => setField("vehicle", event.target.value)} className={inputClass} placeholder={copy.vehicle} />
+                      <datalist id="booking-vehicles">{vehicleOptions.map((vehicle) => <option key={vehicle} value={vehicle} />)}</datalist>
+                    </label>
+                    <label className="form-field lg:col-span-2">
+                      <span className="form-label">{copy.driver}</span>
+                      <input list="booking-drivers" value={form.driver} onChange={(event) => setField("driver", event.target.value)} className={inputClass} placeholder={copy.driver} />
+                      <datalist id="booking-drivers">{driverOptions.map((driver) => <option key={driver} value={driver} />)}</datalist>
+                    </label>
                     <label className="form-field lg:col-span-1">
                       <span className="form-label">{copy.amountPallets}</span>
                       <input inputMode="decimal" value={form.amount_pallets} onChange={(event) => setField("amount_pallets", event.target.value)} className={inputClass} placeholder="10" />
@@ -1010,27 +1041,15 @@ export default function BookingDiaryPage() {
                 </fieldset>
 
                 <fieldset className="booking-form-section">
-                  <legend>{copy.assignment}</legend>
-                  <div className="booking-form-grid">
-                    <label className="form-field lg:col-span-2">
-                      <span className="form-label">{copy.vehicle}</span>
-                      <input list="booking-vehicles" value={form.vehicle} onChange={(event) => setField("vehicle", event.target.value)} className={inputClass} placeholder={copy.vehicle} />
-                      <datalist id="booking-vehicles">{vehicleOptions.map((vehicle) => <option key={vehicle} value={vehicle} />)}</datalist>
-                    </label>
-                    <label className="form-field lg:col-span-2">
-                      <span className="form-label">{copy.driver}</span>
-                      <input list="booking-drivers" value={form.driver} onChange={(event) => setField("driver", event.target.value)} className={inputClass} placeholder={copy.driver} />
-                      <datalist id="booking-drivers">{driverOptions.map((driver) => <option key={driver} value={driver} />)}</datalist>
-                    </label>
-                  </div>
-                </fieldset>
-
-                <fieldset className="booking-form-section">
-                  <legend>{copy.extra}</legend>
+                  <legend>{copy.notesStatus}</legend>
                   <div className="booking-form-grid">
                     <label className="form-field lg:col-span-2">
                       <span className="form-label">{copy.warehouseNo}</span>
                       <input value={form.warehouse_no} onChange={(event) => setField("warehouse_no", event.target.value)} className={inputClass} placeholder="WH / NO" />
+                    </label>
+                    <label className="form-field lg:col-span-2">
+                      <span className="form-label">{copy.status}</span>
+                      <input value={form.status} onChange={(event) => setField("status", event.target.value)} className={inputClass} placeholder={copy.status} />
                     </label>
                     <label className="form-field lg:col-span-4">
                       <span className="form-label">{copy.notes}</span>
