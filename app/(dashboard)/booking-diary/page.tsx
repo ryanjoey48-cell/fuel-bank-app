@@ -737,7 +737,7 @@ export default function BookingDiaryPage() {
                           <span className="booking-line-time-block">
                             <span className="booking-line-time-label">PICKUP</span>
                             <span className={clsx("booking-line-time", !booking.pickup_time && "booking-line-time-empty")}>
-                              {formatPickupTime(booking.pickup_time) || "No time"}
+                              {formatPickupTime(booking.pickup_time) || "TBC"}
                             </span>
                           </span>
                           <span className="booking-line-route">{booking.pickup} <span>-&gt;</span> {booking.dropoff}</span>
@@ -1067,6 +1067,23 @@ export default function BookingDiaryPage() {
                     </label>
                   </div>
                 </fieldset>
+
+                {activeEditingId ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const target = bookings.find((booking) => booking.id === activeEditingId);
+                      if (target) {
+                        setDeleteTarget(target);
+                        setModalOpen(false);
+                      }
+                    }}
+                    className="booking-delete-link"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    {copy.deleteBooking}
+                  </button>
+                ) : null}
               </div>
 
               {error ? <p className="form-error mt-4">{error}</p> : null}
@@ -1079,22 +1096,6 @@ export default function BookingDiaryPage() {
                   <Save className="h-4 w-4" />
                   {saving ? copy.saving : activeEditingId ? copy.update : copy.save}
                 </button>
-                {activeEditingId ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const target = bookings.find((booking) => booking.id === activeEditingId);
-                      if (target) {
-                        setDeleteTarget(target);
-                        setModalOpen(false);
-                      }
-                    }}
-                    className="booking-delete-link sm:ml-2"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    {copy.deleteBooking}
-                  </button>
-                ) : null}
               </div>
             </form>
           </div>

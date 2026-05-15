@@ -493,33 +493,31 @@ td {
   }
 
   .booking-paper-diary {
-    @apply grid gap-2.5;
+    @apply grid gap-3.5;
   }
 
   .booking-date-section {
-    @apply min-w-0 pt-3 first:pt-0;
+    @apply min-w-0 pt-4 first:pt-0;
   }
 
   .booking-date-heading {
-    @apply flex items-center gap-2 pb-1 text-center text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500;
-  }
-
-  .booking-date-heading::before {
-    content: "";
-    @apply h-px flex-1 bg-slate-200/80;
-  }
-
-  .booking-date-heading::after {
-    content: "";
-    @apply h-px flex-1 bg-slate-200/80;
+    @apply mb-1.5 flex items-center justify-center rounded-[0.75rem] border border-brand-100/70 px-3 py-1.5 text-center text-[10px] font-bold uppercase tracking-[0.15em] text-slate-600;
+    background: linear-gradient(180deg, rgba(249, 247, 255, 0.96), rgba(248, 250, 252, 0.94));
+    box-shadow: 0 1px 2px rgba(38,18,78,0.018), inset 0 1px 0 rgba(255,255,255,0.92);
   }
 
   .booking-date-lines {
-    @apply border-t border-slate-100;
+    @apply relative overflow-hidden rounded-[0.75rem] border border-slate-100 bg-slate-50/35 px-2;
+  }
+
+  .booking-date-lines::before {
+    content: "";
+    @apply absolute bottom-1.5 top-1.5 w-px bg-brand-100/70;
+    left: 49px;
   }
 
   .booking-diary-line {
-    @apply block w-full min-w-0 border-b border-slate-100 px-0 py-[0.26rem] text-left outline-none transition active:bg-brand-50/30;
+    @apply relative block w-full min-w-0 border-b border-slate-100/80 px-0 py-[0.22rem] text-left outline-none transition last:border-b-0 active:bg-brand-50/30;
   }
 
   .booking-diary-line:focus-visible {
@@ -875,7 +873,7 @@ td {
     width: 100%;
     height: 100dvh;
     max-width: 100vw;
-    overflow-x: hidden;
+    overflow: hidden;
     box-sizing: border-box;
   }
 
@@ -898,7 +896,7 @@ td {
     flex-direction: column;
     width: 100%;
     max-width: 100%;
-    overflow-x: hidden;
+    overflow: hidden;
     box-sizing: border-box;
     overscroll-behavior-x: none;
     padding-bottom: 0;
@@ -930,7 +928,10 @@ td {
 
   .booking-form-sections {
     @apply grid gap-3;
-    padding-bottom: 180px;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding-bottom: 24px;
   }
 
   .booking-form-section {
@@ -957,10 +958,11 @@ td {
   }
 
   .booking-sheet-actions {
-    @apply fixed left-0 right-0 z-[9999] grid grid-cols-[0.72fr_1.28fr] gap-2 border-t border-slate-200/90 px-4 py-3 sm:flex sm:flex-row sm:items-center sm:justify-end;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 72px);
+    @apply sticky bottom-0 z-50 grid flex-shrink-0 grid-cols-[0.72fr_1.28fr] gap-2 border-t border-slate-200 px-4 sm:flex sm:flex-row sm:items-center sm:justify-end;
     background: #fff;
-    box-shadow: 0 -12px 30px rgba(15, 23, 42, 0.08);
+    box-shadow: 0 -8px 22px rgba(15, 23, 42, 0.06);
+    padding-top: 12px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
     width: 100%;
     max-width: 100%;
     overflow-x: hidden;
@@ -980,7 +982,7 @@ td {
   }
 
   .booking-delete-link {
-    @apply col-span-2 inline-flex min-h-[34px] items-center justify-center gap-1.5 rounded-[0.75rem] px-2 text-xs font-semibold text-rose-600 sm:min-h-[40px];
+    @apply inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-[0.85rem] border border-rose-100 bg-rose-50 px-3 text-xs font-semibold text-rose-600 sm:min-h-[40px];
   }
 }
 
@@ -999,12 +1001,8 @@ td {
 
   .booking-sheet-actions {
     position: sticky;
-    left: auto;
-    right: auto;
     bottom: 0;
     z-index: 10;
-    padding-left: 0;
-    padding-right: 0;
   }
 }
 
