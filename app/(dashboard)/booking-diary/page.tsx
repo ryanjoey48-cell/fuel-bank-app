@@ -509,6 +509,7 @@ export default function BookingDiaryPage() {
 
   const inputClass = "booking-form-control";
   const compactInputClass = "booking-filter-control";
+  const bookingTitle = language === "th" ? "Booking Diary" : copy.title;
   const filterControls = (
     <>
       <div className="relative col-span-1 sm:col-span-3 xl:col-span-1">
@@ -581,7 +582,7 @@ export default function BookingDiaryPage() {
         <div className="booking-diary-logo">EE</div>
         <div className="min-w-0">
           <p className="truncate text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">{copy.company}</p>
-          <h1 className="truncate text-xl font-semibold text-slate-950 lg:text-2xl">{copy.title}</h1>
+          <h1 className="text-xl font-semibold text-slate-950 lg:text-2xl">{bookingTitle}</h1>
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-2">
           <button
@@ -712,12 +713,14 @@ export default function BookingDiaryPage() {
                           <span className="booking-line-route">{booking.pickup} <span>-&gt;</span> {booking.dropoff}</span>
                           <span className="booking-line-status">{copy.updatedLabel}</span>
                         </div>
-                        <div className="booking-line-meta">
-                          <span>{booking.vehicle || "-"}</span>
-                          <span>{booking.driver || "-"}</span>
-                          <span>{booking.amount_pallets || "-"} PLT</span>
-                          <span>{booking.weight ? `${booking.weight}kg` : "-"}</span>
-                        </div>
+                        {(() => {
+                          const meta = [booking.vehicle, booking.driver, booking.amount_pallets ? `${booking.amount_pallets} PLT` : "", booking.weight ? `${booking.weight}kg` : ""].filter(Boolean);
+                          return meta.length ? (
+                            <div className="booking-line-meta">
+                              {meta.map((item, index) => <span key={`${item}-${index}`}>{item}</span>)}
+                            </div>
+                          ) : null;
+                        })()}
                         {(booking.warehouse_no || booking.notes) ? (
                           <div className="booking-line-extra">
                             {[booking.warehouse_no, booking.notes].filter(Boolean).join(" / ")}
@@ -947,7 +950,7 @@ export default function BookingDiaryPage() {
           className="booking-floating-add"
           aria-label={copy.addBooking}
         >
-          <Plus className="h-5 w-5" />
+          <Plus className="h-[18px] w-[18px]" />
         </button>
       ) : null}
 
@@ -1050,13 +1053,13 @@ export default function BookingDiaryPage() {
                         setModalOpen(false);
                       }
                     }}
-                    className="booking-action-button btn-danger sm:mr-auto sm:w-auto"
+                    className="booking-action-button btn-danger col-span-2 sm:mr-auto sm:w-auto"
                   >
                     <Trash2 className="h-4 w-4" />
                     {copy.deleteBooking}
                   </button>
                 ) : null}
-                <button type="button" onClick={closeModal} className="booking-action-button btn-secondary sm:w-auto">
+                <button type="button" onClick={closeModal} className="booking-action-button btn-secondary booking-cancel-action sm:w-auto">
                   {copy.cancel}
                 </button>
                 <button type="submit" disabled={saving} className="booking-action-button btn-primary gap-2 sm:w-auto disabled:opacity-70">
