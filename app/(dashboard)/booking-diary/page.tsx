@@ -732,7 +732,7 @@ export default function BookingDiaryPage() {
                         <div className="booking-line-main">
                           <span className="booking-line-time">{formatPickupTime(booking.pickup_time)}</span>
                           <span className="booking-line-route">{booking.pickup} <span>-&gt;</span> {booking.dropoff}</span>
-                          <span className="booking-line-status">{booking.status || ""}</span>
+                          {booking.status ? <span className="booking-line-status">{booking.status}</span> : null}
                         </div>
                         {(() => {
                           const meta = [booking.vehicle, booking.driver, booking.amount_pallets ? `${booking.amount_pallets} PLT` : "", booking.weight ? `${booking.weight}kg` : ""].filter(Boolean);
