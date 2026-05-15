@@ -20,7 +20,6 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
-import { Header } from "@/components/header";
 import {
   deleteBookingDiaryEntry,
   fetchBookingDiaryEntries,
@@ -122,7 +121,16 @@ const labels = {
     lastChanged: "Last changed",
     details: "Booking details",
     tapToEdit: "Tap to edit",
-    updatedLabel: "Updated"
+    updatedLabel: "Updated",
+    company: "EXPERT EXPRESS SENDER CO., LTD.",
+    filters: "Filters",
+    job: "Job",
+    load: "Load",
+    assignment: "Assignment",
+    extra: "Extra",
+    returnTrip: "Return",
+    route: "Route",
+    actions: "Actions"
   },
   th: {
     title: "สมุดจองงาน",
@@ -181,7 +189,16 @@ const labels = {
     lastChanged: "แก้ไขล่าสุด",
     details: "รายละเอียดงานจอง",
     tapToEdit: "แตะเพื่อแก้ไข",
-    updatedLabel: "อัปเดต"
+    updatedLabel: "อัปเดต",
+    company: "EXPERT EXPRESS SENDER CO., LTD.",
+    filters: "ตัวกรอง",
+    job: "งาน",
+    load: "สินค้า",
+    assignment: "รถ / คนขับ",
+    extra: "เพิ่มเติม",
+    returnTrip: "เที่ยวกลับ",
+    route: "เส้นทาง",
+    actions: "จัดการ"
   }
 };
 
@@ -208,6 +225,15 @@ function formatTime(value: string, language: "en" | "th") {
     month: "short",
     hour: "2-digit",
     minute: "2-digit"
+  }).format(new Date(value));
+}
+
+function formatClock(value: string, language: "en" | "th") {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat(language === "th" ? "th-TH" : "en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
   }).format(new Date(value));
 }
 
@@ -251,6 +277,7 @@ export default function BookingDiaryPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BookingDiaryEntry | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -349,14 +376,6 @@ export default function BookingDiaryPage() {
     });
   }, [bookings, dateFilter, driverFilter, dropoffFilter, pickupFilter, quickFilter, searchQuery, vehicleFilter]);
 
-  const todaysBookingsCount = useMemo(
-    () => filteredBookings.filter((booking) => booking.booking_date === todayKey()).length,
-    [filteredBookings]
-  );
-  const weekBookingsCount = useMemo(
-    () => filteredBookings.filter((booking) => isThisWeek(booking.booking_date)).length,
-    [filteredBookings]
-  );
   const filtersActive = Boolean(
     searchQuery ||
       dateFilter ||
@@ -366,7 +385,15 @@ export default function BookingDiaryPage() {
       driverFilter ||
       quickFilter !== "today"
   );
-  const lastUpdatedAt = filteredBookings[0]?.updated_at ?? "";
+  const groupedBookings = useMemo(() => {
+    const groups = new Map<string, BookingDiaryEntry[]>();
+    filteredBookings.forEach((booking) => {
+      const entries = groups.get(booking.booking_date) ?? [];
+      entries.push(booking);
+      groups.set(booking.booking_date, entries);
+    });
+    return [...groups.entries()].sort(([dateA], [dateB]) => dateA.localeCompare(dateB));
+  }, [filteredBookings]);
 
   const clearFilters = () => {
     setSearchQuery("");
@@ -482,43 +509,110 @@ export default function BookingDiaryPage() {
 
   const inputClass = "booking-form-control";
   const compactInputClass = "booking-filter-control";
+  const filterControls = (
+    <>
+      <div className="relative col-span-1 sm:col-span-3 xl:col-span-1">
+        <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <input
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder={copy.searchPlaceholder}
+          className={`${compactInputClass} bg-white pl-10`}
+          aria-label={copy.search}
+        />
+      </div>
+      <input
+        type="date"
+        value={dateFilter}
+        onChange={(event) => setDateFilter(event.target.value)}
+        className={`${compactInputClass} bg-white`}
+        aria-label={copy.date}
+      />
+      <select value={pickupFilter} onChange={(event) => setPickupFilter(event.target.value)} className={`${compactInputClass} bg-white`}>
+        <option value="">{copy.allPickups}</option>
+        {pickupOptions.map((pickup) => <option key={pickup} value={pickup}>{pickup}</option>)}
+      </select>
+      <select value={dropoffFilter} onChange={(event) => setDropoffFilter(event.target.value)} className={`${compactInputClass} bg-white`}>
+        <option value="">{copy.allDropoffs}</option>
+        {dropoffOptions.map((dropoff) => <option key={dropoff} value={dropoff}>{dropoff}</option>)}
+      </select>
+      <select value={vehicleFilter} onChange={(event) => setVehicleFilter(event.target.value)} className={`${compactInputClass} bg-white`}>
+        <option value="">{copy.allVehicles}</option>
+        {vehicleOptions.map((vehicle) => <option key={vehicle} value={vehicle}>{vehicle}</option>)}
+      </select>
+      <select value={driverFilter} onChange={(event) => setDriverFilter(event.target.value)} className={`${compactInputClass} bg-white`}>
+        <option value="">{copy.allDrivers}</option>
+        {driverOptions.map((driver) => <option key={driver} value={driver}>{driver}</option>)}
+      </select>
+    </>
+  );
+  const quickFilterControls = (
+    <>
+      {(["today", "week", "all"] as const).map((filter) => (
+        <button
+          key={filter}
+          type="button"
+          onClick={() => setQuickFilter(filter)}
+          className={clsx(
+            "booking-filter-chip",
+            quickFilter === filter
+              ? "border-brand-200 bg-brand-50 text-brand-800"
+              : "border-slate-200 bg-white text-slate-600 hover:border-brand-100 hover:text-brand-700"
+          )}
+        >
+          {filter === "today" ? copy.today : filter === "week" ? copy.week : copy.all}
+        </button>
+      ))}
+      {filtersActive ? (
+        <button
+          type="button"
+          onClick={clearFilters}
+          className="booking-filter-chip border-slate-200 bg-white text-slate-600 hover:border-rose-100 hover:text-rose-600"
+        >
+          {copy.clearFilters}
+        </button>
+      ) : null}
+    </>
+  );
 
   return (
     <div className="booking-diary-page w-full max-w-full overflow-x-hidden">
-      <div className="mb-5 hidden lg:block">
-        <Header title={copy.title} description={copy.description} />
-      </div>
-
-      <section className="grid max-w-full gap-3 lg:hidden">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="badge-muted w-fit">{copy.live}</p>
-            <h1 className="mt-3 text-[1.55rem] font-semibold text-slate-950">{copy.title}</h1>
-            <p className="mt-1.5 text-sm leading-6 text-slate-500">{copy.description}</p>
-          </div>
-          <div className="flex shrink-0 gap-2">
-            <button
-              type="button"
-              onClick={exportFilteredBookings}
-              disabled={!filteredBookings.length}
-              className="booking-icon-button btn-secondary disabled:cursor-not-allowed disabled:opacity-50"
-              aria-label={copy.exportExcel}
-            >
-              <Download className="h-4 w-4" />
-            </button>
-            <button type="button" onClick={openCreate} className="booking-icon-button btn-primary" aria-label={copy.addBooking}>
-              <Plus className="h-4 w-4" />
-            </button>
-          </div>
+      <section className="booking-diary-header">
+        <div className="booking-diary-logo">EE</div>
+        <div className="min-w-0">
+          <p className="truncate text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">{copy.company}</p>
+          <h1 className="truncate text-xl font-semibold text-slate-950 lg:text-2xl">{copy.title}</h1>
+        </div>
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setMobileFiltersOpen(true)}
+            className="booking-filter-toggle lg:hidden"
+          >
+            <Filter className="h-3.5 w-3.5" />
+            {copy.filters}
+          </button>
+          <button
+            type="button"
+            onClick={exportFilteredBookings}
+            disabled={!filteredBookings.length}
+            className="booking-icon-button btn-secondary disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label={copy.exportExcel}
+          >
+            <Download className="h-4 w-4" />
+          </button>
+          <button type="button" onClick={openCreate} className="booking-icon-button btn-primary" aria-label={copy.addBooking}>
+            <Plus className="h-4 w-4" />
+          </button>
         </div>
       </section>
 
-      <section className="grid max-w-full gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+      <section className="hidden max-w-full gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
         <div className="booking-filter-panel surface-card-soft">
           <div className="mb-2.5 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Filter className="h-4 w-4 text-brand-700" />
-              <p className="text-sm font-semibold text-slate-800">{copy.quickFilters}</p>
+              <p className="text-sm font-semibold text-slate-800">{copy.filters}</p>
             </div>
             <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
@@ -526,65 +620,10 @@ export default function BookingDiaryPage() {
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-[minmax(220px,1.4fr)_repeat(5,minmax(140px,1fr))]">
-            <div className="relative col-span-2 sm:col-span-3 xl:col-span-1">
-              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder={copy.searchPlaceholder}
-                className={`${compactInputClass} bg-white pl-10`}
-                aria-label={copy.search}
-              />
-            </div>
-            <input
-              type="date"
-              value={dateFilter}
-              onChange={(event) => setDateFilter(event.target.value)}
-              className={`${compactInputClass} bg-white`}
-              aria-label={copy.date}
-            />
-            <select value={pickupFilter} onChange={(event) => setPickupFilter(event.target.value)} className={`${compactInputClass} bg-white`}>
-              <option value="">{copy.allPickups}</option>
-              {pickupOptions.map((pickup) => <option key={pickup} value={pickup}>{pickup}</option>)}
-            </select>
-            <select value={dropoffFilter} onChange={(event) => setDropoffFilter(event.target.value)} className={`${compactInputClass} bg-white`}>
-              <option value="">{copy.allDropoffs}</option>
-              {dropoffOptions.map((dropoff) => <option key={dropoff} value={dropoff}>{dropoff}</option>)}
-            </select>
-            <select value={vehicleFilter} onChange={(event) => setVehicleFilter(event.target.value)} className={`${compactInputClass} bg-white`}>
-              <option value="">{copy.allVehicles}</option>
-              {vehicleOptions.map((vehicle) => <option key={vehicle} value={vehicle}>{vehicle}</option>)}
-            </select>
-            <select value={driverFilter} onChange={(event) => setDriverFilter(event.target.value)} className={`${compactInputClass} bg-white`}>
-              <option value="">{copy.allDrivers}</option>
-              {driverOptions.map((driver) => <option key={driver} value={driver}>{driver}</option>)}
-            </select>
+            {filterControls}
           </div>
           <div className="mt-2.5 flex flex-wrap gap-2">
-            {(["today", "week", "all"] as const).map((filter) => (
-              <button
-                key={filter}
-                type="button"
-                onClick={() => setQuickFilter(filter)}
-                className={clsx(
-                  "booking-filter-chip",
-                  quickFilter === filter
-                    ? "border-brand-200 bg-brand-50 text-brand-800"
-                    : "border-slate-200 bg-white text-slate-600 hover:border-brand-100 hover:text-brand-700"
-                )}
-              >
-                {filter === "today" ? copy.today : filter === "week" ? copy.week : copy.all}
-              </button>
-            ))}
-            {filtersActive ? (
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="booking-filter-chip border-slate-200 bg-white text-slate-600 hover:border-rose-100 hover:text-rose-600"
-              >
-                {copy.clearFilters}
-              </button>
-            ) : null}
+            {quickFilterControls}
           </div>
         </div>
 
@@ -605,6 +644,28 @@ export default function BookingDiaryPage() {
         </div>
       </section>
 
+      {mobileFiltersOpen ? (
+        <div className="booking-mobile-filter-backdrop fixed inset-0 z-40 flex items-end bg-[rgba(26,16,46,0.28)] backdrop-blur-[5px] lg:hidden">
+          <div className="booking-mobile-filter-sheet">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Filter className="h-4 w-4 text-brand-700" />
+                <p className="text-sm font-semibold text-slate-900">{copy.filters}</p>
+              </div>
+              <button type="button" onClick={() => setMobileFiltersOpen(false)} className="btn-secondary h-9 w-9 min-h-0 rounded-[0.8rem] px-0" aria-label={copy.close}>
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-1 gap-2">
+              {filterControls}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {quickFilterControls}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {notice ? (
         <div className="rounded-[1rem] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
           {notice}
@@ -617,30 +678,10 @@ export default function BookingDiaryPage() {
         </div>
       ) : null}
 
-      <section className="booking-stats-strip grid grid-cols-2 gap-2 lg:grid-cols-4">
-        {[
-          { label: copy.totalShown, value: filteredBookings.length },
-          { label: copy.todayShown, value: todaysBookingsCount },
-          { label: copy.weekShown, value: weekBookingsCount },
-          { label: copy.lastChanged, value: lastUpdatedAt ? formatTime(lastUpdatedAt, language) : "-" }
-        ].map((item) => (
-          <div key={item.label} className="booking-stat-cell">
-            <p className="booking-stat-label">{item.label}</p>
-            <p className="booking-stat-value">{item.value}</p>
-          </div>
-        ))}
-      </section>
-
-      <section className="surface-card min-w-0 max-w-full p-3.5 sm:p-5 lg:p-6">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="section-title text-[1.25rem] sm:text-[1.45rem]">{copy.tableHint}</h2>
-              <span className="badge-muted">{filteredBookings.length} {copy.entries}</span>
-            </div>
-            <p className="section-subtitle">{copy.lastChanged}: {filteredBookings[0] ? formatTime(filteredBookings[0].updated_at, language) : "-"}</p>
-          </div>
-          <button type="button" onClick={() => void load(false)} disabled={refreshing} className="btn-secondary min-h-[44px] gap-2 rounded-[1rem] px-4 text-sm disabled:opacity-60">
+      <section className="booking-diary-book min-w-0 max-w-full">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-slate-700">{copy.tableHint}</h2>
+          <button type="button" onClick={() => void load(false)} disabled={refreshing} className="btn-secondary min-h-[36px] gap-2 rounded-[0.8rem] px-3 text-xs disabled:opacity-60">
             <RefreshCw className={clsx("h-4 w-4", refreshing && "animate-spin")} />
             {refreshing ? copy.loading : copy.live}
           </button>
@@ -652,7 +693,44 @@ export default function BookingDiaryPage() {
           <EmptyState title={copy.noBookings} description={copy.noBookingsDescription} />
         ) : (
           <>
-            <div className="booking-ledger-list lg:hidden">
+            <div className="booking-paper-diary lg:hidden">
+              {groupedBookings.map(([date, entries]) => (
+                <section key={date} className="booking-date-section">
+                  <div className="booking-date-heading">
+                    <span>{formatDate(date, language)}</span>
+                  </div>
+                  <div className="booking-date-lines">
+                    {entries.map((booking) => (
+                      <button
+                        key={booking.id}
+                        type="button"
+                        onClick={() => openEdit(booking)}
+                        className="booking-diary-line"
+                      >
+                        <div className="booking-line-main">
+                          <span className="booking-line-time">{formatClock(booking.updated_at, language)}</span>
+                          <span className="booking-line-route">{booking.pickup} <span>-&gt;</span> {booking.dropoff}</span>
+                          <span className="booking-line-status">{copy.updatedLabel}</span>
+                        </div>
+                        <div className="booking-line-meta">
+                          <span>{booking.vehicle || "-"}</span>
+                          <span>{booking.driver || "-"}</span>
+                          <span>{booking.amount_pallets || "-"} PLT</span>
+                          <span>{booking.weight ? `${booking.weight}kg` : "-"}</span>
+                        </div>
+                        {(booking.warehouse_no || booking.notes) ? (
+                          <div className="booking-line-extra">
+                            {[booking.warehouse_no, booking.notes].filter(Boolean).join(" / ")}
+                          </div>
+                        ) : null}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+
+            <div className="hidden">
               {filteredBookings.map((booking) => (
                 <details
                   key={booking.id}
@@ -807,10 +885,10 @@ export default function BookingDiaryPage() {
 
             <div className="table-shell hidden lg:block">
               <div className="table-scroll max-h-[68vh]">
-                <table className="min-w-[1040px]">
+                <table className="min-w-[920px]">
                   <thead>
                     <tr>
-                      {[copy.date, copy.amountPallets, copy.weight, copy.dimensions, copy.pickup, copy.warehouseNo, copy.dropoff, copy.vehicle, copy.driver, copy.notes, copy.modifiedBy, copy.modifiedTime, ""].map((heading) => (
+                      {["Time", copy.route, copy.vehicle, copy.driver, copy.load, copy.warehouseNo, copy.notes, copy.actions].map((heading) => (
                         <th key={heading || "actions"} className="px-3 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600">{heading}</th>
                       ))}
                     </tr>
@@ -818,18 +896,13 @@ export default function BookingDiaryPage() {
                   <tbody>
                     {filteredBookings.map((booking) => (
                       <tr key={booking.id} className="enterprise-table-row cursor-pointer" onClick={() => openEdit(booking)}>
-                        <td className="px-3 py-3 align-middle text-[13px] font-semibold text-slate-950 whitespace-nowrap">{formatDate(booking.booking_date, language)}</td>
-                        <td className="px-3 py-3 align-middle text-[13px]">{booking.amount_pallets || "-"}</td>
-                        <td className="px-3 py-3 align-middle text-[13px]">{booking.weight || "-"}</td>
-                        <td className="max-w-[120px] px-3 py-3 align-middle text-[13px]" title={booking.dimensions || ""}><span className="block truncate">{booking.dimensions || "-"}</span></td>
-                        <td className="max-w-[190px] px-3 py-3 align-middle text-[13px] font-semibold text-slate-900" title={booking.pickup}><span className="block truncate">{booking.pickup}</span></td>
-                        <td className="max-w-[120px] px-3 py-3 align-middle text-[13px]" title={booking.warehouse_no || ""}><span className="block truncate">{booking.warehouse_no || "-"}</span></td>
-                        <td className="max-w-[190px] px-3 py-3 align-middle text-[13px] text-slate-700" title={booking.dropoff}><span className="block truncate">{booking.dropoff}</span></td>
+                        <td className="px-3 py-3 align-middle text-[13px] font-semibold text-slate-950 whitespace-nowrap">{formatClock(booking.updated_at, language)}</td>
+                        <td className="max-w-[280px] px-3 py-3 align-middle text-[13px] font-semibold text-slate-900" title={`${booking.pickup} -> ${booking.dropoff}`}><span className="block truncate">{booking.pickup} <span className="text-brand-600">-&gt;</span> {booking.dropoff}</span></td>
                         <td className="px-3 py-3 align-middle text-[13px] whitespace-nowrap">{booking.vehicle || "-"}</td>
                         <td className="px-3 py-3 align-middle text-[13px] whitespace-nowrap">{booking.driver || "-"}</td>
+                        <td className="px-3 py-3 align-middle text-[13px] whitespace-nowrap">{booking.amount_pallets || "-"} PLT / {booking.weight ? `${booking.weight}kg` : "-"}</td>
+                        <td className="max-w-[130px] px-3 py-3 align-middle text-[13px]" title={booking.warehouse_no || ""}><span className="block truncate">{booking.warehouse_no || "-"}</span></td>
                         <td className="max-w-[150px] px-3 py-3 align-middle text-[13px]" title={booking.notes || ""}><span className="block truncate">{booking.notes || "-"}</span></td>
-                        <td className="px-3 py-3 align-middle text-[13px] whitespace-nowrap">{booking.modified_by || "-"}</td>
-                        <td className="px-3 py-3 align-middle text-[13px] whitespace-nowrap">{formatTime(booking.updated_at, language)}</td>
                         <td className="px-3 py-3 align-middle text-right">
                           <div className="flex justify-end gap-1.5">
                             <button
@@ -892,54 +965,97 @@ export default function BookingDiaryPage() {
             </div>
 
             <form onSubmit={submit} className="booking-sheet-form max-h-[calc(100dvh-88px)] overflow-y-auto px-4 py-4 sm:px-5 sm:py-5 lg:max-h-[calc(96vh-88px)]">
-              <div className="booking-form-grid">
-                <label className="form-field lg:col-span-1">
-                  <span className="form-label form-label-required">{copy.date}</span>
-                  <input ref={firstInputRef} required type="date" value={form.booking_date} onChange={(event) => setField("booking_date", event.target.value)} className={inputClass} />
-                </label>
-                <label className="form-field lg:col-span-1">
-                  <span className="form-label">{copy.amountPallets}</span>
-                  <input inputMode="decimal" value={form.amount_pallets} onChange={(event) => setField("amount_pallets", event.target.value)} className={inputClass} placeholder="10" />
-                </label>
-                <label className="form-field lg:col-span-1">
-                  <span className="form-label">{copy.weight}</span>
-                  <input inputMode="decimal" value={form.weight} onChange={(event) => setField("weight", event.target.value)} className={inputClass} placeholder="1200" />
-                </label>
-                <label className="form-field lg:col-span-1">
-                  <span className="form-label">{copy.dimensions}</span>
-                  <input value={form.dimensions} onChange={(event) => setField("dimensions", event.target.value)} className={inputClass} placeholder="L x W x H" />
-                </label>
-                <label className="form-field lg:col-span-2">
-                  <span className="form-label form-label-required">{copy.pickup}</span>
-                  <input required value={form.pickup} onChange={(event) => setField("pickup", event.target.value)} className={inputClass} placeholder={copy.pickup} />
-                </label>
-                <label className="form-field lg:col-span-1">
-                  <span className="form-label">{copy.warehouseNo}</span>
-                  <input value={form.warehouse_no} onChange={(event) => setField("warehouse_no", event.target.value)} className={inputClass} placeholder="WH / NO" />
-                </label>
-                <label className="form-field lg:col-span-1">
-                  <span className="form-label form-label-required">{copy.dropoff}</span>
-                  <input required value={form.dropoff} onChange={(event) => setField("dropoff", event.target.value)} className={inputClass} placeholder={copy.dropoff} />
-                </label>
-                <label className="form-field lg:col-span-1">
-                  <span className="form-label">{copy.vehicle}</span>
-                  <input list="booking-vehicles" value={form.vehicle} onChange={(event) => setField("vehicle", event.target.value)} className={inputClass} placeholder={copy.vehicle} />
-                  <datalist id="booking-vehicles">{vehicleOptions.map((vehicle) => <option key={vehicle} value={vehicle} />)}</datalist>
-                </label>
-                <label className="form-field lg:col-span-1">
-                  <span className="form-label">{copy.driver}</span>
-                  <input list="booking-drivers" value={form.driver} onChange={(event) => setField("driver", event.target.value)} className={inputClass} placeholder={copy.driver} />
-                  <datalist id="booking-drivers">{driverOptions.map((driver) => <option key={driver} value={driver} />)}</datalist>
-                </label>
-                <label className="form-field lg:col-span-4">
-                  <span className="form-label">{copy.notes}</span>
-                  <textarea value={form.notes} onChange={(event) => setField("notes", event.target.value)} className="form-textarea min-h-[92px] rounded-[1rem]" placeholder={copy.notes} />
-                </label>
+              <div className="booking-form-sections">
+                <fieldset className="booking-form-section">
+                  <legend>{copy.job}</legend>
+                  <div className="booking-form-grid">
+                    <label className="form-field lg:col-span-1">
+                      <span className="form-label form-label-required">{copy.date}</span>
+                      <input ref={firstInputRef} required type="date" value={form.booking_date} onChange={(event) => setField("booking_date", event.target.value)} className={inputClass} />
+                    </label>
+                    <label className="form-field lg:col-span-2">
+                      <span className="form-label form-label-required">{copy.pickup}</span>
+                      <input required value={form.pickup} onChange={(event) => setField("pickup", event.target.value)} className={inputClass} placeholder={copy.pickup} />
+                    </label>
+                    <label className="form-field lg:col-span-2">
+                      <span className="form-label form-label-required">{copy.dropoff}</span>
+                      <input required value={form.dropoff} onChange={(event) => setField("dropoff", event.target.value)} className={inputClass} placeholder={copy.dropoff} />
+                    </label>
+                    <label className="booking-return-toggle lg:col-span-1">
+                      <input type="checkbox" />
+                      <span>{copy.returnTrip}</span>
+                    </label>
+                  </div>
+                </fieldset>
+
+                <fieldset className="booking-form-section">
+                  <legend>{copy.load}</legend>
+                  <div className="booking-form-grid">
+                    <label className="form-field lg:col-span-1">
+                      <span className="form-label">{copy.amountPallets}</span>
+                      <input inputMode="decimal" value={form.amount_pallets} onChange={(event) => setField("amount_pallets", event.target.value)} className={inputClass} placeholder="10" />
+                    </label>
+                    <label className="form-field lg:col-span-1">
+                      <span className="form-label">{copy.weight}</span>
+                      <input inputMode="decimal" value={form.weight} onChange={(event) => setField("weight", event.target.value)} className={inputClass} placeholder="100" />
+                    </label>
+                    <label className="form-field lg:col-span-2">
+                      <span className="form-label">{copy.dimensions}</span>
+                      <input value={form.dimensions} onChange={(event) => setField("dimensions", event.target.value)} className={inputClass} placeholder="L x W x H" />
+                    </label>
+                  </div>
+                </fieldset>
+
+                <fieldset className="booking-form-section">
+                  <legend>{copy.assignment}</legend>
+                  <div className="booking-form-grid">
+                    <label className="form-field lg:col-span-2">
+                      <span className="form-label">{copy.vehicle}</span>
+                      <input list="booking-vehicles" value={form.vehicle} onChange={(event) => setField("vehicle", event.target.value)} className={inputClass} placeholder={copy.vehicle} />
+                      <datalist id="booking-vehicles">{vehicleOptions.map((vehicle) => <option key={vehicle} value={vehicle} />)}</datalist>
+                    </label>
+                    <label className="form-field lg:col-span-2">
+                      <span className="form-label">{copy.driver}</span>
+                      <input list="booking-drivers" value={form.driver} onChange={(event) => setField("driver", event.target.value)} className={inputClass} placeholder={copy.driver} />
+                      <datalist id="booking-drivers">{driverOptions.map((driver) => <option key={driver} value={driver} />)}</datalist>
+                    </label>
+                  </div>
+                </fieldset>
+
+                <fieldset className="booking-form-section">
+                  <legend>{copy.extra}</legend>
+                  <div className="booking-form-grid">
+                    <label className="form-field lg:col-span-2">
+                      <span className="form-label">{copy.warehouseNo}</span>
+                      <input value={form.warehouse_no} onChange={(event) => setField("warehouse_no", event.target.value)} className={inputClass} placeholder="WH / NO" />
+                    </label>
+                    <label className="form-field lg:col-span-4">
+                      <span className="form-label">{copy.notes}</span>
+                      <textarea value={form.notes} onChange={(event) => setField("notes", event.target.value)} className="form-textarea min-h-[86px] rounded-[0.9rem]" placeholder={copy.notes} />
+                    </label>
+                  </div>
+                </fieldset>
               </div>
 
               {error ? <p className="form-error mt-4">{error}</p> : null}
 
               <div className="booking-sheet-actions">
+                {form.id ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const target = bookings.find((booking) => booking.id === form.id);
+                      if (target) {
+                        setDeleteTarget(target);
+                        setModalOpen(false);
+                      }
+                    }}
+                    className="booking-action-button btn-danger sm:mr-auto sm:w-auto"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    {copy.deleteBooking}
+                  </button>
+                ) : null}
                 <button type="button" onClick={closeModal} className="booking-action-button btn-secondary sm:w-auto">
                   {copy.cancel}
                 </button>
