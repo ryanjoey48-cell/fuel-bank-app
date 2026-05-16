@@ -18,6 +18,7 @@ import {
   UserRound,
   X
 } from "lucide-react";
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import {
@@ -112,7 +113,7 @@ const labels = {
     loadError: "Unable to load booking diary.",
     saveError: "Unable to save booking.",
     deleteError: "Unable to delete booking.",
-    required: "Date, pickup time, pickup, and dropoff are required.",
+    required: "Date, pickup, and dropoff are required.",
     clearFilters: "Clear filters",
     totalShown: "Total shown",
     todayShown: "Today",
@@ -181,7 +182,7 @@ const labels = {
     loadError: "โหลดสมุดจองงานไม่ได้",
     saveError: "บันทึกงานจองไม่ได้",
     deleteError: "Unable to delete booking.",
-    required: "กรุณากรอกวันที่ เวลารับของ จุดรับ และจุดส่ง",
+    required: "กรุณากรอกวันที่ จุดรับ และจุดส่ง",
     clearFilters: "Clear filters",
     totalShown: "Total shown",
     todayShown: "Today",
@@ -443,7 +444,7 @@ export default function BookingDiaryPage() {
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!form.booking_date || !form.pickup_time || !form.pickup.trim() || !form.dropoff.trim()) {
+    if (!form.booking_date || !form.pickup.trim() || !form.dropoff.trim()) {
       setError(copy.required);
       return;
     }
@@ -604,7 +605,16 @@ export default function BookingDiaryPage() {
   return (
     <div className="booking-diary-page w-full max-w-full overflow-x-hidden">
       <section className="booking-diary-header">
-        <div className="booking-diary-logo">EE</div>
+        <div className="booking-diary-logo">
+          <Image
+            src="/logo.png"
+            alt={copy.company}
+            width={64}
+            height={48}
+            className="h-8 w-8 object-contain"
+            priority
+          />
+        </div>
         <div className="min-w-0">
           <p className="truncate text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">{copy.company}</p>
           <h1 className="text-xl font-semibold text-slate-950 lg:text-2xl">{bookingTitle}</h1>
@@ -751,7 +761,11 @@ export default function BookingDiaryPage() {
                           ].filter(Boolean);
                           return meta.length ? (
                             <div className="booking-line-meta">
-                              {meta.map((item, index) => <span key={`${item}-${index}`}>{item}</span>)}
+                              {meta.map((item, index) => (
+                                <span key={`${item}-${index}`} className={index === 0 ? "booking-line-vehicle" : undefined}>
+                                  {item}
+                                </span>
+                              ))}
                             </div>
                           ) : null;
                         })()}
@@ -1016,8 +1030,8 @@ export default function BookingDiaryPage() {
                       <input required value={form.dropoff} onChange={(event) => setField("dropoff", event.target.value)} className={inputClass} placeholder={copy.dropoff} />
                     </label>
                     <label className="form-field lg:col-span-1">
-                      <span className="form-label form-label-required">{copy.pickupTime}</span>
-                      <input required type="time" value={form.pickup_time} onChange={(event) => setField("pickup_time", event.target.value)} className={inputClass} />
+                      <span className="form-label">{copy.pickupTime}</span>
+                      <input type="time" value={form.pickup_time} onChange={(event) => setField("pickup_time", event.target.value)} className={inputClass} />
                     </label>
                     <label className="form-field lg:col-span-1">
                       <span className="form-label form-label-required">{copy.date}</span>

@@ -469,8 +469,8 @@ td {
   }
 
   .booking-diary-logo {
-    @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-[0.85rem] bg-brand-700 text-[12px] font-bold tracking-[0.08em] text-white;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.16), 0 8px 18px rgba(95,51,183,0.20);
+    @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-[0.85rem] border border-brand-100/70 bg-white;
+    box-shadow: 0 8px 18px rgba(38,18,78,0.08), inset 0 1px 0 rgba(255,255,255,0.9);
   }
 
   .booking-filter-toggle {
@@ -563,6 +563,10 @@ td {
 
   .booking-line-meta span {
     @apply inline-flex max-w-[64%] min-w-0 items-center truncate;
+  }
+
+  .booking-line-vehicle {
+    @apply text-[12px] font-bold text-slate-800;
   }
 
   .booking-line-meta span + span::before {
