@@ -4,7 +4,6 @@ import { LogOut } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { memo } from "react";
-import { LanguageSwitcher } from "@/components/language-switcher";
 import { useLanguage } from "@/lib/language-provider";
 import { supabase } from "@/lib/supabase";
 
@@ -54,8 +53,6 @@ function HeaderComponent({ title, description, showSignOut = false }: HeaderProp
         </div>
 
         <div className="flex shrink-0 flex-col items-stretch gap-3 md:items-end">
-          <LanguageSwitcher />
-
           {showSignOut ? (
             <button
               onClick={handleLogout}

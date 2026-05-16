@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { MobileAppBar } from "@/components/mobile-app-bar";
 import { Sidebar } from "@/components/sidebar";
 import { SetupNotice } from "@/components/setup-notice";
@@ -84,6 +85,9 @@ export default function DashboardLayout({
       />
       <div className="md:pl-72">
         <main className="dashboard-mobile-shell mx-auto flex min-h-screen w-full max-w-[1440px] max-w-full flex-col gap-4 pb-5 sm:gap-4.5 sm:px-5 sm:pt-20 sm:pb-6 md:px-6 md:pt-8 md:pb-7 lg:px-8">
+          <div className="hidden md:flex md:justify-end">
+            <LanguageSwitcher />
+          </div>
           <SetupNotice />
           {children}
         </main>
