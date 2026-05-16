@@ -937,10 +937,10 @@ export default function BookingDiaryPage() {
 
             <div className="table-shell hidden lg:block">
               <div className="table-scroll max-h-[68vh]">
-                <table className="min-w-[920px]">
+                <table className="min-w-[980px]">
                   <thead>
                     <tr>
-                      {["Time", copy.route, copy.vehicle, copy.driver, copy.load, copy.warehouseNo, copy.notes, copy.actions].map((heading) => (
+                      {[copy.date, "Time", copy.route, copy.vehicle, copy.driver, copy.load, copy.warehouseNo, copy.notes, copy.actions].map((heading) => (
                         <th key={heading || "actions"} className="px-3 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600">{heading}</th>
                       ))}
                     </tr>
@@ -948,6 +948,7 @@ export default function BookingDiaryPage() {
                   <tbody>
                     {filteredBookings.map((booking) => (
                       <tr key={booking.id} className="enterprise-table-row cursor-pointer" onClick={() => openEdit(booking)}>
+                        <td className="px-3 py-3 align-middle text-[13px] font-semibold text-slate-950 whitespace-nowrap">{formatDate(booking.booking_date, language)}</td>
                         <td className="px-3 py-3 align-middle text-[13px] font-semibold text-slate-950 whitespace-nowrap">{formatPickupTime(booking.pickup_time) || "-"}</td>
                         <td className="max-w-[280px] px-3 py-3 align-middle text-[13px] font-semibold text-slate-900" title={`${booking.pickup} -> ${booking.dropoff}`}><span className="block truncate">{booking.pickup} <span className="text-brand-600">-&gt;</span> {booking.dropoff}</span></td>
                         <td className="px-3 py-3 align-middle text-[13px] whitespace-nowrap">{booking.vehicle || "-"}</td>
