@@ -647,7 +647,7 @@ export default function BookingDiaryPage() {
         </div>
       </section>
 
-      <section className="hidden max-w-full gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+      <section className="booking-responsive-controls hidden max-w-full gap-3 md:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
         <div className="booking-filter-panel surface-card-soft">
           <div className="mb-2.5 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
@@ -659,15 +659,15 @@ export default function BookingDiaryPage() {
               {copy.live}
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-[minmax(220px,1.4fr)_repeat(5,minmax(140px,1fr))]">
+          <div className="booking-filter-grid grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-[minmax(220px,1.4fr)_repeat(5,minmax(140px,1fr))]">
             {filterControls}
           </div>
-          <div className="mt-2.5 flex flex-wrap gap-2">
+          <div className="booking-quick-filters mt-2.5 flex flex-wrap gap-2">
             {quickFilterControls}
           </div>
         </div>
 
-        <div className="hidden gap-2 lg:flex">
+        <div className="booking-controls-actions hidden gap-2 lg:flex">
           <button
             type="button"
             onClick={exportFilteredBookings}

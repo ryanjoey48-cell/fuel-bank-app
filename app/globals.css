@@ -1060,8 +1060,17 @@ td {
   }
 }
 
-@media (min-width: 1024px) and (max-width: 1199px) {
+@media (min-width: 768px) and (max-width: 1199px) {
+  .dashboard-mobile-shell:has(.booking-diary-page) {
+    padding-left: max(1rem, calc(env(safe-area-inset-left, 0px) + 1rem));
+    padding-right: max(1rem, calc(env(safe-area-inset-right, 0px) + 1rem));
+  }
+
   .booking-diary-page {
+    width: min(100%, 1100px);
+    max-width: 1100px;
+    margin-left: auto;
+    margin-right: auto;
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 1.5rem);
   }
 
@@ -1075,11 +1084,38 @@ td {
   }
 
   .booking-diary-header-actions {
+    display: none;
     gap: 0.45rem;
+  }
+
+  .booking-responsive-controls {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.75rem;
   }
 
   .booking-filter-panel {
     padding: 0.85rem;
+  }
+
+  .booking-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem;
+  }
+
+  .booking-filter-grid > :first-child {
+    grid-column: 1 / -1;
+  }
+
+  .booking-quick-filters {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 0.1rem;
+  }
+
+  .booking-controls-actions {
+    display: flex !important;
+    justify-content: flex-end;
   }
 
   .booking-action-button {
@@ -1145,8 +1181,31 @@ td {
   }
 }
 
-@media (min-width: 1200px) and (max-width: 1399px) {
+@media (min-width: 1024px) and (max-width: 1199px) {
+  .booking-filter-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .booking-filter-grid > :first-child {
+    grid-column: span 3;
+  }
+
+  .booking-filter-grid > :nth-child(2) {
+    grid-column: span 1;
+  }
+}
+
+@media (min-width: 1200px) and (max-width: 1366px) {
+  .dashboard-mobile-shell:has(.booking-diary-page) {
+    padding-left: max(1.25rem, calc(env(safe-area-inset-left, 0px) + 1.25rem));
+    padding-right: max(1.25rem, calc(env(safe-area-inset-right, 0px) + 1.25rem));
+  }
+
   .booking-diary-page {
+    width: min(100%, 1180px);
+    max-width: 1180px;
+    margin-left: auto;
+    margin-right: auto;
     padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 1.25rem);
   }
 
@@ -1158,26 +1217,115 @@ td {
     padding: 0.95rem;
   }
 
+  .booking-responsive-controls {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.8rem;
+  }
+
+  .booking-filter-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.65rem;
+  }
+
+  .booking-filter-grid > :first-child {
+    grid-column: span 3;
+  }
+
+  .booking-filter-grid > :nth-child(2) {
+    grid-column: span 1;
+  }
+
+  .booking-controls-actions {
+    display: flex !important;
+    justify-content: flex-end;
+  }
+
+  .booking-quick-filters {
+    flex-wrap: nowrap;
+  }
+
   .booking-diary-book {
     padding: 1rem;
   }
 
+  .booking-desktop-table table {
+    width: 100%;
+    min-width: 0 !important;
+    table-layout: fixed;
+  }
+
   .booking-desktop-table .table-scroll {
     max-height: min(66vh, 720px);
+    overflow-x: hidden;
   }
 
   .booking-desktop-head-cell {
-    padding: 0.85rem 0.9rem;
+    padding: 0.8rem 0.55rem;
     letter-spacing: 0.12em;
   }
 
   .booking-desktop-cell {
-    padding: 0.95rem 0.9rem;
+    padding: 0.85rem 0.55rem;
   }
 
   .booking-desktop-vehicle,
   .booking-desktop-driver {
-    max-width: 9.5rem;
+    max-width: 100%;
+    padding-left: 0.55rem;
+    padding-right: 0.55rem;
+  }
+
+  .booking-desktop-table th:nth-child(1),
+  .booking-desktop-table td:nth-child(1) {
+    width: 11%;
+  }
+
+  .booking-desktop-table th:nth-child(2),
+  .booking-desktop-table td:nth-child(2) {
+    width: 10%;
+  }
+
+  .booking-desktop-table th:nth-child(3),
+  .booking-desktop-table td:nth-child(3) {
+    width: 19%;
+  }
+
+  .booking-desktop-table th:nth-child(4),
+  .booking-desktop-table td:nth-child(4),
+  .booking-desktop-table th:nth-child(5),
+  .booking-desktop-table td:nth-child(5) {
+    width: 11%;
+  }
+
+  .booking-desktop-table th:nth-child(6),
+  .booking-desktop-table td:nth-child(6) {
+    width: 12%;
+  }
+
+  .booking-desktop-table th:nth-child(7),
+  .booking-desktop-table td:nth-child(7) {
+    width: 10%;
+  }
+
+  .booking-desktop-table th:nth-child(8),
+  .booking-desktop-table td:nth-child(8) {
+    width: 9%;
+  }
+
+  .booking-desktop-table th:nth-child(9),
+  .booking-desktop-table td:nth-child(9) {
+    width: 7%;
+  }
+
+  .booking-desktop-table .table-action-secondary,
+  .booking-desktop-table .table-action-danger {
+    min-height: 34px;
+    width: 34px;
+    padding-left: 0;
+    padding-right: 0;
+    overflow: hidden;
+    font-size: 0;
   }
 }
 
