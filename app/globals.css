@@ -1060,6 +1060,127 @@ td {
   }
 }
 
+@media (min-width: 1024px) and (max-width: 1199px) {
+  .booking-diary-page {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 1.5rem);
+  }
+
+  .booking-diary-header {
+    gap: 0.75rem;
+    padding: 0.85rem;
+  }
+
+  .booking-diary-title {
+    flex-basis: 14rem;
+  }
+
+  .booking-diary-header-actions {
+    gap: 0.45rem;
+  }
+
+  .booking-filter-panel {
+    padding: 0.85rem;
+  }
+
+  .booking-action-button {
+    min-height: 44px;
+    border-radius: 0.9rem;
+    padding-left: 0.9rem;
+    padding-right: 0.9rem;
+    font-size: 0.8rem;
+  }
+
+  .booking-diary-book {
+    padding: 0.95rem;
+  }
+
+  .booking-paper-diary {
+    display: grid !important;
+    gap: 0.95rem;
+  }
+
+  .booking-date-section {
+    padding-top: 1rem;
+  }
+
+  .booking-date-heading {
+    margin-bottom: 0.45rem;
+  }
+
+  .booking-date-lines {
+    padding-left: 0.65rem;
+    padding-right: 0.65rem;
+  }
+
+  .booking-diary-line {
+    padding-top: 0.4rem;
+    padding-bottom: 0.4rem;
+  }
+
+  .booking-line-main {
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 0.8rem;
+  }
+
+  .booking-line-time-block {
+    width: 48px;
+  }
+
+  .booking-line-time {
+    font-size: 0.9rem;
+  }
+
+  .booking-line-route {
+    font-size: 1rem;
+    line-height: 1.45rem;
+  }
+
+  .booking-line-meta,
+  .booking-line-support {
+    padding-left: 60px;
+  }
+
+  .booking-desktop-table {
+    display: none !important;
+  }
+}
+
+@media (min-width: 1200px) and (max-width: 1399px) {
+  .booking-diary-page {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 1.25rem);
+  }
+
+  .booking-diary-header {
+    padding: 0.9rem 1rem;
+  }
+
+  .booking-filter-panel {
+    padding: 0.95rem;
+  }
+
+  .booking-diary-book {
+    padding: 1rem;
+  }
+
+  .booking-desktop-table .table-scroll {
+    max-height: min(66vh, 720px);
+  }
+
+  .booking-desktop-head-cell {
+    padding: 0.85rem 0.9rem;
+    letter-spacing: 0.12em;
+  }
+
+  .booking-desktop-cell {
+    padding: 0.95rem 0.9rem;
+  }
+
+  .booking-desktop-vehicle,
+  .booking-desktop-driver {
+    max-width: 9.5rem;
+  }
+}
+
 @media (max-width: 767px) {
   html,
   body {
