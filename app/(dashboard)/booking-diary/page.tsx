@@ -21,6 +21,7 @@ import {
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import {
   deleteBookingDiaryEntry,
   fetchBookingDiaryEntries,
@@ -72,6 +73,7 @@ const labels = {
     description: "Fast daily booking capture for phone calls, dispatch handover, and live office updates.",
     addBooking: "Add booking",
     editBooking: "Edit booking",
+    edit: "Edit",
     exportExcel: "Export Excel",
     live: "Live sync",
     entries: "bookings",
@@ -81,6 +83,7 @@ const labels = {
     search: "Search bookings",
     searchPlaceholder: "Search pickup, dropoff, vehicle, driver, notes",
     date: "Date",
+    time: "Time",
     pickupTime: "Pickup time",
     pickup: "Pickup",
     dropoff: "Dropoff",
@@ -141,6 +144,7 @@ const labels = {
     description: "บันทึกงานจองประจำวันให้เร็ว ใช้ง่าย และอัปเดตพร้อมกันทุกเครื่อง",
     addBooking: "เพิ่มงานจอง",
     editBooking: "แก้ไขงานจอง",
+    edit: "แก้ไข",
     exportExcel: "Export Excel",
     live: "ซิงก์สด",
     entries: "รายการ",
@@ -150,6 +154,7 @@ const labels = {
     search: "ค้นหางานจอง",
     searchPlaceholder: "ค้นหาต้นทาง ปลายทาง รถ คนขับ หมายเหตุ",
     date: "วันที่",
+    time: "เวลา",
     pickupTime: "เวลารับของ",
     pickup: "รับของ",
     dropoff: "ส่งของ",
@@ -620,6 +625,7 @@ export default function BookingDiaryPage() {
           <h1 className="text-xl font-semibold text-slate-950 lg:text-2xl">{bookingTitle}</h1>
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          <LanguageSwitcher compact />
           <button
             type="button"
             onClick={() => setMobileFiltersOpen(true)}
@@ -940,7 +946,7 @@ export default function BookingDiaryPage() {
                 <table className="min-w-[980px]">
                   <thead>
                     <tr>
-                      {[copy.date, "Time", copy.route, copy.vehicle, copy.driver, copy.load, copy.warehouseNo, copy.notes, copy.actions].map((heading) => (
+                      {[copy.date, copy.time, copy.route, copy.vehicle, copy.driver, copy.load, copy.warehouseNo, copy.notes, copy.actions].map((heading) => (
                         <th key={heading || "actions"} className="px-3 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600">{heading}</th>
                       ))}
                     </tr>
@@ -968,7 +974,7 @@ export default function BookingDiaryPage() {
                               aria-label={copy.editBooking}
                             >
                               <Edit3 className="h-3.5 w-3.5" />
-                              Edit
+                              {copy.edit}
                             </button>
                             <button
                               type="button"
