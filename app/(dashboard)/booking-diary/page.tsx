@@ -945,28 +945,28 @@ export default function BookingDiaryPage() {
               ))}
             </div>
 
-            <div className="table-shell hidden lg:block">
+            <div className="table-shell booking-desktop-table hidden lg:block">
               <div className="table-scroll max-h-[68vh]">
                 <table className="min-w-[980px]">
                   <thead>
                     <tr>
-                      {[copy.date, copy.time, copy.route, copy.vehicle, copy.driver, copy.load, copy.warehouseNo, copy.notes, copy.actions].map((heading) => (
-                        <th key={heading || "actions"} className="px-3 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600">{heading}</th>
+                      {[copy.date, copy.pickupTime, copy.route, copy.vehicle, copy.driver, copy.load, copy.warehouseNo, copy.notes, copy.actions].map((heading) => (
+                        <th key={heading || "actions"} className="booking-desktop-head-cell">{heading}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {filteredBookings.map((booking) => (
                       <tr key={booking.id} className="enterprise-table-row cursor-pointer" onClick={() => openEdit(booking)}>
-                        <td className="px-3 py-3 align-middle text-[13px] font-semibold text-slate-950 whitespace-nowrap">{formatDate(booking.booking_date, language)}</td>
-                        <td className="px-3 py-3 align-middle text-[13px] font-semibold text-slate-950 whitespace-nowrap">{formatPickupTime(booking.pickup_time) || "-"}</td>
-                        <td className="max-w-[280px] px-3 py-3 align-middle text-[13px] font-semibold text-slate-900" title={`${booking.pickup} -> ${booking.dropoff}`}><span className="block truncate">{booking.pickup} <span className="text-brand-600">-&gt;</span> {booking.dropoff}</span></td>
-                        <td className="px-3 py-3 align-middle text-[13px] whitespace-nowrap">{booking.vehicle || "-"}</td>
-                        <td className="px-3 py-3 align-middle text-[13px] whitespace-nowrap">{booking.driver || "-"}</td>
-                        <td className="px-3 py-3 align-middle text-[13px] whitespace-nowrap">{booking.amount_pallets || "-"} PLT / {booking.weight ? `${booking.weight}kg` : "-"}</td>
-                        <td className="max-w-[130px] px-3 py-3 align-middle text-[13px]" title={booking.warehouse_no || ""}><span className="block truncate">{booking.warehouse_no || "-"}</span></td>
-                        <td className="max-w-[150px] px-3 py-3 align-middle text-[13px]" title={booking.notes || ""}><span className="block truncate">{booking.notes || "-"}</span></td>
-                        <td className="px-3 py-3 align-middle text-right">
+                        <td className="booking-desktop-cell whitespace-nowrap font-semibold text-slate-950">{formatDate(booking.booking_date, language)}</td>
+                        <td className="booking-desktop-cell whitespace-nowrap"><span className="booking-desktop-time">{formatPickupTime(booking.pickup_time) || "-"}</span></td>
+                        <td className="booking-desktop-cell max-w-[280px] font-semibold text-slate-900" title={`${booking.pickup} -> ${booking.dropoff}`}><span className="block truncate">{booking.pickup} <span className="text-brand-600">-&gt;</span> {booking.dropoff}</span></td>
+                        <td className="booking-desktop-cell whitespace-nowrap"><span className="booking-desktop-vehicle">{booking.vehicle || "-"}</span></td>
+                        <td className="booking-desktop-cell whitespace-nowrap"><span className="booking-desktop-driver">{booking.driver || "-"}</span></td>
+                        <td className="booking-desktop-cell whitespace-nowrap">{booking.amount_pallets || "-"} PLT / {booking.weight ? `${booking.weight}kg` : "-"}</td>
+                        <td className="booking-desktop-cell max-w-[130px]" title={booking.warehouse_no || ""}><span className="block truncate">{booking.warehouse_no || "-"}</span></td>
+                        <td className="booking-desktop-cell max-w-[150px]" title={booking.notes || ""}><span className="block truncate">{booking.notes || "-"}</span></td>
+                        <td className="booking-desktop-cell text-right">
                           <div className="flex justify-end gap-1.5">
                             <button
                               type="button"

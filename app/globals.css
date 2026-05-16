@@ -505,6 +505,34 @@ td {
     padding-bottom: max(4.5rem, calc(env(safe-area-inset-bottom, 0px) + 4rem));
   }
 
+  .booking-desktop-table {
+    box-shadow: 0 1px 2px rgba(38,18,78,0.018), 0 14px 34px rgba(38,18,78,0.045);
+  }
+
+  .booking-desktop-table thead {
+    background: linear-gradient(180deg, rgba(250, 248, 255, 0.98), rgba(248, 250, 252, 0.98));
+  }
+
+  .booking-desktop-head-cell {
+    @apply px-4 py-3.5 text-left text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600;
+  }
+
+  .booking-desktop-cell {
+    @apply px-4 py-4 align-middle text-[13px] leading-5;
+  }
+
+  .booking-desktop-time {
+    @apply font-mono text-[13.5px] font-bold tabular-nums text-brand-800;
+  }
+
+  .booking-desktop-vehicle {
+    @apply inline-flex max-w-[11rem] items-center rounded-full border border-brand-100 bg-brand-50 px-2.5 py-1 text-[12.5px] font-bold text-brand-800;
+  }
+
+  .booking-desktop-driver {
+    @apply inline-flex max-w-[11rem] items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[12.5px] font-semibold text-slate-800;
+  }
+
   .booking-paper-diary {
     @apply grid gap-3.5;
   }
