@@ -21,7 +21,6 @@ import {
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
-import { LanguageSwitcher } from "@/components/language-switcher";
 import {
   deleteBookingDiaryEntry,
   fetchBookingDiaryEntries,
@@ -620,12 +619,11 @@ export default function BookingDiaryPage() {
             priority
           />
         </div>
-        <div className="min-w-0">
+        <div className="booking-diary-title min-w-0">
           <p className="truncate text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">{copy.company}</p>
           <h1 className="text-xl font-semibold text-slate-950 lg:text-2xl">{bookingTitle}</h1>
         </div>
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          <LanguageSwitcher compact />
+        <div className="booking-diary-header-actions">
           <button
             type="button"
             onClick={() => setMobileFiltersOpen(true)}
@@ -768,7 +766,13 @@ export default function BookingDiaryPage() {
                           return meta.length ? (
                             <div className="booking-line-meta">
                               {meta.map((item, index) => (
-                                <span key={`${item}-${index}`} className={index === 0 ? "booking-line-vehicle" : undefined}>
+                                <span
+                                  key={`${item}-${index}`}
+                                  className={clsx(
+                                    index === 0 && "booking-line-vehicle",
+                                    index === 1 && "booking-line-driver"
+                                  )}
+                                >
                                   {item}
                                 </span>
                               ))}

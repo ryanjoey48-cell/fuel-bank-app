@@ -460,12 +460,21 @@ td {
     background:
       linear-gradient(180deg, rgba(255,255,255,0.88), rgba(248,250,252,0.92)),
       repeating-linear-gradient(0deg, rgba(148,163,184,0.08) 0, rgba(148,163,184,0.08) 1px, transparent 1px, transparent 34px);
+    padding-bottom: max(4.75rem, calc(env(safe-area-inset-bottom, 0px) + 4.25rem));
   }
 
   .booking-diary-header {
-    @apply mb-3 flex max-w-full items-center gap-3 rounded-[1rem] border border-slate-200/80 px-3 py-3 lg:px-4;
+    @apply mb-3 flex max-w-full flex-wrap items-center gap-3 rounded-[1rem] border border-slate-200/80 px-3 py-3 lg:flex-nowrap lg:px-4;
     background: rgba(255, 255, 255, 0.92);
     box-shadow: 0 1px 2px rgba(38,18,78,0.018), 0 8px 20px rgba(38,18,78,0.035);
+  }
+
+  .booking-diary-title {
+    flex: 1 1 10rem;
+  }
+
+  .booking-diary-header-actions {
+    @apply ml-auto flex min-w-0 shrink-0 items-center justify-end gap-2;
   }
 
   .booking-diary-logo {
@@ -490,6 +499,10 @@ td {
   .booking-diary-book {
     @apply rounded-[1rem] border border-slate-200/85 bg-white/95 p-3 lg:p-4;
     box-shadow: 0 1px 2px rgba(38,18,78,0.016), 0 8px 20px rgba(38,18,78,0.032);
+  }
+
+  .booking-diary-book .premium-empty-state {
+    padding-bottom: max(4.5rem, calc(env(safe-area-inset-bottom, 0px) + 4rem));
   }
 
   .booking-paper-diary {
@@ -558,15 +571,19 @@ td {
   }
 
   .booking-line-meta {
-    @apply mt-0.5 flex min-w-0 flex-wrap gap-x-0 gap-y-0.5 pl-[52px] text-[11px] font-medium leading-4 text-slate-600;
+    @apply mt-1 flex min-w-0 flex-wrap items-center gap-1.5 pl-[52px] text-[11px] font-medium leading-4 text-slate-600;
   }
 
   .booking-line-meta span {
-    @apply inline-flex max-w-[64%] min-w-0 items-center truncate;
+    @apply inline-flex max-w-full min-w-0 items-center truncate;
   }
 
   .booking-line-vehicle {
-    @apply text-[12px] font-bold text-slate-800;
+    @apply rounded-full border border-brand-100 bg-brand-50 px-2 py-0.5 text-[12.5px] font-bold text-brand-800;
+  }
+
+  .booking-line-driver {
+    @apply rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[12px] font-semibold text-slate-800;
   }
 
   .booking-line-meta span + span::before {
@@ -589,6 +606,11 @@ td {
   .booking-line-meta span + span::before {
     content: "\2022";
     @apply mx-1.5 text-slate-300;
+  }
+
+  .booking-line-meta span + span::before {
+    content: none;
+    display: none;
   }
 
   .booking-stats-strip {
@@ -862,10 +884,10 @@ td {
   }
 
   .booking-floating-add {
-    @apply fixed z-30 flex h-12 w-12 items-center justify-center rounded-[1rem] bg-brand-700 text-white lg:hidden;
-    right: max(0.75rem, calc(env(safe-area-inset-right, 0px) + 0.75rem));
-    bottom: max(0.75rem, calc(env(safe-area-inset-bottom, 0px) + 0.75rem));
-    box-shadow: 0 14px 30px rgba(95,51,183,0.28), inset 0 1px 0 rgba(255,255,255,0.14);
+    @apply fixed z-30 flex h-11 w-11 items-center justify-center rounded-[0.9rem] bg-brand-700 text-white lg:hidden;
+    right: max(0.65rem, calc(env(safe-area-inset-right, 0px) + 0.65rem));
+    bottom: max(0.65rem, calc(env(safe-area-inset-bottom, 0px) + 0.65rem));
+    box-shadow: 0 12px 26px rgba(95,51,183,0.28), inset 0 1px 0 rgba(255,255,255,0.14);
   }
 
   .booking-sheet {
