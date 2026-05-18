@@ -928,6 +928,13 @@ export async function fetchOilChangeBaselinesForVehicles(_vehicles: Vehicle[]) {
     .from("oil_change_baselines")
     .select("*");
 
+  console.log("fetched oil_change_baselines", {
+    table: "oil_change_baselines",
+    rowCount: (data ?? []).length,
+    rows: data ?? [],
+    error
+  });
+
   if (error) {
     logDataError("fetchOilChangeBaselinesForVehicles error:", error);
     throw new Error(
@@ -1149,6 +1156,7 @@ export async function saveOilChangeService(payload: {
       conflictColumn: "vehicle_reg",
       payload: oilChangeBaselinePayload
     });
+    console.log("save oil_change_baselines payload", oilChangeBaselinePayload);
     const baselineUpsertResult = await supabase
       .from("oil_change_baselines")
       .upsert(oilChangeBaselinePayload, { onConflict: "vehicle_reg" });
@@ -1160,6 +1168,8 @@ export async function saveOilChangeService(payload: {
       data: baselineUpsertResult.data,
       error: baselineUpsertResult.error
     });
+    console.log("Supabase save response", baselineUpsertResult);
+    console.log("Supabase save error", baselineUpsertResult.error);
 
     if (baselineUpsertResult.error) {
       logDataError("saveOilChangeService baseline error:", baselineUpsertResult.error, oilChangeBaselinePayload);

@@ -135,6 +135,11 @@ export default function WeeklyMileagePage() {
         return vehicle;
       }
 
+      console.log("Oil baseline applied to vehicle", {
+        vehicle: vehicle.vehicle_reg,
+        baseline: baselineForVehicle
+      });
+
       return {
         ...vehicle,
         last_oil_change_date: baselineForVehicle.last_oil_change_date,
