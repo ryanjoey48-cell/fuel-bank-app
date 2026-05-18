@@ -903,24 +903,36 @@ export async function fetchVehicleServiceLogs() {
   });
 }
 
-export async function fetchOilChangeBaselines() {
-  return readThroughCache("oil_change_baselines:all", async () => {
+export async function fetchOilChangeBaselinesForVehicles(vehicles: Vehicle[]) {
+  const baselines: OilChangeBaseline[] = [];
+
+  for (const vehicle of vehicles) {
+    const vehicleReg = normalizeVehicleRegistration(vehicle.vehicle_reg ?? vehicle.registration);
+    if (!vehicleReg) continue;
+
+    console.log("VEHICLE:", vehicleReg);
     const { data, error } = await supabase
       .from("oil_change_baselines")
       .select("*")
-      .order("vehicle_reg", { ascending: true });
+      .eq("vehicle_reg", vehicleReg)
+      .maybeSingle();
+
+    console.log("BASELINE RESULT:", data);
 
     if (error) {
-      logDataError("fetchOilChangeBaselines error:", error);
+      logDataError("fetchOilChangeBaselinesForVehicles error:", error, { vehicle_reg: vehicleReg });
       throw new Error(
         getServiceSchemaSetupMessage(error) ??
-          String(error.message ?? "Unable to load oil change baselines from Supabase.")
+          String(error.message ?? `Unable to load oil change baseline for ${vehicleReg}.`)
       );
     }
 
-    console.log("fetchOilChangeBaselines success", { rowCount: (data ?? []).length });
-    return ((data ?? []) as OilChangeBaseline[]).map(normalizeOilChangeBaselineRow);
-  });
+    if (data) {
+      baselines.push(normalizeOilChangeBaselineRow(data as OilChangeBaseline));
+    }
+  }
+
+  return baselines;
 }
 
 export async function fetchOilChangeHistory() {

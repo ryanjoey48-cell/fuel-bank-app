@@ -9,7 +9,7 @@ import {
   applyOilChangeBaselinesToVehicles,
   deleteWeeklyMileage,
   fetchDrivers,
-  fetchOilChangeBaselines,
+  fetchOilChangeBaselinesForVehicles,
   fetchOilChangeHistory,
   fetchVehicles,
   fetchWeeklyMileage,
@@ -214,7 +214,7 @@ export default function WeeklyMileagePage() {
       vehicles: "select * from vehicles order by vehicle_reg; no client user_id/company_id filter",
       weeklyMileage:
         "select id, week_ending, driver_id, vehicle_reg, odometer_reading, created_at, user_id from weekly_mileage; no client user_id/company_id filter",
-      oilChangeBaselines: "select * from oil_change_baselines order by vehicle_reg; no client user_id/company_id filter",
+      oilChangeBaselines: "for each vehicle: select * from oil_change_baselines where vehicle_reg = vehicle.vehicle_reg; no client user_id/company_id filter",
       serviceHistory: "select * from oil_change_history order by oil_change_date, created_at; no client user_id/company_id filter"
     };
 
@@ -233,13 +233,18 @@ export default function WeeklyMileagePage() {
     });
     console.groupEnd();
 
-    const [driverResult, vehicleResult, mileageResult, baselineResult, serviceLogResult] = await Promise.allSettled([
+    const [driverResult, vehicleResult, mileageResult, serviceLogResult] = await Promise.allSettled([
       fetchDrivers(),
       fetchVehicles(),
       fetchWeeklyMileage(),
-      fetchOilChangeBaselines(),
       fetchOilChangeHistory()
     ]);
+    const baselineResult =
+      vehicleResult.status === "fulfilled"
+        ? await fetchOilChangeBaselinesForVehicles(vehicleResult.value)
+            .then((value) => ({ status: "fulfilled" as const, value }))
+            .catch((reason) => ({ status: "rejected" as const, reason }))
+        : ({ status: "rejected" as const, reason: new Error("Skipped oil baseline lookup because vehicles failed to load.") });
 
     console.groupCollapsed("Weekly mileage page data load");
     console.log("drivers", driverResult);
@@ -611,20 +616,7 @@ export default function WeeklyMileagePage() {
       const result = await saveOilChangeService(servicePayload);
       console.log("Weekly Mileage oil change save result:", result);
 
-      setVehicles((current) => {
-        const withoutSaved = current.filter((vehicle) => String(vehicle.id) !== String(result.vehicle.id));
-        return [...withoutSaved, result.vehicle].sort((a, b) =>
-          (a.vehicle_reg ?? a.registration ?? "").localeCompare(b.vehicle_reg ?? b.registration ?? "")
-        );
-      });
-      setServiceLogs((current) => {
-        const withoutSaved = current.filter((log) => String(log.id) !== String(result.serviceLog.id));
-        return [result.serviceLog, ...withoutSaved].sort((a, b) =>
-          b.service_date.localeCompare(a.service_date) ||
-          b.created_at.localeCompare(a.created_at)
-        );
-      });
-      void loadData();
+      await loadData();
       setSuccessMessage(
         serviceModal.mode === "mark"
           ? t.weeklyMileage.notifications.oilChangeSaved

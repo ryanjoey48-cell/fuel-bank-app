@@ -182,13 +182,18 @@ function buildOilChangeRow({
   latestMileage: WeeklyMileageEntry | null;
 }): OilChangeAlertRow {
   const vehicleTypeInterval = getOilChangeIntervalForVehicleType(vehicleType);
-  const interval = vehicleTypeInterval;
+  const savedInterval =
+    oilChangeIntervalKm != null && Number.isFinite(Number(oilChangeIntervalKm)) && Number(oilChangeIntervalKm) > 0
+      ? Number(oilChangeIntervalKm)
+      : null;
+  const interval = savedInterval ?? vehicleTypeInterval;
   const intervalSource: OilChangeIntervalSource =
-    vehicleTypeInterval != null
+    savedInterval != null
+      ? "vehicle_baseline"
+      : vehicleTypeInterval != null
         ? "vehicle_type"
         : "missing";
   const reviewReasons = [
-    !vehicleType ? "Missing vehicle type" : "",
     interval == null ? "Missing oil change interval" : ""
   ].filter(Boolean);
   const currentOdometer = latestMileage ? getNormalizedOdometer(latestMileage) : null;
@@ -202,11 +207,11 @@ function buildOilChangeRow({
     nextDue != null && currentOdometer != null ? Math.trunc(nextDue - currentOdometer) : null;
   const overdueKm = kmRemaining != null && kmRemaining < 0 ? Math.abs(kmRemaining) : null;
   const status: OilChangeStatus =
-    reviewReasons.length > 0
-      ? "review_required"
-      : lastOdometer == null
+    lastOdometer == null
       ? "not_set"
-      : currentOdometer == null
+      : reviewReasons.length > 0
+        ? "review_required"
+        : currentOdometer == null
         ? "no_odometer"
         : kmRemaining! < 0
           ? "overdue"
