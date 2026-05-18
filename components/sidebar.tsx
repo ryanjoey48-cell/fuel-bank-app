@@ -45,11 +45,11 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       <aside
         id="mobile-nav-panel"
         className={clsx(
-          "fixed inset-y-0 left-0 z-40 flex w-[85vw] max-w-[340px] max-w-[calc(100vw-env(safe-area-inset-left,0px)-1rem)] flex-col overflow-x-hidden overflow-y-auto border-r border-brand-100/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.99),rgba(248,245,252,0.97))] px-3.5 py-4 text-slate-900 shadow-[0_30px_60px_rgba(38,18,78,0.16)] backdrop-blur-xl transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] [padding-top:max(1rem,calc(env(safe-area-inset-top,0px)+0.75rem))] [padding-bottom:max(1rem,calc(env(safe-area-inset-bottom,0px)+0.75rem))] [padding-left:max(0.875rem,calc(env(safe-area-inset-left,0px)+0.5rem))] [padding-right:0.875rem] sm:px-4 sm:py-5 md:w-auto md:max-w-none md:translate-x-0 md:overflow-visible md:border-r md:bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,244,252,0.96))] md:px-5 md:py-5 md:text-slate-900 md:shadow-[0_20px_40px_rgba(38,18,78,0.08)]",
+          "fixed inset-y-0 left-0 z-40 flex w-[85vw] max-w-[340px] max-w-[calc(100vw-env(safe-area-inset-left,0px)-1rem)] flex-col overflow-x-hidden overflow-y-auto border-r border-brand-100/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.99),rgba(248,245,252,0.97))] px-3.5 py-4 text-slate-900 shadow-[0_30px_60px_rgba(38,18,78,0.16)] backdrop-blur-xl transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] [padding-top:max(1rem,calc(env(safe-area-inset-top,0px)+0.75rem))] [padding-bottom:max(1rem,calc(env(safe-area-inset-bottom,0px)+0.75rem))] [padding-left:max(0.875rem,calc(env(safe-area-inset-left,0px)+0.5rem))] [padding-right:0.875rem] sm:px-4 sm:py-5 min-[1367px]:w-auto min-[1367px]:max-w-none min-[1367px]:translate-x-0 min-[1367px]:overflow-visible min-[1367px]:border-r min-[1367px]:bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,244,252,0.96))] min-[1367px]:px-5 min-[1367px]:py-5 min-[1367px]:text-slate-900 min-[1367px]:shadow-[0_20px_40px_rgba(38,18,78,0.08)]",
           open ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="mb-5 flex w-full items-start justify-between gap-3 md:hidden">
+        <div className="tablet-sidebar-header mb-5 flex w-full items-start justify-between gap-3 min-[1367px]:hidden">
           <div className="min-w-0 flex-1 pr-2">
             <p className="truncate text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-500">
               {t.common.appName}
@@ -147,7 +147,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
 
       {open ? (
         <button
-          className="fixed inset-0 z-30 bg-[rgba(43,24,81,0.22)] backdrop-blur-[4px] md:hidden"
+          className="tablet-sidebar-backdrop fixed inset-0 z-30 bg-[rgba(43,24,81,0.22)] backdrop-blur-[4px] min-[1367px]:hidden"
           onClick={onClose}
           type="button"
           aria-label={t.nav.closeSidebar}

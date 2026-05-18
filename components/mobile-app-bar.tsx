@@ -22,12 +22,15 @@ type MobileAppBarProps = {
 
 export function MobileAppBar({ open, onToggle }: MobileAppBarProps) {
   const pathname = usePathname();
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
   const pageKey = PAGE_KEY_BY_PATH[pathname] ?? "dashboard";
-  const pageLabel = t.nav[pageKey];
+  const pageLabel =
+    pathname === "/booking-diary"
+      ? language === "th" ? "สมุดจองงาน" : "Booking Diary"
+      : t.nav[pageKey];
 
   return (
-    <div className="mobile-app-bar fixed inset-x-0 top-0 z-30 border-b border-brand-100/60 bg-[linear-gradient(180deg,rgba(251,250,254,0.98),rgba(248,246,252,0.94))] shadow-[0_16px_36px_rgba(38,18,78,0.08)] backdrop-blur-xl md:hidden">
+    <div className="mobile-app-bar fixed inset-x-0 top-0 z-30 border-b border-brand-100/60 bg-[linear-gradient(180deg,rgba(251,250,254,0.98),rgba(248,246,252,0.94))] shadow-[0_16px_36px_rgba(38,18,78,0.08)] backdrop-blur-xl min-[1367px]:hidden">
       <div className="mx-auto flex min-h-[76px] w-full max-w-full items-center gap-3 px-4 py-3">
         <button
           type="button"

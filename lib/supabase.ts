@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const missingSupabaseEnv = !supabaseUrl || !supabaseAnonKey;
 
 const memoryStorage = new Map<string, string>();
 
@@ -37,10 +38,15 @@ const resolveStorage = () => {
   }
 };
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  // The app still renders a setup state, but we fail loudly in development actions.
-  // eslint-disable-next-line no-console
-  console.warn("Supabase environment variables are missing.");
+if (missingSupabaseEnv) {
+  console.warn(
+    [
+      "Supabase environment variables are missing.",
+      "Live data will not sync with production until NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are configured.",
+      "For Vercel, set these in Project Settings > Environment Variables, then redeploy.",
+      "If the project currently uses VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY, next.config.ts maps them as compatibility aliases at build time."
+    ].join(" ")
+  );
 }
 
 export const supabase = createClient(

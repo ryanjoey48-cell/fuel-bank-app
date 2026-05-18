@@ -124,6 +124,10 @@ td {
 }
 
 @layer components {
+  .dashboard-content-frame {
+    width: 100%;
+  }
+
   .surface-card {
     background: var(--app-surface-strong);
     border: 1px solid var(--app-border);
@@ -1326,6 +1330,67 @@ td {
     padding-right: 0;
     overflow: hidden;
     font-size: 0;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1366px) {
+  .dashboard-content-frame {
+    padding-left: 0;
+  }
+
+  .mobile-app-bar {
+    display: block !important;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-left: max(1.25rem, calc(env(safe-area-inset-left, 0px) + 1rem));
+    padding-right: max(1.25rem, calc(env(safe-area-inset-right, 0px) + 1rem));
+  }
+
+  .desktop-language-toggle {
+    display: none !important;
+  }
+
+  #mobile-nav-panel {
+    width: min(360px, calc(100vw - 2rem));
+    max-width: calc(100vw - 2rem);
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  #mobile-nav-panel .tablet-sidebar-header {
+    display: flex !important;
+  }
+
+  .tablet-sidebar-backdrop {
+    display: block !important;
+  }
+
+  .dashboard-mobile-shell {
+    width: 100%;
+    max-width: none;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 6.25rem);
+    padding-left: max(1.25rem, calc(env(safe-area-inset-left, 0px) + 1.25rem));
+    padding-right: max(1.25rem, calc(env(safe-area-inset-right, 0px) + 1.25rem));
+    padding-bottom: max(1.5rem, calc(env(safe-area-inset-bottom, 0px) + 1rem));
+  }
+
+  .dashboard-mobile-shell:has(.booking-diary-page) {
+    padding-left: max(1.25rem, calc(env(safe-area-inset-left, 0px) + 1.25rem));
+    padding-right: max(1.25rem, calc(env(safe-area-inset-right, 0px) + 1.25rem));
+  }
+
+  .booking-diary-page {
+    width: 100%;
+    max-width: none;
+  }
+
+  .booking-diary-header-actions {
+    display: none;
+  }
+}
+
+@media (min-width: 1367px) {
+  .dashboard-content-frame {
+    padding-left: 18rem;
   }
 }
 
