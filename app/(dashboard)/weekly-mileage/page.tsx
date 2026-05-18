@@ -233,7 +233,9 @@ export default function WeeklyMileagePage() {
 
     const criticalFailures = [
       driverResult.status === "rejected" ? t.nav.drivers : "",
-      mileageResult.status === "rejected" ? t.weeklyMileage.title : ""
+      vehicleResult.status === "rejected" ? (language === "th" ? "รถ" : "vehicles") : "",
+      mileageResult.status === "rejected" ? t.weeklyMileage.title : "",
+      serviceLogResult.status === "rejected" ? (language === "th" ? "ประวัติบริการ" : "service history") : ""
     ].filter(Boolean);
 
     if (criticalFailures.length) {
@@ -511,6 +513,7 @@ export default function WeeklyMileagePage() {
           b.created_at.localeCompare(a.created_at)
         );
       });
+      void loadData();
       setSuccessMessage(
         serviceModal.mode === "mark"
           ? t.weeklyMileage.notifications.oilChangeSaved

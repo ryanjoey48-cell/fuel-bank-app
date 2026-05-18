@@ -732,8 +732,9 @@ export async function fetchVehicles() {
 
     if (error) {
       if (isMissingTableError(error)) {
-        console.warn("fetchVehicles optional table unavailable:", serializeError(error));
-        return [] as Vehicle[];
+        const message = getServiceSchemaSetupMessage(error) ?? "Vehicles table is unavailable in Supabase.";
+        logDataError("fetchVehicles setup error:", error);
+        throw new Error(message);
       }
 
       logDataError("fetchVehicles error:", error);
@@ -756,8 +757,9 @@ export async function fetchVehicleServiceLogs() {
 
     if (error) {
       if (isMissingTableError(error)) {
-        console.warn("fetchVehicleServiceLogs optional table unavailable:", serializeError(error));
-        return [] as VehicleServiceLog[];
+        const message = getServiceSchemaSetupMessage(error) ?? "Vehicle service logs table is unavailable in Supabase.";
+        logDataError("fetchVehicleServiceLogs setup error:", error);
+        throw new Error(message);
       }
 
       logDataError("fetchVehicleServiceLogs error:", error);
