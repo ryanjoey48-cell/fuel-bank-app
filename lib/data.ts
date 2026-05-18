@@ -1097,7 +1097,7 @@ export async function saveOilChangeService(payload: {
       vehicleName: payload.vehicleName,
       vehicleType: payload.vehicleType
     });
-    const baselinePayload = {
+    const oilChangeBaselinePayload = {
       vehicle_reg: vehicle.vehicle_reg,
       last_oil_change_date: serviceDate,
       last_odometer: serviceOdometer,
@@ -1141,26 +1141,50 @@ export async function saveOilChangeService(payload: {
 
     console.log("step", "upsert oil change baseline", {
       table: "oil_change_baselines",
-      operation: "upsert by vehicle_reg",
-      payload: baselinePayload
+      operation: "upsert",
+      conflictColumn: "vehicle_reg",
+      payload: oilChangeBaselinePayload
     });
-    const baselineResult = await supabase
+    const baselineUpsertResult = await supabase
       .from("oil_change_baselines")
-      .upsert(baselinePayload, { onConflict: "vehicle_reg" })
-      .select()
-      .single();
+      .upsert(oilChangeBaselinePayload, { onConflict: "vehicle_reg" });
 
     console.log("saveOilChangeService oil_change_baselines upsert response:", {
+      table: "oil_change_baselines",
+      conflictColumn: "vehicle_reg",
+      payload: oilChangeBaselinePayload,
+      data: baselineUpsertResult.data,
+      error: baselineUpsertResult.error
+    });
+
+    if (baselineUpsertResult.error) {
+      logDataError("saveOilChangeService baseline error:", baselineUpsertResult.error, oilChangeBaselinePayload);
+      throw new Error(
+        getServiceSchemaSetupMessage(baselineUpsertResult.error) ??
+          baselineUpsertResult.error?.message ??
+          "Failed to save oil change baseline - try again."
+      );
+    }
+
+    const baselineResult = await supabase
+      .from("oil_change_baselines")
+      .select("*")
+      .eq("vehicle_reg", oilChangeBaselinePayload.vehicle_reg)
+      .single();
+
+    console.log("saveOilChangeService oil_change_baselines refetch response:", {
+      table: "oil_change_baselines",
+      vehicle_reg: oilChangeBaselinePayload.vehicle_reg,
       data: baselineResult.data,
       error: baselineResult.error
     });
 
     if (baselineResult.error || !baselineResult.data) {
-      logDataError("saveOilChangeService baseline error:", baselineResult.error, baselinePayload);
+      logDataError("saveOilChangeService baseline refetch error:", baselineResult.error, oilChangeBaselinePayload);
       throw new Error(
         getServiceSchemaSetupMessage(baselineResult.error) ??
           baselineResult.error?.message ??
-          "Failed to save oil change baseline - try again."
+          "Baseline saved, but Supabase did not return the saved baseline."
       );
     }
 
