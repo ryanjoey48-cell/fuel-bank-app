@@ -533,30 +533,43 @@ function normalizeOilChangeHistoryRow(row: OilChangeHistory): VehicleServiceLog 
   };
 }
 
+function normalizeOilChangeVehicleRegKey(value: unknown) {
+  return String(value ?? "").trim().toUpperCase();
+}
+
 export function applyOilChangeBaselinesToVehicles(
   vehicles: Vehicle[],
   baselines: OilChangeBaseline[]
 ) {
   const vehicleMap = new Map<string, Vehicle>();
+  const baselineMap = new Map<string, ReturnType<typeof normalizeOilChangeBaselineRow>>();
+
+  for (const rawBaseline of baselines) {
+    const baseline = normalizeOilChangeBaselineRow(rawBaseline);
+    const key = normalizeOilChangeVehicleRegKey(baseline.vehicle_reg);
+    if (key) {
+      baselineMap.set(key, baseline);
+    }
+  }
 
   for (const vehicle of vehicles.map(normalizeVehicleRow)) {
-    const key = normalizeComparableText(vehicle.vehicle_reg ?? vehicle.registration);
+    const vehicleReg = vehicle.vehicle_reg ?? vehicle.registration;
+    const key = normalizeOilChangeVehicleRegKey(vehicleReg);
     if (!key) {
       vehicleMap.set(String(vehicle.id), vehicle);
       continue;
     }
-    vehicleMap.set(key, vehicle);
-  }
 
-  for (const rawBaseline of baselines) {
-    const baseline = normalizeOilChangeBaselineRow(rawBaseline);
-    const key = normalizeComparableText(baseline.vehicle_reg);
-    if (!key) continue;
+    const baseline = baselineMap.get(key) ?? null;
+    console.log("oil change baseline vehicle merge", {
+      vehicle_reg: vehicleReg,
+      normalizedVehicleReg: key,
+      matchedBaseline: baseline
+    });
 
-    const existing = vehicleMap.get(key);
-    if (existing) {
+    if (baseline) {
       vehicleMap.set(key, {
-        ...existing,
+        ...vehicle,
         vehicle_reg: baseline.vehicle_reg,
         registration: baseline.vehicle_reg,
         last_oil_change_date: baseline.last_oil_change_date,
@@ -565,6 +578,13 @@ export function applyOilChangeBaselinesToVehicles(
       });
       continue;
     }
+
+    vehicleMap.set(key, vehicle);
+  }
+
+  for (const baseline of baselineMap.values()) {
+    const key = normalizeOilChangeVehicleRegKey(baseline.vehicle_reg);
+    if (!key || vehicleMap.has(key)) continue;
 
     vehicleMap.set(key, {
       id: baseline.id,
@@ -904,35 +924,42 @@ export async function fetchVehicleServiceLogs() {
 }
 
 export async function fetchOilChangeBaselinesForVehicles(vehicles: Vehicle[]) {
-  const baselines: OilChangeBaseline[] = [];
+  const { data, error } = await supabase
+    .from("oil_change_baselines")
+    .select("*");
 
-  for (const vehicle of vehicles) {
-    const vehicleReg = normalizeVehicleRegistration(vehicle.vehicle_reg ?? vehicle.registration);
-    if (!vehicleReg) continue;
+  if (error) {
+    logDataError("fetchOilChangeBaselinesForVehicles error:", error);
+    throw new Error(
+      getServiceSchemaSetupMessage(error) ??
+        String(error.message ?? "Unable to load oil change baselines from Supabase.")
+    );
+  }
 
-    console.log("VEHICLE:", vehicleReg);
-    const { data, error } = await supabase
-      .from("oil_change_baselines")
-      .select("*")
-      .eq("vehicle_reg", vehicleReg)
-      .maybeSingle();
-
-    console.log("BASELINE RESULT:", data);
-
-    if (error) {
-      logDataError("fetchOilChangeBaselinesForVehicles error:", error, { vehicle_reg: vehicleReg });
-      throw new Error(
-        getServiceSchemaSetupMessage(error) ??
-          String(error.message ?? `Unable to load oil change baseline for ${vehicleReg}.`)
-      );
-    }
-
-    if (data) {
-      baselines.push(normalizeOilChangeBaselineRow(data as OilChangeBaseline));
+  const baselineMap = new Map<string, OilChangeBaseline>();
+  for (const rawBaseline of (data ?? []) as OilChangeBaseline[]) {
+    const baseline = normalizeOilChangeBaselineRow(rawBaseline);
+    const key = normalizeOilChangeVehicleRegKey(baseline.vehicle_reg);
+    if (key) {
+      baselineMap.set(key, baseline);
     }
   }
 
-  return baselines;
+  return vehicles.flatMap((vehicle) => {
+    const vehicleReg = normalizeVehicleRegistration(vehicle.vehicle_reg ?? vehicle.registration);
+    if (!vehicleReg) return [];
+
+    console.log("VEHICLE:", vehicleReg);
+    const baseline = baselineMap.get(normalizeOilChangeVehicleRegKey(vehicleReg)) ?? null;
+
+    console.log("BASELINE RESULT:", baseline);
+    console.log("oil change baseline match", {
+      vehicle_reg: vehicleReg,
+      matchedBaseline: baseline
+    });
+
+    return baseline ? [baseline] : [];
+  });
 }
 
 export async function fetchOilChangeHistory() {
