@@ -64,6 +64,7 @@ export type OilChangeBaseline = {
   last_odometer: number;
   interval_km: number;
   created_at: string;
+  updated_at: string;
 };
 
 export type OilChangeHistory = {

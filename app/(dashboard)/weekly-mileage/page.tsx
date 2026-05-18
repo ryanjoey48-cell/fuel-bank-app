@@ -6,9 +6,11 @@ import { EmptyState } from "@/components/empty-state";
 import { Header } from "@/components/header";
 import { WeeklyMileageUploadCard } from "@/components/weekly-mileage-upload-card";
 import {
+  applyOilChangeBaselinesToVehicles,
   deleteWeeklyMileage,
   fetchDrivers,
-  fetchVehicleServiceLogs,
+  fetchOilChangeBaselines,
+  fetchOilChangeHistory,
   fetchVehicles,
   fetchWeeklyMileage,
   saveOilChangeService,
@@ -212,8 +214,8 @@ export default function WeeklyMileagePage() {
       vehicles: "select * from vehicles order by vehicle_reg; no client user_id/company_id filter",
       weeklyMileage:
         "select id, week_ending, driver_id, vehicle_reg, odometer_reading, created_at, user_id from weekly_mileage; no client user_id/company_id filter",
-      oilChangeBaselines: "read from vehicles.last_oil_change_date, last_oil_change_odometer, oil_change_interval_km; no client user_id/company_id filter",
-      serviceHistory: "select * from vehicle_service_logs order by service_date, created_at; no client user_id/company_id filter"
+      oilChangeBaselines: "select * from oil_change_baselines order by vehicle_reg; no client user_id/company_id filter",
+      serviceHistory: "select * from oil_change_history order by oil_change_date, created_at; no client user_id/company_id filter"
     };
 
     console.groupCollapsed("Weekly Mileage diagnostics");
@@ -225,23 +227,26 @@ export default function WeeklyMileagePage() {
     console.log("tables queried", {
       weeklyMileage: "weekly_mileage",
       vehicles: "vehicles",
-      serviceHistory: "vehicle_service_logs",
+      oilChangeBaselines: "oil_change_baselines",
+      serviceHistory: "oil_change_history",
       filtersApplied: queryFilters
     });
     console.groupEnd();
 
-    const [driverResult, vehicleResult, mileageResult, serviceLogResult] = await Promise.allSettled([
+    const [driverResult, vehicleResult, mileageResult, baselineResult, serviceLogResult] = await Promise.allSettled([
       fetchDrivers(),
       fetchVehicles(),
       fetchWeeklyMileage(),
-      fetchVehicleServiceLogs()
+      fetchOilChangeBaselines(),
+      fetchOilChangeHistory()
     ]);
 
     console.groupCollapsed("Weekly mileage page data load");
     console.log("drivers", driverResult);
     console.log("vehicles", vehicleResult);
     console.log("weekly_mileage", mileageResult);
-    console.log("vehicle_service_logs", serviceLogResult);
+    console.log("oil_change_baselines", baselineResult);
+    console.log("oil_change_history", serviceLogResult);
     console.groupEnd();
 
     if (driverResult.status === "fulfilled") {
@@ -251,11 +256,17 @@ export default function WeeklyMileagePage() {
       setDrivers([]);
     }
 
-    if (vehicleResult.status === "fulfilled") {
+    if (vehicleResult.status === "fulfilled" && baselineResult.status === "fulfilled") {
+      setVehicles(applyOilChangeBaselinesToVehicles(vehicleResult.value, baselineResult.value));
+    } else if (vehicleResult.status === "fulfilled") {
       setVehicles(vehicleResult.value);
     } else {
       console.error("Weekly mileage vehicles query failed:", vehicleResult.reason);
       setVehicles([]);
+    }
+
+    if (baselineResult.status === "rejected") {
+      console.error("Weekly mileage oil baselines query failed:", baselineResult.reason);
     }
 
     if (mileageResult.status === "fulfilled") {
@@ -283,15 +294,21 @@ export default function WeeklyMileagePage() {
       setLoadError(t.weeklyMileage.notifications.loadFailed.replace("{items}", criticalFailures.join(language === "th" ? " และ " : " and ")));
     }
 
+    if (baselineResult.status === "rejected") {
+      setLoadError(t.weeklyMileage.notifications.loadFailed.replace("{items}", "oil baselines"));
+    }
+
     console.log("Weekly mileage page load result", {
       drivers: driverResult.status === "fulfilled" ? driverResult.value.length : "failed",
       vehicles: vehicleResult.status === "fulfilled" ? vehicleResult.value.length : "failed",
       weeklyMileage: mileageResult.status === "fulfilled" ? mileageResult.value.length : "failed",
+      oilBaselines: baselineResult.status === "fulfilled" ? baselineResult.value.length : "failed",
       serviceLogs: serviceLogResult.status === "fulfilled" ? serviceLogResult.value.length : "failed",
       errors: {
         drivers: driverResult.status === "rejected" ? String(driverResult.reason) : null,
         vehicles: vehicleResult.status === "rejected" ? String(vehicleResult.reason) : null,
         weeklyMileage: mileageResult.status === "rejected" ? String(mileageResult.reason) : null,
+        oilBaselines: baselineResult.status === "rejected" ? String(baselineResult.reason) : null,
         serviceLogs: serviceLogResult.status === "rejected" ? String(serviceLogResult.reason) : null
       }
     });
@@ -303,14 +320,15 @@ export default function WeeklyMileagePage() {
       tables: {
         vehicles: "public.vehicles",
         weeklyMileage: "public.weekly_mileage",
-        oilChangeBaselines: "public.vehicles",
-        serviceHistory: "public.vehicle_service_logs"
+        oilChangeBaselines: "public.oil_change_baselines",
+        serviceHistory: "public.oil_change_history"
       },
       filters: queryFilters,
       rowCounts: {
         drivers: driverResult.status === "fulfilled" ? driverResult.value.length : "failed",
         vehicles: vehicleResult.status === "fulfilled" ? vehicleResult.value.length : "failed",
         weeklyMileage: mileageResult.status === "fulfilled" ? mileageResult.value.length : "failed",
+        oilChangeBaselines: baselineResult.status === "fulfilled" ? baselineResult.value.length : "failed",
         serviceHistory: serviceLogResult.status === "fulfilled" ? serviceLogResult.value.length : "failed"
       },
       errors: {
@@ -318,6 +336,7 @@ export default function WeeklyMileagePage() {
         drivers: driverResult.status === "rejected" ? String(driverResult.reason) : null,
         vehicles: vehicleResult.status === "rejected" ? String(vehicleResult.reason) : null,
         weeklyMileage: mileageResult.status === "rejected" ? String(mileageResult.reason) : null,
+        oilChangeBaselines: baselineResult.status === "rejected" ? String(baselineResult.reason) : null,
         serviceHistory: serviceLogResult.status === "rejected" ? String(serviceLogResult.reason) : null
       }
     });
@@ -585,7 +604,8 @@ export default function WeeklyMileagePage() {
         intervalKm: Number(serviceForm.intervalKm),
         notes: serviceForm.notes,
         serviceLogId: serviceModal.serviceLogId,
-        updateExistingLog: serviceModal.mode === "edit"
+        updateExistingLog: serviceModal.mode === "edit",
+        recordHistory: serviceModal.mode === "mark"
       };
       console.log("Weekly Mileage oil change save payload:", servicePayload);
       const result = await saveOilChangeService(servicePayload);

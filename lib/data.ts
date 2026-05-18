@@ -25,6 +25,8 @@ import type {
   FuelLogSortDirection,
   FuelLogSortKey,
   FuelLogWithDriver,
+  OilChangeBaseline,
+  OilChangeHistory,
   PaginatedFuelLogsResult,
   RouteDistanceEstimate,
   Shipment,
@@ -505,9 +507,90 @@ function normalizeServiceLogRow(log: VehicleServiceLog) {
   };
 }
 
+function normalizeOilChangeBaselineRow(row: OilChangeBaseline) {
+  return {
+    ...row,
+    vehicle_reg: normalizeVehicleRegistration(row.vehicle_reg),
+    last_odometer: Number(row.last_odometer),
+    interval_km: Number(row.interval_km)
+  };
+}
+
+function normalizeOilChangeHistoryRow(row: OilChangeHistory): VehicleServiceLog {
+  const odometer = Number(row.odometer ?? 0);
+  return {
+    id: row.id,
+    vehicle_id: null,
+    vehicle_reg: normalizeVehicleRegistration(row.vehicle_reg),
+    service_type: "oil_change",
+    service_date: row.oil_change_date,
+    odometer,
+    service_odometer: odometer,
+    interval_km: null,
+    vehicle_type_snapshot: null,
+    notes: null,
+    created_at: row.created_at
+  };
+}
+
+export function applyOilChangeBaselinesToVehicles(
+  vehicles: Vehicle[],
+  baselines: OilChangeBaseline[]
+) {
+  const vehicleMap = new Map<string, Vehicle>();
+
+  for (const vehicle of vehicles.map(normalizeVehicleRow)) {
+    const key = normalizeComparableText(vehicle.vehicle_reg ?? vehicle.registration);
+    if (!key) {
+      vehicleMap.set(String(vehicle.id), vehicle);
+      continue;
+    }
+    vehicleMap.set(key, vehicle);
+  }
+
+  for (const rawBaseline of baselines) {
+    const baseline = normalizeOilChangeBaselineRow(rawBaseline);
+    const key = normalizeComparableText(baseline.vehicle_reg);
+    if (!key) continue;
+
+    const existing = vehicleMap.get(key);
+    if (existing) {
+      vehicleMap.set(key, {
+        ...existing,
+        vehicle_reg: baseline.vehicle_reg,
+        registration: baseline.vehicle_reg,
+        last_oil_change_date: baseline.last_oil_change_date,
+        last_oil_change_odometer: baseline.last_odometer,
+        oil_change_interval_km: baseline.interval_km
+      });
+      continue;
+    }
+
+    vehicleMap.set(key, {
+      id: baseline.id,
+      user_id: "",
+      vehicle_reg: baseline.vehicle_reg,
+      registration: baseline.vehicle_reg,
+      vehicle_name: baseline.vehicle_reg,
+      vehicle_category: "",
+      vehicle_type: null,
+      active: true,
+      last_oil_change_date: baseline.last_oil_change_date,
+      last_oil_change_odometer: baseline.last_odometer,
+      oil_change_interval_km: baseline.interval_km,
+      created_at: baseline.created_at,
+      updated_at: baseline.updated_at
+    });
+  }
+
+  return Array.from(vehicleMap.values()).sort((a, b) =>
+    (a.vehicle_reg ?? a.registration ?? "").localeCompare(b.vehicle_reg ?? b.registration ?? "")
+  );
+}
+
 function getServiceSchemaSetupMessage(error: unknown) {
   if (isMissingTableError(error)) {
-    return "Oil Change Service Management is not set up in Supabase yet. Apply migration 20260421_add_oil_change_alert_fields.sql, then refresh the page.";
+    return "Oil Change Service Management is not set up in Supabase yet. Apply the oil_change_baselines and oil_change_history migration, then refresh the page.";
   }
 
   if (isMissingColumnError(error)) {
@@ -518,7 +601,7 @@ function getServiceSchemaSetupMessage(error: unknown) {
     const record = error as Record<string, unknown>;
     const message = String(record.message ?? "").toLowerCase();
     if (record.code === "42501" || message.includes("row-level security") || message.includes("permission")) {
-      return "Oil Change Service Management is blocked by Supabase permissions. Apply the latest RLS policy migration for vehicles and vehicle_service_logs.";
+      return "Oil Change Service Management is blocked by Supabase permissions. Apply the latest RLS policy migration for oil_change_baselines and oil_change_history.";
     }
   }
 
@@ -820,6 +903,47 @@ export async function fetchVehicleServiceLogs() {
   });
 }
 
+export async function fetchOilChangeBaselines() {
+  return readThroughCache("oil_change_baselines:all", async () => {
+    const { data, error } = await supabase
+      .from("oil_change_baselines")
+      .select("*")
+      .order("vehicle_reg", { ascending: true });
+
+    if (error) {
+      logDataError("fetchOilChangeBaselines error:", error);
+      throw new Error(
+        getServiceSchemaSetupMessage(error) ??
+          String(error.message ?? "Unable to load oil change baselines from Supabase.")
+      );
+    }
+
+    console.log("fetchOilChangeBaselines success", { rowCount: (data ?? []).length });
+    return ((data ?? []) as OilChangeBaseline[]).map(normalizeOilChangeBaselineRow);
+  });
+}
+
+export async function fetchOilChangeHistory() {
+  return readThroughCache("oil_change_history:all", async () => {
+    const { data, error } = await supabase
+      .from("oil_change_history")
+      .select("*")
+      .order("oil_change_date", { ascending: false })
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      logDataError("fetchOilChangeHistory error:", error);
+      throw new Error(
+        getServiceSchemaSetupMessage(error) ??
+          String(error.message ?? "Unable to load oil change history from Supabase.")
+      );
+    }
+
+    console.log("fetchOilChangeHistory success", { rowCount: (data ?? []).length });
+    return ((data ?? []) as OilChangeHistory[]).map(normalizeOilChangeHistoryRow);
+  });
+}
+
 async function ensureVehicleForService({
   vehicleId,
   registration,
@@ -929,12 +1053,15 @@ export async function saveOilChangeService(payload: {
   notes?: string | null;
   serviceLogId?: string | null;
   updateExistingLog?: boolean;
+  recordHistory?: boolean;
 }) {
   console.groupCollapsed("Oil change service save");
   console.log("incoming payload", payload);
   const serviceDate = payload.serviceDate?.trim();
   const serviceOdometer = Math.trunc(Number(payload.serviceOdometer));
-  const intervalKm = Math.trunc(Number(getOilChangeIntervalForVehicleType(payload.vehicleType) || 30000));
+  const intervalKm = Math.trunc(
+    Number(payload.intervalKm || getOilChangeIntervalForVehicleType(payload.vehicleType) || 30000)
+  );
 
   try {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(serviceDate)) {
@@ -958,127 +1085,100 @@ export async function saveOilChangeService(payload: {
       vehicleName: payload.vehicleName,
       vehicleType: payload.vehicleType
     });
-    const userId = await getCurrentUserId();
-    const servicePayload = {
-      user_id: userId,
-      vehicle_id: vehicle.id,
+    const baselinePayload = {
       vehicle_reg: vehicle.vehicle_reg,
-      service_type: "oil_change",
-      service_date: serviceDate,
-      odometer: serviceOdometer,
-      interval_km: intervalKm,
-      vehicle_type_snapshot: payload.vehicleType ?? null,
-      notes: payload.notes?.trim() || null
+      last_oil_change_date: serviceDate,
+      last_odometer: serviceOdometer,
+      interval_km: intervalKm
     };
-    const serviceOperation = payload.updateExistingLog && payload.serviceLogId ? "update" : "insert";
-    console.log("step", "write service log", {
-      table: "vehicle_service_logs",
-      operation: serviceOperation,
-      payload: servicePayload,
-      serviceLogId: payload.serviceLogId
-    });
 
-    let serviceResult =
-      serviceOperation === "update"
-        ? await supabase
-            .from("vehicle_service_logs")
-            .update(servicePayload)
-            .eq("id", payload.serviceLogId!)
-            .select()
-            .single()
-        : await supabase
-            .from("vehicle_service_logs")
-            .select("*")
-            .eq("vehicle_id", vehicle.id)
-            .eq("service_type", "oil_change")
-            .eq("service_date", serviceDate)
-            .eq("odometer", serviceOdometer)
-            .limit(1)
-            .maybeSingle();
-
-    console.log("saveOilChangeService service log initial response:", {
-      operation: serviceOperation,
-      data: serviceResult.data,
-      error: serviceResult.error
-    });
-
-    if (serviceOperation === "insert" && !serviceResult.error && !serviceResult.data) {
-      serviceResult = await supabase
-        .from("vehicle_service_logs")
-        .insert(servicePayload)
+    let historyRow: VehicleServiceLog | null = null;
+    if (payload.recordHistory) {
+      const historyPayload = {
+        vehicle_reg: vehicle.vehicle_reg,
+        oil_change_date: serviceDate,
+        odometer: serviceOdometer
+      };
+      console.log("step", "insert oil change history", {
+        table: "oil_change_history",
+        operation: "insert",
+        payload: historyPayload
+      });
+      const historyResult = await supabase
+        .from("oil_change_history")
+        .insert(historyPayload)
         .select()
         .single();
-      console.log("saveOilChangeService service log insert response:", {
-        data: serviceResult.data,
-        error: serviceResult.error
+
+      console.log("saveOilChangeService oil_change_history insert response:", {
+        data: historyResult.data,
+        error: historyResult.error
       });
-    }
 
-    if (serviceResult.error) {
-      if (serviceOperation === "insert" && (serviceResult.error as { code?: string }).code === "23505") {
-        const recovered = await supabase
-          .from("vehicle_service_logs")
-          .select("*")
-          .eq("vehicle_id", vehicle.id)
-          .eq("service_type", "oil_change")
-          .eq("service_date", serviceDate)
-          .eq("odometer", serviceOdometer)
-          .limit(1)
-          .maybeSingle();
-
-        console.log("saveOilChangeService duplicate recovery response:", {
-          data: recovered.data,
-          error: recovered.error
-        });
-
-        if (!recovered.error && recovered.data) {
-          serviceResult = recovered;
-        }
+      if (historyResult.error || !historyResult.data) {
+        logDataError("saveOilChangeService history error:", historyResult.error, historyPayload);
+        throw new Error(
+          getServiceSchemaSetupMessage(historyResult.error) ??
+            historyResult.error?.message ??
+            "Failed to save oil change history - try again."
+        );
       }
+
+      historyRow = normalizeOilChangeHistoryRow(historyResult.data as OilChangeHistory);
     }
 
-    if (serviceResult.error || !serviceResult.data) {
-      logDataError("saveOilChangeService log error:", serviceResult.error, servicePayload);
-      throw new Error(getServiceSchemaSetupMessage(serviceResult.error) ?? serviceResult.error?.message ?? "Failed to save service record - try again.");
-    }
-
-    const baselinePayload = {
-      last_oil_change_date: serviceDate,
-      last_oil_change_odometer: serviceOdometer,
-      oil_change_interval_km: intervalKm,
-      ...(payload.vehicleType ? { vehicle_type: payload.vehicleType } : {})
-    };
-    console.log("step", "update active baseline", {
-      table: "vehicles",
-      operation: "update",
-      vehicleId: vehicle.id,
+    console.log("step", "upsert oil change baseline", {
+      table: "oil_change_baselines",
+      operation: "upsert by vehicle_reg",
       payload: baselinePayload
     });
-    const vehicleResult = await supabase
-      .from("vehicles")
-      .update(baselinePayload)
-      .eq("id", vehicle.id)
+    const baselineResult = await supabase
+      .from("oil_change_baselines")
+      .upsert(baselinePayload, { onConflict: "vehicle_reg" })
       .select()
       .single();
 
-    console.log("saveOilChangeService vehicle baseline update response:", {
-      data: vehicleResult.data,
-      error: vehicleResult.error
+    console.log("saveOilChangeService oil_change_baselines upsert response:", {
+      data: baselineResult.data,
+      error: baselineResult.error
     });
 
-    if (vehicleResult.error) {
-      logDataError("saveOilChangeService vehicle baseline error:", vehicleResult.error, { vehicleId: vehicle.id });
-      throw new Error(getServiceSchemaSetupMessage(vehicleResult.error) ?? vehicleResult.error.message ?? "Service saved, but baseline update failed.");
+    if (baselineResult.error || !baselineResult.data) {
+      logDataError("saveOilChangeService baseline error:", baselineResult.error, baselinePayload);
+      throw new Error(
+        getServiceSchemaSetupMessage(baselineResult.error) ??
+          baselineResult.error?.message ??
+          "Failed to save oil change baseline - try again."
+      );
     }
 
-    dispatchDataChange("vehicle_service_logs");
+    const baseline = normalizeOilChangeBaselineRow(baselineResult.data as OilChangeBaseline);
+    const updatedVehicle = normalizeVehicleRow({
+      ...vehicle,
+      last_oil_change_date: baseline.last_oil_change_date,
+      last_oil_change_odometer: baseline.last_odometer,
+      oil_change_interval_km: baseline.interval_km
+    });
+    const baselineServiceLog =
+      historyRow ??
+      normalizeOilChangeHistoryRow({
+        id: baseline.id,
+        vehicle_reg: baseline.vehicle_reg,
+        oil_change_date: baseline.last_oil_change_date,
+        odometer: baseline.last_odometer,
+        created_at: baseline.updated_at ?? baseline.created_at
+      });
+
+    dispatchDataChange("oil_change_baselines");
+    dispatchDataChange("oil_change_history");
     console.log("success", {
-      vehicle: vehicleResult.data,
-      serviceLog: serviceResult.data
+      vehicle: updatedVehicle,
+      baseline,
+      serviceLog: baselineServiceLog
     });
     return {
-      vehicle: normalizeVehicleRow(vehicleResult.data as Vehicle),
-      serviceLog: normalizeServiceLogRow(serviceResult.data as VehicleServiceLog)
+      vehicle: updatedVehicle,
+      serviceLog: baselineServiceLog
     };
   } catch (error) {
     console.error("Oil change service save failed", serializeError(error));
