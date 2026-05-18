@@ -19,7 +19,7 @@ import {
   X
 } from "lucide-react";
 import Image from "next/image";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type RefObject, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import {
   deleteBookingDiaryEntry,
@@ -32,6 +32,7 @@ import { exportToXlsx } from "@/lib/export";
 import { useLanguage } from "@/lib/language-provider";
 import { supabase } from "@/lib/supabase";
 import { formatDate } from "@/lib/utils";
+import { LOCATION_SUGGESTIONS } from "@/src/data/locations";
 import type { BookingDiaryEntry, Driver, Vehicle } from "@/types/database";
 
 type BookingForm = {
@@ -262,6 +263,135 @@ function isThisWeek(dateKey: string) {
   return target >= start && target <= end;
 }
 
+function highlightMatch(option: string, query: string) {
+  const trimmedQuery = query.trim();
+  if (!trimmedQuery) return option;
+
+  const matchIndex = option.toLocaleLowerCase().indexOf(trimmedQuery.toLocaleLowerCase());
+  if (matchIndex < 0) return option;
+
+  const before = option.slice(0, matchIndex);
+  const match = option.slice(matchIndex, matchIndex + trimmedQuery.length);
+  const after = option.slice(matchIndex + trimmedQuery.length);
+
+  return (
+    <>
+      {before}
+      <mark className="bg-transparent font-bold text-brand-700">{match}</mark>
+      {after}
+    </>
+  );
+}
+
+type LocationComboboxProps = {
+  value: string;
+  onChange: (value: string) => void;
+  options: string[];
+  placeholder: string;
+  className: string;
+  inputRef?: RefObject<HTMLInputElement | null>;
+  required?: boolean;
+};
+
+function LocationCombobox({
+  value,
+  onChange,
+  options,
+  placeholder,
+  className,
+  inputRef,
+  required = false
+}: LocationComboboxProps) {
+  const listboxId = useId();
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const query = value.trim();
+  const normalizedQuery = query.toLocaleLowerCase();
+  const matches = useMemo(() => {
+    if (!normalizedQuery) return options.slice(0, 8);
+    return options
+      .filter((option) => option.toLocaleLowerCase().includes(normalizedQuery))
+      .slice(0, 10);
+  }, [normalizedQuery, options]);
+
+  const selectOption = (option: string) => {
+    onChange(option);
+    setOpen(false);
+    setActiveIndex(0);
+  };
+
+  return (
+    <div className="relative">
+      <input
+        ref={inputRef}
+        required={required}
+        value={value}
+        onChange={(event) => {
+          onChange(event.target.value);
+          setOpen(true);
+          setActiveIndex(0);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+        onKeyDown={(event) => {
+          if (!open && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+            setOpen(true);
+            return;
+          }
+
+          if (!matches.length) return;
+
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            setActiveIndex((current) => (current + 1) % matches.length);
+          } else if (event.key === "ArrowUp") {
+            event.preventDefault();
+            setActiveIndex((current) => (current - 1 + matches.length) % matches.length);
+          } else if (event.key === "Enter" && open) {
+            event.preventDefault();
+            selectOption(matches[activeIndex]);
+          } else if (event.key === "Escape") {
+            setOpen(false);
+          }
+        }}
+        className={className}
+        placeholder={placeholder}
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={open && matches.length > 0}
+        aria-controls={listboxId}
+        aria-activedescendant={open && matches[activeIndex] ? `${listboxId}-${activeIndex}` : undefined}
+      />
+      {open && matches.length > 0 ? (
+        <div
+          id={listboxId}
+          role="listbox"
+          className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-[70] max-h-56 overflow-y-auto rounded-[0.85rem] border border-slate-200 bg-white p-1 shadow-[0_18px_44px_rgba(15,23,42,0.14)]"
+        >
+          {matches.map((option, index) => (
+            <button
+              key={option}
+              id={`${listboxId}-${index}`}
+              type="button"
+              role="option"
+              aria-selected={activeIndex === index}
+              onMouseEnter={() => setActiveIndex(index)}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => selectOption(option)}
+              className={clsx(
+                "flex w-full items-center rounded-[0.65rem] px-3 py-2 text-left text-[13px] font-medium text-slate-700 transition",
+                activeIndex === index ? "bg-slate-100 text-slate-950" : "hover:bg-slate-50"
+              )}
+            >
+              <span className="truncate">{highlightMatch(option, value)}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function BookingDiaryPage() {
   const { language } = useLanguage();
   const copy = labels[language === "th" ? "th" : "en"];
@@ -345,6 +475,10 @@ export default function BookingDiaryPage() {
   const driverOptions = useMemo(
     () => uniqueSorted([...bookings.map((booking) => booking.driver), ...drivers.map((driver) => driver.name)]),
     [bookings, drivers]
+  );
+  const locationOptions = useMemo(
+    () => uniqueSorted([...LOCATION_SUGGESTIONS, ...bookings.map((booking) => booking.pickup), ...bookings.map((booking) => booking.dropoff)]),
+    [bookings]
   );
 
   const filteredBookings = useMemo(() => {
@@ -1034,11 +1168,26 @@ export default function BookingDiaryPage() {
                   <div className="booking-form-grid">
                     <label className="form-field lg:col-span-2">
                       <span className="form-label form-label-required">{copy.pickup}</span>
-                      <input ref={firstInputRef} required value={form.pickup} onChange={(event) => setField("pickup", event.target.value)} className={inputClass} placeholder={copy.pickup} />
+                      <LocationCombobox
+                        inputRef={firstInputRef}
+                        required
+                        value={form.pickup}
+                        onChange={(value) => setField("pickup", value)}
+                        options={locationOptions}
+                        className={inputClass}
+                        placeholder={copy.pickup}
+                      />
                     </label>
                     <label className="form-field lg:col-span-2">
                       <span className="form-label form-label-required">{copy.dropoff}</span>
-                      <input required value={form.dropoff} onChange={(event) => setField("dropoff", event.target.value)} className={inputClass} placeholder={copy.dropoff} />
+                      <LocationCombobox
+                        required
+                        value={form.dropoff}
+                        onChange={(value) => setField("dropoff", value)}
+                        options={locationOptions}
+                        className={inputClass}
+                        placeholder={copy.dropoff}
+                      />
                     </label>
                     <label className="form-field lg:col-span-1">
                       <span className="form-label">{copy.pickupTime}</span>
