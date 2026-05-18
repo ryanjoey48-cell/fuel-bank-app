@@ -57,6 +57,23 @@ export type VehicleServiceLog = {
   user_id?: string;
 };
 
+export type OilChangeBaseline = {
+  id: string;
+  vehicle_reg: string;
+  last_oil_change_date: string;
+  last_odometer: number;
+  interval_km: number;
+  created_at: string;
+};
+
+export type OilChangeHistory = {
+  id: string;
+  vehicle_reg: string;
+  oil_change_date: string;
+  odometer: number;
+  created_at: string;
+};
+
 export type FuelLog = {
   id: string;
   date: string;
