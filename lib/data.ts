@@ -996,12 +996,22 @@ export async function saveOilChangeService(payload: {
             .limit(1)
             .maybeSingle();
 
+    console.log("saveOilChangeService service log initial response:", {
+      operation: serviceOperation,
+      data: serviceResult.data,
+      error: serviceResult.error
+    });
+
     if (serviceOperation === "insert" && !serviceResult.error && !serviceResult.data) {
       serviceResult = await supabase
         .from("vehicle_service_logs")
         .insert(servicePayload)
         .select()
         .single();
+      console.log("saveOilChangeService service log insert response:", {
+        data: serviceResult.data,
+        error: serviceResult.error
+      });
     }
 
     if (serviceResult.error) {
@@ -1015,6 +1025,11 @@ export async function saveOilChangeService(payload: {
           .eq("odometer", serviceOdometer)
           .limit(1)
           .maybeSingle();
+
+        console.log("saveOilChangeService duplicate recovery response:", {
+          data: recovered.data,
+          error: recovered.error
+        });
 
         if (!recovered.error && recovered.data) {
           serviceResult = recovered;
@@ -1045,6 +1060,11 @@ export async function saveOilChangeService(payload: {
       .eq("id", vehicle.id)
       .select()
       .single();
+
+    console.log("saveOilChangeService vehicle baseline update response:", {
+      data: vehicleResult.data,
+      error: vehicleResult.error
+    });
 
     if (vehicleResult.error) {
       logDataError("saveOilChangeService vehicle baseline error:", vehicleResult.error, { vehicleId: vehicle.id });

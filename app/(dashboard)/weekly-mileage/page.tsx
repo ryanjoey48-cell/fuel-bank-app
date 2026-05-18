@@ -32,6 +32,20 @@ const PAGE_SIZE = 25;
 const initialForm = { id: "", week_ending: "", driver_id: "", vehicle_reg: "", mileage: "" };
 type OilActionMode = "set" | "edit" | "mark";
 type OilFilter = "all" | "overdue" | "urgent" | "due_soon" | "review_required" | "not_set" | "ok";
+type WeeklyMileageDebugInfo = {
+  userEmail: string | null;
+  userId: string | null;
+  supabaseUrl: string;
+  tables: {
+    vehicles: string;
+    weeklyMileage: string;
+    oilChangeBaselines: string;
+    serviceHistory: string;
+  };
+  filters: Record<string, string>;
+  rowCounts: Record<string, number | "failed" | null>;
+  errors: Record<string, string | null>;
+};
 
 export default function WeeklyMileagePage() {
   const { language, t } = useLanguage();
@@ -66,7 +80,11 @@ export default function WeeklyMileagePage() {
   const [selectedWeek, setSelectedWeek] = useState("");
   const [comparisonDriverId, setComparisonDriverId] = useState("");
   const [tablePage, setTablePage] = useState(1);
+  const [debugInfo, setDebugInfo] = useState<WeeklyMileageDebugInfo | null>(null);
   const isEditing = Boolean(form.id);
+  const showWeeklyMileageDebug =
+    process.env.NODE_ENV !== "production" ||
+    process.env.NEXT_PUBLIC_WEEKLY_MILEAGE_DEBUG === "true";
 
   const selectedDriver = useMemo(
     () => drivers.find((driver) => String(driver.id) === String(form.driver_id)),
@@ -190,6 +208,13 @@ export default function WeeklyMileagePage() {
     setError(null);
     setLoadError(null);
     const { data: authData, error: authError } = await supabase.auth.getUser();
+    const queryFilters = {
+      vehicles: "select * from vehicles order by vehicle_reg; no client user_id/company_id filter",
+      weeklyMileage:
+        "select id, week_ending, driver_id, vehicle_reg, odometer_reading, created_at, user_id from weekly_mileage; no client user_id/company_id filter",
+      oilChangeBaselines: "read from vehicles.last_oil_change_date, last_oil_change_odometer, oil_change_interval_km; no client user_id/company_id filter",
+      serviceHistory: "select * from vehicle_service_logs order by service_date, created_at; no client user_id/company_id filter"
+    };
 
     console.groupCollapsed("Weekly Mileage diagnostics");
     console.log("current user", {
@@ -201,7 +226,7 @@ export default function WeeklyMileagePage() {
       weeklyMileage: "weekly_mileage",
       vehicles: "vehicles",
       serviceHistory: "vehicle_service_logs",
-      filtersApplied: "none in client; access is controlled by Supabase RLS policies"
+      filtersApplied: queryFilters
     });
     console.groupEnd();
 
@@ -268,6 +293,32 @@ export default function WeeklyMileagePage() {
         vehicles: vehicleResult.status === "rejected" ? String(vehicleResult.reason) : null,
         weeklyMileage: mileageResult.status === "rejected" ? String(mileageResult.reason) : null,
         serviceLogs: serviceLogResult.status === "rejected" ? String(serviceLogResult.reason) : null
+      }
+    });
+
+    setDebugInfo({
+      userEmail: authData.user?.email ?? null,
+      userId: authData.user?.id ?? null,
+      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ?? "missing",
+      tables: {
+        vehicles: "public.vehicles",
+        weeklyMileage: "public.weekly_mileage",
+        oilChangeBaselines: "public.vehicles",
+        serviceHistory: "public.vehicle_service_logs"
+      },
+      filters: queryFilters,
+      rowCounts: {
+        drivers: driverResult.status === "fulfilled" ? driverResult.value.length : "failed",
+        vehicles: vehicleResult.status === "fulfilled" ? vehicleResult.value.length : "failed",
+        weeklyMileage: mileageResult.status === "fulfilled" ? mileageResult.value.length : "failed",
+        serviceHistory: serviceLogResult.status === "fulfilled" ? serviceLogResult.value.length : "failed"
+      },
+      errors: {
+        auth: authError?.message ?? null,
+        drivers: driverResult.status === "rejected" ? String(driverResult.reason) : null,
+        vehicles: vehicleResult.status === "rejected" ? String(vehicleResult.reason) : null,
+        weeklyMileage: mileageResult.status === "rejected" ? String(mileageResult.reason) : null,
+        serviceHistory: serviceLogResult.status === "rejected" ? String(serviceLogResult.reason) : null
       }
     });
 
@@ -477,6 +528,21 @@ export default function WeeklyMileagePage() {
         ? row.currentOdometer ?? row.lastOilChangeOdometer ?? ""
         : row.lastOilChangeOdometer ?? latestLog?.odometer ?? row.currentOdometer ?? "";
 
+    console.log("Weekly Mileage oil change action clicked:", {
+      action: mode,
+      vehicleRegistration: row.registration,
+      vehicleId: row.vehicleId,
+      currentStatus: row.status,
+      lastOilChangeDate: row.lastOilChangeDate,
+      lastOilChangeOdometer: row.lastOilChangeOdometer,
+      latestServiceLog: latestLog,
+      defaults: {
+        serviceDate: defaultDate,
+        serviceOdometer: defaultOdometer,
+        intervalKm: defaultInterval
+      }
+    });
+
     setError(null);
     setSuccessMessage(null);
     setServiceForm({
@@ -509,7 +575,7 @@ export default function WeeklyMileagePage() {
       setSavingService(true);
       setError(null);
       setSuccessMessage(null);
-      const result = await saveOilChangeService({
+      const servicePayload = {
         vehicleId: serviceModal.vehicleId,
         vehicleReg: serviceModal.registration,
         vehicleName: serviceModal.vehicleName,
@@ -520,7 +586,10 @@ export default function WeeklyMileagePage() {
         notes: serviceForm.notes,
         serviceLogId: serviceModal.serviceLogId,
         updateExistingLog: serviceModal.mode === "edit"
-      });
+      };
+      console.log("Weekly Mileage oil change save payload:", servicePayload);
+      const result = await saveOilChangeService(servicePayload);
+      console.log("Weekly Mileage oil change save result:", result);
 
       setVehicles((current) => {
         const withoutSaved = current.filter((vehicle) => String(vehicle.id) !== String(result.vehicle.id));
@@ -578,6 +647,49 @@ export default function WeeklyMileagePage() {
         <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           {loadError}
         </div>
+      ) : null}
+
+      {showWeeklyMileageDebug && debugInfo ? (
+        <section className="mb-4 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-xs text-amber-950">
+          <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <h3 className="text-sm font-bold text-amber-950">Weekly Mileage Debug</h3>
+            <span className="rounded-full border border-amber-300 bg-white/70 px-2.5 py-1 font-semibold">
+              development/admin diagnostics
+            </span>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div>
+              <p className="font-bold uppercase tracking-[0.12em] text-amber-700">User</p>
+              <p className="mt-1 break-all">Email: {debugInfo.userEmail ?? "missing"}</p>
+              <p className="break-all">ID: {debugInfo.userId ?? "missing"}</p>
+              <p className="mt-1 break-all">Supabase: {debugInfo.supabaseUrl}</p>
+            </div>
+            <div>
+              <p className="font-bold uppercase tracking-[0.12em] text-amber-700">Tables</p>
+              {Object.entries(debugInfo.tables).map(([label, table]) => (
+                <p key={label} className="break-all">{label}: {table}</p>
+              ))}
+            </div>
+            <div>
+              <p className="font-bold uppercase tracking-[0.12em] text-amber-700">Row Counts</p>
+              {Object.entries(debugInfo.rowCounts).map(([label, count]) => (
+                <p key={label}>{label}: {count ?? "not loaded"}</p>
+              ))}
+            </div>
+            <div>
+              <p className="font-bold uppercase tracking-[0.12em] text-amber-700">Errors</p>
+              {Object.entries(debugInfo.errors).map(([label, message]) => (
+                <p key={label} className="break-words">{label}: {message ?? "none"}</p>
+              ))}
+            </div>
+          </div>
+          <div className="mt-3 rounded-xl border border-amber-200 bg-white/65 p-3">
+            <p className="font-bold uppercase tracking-[0.12em] text-amber-700">Exact Query Filters</p>
+            {Object.entries(debugInfo.filters).map(([label, filter]) => (
+              <p key={label} className="mt-1 break-words">{label}: {filter}</p>
+            ))}
+          </div>
+        </section>
       ) : null}
 
       <section className="surface-card mb-4 p-4 sm:p-5">
