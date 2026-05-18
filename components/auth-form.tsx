@@ -56,7 +56,7 @@ export function AuthForm() {
         </h2>
       </div>
 
-      <div className="mb-8 flex rounded-[1.4rem] border border-brand-100/70 bg-brand-50/65 p-1.5">
+      <div className="mb-8 flex rounded-[1rem] border border-slate-200 bg-slate-50 p-1.5">
         <button
           type="button"
           className={`flex-1 rounded-[1.05rem] px-4 py-3.5 text-sm font-medium transition ${
@@ -108,7 +108,7 @@ export function AuthForm() {
         </div>
 
         {message ? (
-          <p className="rounded-[1.35rem] border border-brand-100 bg-brand-50/80 px-4.5 py-3.5 text-sm text-brand-800 shadow-[0_12px_24px_rgba(95,51,183,0.08)]">
+          <p className="rounded-[1rem] border border-slate-200 bg-white px-4.5 py-3.5 text-sm text-slate-700 shadow-[0_8px_18px_rgba(15,23,42,0.05)]">
             {message}
           </p>
         ) : null}

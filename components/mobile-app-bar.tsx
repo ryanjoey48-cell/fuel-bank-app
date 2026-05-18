@@ -30,7 +30,7 @@ export function MobileAppBar({ open, onToggle }: MobileAppBarProps) {
       : t.nav[pageKey];
 
   return (
-    <div className="mobile-app-bar fixed inset-x-0 top-0 z-30 border-b border-brand-100/60 bg-[linear-gradient(180deg,rgba(251,250,254,0.98),rgba(248,246,252,0.94))] shadow-[0_16px_36px_rgba(38,18,78,0.08)] backdrop-blur-xl min-[1367px]:hidden">
+    <div className="mobile-app-bar fixed inset-x-0 top-0 z-30 border-b border-slate-200 bg-white/95 shadow-[0_12px_28px_rgba(15,23,42,0.07)] backdrop-blur-xl min-[1367px]:hidden">
       <div className="mx-auto flex min-h-[76px] w-full max-w-full items-center gap-3 px-4 py-3">
         <button
           type="button"
@@ -47,7 +47,7 @@ export function MobileAppBar({ open, onToggle }: MobileAppBarProps) {
         </button>
 
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[1.15rem] border border-brand-100/70 bg-white shadow-[0_12px_24px_rgba(38,18,78,0.07)]">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[1.15rem] border border-slate-200 bg-white shadow-[0_10px_22px_rgba(15,23,42,0.06)]">
             <Image
               src="/logo.png"
               alt={t.common.appName}

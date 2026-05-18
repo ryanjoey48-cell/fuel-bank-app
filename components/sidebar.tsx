@@ -45,7 +45,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       <aside
         id="mobile-nav-panel"
         className={clsx(
-          "fixed inset-y-0 left-0 z-40 flex w-[85vw] max-w-[340px] max-w-[calc(100vw-env(safe-area-inset-left,0px)-1rem)] flex-col overflow-x-hidden overflow-y-auto border-r border-brand-100/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.99),rgba(248,245,252,0.97))] px-3.5 py-4 text-slate-900 shadow-[0_30px_60px_rgba(38,18,78,0.16)] backdrop-blur-xl transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] [padding-top:max(1rem,calc(env(safe-area-inset-top,0px)+0.75rem))] [padding-bottom:max(1rem,calc(env(safe-area-inset-bottom,0px)+0.75rem))] [padding-left:max(0.875rem,calc(env(safe-area-inset-left,0px)+0.5rem))] [padding-right:0.875rem] sm:px-4 sm:py-5 min-[1367px]:w-auto min-[1367px]:max-w-none min-[1367px]:translate-x-0 min-[1367px]:overflow-visible min-[1367px]:border-r min-[1367px]:bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,244,252,0.96))] min-[1367px]:px-5 min-[1367px]:py-5 min-[1367px]:text-slate-900 min-[1367px]:shadow-[0_20px_40px_rgba(38,18,78,0.08)]",
+          "fixed inset-y-0 left-0 z-40 flex w-[85vw] max-w-[340px] max-w-[calc(100vw-env(safe-area-inset-left,0px)-1rem)] flex-col overflow-x-hidden overflow-y-auto border-r border-slate-200 bg-[linear-gradient(180deg,rgba(255,255,255,0.99),rgba(248,250,252,0.97))] px-3.5 py-4 text-slate-900 shadow-[0_30px_60px_rgba(15,23,42,0.12)] backdrop-blur-xl transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] [padding-top:max(1rem,calc(env(safe-area-inset-top,0px)+0.75rem))] [padding-bottom:max(1rem,calc(env(safe-area-inset-bottom,0px)+0.75rem))] [padding-left:max(0.875rem,calc(env(safe-area-inset-left,0px)+0.5rem))] [padding-right:0.875rem] sm:px-4 sm:py-5 min-[1367px]:w-auto min-[1367px]:max-w-none min-[1367px]:translate-x-0 min-[1367px]:overflow-visible min-[1367px]:border-r min-[1367px]:bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.96))] min-[1367px]:px-5 min-[1367px]:py-5 min-[1367px]:text-slate-900 min-[1367px]:shadow-[0_20px_40px_rgba(15,23,42,0.06)]",
           open ? "translate-x-0" : "-translate-x-full"
         )}
       >
@@ -66,7 +66,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           </button>
         </div>
 
-        <div className="mb-6 w-full min-w-0 rounded-[1.5rem] border border-brand-100/70 bg-[linear-gradient(145deg,rgba(255,255,255,0.99),rgba(244,239,255,0.78))] px-3.5 py-4 shadow-[0_20px_40px_rgba(38,18,78,0.06)] md:mb-8 md:border-brand-100/70 md:bg-[linear-gradient(145deg,rgba(255,255,255,0.98),rgba(246,242,253,0.9))] md:px-4">
+        <div className="mb-6 w-full min-w-0 rounded-[1.5rem] border border-slate-200 bg-white px-3.5 py-4 shadow-[0_12px_28px_rgba(15,23,42,0.05)] md:mb-8 md:px-4">
           <div className="flex min-w-0 flex-col items-center justify-center text-center">
             <div className="flex h-[88px] w-full min-w-0 items-center justify-center sm:h-[108px]">
               <Image
@@ -135,7 +135,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           })}
         </nav>
 
-        <div className="mt-6 w-full min-w-0 rounded-[1.35rem] border border-brand-100/70 bg-white/96 px-3.5 py-3.5 shadow-[0_14px_28px_rgba(38,18,78,0.05)] md:mt-auto md:border-brand-100/70 md:bg-white/90 md:px-4">
+        <div className="mt-6 w-full min-w-0 rounded-[1.35rem] border border-slate-200 bg-white/96 px-3.5 py-3.5 shadow-[0_10px_22px_rgba(15,23,42,0.04)] md:mt-auto md:px-4">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500 md:text-slate-500">
             {t.common.appName}
           </p>

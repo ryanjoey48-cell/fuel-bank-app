@@ -13,7 +13,7 @@ export function LanguageSwitcher({ compact = false }: LanguageSwitcherProps) {
   return (
     <div
       className={clsx(
-        "inline-flex shrink-0 items-center rounded-full border border-brand-100/70 bg-white/96 p-1 shadow-[0_10px_22px_rgba(38,18,78,0.06)]",
+        "inline-flex shrink-0 items-center rounded-[0.7rem] border border-slate-200 bg-white/96 p-0.5 shadow-[0_1px_2px_rgba(15,23,42,0.05)]",
         compact ? "gap-0" : "gap-0.5"
       )}
       aria-label={t.common.language}
@@ -23,11 +23,11 @@ export function LanguageSwitcher({ compact = false }: LanguageSwitcherProps) {
         type="button"
         onClick={() => setLanguage("en")}
         className={clsx(
-          "rounded-full font-semibold transition duration-200",
-          compact ? "min-h-[38px] min-w-[44px] px-3 text-xs" : "min-h-[42px] min-w-[50px] px-4 text-sm",
+          "rounded-[0.55rem] font-bold transition duration-150 active:scale-[0.98]",
+          compact ? "min-h-[28px] min-w-[34px] px-2 text-[11px]" : "min-h-[30px] min-w-[38px] px-2.5 text-[11px]",
           language === "en"
-            ? "bg-brand-600 text-white shadow-[0_10px_20px_rgba(95,51,183,0.18)]"
-            : "text-slate-600 hover:bg-brand-50 hover:text-slate-900"
+            ? "bg-brand-700 text-white shadow-[0_6px_14px_rgba(95,51,183,0.18)]"
+            : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
         )}
         aria-pressed={language === "en"}
       >
@@ -37,11 +37,11 @@ export function LanguageSwitcher({ compact = false }: LanguageSwitcherProps) {
         type="button"
         onClick={() => setLanguage("th")}
         className={clsx(
-          "rounded-full font-semibold transition duration-200",
-          compact ? "min-h-[38px] min-w-[44px] px-3 text-xs" : "min-h-[42px] min-w-[50px] px-4 text-sm",
+          "rounded-[0.55rem] font-bold transition duration-150 active:scale-[0.98]",
+          compact ? "min-h-[28px] min-w-[34px] px-2 text-[11px]" : "min-h-[30px] min-w-[38px] px-2.5 text-[11px]",
           language === "th"
-            ? "bg-brand-600 text-white shadow-[0_10px_20px_rgba(95,51,183,0.18)]"
-            : "text-slate-600 hover:bg-brand-50 hover:text-slate-900"
+            ? "bg-brand-700 text-white shadow-[0_6px_14px_rgba(95,51,183,0.18)]"
+            : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
         )}
         aria-pressed={language === "th"}
       >

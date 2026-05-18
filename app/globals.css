@@ -4,19 +4,19 @@
 
 :root {
   color-scheme: light;
-  --app-bg: #f5f4fb;
+  --app-bg: #f7f7fa;
   --app-surface: #ffffff;
   --app-surface-strong: #ffffff;
-  --app-border: #e8e3f3;
-  --app-border-strong: #dbd4ec;
-  --app-shadow: 0 1px 2px rgba(38, 18, 78, 0.03), 0 18px 40px rgba(38, 18, 78, 0.055);
-  --app-shadow-soft: 0 1px 2px rgba(38, 18, 78, 0.02), 0 12px 28px rgba(38, 18, 78, 0.045);
-  --brand-primary: #5f33b7;
-  --brand-primary-hover: #5127a5;
-  --brand-primary-soft: #f4efff;
-  --brand-primary-border: #ddd1fb;
+  --app-border: #e2e5ea;
+  --app-border-strong: #cfd5df;
+  --app-shadow: 0 1px 2px rgba(15, 23, 42, 0.045), 0 14px 34px rgba(38, 18, 78, 0.045);
+  --app-shadow-soft: 0 1px 2px rgba(15, 23, 42, 0.035), 0 10px 24px rgba(38, 18, 78, 0.035);
+  --brand-primary: #4f23a3;
+  --brand-primary-hover: #421c8b;
+  --brand-primary-soft: #f2edff;
+  --brand-primary-border: #d8cdf7;
   --brand-accent: #f28a2f;
-  --table-row-hover: #f8f6fc;
+  --table-row-hover: #f7f5fc;
   --table-row-zebra: rgba(15, 23, 42, 0.024);
 }
 
@@ -30,9 +30,7 @@ body {
   font-family: "Aptos", "SF Pro Text", "Noto Sans Thai", "Segoe UI", sans-serif;
   font-feature-settings: "ss01" 1, "cv05" 1;
   background:
-    radial-gradient(circle at top left, rgba(95, 51, 183, 0.06), transparent 30%),
-    radial-gradient(circle at top right, rgba(242, 138, 47, 0.04), transparent 20%),
-    linear-gradient(180deg, #fcfbfe 0%, #f5f4fb 100%);
+    linear-gradient(180deg, #fbfbfd 0%, #f7f7fa 100%);
   min-height: 100vh;
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -60,13 +58,13 @@ body {
 input,
 select,
 textarea {
-  @apply w-full rounded-[1.25rem] px-5 py-4 text-[15px] leading-6 text-slate-900 outline-none transition duration-200;
+  @apply w-full rounded-[0.8rem] px-3.5 py-2.5 text-[14px] leading-6 text-slate-900 outline-none transition duration-150;
   border: 1px solid var(--app-border);
   background: rgba(255, 255, 255, 0.98);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.92),
     0 1px 1px rgba(15, 23, 42, 0.02),
-    0 12px 24px rgba(15, 23, 42, 0.035);
+    0 6px 14px rgba(15, 23, 42, 0.025);
 }
 
 input::placeholder,
@@ -85,8 +83,8 @@ select:focus,
 textarea:focus {
   border-color: rgba(95, 51, 183, 0.58);
   box-shadow:
-    0 0 0 5px rgba(95, 51, 183, 0.11),
-    0 16px 30px rgba(38, 18, 78, 0.07);
+    0 0 0 3px rgba(95, 51, 183, 0.11),
+    0 10px 22px rgba(38, 18, 78, 0.055);
 }
 
 button {
@@ -130,57 +128,57 @@ td {
 
   .surface-card {
     background: var(--app-surface-strong);
-    border: 1px solid var(--app-border);
+    border: 1px solid rgba(226, 229, 234, 0.72);
     box-shadow: var(--app-shadow);
     position: relative;
-    @apply w-full max-w-full rounded-[2rem] transition duration-200;
+    @apply w-full max-w-full rounded-[0.85rem] transition duration-150;
   }
 
   .surface-card:hover {
-    box-shadow: 0 1px 2px rgba(38, 18, 78, 0.03), 0 24px 50px rgba(38, 18, 78, 0.075);
-    transform: translateY(-2px);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.045), 0 18px 38px rgba(38, 18, 78, 0.06);
+    transform: translateY(-1px);
   }
 
   .surface-card-soft {
     background: var(--app-surface);
-    border: 1px solid var(--app-border);
+    border: 1px solid rgba(226, 229, 234, 0.72);
     box-shadow: var(--app-shadow-soft);
     position: relative;
-    @apply w-full max-w-full rounded-[1.95rem] transition duration-200;
+    @apply w-full max-w-full rounded-[0.85rem] transition duration-150;
   }
 
   .surface-card-soft:hover {
-    box-shadow: 0 1px 2px rgba(38, 18, 78, 0.025), 0 18px 38px rgba(38, 18, 78, 0.06);
-    transform: translateY(-2px);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 14px 30px rgba(38, 18, 78, 0.055);
+    transform: translateY(-1px);
   }
 
   .subtle-panel {
-    @apply w-full max-w-full rounded-[1.7rem] transition duration-200;
-    border: 1px solid var(--app-border);
+    @apply w-full max-w-full rounded-[0.85rem] transition duration-150;
+    border: 1px solid rgba(226, 229, 234, 0.72);
     background: #ffffff;
     box-shadow: 0 1px 2px rgba(38, 18, 78, 0.025), 0 10px 24px rgba(38, 18, 78, 0.04);
   }
 
   .table-shell {
-    @apply w-full max-w-full overflow-hidden rounded-[1.9rem];
-    border: 1px solid var(--app-border);
+    @apply w-full max-w-full overflow-hidden rounded-[0.85rem];
+    border: 1px solid rgba(226, 229, 234, 0.72);
     background: #ffffff;
-    box-shadow: 0 1px 2px rgba(38, 18, 78, 0.025), 0 14px 30px rgba(38, 18, 78, 0.04);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.035), 0 12px 26px rgba(38, 18, 78, 0.035);
   }
 
   .btn-primary {
-    @apply inline-flex min-h-[56px] items-center justify-center rounded-[1.25rem] px-6 py-3.5 text-sm font-semibold text-white;
-    background: linear-gradient(180deg, #6839c7 0%, #5f33b7 100%);
+    @apply inline-flex min-h-[44px] items-center justify-center rounded-[0.8rem] px-4 py-2.5 text-sm font-semibold text-white;
+    background: linear-gradient(180deg, #5c2db5 0%, #4f23a3 100%);
     box-shadow:
       0 1px 2px rgba(95, 51, 183, 0.16),
-      0 16px 30px rgba(95, 51, 183, 0.2),
+      0 12px 24px rgba(95, 51, 183, 0.18),
       inset 0 1px 0 rgba(255, 255, 255, 0.1);
   }
 
   .btn-primary:hover {
     transform: translateY(-1px);
-    background: linear-gradient(180deg, #6031bc 0%, #5127a5 100%);
-    box-shadow: 0 20px 34px rgba(95, 51, 183, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    background: linear-gradient(180deg, #5427aa 0%, #421c8b 100%);
+    box-shadow: 0 14px 26px rgba(95, 51, 183, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   }
 
   .btn-primary:active {
@@ -191,7 +189,7 @@ td {
   }
 
   .btn-secondary {
-    @apply inline-flex min-h-[56px] items-center justify-center rounded-[1.25rem] px-5 py-3.5 text-sm font-semibold text-slate-700;
+    @apply inline-flex min-h-[44px] items-center justify-center rounded-[0.8rem] px-3.5 py-2.5 text-sm font-semibold text-slate-700;
     border: 1px solid var(--app-border);
     background: rgba(255, 255, 255, 0.96);
     box-shadow: 0 1px 1px rgba(38, 18, 78, 0.02), 0 10px 20px rgba(38, 18, 78, 0.04);
@@ -211,7 +209,7 @@ td {
   }
 
   .btn-danger {
-    @apply inline-flex min-h-[56px] items-center justify-center rounded-[1.25rem] px-5 py-3.5 text-sm font-semibold text-rose-700;
+    @apply inline-flex min-h-[44px] items-center justify-center rounded-[0.8rem] px-3.5 py-2.5 text-sm font-semibold text-rose-700;
     border: 1px solid rgba(254, 205, 211, 0.8);
     background: rgba(255, 241, 242, 0.9);
     box-shadow: 0 1px 1px rgba(190, 24, 93, 0.02), 0 8px 18px rgba(190, 24, 93, 0.04);
@@ -229,8 +227,8 @@ td {
   }
 
   .form-label {
-    @apply block text-[13px] font-semibold leading-5 text-slate-700;
-    margin-bottom: 0.625rem;
+    @apply block text-[11px] font-bold uppercase leading-5 tracking-[0.12em] text-slate-500;
+    margin-bottom: 0.35rem;
   }
 
   .form-label-required::after {
@@ -243,28 +241,28 @@ td {
   }
 
   .form-input {
-    @apply min-h-[60px] rounded-[1.25rem] px-5 py-4 text-[15px];
+    @apply min-h-[44px] rounded-[0.8rem] px-3.5 py-2.5 text-[14px];
     border-color: var(--app-border);
   }
 
   .form-input-readonly {
-    @apply min-h-[60px] rounded-[1.25rem] px-5 py-4 text-[15px] text-slate-600;
+    @apply min-h-[44px] rounded-[0.8rem] px-3.5 py-2.5 text-[14px] text-slate-600;
     background: rgba(248, 250, 252, 0.98);
     border-color: var(--app-border);
   }
 
   .form-textarea {
-    @apply rounded-[1.25rem] px-5 py-4 text-[15px];
+    @apply rounded-[0.8rem] px-3.5 py-2.5 text-[14px];
     border-color: var(--app-border);
   }
 
   .section-title {
-    @apply text-[1.52rem] font-semibold text-slate-950;
-    letter-spacing: -0.03em;
+    @apply text-[1.25rem] font-bold text-slate-950;
+    letter-spacing: 0;
   }
 
   .section-subtitle {
-    @apply mt-2 text-[13px] leading-6 text-slate-500;
+    @apply mt-1 text-[13px] leading-5 text-slate-500;
   }
 
   .panel-divider {
@@ -272,11 +270,11 @@ td {
   }
 
   .form-section {
-    @apply subtle-panel p-5.5 sm:p-6;
+    @apply subtle-panel p-4 sm:p-5;
   }
 
   .enterprise-table-row {
-    @apply border-b border-slate-100/80 transition duration-200 last:border-none;
+    @apply border-b border-slate-200/70 transition duration-150 last:border-none;
   }
 
   .table-shell tbody .enterprise-table-row:nth-child(even) {
@@ -305,11 +303,11 @@ td {
   }
 
   .table-body-cell {
-    @apply px-5 py-5.5 align-middle text-[13px] leading-6;
+    @apply px-4 py-3.5 align-middle text-[13px] leading-5;
   }
 
   .table-head-cell {
-    @apply px-5 py-4 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-600;
+    @apply px-4 py-3 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600;
   }
 
   .form-helper {
@@ -321,23 +319,23 @@ td {
   }
 
   .metric-label {
-    @apply mt-2 truncate text-[10px] font-bold uppercase leading-4 tracking-[0.16em] text-slate-500;
+    @apply mt-1.5 truncate text-[10px] font-bold uppercase leading-4 tracking-[0.14em] text-slate-500;
   }
 
   .metric-value {
-    @apply truncate text-[1.55rem] font-semibold text-slate-950 sm:text-[1.85rem];
+    @apply truncate text-[1.65rem] font-bold text-slate-950 sm:text-[1.95rem];
     font-variant-numeric: tabular-nums;
     letter-spacing: 0;
   }
 
   .metric-value-date {
-    @apply truncate text-[1.25rem] font-semibold text-slate-700 sm:text-[1.45rem];
+    @apply truncate text-[1.25rem] font-bold text-slate-800 sm:text-[1.45rem];
     font-variant-numeric: tabular-nums;
     letter-spacing: 0;
   }
 
   .metric-helper {
-    @apply mt-auto truncate pt-3 text-[11px] leading-5 text-slate-500;
+    @apply mt-auto truncate pt-2 text-[11px] leading-5 text-slate-500;
   }
 
   .supporting-date {
@@ -361,7 +359,7 @@ td {
   }
 
   .card-metric-shell {
-    @apply flex h-full min-h-[132px] min-w-0 flex-col justify-between p-4 sm:min-h-[144px] sm:p-5;
+    @apply flex h-full min-h-[112px] min-w-0 flex-col justify-between p-3.5 sm:min-h-[124px] sm:p-4;
   }
 
   .card-metric-header {
@@ -369,8 +367,8 @@ td {
   }
 
   .card-metric-icon {
-    @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-[1rem] border border-brand-100/70 bg-white text-brand-700;
-    box-shadow: 0 12px 24px rgba(95, 51, 183, 0.08);
+    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.75rem] border border-slate-200 bg-white text-brand-700;
+    box-shadow: 0 8px 18px rgba(95, 51, 183, 0.07);
   }
 
   .premium-empty-state {
@@ -412,28 +410,28 @@ td {
   }
 
   .booking-filter-panel {
-    @apply max-w-full rounded-[1.35rem] p-3.5 sm:p-4;
-    box-shadow: 0 1px 2px rgba(38, 18, 78, 0.025), 0 12px 26px rgba(38, 18, 78, 0.045);
+    @apply max-w-full rounded-[0.85rem] p-3 sm:p-3.5;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.035), 0 10px 22px rgba(38, 18, 78, 0.035);
   }
 
   .booking-filter-control,
   .booking-form-control {
-    @apply w-full max-w-full rounded-[0.95rem] border px-3.5 text-[14px] text-slate-900 outline-none transition duration-200;
+    @apply w-full max-w-full rounded-[0.7rem] border px-3 text-[13px] text-slate-900 outline-none transition duration-150;
     box-sizing: border-box;
-    min-height: 46px;
+    min-height: 40px;
     border-color: rgba(226, 232, 240, 0.96);
     background: linear-gradient(180deg, rgba(255,255,255,0.99), rgba(248,250,252,0.96));
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.92), 0 8px 18px rgba(15,23,42,0.032);
   }
 
   .booking-filter-control {
-    min-height: 42px;
-    @apply py-2.5 text-[13px];
+    min-height: 38px;
+    @apply py-2 text-[13px];
   }
 
   .booking-form-control {
-    @apply py-2.5;
-    min-height: 48px;
+    @apply py-2;
+    min-height: 42px;
   }
 
   .booking-filter-control:focus,
@@ -449,11 +447,11 @@ td {
   }
 
   .booking-filter-chip {
-    @apply inline-flex min-h-[34px] items-center rounded-full border px-3.5 text-[11px] font-semibold;
+    @apply inline-flex min-h-[30px] items-center rounded-[0.65rem] border px-2.5 text-[11px] font-semibold;
   }
 
   .booking-action-button {
-    @apply inline-flex min-h-[48px] items-center justify-center rounded-[1rem] px-4 text-sm font-semibold;
+    @apply inline-flex min-h-[42px] items-center justify-center rounded-[0.8rem] px-3.5 text-sm font-semibold;
   }
 
   .booking-icon-button {
@@ -461,14 +459,12 @@ td {
   }
 
   .booking-diary-page {
-    background:
-      linear-gradient(180deg, rgba(255,255,255,0.88), rgba(248,250,252,0.92)),
-      repeating-linear-gradient(0deg, rgba(148,163,184,0.08) 0, rgba(148,163,184,0.08) 1px, transparent 1px, transparent 34px);
+    background: linear-gradient(180deg, rgba(255,255,255,0.88), rgba(248,250,252,0.92));
     padding-bottom: max(4.75rem, calc(env(safe-area-inset-bottom, 0px) + 4.25rem));
   }
 
   .booking-diary-header {
-    @apply mb-3 flex max-w-full flex-wrap items-center gap-3 rounded-[1rem] border border-slate-200/80 px-3 py-3 lg:flex-nowrap lg:px-4;
+    @apply mb-3 flex max-w-full flex-wrap items-center gap-3 rounded-[0.85rem] border border-slate-200/80 px-3 py-2.5 lg:flex-nowrap lg:px-3.5;
     background: rgba(255, 255, 255, 0.92);
     box-shadow: 0 1px 2px rgba(38,18,78,0.018), 0 8px 20px rgba(38,18,78,0.035);
   }
@@ -482,7 +478,7 @@ td {
   }
 
   .booking-diary-logo {
-    @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-[0.85rem] border border-brand-100/70 bg-white;
+    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-[0.7rem] border border-slate-200 bg-white;
     box-shadow: 0 8px 18px rgba(38,18,78,0.08), inset 0 1px 0 rgba(255,255,255,0.9);
   }
 
@@ -501,7 +497,7 @@ td {
   }
 
   .booking-diary-book {
-    @apply rounded-[1rem] border border-slate-200/85 bg-white/95 p-3 lg:p-4;
+    @apply rounded-[0.85rem] border border-slate-200/85 bg-white/95 p-3 lg:p-3.5;
     box-shadow: 0 1px 2px rgba(38,18,78,0.016), 0 8px 20px rgba(38,18,78,0.032);
   }
 
@@ -518,11 +514,11 @@ td {
   }
 
   .booking-desktop-head-cell {
-    @apply px-4 py-3.5 text-left text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600;
+    @apply px-3.5 py-2.5 text-left text-[10px] font-bold uppercase tracking-[0.14em] text-slate-600;
   }
 
   .booking-desktop-cell {
-    @apply px-4 py-4 align-middle text-[13px] leading-5;
+    @apply px-3.5 py-3 align-middle text-[13px] leading-5;
   }
 
   .booking-desktop-time {
@@ -530,43 +526,43 @@ td {
   }
 
   .booking-desktop-vehicle {
-    @apply inline-flex max-w-[11rem] items-center rounded-full border border-brand-100 bg-brand-50 px-2.5 py-1 text-[12.5px] font-bold text-brand-800;
+    @apply inline-flex max-w-[11rem] items-center rounded-[0.55rem] border border-slate-200 bg-slate-50 px-2 py-0.5 text-[12px] font-bold text-slate-800;
   }
 
   .booking-desktop-driver {
-    @apply inline-flex max-w-[11rem] items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[12.5px] font-semibold text-slate-800;
+    @apply inline-flex max-w-[11rem] items-center rounded-[0.55rem] border border-slate-200 bg-slate-50 px-2 py-0.5 text-[12px] font-semibold text-slate-800;
   }
 
   .booking-paper-diary {
-    @apply grid gap-3.5;
+    @apply grid gap-2.5;
   }
 
   .booking-date-section {
-    @apply min-w-0 pt-4 first:pt-0;
+    @apply min-w-0 pt-3 first:pt-0;
   }
 
   .booking-date-heading {
-    @apply mb-1.5 flex items-center justify-center rounded-[0.75rem] border border-brand-100/70 px-3 py-1.5 text-center text-[10px] font-bold uppercase tracking-[0.15em] text-slate-600;
+    @apply mb-1 flex items-center justify-center rounded-[0.65rem] border border-slate-200 px-3 py-1.5 text-center text-[10px] font-bold uppercase tracking-[0.15em] text-slate-600;
     background: linear-gradient(180deg, rgba(249, 247, 255, 0.96), rgba(248, 250, 252, 0.94));
     box-shadow: 0 1px 2px rgba(38,18,78,0.018), inset 0 1px 0 rgba(255,255,255,0.92);
   }
 
   .booking-date-lines {
-    @apply relative overflow-hidden rounded-[0.75rem] border border-slate-100 bg-slate-50/35 px-2;
+    @apply relative overflow-hidden rounded-[0.7rem] border border-slate-200/80 bg-white px-2;
   }
 
   .booking-date-lines::before {
     content: "";
-    @apply absolute bottom-1.5 top-1.5 w-px bg-brand-100/70;
+    @apply absolute bottom-1.5 top-1.5 w-px bg-slate-200;
     left: 49px;
   }
 
   .booking-diary-line {
-    @apply relative block w-full min-w-0 border-b border-slate-100/80 px-0 py-[0.22rem] text-left outline-none transition last:border-b-0 active:bg-brand-50/30;
+    @apply relative block w-full min-w-0 border-b border-slate-200/70 px-0 py-1.5 text-left outline-none transition duration-150 last:border-b-0 hover:bg-slate-50 active:bg-slate-50;
   }
 
   .booking-diary-line:focus-visible {
-    @apply bg-brand-50/50;
+    @apply bg-slate-50;
     box-shadow: inset 3px 0 0 rgba(95,51,183,0.72);
   }
 
@@ -591,7 +587,7 @@ td {
   }
 
   .booking-line-route {
-    @apply min-w-0 truncate text-[15px] font-semibold leading-5 text-slate-950;
+    @apply min-w-0 truncate text-[14px] font-bold leading-5 text-slate-950;
   }
 
   .booking-line-route span {
@@ -599,11 +595,11 @@ td {
   }
 
   .booking-line-status {
-    @apply rounded-full border border-brand-100 bg-brand-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em] text-brand-700;
+    @apply rounded-[0.55rem] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em] text-slate-600;
   }
 
   .booking-line-meta {
-    @apply mt-1 flex min-w-0 flex-wrap items-center gap-1.5 pl-[52px] text-[11px] font-medium leading-4 text-slate-600;
+    @apply mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5 pl-[52px] text-[11px] font-medium leading-4 text-slate-600;
   }
 
   .booking-line-meta span {
@@ -611,11 +607,11 @@ td {
   }
 
   .booking-line-vehicle {
-    @apply rounded-full border border-brand-100 bg-brand-50 px-2 py-0.5 text-[12.5px] font-bold text-brand-800;
+    @apply rounded-[0.55rem] border border-slate-200 bg-slate-50 px-2 py-0.5 text-[12px] font-bold text-slate-800;
   }
 
   .booking-line-driver {
-    @apply rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[12px] font-semibold text-slate-800;
+    @apply rounded-[0.55rem] border border-slate-200 bg-slate-50 px-2 py-0.5 text-[12px] font-semibold text-slate-800;
   }
 
   .booking-line-meta span + span::before {
@@ -646,13 +642,13 @@ td {
   }
 
   .booking-stats-strip {
-    @apply max-w-full rounded-[1.15rem] border border-brand-100/70 p-2.5;
+    @apply max-w-full rounded-[0.85rem] border border-slate-200 p-2;
     background: rgba(255, 255, 255, 0.94);
     box-shadow: 0 1px 2px rgba(38,18,78,0.02), 0 10px 22px rgba(38,18,78,0.04);
   }
 
   .booking-stat-cell {
-    @apply min-w-0 rounded-[0.95rem] px-3 py-2;
+    @apply min-w-0 rounded-[0.7rem] px-2.5 py-1.5;
     background: rgba(248, 250, 252, 0.78);
   }
 
@@ -665,7 +661,7 @@ td {
   }
 
   .booking-mobile-card {
-    @apply w-full max-w-full rounded-[1.1rem] border border-brand-100/60 bg-white p-3;
+    @apply w-full max-w-full rounded-[1.1rem] border border-slate-200 bg-white p-3;
     box-shadow: 0 1px 2px rgba(38,18,78,0.025), 0 10px 24px rgba(38,18,78,0.05);
   }
 
@@ -692,7 +688,7 @@ td {
   }
 
   .booking-entry-edit {
-    @apply inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-[0.85rem] border border-brand-100 bg-brand-50 px-2.5 text-[11px] font-semibold text-brand-700 active:scale-95;
+    @apply inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-[0.85rem] border border-slate-200 bg-white px-2.5 text-[11px] font-semibold text-brand-700 active:scale-95;
   }
 
   .booking-entry-main {
@@ -787,12 +783,12 @@ td {
   }
 
   .booking-ledger-list {
-    @apply grid gap-2;
+    @apply grid gap-1.5;
   }
 
   .booking-ledger-entry {
-    @apply w-full max-w-full cursor-pointer rounded-[0.95rem] border border-brand-100/70 bg-white px-3 py-2 outline-none transition duration-200 active:scale-[0.995];
-    box-shadow: 0 1px 2px rgba(38,18,78,0.025), 0 8px 18px rgba(38,18,78,0.042);
+    @apply w-full max-w-full cursor-pointer rounded-[0.75rem] border border-slate-200 bg-white px-3 py-2 outline-none transition duration-150 active:scale-[0.995];
+    box-shadow: 0 1px 2px rgba(15,23,42,0.03), 0 6px 14px rgba(38,18,78,0.035);
   }
 
   .booking-ledger-entry summary {
@@ -817,7 +813,7 @@ td {
   }
 
   .booking-ledger-right span:last-child {
-    @apply flex h-6 w-6 items-center justify-center rounded-full border border-brand-100 bg-brand-50 text-brand-700;
+    @apply flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-brand-700;
   }
 
   .booking-ledger-entry[open] .booking-ledger-right span:last-child {
