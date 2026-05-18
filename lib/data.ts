@@ -446,6 +446,48 @@ function normalizeVehicleRow(vehicle: Vehicle) {
   };
 }
 
+function hasOilChangeBaseline(vehicle: Vehicle) {
+  return Boolean(vehicle.last_oil_change_date) || vehicle.last_oil_change_odometer != null;
+}
+
+function mergeVehicleRowsByRegistration(vehicles: Vehicle[]) {
+  const merged = new Map<string, Vehicle>();
+
+  for (const vehicle of vehicles.map(normalizeVehicleRow)) {
+    const key = normalizeComparableText(vehicle.vehicle_reg ?? vehicle.registration);
+    if (!key) {
+      merged.set(String(vehicle.id), vehicle);
+      continue;
+    }
+
+    const existing = merged.get(key);
+    if (!existing) {
+      merged.set(key, vehicle);
+      continue;
+    }
+
+    const existingHasBaseline = hasOilChangeBaseline(existing);
+    const currentHasBaseline = hasOilChangeBaseline(vehicle);
+    const base = currentHasBaseline && !existingHasBaseline ? vehicle : existing;
+    const supplement = base === vehicle ? existing : vehicle;
+
+    merged.set(key, {
+      ...supplement,
+      ...base,
+      vehicle_reg: base.vehicle_reg || supplement.vehicle_reg,
+      registration: base.registration || supplement.registration,
+      vehicle_name: base.vehicle_name || supplement.vehicle_name,
+      vehicle_type: base.vehicle_type || supplement.vehicle_type,
+      last_oil_change_date: base.last_oil_change_date ?? supplement.last_oil_change_date ?? null,
+      last_oil_change_odometer:
+        base.last_oil_change_odometer ?? supplement.last_oil_change_odometer ?? null,
+      oil_change_interval_km: base.oil_change_interval_km ?? supplement.oil_change_interval_km ?? null
+    });
+  }
+
+  return Array.from(merged.values());
+}
+
 function normalizeServiceLogRow(log: VehicleServiceLog) {
   const odometer = Number(log.odometer ?? log.service_odometer ?? 0);
   return {
@@ -743,7 +785,15 @@ export async function fetchVehicles() {
 
     console.log("fetchVehicles success", { rowCount: (data ?? []).length });
 
-    return ((data ?? []) as Vehicle[]).map(normalizeVehicleRow);
+    const merged = mergeVehicleRowsByRegistration((data ?? []) as Vehicle[]);
+    if (merged.length !== (data ?? []).length) {
+      console.warn("fetchVehicles merged duplicate vehicle registrations for shared oil-change view:", {
+        rawRowCount: (data ?? []).length,
+        mergedRowCount: merged.length
+      });
+    }
+
+    return merged;
   });
 }
 

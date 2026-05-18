@@ -18,6 +18,7 @@ import { exportToCsv } from "@/lib/export";
 import { applyRequiredValidationMessage, clearValidationMessage } from "@/lib/form-validation";
 import { useLanguage } from "@/lib/language-provider";
 import { getOilChangeIntervalForVehicleType } from "@/lib/oil-change-service";
+import { supabase } from "@/lib/supabase";
 import {
   buildDriverWeeklyComparisons,
   buildOilChangeAlertRows,
@@ -188,6 +189,21 @@ export default function WeeklyMileagePage() {
     setLoading(true);
     setError(null);
     setLoadError(null);
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+
+    console.groupCollapsed("Weekly Mileage diagnostics");
+    console.log("current user", {
+      id: authData.user?.id ?? null,
+      email: authData.user?.email ?? null,
+      authError: authError?.message ?? null
+    });
+    console.log("tables queried", {
+      weeklyMileage: "weekly_mileage",
+      vehicles: "vehicles",
+      serviceHistory: "vehicle_service_logs",
+      filtersApplied: "none in client; access is controlled by Supabase RLS policies"
+    });
+    console.groupEnd();
 
     const [driverResult, vehicleResult, mileageResult, serviceLogResult] = await Promise.allSettled([
       fetchDrivers(),
@@ -246,7 +262,13 @@ export default function WeeklyMileagePage() {
       drivers: driverResult.status === "fulfilled" ? driverResult.value.length : "failed",
       vehicles: vehicleResult.status === "fulfilled" ? vehicleResult.value.length : "failed",
       weeklyMileage: mileageResult.status === "fulfilled" ? mileageResult.value.length : "failed",
-      serviceLogs: serviceLogResult.status === "fulfilled" ? serviceLogResult.value.length : "failed"
+      serviceLogs: serviceLogResult.status === "fulfilled" ? serviceLogResult.value.length : "failed",
+      errors: {
+        drivers: driverResult.status === "rejected" ? String(driverResult.reason) : null,
+        vehicles: vehicleResult.status === "rejected" ? String(vehicleResult.reason) : null,
+        weeklyMileage: mileageResult.status === "rejected" ? String(mileageResult.reason) : null,
+        serviceLogs: serviceLogResult.status === "rejected" ? String(serviceLogResult.reason) : null
+      }
     });
 
     setLoading(false);
