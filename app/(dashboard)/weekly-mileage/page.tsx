@@ -6,7 +6,6 @@ import { EmptyState } from "@/components/empty-state";
 import { Header } from "@/components/header";
 import { WeeklyMileageUploadCard } from "@/components/weekly-mileage-upload-card";
 import {
-  applyOilChangeBaselinesToVehicles,
   deleteWeeklyMileage,
   fetchDrivers,
   fetchOilChangeBaselinesForVehicles,
@@ -28,10 +27,16 @@ import {
   computeWeeklyMileageByVehicle
 } from "@/lib/operations";
 import { formatDate, formatNumber } from "@/lib/utils";
-import type { Driver, Vehicle, VehicleServiceLog, WeeklyMileageEntry } from "@/types/database";
+import type { Driver, OilChangeBaseline, Vehicle, VehicleServiceLog, WeeklyMileageEntry } from "@/types/database";
 
 const PAGE_SIZE = 25;
 const initialForm = { id: "", week_ending: "", driver_id: "", vehicle_reg: "", mileage: "" };
+const normalizeReg = (value: unknown) =>
+  String(value ?? "")
+    .trim()
+    .replace(/\s+/g, "")
+    .replace(/-/g, "")
+    .toUpperCase();
 type OilActionMode = "set" | "edit" | "mark";
 type OilFilter = "all" | "overdue" | "urgent" | "due_soon" | "review_required" | "not_set" | "ok";
 type WeeklyMileageDebugInfo = {
@@ -53,6 +58,7 @@ export default function WeeklyMileagePage() {
   const { language, t } = useLanguage();
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [oilChangeBaselines, setOilChangeBaselines] = useState<OilChangeBaseline[]>([]);
   const [serviceLogs, setServiceLogs] = useState<VehicleServiceLog[]>([]);
   const [entries, setEntries] = useState<WeeklyMileageEntry[]>([]);
   const [form, setForm] = useState(initialForm);
@@ -109,10 +115,36 @@ export default function WeeklyMileagePage() {
     () => buildDriverWeeklyComparisons(sortedEntries),
     [sortedEntries]
   );
-  const oilChangeRows = useMemo(
-    () => buildOilChangeAlertRows({ vehicles, weeklyMileage: sortedEntries, drivers }),
-    [drivers, sortedEntries, vehicles]
-  );
+  const oilChangeRows = useMemo(() => {
+    const vehiclesWithBaselines = vehicles.map((vehicle) => {
+      const baselineForVehicle = oilChangeBaselines.find(
+        (baseline) => normalizeReg(baseline.vehicle_reg) === normalizeReg(vehicle.vehicle_reg)
+      );
+
+      console.log("Oil baseline matching", {
+        vehicle: vehicle.vehicle_reg,
+        normalizedVehicle: normalizeReg(vehicle.vehicle_reg),
+        baselineRegs: oilChangeBaselines.map((baseline) => ({
+          raw: baseline.vehicle_reg,
+          normalized: normalizeReg(baseline.vehicle_reg)
+        })),
+        matched: baselineForVehicle ?? null
+      });
+
+      if (!baselineForVehicle) {
+        return vehicle;
+      }
+
+      return {
+        ...vehicle,
+        last_oil_change_date: baselineForVehicle.last_oil_change_date,
+        last_oil_change_odometer: Number(baselineForVehicle.last_odometer),
+        oil_change_interval_km: Number(baselineForVehicle.interval_km)
+      };
+    });
+
+    return buildOilChangeAlertRows({ vehicles: vehiclesWithBaselines, weeklyMileage: sortedEntries, drivers });
+  }, [drivers, oilChangeBaselines, sortedEntries, vehicles]);
   const oilSummary = useMemo(
     () => ({
       overdue: oilChangeRows.filter((row) => row.status === "overdue").length,
@@ -214,7 +246,7 @@ export default function WeeklyMileagePage() {
       vehicles: "select * from vehicles order by vehicle_reg; no client user_id/company_id filter",
       weeklyMileage:
         "select id, week_ending, driver_id, vehicle_reg, odometer_reading, created_at, user_id from weekly_mileage; no client user_id/company_id filter",
-      oilChangeBaselines: "for each vehicle: select * from oil_change_baselines where vehicle_reg = vehicle.vehicle_reg; no client user_id/company_id filter",
+      oilChangeBaselines: "select * from oil_change_baselines; merged into cards by normalizeReg(vehicle_reg); no client user_id/company_id filter",
       serviceHistory: "select * from oil_change_history order by oil_change_date, created_at; no client user_id/company_id filter"
     };
 
@@ -261,13 +293,17 @@ export default function WeeklyMileagePage() {
       setDrivers([]);
     }
 
-    if (vehicleResult.status === "fulfilled" && baselineResult.status === "fulfilled") {
-      setVehicles(applyOilChangeBaselinesToVehicles(vehicleResult.value, baselineResult.value));
-    } else if (vehicleResult.status === "fulfilled") {
+    if (vehicleResult.status === "fulfilled") {
       setVehicles(vehicleResult.value);
     } else {
       console.error("Weekly mileage vehicles query failed:", vehicleResult.reason);
       setVehicles([]);
+    }
+
+    if (baselineResult.status === "fulfilled") {
+      setOilChangeBaselines(baselineResult.value);
+    } else {
+      setOilChangeBaselines([]);
     }
 
     if (baselineResult.status === "rejected") {

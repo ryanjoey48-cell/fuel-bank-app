@@ -923,7 +923,7 @@ export async function fetchVehicleServiceLogs() {
   });
 }
 
-export async function fetchOilChangeBaselinesForVehicles(vehicles: Vehicle[]) {
+export async function fetchOilChangeBaselinesForVehicles(_vehicles: Vehicle[]) {
   const { data, error } = await supabase
     .from("oil_change_baselines")
     .select("*");
@@ -936,30 +936,7 @@ export async function fetchOilChangeBaselinesForVehicles(vehicles: Vehicle[]) {
     );
   }
 
-  const baselineMap = new Map<string, OilChangeBaseline>();
-  for (const rawBaseline of (data ?? []) as OilChangeBaseline[]) {
-    const baseline = normalizeOilChangeBaselineRow(rawBaseline);
-    const key = normalizeOilChangeVehicleRegKey(baseline.vehicle_reg);
-    if (key) {
-      baselineMap.set(key, baseline);
-    }
-  }
-
-  return vehicles.flatMap((vehicle) => {
-    const vehicleReg = normalizeVehicleRegistration(vehicle.vehicle_reg ?? vehicle.registration);
-    if (!vehicleReg) return [];
-
-    console.log("VEHICLE:", vehicleReg);
-    const baseline = baselineMap.get(normalizeOilChangeVehicleRegKey(vehicleReg)) ?? null;
-
-    console.log("BASELINE RESULT:", baseline);
-    console.log("oil change baseline match", {
-      vehicle_reg: vehicleReg,
-      matchedBaseline: baseline
-    });
-
-    return baseline ? [baseline] : [];
-  });
+  return ((data ?? []) as OilChangeBaseline[]).map(normalizeOilChangeBaselineRow);
 }
 
 export async function fetchOilChangeHistory() {
