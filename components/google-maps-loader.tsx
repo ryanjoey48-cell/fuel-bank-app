@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { getClientGoogleMapsApiKey } from "@/lib/google-maps";
+import { getClientGoogleMapsConfig } from "@/lib/google-maps";
 
 declare global {
   interface Window {
@@ -17,7 +17,13 @@ declare global {
 
 export function GoogleMapsLoader() {
   useEffect(() => {
-    const apiKey = getClientGoogleMapsApiKey();
+    const { hasKey, key: apiKey, source } = getClientGoogleMapsConfig();
+
+    if (process.env.NODE_ENV !== "production") {
+      console.info(
+        `[Fuel Bank] Google Maps browser key ${hasKey ? "loaded" : "missing"}${source ? ` from ${source}` : ""}.`
+      );
+    }
 
     if (!apiKey || typeof window === "undefined") {
       return;

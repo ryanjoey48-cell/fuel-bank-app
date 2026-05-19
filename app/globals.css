@@ -519,8 +519,39 @@ td {
     @apply mb-3 text-[12px] font-semibold text-slate-500;
   }
 
+  .booking-pagination {
+    @apply mt-3 flex flex-col gap-2 rounded-[0.85rem] border border-slate-200 bg-white px-3 py-2.5 text-[12px] font-semibold text-slate-500 sm:flex-row sm:items-center sm:justify-between;
+  }
+
+  .booking-pagination-controls {
+    @apply flex flex-wrap items-center gap-2 text-slate-600;
+  }
+
+  .booking-pagination-controls span {
+    @apply rounded-[0.7rem] bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700;
+  }
+
   .booking-desktop-table thead {
     background: linear-gradient(180deg, rgba(250, 248, 255, 0.98), rgba(248, 250, 252, 0.98));
+  }
+
+  .booking-desktop-date-row td {
+    @apply px-0 py-2;
+    background: #ffffff;
+  }
+
+  .booking-desktop-date-heading {
+    @apply flex items-center justify-between gap-3 rounded-[0.75rem] border border-brand-100 px-3.5 py-2 text-left;
+    background: linear-gradient(180deg, rgba(246, 243, 255, 0.98), rgba(250, 248, 255, 0.96));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 0 8px 18px rgba(95,51,183,0.045);
+  }
+
+  .booking-desktop-date-heading span {
+    @apply text-[12px] font-bold uppercase tracking-[0.12em] text-brand-800;
+  }
+
+  .booking-desktop-date-heading strong {
+    @apply shrink-0 rounded-full border border-brand-100 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-600;
   }
 
   .booking-desktop-head-cell {
@@ -552,9 +583,13 @@ td {
   }
 
   .booking-date-heading {
-    @apply mb-1 flex items-center justify-center rounded-[0.65rem] border border-slate-200 px-3 py-1.5 text-center text-[10px] font-bold uppercase tracking-[0.15em] text-slate-600;
+    @apply mb-1 flex items-center justify-between gap-2 rounded-[0.65rem] border border-brand-100 px-3 py-1.5 text-left text-[10px] font-bold uppercase tracking-[0.15em] text-brand-800;
     background: linear-gradient(180deg, rgba(249, 247, 255, 0.96), rgba(248, 250, 252, 0.94));
     box-shadow: 0 1px 2px rgba(38,18,78,0.018), inset 0 1px 0 rgba(255,255,255,0.92);
+  }
+
+  .booking-date-heading strong {
+    @apply shrink-0 rounded-full border border-brand-100 bg-white px-2 py-0.5 text-[9px] font-bold text-slate-600;
   }
 
   .booking-date-lines {
@@ -574,6 +609,14 @@ td {
   .booking-diary-line:focus-visible {
     @apply bg-slate-50;
     box-shadow: inset 3px 0 0 rgba(95,51,183,0.72);
+  }
+
+  .booking-diary-line-main {
+    @apply block w-full min-w-0 text-left outline-none;
+  }
+
+  .booking-line-actions {
+    @apply mt-1.5 flex min-w-0 flex-wrap items-center gap-1.5 pl-[52px];
   }
 
   .booking-line-main {

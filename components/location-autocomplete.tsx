@@ -79,6 +79,9 @@ export function LocationAutocomplete({
 
         if (!cancelled) {
           const configured = Boolean(result.data?.configured);
+          if (process.env.NODE_ENV !== "production") {
+            console.info(`[Fuel Bank] Google Maps autocomplete proxy ${configured ? "configured" : "not configured"}.`);
+          }
           setMapsConfigured(configured);
           onConfigurationChange?.(configured);
           if (result.data?.configured === false) {
@@ -87,6 +90,9 @@ export function LocationAutocomplete({
         }
       } catch {
         if (!cancelled) {
+          if (process.env.NODE_ENV !== "production") {
+            console.info("[Fuel Bank] Google Maps autocomplete proxy configuration check failed.");
+          }
           setMapsConfigured(null);
         }
       }

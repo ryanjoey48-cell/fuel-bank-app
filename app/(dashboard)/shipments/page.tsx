@@ -1773,11 +1773,14 @@ export default function ShipmentsPage() {
   }, [labels.depotMissing, setLocationField]);
 
   const estimateRoute = useCallback(async () => {
-    const origin = form.route_start_location_data;
-    const pickup = form.start_location_data;
-    const mainDropoff = form.end_location_data;
+    const origin = form.route_start_location_data ?? createManualLocation(form.route_start_location);
+    const pickup = form.start_location_data ?? createManualLocation(form.start_location);
+    const mainDropoff = form.end_location_data ?? createManualLocation(form.end_location);
     const additionalDropoffEntries = form.additional_dropoffs
-      .map((stop, index) => ({ stop: stop.trim(), location: form.additional_dropoff_data[index] ?? null }))
+      .map((stop, index) => ({
+        stop: stop.trim(),
+        location: form.additional_dropoff_data[index] ?? createManualLocation(stop)
+      }))
       .filter((entry) => Boolean(entry.stop));
     const additionalDropoffs = additionalDropoffEntries
       .map((entry) => entry.location)
@@ -1792,13 +1795,8 @@ export default function ShipmentsPage() {
       throw new Error(labels.routeKeyMissing);
     }
 
-    if (
-      !hasCoordinates(origin) ||
-      !hasCoordinates(pickup) ||
-      !hasCoordinates(mainDropoff) ||
-      additionalDropoffEntries.some((entry) => !hasCoordinates(entry.location))
-    ) {
-      throw new Error(labels.validGoogleLocationRequired);
+    if (googleMapsConfigured === false) {
+      throw new Error(labels.mapsUnavailableManualOnly);
     }
 
     const originKey = locationRouteKey(origin, form.route_start_location);
@@ -1877,9 +1875,10 @@ export default function ShipmentsPage() {
     form.route_start_location_data,
     form.start_location,
     form.start_location_data,
+    googleMapsConfigured,
+    labels.mapsUnavailableManualOnly,
     labels.routeKeyMissing,
-    labels.routeReady,
-    labels.validGoogleLocationRequired
+    labels.routeReady
   ]);
 
   const handleEstimateRoute = useCallback(async () => {

@@ -4,6 +4,7 @@ import clsx from "clsx";
 import {
   CalendarDays,
   Clock3,
+  Copy,
   Download,
   Edit3,
   Filter,
@@ -19,7 +20,7 @@ import {
   X
 } from "lucide-react";
 import Image from "next/image";
-import { type RefObject, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Fragment, type RefObject, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import {
   deleteBookingDiaryEntry,
@@ -35,6 +36,8 @@ import { formatDate } from "@/lib/utils";
 import { LOCATION_SUGGESTIONS } from "@/src/data/locations";
 import type { BookingDiaryEntry, Driver, Vehicle } from "@/types/database";
 
+const PAGE_SIZE = 50;
+
 type BookingForm = {
   id: string;
   booking_date: string;
@@ -49,6 +52,14 @@ type BookingForm = {
   driver: string;
   notes: string;
 };
+
+type BookingSortKey =
+  | "date_oldest"
+  | "date_newest"
+  | "recent_first"
+  | "recent_last"
+  | "pickup_earliest"
+  | "pickup_latest";
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
@@ -74,6 +85,9 @@ const labels = {
     addBooking: "Add booking",
     editBooking: "Edit booking",
     edit: "Edit",
+    duplicate: "Duplicate",
+    createCopy: "Create copy",
+    saveDuplicatedBooking: "Save duplicated booking",
     exportExcel: "Export Excel",
     live: "Live sync",
     entries: "bookings",
@@ -94,6 +108,13 @@ const labels = {
     allDropoffs: "All dropoffs",
     allVehicles: "All vehicles",
     allDrivers: "All drivers",
+    sortBy: "Sort by",
+    dateOldestFirst: "Date: oldest first",
+    dateNewestFirst: "Date: newest first",
+    recentlyAddedFirst: "Recently added first",
+    recentlyAddedLast: "Recently added last",
+    pickupTimeEarliestFirst: "Pickup time: earliest first",
+    pickupTimeLatestFirst: "Pickup time: latest first",
     amountPallets: "Amount / pallets",
     weight: "Weight",
     dimensions: "Dimensions",
@@ -108,9 +129,10 @@ const labels = {
     close: "Close",
     quickFilters: "Quick filters",
     loading: "Loading booking diary...",
-    noBookings: "No bookings in this view",
+    noBookings: "No bookings found",
     noBookingsDescription: "Add a booking or adjust the filters to see the office diary.",
     saved: "Booking saved.",
+    copied: "Duplicated booking saved.",
     updated: "Booking updated.",
     deleted: "Booking deleted.",
     loadError: "Unable to load booking diary.",
@@ -118,6 +140,10 @@ const labels = {
     deleteError: "Unable to delete booking.",
     required: "Date, pickup, and dropoff are required.",
     clearFilters: "Clear filters",
+    previous: "Previous",
+    next: "Next",
+    pageSummary: "Page {page} of {pages}",
+    showingRange: "Showing {start}-{end} of {total} bookings",
     totalShown: "Total shown",
     todayShown: "Today",
     weekShown: "This week",
@@ -212,6 +238,27 @@ const labels = {
   }
 };
 
+const labelExtras = {
+  en: {},
+  th: {
+    duplicate: "ทำซ้ำ",
+    createCopy: "สร้างสำเนา",
+    saveDuplicatedBooking: "บันทึกงานที่ทำซ้ำ",
+    sortBy: "เรียงตาม",
+    dateOldestFirst: "วันที่: เก่าก่อน",
+    dateNewestFirst: "วันที่: ใหม่ก่อน",
+    recentlyAddedFirst: "เพิ่มล่าสุดก่อน",
+    recentlyAddedLast: "เพิ่มล่าสุดหลังสุด",
+    pickupTimeEarliestFirst: "เวลารับของ: เร็วก่อน",
+    pickupTimeLatestFirst: "เวลารับของ: ช้าก่อน",
+    previous: "ก่อนหน้า",
+    next: "ถัดไป",
+    pageSummary: "หน้า {page} จาก {pages}",
+    showingRange: "แสดง {start}-{end} จาก {total} รายการ",
+    copied: "บันทึกงานที่ทำซ้ำแล้ว"
+  }
+};
+
 function mapBookingToForm(booking: BookingDiaryEntry): BookingForm {
   return {
     id: booking.id,
@@ -244,6 +291,24 @@ function formatPickupTime(value: string | null | undefined) {
   return value.slice(0, 5);
 }
 
+function formatDateHeading(value: string, language: "en" | "th") {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const parsed = match
+    ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+    : new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return formatDate(value, language);
+  }
+
+  return new Intl.DateTimeFormat(language === "th" ? "th-TH" : "en-GB", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric"
+  }).format(parsed);
+}
+
 function uniqueSorted(values: Array<string | null | undefined>) {
   return [...new Set(values.map((value) => (value ?? "").trim()).filter(Boolean))].sort((a, b) =>
     a.localeCompare(b)
@@ -263,17 +328,48 @@ function isThisWeek(dateKey: string) {
   return target >= start && target <= end;
 }
 
-function compareBookings(a: BookingDiaryEntry, b: BookingDiaryEntry) {
-  const dateCompare = a.booking_date.localeCompare(b.booking_date);
-  if (dateCompare !== 0) return dateCompare;
+function compareTextDate(a: string | null | undefined, b: string | null | undefined) {
+  return (a || "").localeCompare(b || "");
+}
 
-  const timeCompare = (a.pickup_time || "99:99").localeCompare(b.pickup_time || "99:99");
-  if (timeCompare !== 0) return timeCompare;
+function comparePickupTime(a: string | null | undefined, b: string | null | undefined) {
+  return (a || "99:99").localeCompare(b || "99:99");
+}
 
-  const createdCompare = (a.created_at || "").localeCompare(b.created_at || "");
-  if (createdCompare !== 0) return createdCompare;
+function compareBookings(a: BookingDiaryEntry, b: BookingDiaryEntry, sortKey: BookingSortKey) {
+  const createdAsc = compareTextDate(a.created_at, b.created_at) || a.id.localeCompare(b.id);
+  const dateAsc =
+    a.booking_date.localeCompare(b.booking_date) ||
+    comparePickupTime(a.pickup_time, b.pickup_time) ||
+    createdAsc;
+  const pickupAsc =
+    comparePickupTime(a.pickup_time, b.pickup_time) ||
+    a.booking_date.localeCompare(b.booking_date) ||
+    createdAsc;
 
-  return a.id.localeCompare(b.id);
+  switch (sortKey) {
+    case "date_newest":
+      return (
+        b.booking_date.localeCompare(a.booking_date) ||
+        comparePickupTime(a.pickup_time, b.pickup_time) ||
+        createdAsc
+      );
+    case "recent_first":
+      return compareTextDate(b.created_at, a.created_at) || b.id.localeCompare(a.id);
+    case "recent_last":
+      return createdAsc;
+    case "pickup_earliest":
+      return pickupAsc;
+    case "pickup_latest":
+      return (
+        comparePickupTime(b.pickup_time, a.pickup_time) ||
+        a.booking_date.localeCompare(b.booking_date) ||
+        createdAsc
+      );
+    case "date_oldest":
+    default:
+      return dateAsc;
+  }
 }
 
 function highlightMatch(option: string, query: string) {
@@ -407,7 +503,8 @@ function LocationCombobox({
 
 export default function BookingDiaryPage() {
   const { language } = useLanguage();
-  const copy = labels[language === "th" ? "th" : "en"];
+  const languageKey = language === "th" ? "th" : "en";
+  const copy = { ...labels.en, ...labels[languageKey], ...labelExtras[languageKey] };
   const firstInputRef = useRef<HTMLInputElement | null>(null);
   const [bookings, setBookings] = useState<BookingDiaryEntry[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -421,9 +518,12 @@ export default function BookingDiaryPage() {
   const [dropoffFilter, setDropoffFilter] = useState("");
   const [vehicleFilter, setVehicleFilter] = useState("");
   const [driverFilter, setDriverFilter] = useState("");
+  const [sortBy, setSortBy] = useState<BookingSortKey>("date_oldest");
+  const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editingBookingId, setEditingBookingId] = useState<string | null>(null);
+  const [duplicatingBooking, setDuplicatingBooking] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BookingDiaryEntry | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -527,8 +627,34 @@ export default function BookingDiaryPage() {
         (!vehicleFilter || booking.vehicle === vehicleFilter) &&
         (!driverFilter || booking.driver === driverFilter)
       );
-    }).sort(compareBookings);
-  }, [bookings, dateFilter, driverFilter, dropoffFilter, pickupFilter, quickFilter, searchQuery, vehicleFilter]);
+    }).sort((a, b) => compareBookings(a, b, sortBy));
+  }, [bookings, dateFilter, driverFilter, dropoffFilter, pickupFilter, quickFilter, searchQuery, sortBy, vehicleFilter]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [dateFilter, driverFilter, dropoffFilter, pickupFilter, quickFilter, searchQuery, sortBy, vehicleFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredBookings.length / PAGE_SIZE));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const pageStartIndex = filteredBookings.length ? (safeCurrentPage - 1) * PAGE_SIZE : 0;
+  const pageEndIndex = Math.min(pageStartIndex + PAGE_SIZE, filteredBookings.length);
+  const paginatedBookings = useMemo(
+    () => filteredBookings.slice(pageStartIndex, pageEndIndex),
+    [filteredBookings, pageEndIndex, pageStartIndex]
+  );
+  const dateCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    filteredBookings.forEach((booking) => {
+      counts.set(booking.booking_date, (counts.get(booking.booking_date) ?? 0) + 1);
+    });
+    return counts;
+  }, [filteredBookings]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const filtersActive = Boolean(
     searchQuery ||
@@ -541,15 +667,13 @@ export default function BookingDiaryPage() {
   );
   const groupedBookings = useMemo(() => {
     const groups = new Map<string, BookingDiaryEntry[]>();
-    filteredBookings.forEach((booking) => {
+    paginatedBookings.forEach((booking) => {
       const entries = groups.get(booking.booking_date) ?? [];
       entries.push(booking);
       groups.set(booking.booking_date, entries);
     });
-    return [...groups.entries()]
-      .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
-      .map(([date, entries]) => [date, entries] as const);
-  }, [filteredBookings]);
+    return [...groups.entries()].map(([date, entries]) => [date, entries] as const);
+  }, [paginatedBookings]);
 
   const clearFilters = () => {
     setSearchQuery("");
@@ -559,11 +683,14 @@ export default function BookingDiaryPage() {
     setVehicleFilter("");
     setDriverFilter("");
     setQuickFilter("today");
+    setSortBy("date_oldest");
+    setCurrentPage(1);
   };
 
   const openCreate = () => {
     setForm(emptyForm());
     setEditingBookingId(null);
+    setDuplicatingBooking(false);
     setError(null);
     setNotice(null);
     setModalOpen(true);
@@ -577,6 +704,16 @@ export default function BookingDiaryPage() {
     }
     setForm(mapBookingToForm(booking));
     setEditingBookingId(booking.id);
+    setDuplicatingBooking(false);
+    setError(null);
+    setNotice(null);
+    setModalOpen(true);
+  };
+
+  const openDuplicate = (booking: BookingDiaryEntry) => {
+    setForm({ ...mapBookingToForm(booking), id: "" });
+    setEditingBookingId(null);
+    setDuplicatingBooking(true);
     setError(null);
     setNotice(null);
     setModalOpen(true);
@@ -586,6 +723,7 @@ export default function BookingDiaryPage() {
     if (saving) return;
     setModalOpen(false);
     setEditingBookingId(null);
+    setDuplicatingBooking(false);
   };
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -598,7 +736,7 @@ export default function BookingDiaryPage() {
     try {
       setSaving(true);
       setError(null);
-      const targetId = (editingBookingId ?? form.id.trim()) || undefined;
+      const targetId = duplicatingBooking ? undefined : (editingBookingId ?? form.id.trim()) || undefined;
       await saveBookingDiaryEntry({
         id: targetId,
         booking_date: form.booking_date,
@@ -613,8 +751,9 @@ export default function BookingDiaryPage() {
         driver: form.driver,
         notes: form.notes
       });
-      setNotice(targetId ? copy.updated : copy.saved);
+      setNotice(duplicatingBooking ? copy.copied : targetId ? copy.updated : copy.saved);
       setEditingBookingId(null);
+      setDuplicatingBooking(false);
       setModalOpen(false);
       await load(false);
     } catch (err) {
@@ -701,6 +840,14 @@ export default function BookingDiaryPage() {
         className={`${compactInputClass} bg-white`}
         aria-label={copy.date}
       />
+      <select value={sortBy} onChange={(event) => setSortBy(event.target.value as BookingSortKey)} className={`${compactInputClass} bg-white`} aria-label={copy.sortBy}>
+        <option value="date_oldest">{copy.dateOldestFirst}</option>
+        <option value="date_newest">{copy.dateNewestFirst}</option>
+        <option value="recent_first">{copy.recentlyAddedFirst}</option>
+        <option value="recent_last">{copy.recentlyAddedLast}</option>
+        <option value="pickup_earliest">{copy.pickupTimeEarliestFirst}</option>
+        <option value="pickup_latest">{copy.pickupTimeLatestFirst}</option>
+      </select>
       <select value={pickupFilter} onChange={(event) => setPickupFilter(event.target.value)} className={`${compactInputClass} bg-white`}>
         <option value="">{copy.allPickups}</option>
         {pickupOptions.map((pickup) => <option key={pickup} value={pickup}>{pickup}</option>)}
@@ -801,7 +948,7 @@ export default function BookingDiaryPage() {
               {copy.live}
             </div>
           </div>
-          <div className="booking-filter-grid grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-[minmax(220px,1.4fr)_repeat(5,minmax(140px,1fr))]">
+          <div className="booking-filter-grid grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-[minmax(220px,1.4fr)_repeat(6,minmax(140px,1fr))]">
             {filterControls}
           </div>
           <div className="booking-quick-filters mt-2.5 flex flex-wrap gap-2">
@@ -868,7 +1015,12 @@ export default function BookingDiaryPage() {
             {refreshing ? copy.loading : copy.live}
           </button>
         </div>
-        <p className="booking-visible-count">Showing {filteredBookings.length} bookings</p>
+        <p className="booking-visible-count">
+          {copy.showingRange
+            .replace("{start}", String(filteredBookings.length ? pageStartIndex + 1 : 0))
+            .replace("{end}", String(pageEndIndex))
+            .replace("{total}", String(filteredBookings.length))}
+        </p>
 
         {loading ? (
           <p className="loading-inline">{copy.loading}</p>
@@ -880,55 +1032,66 @@ export default function BookingDiaryPage() {
               {groupedBookings.map(([date, entries]) => (
                 <section key={date} className="booking-date-section">
                   <div className="booking-date-heading">
-                    <span>{formatDate(date, language)}</span>
+                    <span>{formatDateHeading(date, language)}</span>
+                    <strong>{dateCounts.get(date) ?? entries.length} {copy.entries}</strong>
                   </div>
                   <div className="booking-date-lines">
                     {entries.map((booking) => (
-                      <button
-                        key={booking.id}
-                        type="button"
-                        onClick={() => openEdit(booking)}
-                        className="booking-diary-line"
-                      >
-                        <div className="booking-line-main">
-                          <span className="booking-line-time-block">
-                            <span className="booking-line-time-label">PICKUP</span>
-                            <span className={clsx("booking-line-time", !booking.pickup_time && "booking-line-time-empty")}>
-                              {formatPickupTime(booking.pickup_time) || "TBC"}
+                      <div key={booking.id} className="booking-diary-line">
+                        <button type="button" onClick={() => openEdit(booking)} className="booking-diary-line-main">
+                          <span className="booking-line-main">
+                            <span className="booking-line-time-block">
+                              <span className="booking-line-time-label">PICKUP</span>
+                              <span className={clsx("booking-line-time", !booking.pickup_time && "booking-line-time-empty")}>
+                                {formatPickupTime(booking.pickup_time) || "TBC"}
+                              </span>
                             </span>
+                            <span className="booking-line-route">{booking.pickup} <span>-&gt;</span> {booking.dropoff}</span>
                           </span>
-                          <span className="booking-line-route">{booking.pickup} <span>-&gt;</span> {booking.dropoff}</span>
+                          {(() => {
+                            const meta = [
+                              booking.vehicle,
+                              booking.driver,
+                              booking.amount_pallets ? `${booking.amount_pallets} PLT` : "",
+                              booking.weight ? `${booking.weight}kg` : ""
+                            ].filter(Boolean);
+                            return meta.length ? (
+                              <span className="booking-line-meta">
+                                {meta.map((item, index) => (
+                                  <span
+                                    key={`${item}-${index}`}
+                                    className={clsx(
+                                      index === 0 && "booking-line-vehicle",
+                                      index === 1 && "booking-line-driver"
+                                    )}
+                                  >
+                                    {item}
+                                  </span>
+                                ))}
+                              </span>
+                            ) : null;
+                          })()}
+                          {(booking.warehouse_no || booking.notes) ? (
+                            <span className="booking-line-support">
+                              {booking.warehouse_no ? <span>Warehouse: {booking.warehouse_no}</span> : null}
+                              {booking.notes ? <span>Notes: {booking.notes}</span> : null}
+                            </span>
+                          ) : null}
+                        </button>
+                        <div className="booking-line-actions">
+                          <button type="button" onClick={() => openEdit(booking)} className="booking-entry-edit" aria-label={copy.editBooking}>
+                            <Edit3 className="h-3.5 w-3.5" />
+                            {copy.edit}
+                          </button>
+                          <button type="button" onClick={() => openDuplicate(booking)} className="booking-entry-edit" aria-label={copy.duplicate}>
+                            <Copy className="h-3.5 w-3.5" />
+                            {copy.duplicate}
+                          </button>
+                          <button type="button" onClick={() => setDeleteTarget(booking)} className="booking-card-delete" aria-label={copy.deleteBooking}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
                         </div>
-                        {(() => {
-                          const meta = [
-                            booking.vehicle,
-                            booking.driver,
-                            booking.amount_pallets ? `${booking.amount_pallets} PLT` : "",
-                            booking.weight ? `${booking.weight}kg` : ""
-                          ].filter(Boolean);
-                          return meta.length ? (
-                            <div className="booking-line-meta">
-                              {meta.map((item, index) => (
-                                <span
-                                  key={`${item}-${index}`}
-                                  className={clsx(
-                                    index === 0 && "booking-line-vehicle",
-                                    index === 1 && "booking-line-driver"
-                                  )}
-                                >
-                                  {item}
-                                </span>
-                              ))}
-                            </div>
-                          ) : null;
-                        })()}
-                        {(booking.warehouse_no || booking.notes) ? (
-                          <div className="booking-line-support">
-                            {booking.warehouse_no ? <span>Warehouse: {booking.warehouse_no}</span> : null}
-                            {booking.notes ? <span>Notes: {booking.notes}</span> : null}
-                          </div>
-                        ) : null}
-                      </button>
+                      </div>
                     ))}
                   </div>
                 </section>
@@ -936,7 +1099,7 @@ export default function BookingDiaryPage() {
             </div>
 
             <div className="hidden">
-              {filteredBookings.map((booking) => (
+              {paginatedBookings.map((booking) => (
                 <details
                   key={booking.id}
                   className="booking-ledger-entry"
@@ -1004,7 +1167,7 @@ export default function BookingDiaryPage() {
             </div>
 
             <div className="hidden">
-              {filteredBookings.map((booking) => (
+              {paginatedBookings.map((booking) => (
                 <article
                   key={booking.id}
                   className="booking-mobile-card booking-entry"
@@ -1099,47 +1262,103 @@ export default function BookingDiaryPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredBookings.map((booking) => (
-                      <tr key={booking.id} className="enterprise-table-row cursor-pointer" onClick={() => openEdit(booking)}>
-                        <td className="booking-desktop-cell whitespace-nowrap font-semibold text-slate-950">{formatDate(booking.booking_date, language)}</td>
-                        <td className="booking-desktop-cell whitespace-nowrap"><span className="booking-desktop-time">{formatPickupTime(booking.pickup_time) || "-"}</span></td>
-                        <td className="booking-desktop-cell max-w-[280px] font-semibold text-slate-900" title={`${booking.pickup} -> ${booking.dropoff}`}><span className="block truncate">{booking.pickup} <span className="text-brand-600">-&gt;</span> {booking.dropoff}</span></td>
-                        <td className="booking-desktop-cell whitespace-nowrap"><span className="booking-desktop-vehicle">{booking.vehicle || "-"}</span></td>
-                        <td className="booking-desktop-cell whitespace-nowrap"><span className="booking-desktop-driver">{booking.driver || "-"}</span></td>
-                        <td className="booking-desktop-cell whitespace-nowrap">{booking.amount_pallets || "-"} PLT / {booking.weight ? `${booking.weight}kg` : "-"}</td>
-                        <td className="booking-desktop-cell max-w-[130px]" title={booking.warehouse_no || ""}><span className="block truncate">{booking.warehouse_no || "-"}</span></td>
-                        <td className="booking-desktop-cell max-w-[150px]" title={booking.notes || ""}><span className="block truncate">{booking.notes || "-"}</span></td>
-                        <td className="booking-desktop-cell text-right">
-                          <div className="flex justify-end gap-1.5">
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                openEdit(booking);
-                              }}
-                              className="table-action-secondary min-h-[36px] gap-1.5 px-2.5"
-                              aria-label={copy.editBooking}
-                            >
-                              <Edit3 className="h-3.5 w-3.5" />
-                              {copy.edit}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                setDeleteTarget(booking);
-                              }}
-                              className="table-action-danger min-h-[36px] gap-1.5 px-2.5"
-                              aria-label={copy.deleteBooking}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
+                    {groupedBookings.map(([date, entries]) => (
+                      <Fragment key={date}>
+                        <tr className="booking-desktop-date-row">
+                          <td colSpan={9}>
+                            <div className="booking-desktop-date-heading">
+                              <span>{formatDateHeading(date, language)}</span>
+                              <strong>{dateCounts.get(date) ?? entries.length} {copy.entries}</strong>
+                            </div>
+                          </td>
+                        </tr>
+                        {entries.map((booking) => (
+                          <tr key={booking.id} className="enterprise-table-row cursor-pointer" onClick={() => openEdit(booking)}>
+                            <td className="booking-desktop-cell whitespace-nowrap font-semibold text-slate-950">{formatDate(booking.booking_date, language)}</td>
+                            <td className="booking-desktop-cell whitespace-nowrap"><span className="booking-desktop-time">{formatPickupTime(booking.pickup_time) || "-"}</span></td>
+                            <td className="booking-desktop-cell max-w-[280px] font-semibold text-slate-900" title={`${booking.pickup} -> ${booking.dropoff}`}><span className="block truncate">{booking.pickup} <span className="text-brand-600">-&gt;</span> {booking.dropoff}</span></td>
+                            <td className="booking-desktop-cell whitespace-nowrap"><span className="booking-desktop-vehicle">{booking.vehicle || "-"}</span></td>
+                            <td className="booking-desktop-cell whitespace-nowrap"><span className="booking-desktop-driver">{booking.driver || "-"}</span></td>
+                            <td className="booking-desktop-cell whitespace-nowrap">{booking.amount_pallets || "-"} PLT / {booking.weight ? `${booking.weight}kg` : "-"}</td>
+                            <td className="booking-desktop-cell max-w-[130px]" title={booking.warehouse_no || ""}><span className="block truncate">{booking.warehouse_no || "-"}</span></td>
+                            <td className="booking-desktop-cell max-w-[150px]" title={booking.notes || ""}><span className="block truncate">{booking.notes || "-"}</span></td>
+                            <td className="booking-desktop-cell text-right">
+                              <div className="flex justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openEdit(booking);
+                                  }}
+                                  className="table-action-secondary min-h-[36px] gap-1.5 px-2.5"
+                                  aria-label={copy.editBooking}
+                                >
+                                  <Edit3 className="h-3.5 w-3.5" />
+                                  {copy.edit}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openDuplicate(booking);
+                                  }}
+                                  className="table-action-secondary min-h-[36px] gap-1.5 px-2.5"
+                                  aria-label={copy.duplicate}
+                                >
+                                  <Copy className="h-3.5 w-3.5" />
+                                  {copy.duplicate}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setDeleteTarget(booking);
+                                  }}
+                                  className="table-action-danger min-h-[36px] gap-1.5 px-2.5"
+                                  aria-label={copy.deleteBooking}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+
+            <div className="booking-pagination">
+              <p>
+                {copy.showingRange
+                  .replace("{start}", String(filteredBookings.length ? pageStartIndex + 1 : 0))
+                  .replace("{end}", String(pageEndIndex))
+                  .replace("{total}", String(filteredBookings.length))}
+              </p>
+              <div className="booking-pagination-controls">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                  disabled={safeCurrentPage <= 1}
+                  className="btn-secondary min-h-[38px] rounded-[0.75rem] px-3 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {copy.previous}
+                </button>
+                <span>
+                  {copy.pageSummary
+                    .replace("{page}", String(safeCurrentPage))
+                    .replace("{pages}", String(totalPages))}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                  disabled={safeCurrentPage >= totalPages}
+                  className="btn-secondary min-h-[38px] rounded-[0.75rem] px-3 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {copy.next}
+                </button>
               </div>
             </div>
           </>
@@ -1162,8 +1381,8 @@ export default function BookingDiaryPage() {
           <div className="booking-sheet max-h-[100dvh] w-full overflow-hidden rounded-t-[1.6rem] border border-brand-100 bg-white shadow-[0_30px_70px_rgba(38,18,78,0.24)] lg:max-h-[96vh] lg:max-w-3xl lg:rounded-[1.6rem]">
             <div className="flex items-center justify-between gap-3 border-b border-slate-200/80 px-4 py-4 sm:px-5">
               <div className="min-w-0">
-                <p className="badge-muted w-fit">{activeEditingId ? copy.editBooking : copy.addBooking}</p>
-                <h3 className="mt-2 truncate text-lg font-semibold text-slate-950">{activeEditingId ? formatDate(form.booking_date, language) : copy.addBooking}</h3>
+                <p className="badge-muted w-fit">{duplicatingBooking ? copy.createCopy : activeEditingId ? copy.editBooking : copy.addBooking}</p>
+                <h3 className="mt-2 truncate text-lg font-semibold text-slate-950">{activeEditingId || duplicatingBooking ? formatDate(form.booking_date, language) : copy.addBooking}</h3>
               </div>
               <button type="button" onClick={closeModal} className="btn-secondary min-h-[42px] w-11 rounded-[1rem] px-0" aria-label={copy.close}>
                 <X className="h-4 w-4" />
@@ -1277,7 +1496,7 @@ export default function BookingDiaryPage() {
                 </button>
                 <button type="submit" disabled={saving} className="booking-action-button btn-primary gap-2 sm:w-auto disabled:opacity-70">
                   <Save className="h-4 w-4" />
-                  {saving ? copy.saving : activeEditingId ? copy.update : copy.save}
+                  {saving ? copy.saving : duplicatingBooking ? copy.saveDuplicatedBooking : activeEditingId ? copy.update : copy.save}
                 </button>
               </div>
             </form>
