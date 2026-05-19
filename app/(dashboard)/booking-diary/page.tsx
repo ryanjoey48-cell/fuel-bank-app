@@ -905,13 +905,13 @@ export default function BookingDiaryPage() {
             alt={copy.company}
             width={64}
             height={48}
-            className="h-8 w-8 object-contain"
+            className="h-12 w-auto object-contain brightness-105"
             priority
           />
         </div>
         <div className="booking-diary-title min-w-0">
-          <p className="truncate text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">{copy.company}</p>
-          <h1 className="text-xl font-semibold text-slate-950 lg:text-2xl">{bookingTitle}</h1>
+          <p className="truncate text-[10px] font-bold uppercase tracking-[0.16em] text-brand-700">{copy.company}</p>
+          <h1 className="truncate text-[1.2rem] font-semibold leading-7 text-slate-950 sm:text-[1.35rem]">{bookingTitle}</h1>
         </div>
         <div className="booking-diary-header-actions">
           <button

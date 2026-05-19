@@ -4,7 +4,6 @@ import clsx from "clsx";
 import { Menu, X } from "lucide-react";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { LanguageSwitcher } from "@/components/language-switcher";
 import { useLanguage } from "@/lib/language-provider";
 
 const PAGE_KEY_BY_PATH: Record<string, "dashboard" | "drivers" | "fuelLogs" | "transfers" | "weeklyMileage"> = {
@@ -67,8 +66,6 @@ export function MobileAppBar({ open, onToggle }: MobileAppBarProps) {
             </p>
           </div>
         </div>
-
-        <LanguageSwitcher compact />
       </div>
     </div>
   );
