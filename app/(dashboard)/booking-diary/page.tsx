@@ -518,7 +518,7 @@ export default function BookingDiaryPage() {
   const [dropoffFilter, setDropoffFilter] = useState("");
   const [vehicleFilter, setVehicleFilter] = useState("");
   const [driverFilter, setDriverFilter] = useState("");
-  const [sortBy, setSortBy] = useState<BookingSortKey>("date_oldest");
+  const [sortBy, setSortBy] = useState<BookingSortKey>("date_newest");
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -663,7 +663,8 @@ export default function BookingDiaryPage() {
       dropoffFilter ||
       vehicleFilter ||
       driverFilter ||
-      quickFilter !== "today"
+      quickFilter !== "today" ||
+      sortBy !== "date_newest"
   );
   const groupedBookings = useMemo(() => {
     const groups = new Map<string, BookingDiaryEntry[]>();
@@ -683,7 +684,7 @@ export default function BookingDiaryPage() {
     setVehicleFilter("");
     setDriverFilter("");
     setQuickFilter("today");
-    setSortBy("date_oldest");
+    setSortBy("date_newest");
     setCurrentPage(1);
   };
 
@@ -841,8 +842,8 @@ export default function BookingDiaryPage() {
         aria-label={copy.date}
       />
       <select value={sortBy} onChange={(event) => setSortBy(event.target.value as BookingSortKey)} className={`${compactInputClass} bg-white`} aria-label={copy.sortBy}>
-        <option value="date_oldest">{copy.dateOldestFirst}</option>
         <option value="date_newest">{copy.dateNewestFirst}</option>
+        <option value="date_oldest">{copy.dateOldestFirst}</option>
         <option value="recent_first">{copy.recentlyAddedFirst}</option>
         <option value="recent_last">{copy.recentlyAddedLast}</option>
         <option value="pickup_earliest">{copy.pickupTimeEarliestFirst}</option>
@@ -936,9 +937,9 @@ export default function BookingDiaryPage() {
         </div>
       </section>
 
-      <section className="booking-responsive-controls hidden max-w-full gap-3 md:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+      <section className="booking-responsive-controls hidden max-w-full md:block">
         <div className="booking-filter-panel surface-card-soft">
-          <div className="mb-2.5 flex items-center justify-between gap-3">
+          <div className="booking-filter-panel-header">
             <div className="flex items-center gap-2">
               <Filter className="h-4 w-4 text-brand-700" />
               <p className="text-sm font-semibold text-slate-800">{copy.filters}</p>
@@ -951,25 +952,26 @@ export default function BookingDiaryPage() {
           <div className="booking-filter-grid grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-[minmax(220px,1.4fr)_repeat(6,minmax(140px,1fr))]">
             {filterControls}
           </div>
-          <div className="booking-quick-filters mt-2.5 flex flex-wrap gap-2">
-            {quickFilterControls}
+          <div className="booking-filter-footer">
+            <div className="booking-quick-filters flex flex-wrap gap-2">
+              {quickFilterControls}
+            </div>
+            <div className="booking-controls-actions">
+              <button
+                type="button"
+                onClick={exportFilteredBookings}
+                disabled={!filteredBookings.length}
+                className="booking-action-button btn-secondary gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Download className="h-4 w-4" />
+                {copy.exportExcel}
+              </button>
+              <button type="button" onClick={openCreate} className="booking-action-button btn-primary gap-2">
+                <PackagePlus className="h-4 w-4" />
+                {copy.addBooking}
+              </button>
+            </div>
           </div>
-        </div>
-
-        <div className="booking-controls-actions hidden gap-2 lg:flex">
-          <button
-            type="button"
-            onClick={exportFilteredBookings}
-            disabled={!filteredBookings.length}
-            className="booking-action-button btn-secondary gap-2 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Download className="h-4 w-4" />
-            {copy.exportExcel}
-          </button>
-          <button type="button" onClick={openCreate} className="booking-action-button btn-primary gap-2">
-            <PackagePlus className="h-4 w-4" />
-            {copy.addBooking}
-          </button>
         </div>
       </section>
 

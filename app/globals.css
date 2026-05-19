@@ -414,6 +414,18 @@ td {
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.035), 0 10px 22px rgba(38, 18, 78, 0.035);
   }
 
+  .booking-filter-panel-header {
+    @apply mb-3 flex items-center justify-between gap-3 border-b border-slate-200/70 pb-2.5;
+  }
+
+  .booking-filter-footer {
+    @apply mt-3 flex flex-col gap-3 border-t border-slate-200/70 pt-3 lg:flex-row lg:items-center lg:justify-between;
+  }
+
+  .booking-controls-actions {
+    @apply flex flex-wrap items-center gap-2 lg:justify-end;
+  }
+
   .booking-filter-control,
   .booking-form-control {
     @apply w-full max-w-full rounded-[0.7rem] border px-3 text-[13px] text-slate-900 outline-none transition duration-150;
