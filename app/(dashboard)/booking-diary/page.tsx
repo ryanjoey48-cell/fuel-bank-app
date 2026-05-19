@@ -263,6 +263,19 @@ function isThisWeek(dateKey: string) {
   return target >= start && target <= end;
 }
 
+function compareBookings(a: BookingDiaryEntry, b: BookingDiaryEntry) {
+  const dateCompare = a.booking_date.localeCompare(b.booking_date);
+  if (dateCompare !== 0) return dateCompare;
+
+  const timeCompare = (a.pickup_time || "99:99").localeCompare(b.pickup_time || "99:99");
+  if (timeCompare !== 0) return timeCompare;
+
+  const createdCompare = (a.created_at || "").localeCompare(b.created_at || "");
+  if (createdCompare !== 0) return createdCompare;
+
+  return a.id.localeCompare(b.id);
+}
+
 function highlightMatch(option: string, query: string) {
   const trimmedQuery = query.trim();
   if (!trimmedQuery) return option;
@@ -514,7 +527,7 @@ export default function BookingDiaryPage() {
         (!vehicleFilter || booking.vehicle === vehicleFilter) &&
         (!driverFilter || booking.driver === driverFilter)
       );
-    });
+    }).sort(compareBookings);
   }, [bookings, dateFilter, driverFilter, dropoffFilter, pickupFilter, quickFilter, searchQuery, vehicleFilter]);
 
   const filtersActive = Boolean(
@@ -535,12 +548,7 @@ export default function BookingDiaryPage() {
     });
     return [...groups.entries()]
       .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
-      .map(([date, entries]) => [
-        date,
-        [...entries].sort((a, b) =>
-          (a.pickup_time || "99:99").localeCompare(b.pickup_time || "99:99")
-        )
-      ] as const);
+      .map(([date, entries]) => [date, entries] as const);
   }, [filteredBookings]);
 
   const clearFilters = () => {
@@ -860,6 +868,7 @@ export default function BookingDiaryPage() {
             {refreshing ? copy.loading : copy.live}
           </button>
         </div>
+        <p className="booking-visible-count">Showing {filteredBookings.length} bookings</p>
 
         {loading ? (
           <p className="loading-inline">{copy.loading}</p>
@@ -1080,7 +1089,7 @@ export default function BookingDiaryPage() {
             </div>
 
             <div className="table-shell booking-desktop-table hidden lg:block">
-              <div className="table-scroll max-h-[68vh]">
+              <div className="table-scroll">
                 <table className="min-w-[980px]">
                   <thead>
                     <tr>
