@@ -23,7 +23,7 @@ function HeaderComponent({ title, description, showSignOut = false }: HeaderProp
   };
 
   return (
-    <header className="surface-card hidden overflow-hidden px-3.5 py-3 md:block md:px-4">
+    <header className="surface-card hidden overflow-hidden px-3.5 py-3 min-[1367px]:block min-[1367px]:px-4">
       <div className="absolute inset-x-0 top-0 h-full bg-[linear-gradient(135deg,rgba(95,51,183,0.035),rgba(242,138,47,0.014)_58%,transparent)]" />
       <div className="relative flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex min-w-0 flex-1 items-center gap-3.5">

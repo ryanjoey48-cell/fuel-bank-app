@@ -26,6 +26,8 @@ export function MobileAppBar({ open, onToggle }: MobileAppBarProps) {
   const pageLabel =
     pathname === "/booking-diary"
       ? language === "th" ? "สมุดจองงาน" : "Booking Diary"
+      : pathname === "/shipments"
+        ? language === "th" ? "งานขนส่ง" : "Shipments"
       : t.nav[pageKey];
 
   return (

@@ -1495,7 +1495,7 @@ td {
     max-width: none;
   }
 
-  .booking-diary-header-actions {
+  .booking-diary-header {
     display: none;
   }
 }
@@ -1524,5 +1524,18 @@ td {
     padding-top: env(safe-area-inset-top, 0px);
     padding-left: max(1rem, calc(env(safe-area-inset-left, 0px) + 0.75rem));
     padding-right: max(1rem, calc(env(safe-area-inset-right, 0px) + 0.75rem));
+  }
+
+  .booking-diary-header {
+    justify-content: flex-end;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .booking-diary-logo,
+  .booking-diary-title {
+    display: none;
   }
 }
