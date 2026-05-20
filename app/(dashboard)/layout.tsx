@@ -67,7 +67,7 @@ export default function DashboardLayout({
 
   if (checkingAuth) {
     return (
-      <main className="flex min-h-screen items-center justify-center px-4">
+      <main className="flex min-h-[100dvh] items-center justify-center px-4">
         <div className="surface-card px-6 py-5 text-sm text-slate-600">
           {t.common.sessionCheck}
         </div>
@@ -76,14 +76,14 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-[100dvh]">
       <Sidebar open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
       <MobileAppBar
         open={mobileMenuOpen}
         onToggle={() => setMobileMenuOpen((current) => !current)}
       />
       <div className="dashboard-content-frame">
-        <main className="dashboard-mobile-shell mx-auto flex min-h-screen w-full max-w-[1440px] max-w-full flex-col gap-3.5 pb-5 sm:gap-4 sm:px-5 sm:pt-20 sm:pb-6 md:px-6 md:pt-8 md:pb-7 lg:px-8">
+        <main className="dashboard-mobile-shell mx-auto flex min-h-[100dvh] w-full max-w-[1440px] max-w-full flex-col gap-3.5 pb-5 sm:gap-4 sm:px-5 sm:pt-20 sm:pb-6 md:px-6 md:pt-8 md:pb-7 lg:px-8">
           <SetupNotice />
           {children}
         </main>

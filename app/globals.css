@@ -1465,18 +1465,20 @@ td {
 
   .mobile-app-bar {
     display: block !important;
+    position: sticky !important;
+    inset: auto;
+    top: 0;
     padding-top: env(safe-area-inset-top, 0px);
     padding-left: max(1.25rem, calc(env(safe-area-inset-left, 0px) + 1rem));
     padding-right: max(1.25rem, calc(env(safe-area-inset-right, 0px) + 1rem));
-    z-index: 50;
+    z-index: 30;
     background: #fbfbfd;
-    transform: translateZ(0);
-    will-change: transform;
+    overflow: visible;
   }
 
   .mobile-app-bar::before {
     content: "";
-    position: fixed;
+    position: absolute;
     inset: calc(env(safe-area-inset-top, 0px) * -1) 0 auto 0;
     height: calc(env(safe-area-inset-top, 0px) + 0.75rem);
     background: #fbfbfd;
@@ -1501,7 +1503,8 @@ td {
   .dashboard-mobile-shell {
     width: 100%;
     max-width: none;
-    padding-top: calc(env(safe-area-inset-top, 0px) + 6.5rem);
+    min-height: 100dvh;
+    padding-top: 1rem;
     padding-left: max(1.25rem, calc(env(safe-area-inset-left, 0px) + 1.25rem));
     padding-right: max(1.25rem, calc(env(safe-area-inset-right, 0px) + 1.25rem));
     padding-bottom: max(1.5rem, calc(env(safe-area-inset-bottom, 0px) + 1rem));
