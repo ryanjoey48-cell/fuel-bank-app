@@ -3,6 +3,7 @@
 import clsx from "clsx";
 import {
   CalendarDays,
+  ChevronRight,
   Clock3,
   Copy,
   Download,
@@ -530,6 +531,8 @@ export default function BookingDiaryPage() {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [expandedDateKeys, setExpandedDateKeys] = useState<Set<string>>(() => new Set([todayKey()]));
+  const [toggledDateKeys, setToggledDateKeys] = useState<Set<string>>(() => new Set());
 
   const load = useCallback(async (blocking = false) => {
     try {
@@ -634,14 +637,6 @@ export default function BookingDiaryPage() {
     setCurrentPage(1);
   }, [dateFilter, driverFilter, dropoffFilter, pickupFilter, quickFilter, searchQuery, sortBy, vehicleFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredBookings.length / PAGE_SIZE));
-  const safeCurrentPage = Math.min(currentPage, totalPages);
-  const pageStartIndex = filteredBookings.length ? (safeCurrentPage - 1) * PAGE_SIZE : 0;
-  const pageEndIndex = Math.min(pageStartIndex + PAGE_SIZE, filteredBookings.length);
-  const paginatedBookings = useMemo(
-    () => filteredBookings.slice(pageStartIndex, pageEndIndex),
-    [filteredBookings, pageEndIndex, pageStartIndex]
-  );
   const dateCounts = useMemo(() => {
     const counts = new Map<string, number>();
     filteredBookings.forEach((booking) => {
@@ -649,12 +644,6 @@ export default function BookingDiaryPage() {
     });
     return counts;
   }, [filteredBookings]);
-
-  useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(totalPages);
-    }
-  }, [currentPage, totalPages]);
 
   const filtersActive = Boolean(
     searchQuery ||
@@ -668,13 +657,155 @@ export default function BookingDiaryPage() {
   );
   const groupedBookings = useMemo(() => {
     const groups = new Map<string, BookingDiaryEntry[]>();
-    paginatedBookings.forEach((booking) => {
+    filteredBookings.forEach((booking) => {
       const entries = groups.get(booking.booking_date) ?? [];
       entries.push(booking);
       groups.set(booking.booking_date, entries);
     });
     return [...groups.entries()].map(([date, entries]) => [date, entries] as const);
-  }, [paginatedBookings]);
+  }, [filteredBookings]);
+  const visibleDateKeys = useMemo(() => groupedBookings.map(([date]) => date), [groupedBookings]);
+  const visibleDateKeySet = useMemo(() => new Set(visibleDateKeys), [visibleDateKeys]);
+  const expandedVisibleDateCount = useMemo(
+    () => visibleDateKeys.filter((date) => expandedDateKeys.has(date)).length,
+    [expandedDateKeys, visibleDateKeys]
+  );
+  const allVisibleDateSectionsExpanded = visibleDateKeys.length > 0 && expandedVisibleDateCount === visibleDateKeys.length;
+  const dateSectionControlLabel =
+    allVisibleDateSectionsExpanded
+      ? language === "th" ? "ย่อทั้งหมด" : "Collapse all"
+      : language === "th" ? "ขยายทั้งหมด" : "Expand all";
+
+  useEffect(() => {
+    const today = todayKey();
+
+    setExpandedDateKeys((current) => {
+      const next = new Set([...current].filter((date) => visibleDateKeySet.has(date)));
+      if (visibleDateKeySet.has(today) && !toggledDateKeys.has(today)) {
+        next.add(today);
+      }
+      return next;
+    });
+  }, [toggledDateKeys, visibleDateKeySet]);
+
+  const toggleDateSection = useCallback((date: string) => {
+    setToggledDateKeys((current) => {
+      const next = new Set(current);
+      next.add(date);
+      return next;
+    });
+    setExpandedDateKeys((current) => {
+      if (current.has(date)) {
+        const next = new Set(current);
+        next.delete(date);
+        return next;
+      }
+      return new Set([...current, date]);
+    });
+  }, []);
+
+  const toggleAllDateSections = useCallback(() => {
+    setToggledDateKeys((current) => {
+      const next = new Set(current);
+      visibleDateKeys.forEach((date) => next.add(date));
+      return next;
+    });
+
+    setCurrentPage(1);
+    if (allVisibleDateSectionsExpanded) {
+      setExpandedDateKeys(new Set());
+    } else {
+      setExpandedDateKeys(new Set(visibleDateKeys));
+    }
+  }, [allVisibleDateSectionsExpanded, visibleDateKeys]);
+
+  const diaryPages = useMemo(() => {
+    type DiaryPageGroup = {
+      date: string;
+      entries: BookingDiaryEntry[];
+      totalEntries: number;
+    };
+
+    const pages: DiaryPageGroup[][] = [];
+    let page: DiaryPageGroup[] = [];
+    let visibleItemsOnPage = 0;
+
+    if (allVisibleDateSectionsExpanded) {
+      return [
+        groupedBookings.map(([date, entries]) => ({
+          date,
+          entries,
+          totalEntries: entries.length
+        }))
+      ];
+    }
+
+    const commitPage = () => {
+      if (page.length) {
+        pages.push(page);
+        page = [];
+        visibleItemsOnPage = 0;
+      }
+    };
+
+    groupedBookings.forEach(([date, entries]) => {
+      const expanded = expandedDateKeys.has(date);
+
+      if (!expanded) {
+        if (visibleItemsOnPage >= PAGE_SIZE) {
+          commitPage();
+        }
+        page.push({ date, entries: [], totalEntries: entries.length });
+        visibleItemsOnPage += 1;
+        return;
+      }
+
+      const visibleItemCount = 1 + entries.length;
+
+      if (visibleItemCount <= PAGE_SIZE) {
+        if (visibleItemsOnPage > 0 && visibleItemsOnPage + visibleItemCount > PAGE_SIZE) {
+          commitPage();
+        }
+        page.push({ date, entries, totalEntries: entries.length });
+        visibleItemsOnPage += visibleItemCount;
+        return;
+      }
+
+      commitPage();
+      let entryIndex = 0;
+      while (entryIndex < entries.length) {
+        const chunk = entries.slice(entryIndex, entryIndex + PAGE_SIZE - 1);
+        pages.push([{ date, entries: chunk, totalEntries: entries.length }]);
+        entryIndex += chunk.length;
+      }
+    });
+
+    commitPage();
+    return pages;
+  }, [allVisibleDateSectionsExpanded, expandedDateKeys, groupedBookings]);
+
+  const totalPages = Math.max(1, diaryPages.length);
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const paginatedGroups = useMemo(
+    () => diaryPages[safeCurrentPage - 1] ?? [],
+    [diaryPages, safeCurrentPage]
+  );
+  const paginatedBookings = useMemo(
+    () => paginatedGroups.flatMap((group) => group.entries),
+    [paginatedGroups]
+  );
+  const visiblePageDateCount = paginatedGroups.length;
+  const visiblePageBookingCount = paginatedGroups.reduce((total, group) => total + group.totalEntries, 0);
+  const visibleRangeText =
+    language === "th"
+      ? `แสดง ${visiblePageDateCount} กลุ่มวันที่ รวม ${visiblePageBookingCount} รายการ`
+      : `Showing ${visiblePageDateCount} date ${visiblePageDateCount === 1 ? "group" : "groups"} containing ${visiblePageBookingCount} ${visiblePageBookingCount === 1 ? "booking" : "bookings"}`;
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const clearFilters = () => {
     setSearchQuery("");
@@ -1010,18 +1141,25 @@ export default function BookingDiaryPage() {
       ) : null}
 
       <section className="booking-diary-book min-w-0 max-w-full">
-        <div className="mb-2 flex items-center justify-between gap-3">
+        <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-sm font-semibold text-slate-700">{copy.tableHint}</h2>
-          <button type="button" onClick={() => void load(false)} disabled={refreshing} className="btn-secondary min-h-[36px] gap-2 rounded-[0.8rem] px-3 text-xs disabled:opacity-60">
-            <RefreshCw className={clsx("h-4 w-4", refreshing && "animate-spin")} />
-            {refreshing ? copy.loading : copy.live}
-          </button>
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            <button
+              type="button"
+              onClick={toggleAllDateSections}
+              disabled={visibleDateKeys.length === 0}
+              className="booking-section-toggle disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {dateSectionControlLabel}
+            </button>
+            <button type="button" onClick={() => void load(false)} disabled={refreshing} className="btn-secondary min-h-[36px] gap-2 rounded-[0.8rem] px-3 text-xs disabled:opacity-60">
+              <RefreshCw className={clsx("h-4 w-4", refreshing && "animate-spin")} />
+              {refreshing ? copy.loading : copy.live}
+            </button>
+          </div>
         </div>
         <p className="booking-visible-count">
-          {copy.showingRange
-            .replace("{start}", String(filteredBookings.length ? pageStartIndex + 1 : 0))
-            .replace("{end}", String(pageEndIndex))
-            .replace("{total}", String(filteredBookings.length))}
+          {visibleRangeText}
         </p>
 
         {loading ? (
@@ -1031,14 +1169,28 @@ export default function BookingDiaryPage() {
         ) : (
           <>
             <div className="booking-paper-diary lg:hidden">
-              {groupedBookings.map(([date, entries]) => (
-                <section key={date} className="booking-date-section">
-                  <div className="booking-date-heading">
-                    <span>{formatDateHeading(date, language)}</span>
-                    <strong>{dateCounts.get(date) ?? entries.length} {copy.entries}</strong>
-                  </div>
-                  <div className="booking-date-lines">
-                    {entries.map((booking) => (
+              {paginatedGroups.map(({ date, entries, totalEntries }) => {
+                const expanded = expandedDateKeys.has(date);
+
+                return (
+                  <section key={date} className="booking-date-section">
+                    <button
+                      type="button"
+                      onClick={() => toggleDateSection(date)}
+                      className={clsx("booking-date-heading", expanded && "booking-date-heading-open")}
+                      aria-expanded={expanded}
+                    >
+                      <span className="booking-date-heading-main">
+                        <span className="booking-date-chevron">
+                          <ChevronRight className={clsx("h-3.5 w-3.5 transition-transform duration-200", expanded && "rotate-90")} />
+                        </span>
+                        <span>{formatDateHeading(date, language)}</span>
+                      </span>
+                      <strong>{dateCounts.get(date) ?? totalEntries} {copy.entries}</strong>
+                    </button>
+                    {expanded && entries.length ? (
+                      <div className="booking-date-lines">
+                        {entries.map((booking) => (
                       <div key={booking.id} className="booking-diary-line">
                         <button type="button" onClick={() => openEdit(booking)} className="booking-diary-line-main">
                           <span className="booking-line-main">
@@ -1094,10 +1246,12 @@ export default function BookingDiaryPage() {
                           </button>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </section>
-              ))}
+                        ))}
+                      </div>
+                    ) : null}
+                  </section>
+                );
+              })}
             </div>
 
             <div className="hidden">
@@ -1264,17 +1418,30 @@ export default function BookingDiaryPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {groupedBookings.map(([date, entries]) => (
-                      <Fragment key={date}>
+                    {paginatedGroups.map(({ date, entries, totalEntries }) => {
+                      const expanded = expandedDateKeys.has(date);
+
+                      return (
+                        <Fragment key={date}>
                         <tr className="booking-desktop-date-row">
                           <td colSpan={9}>
-                            <div className="booking-desktop-date-heading">
-                              <span>{formatDateHeading(date, language)}</span>
-                              <strong>{dateCounts.get(date) ?? entries.length} {copy.entries}</strong>
-                            </div>
+                            <button
+                              type="button"
+                              onClick={() => toggleDateSection(date)}
+                              className={clsx("booking-desktop-date-heading", expanded && "booking-desktop-date-heading-open")}
+                              aria-expanded={expanded}
+                            >
+                              <span className="booking-desktop-date-heading-main">
+                                <span className="booking-date-chevron">
+                                  <ChevronRight className={clsx("h-3.5 w-3.5 transition-transform duration-200", expanded && "rotate-90")} />
+                                </span>
+                                <span>{formatDateHeading(date, language)}</span>
+                              </span>
+                              <strong>{dateCounts.get(date) ?? totalEntries} {copy.entries}</strong>
+                            </button>
                           </td>
                         </tr>
-                        {entries.map((booking) => (
+                        {expanded && entries.length ? entries.map((booking) => (
                           <tr key={booking.id} className="enterprise-table-row cursor-pointer" onClick={() => openEdit(booking)}>
                             <td className="booking-desktop-cell whitespace-nowrap font-semibold text-slate-950">{formatDate(booking.booking_date, language)}</td>
                             <td className="booking-desktop-cell whitespace-nowrap"><span className="booking-desktop-time">{formatPickupTime(booking.pickup_time) || "-"}</span></td>
@@ -1324,9 +1491,10 @@ export default function BookingDiaryPage() {
                               </div>
                             </td>
                           </tr>
-                        ))}
-                      </Fragment>
-                    ))}
+                        )) : null}
+                        </Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -1334,10 +1502,7 @@ export default function BookingDiaryPage() {
 
             <div className="booking-pagination">
               <p>
-                {copy.showingRange
-                  .replace("{start}", String(filteredBookings.length ? pageStartIndex + 1 : 0))
-                  .replace("{end}", String(pageEndIndex))
-                  .replace("{total}", String(filteredBookings.length))}
+                {visibleRangeText}
               </p>
               <div className="booking-pagination-controls">
                 <button
