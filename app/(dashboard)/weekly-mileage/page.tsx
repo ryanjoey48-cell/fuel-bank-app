@@ -1,10 +1,9 @@
 "use client";
 
-import { CheckCircle2, Download, History, Pencil, Plus, Trash2, X } from "lucide-react";
+import { CheckCircle2, Copy, Download, History, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { Header } from "@/components/header";
-import { WeeklyMileageUploadCard } from "@/components/weekly-mileage-upload-card";
 import {
   deleteWeeklyMileage,
   fetchDrivers,
@@ -28,6 +27,7 @@ import {
 } from "@/lib/operations";
 import { formatDate, formatNumber } from "@/lib/utils";
 import type { Driver, OilChangeBaseline, Vehicle, VehicleServiceLog, WeeklyMileageEntry } from "@/types/database";
+import type { OilChangeAlertRow, OilChangeStatus } from "@/lib/operations";
 
 const PAGE_SIZE = 25;
 const initialForm = { id: "", week_ending: "", driver_id: "", vehicle_reg: "", mileage: "" };
@@ -39,6 +39,7 @@ const normalizeReg = (value: unknown) =>
     .toUpperCase();
 type OilActionMode = "set" | "edit" | "mark";
 type OilFilter = "all" | "overdue" | "urgent" | "due_soon" | "review_required" | "not_set" | "ok";
+type OilReportScope = "all" | "overdue" | "urgent_overdue" | "due_soon" | "review_required";
 type WeeklyMileageDebugInfo = {
   userEmail: string | null;
   userId: string | null;
@@ -158,6 +159,16 @@ export default function WeeklyMileagePage() {
       ok: oilChangeRows.filter((row) => row.status === "ok").length,
       not_set: oilChangeRows.filter((row) => row.status === "not_set").length,
       review_required: oilChangeRows.filter((row) => row.status === "review_required").length
+    }),
+    [oilChangeRows]
+  );
+  const oilReportSummary = useMemo(
+    () => ({
+      overdue: oilChangeRows.filter((row) => row.status === "overdue").length,
+      urgent: oilChangeRows.filter((row) => row.status === "urgent").length,
+      dueSoon: oilChangeRows.filter((row) => row.status === "due_soon").length,
+      reviewRequired: oilChangeRows.filter((row) => row.status === "review_required" || row.status === "not_set" || row.status === "no_odometer").length,
+      ok: oilChangeRows.filter((row) => row.status === "ok").length
     }),
     [oilChangeRows]
   );
@@ -690,6 +701,120 @@ export default function WeeklyMileagePage() {
       "weekly-mileage-report"
     );
 
+  const oilReportStatusLabel = (status: OilChangeStatus) => {
+    if (status === "overdue") return "Overdue";
+    if (status === "urgent") return "Urgent";
+    if (status === "due_soon") return "Due Soon";
+    if (status === "review_required" || status === "no_odometer") return "Review Required";
+    if (status === "not_set") return "Not Set";
+    return "OK";
+  };
+
+  const oilReportPriority = (row: OilChangeAlertRow) => {
+    if (row.status === "overdue") return "Immediate service required";
+    if (row.status === "urgent") return "Book service soon";
+    if (row.status === "due_soon") return "Monitor";
+    if (row.status === "review_required" || row.status === "not_set" || row.status === "no_odometer") {
+      return "Missing service baseline";
+    }
+    return "No action needed";
+  };
+
+  const oilReportRank = (status: OilChangeStatus) => {
+    if (status === "overdue") return 1;
+    if (status === "urgent") return 2;
+    if (status === "due_soon") return 3;
+    if (status === "review_required" || status === "not_set" || status === "no_odometer") return 4;
+    return 5;
+  };
+
+  const sortOilReportRows = (rows: OilChangeAlertRow[]) =>
+    [...rows].sort((left, right) => {
+      const rankDiff = oilReportRank(left.status) - oilReportRank(right.status);
+      if (rankDiff !== 0) return rankDiff;
+
+      const leftRemaining = left.kmRemaining ?? Number.POSITIVE_INFINITY;
+      const rightRemaining = right.kmRemaining ?? Number.POSITIVE_INFINITY;
+      if (leftRemaining !== rightRemaining) return leftRemaining - rightRemaining;
+
+      return left.registration.localeCompare(right.registration);
+    });
+
+  const getOilReportRows = (scope: OilReportScope) => {
+    if (scope === "overdue") {
+      return sortOilReportRows(oilChangeRows.filter((row) => row.status === "overdue"));
+    }
+    if (scope === "urgent_overdue") {
+      return sortOilReportRows(oilChangeRows.filter((row) => row.status === "overdue" || row.status === "urgent"));
+    }
+    if (scope === "due_soon") {
+      return sortOilReportRows(oilChangeRows.filter((row) => row.status === "due_soon"));
+    }
+    if (scope === "review_required") {
+      return sortOilReportRows(
+        oilChangeRows.filter((row) => row.status === "review_required" || row.status === "not_set" || row.status === "no_odometer")
+      );
+    }
+    return sortOilReportRows(oilChangeRows);
+  };
+
+  const buildOilReportExportRows = (rows: OilChangeAlertRow[]) =>
+    rows.map((row) => ({
+      "Vehicle Registration": row.registration,
+      "Driver Name": row.driverName ?? "",
+      "Vehicle Type": row.vehicleType ? vehicleTypeLabel(row.vehicleType) : "",
+      "Current Odometer": row.currentOdometer ?? "",
+      "Last Oil Change Date": row.lastOilChangeDate ?? "",
+      "Last Oil Change Odometer": row.lastOilChangeOdometer ?? "",
+      "Service Interval KM": row.oilChangeIntervalKm ?? "",
+      "Next Service Due KM": row.nextOilChangeDueOdometer ?? "",
+      "KM Remaining": row.kmRemaining ?? "",
+      Status: oilReportStatusLabel(row.status),
+      Priority: oilReportPriority(row),
+      Notes: row.reviewReasons.length ? row.reviewReasons.map(reviewReasonLabel).join("; ") : actionLine(row)
+    }));
+
+  const exportOilServiceReport = (scope: OilReportScope, fileSuffix: string) => {
+    exportToCsv(buildOilReportExportRows(getOilReportRows(scope)), `oil-change-service-report-${fileSuffix}`);
+  };
+
+  const copyOilReportSummary = async () => {
+    const immediateRows = sortOilReportRows(
+      oilChangeRows.filter((row) => row.status === "overdue" || row.status === "urgent")
+    ).slice(0, 8);
+    const message = [
+      "Oil Change Service Report",
+      "",
+      `Overdue: ${oilReportSummary.overdue} vehicles`,
+      `Urgent: ${oilReportSummary.urgent} vehicles`,
+      `Due Soon: ${oilReportSummary.dueSoon} vehicles`,
+      `Review Required: ${oilReportSummary.reviewRequired} vehicles`,
+      `OK: ${oilReportSummary.ok} vehicles`,
+      "",
+      "Immediate attention:",
+      ...(immediateRows.length
+        ? immediateRows.map((row) => {
+            const detail =
+              row.status === "overdue" && row.overdueKm != null
+                ? `Overdue by ${formatNumber(row.overdueKm, language)} KM`
+                : row.kmRemaining != null
+                  ? `Due in ${formatNumber(row.kmRemaining, language)} KM`
+                  : oilReportStatusLabel(row.status);
+            return `- ${row.registration} - ${detail}`;
+          })
+        : ["- None"])
+    ].join("\n");
+
+    try {
+      await navigator.clipboard.writeText(message);
+      setError(null);
+      setSuccessMessage("Oil change report summary copied.");
+    } catch (err) {
+      console.error("Oil change report copy failed:", err);
+      setError("Unable to copy report summary. Please try again.");
+    }
+  };
+
   return (
     <>
       <div className="mb-6 hidden md:block">
@@ -798,11 +923,61 @@ export default function WeeklyMileagePage() {
         )}
       </section>
 
-      <WeeklyMileageUploadCard
-        drivers={drivers}
-        entries={entries}
-        onSaved={loadData}
-      />
+      <section className="surface-card mb-4 p-4 sm:p-5">
+        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h3 className="section-title">Oil Change Service Report</h3>
+            <p className="section-subtitle">Export vehicles that are overdue, urgent, due soon, or ready for review.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void copyOilReportSummary()}
+            disabled={!oilChangeRows.length}
+            className="btn-secondary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+          >
+            <Copy className="h-4 w-4" />
+            Copy Report Summary
+          </button>
+        </div>
+
+        <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          {[
+            { label: "Overdue Vehicles", value: oilReportSummary.overdue, className: "text-rose-700" },
+            { label: "Urgent Vehicles", value: oilReportSummary.urgent, className: "text-orange-700" },
+            { label: "Due Soon Vehicles", value: oilReportSummary.dueSoon, className: "text-amber-700" },
+            { label: "Review Required", value: oilReportSummary.reviewRequired, className: "text-sky-700" },
+            { label: "OK Vehicles", value: oilReportSummary.ok, className: "text-emerald-700" }
+          ].map((item) => (
+            <div key={item.label} className="rounded-[0.85rem] border border-slate-200 bg-white/85 px-3 py-3">
+              <p className="metric-label">{item.label}</p>
+              <p className={`mt-1 text-2xl font-bold tracking-normal ${item.className}`}>
+                {formatNumber(item.value, language)}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+          {[
+            { label: "Export All Service Statuses", scope: "all", suffix: "all" },
+            { label: "Export Overdue Only", scope: "overdue", suffix: "overdue" },
+            { label: "Export Urgent + Overdue", scope: "urgent_overdue", suffix: "urgent-overdue" },
+            { label: "Export Due Soon", scope: "due_soon", suffix: "due-soon" },
+            { label: "Export Review Required / Not Set", scope: "review_required", suffix: "review-required" }
+          ].map((option) => (
+            <button
+              key={option.scope}
+              type="button"
+              onClick={() => exportOilServiceReport(option.scope as OilReportScope, option.suffix)}
+              disabled={!getOilReportRows(option.scope as OilReportScope).length}
+              className="btn-secondary min-h-[44px] justify-center gap-2 px-3 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Download className="h-4 w-4" />
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </section>
 
       <section className="surface-card mb-4 p-4 sm:p-5">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">

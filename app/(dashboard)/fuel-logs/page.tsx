@@ -6,6 +6,8 @@ import {
   Clock3,
   Download,
   Droplets,
+  Gauge,
+  Info,
   ReceiptText,
   TrendingUp,
   Wallet
@@ -39,7 +41,7 @@ import { exportToCsv } from "@/lib/export";
 import { applyRequiredValidationMessage, clearValidationMessage } from "@/lib/form-validation";
 import { useLanguage } from "@/lib/language-provider";
 import { calculateFuelFields } from "@/lib/operations";
-import { formatCurrency, formatDate, formatNumber, today } from "@/lib/utils";
+import { formatCurrency, formatDate, formatNumber, normalizeVehicleRegistration, today } from "@/lib/utils";
 import type {
   Driver,
   FuelLogDaySummary,
@@ -56,6 +58,13 @@ const DEFAULT_FUEL_TYPE = "diesel";
 const DEFAULT_PAYMENT_METHOD = "company_card";
 const DEFAULT_ENTRY_SOURCE: FuelLogEntrySource = "line_message";
 const FILTER_STORAGE_KEY = "fuel-bank:fuel-logs-filters";
+const efficiencyThresholds = {
+  minReliableKmDriven: 100,
+  longTripKmDriven: 1200,
+  longRefillGapDays: 4,
+  lowKmPerLitre: 2.0,
+  highKmPerLitre: 5.5
+};
 
 type FuelLogForm = {
   id: string;
@@ -118,19 +127,89 @@ type FuelDraft = {
   notes: string | null;
 };
 
-function getLogTimestamp(log: FuelLogWithDriver) {
-  return log.created_at || log.date;
-}
+type EfficiencyFilters = {
+  driverId: string;
+  vehicleReg: string;
+  fromDate: string;
+  toDate: string;
+  specificDate: string;
+  onlyWithMileage: boolean;
+  receiptCheckedStatus: "" | "checked" | "not_checked";
+};
 
-function formatTimeLabel(value: string | null | undefined, language: "en" | "th") {
-  if (!value) return "-";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "-";
-  return new Intl.DateTimeFormat(language === "th" ? "th-TH" : "en-GB", {
-    hour: "2-digit",
-    minute: "2-digit"
-  }).format(parsed);
-}
+type EfficiencyCalculationMode = "per_fill" | "trip_summary";
+
+type EfficiencyStatus =
+  | "missing_mileage"
+  | "not_enough_data"
+  | "check_mileage"
+  | "normal"
+  | "too_short_to_judge"
+  | "needs_review"
+  | "long_trip_check"
+  | "check_receipt";
+
+type EfficiencyNoteKey =
+  | "missing_mileage"
+  | "not_enough_data"
+  | "check_mileage"
+  | "too_short_to_judge"
+  | "long_trip_check"
+  | "km_l_high"
+  | "km_l_low"
+  | "receipt_not_checked_verify"
+  | "reliable_calculation";
+
+type EfficiencyRow = {
+  log: FuelLogWithDriver;
+  previousEntry: FuelLogWithDriver | null;
+  previousFuelDate: string | null;
+  daysSincePreviousFill: number | null;
+  previousMileage: number | null;
+  currentMileage: number | null;
+  kmDriven: number | null;
+  litres: number | null;
+  kmPerLitre: number | null;
+  status: EfficiencyStatus;
+  resultReason: EfficiencyNoteKey;
+  dataQualityNotes: EfficiencyNoteKey[];
+  includedInKpiAverage: boolean;
+};
+
+type TripSummaryStatus =
+  | "calculated"
+  | "check_receipts"
+  | "missing_mileage"
+  | "check_mileage"
+  | "not_enough_data";
+
+type TripSummary = {
+  logs: FuelLogWithDriver[];
+  startMileage: number | null;
+  endMileage: number | null;
+  tripKm: number | null;
+  totalLitres: number;
+  totalFuelCost: number;
+  tripKmPerLitre: number | null;
+  averagePricePerLitre: number | null;
+  fuelLogCount: number;
+  receiptCheckedCount: number;
+  receiptUncheckedCount: number;
+  missingMileageCount: number;
+  mileageRecordCount: number;
+  status: TripSummaryStatus;
+  reason: string;
+};
+
+const initialEfficiencyFilters: EfficiencyFilters = {
+  driverId: "",
+  vehicleReg: "",
+  fromDate: "",
+  toDate: "",
+  specificDate: "",
+  onlyWithMileage: true,
+  receiptCheckedStatus: ""
+};
 
 function getReceiptCheckLabel(checked: boolean, language: "en" | "th") {
   if (language === "th") {
@@ -191,6 +270,148 @@ function getFuelLogDuplicateKey(log: Pick<FuelLogWithDriver, "date" | "driver_id
 
 function isMissingMileage(log: Pick<FuelLogWithDriver, "mileage">) {
   return log.mileage == null || Number(log.mileage) <= 0;
+}
+
+function getMileageValue(value: number | null | undefined) {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : null;
+}
+
+function compareFuelLogsByMileageOrder(a: FuelLogWithDriver, b: FuelLogWithDriver) {
+  const dateComparison = a.date.localeCompare(b.date);
+  if (dateComparison !== 0) return dateComparison;
+
+  const createdAtComparison = (a.created_at || "").localeCompare(b.created_at || "");
+  if (createdAtComparison !== 0) return createdAtComparison;
+
+  return String(a.id).localeCompare(String(b.id));
+}
+
+function getDaysBetweenFuelDates(previousDate: string | null | undefined, currentDate: string | null | undefined) {
+  if (!previousDate || !currentDate) return null;
+  const previous = new Date(`${previousDate}T00:00:00`);
+  const current = new Date(`${currentDate}T00:00:00`);
+  if (Number.isNaN(previous.getTime()) || Number.isNaN(current.getTime())) return null;
+  return Math.max(0, Math.round((current.getTime() - previous.getTime()) / (24 * 60 * 60 * 1000)));
+}
+
+function getInclusiveDaysBetweenDates(startDate: string | null | undefined, endDate: string | null | undefined) {
+  if (!startDate || !endDate) return null;
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T00:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return null;
+  return Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+}
+
+function buildEfficiencyRows(logs: FuelLogWithDriver[]) {
+  const previousByVehicle = new Map<string, FuelLogWithDriver>();
+  const rows = [...logs]
+    .sort(compareFuelLogsByMileageOrder)
+    .map((log) => {
+      const vehicleKey = normalizeVehicleRegistration(log.vehicle_reg);
+      const currentMileage = getMileageValue(log.mileage);
+      const litres = Number.isFinite(Number(log.litres)) && Number(log.litres) > 0 ? Number(log.litres) : null;
+      const previousEntry = vehicleKey ? previousByVehicle.get(vehicleKey) ?? null : null;
+      const previousFuelDate = previousEntry?.date ?? null;
+      const daysSincePreviousFill = getDaysBetweenFuelDates(previousFuelDate, log.date);
+      const previousMileage = getMileageValue(previousEntry?.mileage);
+
+      let kmDriven: number | null = null;
+      let kmPerLitre: number | null = null;
+      let status: EfficiencyStatus = "not_enough_data";
+      let resultReason: EfficiencyNoteKey = "not_enough_data";
+      const dataQualityNotes: EfficiencyNoteKey[] = [];
+
+      if (currentMileage == null) {
+        status = "missing_mileage";
+        resultReason = "missing_mileage";
+        dataQualityNotes.push("missing_mileage");
+      } else if (previousMileage == null || litres == null) {
+        status = "not_enough_data";
+        resultReason = "not_enough_data";
+        dataQualityNotes.push("not_enough_data");
+      } else if (currentMileage <= previousMileage) {
+        status = "check_mileage";
+        resultReason = "check_mileage";
+        dataQualityNotes.push("check_mileage");
+      } else {
+        kmDriven = currentMileage - previousMileage;
+        kmPerLitre = litres > 0 ? kmDriven / litres : null;
+        if (kmPerLitre == null || !Number.isFinite(kmPerLitre)) {
+          status = "not_enough_data";
+          resultReason = "not_enough_data";
+          dataQualityNotes.push("not_enough_data");
+        } else {
+          const tooShortToJudge = kmDriven < efficiencyThresholds.minReliableKmDriven;
+          const longTripCheck =
+            kmDriven > efficiencyThresholds.longTripKmDriven ||
+            (daysSincePreviousFill != null && daysSincePreviousFill >= efficiencyThresholds.longRefillGapDays);
+          const lowerThanExpected = kmPerLitre < efficiencyThresholds.lowKmPerLitre;
+          const higherThanExpected = kmPerLitre > efficiencyThresholds.highKmPerLitre;
+          const receiptNotChecked = !log.receipt_checked;
+
+          if (receiptNotChecked) dataQualityNotes.push("receipt_not_checked_verify");
+          if (tooShortToJudge) dataQualityNotes.push("too_short_to_judge");
+          if (longTripCheck) dataQualityNotes.push("long_trip_check");
+          if (lowerThanExpected) dataQualityNotes.push("km_l_low");
+          if (higherThanExpected) dataQualityNotes.push("km_l_high");
+
+          if (receiptNotChecked) {
+            status = "check_receipt";
+            resultReason = "receipt_not_checked_verify";
+          } else if (tooShortToJudge) {
+            status = "too_short_to_judge";
+            resultReason = "too_short_to_judge";
+          } else if (longTripCheck) {
+            status = "long_trip_check";
+            resultReason = "long_trip_check";
+          } else if (lowerThanExpected) {
+            status = "needs_review";
+            resultReason = "km_l_low";
+          } else if (higherThanExpected) {
+            status = "needs_review";
+            resultReason = "km_l_high";
+          } else {
+            status = "normal";
+            resultReason = "reliable_calculation";
+            dataQualityNotes.push("reliable_calculation");
+          }
+        }
+      }
+
+      const includedInKpiAverage = status === "normal";
+
+      if (!dataQualityNotes.length) {
+        dataQualityNotes.push("reliable_calculation");
+      }
+
+      if (vehicleKey && currentMileage != null) {
+        previousByVehicle.set(vehicleKey, log);
+      }
+
+      return {
+        log,
+        previousEntry,
+        previousFuelDate,
+        daysSincePreviousFill,
+        previousMileage,
+        currentMileage,
+        kmDriven,
+        litres,
+        kmPerLitre,
+        status,
+        resultReason,
+        dataQualityNotes,
+        includedInKpiAverage
+      } satisfies EfficiencyRow;
+    });
+
+  return rows.sort((a, b) => compareFuelLogsByMileageOrder(b.log, a.log));
+}
+
+function getNumericValue(value: number | null | undefined) {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : 0;
 }
 
 function getStoredFilters(): FuelLogFilters {
@@ -355,10 +576,13 @@ export default function FuelLogsPage() {
 
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [fuelLogs, setFuelLogs] = useState<FuelLogWithDriver[]>([]);
+  const [efficiencySourceLogs, setEfficiencySourceLogs] = useState<FuelLogWithDriver[]>([]);
   const [todayLogs, setTodayLogs] = useState<FuelLogWithDriver[]>([]);
   const [last7DayRows, setLast7DayRows] = useState<FuelLogDaySummary[]>([]);
   const [form, setForm] = useState(initialForm);
   const [filters, setFilters] = useState<FuelLogFilters>(() => getStoredFilters());
+  const [efficiencyFilters, setEfficiencyFilters] = useState<EfficiencyFilters>(initialEfficiencyFilters);
+  const [efficiencyCalculationMode, setEfficiencyCalculationMode] = useState<EfficiencyCalculationMode>("per_fill");
   const [sortKey, setSortKey] = useState<FuelLogSortKey>("date");
   const [sortDirection, setSortDirection] = useState<FuelLogSortDirection>("desc");
   const [currentPage, setCurrentPage] = useState(1);
@@ -397,28 +621,20 @@ export default function FuelLogsPage() {
     entriesToday: todayLogs.length
   };
 
-  const topDriversToday = useMemo(() => {
-    const totals = new Map<string, { driver: string; amount: number; litres: number }>();
-    todayLogs.forEach((log) => {
-      const key = log.driver || "-";
-      const current = totals.get(key) || { driver: key, amount: 0, litres: 0 };
-      current.amount += Number(log.total_cost || 0);
-      current.litres += Number(log.litres || 0);
-      totals.set(key, current);
-    });
-    return Array.from(totals.values()).sort((a, b) => b.amount - a.amount).slice(0, 5);
-  }, [todayLogs]);
-
   const vehicleOptions = useMemo(
     () =>
       Array.from(
         new Set(
-          [...fuelLogs.map((log) => log.vehicle_reg), ...drivers.map((driver) => driver.vehicle_reg)]
+          [
+            ...fuelLogs.map((log) => log.vehicle_reg),
+            ...efficiencySourceLogs.map((log) => log.vehicle_reg),
+            ...drivers.map((driver) => driver.vehicle_reg)
+          ]
             .filter(Boolean)
             .map((value) => value.trim())
         )
       ).sort(),
-    [drivers, fuelLogs]
+    [drivers, efficiencySourceLogs, fuelLogs]
   );
 
   const duplicateKeyCounts = useMemo(() => {
@@ -429,6 +645,243 @@ export default function FuelLogsPage() {
     }
     return counts;
   }, [fuelLogs]);
+
+  const efficiencyRows = useMemo(() => buildEfficiencyRows(efficiencySourceLogs), [efficiencySourceLogs]);
+
+  const scopedEfficiencyRows = useMemo(
+    () =>
+      efficiencyRows.filter((row) => {
+        if (efficiencyFilters.driverId && String(row.log.driver_id || "") !== efficiencyFilters.driverId) return false;
+        if (efficiencyFilters.vehicleReg && row.log.vehicle_reg !== efficiencyFilters.vehicleReg) return false;
+        if (efficiencyFilters.specificDate && row.log.date !== efficiencyFilters.specificDate) return false;
+        if (!efficiencyFilters.specificDate && efficiencyFilters.fromDate && row.log.date < efficiencyFilters.fromDate) return false;
+        if (!efficiencyFilters.specificDate && efficiencyFilters.toDate && row.log.date > efficiencyFilters.toDate) return false;
+        if (efficiencyFilters.receiptCheckedStatus === "checked" && !row.log.receipt_checked) return false;
+        if (efficiencyFilters.receiptCheckedStatus === "not_checked" && row.log.receipt_checked) return false;
+        return true;
+      }),
+    [efficiencyFilters, efficiencyRows]
+  );
+
+  const filteredEfficiencyRows = useMemo(
+    () =>
+      efficiencyFilters.onlyWithMileage
+        ? scopedEfficiencyRows.filter((row) => row.currentMileage != null)
+        : scopedEfficiencyRows,
+    [efficiencyFilters.onlyWithMileage, scopedEfficiencyRows]
+  );
+
+  const efficiencySummary = useMemo(() => {
+    const calculatedRows = filteredEfficiencyRows.filter((row) => row.kmPerLitre != null && row.kmDriven != null);
+    const reliableRows = calculatedRows.filter((row) => row.includedInKpiAverage);
+    const totalKm = calculatedRows.reduce((sum, row) => sum + Number(row.kmDriven || 0), 0);
+    const totalLitres = calculatedRows.reduce((sum, row) => sum + Number(row.litres || 0), 0);
+    const reliableKm = reliableRows.reduce((sum, row) => sum + Number(row.kmDriven || 0), 0);
+    const reliableLitres = reliableRows.reduce((sum, row) => sum + Number(row.litres || 0), 0);
+    const kmPerLitreValues = reliableRows.map((row) => Number(row.kmPerLitre)).filter(Number.isFinite);
+    const reviewStatuses: EfficiencyStatus[] = [
+      "needs_review",
+      "long_trip_check",
+      "too_short_to_judge",
+      "check_mileage",
+      "check_receipt"
+    ];
+
+    return {
+      averageKmPerLitre: reliableLitres > 0 ? reliableKm / reliableLitres : null,
+      bestKmPerLitre: kmPerLitreValues.length ? Math.max(...kmPerLitreValues) : null,
+      worstKmPerLitre: kmPerLitreValues.length ? Math.min(...kmPerLitreValues) : null,
+      totalKm,
+      totalLitres,
+      mileageCompliance:
+        scopedEfficiencyRows.length > 0
+          ? (scopedEfficiencyRows.filter((row) => row.currentMileage != null).length / scopedEfficiencyRows.length) * 100
+          : null,
+      reviewNeededEntries: filteredEfficiencyRows.filter((row) => reviewStatuses.includes(row.status)).length,
+      missingMileageEntries: scopedEfficiencyRows.filter((row) => row.status === "missing_mileage").length
+    };
+  }, [filteredEfficiencyRows, scopedEfficiencyRows]);
+
+  const missingMileageRows = useMemo(
+    () => scopedEfficiencyRows.filter((row) => row.status === "missing_mileage"),
+    [scopedEfficiencyRows]
+  );
+
+  const tripSummaryLogs = useMemo(
+    () =>
+      [...efficiencySourceLogs]
+        .filter((log) => {
+          if (efficiencyFilters.driverId && String(log.driver_id || "") !== efficiencyFilters.driverId) return false;
+          if (efficiencyFilters.vehicleReg && log.vehicle_reg !== efficiencyFilters.vehicleReg) return false;
+          if (efficiencyFilters.fromDate && log.date < efficiencyFilters.fromDate) return false;
+          if (efficiencyFilters.toDate && log.date > efficiencyFilters.toDate) return false;
+          if (efficiencyFilters.receiptCheckedStatus === "checked" && !log.receipt_checked) return false;
+          if (efficiencyFilters.receiptCheckedStatus === "not_checked" && log.receipt_checked) return false;
+          return true;
+        })
+        .sort(compareFuelLogsByMileageOrder),
+    [
+      efficiencyFilters.driverId,
+      efficiencyFilters.fromDate,
+      efficiencyFilters.receiptCheckedStatus,
+      efficiencyFilters.toDate,
+      efficiencyFilters.vehicleReg,
+      efficiencySourceLogs
+    ]
+  );
+
+  const tripSummary = useMemo<TripSummary>(() => {
+    const logs = tripSummaryLogs;
+    const mileageLogs = logs.filter((log) => getMileageValue(log.mileage) != null);
+    const startMileage = mileageLogs.length ? getMileageValue(mileageLogs[0].mileage) : null;
+    const endMileage = mileageLogs.length ? getMileageValue(mileageLogs[mileageLogs.length - 1].mileage) : null;
+    const totalLitres = logs.reduce((sum, log) => sum + getNumericValue(log.litres), 0);
+    const totalFuelCost = logs.reduce((sum, log) => sum + getNumericValue(log.total_cost), 0);
+    const receiptCheckedCount = logs.filter((log) => log.receipt_checked).length;
+    const receiptUncheckedCount = logs.length - receiptCheckedCount;
+    const missingMileageCount = logs.filter((log) => getMileageValue(log.mileage) == null).length;
+
+    let status: TripSummaryStatus = "not_enough_data";
+    let reason: string = t.fuelLogs.efficiency.tripNeedTwoMileageRecords;
+    let tripKm: number | null = null;
+    let tripKmPerLitre: number | null = null;
+
+    if (mileageLogs.length < 2 || startMileage == null || endMileage == null) {
+      status = "not_enough_data";
+      reason = t.fuelLogs.efficiency.tripNeedTwoMileageRecords;
+    } else if (endMileage <= startMileage) {
+      status = "check_mileage";
+      reason = t.fuelLogs.efficiency.tripEndMileageMustBeHigher;
+    } else if (totalLitres <= 0) {
+      status = "not_enough_data";
+      reason = t.fuelLogs.efficiency.tripNotEnoughLitres;
+    } else {
+      tripKm = endMileage - startMileage;
+      tripKmPerLitre = tripKm / totalLitres;
+      if (receiptUncheckedCount > 0) {
+        status = "check_receipts";
+        reason = t.fuelLogs.efficiency.tripReceiptsTooltip;
+      } else if (missingMileageCount > 0) {
+        status = "missing_mileage";
+        reason = t.fuelLogs.efficiency.tripMissingMileageWarning;
+      } else {
+        status = "calculated";
+        reason = t.fuelLogs.efficiency.tripCalculatedTooltip;
+      }
+    }
+
+    return {
+      logs,
+      startMileage,
+      endMileage,
+      tripKm,
+      totalLitres,
+      totalFuelCost,
+      tripKmPerLitre,
+      averagePricePerLitre: totalLitres > 0 ? totalFuelCost / totalLitres : null,
+      fuelLogCount: logs.length,
+      receiptCheckedCount,
+      receiptUncheckedCount,
+      missingMileageCount,
+      mileageRecordCount: mileageLogs.length,
+      status,
+      reason
+    };
+  }, [t.fuelLogs.efficiency, tripSummaryLogs]);
+
+  const statusLabels: Record<EfficiencyStatus, string> = {
+    missing_mileage: t.fuelLogs.efficiency.statusMissingMileage,
+    not_enough_data: t.fuelLogs.efficiency.statusNotEnoughData,
+    check_mileage: t.fuelLogs.efficiency.statusCheckMileage,
+    normal: t.fuelLogs.efficiency.statusNormal,
+    too_short_to_judge: t.fuelLogs.efficiency.statusTooShortToJudge,
+    needs_review: t.fuelLogs.efficiency.statusNeedsReview,
+    long_trip_check: t.fuelLogs.efficiency.statusLongTripCheck,
+    check_receipt: t.fuelLogs.efficiency.statusCheckReceipt
+  };
+
+  const tripStatusLabels: Record<TripSummaryStatus, string> = {
+    calculated: t.fuelLogs.efficiency.statusCalculated,
+    check_receipts: t.fuelLogs.efficiency.statusCheckReceipts,
+    missing_mileage: t.fuelLogs.efficiency.statusMissingMileage,
+    check_mileage: t.fuelLogs.efficiency.statusCheckMileage,
+    not_enough_data: t.fuelLogs.efficiency.statusNotEnoughData
+  };
+
+  const tripStatusTooltips: Record<TripSummaryStatus, string> = {
+    calculated: t.fuelLogs.efficiency.tripStatusCalculatedTooltip,
+    check_receipts: t.fuelLogs.efficiency.tripStatusCheckReceiptsTooltip,
+    missing_mileage: t.fuelLogs.efficiency.tripStatusMissingMileageTooltip,
+    check_mileage: t.fuelLogs.efficiency.tripStatusCheckMileageTooltip,
+    not_enough_data: t.fuelLogs.efficiency.tripStatusNotEnoughDataTooltip
+  };
+
+  const tripPeriodDays = getInclusiveDaysBetweenDates(efficiencyFilters.fromDate, efficiencyFilters.toDate);
+  const tripPeriodLabel =
+    efficiencyFilters.fromDate || efficiencyFilters.toDate
+      ? `${efficiencyFilters.fromDate ? formatDate(efficiencyFilters.fromDate, language) : "-"} -> ${
+          efficiencyFilters.toDate ? formatDate(efficiencyFilters.toDate, language) : "-"
+        }`
+      : "-";
+  const receiptsSummaryLabel = `${formatNumber(tripSummary.receiptCheckedCount, language)} ${t.fuelLogs.efficiency.of} ${formatNumber(
+    tripSummary.fuelLogCount,
+    language
+  )} ${t.fuelLogs.efficiency.checkedLower}`;
+  const missingMileageSummaryLabel =
+    tripSummary.missingMileageCount === 0
+      ? `0 ${t.fuelLogs.efficiency.missingLower}`
+      : `${formatNumber(tripSummary.missingMileageCount, language)} ${t.fuelLogs.efficiency.missingLower}`;
+  const mileageClarityMessage =
+    tripSummary.mileageRecordCount < 2
+      ? t.fuelLogs.efficiency.tripNeedTwoMileageRecordsDateRange
+      : tripSummary.missingMileageCount > 0
+        ? t.fuelLogs.efficiency.tripMissingMileageCanStillCalculate
+        : t.fuelLogs.efficiency.tripAllKeyMileageAvailable;
+
+  const noteLabels: Record<EfficiencyNoteKey, string> = {
+    missing_mileage: t.fuelLogs.efficiency.noteMissingMileage,
+    not_enough_data: t.fuelLogs.efficiency.noteNotEnoughData,
+    check_mileage: t.fuelLogs.efficiency.noteCheckMileage,
+    too_short_to_judge: t.fuelLogs.efficiency.noteTooShortToJudge,
+    long_trip_check: t.fuelLogs.efficiency.noteLongTripCheck,
+    km_l_high: t.fuelLogs.efficiency.noteKmLHigh,
+    km_l_low: t.fuelLogs.efficiency.noteKmLLow,
+    receipt_not_checked_verify: t.fuelLogs.efficiency.noteReceiptNotCheckedVerify,
+    reliable_calculation: t.fuelLogs.efficiency.noteReliableCalculation
+  };
+
+  const getEfficiencyStatusClass = (status: EfficiencyStatus) => {
+    if (status === "normal") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    if (status === "needs_review" || status === "long_trip_check" || status === "too_short_to_judge" || status === "check_mileage" || status === "check_receipt") {
+      return "border-amber-200 bg-amber-50 text-amber-800";
+    }
+    return "border-slate-200 bg-slate-100 text-slate-600";
+  };
+
+  const getTripStatusClass = (status: TripSummaryStatus) => {
+    if (status === "calculated") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    if (status === "check_receipts" || status === "missing_mileage" || status === "check_mileage") {
+      return "border-amber-200 bg-amber-50 text-amber-800";
+    }
+    return "border-slate-200 bg-slate-100 text-slate-600";
+  };
+
+  const getEfficiencyNoteText = (row: EfficiencyRow) =>
+    row.dataQualityNotes.map((note) => noteLabels[note]).filter(Boolean).join(" ");
+
+  const getEfficiencyTooltipText = (row: EfficiencyRow) => {
+    const calculated = row.kmPerLitre != null ? `${formatNumber(row.kmPerLitre, language, 2)} ${t.fuelLogs.efficiency.kmPerLitre}` : "-";
+    const reason =
+      row.resultReason === "too_short_to_judge" && row.kmDriven != null
+        ? `${t.fuelLogs.efficiency.onlyDrivenPrefix} ${formatNumber(row.kmDriven, language, 0)} ${t.fuelLogs.efficiency.onlyDrivenSuffix}`
+        : noteLabels[row.resultReason];
+    return [
+      `${t.fuelLogs.efficiency.calculated}: ${calculated}`,
+      `${t.fuelLogs.efficiency.reason}: ${reason}`,
+      `${t.fuelLogs.efficiency.receipt}: ${getReceiptCheckLabel(row.log.receipt_checked, language)}`,
+      `${t.fuelLogs.efficiency.includedInAverage}: ${row.includedInKpiAverage ? t.fuelLogs.efficiency.yes : t.fuelLogs.efficiency.no}`
+    ].join("\n");
+  };
 
   const getFuelLogWarnings = (log: FuelLogWithDriver) => {
     const warnings: string[] = [];
@@ -450,14 +903,16 @@ export default function FuelLogsPage() {
   }, [t.fuelLogs.unableToLoadFuelData]);
 
   const loadSummaryData = useCallback(async () => {
-    const [todayRows, recentDayRows, receiptSummaryRows] = await Promise.all([
+    const [todayRows, recentDayRows, receiptSummaryRows, efficiencyRowsForAnalysis] = await Promise.all([
       fetchFuelLogTodayRows(todayValue),
       fetchFuelLogRecentDaySummaries(7),
-      fetchFuelLogReceiptSummary(filters)
+      fetchFuelLogReceiptSummary(filters),
+      fetchFuelLogsForExport({})
     ]);
     setTodayLogs(todayRows);
     setLast7DayRows(recentDayRows);
     setReceiptSummary(receiptSummaryRows);
+    setEfficiencySourceLogs(efficiencyRowsForAnalysis);
   }, [filters, todayValue]);
 
   const loadFuelLogPage = useCallback(
@@ -627,6 +1082,12 @@ export default function FuelLogsPage() {
   const updateFilters = (updater: FuelLogFilters | ((current: FuelLogFilters) => FuelLogFilters)) => {
     setFilters((current) => (typeof updater === "function" ? updater(current) : updater));
     setCurrentPage(1);
+  };
+
+  const updateEfficiencyFilters = (
+    updater: EfficiencyFilters | ((current: EfficiencyFilters) => EfficiencyFilters)
+  ) => {
+    setEfficiencyFilters((current) => (typeof updater === "function" ? updater(current) : updater));
   };
 
   const handleSortChange = (nextKey: FuelLogSortKey) => {
@@ -822,6 +1283,132 @@ export default function FuelLogsPage() {
     }
   };
 
+  const handleExportEfficiencyReport = () => {
+    if (efficiencyCalculationMode === "trip_summary") {
+      const selectedDriverLabel =
+        drivers.find((driver) => String(driver.id) === String(efficiencyFilters.driverId))?.name ||
+        t.fuelLogs.efficiency.allDrivers;
+
+      exportToCsv(
+        [
+          {
+            [t.fuelLogs.efficiency.reportSection]: t.fuelLogs.efficiency.tripSummaryReport,
+            [t.fuelLogs.efficiency.field]: "",
+            [t.fuelLogs.efficiency.value]: ""
+          },
+          {
+            [t.fuelLogs.efficiency.reportSection]: t.fuelLogs.efficiency.summary,
+            [t.fuelLogs.efficiency.field]: t.fuelLogs.efficiency.driver,
+            [t.fuelLogs.efficiency.value]: selectedDriverLabel
+          },
+          {
+            [t.fuelLogs.efficiency.reportSection]: t.fuelLogs.efficiency.summary,
+            [t.fuelLogs.efficiency.field]: t.fuelLogs.efficiency.vehicleReg,
+            [t.fuelLogs.efficiency.value]: efficiencyFilters.vehicleReg || t.fuelLogs.efficiency.allVehicles
+          },
+          {
+            [t.fuelLogs.efficiency.reportSection]: t.fuelLogs.efficiency.summary,
+            [t.fuelLogs.efficiency.field]: t.fuelLogs.efficiency.tripPeriod,
+            [t.fuelLogs.efficiency.value]: tripPeriodLabel
+          },
+          {
+            [t.fuelLogs.efficiency.reportSection]: t.fuelLogs.efficiency.summary,
+            [t.fuelLogs.efficiency.field]: t.fuelLogs.efficiency.startMileage,
+            [t.fuelLogs.efficiency.value]: tripSummary.startMileage ?? ""
+          },
+          {
+            [t.fuelLogs.efficiency.reportSection]: t.fuelLogs.efficiency.summary,
+            [t.fuelLogs.efficiency.field]: t.fuelLogs.efficiency.endMileage,
+            [t.fuelLogs.efficiency.value]: tripSummary.endMileage ?? ""
+          },
+          {
+            [t.fuelLogs.efficiency.reportSection]: t.fuelLogs.efficiency.summary,
+            [t.fuelLogs.efficiency.field]: t.fuelLogs.efficiency.tripKm,
+            [t.fuelLogs.efficiency.value]: tripSummary.tripKm != null ? Number(tripSummary.tripKm.toFixed(2)) : ""
+          },
+          {
+            [t.fuelLogs.efficiency.reportSection]: t.fuelLogs.efficiency.summary,
+            [t.fuelLogs.efficiency.field]: t.fuelLogs.efficiency.totalLitres,
+            [t.fuelLogs.efficiency.value]: Number(tripSummary.totalLitres.toFixed(2))
+          },
+          {
+            [t.fuelLogs.efficiency.reportSection]: t.fuelLogs.efficiency.summary,
+            [t.fuelLogs.efficiency.field]: t.fuelLogs.efficiency.tripKmPerLitre,
+            [t.fuelLogs.efficiency.value]: tripSummary.tripKmPerLitre != null ? Number(tripSummary.tripKmPerLitre.toFixed(2)) : ""
+          },
+          {
+            [t.fuelLogs.efficiency.reportSection]: t.fuelLogs.efficiency.summary,
+            [t.fuelLogs.efficiency.field]: t.fuelLogs.efficiency.totalFuelCost,
+            [t.fuelLogs.efficiency.value]: Number(tripSummary.totalFuelCost.toFixed(2))
+          },
+          {
+            [t.fuelLogs.efficiency.reportSection]: t.fuelLogs.efficiency.summary,
+            [t.fuelLogs.efficiency.field]: t.fuelLogs.efficiency.averagePricePerLitre,
+            [t.fuelLogs.efficiency.value]:
+              tripSummary.averagePricePerLitre != null ? Number(tripSummary.averagePricePerLitre.toFixed(2)) : ""
+          },
+          {
+            [t.fuelLogs.efficiency.reportSection]: t.fuelLogs.efficiency.summary,
+            [t.fuelLogs.efficiency.field]: t.fuelLogs.efficiency.fuelLogCount,
+            [t.fuelLogs.efficiency.value]: tripSummary.fuelLogCount
+          },
+          {
+            [t.fuelLogs.efficiency.reportSection]: t.fuelLogs.efficiency.summary,
+            [t.fuelLogs.efficiency.field]: t.fuelLogs.efficiency.receiptsChecked,
+            [t.fuelLogs.efficiency.value]: receiptsSummaryLabel
+          },
+          {
+            [t.fuelLogs.efficiency.reportSection]: t.fuelLogs.efficiency.summary,
+            [t.fuelLogs.efficiency.field]: t.fuelLogs.efficiency.missingMileageCount,
+            [t.fuelLogs.efficiency.value]: tripSummary.missingMileageCount
+          },
+          {
+            [t.fuelLogs.efficiency.reportSection]: t.fuelLogs.efficiency.summary,
+            [t.fuelLogs.efficiency.field]: t.fuelLogs.efficiency.result,
+            [t.fuelLogs.efficiency.value]: tripStatusLabels[tripSummary.status]
+          },
+          ...tripSummary.logs.map((log) => ({
+            [t.fuelLogs.efficiency.reportSection]: t.fuelLogs.efficiency.includedFuelLogs,
+            [t.fuelLogs.efficiency.date]: formatDate(log.date, language),
+            [t.fuelLogs.efficiency.driver]: log.driver || "",
+            [t.fuelLogs.efficiency.vehicleReg]: log.vehicle_reg || "",
+            [t.fuelLogs.efficiency.mileage]: log.mileage ?? "",
+            [t.fuelLogs.efficiency.litres]: log.litres ?? "",
+            [t.fuelLogs.efficiency.totalCost]: log.total_cost ?? "",
+            [t.fuelLogs.efficiency.pricePerLitre]: log.price_per_litre ?? "",
+            [t.fuelLogs.efficiency.receiptCheck]: getReceiptCheckLabel(log.receipt_checked, language),
+            [t.fuelLogs.efficiency.entrySource]: sourceCopy.options[normalizeEntrySource(log.entry_source)],
+            [t.fuelLogs.efficiency.notes]: log.notes ?? ""
+          }))
+        ],
+        "fuel-efficiency-trip-summary"
+      );
+      return;
+    }
+
+    exportToCsv(
+      filteredEfficiencyRows.map((row) => ({
+        [t.fuelLogs.efficiency.date]: formatDate(row.log.date, language),
+        [t.fuelLogs.efficiency.driver]: row.log.driver || "",
+        [t.fuelLogs.efficiency.vehicleReg]: row.log.vehicle_reg || "",
+        [t.fuelLogs.efficiency.previousFuelDate]: row.previousFuelDate ? formatDate(row.previousFuelDate, language) : "",
+        [t.fuelLogs.efficiency.daysSincePreviousFill]: row.daysSincePreviousFill ?? "",
+        [t.fuelLogs.efficiency.previousMileage]: row.previousMileage ?? "",
+        [t.fuelLogs.efficiency.currentMileage]: row.currentMileage ?? "",
+        [t.fuelLogs.efficiency.kmDriven]: row.kmDriven != null ? Number(row.kmDriven.toFixed(2)) : "",
+        [t.fuelLogs.efficiency.litres]: row.litres ?? "",
+        [t.fuelLogs.efficiency.kmPerLitre]: row.kmPerLitre != null ? Number(row.kmPerLitre.toFixed(2)) : "",
+        [t.fuelLogs.efficiency.receiptCheck]: getReceiptCheckLabel(row.log.receipt_checked, language),
+        [t.fuelLogs.efficiency.result]: statusLabels[row.status],
+        [t.fuelLogs.efficiency.tooltipReason]: noteLabels[row.resultReason],
+        [t.fuelLogs.efficiency.includedInKpiAverage]: row.includedInKpiAverage
+          ? t.fuelLogs.efficiency.yes
+          : t.fuelLogs.efficiency.no
+      })),
+      "fuel-efficiency-report"
+    );
+  };
+
   const avgPriceToday = stats.litresToday > 0 ? stats.fuelSpendToday / stats.litresToday : 0;
 
   const handleReceiptToggle = useCallback(
@@ -895,55 +1482,418 @@ export default function FuelLogsPage() {
         <StatCard label={t.fuelLogs.averagePricePerLitreToday} value={stats.litresToday > 0 ? formatCurrency(avgPriceToday, language) : "-"} helper={stats.litresToday > 0 ? t.fuelLogs.averagePricePerLitreTodayHelper : t.fuelLogs.noTodayFuelDescription} icon={<TrendingUp className="h-5 w-5" />} />
       </section>
 
-      <section className="surface-card mb-4.5 p-4 sm:p-5">
-        <div className="mb-2.5">
-          <h3 className="section-title">{t.fuelLogs.todaysFuelActivity}</h3>
-          <p className="section-subtitle">{t.fuelLogs.todaysFuelActivityDescription}</p>
-        </div>
-        {loading ? (
-          <p className="text-sm text-slate-500">{t.fuelLogs.loadingFuelLogs}</p>
-        ) : todayLogs.length === 0 ? (
-          <EmptyState title={t.fuelLogs.noTodayFuelTitle} description={t.fuelLogs.noTodayFuelDescription} />
-        ) : (
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
-            <div className="space-y-3">
-              {todayLogs.slice(0, 6).map((log) => (
-                <div key={log.id} className="subtle-panel px-4 py-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-slate-900">{log.driver || "-"}</p>
-                      <p className="mt-1 text-sm text-slate-500">{log.vehicle_reg || "-"}</p>
-                    </div>
-                    <span className="shrink-0 text-sm font-semibold text-slate-950">{formatCurrency(Number(log.total_cost || 0), language)}</span>
-                  </div>
-                  <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400">
-                    <span>{formatNumber(Number(log.litres || 0), language, 2)}L</span>
-                    <span className="text-slate-300">-</span>
-                    <span>{formatTimeLabel(getLogTimestamp(log), language)}</span>
-                    <span className="text-slate-300">-</span>
-                    <span>{formatDate(log.date, language)}</span>
-                  </div>
-                </div>
-              ))}
+      <section className="surface-card mb-4.5 overflow-hidden p-4 sm:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-brand-100 bg-brand-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">
+              <Gauge className="h-3.5 w-3.5" />
+              {t.fuelLogs.efficiency.badge}
             </div>
-            <div className="subtle-panel p-4">
-              <div className="mb-2.5">
-                <p className="text-sm font-semibold text-slate-900">{t.fuelLogs.topDriversToday}</p>
-                <p className="mt-1 text-xs text-slate-400">{formatDate(todayValue, language)}</p>
+            <h3 className="mt-3 text-xl font-semibold text-slate-950">{t.fuelLogs.efficiency.title}</h3>
+            <p className="mt-1 max-w-3xl text-sm text-slate-500">{t.fuelLogs.efficiency.subtitle}</p>
+          </div>
+          <button
+            type="button"
+            onClick={handleExportEfficiencyReport}
+            disabled={efficiencyCalculationMode === "per_fill" ? !filteredEfficiencyRows.length : !tripSummary.logs.length}
+            className="btn-secondary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+          >
+            <Download className="h-4 w-4" />
+            {t.fuelLogs.efficiency.exportReport}
+          </button>
+        </div>
+
+        <div className="mt-5 rounded-[1.25rem] border border-brand-100 bg-brand-50/50 p-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">
+            {t.fuelLogs.efficiency.calculationMode}
+          </p>
+          <div className="grid grid-cols-2 gap-2 rounded-2xl bg-white p-1 shadow-[inset_0_0_0_1px_rgba(124,58,237,0.08)] sm:inline-grid sm:min-w-[320px]">
+            {([
+              ["per_fill", t.fuelLogs.efficiency.perFill],
+              ["trip_summary", t.fuelLogs.efficiency.tripSummary]
+            ] as [EfficiencyCalculationMode, string][]).map(([mode, label]) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setEfficiencyCalculationMode(mode)}
+                className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                  efficiencyCalculationMode === mode
+                    ? "bg-brand-700 text-white shadow-sm"
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-5 rounded-[1.5rem] border border-slate-200/80 bg-white/95 p-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)] sm:p-5">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-slate-900">{t.fuelLogs.efficiency.filters}</p>
+            <button type="button" onClick={() => setEfficiencyFilters(initialEfficiencyFilters)} className="text-sm font-medium text-slate-500 hover:text-slate-900">{t.fuelLogs.efficiency.clearFilters}</button>
+          </div>
+          <div className="grid gap-3 md:grid-cols-12">
+            <div className="md:col-span-3">
+              <label className="form-label">{t.fuelLogs.efficiency.driver}</label>
+              <select value={efficiencyFilters.driverId} onChange={(event) => updateEfficiencyFilters((current) => ({ ...current, driverId: event.target.value }))} className="form-input bg-white">
+                <option value="">{t.fuelLogs.efficiency.allDrivers}</option>
+                {drivers.map((driver) => <option key={driver.id} value={String(driver.id)}>{driver.name}</option>)}
+              </select>
+            </div>
+            <div className="md:col-span-3">
+              <label className="form-label">{t.fuelLogs.efficiency.vehicleReg}</label>
+              <select value={efficiencyFilters.vehicleReg} onChange={(event) => updateEfficiencyFilters((current) => ({ ...current, vehicleReg: event.target.value }))} className="form-input bg-white">
+                <option value="">{t.fuelLogs.efficiency.allVehicles}</option>
+                {vehicleOptions.map((vehicleReg) => <option key={vehicleReg} value={vehicleReg}>{vehicleReg}</option>)}
+              </select>
+            </div>
+            <div className="md:col-span-3">
+              <label className="form-label">{t.fuelLogs.efficiency.dateRange}</label>
+              <div className="grid grid-cols-2 gap-2">
+                <input type="date" value={efficiencyFilters.fromDate} onChange={(event) => updateEfficiencyFilters((current) => ({ ...current, fromDate: event.target.value, specificDate: "" }))} className="form-input bg-white" />
+                <input type="date" value={efficiencyFilters.toDate} onChange={(event) => updateEfficiencyFilters((current) => ({ ...current, toDate: event.target.value, specificDate: "" }))} className="form-input bg-white" />
               </div>
-              <div className="space-y-2">
-                {topDriversToday.map((driver) => (
-                  <div key={driver.driver} className="flex items-start justify-between gap-3 border-b border-slate-100/70 pb-2 last:border-b-0 last:pb-0">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-slate-800">{driver.driver}</p>
-                      <p className="mt-0.5 text-xs text-slate-400">{formatNumber(driver.litres, language, 2)}L</p>
+            </div>
+            {efficiencyCalculationMode === "per_fill" ? (
+              <div className="md:col-span-3">
+                <label className="form-label">{t.fuelLogs.efficiency.specificDate}</label>
+                <input type="date" value={efficiencyFilters.specificDate} onChange={(event) => updateEfficiencyFilters((current) => ({ ...current, specificDate: event.target.value, fromDate: event.target.value ? "" : current.fromDate, toDate: event.target.value ? "" : current.toDate }))} className="form-input bg-white" />
+              </div>
+            ) : null}
+            <div className="md:col-span-3">
+              <label className="form-label">{t.fuelLogs.efficiency.receiptCheck}</label>
+              <select value={efficiencyFilters.receiptCheckedStatus} onChange={(event) => updateEfficiencyFilters((current) => ({ ...current, receiptCheckedStatus: event.target.value as EfficiencyFilters["receiptCheckedStatus"] }))} className="form-input bg-white">
+                <option value="">{copy.all}</option>
+                <option value="checked">{t.fuelLogs.efficiency.receiptChecked}</option>
+                <option value="not_checked">{t.fuelLogs.efficiency.receiptNotChecked}</option>
+              </select>
+            </div>
+            {efficiencyCalculationMode === "per_fill" ? (
+              <label className="md:col-span-9 flex min-h-[44px] items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700">
+                <input type="checkbox" checked={efficiencyFilters.onlyWithMileage} onChange={(event) => updateEfficiencyFilters((current) => ({ ...current, onlyWithMileage: event.target.checked }))} className="h-4 w-4 accent-brand-700" />
+                {t.fuelLogs.efficiency.onlyWithMileage}
+              </label>
+            ) : null}
+          </div>
+        </div>
+
+        {efficiencyCalculationMode === "per_fill" ? (
+          <>
+        <div className="mt-5 flex items-start gap-3 rounded-2xl border border-sky-100 bg-sky-50/70 px-4 py-3 text-sm text-slate-700">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-700" />
+          <div>
+            <p className="font-semibold text-slate-900">{t.fuelLogs.efficiency.howCalculatedTitle}</p>
+            <p className="mt-1">{t.fuelLogs.efficiency.howCalculatedDescription}</p>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
+          <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.averageKmPerLitre}</p><p className="mt-2 text-xl font-bold text-slate-950">{efficiencySummary.averageKmPerLitre != null ? formatNumber(efficiencySummary.averageKmPerLitre, language, 2) : "-"}</p></div>
+          <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.bestKmPerLitre}</p><p className="mt-2 text-xl font-bold text-emerald-700">{efficiencySummary.bestKmPerLitre != null ? formatNumber(efficiencySummary.bestKmPerLitre, language, 2) : "-"}</p></div>
+          <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.worstKmPerLitre}</p><p className="mt-2 text-xl font-bold text-amber-700">{efficiencySummary.worstKmPerLitre != null ? formatNumber(efficiencySummary.worstKmPerLitre, language, 2) : "-"}</p></div>
+          <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.totalKmCalculated}</p><p className="mt-2 text-xl font-bold text-slate-950">{formatNumber(efficiencySummary.totalKm, language, 0)}</p></div>
+          <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.totalLitresUsed}</p><p className="mt-2 text-xl font-bold text-slate-950">{formatNumber(efficiencySummary.totalLitres, language, 2)}</p></div>
+          <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.missingMileageEntries}</p><p className="mt-2 text-xl font-bold text-rose-700">{formatNumber(efficiencySummary.missingMileageEntries, language)}</p></div>
+          <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.mileageCompliance}</p><p className="mt-2 text-xl font-bold text-brand-700">{efficiencySummary.mileageCompliance != null ? `${formatNumber(efficiencySummary.mileageCompliance, language, 0)}%` : "—"}</p><p className="mt-1 text-xs font-medium text-slate-500">{t.fuelLogs.efficiency.mileageProvided}</p></div>
+          <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.reviewNeeded}</p><p className="mt-2 text-xl font-bold text-amber-700">{formatNumber(efficiencySummary.reviewNeededEntries, language)}</p></div>
+        </div>
+
+        {missingMileageRows.length > 0 ? (
+          <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>{t.fuelLogs.efficiency.missingMileageWarning}</p>
+            </div>
+            <div className="mt-4 rounded-2xl border border-amber-200 bg-white/80 p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-800">{t.fuelLogs.efficiency.missingMileageEntries}</p>
+              <div className="mt-3 space-y-2 md:hidden">
+                {missingMileageRows.slice(0, 8).map((row) => (
+                  <div key={row.log.id} className="rounded-xl border border-amber-100 bg-white px-3 py-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-slate-900">{row.log.driver || "-"}</p>
+                        <p className="mt-0.5 text-xs text-slate-500">{formatDate(row.log.date, language)} · {row.log.vehicle_reg || "-"}</p>
+                      </div>
+                      <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">{t.fuelLogs.efficiency.needsMileage}</span>
                     </div>
-                    <p className="text-sm font-semibold text-slate-950">{formatCurrency(driver.amount, language)}</p>
+                    <p className="mt-2 text-xs text-slate-500">{formatNumber(Number(row.log.litres || 0), language, 2)} {t.fuelLogs.efficiency.litres} · {formatCurrency(Number(row.log.total_cost || 0), language)}</p>
                   </div>
                 ))}
               </div>
+              <div className="mt-3 hidden overflow-x-auto md:block">
+                <table className="min-w-[760px] w-full text-xs">
+                  <thead className="text-slate-500">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-semibold">{t.fuelLogs.efficiency.date}</th>
+                      <th className="px-3 py-2 text-left font-semibold">{t.fuelLogs.efficiency.driver}</th>
+                      <th className="px-3 py-2 text-left font-semibold">{t.fuelLogs.efficiency.vehicleReg}</th>
+                      <th className="px-3 py-2 text-right font-semibold">{t.fuelLogs.efficiency.litres}</th>
+                      <th className="px-3 py-2 text-right font-semibold">{t.fuelLogs.totalCost}</th>
+                      <th className="px-3 py-2 text-left font-semibold">{t.fuelLogs.efficiency.status}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {missingMileageRows.slice(0, 8).map((row) => (
+                      <tr key={row.log.id} className="border-t border-amber-100 text-slate-700">
+                        <td className="px-3 py-2 font-medium">{formatDate(row.log.date, language)}</td>
+                        <td className="px-3 py-2">{row.log.driver || "-"}</td>
+                        <td className="px-3 py-2">{row.log.vehicle_reg || "-"}</td>
+                        <td className="px-3 py-2 text-right">{formatNumber(Number(row.log.litres || 0), language, 2)}</td>
+                        <td className="px-3 py-2 text-right">{formatCurrency(Number(row.log.total_cost || 0), language)}</td>
+                        <td className="px-3 py-2"><span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">{t.fuelLogs.efficiency.needsMileage}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {missingMileageRows.length > 8 ? (
+                <p className="mt-3 text-xs text-amber-800">{t.fuelLogs.efficiency.missingMileageListLimit}</p>
+              ) : null}
             </div>
           </div>
+        ) : null}
+
+        <div className="mt-5">
+          {loading ? (
+            <p className="text-sm text-slate-500">{t.fuelLogs.loadingFuelLogs}</p>
+          ) : filteredEfficiencyRows.length === 0 ? (
+            <EmptyState title={t.fuelLogs.efficiency.noResultsTitle} description={t.fuelLogs.efficiency.noResultsDescription} />
+          ) : (
+            <>
+              <div className="space-y-3 md:hidden">
+                {filteredEfficiencyRows.slice(0, 25).map((row) => (
+                  <div key={row.log.id} className="subtle-panel p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{formatDate(row.log.date, language)}</p>
+                        <p className="mt-2 text-sm font-semibold text-slate-900">{row.log.driver || "-"}</p>
+                        <p className="mt-1 text-sm text-slate-500">{row.log.vehicle_reg || "-"}</p>
+                      </div>
+                      <button type="button" title={getEfficiencyTooltipText(row)} className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getEfficiencyStatusClass(row.status)}`}>{statusLabels[row.status]}</button>
+                    </div>
+                    <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                      <div><p className="text-xs text-slate-500">{t.fuelLogs.efficiency.previousMileage}</p><p className="font-semibold text-slate-900">{row.previousMileage ?? "-"}</p></div>
+                      <div><p className="text-xs text-slate-500">{t.fuelLogs.efficiency.currentMileage}</p><p className="font-semibold text-slate-900">{row.currentMileage ?? "-"}</p></div>
+                      <div><p className="text-xs text-slate-500">{t.fuelLogs.efficiency.kmDriven}</p><p className="font-semibold text-slate-900">{row.kmDriven != null ? formatNumber(row.kmDriven, language, 0) : "-"}</p></div>
+                      <div><p className="text-xs text-slate-500">{t.fuelLogs.efficiency.kmPerLitre}</p><p className="font-semibold text-slate-900">{row.kmPerLitre != null ? formatNumber(row.kmPerLitre, language, 2) : "-"}</p></div>
+                      <div><p className="text-xs text-slate-500">{t.fuelLogs.efficiency.daysSincePreviousFill}</p><p className="font-semibold text-slate-900">{row.daysSincePreviousFill ?? "-"}</p></div>
+                      <div><p className="text-xs text-slate-500">{t.fuelLogs.efficiency.receiptCheck}</p><span className={`mt-1 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getReceiptCheckBadgeClass(row.log.receipt_checked)}`}>{getReceiptCheckLabel(row.log.receipt_checked, language)}</span></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="hidden md:block">
+                <div className="table-shell rounded-2xl">
+                  <div className="table-scroll overflow-x-auto">
+                    <table className="min-w-[1220px] w-full text-sm">
+                      <thead className="bg-slate-50/95 text-slate-600">
+                        <tr>
+                          <th className="table-head-cell text-left">{t.fuelLogs.efficiency.date}</th>
+                          <th className="table-head-cell text-left">{t.fuelLogs.efficiency.driver}</th>
+                          <th className="table-head-cell text-left">{t.fuelLogs.efficiency.vehicleReg}</th>
+                          <th className="table-head-cell text-right">{t.fuelLogs.efficiency.daysSincePreviousFill}</th>
+                          <th className="table-head-cell text-right">{t.fuelLogs.efficiency.previousMileage}</th>
+                          <th className="table-head-cell text-right">{t.fuelLogs.efficiency.currentMileage}</th>
+                          <th className="table-head-cell text-right">{t.fuelLogs.efficiency.kmDriven}</th>
+                          <th className="table-head-cell text-right">{t.fuelLogs.efficiency.litres}</th>
+                          <th className="table-head-cell text-right">{t.fuelLogs.efficiency.kmPerLitre}</th>
+                          <th className="table-head-cell text-left">{t.fuelLogs.efficiency.receiptCheck}</th>
+                          <th className="table-head-cell text-left">{t.fuelLogs.efficiency.result}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredEfficiencyRows.slice(0, 100).map((row) => (
+                          <tr key={row.log.id} className="enterprise-table-row">
+                            <td className="table-body-cell whitespace-nowrap font-medium text-slate-700">{formatDate(row.log.date, language)}</td>
+                            <td className="table-body-cell whitespace-nowrap table-driver-name">{row.log.driver || "-"}</td>
+                            <td className="table-body-cell whitespace-nowrap text-slate-700">{row.log.vehicle_reg || "-"}</td>
+                            <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800">{row.daysSincePreviousFill ?? "-"}</td>
+                            <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800">{row.previousMileage ?? "-"}</td>
+                            <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800">{row.currentMileage ?? "-"}</td>
+                            <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800">{row.kmDriven != null ? formatNumber(row.kmDriven, language, 0) : "-"}</td>
+                            <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800">{row.litres != null ? formatNumber(row.litres, language, 2) : "-"}</td>
+                            <td className="table-body-cell whitespace-nowrap text-right text-base font-bold text-slate-950">{row.kmPerLitre != null ? formatNumber(row.kmPerLitre, language, 2) : "-"}</td>
+                            <td className="table-body-cell"><span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getReceiptCheckBadgeClass(row.log.receipt_checked)}`}>{getReceiptCheckLabel(row.log.receipt_checked, language)}</span></td>
+                            <td className="table-body-cell"><button type="button" title={getEfficiencyTooltipText(row)} className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getEfficiencyStatusClass(row.status)}`}>{statusLabels[row.status]}</button></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+              {filteredEfficiencyRows.length > 100 ? (
+                <p className="mt-3 text-xs text-slate-500">{t.fuelLogs.efficiency.previewLimit}</p>
+              ) : null}
+            </>
+          )}
+        </div>
+          </>
+        ) : (
+          <>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
+              <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.tripKm}</p><p className="mt-2 text-xl font-bold text-slate-950">{tripSummary.tripKm != null ? formatNumber(tripSummary.tripKm, language, 0) : "-"}</p></div>
+              <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.totalLitres}</p><p className="mt-2 text-xl font-bold text-slate-950">{formatNumber(tripSummary.totalLitres, language, 2)}</p></div>
+              <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.tripKmPerLitre}</p><p className="mt-2 text-xl font-bold text-brand-700">{tripSummary.tripKmPerLitre != null ? formatNumber(tripSummary.tripKmPerLitre, language, 2) : "-"}</p></div>
+              <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.totalFuelCost}</p><p className="mt-2 text-xl font-bold text-slate-950">{formatCurrency(tripSummary.totalFuelCost, language)}</p></div>
+              <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.averagePricePerLitre}</p><p className="mt-2 text-xl font-bold text-slate-950">{tripSummary.averagePricePerLitre != null ? formatCurrency(tripSummary.averagePricePerLitre, language) : "-"}</p></div>
+              <div className="subtle-panel p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.receiptsChecked}</p>
+                <p className="mt-2 text-lg font-bold text-emerald-700">{receiptsSummaryLabel}</p>
+                <p className="mt-1 text-xs text-slate-500">{tripSummary.receiptUncheckedCount === 0 ? t.fuelLogs.efficiency.allReceiptsChecked : t.fuelLogs.efficiency.tripReceiptsTooltip}</p>
+              </div>
+              <div className="subtle-panel p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.missingMileage}</p>
+                <p className="mt-2 text-lg font-bold text-amber-700">{missingMileageSummaryLabel}</p>
+                <p className="mt-1 text-xs text-slate-500">{mileageClarityMessage}</p>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
+              <div className="flex items-start gap-3">
+                <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand-700" />
+                <div>
+                  <p className="font-semibold text-slate-950">{t.fuelLogs.efficiency.tripSummaryCalculation}</p>
+                  <p className="mt-1 max-w-4xl text-sm text-slate-600">{t.fuelLogs.efficiency.tripSummaryCalculationDescription}</p>
+                </div>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.step} 1</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-900">{t.fuelLogs.efficiency.startMileage} {"->"} {t.fuelLogs.efficiency.endMileage}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.step} 2</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-900">{t.fuelLogs.efficiency.endMileage} - {t.fuelLogs.efficiency.startMileage} = {t.fuelLogs.efficiency.tripKm}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.step} 3</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-900">{t.fuelLogs.efficiency.tripKm} ÷ {t.fuelLogs.efficiency.totalLitres} = {t.fuelLogs.efficiency.tripKmPerLitre}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-brand-100 bg-brand-50/60 p-4 text-sm text-slate-700">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex items-start gap-3">
+                  <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand-700" />
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-950">{t.fuelLogs.efficiency.tripFormulaTitle}</p>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.tripPeriod}</p><p className="mt-1 font-semibold text-slate-900">{tripPeriodLabel}</p>{tripPeriodDays != null ? <p className="mt-0.5 text-xs text-slate-500">{t.fuelLogs.efficiency.numberOfDays}: {formatNumber(tripPeriodDays, language)} {t.fuelLogs.efficiency.days}</p> : null}</div>
+                      <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.mileage}</p><p className="mt-1 font-semibold text-slate-900">{tripSummary.startMileage != null ? formatNumber(tripSummary.startMileage, language, 0) : "-"} {"->"} {tripSummary.endMileage != null ? formatNumber(tripSummary.endMileage, language, 0) : "-"}</p></div>
+                      <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.tripDistance}</p><p className="mt-1 font-semibold text-slate-900">{tripSummary.endMileage != null ? formatNumber(tripSummary.endMileage, language, 0) : "-"} - {tripSummary.startMileage != null ? formatNumber(tripSummary.startMileage, language, 0) : "-"} = {tripSummary.tripKm != null ? formatNumber(tripSummary.tripKm, language, 0) : "-"} km</p></div>
+                      <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.fuelUsed}</p><p className="mt-1 font-semibold text-slate-900">{formatNumber(tripSummary.totalLitres, language, 2)} {t.fuelLogs.efficiency.litres}</p></div>
+                    </div>
+                    <div className="mt-4 rounded-2xl border border-brand-100 bg-white/80 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">{t.fuelLogs.efficiency.finalResult}</p>
+                      <p className="mt-2 text-lg font-bold text-slate-950">{tripSummary.tripKm != null ? formatNumber(tripSummary.tripKm, language, 0) : "-"} km ÷ {formatNumber(tripSummary.totalLitres, language, 2)}L = {tripSummary.tripKmPerLitre != null ? formatNumber(tripSummary.tripKmPerLitre, language, 2) : "-"} KM/L</p>
+                      {tripSummary.tripKmPerLitre != null ? <p className="mt-2 text-sm text-slate-600">{t.fuelLogs.efficiency.thisMeansVehicleTravelled} {formatNumber(tripSummary.tripKmPerLitre, language, 2)} km {t.fuelLogs.efficiency.forEveryOneLitre}</p> : null}
+                    </div>
+                  </div>
+                </div>
+                <button type="button" title={tripStatusTooltips[tripSummary.status]} className={`inline-flex w-fit shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold ${getTripStatusClass(tripSummary.status)}`}>
+                  {tripStatusLabels[tripSummary.status]}
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-3 lg:grid-cols-2">
+              <div className={`flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm ${tripSummary.receiptUncheckedCount > 0 ? "border-amber-200 bg-amber-50 text-amber-900" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>
+                {tripSummary.receiptUncheckedCount > 0 ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> : <ReceiptText className="mt-0.5 h-4 w-4 shrink-0" />}
+                <div><p className="font-semibold">{tripSummary.receiptUncheckedCount > 0 ? t.fuelLogs.efficiency.statusCheckReceipts : t.fuelLogs.efficiency.allReceiptsChecked}</p><p className="mt-1">{tripSummary.receiptUncheckedCount > 0 ? t.fuelLogs.efficiency.tripReceiptsTooltip : t.fuelLogs.efficiency.allReceiptsChecked}</p></div>
+              </div>
+              <div className={`flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm ${tripSummary.mileageRecordCount < 2 || tripSummary.missingMileageCount > 0 ? "border-amber-200 bg-amber-50 text-amber-900" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>
+                {tripSummary.mileageRecordCount < 2 || tripSummary.missingMileageCount > 0 ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> : <Gauge className="mt-0.5 h-4 w-4 shrink-0" />}
+                <div><p className="font-semibold">{tripSummary.mileageRecordCount < 2 ? t.fuelLogs.efficiency.statusNotEnoughData : tripSummary.missingMileageCount > 0 ? t.fuelLogs.efficiency.statusMissingMileage : t.fuelLogs.efficiency.tripAllKeyMileageAvailable}</p><p className="mt-1">{mileageClarityMessage}</p></div>
+              </div>
+            </div>
+
+            <div className="mt-5">
+              <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h4 className="text-base font-semibold text-slate-950">{t.fuelLogs.efficiency.includedFuelLogs}</h4>
+                  <p className="mt-1 text-sm text-slate-500">{t.fuelLogs.efficiency.includedFuelLogsHelper}</p>
+                  <p className="mt-1 text-xs font-medium text-slate-500">{formatNumber(tripSummary.fuelLogCount, language)} {t.common.entries}</p>
+                </div>
+                <button type="button" title={tripStatusTooltips[tripSummary.status]} className={`inline-flex w-fit rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getTripStatusClass(tripSummary.status)}`}>
+                  {tripStatusLabels[tripSummary.status]}
+                </button>
+              </div>
+              {loading ? (
+                <p className="text-sm text-slate-500">{t.fuelLogs.loadingFuelLogs}</p>
+              ) : tripSummary.logs.length === 0 ? (
+                <EmptyState title={t.fuelLogs.efficiency.noResultsTitle} description={t.fuelLogs.efficiency.noResultsDescription} />
+              ) : (
+                <>
+                  <div className="space-y-3 md:hidden">
+                    {tripSummary.logs.slice(0, 50).map((log) => (
+                      <div key={log.id} className="subtle-panel p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{formatDate(log.date, language)}</p>
+                            <p className="mt-2 text-sm font-semibold text-slate-900">{log.driver || "-"}</p>
+                            <p className="mt-1 text-sm text-slate-500">{log.vehicle_reg || "-"}</p>
+                          </div>
+                          <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getReceiptCheckBadgeClass(log.receipt_checked)}`}>{getReceiptCheckLabel(log.receipt_checked, language)}</span>
+                        </div>
+                        <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                          <div><p className="text-xs text-slate-500">{t.fuelLogs.efficiency.mileage}</p><p className="font-semibold text-slate-900">{getMileageValue(log.mileage) != null ? formatNumber(Number(log.mileage), language, 0) : "-"}</p></div>
+                          <div><p className="text-xs text-slate-500">{t.fuelLogs.efficiency.litres}</p><p className="font-semibold text-slate-900">{formatNumber(Number(log.litres || 0), language, 2)}</p></div>
+                          <div><p className="text-xs text-slate-500">{t.fuelLogs.efficiency.totalCost}</p><p className="font-semibold text-slate-900">{formatCurrency(Number(log.total_cost || 0), language)}</p></div>
+                          <div><p className="text-xs text-slate-500">{t.fuelLogs.efficiency.pricePerLitre}</p><p className="font-semibold text-slate-900">{log.price_per_litre != null ? formatCurrency(Number(log.price_per_litre), language) : "-"}</p></div>
+                          <div className="col-span-2"><p className="text-xs text-slate-500">{t.fuelLogs.efficiency.entrySource}</p><p className="font-semibold text-slate-900">{sourceCopy.options[normalizeEntrySource(log.entry_source)]}</p></div>
+                          {log.notes ? <div className="col-span-2"><p className="text-xs text-slate-500">{t.fuelLogs.efficiency.notes}</p><p className="font-medium text-slate-700">{log.notes}</p></div> : null}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="hidden md:block">
+                    <div className="table-shell rounded-2xl">
+                      <div className="table-scroll overflow-x-auto">
+                        <table className="min-w-[1280px] w-full text-sm">
+                          <thead className="bg-slate-50/95 text-slate-600">
+                            <tr>
+                              <th className="table-head-cell text-left">{t.fuelLogs.efficiency.date}</th>
+                              <th className="table-head-cell text-left">{t.fuelLogs.efficiency.driver}</th>
+                              <th className="table-head-cell text-left">{t.fuelLogs.efficiency.vehicleReg}</th>
+                              <th className="table-head-cell text-right">{t.fuelLogs.efficiency.mileage}</th>
+                              <th className="table-head-cell text-right">{t.fuelLogs.efficiency.litres}</th>
+                              <th className="table-head-cell text-right">{t.fuelLogs.efficiency.totalCost}</th>
+                              <th className="table-head-cell text-right">{t.fuelLogs.efficiency.pricePerLitre}</th>
+                              <th className="table-head-cell text-left">{t.fuelLogs.efficiency.receiptCheck}</th>
+                              <th className="table-head-cell text-left">{t.fuelLogs.efficiency.entrySource}</th>
+                              <th className="table-head-cell text-left">{t.fuelLogs.efficiency.notes}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {tripSummary.logs.slice(0, 100).map((log) => (
+                              <tr key={log.id} className="enterprise-table-row">
+                                <td className="table-body-cell whitespace-nowrap font-medium text-slate-700">{formatDate(log.date, language)}</td>
+                                <td className="table-body-cell whitespace-nowrap table-driver-name">{log.driver || "-"}</td>
+                                <td className="table-body-cell whitespace-nowrap text-slate-700">{log.vehicle_reg || "-"}</td>
+                                <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800">{getMileageValue(log.mileage) != null ? formatNumber(Number(log.mileage), language, 0) : "-"}</td>
+                                <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800">{formatNumber(Number(log.litres || 0), language, 2)}</td>
+                                <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800">{formatCurrency(Number(log.total_cost || 0), language)}</td>
+                                <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800">{log.price_per_litre != null ? formatCurrency(Number(log.price_per_litre), language) : "-"}</td>
+                                <td className="table-body-cell"><span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getReceiptCheckBadgeClass(log.receipt_checked)}`}>{getReceiptCheckLabel(log.receipt_checked, language)}</span></td>
+                                <td className="table-body-cell"><span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getEntrySourceBadgeClass(normalizeEntrySource(log.entry_source))}`}>{sourceCopy.options[normalizeEntrySource(log.entry_source)]}</span></td>
+                                <td className="table-body-cell max-w-[260px] truncate text-slate-600" title={log.notes || ""}>{log.notes || "-"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                  {tripSummary.logs.length > 100 ? (
+                    <p className="mt-3 text-xs text-slate-500">{t.fuelLogs.efficiency.previewLimit}</p>
+                  ) : null}
+                </>
+              )}
+            </div>
+          </>
         )}
       </section>
 
