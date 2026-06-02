@@ -201,10 +201,17 @@ function buildOilChangeRow({
     lastOilChangeOdometer != null && Number.isFinite(Number(lastOilChangeOdometer))
       ? Number(lastOilChangeOdometer)
       : null;
+  const currentLowerThanLastService =
+    currentOdometer != null && lastOdometer != null && currentOdometer < lastOdometer;
+  if (currentLowerThanLastService) {
+    reviewReasons.push("Current odometer is lower than the last oil change mileage. Please check mileage data.");
+  }
   const nextDue =
     lastOdometer != null && interval != null ? Math.trunc(lastOdometer + interval) : null;
   const kmRemaining =
-    nextDue != null && currentOdometer != null ? Math.trunc(nextDue - currentOdometer) : null;
+    nextDue != null && currentOdometer != null
+      ? Math.trunc(currentLowerThanLastService && interval != null ? interval : nextDue - currentOdometer)
+      : null;
   const overdueKm = kmRemaining != null && kmRemaining < 0 ? Math.abs(kmRemaining) : null;
   const status: OilChangeStatus =
     lastOdometer == null

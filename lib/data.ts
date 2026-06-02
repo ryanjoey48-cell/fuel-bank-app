@@ -11,6 +11,7 @@ import {
   normalizePaymentMethodKey,
   normalizeTransferTypeKey
 } from "@/lib/localized-values";
+import { normalizeFuelLogLocation } from "@/lib/fuel-log-location";
 import { getOilChangeIntervalForVehicleType } from "@/lib/oil-change-service";
 import type {
   BankTransfer,
@@ -492,16 +493,23 @@ function mergeVehicleRowsByRegistration(vehicles: Vehicle[]) {
 
 function normalizeServiceLogRow(log: VehicleServiceLog) {
   const odometer = Number(log.odometer ?? log.service_odometer ?? 0);
+  const intervalKm =
+    log.interval_km != null && Number.isFinite(Number(log.interval_km))
+      ? Number(log.interval_km)
+      : null;
   return {
     ...log,
     vehicle_id: log.vehicle_id ?? null,
     vehicle_reg: normalizeVehicleRegistration(log.vehicle_reg),
     odometer,
     service_odometer: odometer,
-    interval_km:
-      log.interval_km != null && Number.isFinite(Number(log.interval_km))
-        ? Number(log.interval_km)
-        : null,
+    interval_km: intervalKm,
+    next_service_due_odometer:
+      log.next_service_due_odometer != null && Number.isFinite(Number(log.next_service_due_odometer))
+        ? Number(log.next_service_due_odometer)
+        : intervalKm != null
+          ? Math.trunc(odometer + intervalKm)
+          : null,
     vehicle_type_snapshot: log.vehicle_type_snapshot ?? null,
     notes: log.notes ?? null
   };
@@ -527,6 +535,7 @@ function normalizeOilChangeHistoryRow(row: OilChangeHistory): VehicleServiceLog 
     odometer,
     service_odometer: odometer,
     interval_km: null,
+    next_service_due_odometer: null,
     vehicle_type_snapshot: null,
     notes: null,
     created_at: row.created_at
@@ -535,6 +544,69 @@ function normalizeOilChangeHistoryRow(row: OilChangeHistory): VehicleServiceLog 
 
 function normalizeOilChangeVehicleRegKey(value: unknown) {
   return String(value ?? "").trim().toUpperCase();
+}
+
+async function syncOilChangeOdometerToWeeklyMileage({
+  vehicleReg,
+  serviceDate,
+  serviceOdometer
+}: {
+  vehicleReg: string;
+  serviceDate: string;
+  serviceOdometer: number;
+}) {
+  const normalizedVehicleReg = normalizeVehicleRegistration(vehicleReg);
+  const latestResult = await supabase
+    .from("weekly_mileage")
+    .select("id, week_ending, driver_id, vehicle_reg, odometer_reading, mileage, created_at")
+    .ilike("vehicle_reg", normalizedVehicleReg)
+    .order("week_ending", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (latestResult.error && !isMissingColumnError(latestResult.error)) {
+    logDataError("syncOilChangeOdometerToWeeklyMileage latest lookup warning:", latestResult.error, {
+      vehicleReg: normalizedVehicleReg
+    });
+    return;
+  }
+
+  const latestRow = latestResult.data as Partial<WeeklyMileageEntry> | null;
+  const latestOdometer = parseOptionalNumeric(latestRow?.odometer_reading ?? latestRow?.mileage);
+  const latestWeekEnding = latestRow?.week_ending ?? null;
+
+  if (latestOdometer != null && latestOdometer >= serviceOdometer) {
+    return;
+  }
+
+  const syncWeekEnding = latestWeekEnding && latestWeekEnding > serviceDate ? latestWeekEnding : serviceDate;
+
+  const drivers = await fetchDrivers().catch((error) => {
+    logDataError("syncOilChangeOdometerToWeeklyMileage driver lookup warning:", error, {
+      vehicleReg: normalizedVehicleReg
+    });
+    return [] as Driver[];
+  });
+  const matchedDriver = drivers.find(
+    (driver) => normalizeComparableText(driver.vehicle_reg) === normalizeComparableText(normalizedVehicleReg)
+  );
+
+  if (!matchedDriver) {
+    logDataError("syncOilChangeOdometerToWeeklyMileage skipped: no driver matched vehicle registration.", null, {
+      vehicleReg: normalizedVehicleReg
+    });
+    return;
+  }
+
+  await saveWeeklyMileage({
+    week_ending: syncWeekEnding,
+    driver_id: String(matchedDriver.id),
+    driver: matchedDriver.name,
+    vehicle_reg: normalizedVehicleReg,
+    odometer_reading: serviceOdometer,
+    mileage: serviceOdometer
+  });
 }
 
 export function applyOilChangeBaselinesToVehicles(
@@ -707,7 +779,8 @@ function mapFuelLogRows(
         : log.odometer != null
           ? Number(log.odometer)
           : null,
-    station: log.location,
+    station: normalizeFuelLogLocation(log.location),
+    location: normalizeFuelLogLocation(log.location),
     price_per_litre: log.price_per_litre,
     fuel_type: normalizeFuelTypeKey(log.fuel_type) ?? log.fuel_type,
     payment_method: normalizePaymentMethodKey(log.payment_method) ?? log.payment_method,
@@ -737,7 +810,7 @@ async function runFuelLogQueryWithOptionalColumnFallback<T>(
   return queryFactory(FUEL_LOG_BASE_SELECT_COLUMNS);
 }
 
-function applyFuelLogFilters<TQuery extends { gte: Function; lte: Function; eq: Function; or: Function }>(
+function applyFuelLogFilters<TQuery extends { gte: Function; lte: Function; eq: Function; ilike: Function; or: Function }>(
   query: TQuery,
   filters: FuelLogFilters = {}
 ) {
@@ -746,6 +819,7 @@ function applyFuelLogFilters<TQuery extends { gte: Function; lte: Function; eq: 
   const toDate = filters.toDate?.trim();
   const driverId = filters.driverId?.trim();
   const vehicleReg = filters.vehicleReg?.trim();
+  const location = normalizeFuelLogLocation(filters.location);
   const paymentMethod = filters.paymentMethod?.trim();
   const entrySource = filters.entrySource?.trim();
   const receiptCheckedStatus = filters.receiptCheckedStatus?.trim();
@@ -763,6 +837,12 @@ function applyFuelLogFilters<TQuery extends { gte: Function; lte: Function; eq: 
   }
   if (vehicleReg) {
     nextQuery = nextQuery.eq("vehicle_reg", vehicleReg);
+  }
+  if (location) {
+    nextQuery =
+      location === "Bangchak" || location === "Shell"
+        ? nextQuery.ilike("location", `${location}%`)
+        : nextQuery.ilike("location", location);
   }
   if (paymentMethod) {
     nextQuery = nextQuery.eq("payment_method", paymentMethod);
@@ -948,6 +1028,28 @@ export async function fetchOilChangeBaselinesForVehicles(_vehicles: Vehicle[]) {
 
 export async function fetchOilChangeHistory() {
   return readThroughCache("oil_change_history:all", async () => {
+    const serviceLogResult = await supabase
+      .from("vehicle_service_logs")
+      .select("*")
+      .eq("service_type", "oil_change")
+      .order("service_date", { ascending: false })
+      .order("created_at", { ascending: false });
+
+    if (!serviceLogResult.error) {
+      console.log("fetchOilChangeHistory vehicle_service_logs success", {
+        rowCount: (serviceLogResult.data ?? []).length
+      });
+      return ((serviceLogResult.data ?? []) as VehicleServiceLog[]).map(normalizeServiceLogRow);
+    }
+
+    if (!isMissingTableError(serviceLogResult.error) && !isMissingColumnError(serviceLogResult.error)) {
+      logDataError("fetchOilChangeHistory vehicle_service_logs error:", serviceLogResult.error);
+      throw new Error(
+        getServiceSchemaSetupMessage(serviceLogResult.error) ??
+          String(serviceLogResult.error.message ?? "Unable to load oil change service history from Supabase.")
+      );
+    }
+
     const { data, error } = await supabase
       .from("oil_change_history")
       .select("*")
@@ -955,14 +1057,14 @@ export async function fetchOilChangeHistory() {
       .order("created_at", { ascending: false });
 
     if (error) {
-      logDataError("fetchOilChangeHistory error:", error);
+      logDataError("fetchOilChangeHistory fallback error:", error);
       throw new Error(
         getServiceSchemaSetupMessage(error) ??
           String(error.message ?? "Unable to load oil change history from Supabase.")
       );
     }
 
-    console.log("fetchOilChangeHistory success", { rowCount: (data ?? []).length });
+    console.log("fetchOilChangeHistory fallback success", { rowCount: (data ?? []).length });
     return ((data ?? []) as OilChangeHistory[]).map(normalizeOilChangeHistoryRow);
   });
 }
@@ -1117,21 +1219,36 @@ export async function saveOilChangeService(payload: {
 
     let historyRow: VehicleServiceLog | null = null;
     if (payload.recordHistory) {
-      const historyPayload = {
+      const historyPayload = stripUndefined({
+        vehicle_id: isUuid(vehicle.id) ? vehicle.id : undefined,
         vehicle_reg: vehicle.vehicle_reg,
-        oil_change_date: serviceDate,
-        odometer: serviceOdometer
-      };
+        service_type: "oil_change",
+        service_date: serviceDate,
+        odometer: serviceOdometer,
+        interval_km: intervalKm,
+        next_service_due_odometer: Math.trunc(serviceOdometer + intervalKm),
+        vehicle_type_snapshot: payload.vehicleType ?? vehicle.vehicle_type ?? null,
+        notes: payload.notes?.trim() || null
+      });
       console.log("step", "insert oil change history", {
-        table: "oil_change_history",
+        table: "vehicle_service_logs",
         operation: "insert",
         payload: historyPayload
       });
-      const historyResult = await supabase
-        .from("oil_change_history")
+      let historyResult = await supabase
+        .from("vehicle_service_logs")
         .insert(historyPayload)
         .select()
         .single();
+
+      if (historyResult.error && isMissingColumnError(historyResult.error)) {
+        const { next_service_due_odometer: _nextServiceDueOdometer, ...fallbackHistoryPayload } = historyPayload;
+        historyResult = await supabase
+          .from("vehicle_service_logs")
+          .insert(fallbackHistoryPayload)
+          .select()
+          .single();
+      }
 
       console.log("saveOilChangeService oil_change_history insert response:", {
         data: historyResult.data,
@@ -1147,7 +1264,7 @@ export async function saveOilChangeService(payload: {
         );
       }
 
-      historyRow = normalizeOilChangeHistoryRow(historyResult.data as OilChangeHistory);
+      historyRow = normalizeServiceLogRow(historyResult.data as VehicleServiceLog);
     }
 
     console.log("step", "upsert oil change baseline", {
@@ -1203,6 +1320,11 @@ export async function saveOilChangeService(payload: {
     }
 
     const baseline = normalizeOilChangeBaselineRow(baselineResult.data as OilChangeBaseline);
+    await syncOilChangeOdometerToWeeklyMileage({
+      vehicleReg: baseline.vehicle_reg,
+      serviceDate: baseline.last_oil_change_date,
+      serviceOdometer: baseline.last_odometer
+    });
     const updatedVehicle = normalizeVehicleRow({
       ...vehicle,
       last_oil_change_date: baseline.last_oil_change_date,
@@ -1221,6 +1343,7 @@ export async function saveOilChangeService(payload: {
 
     dispatchDataChange("oil_change_baselines");
     dispatchDataChange("oil_change_history");
+    dispatchDataChange("vehicle_service_logs");
     console.log("success", {
       vehicle: updatedVehicle,
       baseline,
@@ -1912,6 +2035,7 @@ export async function deleteDriver(id: string) {
 
 export async function saveFuelLog(payload: Partial<FuelLog>) {
   const { id, ...rest } = payload;
+  const locationValue = rest.location ?? rest.station;
   const driverName =
     rest.driver && String(rest.driver).trim()
       ? String(rest.driver).trim()
@@ -1929,7 +2053,7 @@ export async function saveFuelLog(payload: Partial<FuelLog>) {
     total_cost: rest.total_cost,
     price_per_litre: rest.price_per_litre ?? null,
     mileage: rest.odometer ?? rest.mileage ?? null,
-    location: rest.location ?? rest.station,
+    location: locationValue == null ? undefined : normalizeFuelLogLocation(locationValue),
     fuel_type: normalizeFuelTypeKey(rest.fuel_type) ?? rest.fuel_type,
     payment_method: normalizePaymentMethodKey(rest.payment_method) ?? rest.payment_method,
     entry_source: normalizeFuelLogEntrySource(rest.entry_source),
@@ -1959,8 +2083,8 @@ export async function saveFuelLog(payload: Partial<FuelLog>) {
     mileage:
       Number((result.data as { mileage?: number | null }).mileage) ||
       Number((result.data as FuelLog).odometer || 0),
-    station: (result.data as { location?: string }).location,
-    location: (result.data as { location?: string }).location,
+    station: normalizeFuelLogLocation((result.data as { location?: string }).location),
+    location: normalizeFuelLogLocation((result.data as { location?: string }).location),
     price_per_litre: (result.data as { price_per_litre?: number | null }).price_per_litre ?? null,
     entry_source: normalizeFuelLogEntrySource((result.data as { entry_source?: string | null }).entry_source),
     receipt_checked: Boolean((result.data as { receipt_checked?: boolean | null }).receipt_checked),

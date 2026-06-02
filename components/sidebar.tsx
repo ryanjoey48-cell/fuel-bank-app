@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { useEffect, useState } from "react";
 import {
   ArrowRightLeft,
+  BarChart3,
   CalendarDays,
   ChevronRight,
   Droplets,
@@ -52,6 +53,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   const navItems = [
     { href: "/dashboard", label: t.nav.dashboard, icon: LayoutDashboard },
     { href: "/fuel-logs", label: t.nav.fuelLogs, icon: Droplets },
+    { href: "/fuel-spend-report", label: t.nav.fuelSpendReport, icon: BarChart3 },
     { href: "/transfers", label: t.nav.transfers, icon: ArrowRightLeft },
     { href: "/weekly-mileage", label: t.nav.weeklyMileage, icon: Route },
     {

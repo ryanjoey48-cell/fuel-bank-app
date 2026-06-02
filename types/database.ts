@@ -50,6 +50,7 @@ export type VehicleServiceLog = {
   odometer: number;
   service_odometer?: number;
   interval_km: number | null;
+  next_service_due_odometer?: number | null;
   vehicle_type_snapshot?: DriverVehicleType | string | null;
   notes: string | null;
   created_at: string;
@@ -124,6 +125,7 @@ export type FuelLogFilters = {
   toDate?: string;
   driverId?: string;
   vehicleReg?: string;
+  location?: string;
   paymentMethod?: string;
   entrySource?: "" | FuelLogEntrySource;
   receiptCheckedStatus?: "" | "checked" | "not_checked";

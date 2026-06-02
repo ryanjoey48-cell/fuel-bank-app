@@ -39,6 +39,7 @@ import {
 } from "@/lib/data";
 import { exportToCsv } from "@/lib/export";
 import { applyRequiredValidationMessage, clearValidationMessage } from "@/lib/form-validation";
+import { normalizeFuelLogLocation, shouldShowFuelLogLocationOption } from "@/lib/fuel-log-location";
 import { useLanguage } from "@/lib/language-provider";
 import { calculateFuelFields } from "@/lib/operations";
 import { formatCurrency, formatDate, formatNumber, normalizeVehicleRegistration, today } from "@/lib/utils";
@@ -54,6 +55,8 @@ import type {
 } from "@/types/database";
 
 const PAGE_SIZE = 25;
+const EFFICIENCY_PREVIEW_PAGE_SIZE = 25;
+const MISSING_MILEAGE_PREVIEW_LIMIT = 8;
 const DEFAULT_FUEL_TYPE = "diesel";
 const DEFAULT_PAYMENT_METHOD = "company_card";
 const DEFAULT_ENTRY_SOURCE: FuelLogEntrySource = "line_message";
@@ -103,6 +106,7 @@ const initialFilters: FuelLogFilters = {
   toDate: "",
   driverId: "",
   vehicleReg: "",
+  location: "",
   paymentMethod: "",
   entrySource: "",
   receiptCheckedStatus: "",
@@ -425,6 +429,7 @@ function getStoredFilters(): FuelLogFilters {
       toDate: parsed.toDate ?? "",
       driverId: parsed.driverId ?? "",
       vehicleReg: parsed.vehicleReg ?? "",
+      location: normalizeFuelLogLocation(parsed.location ?? ""),
       paymentMethod: parsed.paymentMethod ?? "",
       entrySource: parsed.entrySource ? normalizeEntrySource(parsed.entrySource) : "",
       receiptCheckedStatus: parsed.receiptCheckedStatus ?? "",
@@ -583,6 +588,9 @@ export default function FuelLogsPage() {
   const [filters, setFilters] = useState<FuelLogFilters>(() => getStoredFilters());
   const [efficiencyFilters, setEfficiencyFilters] = useState<EfficiencyFilters>(initialEfficiencyFilters);
   const [efficiencyCalculationMode, setEfficiencyCalculationMode] = useState<EfficiencyCalculationMode>("per_fill");
+  const [efficiencyPreviewCount, setEfficiencyPreviewCount] = useState(EFFICIENCY_PREVIEW_PAGE_SIZE);
+  const [tripPreviewCount, setTripPreviewCount] = useState(EFFICIENCY_PREVIEW_PAGE_SIZE);
+  const [missingMileageExpanded, setMissingMileageExpanded] = useState(false);
   const [sortKey, setSortKey] = useState<FuelLogSortKey>("date");
   const [sortDirection, setSortDirection] = useState<FuelLogSortDirection>("desc");
   const [currentPage, setCurrentPage] = useState(1);
@@ -636,6 +644,23 @@ export default function FuelLogsPage() {
       ).sort(),
     [drivers, efficiencySourceLogs, fuelLogs]
   );
+
+  const locationOptions = useMemo(() => {
+    const locationsByKey = new Map<string, string>();
+    [...fuelLogs, ...efficiencySourceLogs].forEach((log) => {
+      const location = log.location?.trim();
+      if (!location) return;
+      if (!shouldShowFuelLogLocationOption(location)) return;
+      const key = location.toLocaleLowerCase();
+      if (!locationsByKey.has(key)) {
+        locationsByKey.set(key, location);
+      }
+    });
+
+    return Array.from(locationsByKey.values()).sort((a, b) =>
+      a.localeCompare(b, language === "th" ? "th" : "en", { sensitivity: "base" })
+    );
+  }, [efficiencySourceLogs, fuelLogs, language]);
 
   const duplicateKeyCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -705,6 +730,16 @@ export default function FuelLogsPage() {
   const missingMileageRows = useMemo(
     () => scopedEfficiencyRows.filter((row) => row.status === "missing_mileage"),
     [scopedEfficiencyRows]
+  );
+
+  const displayedEfficiencyRows = useMemo(
+    () => filteredEfficiencyRows.slice(0, efficiencyPreviewCount),
+    [efficiencyPreviewCount, filteredEfficiencyRows]
+  );
+
+  const missingMileagePreviewRows = useMemo(
+    () => missingMileageRows.slice(0, MISSING_MILEAGE_PREVIEW_LIMIT),
+    [missingMileageRows]
   );
 
   const tripSummaryLogs = useMemo(
@@ -788,6 +823,20 @@ export default function FuelLogsPage() {
       reason
     };
   }, [t.fuelLogs.efficiency, tripSummaryLogs]);
+
+  const displayedTripSummaryLogs = useMemo(
+    () => tripSummary.logs.slice(0, tripPreviewCount),
+    [tripPreviewCount, tripSummary.logs]
+  );
+
+  useEffect(() => {
+    setEfficiencyPreviewCount(EFFICIENCY_PREVIEW_PAGE_SIZE);
+    setTripPreviewCount(EFFICIENCY_PREVIEW_PAGE_SIZE);
+  }, [efficiencyCalculationMode, efficiencyFilters]);
+
+  useEffect(() => {
+    setMissingMileageExpanded(missingMileageRows.length > 0 && missingMileageRows.length <= MISSING_MILEAGE_PREVIEW_LIMIT);
+  }, [missingMileageRows.length]);
 
   const statusLabels: Record<EfficiencyStatus, string> = {
     missing_mileage: t.fuelLogs.efficiency.statusMissingMileage,
@@ -1129,7 +1178,7 @@ export default function FuelLogsPage() {
       litres: Number(form.litres),
       total_cost: Number(form.total_cost),
       price_per_litre: form.price_per_litre ? Number(form.price_per_litre) : null,
-      station: form.location.trim(),
+      station: normalizeFuelLogLocation(form.location),
       fuel_type: form.fuel_type || null,
       payment_method: form.payment_method || null,
       entry_source: normalizeEntrySource(form.entry_source),
@@ -1600,15 +1649,26 @@ export default function FuelLogsPage() {
         </div>
 
         {missingMileageRows.length > 0 ? (
-          <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <p>{t.fuelLogs.efficiency.missingMileageWarning}</p>
+          <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50/90 p-3 text-sm text-amber-900 shadow-[0_8px_22px_rgba(180,83,9,0.06)] sm:p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <div>
+                  <p className="font-semibold text-amber-950">
+                    {formatNumber(missingMileageRows.length, language)} {t.fuelLogs.efficiency.missingMileageSummarySuffix}
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-amber-800">{t.fuelLogs.efficiency.missingMileageWarning}</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setMissingMileageExpanded((current) => !current)} className="btn-secondary min-h-[38px] border-amber-200 px-3 py-2 text-xs text-amber-900 hover:border-amber-300 hover:text-amber-950">
+                {missingMileageExpanded ? t.fuelLogs.efficiency.hideMissingEntries : t.fuelLogs.efficiency.viewMissingEntries}
+              </button>
             </div>
-            <div className="mt-4 rounded-2xl border border-amber-200 bg-white/80 p-3">
+            {missingMileageExpanded ? (
+            <div className="mt-3 rounded-2xl border border-amber-200 bg-white/85 p-3">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-800">{t.fuelLogs.efficiency.missingMileageEntries}</p>
               <div className="mt-3 space-y-2 md:hidden">
-                {missingMileageRows.slice(0, 8).map((row) => (
+                {missingMileagePreviewRows.map((row) => (
                   <div key={row.log.id} className="rounded-xl border border-amber-100 bg-white px-3 py-2">
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -1634,7 +1694,7 @@ export default function FuelLogsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {missingMileageRows.slice(0, 8).map((row) => (
+                    {missingMileagePreviewRows.map((row) => (
                       <tr key={row.log.id} className="border-t border-amber-100 text-slate-700">
                         <td className="px-3 py-2 font-medium">{formatDate(row.log.date, language)}</td>
                         <td className="px-3 py-2">{row.log.driver || "-"}</td>
@@ -1651,6 +1711,7 @@ export default function FuelLogsPage() {
                 <p className="mt-3 text-xs text-amber-800">{t.fuelLogs.efficiency.missingMileageListLimit}</p>
               ) : null}
             </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -1662,7 +1723,7 @@ export default function FuelLogsPage() {
           ) : (
             <>
               <div className="space-y-3 md:hidden">
-                {filteredEfficiencyRows.slice(0, 25).map((row) => (
+                {displayedEfficiencyRows.map((row) => (
                   <div key={row.log.id} className="subtle-panel p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -1686,8 +1747,8 @@ export default function FuelLogsPage() {
               <div className="hidden md:block">
                 <div className="table-shell rounded-2xl">
                   <div className="table-scroll overflow-x-auto">
-                    <table className="min-w-[1220px] w-full text-sm">
-                      <thead className="bg-slate-50/95 text-slate-600">
+                    <table className="min-w-[1220px] w-full text-sm [&_.table-body-cell]:py-2.5 [&_.table-head-cell]:py-2.5">
+                      <thead className="sticky top-0 z-10 bg-slate-100/95 text-slate-700 shadow-[inset_0_-1px_0_rgba(226,232,240,0.9)] backdrop-blur">
                         <tr>
                           <th className="table-head-cell text-left">{t.fuelLogs.efficiency.date}</th>
                           <th className="table-head-cell text-left">{t.fuelLogs.efficiency.driver}</th>
@@ -1703,7 +1764,7 @@ export default function FuelLogsPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredEfficiencyRows.slice(0, 100).map((row) => (
+                        {displayedEfficiencyRows.map((row) => (
                           <tr key={row.log.id} className="enterprise-table-row">
                             <td className="table-body-cell whitespace-nowrap font-medium text-slate-700">{formatDate(row.log.date, language)}</td>
                             <td className="table-body-cell whitespace-nowrap table-driver-name">{row.log.driver || "-"}</td>
@@ -1723,8 +1784,19 @@ export default function FuelLogsPage() {
                   </div>
                 </div>
               </div>
-              {filteredEfficiencyRows.length > 100 ? (
-                <p className="mt-3 text-xs text-slate-500">{t.fuelLogs.efficiency.previewLimit}</p>
+              {filteredEfficiencyRows.length > EFFICIENCY_PREVIEW_PAGE_SIZE ? (
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-xs text-slate-500">
+                    {efficiencyPreviewCount === EFFICIENCY_PREVIEW_PAGE_SIZE
+                      ? t.fuelLogs.efficiency.previewLimit
+                      : `${formatNumber(displayedEfficiencyRows.length, language)} ${t.fuelLogs.efficiency.of} ${formatNumber(filteredEfficiencyRows.length, language)} ${t.common.entries}`}
+                  </p>
+                  {filteredEfficiencyRows.length > displayedEfficiencyRows.length ? (
+                    <button type="button" onClick={() => setEfficiencyPreviewCount((count) => count + EFFICIENCY_PREVIEW_PAGE_SIZE)} className="btn-secondary min-h-[38px] px-3 py-2 text-xs">
+                      {t.fuelLogs.efficiency.showMore}
+                    </button>
+                  ) : null}
+                </div>
               ) : null}
             </>
           )}
@@ -1828,7 +1900,7 @@ export default function FuelLogsPage() {
               ) : (
                 <>
                   <div className="space-y-3 md:hidden">
-                    {tripSummary.logs.slice(0, 50).map((log) => (
+                    {displayedTripSummaryLogs.map((log) => (
                       <div key={log.id} className="subtle-panel p-4">
                         <div className="flex items-start justify-between gap-3">
                           <div>
@@ -1852,8 +1924,8 @@ export default function FuelLogsPage() {
                   <div className="hidden md:block">
                     <div className="table-shell rounded-2xl">
                       <div className="table-scroll overflow-x-auto">
-                        <table className="min-w-[1280px] w-full text-sm">
-                          <thead className="bg-slate-50/95 text-slate-600">
+                        <table className="min-w-[1280px] w-full text-sm [&_.table-body-cell]:py-2.5 [&_.table-head-cell]:py-2.5">
+                          <thead className="sticky top-0 z-10 bg-slate-100/95 text-slate-700 shadow-[inset_0_-1px_0_rgba(226,232,240,0.9)] backdrop-blur">
                             <tr>
                               <th className="table-head-cell text-left">{t.fuelLogs.efficiency.date}</th>
                               <th className="table-head-cell text-left">{t.fuelLogs.efficiency.driver}</th>
@@ -1868,7 +1940,7 @@ export default function FuelLogsPage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {tripSummary.logs.slice(0, 100).map((log) => (
+                            {displayedTripSummaryLogs.map((log) => (
                               <tr key={log.id} className="enterprise-table-row">
                                 <td className="table-body-cell whitespace-nowrap font-medium text-slate-700">{formatDate(log.date, language)}</td>
                                 <td className="table-body-cell whitespace-nowrap table-driver-name">{log.driver || "-"}</td>
@@ -1887,8 +1959,19 @@ export default function FuelLogsPage() {
                       </div>
                     </div>
                   </div>
-                  {tripSummary.logs.length > 100 ? (
-                    <p className="mt-3 text-xs text-slate-500">{t.fuelLogs.efficiency.previewLimit}</p>
+                  {tripSummary.logs.length > EFFICIENCY_PREVIEW_PAGE_SIZE ? (
+                    <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-xs text-slate-500">
+                        {tripPreviewCount === EFFICIENCY_PREVIEW_PAGE_SIZE
+                          ? t.fuelLogs.efficiency.previewLimit
+                          : `${formatNumber(displayedTripSummaryLogs.length, language)} ${t.fuelLogs.efficiency.of} ${formatNumber(tripSummary.logs.length, language)} ${t.common.entries}`}
+                      </p>
+                      {tripSummary.logs.length > displayedTripSummaryLogs.length ? (
+                        <button type="button" onClick={() => setTripPreviewCount((count) => count + EFFICIENCY_PREVIEW_PAGE_SIZE)} className="btn-secondary min-h-[38px] px-3 py-2 text-xs">
+                          {t.fuelLogs.efficiency.showMore}
+                        </button>
+                      ) : null}
+                    </div>
                   ) : null}
                 </>
               )}
@@ -2055,6 +2138,7 @@ export default function FuelLogsPage() {
                 <div className="md:col-span-4 lg:col-span-4"><label className="form-label">{copy.vehicle}</label><select value={filters.vehicleReg ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, vehicleReg: event.target.value }))} className="form-input bg-white"><option value="">{copy.all}</option>{vehicleOptions.map((vehicleReg) => <option key={vehicleReg} value={vehicleReg}>{vehicleReg}</option>)}</select></div>
               </div>
               <div className="grid gap-3 md:grid-cols-12">
+                <div className="md:col-span-3"><label className="form-label">{t.fuelLogs.location}</label><select value={filters.location ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, location: event.target.value }))} className="form-input bg-white"><option value="">{t.fuelLogs.allLocations}</option>{locationOptions.map((location) => <option key={location} value={location}>{location}</option>)}</select></div>
                 <div className="md:col-span-3"><label className="form-label">{copy.payment}</label><select value={filters.paymentMethod ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, paymentMethod: event.target.value }))} className="form-input bg-white"><option value="">{copy.all}</option>{paymentMethodOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
                 <div className="md:col-span-3"><label className="form-label">{sourceCopy.filterLabel}</label><select value={filters.entrySource ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, entrySource: event.target.value as FuelLogFilters["entrySource"] }))} className="form-input bg-white"><option value="">{sourceCopy.all}</option>{entrySourceOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
                 <div className="md:col-span-3"><label className="form-label">{receiptCopy.filterLabel}</label><select value={filters.receiptCheckedStatus ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, receiptCheckedStatus: event.target.value as FuelLogFilters["receiptCheckedStatus"] }))} className="form-input bg-white"><option value="">{copy.all}</option><option value="checked">{receiptCopy.checked}</option><option value="not_checked">{receiptCopy.notChecked}</option></select></div>

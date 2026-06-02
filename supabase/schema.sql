@@ -104,6 +104,7 @@ create table if not exists public.vehicle_service_logs (
   service_date date not null,
   odometer numeric(12, 2) not null,
   interval_km numeric(12, 2),
+  next_service_due_odometer numeric(12, 2),
   vehicle_type_snapshot text,
   notes text,
   created_at timestamptz not null default now(),

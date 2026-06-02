@@ -37,6 +37,8 @@ const normalizeReg = (value: unknown) =>
     .replace(/\s+/g, "")
     .replace(/-/g, "")
     .toUpperCase();
+const CURRENT_ODOMETER_BELOW_SERVICE_REASON =
+  "Current odometer is lower than the last oil change mileage. Please check mileage data.";
 type OilActionMode = "set" | "edit" | "mark";
 type OilFilter = "all" | "overdue" | "urgent" | "due_soon" | "review_required" | "not_set" | "ok";
 type OilReportScope = "all" | "overdue" | "urgent_overdue" | "due_soon" | "review_required";
@@ -74,6 +76,7 @@ export default function WeeklyMileagePage() {
     registration: string;
     vehicleName: string;
     vehicleType: string | null;
+    currentOdometer: number | null;
     serviceLogId?: string | null;
   } | null>(null);
   const [serviceForm, setServiceForm] = useState({
@@ -504,6 +507,12 @@ export default function WeeklyMileagePage() {
     return t.weeklyMileage.oil.filters.notSet;
   };
 
+  const hasMileageDataIssue = (row: OilChangeAlertRow) =>
+    row.reviewReasons.includes(CURRENT_ODOMETER_BELOW_SERVICE_REASON);
+
+  const oilStatusLabelForRow = (row: OilChangeAlertRow) =>
+    hasMileageDataIssue(row) ? t.weeklyMileage.oil.mileageDataIssue : oilStatusLabel(row.status);
+
   const oilStatusIcon = (status: string) =>
     status === "ok" ? "✅" : status === "overdue" || status === "urgent" || status === "due_soon" ? "⚠" : "•";
 
@@ -558,6 +567,9 @@ export default function WeeklyMileagePage() {
     if (row.status === "overdue" && row.overdueKm != null) {
       return t.weeklyMileage.oil.actionOverdueBy.replace("{km}", formatKmValue(row.overdueKm));
     }
+    if (row.kmRemaining === 0) {
+      return t.weeklyMileage.oil.actionDueNow;
+    }
     if (row.status === "urgent" && row.kmRemaining != null) {
       return t.weeklyMileage.oil.actionDueIn.replace("{km}", formatKmValue(row.kmRemaining));
     }
@@ -567,12 +579,15 @@ export default function WeeklyMileagePage() {
     if (row.status === "ok") {
       return t.weeklyMileage.oil.filters.ok;
     }
-    return oilStatusLabel(row.status);
+    return oilStatusLabelForRow(row);
   };
 
   const reviewReasonLabel = (reason: string) => {
     if (reason === "Missing vehicle type") return t.weeklyMileage.oil.missingVehicleType;
     if (reason === "Missing oil change interval") return t.weeklyMileage.oil.missingOilChangeInterval;
+    if (reason === CURRENT_ODOMETER_BELOW_SERVICE_REASON) {
+      return t.weeklyMileage.oil.currentLowerThanLastOilChange;
+    }
     return reason;
   };
 
@@ -596,7 +611,7 @@ export default function WeeklyMileagePage() {
     const defaultInterval =
       mode === "edit"
         ? latestLog?.interval_km ?? row.oilChangeIntervalKm ?? getOilChangeIntervalForVehicleType(row.vehicleType)
-        : row.oilChangeIntervalKm ?? latestLog?.interval_km ?? getOilChangeIntervalForVehicleType(row.vehicleType);
+        : getOilChangeIntervalForVehicleType(row.vehicleType) ?? row.oilChangeIntervalKm ?? latestLog?.interval_km;
     const defaultDate =
       mode === "mark" ? todayKey() : row.lastOilChangeDate ?? latestLog?.service_date ?? todayKey();
     const defaultOdometer =
@@ -625,7 +640,7 @@ export default function WeeklyMileagePage() {
       serviceDate: defaultDate,
       serviceOdometer: defaultOdometer === "" ? "" : String(defaultOdometer),
       intervalKm: defaultInterval != null ? String(defaultInterval) : "",
-      notes: mode === "mark" ? t.weeklyMileage.oil.oilChangedNote : ""
+      notes: ""
     });
     setServiceModal({
       mode,
@@ -633,6 +648,7 @@ export default function WeeklyMileagePage() {
       registration: row.registration,
       vehicleName: row.vehicleName,
       vehicleType: row.vehicleType,
+      currentOdometer: row.currentOdometer,
       serviceLogId: mode === "edit" ? latestLog?.id ?? null : null
     });
   };
@@ -651,15 +667,30 @@ export default function WeeklyMileagePage() {
       setSavingService(true);
       setError(null);
       setSuccessMessage(null);
+      const serviceOdometer = Number(serviceForm.serviceOdometer);
+      const isLowerThanCurrent =
+        serviceModal.currentOdometer != null &&
+        Number.isFinite(serviceOdometer) &&
+        serviceOdometer < serviceModal.currentOdometer;
+      if (isLowerThanCurrent) {
+        const confirmed = window.confirm(t.weeklyMileage.oil.confirmLowerOilChangeOdometer);
+        if (!confirmed) {
+          return;
+        }
+      }
+      const notes = [
+        serviceForm.notes.trim(),
+        isLowerThanCurrent ? t.weeklyMileage.oil.lowerThanCurrentConfirmed : ""
+      ].filter(Boolean).join(" | ");
       const servicePayload = {
         vehicleId: serviceModal.vehicleId,
         vehicleReg: serviceModal.registration,
         vehicleName: serviceModal.vehicleName,
         vehicleType: serviceModal.vehicleType,
         serviceDate: serviceForm.serviceDate,
-        serviceOdometer: Number(serviceForm.serviceOdometer),
+        serviceOdometer,
         intervalKm: Number(serviceForm.intervalKm),
-        notes: serviceForm.notes,
+        notes,
         serviceLogId: serviceModal.serviceLogId,
         updateExistingLog: serviceModal.mode === "edit",
         recordHistory: serviceModal.mode === "mark"
@@ -1075,7 +1106,7 @@ export default function WeeklyMileagePage() {
                           <div className="flex flex-wrap items-center gap-2">
                             <h4 className="text-2xl font-bold tracking-normal text-slate-950">{row.registration}</h4>
                             <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${oilStatusClass(row.status)}`}>
-                              {oilStatusIcon(row.status)} {oilStatusLabel(row.status)}
+                              {oilStatusIcon(row.status)} {oilStatusLabelForRow(row)}
                             </span>
                           </div>
                           <p className="mt-2 text-sm font-medium text-slate-600">
@@ -1551,6 +1582,7 @@ export default function WeeklyMileagePage() {
                     onChange={(event) => setServiceForm((current) => ({ ...current, serviceOdometer: event.target.value }))}
                     className="form-input bg-white"
                   />
+                  <p className="form-helper">{t.weeklyMileage.oil.oilChangeOdometerHelper}</p>
                 </div>
                 <div className="form-field">
                   <label className="form-label form-label-required">{t.weeklyMileage.oil.intervalKm}</label>
@@ -1582,7 +1614,7 @@ export default function WeeklyMileagePage() {
                   {t.common.cancel}
                 </button>
                 <button type="submit" disabled={savingService} className="btn-primary disabled:opacity-60">
-                  {savingService ? t.common.saving : t.common.save}
+                  {savingService ? t.common.saving : serviceModal.mode === "mark" ? t.weeklyMileage.oil.saveOilChange : t.common.save}
                 </button>
               </div>
             </form>
@@ -1616,7 +1648,7 @@ export default function WeeklyMileagePage() {
                         </div>
                         <span className="badge-muted">{log.service_type === "oil_change" ? t.weeklyMileage.oil.oilChange : log.service_type}</span>
                       </div>
-                      <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                      <div className="mt-3 grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
                         <div>
                           <p className="metric-label">{t.weeklyMileage.oil.serviceOdometer}</p>
                           <p className="mt-1 font-semibold text-slate-900">{formatKmValue(log.odometer)}</p>
@@ -1624,6 +1656,14 @@ export default function WeeklyMileagePage() {
                         <div>
                           <p className="metric-label">{t.weeklyMileage.oil.intervalKm}</p>
                           <p className="mt-1 font-semibold text-slate-900">{formatKmValue(log.interval_km)}</p>
+                        </div>
+                        <div>
+                          <p className="metric-label">{t.weeklyMileage.nextServiceDue}</p>
+                          <p className="mt-1 font-semibold text-slate-900">{formatKmValue(log.next_service_due_odometer ?? (log.interval_km != null ? log.odometer + log.interval_km : null))}</p>
+                        </div>
+                        <div>
+                          <p className="metric-label">{t.weeklyMileage.oil.recordedAt}</p>
+                          <p className="mt-1 font-semibold text-slate-900">{log.created_at ? formatDate(log.created_at.slice(0, 10), language) : "-"}</p>
                         </div>
                       </div>
                     </div>
