@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
+import { FuelStatementImporter } from "@/components/fuel-statement-importer";
 import { Header } from "@/components/header";
 import { StatCard } from "@/components/stat-card";
 import {
@@ -234,7 +235,11 @@ function normalizeEntrySource(value: unknown): FuelLogEntrySource {
     return "direct_from_receipt";
   }
 
-  return value === "direct_from_receipt" || value === "other" || value === "line_message"
+  return value === "direct_from_receipt" ||
+    value === "statement_manual" ||
+    value === "other" ||
+    value === "line_message" ||
+    value === "statement_import"
     ? value
     : DEFAULT_ENTRY_SOURCE;
 }
@@ -246,6 +251,10 @@ function getEntrySourceBadgeClass(source: FuelLogEntrySource) {
 
   if (source === "other") {
     return "border-slate-200 bg-slate-100 text-slate-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]";
+  }
+
+  if (source === "statement_import" || source === "statement_manual") {
+    return "border-violet-200 bg-violet-50 text-violet-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]";
   }
 
   return "border-sky-200 bg-sky-50 text-sky-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]";
@@ -536,6 +545,12 @@ export default function FuelLogsPage() {
       ? "ไม่สามารถส่งออกรายการเติมน้ำมันได้"
       : "Unable to export fuel logs.";
 
+  const statementEntryCopy = {
+    keepDetails: "Keep details for next entry",
+    statementModeHelper:
+      "Statement mode: Save and add another keeps driver, vehicle, station and payment details."
+  };
+
   const receiptCopy = {
     filterLabel: language === "th" ? "สถานะตรวจใบเสร็จ" : "Receipt check",
     checked: language === "th" ? "ตรวจแล้ว" : "Checked",
@@ -567,12 +582,24 @@ export default function FuelLogsPage() {
     options: {
       line_message: language === "th" ? "ข้อความ LINE" : "Line message",
       direct_from_receipt: language === "th" ? "จากใบเสร็จโดยตรง" : "Direct from receipt",
+      statement_manual: "Direct from statement",
+      statement_import: language === "th" ? "Statement import" : "Statement import",
       other: language === "th" ? "อื่นๆ" : "Other"
     } satisfies Record<FuelLogEntrySource, string>
   };
-  const entrySourceOptions = ([
+  const manualEntrySourceOptions = ([
     "line_message",
     "direct_from_receipt",
+    "statement_manual"
+  ] as FuelLogEntrySource[]).map((value) => ({
+    value,
+    label: sourceCopy.options[value]
+  }));
+  const filterEntrySourceOptions = ([
+    "line_message",
+    "direct_from_receipt",
+    "statement_manual",
+    "statement_import",
     "other"
   ] as FuelLogEntrySource[]).map((value) => ({
     value,
@@ -603,6 +630,7 @@ export default function FuelLogsPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [submitMode, setSubmitMode] = useState<"save" | "addAnother">("save");
+  const [keepDetailsForNextEntry, setKeepDetailsForNextEntry] = useState(true);
   const [lastEditedFuelField, setLastEditedFuelField] = useState<"litres" | "total_cost" | "price_per_litre">("total_cost");
   const [pendingDraft, setPendingDraft] = useState<FuelDraft | null>(null);
   const [duplicateMatches, setDuplicateMatches] = useState<FuelLogWithDriver[]>([]);
@@ -661,7 +689,6 @@ export default function FuelLogsPage() {
       a.localeCompare(b, language === "th" ? "th" : "en", { sensitivity: "base" })
     );
   }, [efficiencySourceLogs, fuelLogs, language]);
-
   const duplicateKeyCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const log of fuelLogs) {
@@ -1152,19 +1179,31 @@ export default function FuelLogsPage() {
   ) => applyRequiredValidationMessage(event, t.common.requiredField);
 
   const nextForm = useCallback(
-    (mode: "save" | "addAnother") =>
-      mode === "addAnother"
-        ? {
-            ...initialForm,
-            date: form.date,
-            driver_id: form.driver_id,
-            vehicle_reg: form.vehicle_reg,
-            fuel_type: DEFAULT_FUEL_TYPE,
-            payment_method: DEFAULT_PAYMENT_METHOD,
-            entry_source: form.entry_source
-          }
-        : { ...initialForm, date: form.date },
-    [form.date, form.driver_id, form.entry_source, form.vehicle_reg]
+    (mode: "save" | "addAnother") => {
+      if (mode !== "addAnother") return { ...initialForm, date: form.date };
+      if (!keepDetailsForNextEntry) return { ...initialForm };
+
+      return {
+        ...initialForm,
+        date: form.date,
+        driver_id: form.driver_id,
+        vehicle_reg: form.vehicle_reg,
+        location: form.location,
+        fuel_type: form.fuel_type,
+        payment_method: form.payment_method,
+        entry_source: form.entry_source
+      };
+    },
+    [
+      form.date,
+      form.driver_id,
+      form.entry_source,
+      form.fuel_type,
+      form.location,
+      form.payment_method,
+      form.vehicle_reg,
+      keepDetailsForNextEntry
+    ]
   );
 
   const buildDraft = useCallback(
@@ -1178,7 +1217,7 @@ export default function FuelLogsPage() {
       litres: Number(form.litres),
       total_cost: Number(form.total_cost),
       price_per_litre: form.price_per_litre ? Number(form.price_per_litre) : null,
-      station: normalizeFuelLogLocation(form.location),
+      station: form.location.trim(),
       fuel_type: form.fuel_type || null,
       payment_method: form.payment_method || null,
       entry_source: normalizeEntrySource(form.entry_source),
@@ -1198,6 +1237,7 @@ export default function FuelLogsPage() {
     async (draft: FuelDraft, mode: "save" | "addAnother") => {
       await saveFuelLog(draft);
       setForm(nextForm(mode));
+      setLastEditedFuelField("total_cost");
       setSubmitMode("save");
       setPendingDraft(null);
       setDuplicateMatches([]);
@@ -2024,8 +2064,8 @@ export default function FuelLogsPage() {
       </section>
 
       <section className="mt-5 grid gap-5">
-        <section className="surface-card p-4 sm:p-5">
-          <form onSubmit={handleSubmit} className="space-y-5">
+        <section className="surface-card p-3 sm:p-4">
+          <form onSubmit={handleSubmit} className="space-y-3">
             <div>
               <h3 className="section-title">{isEditing ? t.fuelLogs.editFuelEntry : t.fuelLogs.addFuelEntry}</h3>
               <p className="section-subtitle">{t.fuelLogs.description}</p>
@@ -2063,28 +2103,32 @@ export default function FuelLogsPage() {
                 </div>
               </div>
             ) : null}
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2">
               <div className="form-field"><label className="form-label form-label-required">{t.fuelLogs.logDate}</label><input type="date" required max={todayValue} value={form.date} onInvalid={handleInvalid} onInput={clearValidationMessage} onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))} className="form-input bg-white" /></div>
               <div className="form-field"><label className="form-label form-label-required">{t.fuelLogs.driver}</label><select required value={form.driver_id} onInvalid={handleInvalid} onInput={clearValidationMessage} onChange={(event) => handleDriverChange(event.target.value)} className="form-input bg-white"><option value="">{t.fuelLogs.selectDriver}</option>{drivers.map((driver) => <option key={driver.id} value={String(driver.id)}>{driver.name}</option>)}</select></div>
               <div className="form-field sm:col-span-2">
                 <label className="form-label">{sourceCopy.label}</label>
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <select value={form.entry_source} onChange={(event) => setForm((current) => ({ ...current, entry_source: normalizeEntrySource(event.target.value) }))} className="form-input bg-white sm:max-w-xs">
-                    {entrySourceOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                  </select>
-                  <div className="flex flex-wrap gap-2">
-                    {entrySourceOptions.map((option) => (
-                      <button key={option.value} type="button" onClick={() => setForm((current) => ({ ...current, entry_source: option.value }))} className={`inline-flex min-h-[38px] items-center rounded-full border px-3 py-1.5 text-xs font-semibold transition ${form.entry_source === option.value ? getEntrySourceBadgeClass(option.value) : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}>
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {manualEntrySourceOptions.map((option) => (
+                    <button key={option.value} type="button" onClick={() => setForm((current) => ({ ...current, entry_source: option.value }))} className={`inline-flex min-h-8 items-center rounded-full border px-3 py-1 text-xs font-semibold transition ${form.entry_source === option.value ? getEntrySourceBadgeClass(option.value) : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}>
+                      {option.label}
+                    </button>
+                  ))}
                 </div>
                 {form.entry_source === "direct_from_receipt" ? <p className="form-helper text-emerald-700">{sourceCopy.auditHint}</p> : null}
+                {form.entry_source === "statement_manual" ? <p className="mt-1 text-xs text-sky-700">{statementEntryCopy.statementModeHelper}</p> : null}
               </div>
               <div className="form-field"><label className="form-label form-label-required">{t.fuelLogs.vehicleReg}</label><input required list="fuel-log-vehicle-options" value={form.vehicle_reg} onInvalid={handleInvalid} onInput={clearValidationMessage} onChange={(event) => setForm((current) => ({ ...current, vehicle_reg: event.target.value }))} placeholder={t.fuelLogs.vehiclePlaceholder} className="form-input bg-white" /><p className="form-helper">{selectedDriver?.vehicle_reg?.trim() ? copy.autoFillLabel : copy.noVehicleAssignedLabel}</p></div>
               <div className="form-field"><label className="form-label">{t.fuelLogs.mileage}</label><input type="number" min="0" step="1" value={form.mileage} onChange={(event) => setForm((current) => ({ ...current, mileage: event.target.value }))} placeholder={t.fuelLogs.currentMileage} className="form-input bg-white" /><p className="form-helper">{comparisonEntry ? `${comparisonEntry.vehicle_reg} | ${formatDate(comparisonEntry.date, language)} | ${comparisonEntry.mileage ?? "-"}` : copy.previousEntryHelper}</p>{form.mileage && comparisonEntry?.mileage != null && Number(form.mileage) < Number(comparisonEntry.mileage) ? <div className="mt-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{t.fuelLogs.mileageValidationError}</div> : null}</div>
-              <div className="form-field"><label className="form-label form-label-required">{t.fuelLogs.fuelStationLocation}</label><input required value={form.location} onInvalid={handleInvalid} onInput={clearValidationMessage} onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))} placeholder={t.fuelLogs.stationNameOrLocation} className="form-input bg-white" /></div>
+              <div className="form-field">
+                <label className="form-label form-label-required">{t.fuelLogs.fuelStationLocation}</label>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {["Shell", "Bangchak"].map((station) => (
+                    <button key={station} type="button" onClick={() => setForm((current) => ({ ...current, location: station }))} className={`min-h-8 rounded-full border px-3 py-1 text-xs font-semibold transition ${form.location.trim().toLowerCase() === station.toLowerCase() ? "border-sky-300 bg-sky-50 text-sky-800" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}>{station}</button>
+                  ))}
+                  <input required value={form.location} onInvalid={handleInvalid} onInput={clearValidationMessage} onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))} placeholder="Custom location" autoComplete="off" className="form-input min-w-[180px] flex-1 bg-white" />
+                </div>
+              </div>
               <div className="form-field"><label className="form-label form-label-required">{t.fuelLogs.litres}</label><input type="number" min="0" step="0.01" required value={form.litres} onInvalid={handleInvalid} onInput={clearValidationMessage} onChange={(event) => updateFuelField("litres", event.target.value)} className="form-input bg-white" /></div>
               <div className="form-field"><label className="form-label form-label-required">{t.fuelLogs.totalCost}</label><input type="number" min="0" step="0.01" required value={form.total_cost} onInvalid={handleInvalid} onInput={clearValidationMessage} onChange={(event) => updateFuelField("total_cost", event.target.value)} className="form-input bg-white" /></div>
               <div className="form-field"><label className="form-label">{t.fuelLogs.pricePerLitre}</label><input type="number" min="0" step="0.01" value={form.price_per_litre} onChange={(event) => updateFuelField("price_per_litre", event.target.value)} placeholder={t.fuelLogs.pricePerLitrePlaceholder} className="form-input bg-white" /><p className="form-helper">{t.fuelLogs.pricePerLitreHelper}</p></div>
@@ -2094,7 +2138,7 @@ export default function FuelLogsPage() {
 
             <div className="form-field">
               <label className="form-label">{t.fuelLogs.notes}</label>
-              <textarea rows={4} value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} placeholder={t.fuelLogs.optionalNotes} className="form-textarea bg-white" />
+              <textarea rows={2} value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} placeholder={t.fuelLogs.optionalNotes} className="form-textarea bg-white" />
             </div>
 
             <datalist id="fuel-log-vehicle-options">
@@ -2102,8 +2146,13 @@ export default function FuelLogsPage() {
                 <option key={vehicleReg} value={vehicleReg} />
               ))}
             </datalist>
-
-            <div className="sticky bottom-3 z-10 flex flex-col gap-2.5 rounded-[1.5rem] border border-slate-200/80 bg-white/95 p-3 shadow-[0_10px_30px_rgba(15,23,42,0.08)] backdrop-blur sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none sm:flex-row sm:items-center">
+            <div className="sticky bottom-2 z-10 flex flex-col gap-2 rounded-lg border border-slate-200/80 bg-white/95 p-2.5 shadow-[0_8px_24px_rgba(15,23,42,0.08)] backdrop-blur sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none sm:flex-row sm:items-center">
+              {!isEditing ? (
+                <label className="flex min-h-10 cursor-pointer items-center gap-2.5 text-sm font-medium text-slate-700 sm:mr-auto">
+                  <input type="checkbox" checked={keepDetailsForNextEntry} onChange={(event) => setKeepDetailsForNextEntry(event.target.checked)} className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
+                  <span>{statementEntryCopy.keepDetails}</span>
+                </label>
+              ) : null}
               {!isEditing ? <button type="submit" disabled={saving} onClick={() => setSubmitMode("addAnother")} className="btn-secondary min-w-[180px] flex-1 sm:flex-none disabled:opacity-70">{saving && submitMode === "addAnother" ? t.common.saving : t.fuelLogs.saveAndAddAnother}</button> : null}
               <button type="submit" disabled={saving} onClick={() => setSubmitMode("save")} className="btn-primary min-w-[180px] flex-1 sm:flex-none disabled:opacity-70">{saving && submitMode === "save" ? t.common.saving : isEditing ? t.fuelLogs.updateFuelEntry : t.fuelLogs.saveFuelEntry}</button>
               {isEditing ? <button type="button" onClick={resetForm} className="btn-secondary w-full sm:w-auto">{t.common.cancel}</button> : null}
@@ -2122,6 +2171,7 @@ export default function FuelLogsPage() {
               </div>
               <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
                 <div className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">{formatNumber(totalCount, language)} {copy.matches}</div>
+                <FuelStatementImporter drivers={drivers} existingLogs={efficiencySourceLogs} onImported={() => refreshCurrentPage(1)} />
                 <button type="button" onClick={() => void handleExportFuelLogs()} disabled={!totalCount || exporting || loading} className="btn-secondary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"><Download className="h-4 w-4" />{exporting ? exportButtonLabel : t.common.export}</button>
               </div>
             </div>
@@ -2140,7 +2190,7 @@ export default function FuelLogsPage() {
               <div className="grid gap-3 md:grid-cols-12">
                 <div className="md:col-span-3"><label className="form-label">{t.fuelLogs.location}</label><select value={filters.location ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, location: event.target.value }))} className="form-input bg-white"><option value="">{t.fuelLogs.allLocations}</option>{locationOptions.map((location) => <option key={location} value={location}>{location}</option>)}</select></div>
                 <div className="md:col-span-3"><label className="form-label">{copy.payment}</label><select value={filters.paymentMethod ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, paymentMethod: event.target.value }))} className="form-input bg-white"><option value="">{copy.all}</option>{paymentMethodOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
-                <div className="md:col-span-3"><label className="form-label">{sourceCopy.filterLabel}</label><select value={filters.entrySource ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, entrySource: event.target.value as FuelLogFilters["entrySource"] }))} className="form-input bg-white"><option value="">{sourceCopy.all}</option>{entrySourceOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
+                <div className="md:col-span-3"><label className="form-label">{sourceCopy.filterLabel}</label><select value={filters.entrySource ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, entrySource: event.target.value as FuelLogFilters["entrySource"] }))} className="form-input bg-white"><option value="">{sourceCopy.all}</option>{filterEntrySourceOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
                 <div className="md:col-span-3"><label className="form-label">{receiptCopy.filterLabel}</label><select value={filters.receiptCheckedStatus ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, receiptCheckedStatus: event.target.value as FuelLogFilters["receiptCheckedStatus"] }))} className="form-input bg-white"><option value="">{copy.all}</option><option value="checked">{receiptCopy.checked}</option><option value="not_checked">{receiptCopy.notChecked}</option></select></div>
                 <div className="md:col-span-3"><label className="form-label">{copy.totalCostRange}</label><div className="grid grid-cols-2 gap-2"><input type="number" min="0" step="0.01" value={filters.totalCostMin ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, totalCostMin: event.target.value }))} placeholder={copy.min} className="form-input bg-white" /><input type="number" min="0" step="0.01" value={filters.totalCostMax ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, totalCostMax: event.target.value }))} placeholder={copy.max} className="form-input bg-white" /></div></div>
               </div>

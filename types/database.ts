@@ -48,6 +48,7 @@ export type VehicleServiceLog = {
   service_type: "oil_change" | string;
   service_date: string;
   odometer: number;
+  oil_change_odometer?: number | null;
   service_odometer?: number;
   interval_km: number | null;
   next_service_due_odometer?: number | null;
@@ -99,7 +100,12 @@ export type FuelLog = {
   user_id: string;
 };
 
-export type FuelLogEntrySource = "line_message" | "direct_from_receipt" | "other";
+export type FuelLogEntrySource =
+  | "line_message"
+  | "direct_from_receipt"
+  | "statement_manual"
+  | "statement_import"
+  | "other";
 
 export type BankTransfer = {
   id: string;

@@ -21,6 +21,7 @@ type ReportFilters = {
   driver: string;
   location: string;
   vehicleReg: string;
+  checkedStatus: "" | "checked" | "not_checked";
 };
 
 type GroupedFuelSpendRow = {
@@ -30,6 +31,9 @@ type GroupedFuelSpendRow = {
   totalSpend: number;
   totalLitres: number;
   entryCount: number;
+  checkedEntries: number;
+  uncheckedEntries: number;
+  uncheckedSpend: number;
   averagePricePerLitre: number | null;
   lastUsedDate: string;
   logs: FuelLogWithDriver[];
@@ -92,8 +96,16 @@ function formatPrice(value: number | null) {
 
 function getEntrySourceLabel(source: FuelLogEntrySource, labels: ReturnType<typeof useLanguage>["t"]["fuelSpendReport"]) {
   if (source === "direct_from_receipt") return labels.directFromReceipt;
+  if (source === "statement_manual") return labels.directFromStatement;
+  if (source === "statement_import") return labels.statementImport;
   if (source === "other") return labels.other;
   return labels.lineMessage;
+}
+
+function getCheckedStatusBadgeClass(checked: boolean) {
+  return checked
+    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+    : "border-amber-200 bg-amber-100 text-amber-800";
 }
 
 export default function FuelSpendReportPage() {
@@ -111,7 +123,8 @@ export default function FuelSpendReportPage() {
     toDate: defaultRange.toDate,
     driver: "",
     location: "",
-    vehicleReg: ""
+    vehicleReg: "",
+    checkedStatus: ""
   });
 
   useEffect(() => {
@@ -146,7 +159,7 @@ export default function FuelSpendReportPage() {
 
   const clearFilters = () => {
     const range = getPresetRange("this_month");
-    setFilters({ preset: "this_month", fromDate: range.fromDate, toDate: range.toDate, driver: "", location: "", vehicleReg: "" });
+    setFilters({ preset: "this_month", fromDate: range.fromDate, toDate: range.toDate, driver: "", location: "", vehicleReg: "", checkedStatus: "" });
     setExpandedRows(new Set());
   };
 
@@ -187,6 +200,8 @@ export default function FuelSpendReportPage() {
         if (filters.driver && log.driver !== filters.driver) return false;
         if (filters.location && log.location !== filters.location) return false;
         if (filters.vehicleReg && log.vehicle_reg !== filters.vehicleReg) return false;
+        if (filters.checkedStatus === "checked" && !log.receipt_checked) return false;
+        if (filters.checkedStatus === "not_checked" && log.receipt_checked) return false;
         return true;
       }),
     [filters, normalizedLogs]
@@ -200,6 +215,9 @@ export default function FuelSpendReportPage() {
       const existing = groups.get(key);
       const totalCost = getSafeNumber(log.total_cost);
       const litres = getSafeNumber(log.litres);
+      const checkedEntries = log.receipt_checked ? 1 : 0;
+      const uncheckedEntries = log.receipt_checked ? 0 : 1;
+      const uncheckedSpend = log.receipt_checked ? 0 : totalCost;
 
       if (!existing) {
         groups.set(key, {
@@ -209,6 +227,9 @@ export default function FuelSpendReportPage() {
           totalSpend: totalCost,
           totalLitres: litres,
           entryCount: 1,
+          checkedEntries,
+          uncheckedEntries,
+          uncheckedSpend,
           averagePricePerLitre: null,
           lastUsedDate: log.date,
           logs: [log]
@@ -219,6 +240,9 @@ export default function FuelSpendReportPage() {
       existing.totalSpend += totalCost;
       existing.totalLitres += litres;
       existing.entryCount += 1;
+      existing.checkedEntries += checkedEntries;
+      existing.uncheckedEntries += uncheckedEntries;
+      existing.uncheckedSpend += uncheckedSpend;
       existing.lastUsedDate = log.date > existing.lastUsedDate ? log.date : existing.lastUsedDate;
       existing.logs.push(log);
     }
@@ -238,6 +262,9 @@ export default function FuelSpendReportPage() {
   const summary = useMemo(() => {
     const totalSpend = filteredLogs.reduce((sum, log) => sum + getSafeNumber(log.total_cost), 0);
     const totalLitres = filteredLogs.reduce((sum, log) => sum + getSafeNumber(log.litres), 0);
+    const checkedEntries = filteredLogs.filter((log) => log.receipt_checked).length;
+    const uncheckedEntries = filteredLogs.length - checkedEntries;
+    const uncheckedSpend = filteredLogs.reduce((sum, log) => (log.receipt_checked ? sum : sum + getSafeNumber(log.total_cost)), 0);
     const locationCounts = new Map<string, number>();
     filteredLogs.forEach((log) => locationCounts.set(log.location, (locationCounts.get(log.location) ?? 0) + 1));
     const mostUsedStation =
@@ -248,6 +275,9 @@ export default function FuelSpendReportPage() {
       totalLitres,
       averagePricePerLitre: totalLitres > 0 ? totalSpend / totalLitres : null,
       entryCount: filteredLogs.length,
+      checkedEntries,
+      uncheckedEntries,
+      uncheckedSpend,
       mostUsedStation
     };
   }, [filteredLogs]);
@@ -271,10 +301,14 @@ export default function FuelSpendReportPage() {
       { Section: labels.appliedFilters, Field: labels.driver, Value: filters.driver || labels.all },
       { Section: labels.appliedFilters, Field: labels.location, Value: filters.location || labels.all },
       { Section: labels.appliedFilters, Field: labels.vehicleRegistration, Value: filters.vehicleReg || labels.all },
+      { Section: labels.appliedFilters, Field: labels.checkedStatus, Value: filters.checkedStatus === "checked" ? labels.checked : filters.checkedStatus === "not_checked" ? labels.notChecked : labels.all },
       { Section: labels.summaryTotals, Field: labels.totalFuelSpend, Value: summary.totalSpend.toFixed(2) },
       { Section: labels.summaryTotals, Field: labels.totalLitres, Value: summary.totalLitres.toFixed(2) },
       { Section: labels.summaryTotals, Field: labels.averagePricePerLitre, Value: summary.averagePricePerLitre?.toFixed(2) ?? "" },
       { Section: labels.summaryTotals, Field: labels.fuelEntries, Value: summary.entryCount },
+      { Section: labels.summaryTotals, Field: labels.checkedEntries, Value: summary.checkedEntries },
+      { Section: labels.summaryTotals, Field: labels.uncheckedEntries, Value: summary.uncheckedEntries },
+      { Section: labels.summaryTotals, Field: labels.uncheckedSpend, Value: summary.uncheckedSpend.toFixed(2) },
       ...groupedRows.map((row) => ({
         Section: labels.groupedTable,
         [labels.driver]: row.driver,
@@ -282,6 +316,9 @@ export default function FuelSpendReportPage() {
         [labels.totalSpend]: row.totalSpend.toFixed(2),
         [labels.totalLitres]: row.totalLitres.toFixed(2),
         [labels.entries]: row.entryCount,
+        [labels.checkedEntries]: row.checkedEntries,
+        [labels.uncheckedEntries]: row.uncheckedEntries,
+        [labels.uncheckedSpend]: row.uncheckedSpend.toFixed(2),
         [labels.averagePricePerLitre]: row.averagePricePerLitre?.toFixed(2) ?? "",
         [labels.lastUsedDate]: row.lastUsedDate
       })),
@@ -319,10 +356,15 @@ export default function FuelSpendReportPage() {
             <h2 className="mt-3 text-xl font-semibold text-slate-950">{labels.title}</h2>
             <p className="mt-1 max-w-3xl text-sm text-slate-500">{labels.subtitle}</p>
           </div>
-          <button type="button" onClick={exportReport} disabled={!filteredLogs.length} className="btn-secondary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">
-            <Download className="h-4 w-4" />
-            {labels.export}
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button type="button" onClick={() => setFilters((current) => ({ ...current, checkedStatus: "not_checked" }))} className="btn-secondary w-full sm:w-auto">
+              {labels.showUncheckedOnly}
+            </button>
+            <button type="button" onClick={exportReport} disabled={!filteredLogs.length} className="btn-secondary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">
+              <Download className="h-4 w-4" />
+              {labels.export}
+            </button>
+          </div>
         </div>
 
         <div className="mt-5 rounded-[1.5rem] border border-slate-200/80 bg-white/95 p-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)] sm:p-5">
@@ -369,15 +411,26 @@ export default function FuelSpendReportPage() {
                 {vehicleOptions.map((vehicle) => <option key={vehicle} value={vehicle}>{vehicle}</option>)}
               </select>
             </div>
+            <div className="md:col-span-3">
+              <label className="form-label">{labels.checkedStatus}</label>
+              <select value={filters.checkedStatus} onChange={(event) => setFilters((current) => ({ ...current, checkedStatus: event.target.value as ReportFilters["checkedStatus"] }))} className="form-input bg-white">
+                <option value="">{labels.all}</option>
+                <option value="checked">{labels.checked}</option>
+                <option value="not_checked">{labels.notChecked}</option>
+              </select>
+            </div>
           </div>
         </div>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard label={labels.totalFuelSpend} value={formatBaht(summary.totalSpend)} />
         <SummaryCard label={labels.totalLitres} value={formatLitres(summary.totalLitres, language)} />
         <SummaryCard label={labels.averagePricePerLitre} value={formatPrice(summary.averagePricePerLitre)} />
         <SummaryCard label={labels.fuelEntries} value={formatNumber(summary.entryCount, language)} />
+        <SummaryCard label={labels.checkedEntries} value={formatNumber(summary.checkedEntries, language)} />
+        <SummaryCard label={labels.uncheckedEntries} value={formatNumber(summary.uncheckedEntries, language)} />
+        <SummaryCard label={labels.uncheckedSpend} value={formatBaht(summary.uncheckedSpend)} />
         <SummaryCard label={labels.mostUsedStation} value={summary.mostUsedStation} />
       </section>
 
@@ -404,7 +457,7 @@ export default function FuelSpendReportPage() {
         ) : (
           <div className="table-shell rounded-2xl">
             <div className="table-scroll overflow-x-auto">
-              <table className="min-w-[1120px] w-full text-sm">
+              <table className="min-w-[1360px] w-full text-sm">
                 <thead className="bg-slate-50/95 text-slate-600">
                   <tr>
                     <th className="table-head-cell text-left">{labels.driver}</th>
@@ -412,6 +465,9 @@ export default function FuelSpendReportPage() {
                     <SortableHeader label={labels.totalSpend} active={sortKey === "totalSpend"} onClick={() => setSortKey("totalSpend")} />
                     <SortableHeader label={labels.totalLitres} active={sortKey === "totalLitres"} onClick={() => setSortKey("totalLitres")} />
                     <SortableHeader label={labels.entries} active={sortKey === "entryCount"} onClick={() => setSortKey("entryCount")} />
+                    <th className="table-head-cell text-right">{labels.checkedEntries}</th>
+                    <th className="table-head-cell text-right">{labels.uncheckedEntries}</th>
+                    <th className="table-head-cell text-right">{labels.uncheckedSpend}</th>
                     <th className="table-head-cell text-right">{labels.averagePricePerLitre}</th>
                     <SortableHeader label={labels.lastUsedDate} active={sortKey === "lastUsedDate"} onClick={() => setSortKey("lastUsedDate")} />
                   </tr>
@@ -432,6 +488,9 @@ export default function FuelSpendReportPage() {
                           <td className="table-body-cell text-right text-base font-bold text-slate-950">{formatBaht(row.totalSpend)}</td>
                           <td className="table-body-cell text-right font-medium text-slate-800">{formatLitres(row.totalLitres, language)}</td>
                           <td className="table-body-cell text-right font-medium text-slate-800">{formatNumber(row.entryCount, language)}</td>
+                          <td className="table-body-cell text-right font-medium text-emerald-700">{formatNumber(row.checkedEntries, language)}</td>
+                          <td className="table-body-cell text-right font-semibold text-amber-700">{formatNumber(row.uncheckedEntries, language)}</td>
+                          <td className="table-body-cell text-right font-semibold text-amber-700">{formatBaht(row.uncheckedSpend)}</td>
                           <td className="table-body-cell text-right font-medium text-slate-800">{formatPrice(row.averagePricePerLitre)}</td>
                           <td className="table-body-cell text-right">
                             <span className="inline-flex items-center gap-2 font-medium text-slate-800">
@@ -442,7 +501,7 @@ export default function FuelSpendReportPage() {
                         </tr>
                         {expanded ? (
                           <tr className="bg-slate-50/60">
-                            <td colSpan={7} className="px-4 py-4">
+                            <td colSpan={10} className="px-4 py-4">
                               <div className="rounded-2xl border border-slate-200 bg-white">
                                 <table className="min-w-full text-xs">
                                   <thead className="bg-slate-50 text-slate-500">
@@ -461,7 +520,7 @@ export default function FuelSpendReportPage() {
                                   </thead>
                                   <tbody>
                                     {row.logs.map((log) => (
-                                      <tr key={log.id} className="border-t border-slate-100 text-slate-700">
+                                      <tr key={log.id} className={`border-t border-slate-100 text-slate-700 ${log.receipt_checked ? "" : "bg-amber-50/70"}`}>
                                         <td className="px-3 py-2 font-medium">{formatDate(log.date, language)}</td>
                                         <td className="px-3 py-2">{log.driver}</td>
                                         <td className="px-3 py-2">{log.vehicle_reg}</td>
@@ -469,7 +528,11 @@ export default function FuelSpendReportPage() {
                                         <td className="px-3 py-2 text-right">{formatLitres(getSafeNumber(log.litres), language)}</td>
                                         <td className="px-3 py-2 text-right font-semibold text-slate-900">{formatBaht(getSafeNumber(log.total_cost))}</td>
                                         <td className="px-3 py-2 text-right">{formatPrice(getPricePerLitre(log))}</td>
-                                        <td className="px-3 py-2">{log.receipt_checked ? labels.checked : labels.notChecked}</td>
+                                        <td className="px-3 py-2">
+                                          <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getCheckedStatusBadgeClass(log.receipt_checked)}`}>
+                                            {log.receipt_checked ? labels.checked : labels.notChecked}
+                                          </span>
+                                        </td>
                                         <td className="px-3 py-2">{getEntrySourceLabel(log.entry_source, labels)}</td>
                                         <td className="max-w-[240px] truncate px-3 py-2" title={log.notes || ""}>{log.notes || "-"}</td>
                                       </tr>

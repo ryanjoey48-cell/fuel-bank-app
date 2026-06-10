@@ -17,7 +17,7 @@ import {
 import { exportToCsv } from "@/lib/export";
 import { applyRequiredValidationMessage, clearValidationMessage } from "@/lib/form-validation";
 import { useLanguage } from "@/lib/language-provider";
-import { getOilChangeIntervalForVehicleType } from "@/lib/oil-change-service";
+import { getEffectiveOilChangeIntervalForVehicleType, getOilChangeIntervalForVehicleType } from "@/lib/oil-change-service";
 import { supabase } from "@/lib/supabase";
 import {
   buildDriverWeeklyComparisons,
@@ -609,9 +609,10 @@ export default function WeeklyMileagePage() {
   const openServiceModal = (mode: OilActionMode, row: (typeof oilChangeRows)[number]) => {
     const latestLog = getLatestServiceLog(row.registration);
     const defaultInterval =
-      mode === "edit"
-        ? latestLog?.interval_km ?? row.oilChangeIntervalKm ?? getOilChangeIntervalForVehicleType(row.vehicleType)
-        : getOilChangeIntervalForVehicleType(row.vehicleType) ?? row.oilChangeIntervalKm ?? latestLog?.interval_km;
+      getEffectiveOilChangeIntervalForVehicleType(
+        row.vehicleType,
+        row.oilChangeIntervalKm ?? latestLog?.interval_km ?? getOilChangeIntervalForVehicleType(row.vehicleType)
+      );
     const defaultDate =
       mode === "mark" ? todayKey() : row.lastOilChangeDate ?? latestLog?.service_date ?? todayKey();
     const defaultOdometer =

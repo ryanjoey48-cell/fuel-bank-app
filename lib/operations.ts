@@ -8,6 +8,7 @@ import type {
   WeeklyMileageEntry
 } from "@/types/database";
 import {
+  getEffectiveOilChangeIntervalForVehicleType,
   getOilChangeIntervalForVehicleType,
   getVehicleTypeLabel,
   type OilChangeIntervalSource
@@ -186,9 +187,9 @@ function buildOilChangeRow({
     oilChangeIntervalKm != null && Number.isFinite(Number(oilChangeIntervalKm)) && Number(oilChangeIntervalKm) > 0
       ? Number(oilChangeIntervalKm)
       : null;
-  const interval = savedInterval ?? vehicleTypeInterval;
+  const interval = getEffectiveOilChangeIntervalForVehicleType(vehicleType, savedInterval);
   const intervalSource: OilChangeIntervalSource =
-    savedInterval != null
+    savedInterval != null && savedInterval === interval
       ? "vehicle_baseline"
       : vehicleTypeInterval != null
         ? "vehicle_type"

@@ -12,7 +12,7 @@ import {
   normalizeTransferTypeKey
 } from "@/lib/localized-values";
 import { normalizeFuelLogLocation } from "@/lib/fuel-log-location";
-import { getOilChangeIntervalForVehicleType } from "@/lib/oil-change-service";
+import { getEffectiveOilChangeIntervalForVehicleType, getOilChangeIntervalForVehicleType } from "@/lib/oil-change-service";
 import type {
   BankTransfer,
   BankTransferWithDriver,
@@ -233,9 +233,12 @@ function isMissingColumnError(error: unknown) {
   }
 
   const record = error as Record<string, unknown>;
+  const message = String(record.message ?? record.details ?? record.hint ?? "").toLowerCase();
   return (
     record.code === "42703" ||
-    String(record.message ?? "").toLowerCase().includes("does not exist")
+    record.code === "PGRST204" ||
+    message.includes("does not exist") ||
+    (message.includes("could not find the") && message.includes("column"))
   );
 }
 
@@ -253,6 +256,48 @@ function isMissingTableError(error: unknown) {
     message.includes("could not find the table") ||
     message.includes("relation") && message.includes("does not exist")
   );
+}
+
+async function insertVehicleServiceLogWithSchemaFallback(payload: Record<string, unknown>) {
+  let activePayload = { ...payload };
+  const removedColumns: string[] = [];
+
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    console.log("vehicle_service_logs insert payload attempt:", {
+      attempt: attempt + 1,
+      removedColumns,
+      payload: activePayload
+    });
+
+    const result = await supabase
+      .from("vehicle_service_logs")
+      .insert(activePayload)
+      .select()
+      .single();
+
+    if (!result.error) {
+      return result;
+    }
+
+    const missingColumn = getMissingColumnName(result.error);
+    if (missingColumn && missingColumn in activePayload && isMissingColumnError(result.error)) {
+      logDataError("vehicle_service_logs column missing; retrying without it:", result.error, {
+        missingColumn
+      });
+      const { [missingColumn]: _removed, ...nextPayload } = activePayload;
+      activePayload = nextPayload;
+      removedColumns.push(missingColumn);
+      continue;
+    }
+
+    return result;
+  }
+
+  return supabase
+    .from("vehicle_service_logs")
+    .insert(activePayload)
+    .select()
+    .single();
 }
 
 function normalizeTransferReceiptStatus(value: unknown) {
@@ -492,7 +537,7 @@ function mergeVehicleRowsByRegistration(vehicles: Vehicle[]) {
 }
 
 function normalizeServiceLogRow(log: VehicleServiceLog) {
-  const odometer = Number(log.odometer ?? log.service_odometer ?? 0);
+  const odometer = Number(log.odometer ?? log.oil_change_odometer ?? log.service_odometer ?? 0);
   const intervalKm =
     log.interval_km != null && Number.isFinite(Number(log.interval_km))
       ? Number(log.interval_km)
@@ -502,6 +547,10 @@ function normalizeServiceLogRow(log: VehicleServiceLog) {
     vehicle_id: log.vehicle_id ?? null,
     vehicle_reg: normalizeVehicleRegistration(log.vehicle_reg),
     odometer,
+    oil_change_odometer:
+      log.oil_change_odometer != null && Number.isFinite(Number(log.oil_change_odometer))
+        ? Number(log.oil_change_odometer)
+        : odometer,
     service_odometer: odometer,
     interval_km: intervalKm,
     next_service_due_odometer:
@@ -735,7 +784,13 @@ const FUEL_LOG_RECEIPT_SELECT_COLUMNS = `${FUEL_LOG_BASE_SELECT_COLUMNS}, receip
 const FUEL_LOG_ENTRY_SOURCE_SELECT_COLUMNS = `${FUEL_LOG_RECEIPT_SELECT_COLUMNS}, entry_source`;
 
 function normalizeFuelLogEntrySource(value: unknown): FuelLogEntrySource {
-  if (value === "direct_from_receipt" || value === "other" || value === "line_message") {
+  if (
+    value === "direct_from_receipt" ||
+    value === "statement_manual" ||
+    value === "other" ||
+    value === "line_message" ||
+    value === "statement_import"
+  ) {
     return value;
   }
 
@@ -779,8 +834,8 @@ function mapFuelLogRows(
         : log.odometer != null
           ? Number(log.odometer)
           : null,
-    station: normalizeFuelLogLocation(log.location),
-    location: normalizeFuelLogLocation(log.location),
+    station: String(log.location ?? "").trim(),
+    location: String(log.location ?? "").trim(),
     price_per_litre: log.price_per_litre,
     fuel_type: normalizeFuelTypeKey(log.fuel_type) ?? log.fuel_type,
     payment_method: normalizePaymentMethodKey(log.payment_method) ?? log.payment_method,
@@ -1185,7 +1240,7 @@ export async function saveOilChangeService(payload: {
   const serviceDate = payload.serviceDate?.trim();
   const serviceOdometer = Math.trunc(Number(payload.serviceOdometer));
   const intervalKm = Math.trunc(
-    Number(payload.intervalKm || getOilChangeIntervalForVehicleType(payload.vehicleType) || 30000)
+    Number(getEffectiveOilChangeIntervalForVehicleType(payload.vehicleType, payload.intervalKm) || 30000)
   );
 
   try {
@@ -1225,6 +1280,7 @@ export async function saveOilChangeService(payload: {
         service_type: "oil_change",
         service_date: serviceDate,
         odometer: serviceOdometer,
+        oil_change_odometer: serviceOdometer,
         interval_km: intervalKm,
         next_service_due_odometer: Math.trunc(serviceOdometer + intervalKm),
         vehicle_type_snapshot: payload.vehicleType ?? vehicle.vehicle_type ?? null,
@@ -1235,20 +1291,7 @@ export async function saveOilChangeService(payload: {
         operation: "insert",
         payload: historyPayload
       });
-      let historyResult = await supabase
-        .from("vehicle_service_logs")
-        .insert(historyPayload)
-        .select()
-        .single();
-
-      if (historyResult.error && isMissingColumnError(historyResult.error)) {
-        const { next_service_due_odometer: _nextServiceDueOdometer, ...fallbackHistoryPayload } = historyPayload;
-        historyResult = await supabase
-          .from("vehicle_service_logs")
-          .insert(fallbackHistoryPayload)
-          .select()
-          .single();
-      }
+      const historyResult = await insertVehicleServiceLogWithSchemaFallback(historyPayload);
 
       console.log("saveOilChangeService oil_change_history insert response:", {
         data: historyResult.data,
@@ -2053,7 +2096,7 @@ export async function saveFuelLog(payload: Partial<FuelLog>) {
     total_cost: rest.total_cost,
     price_per_litre: rest.price_per_litre ?? null,
     mileage: rest.odometer ?? rest.mileage ?? null,
-    location: locationValue == null ? undefined : normalizeFuelLogLocation(locationValue),
+    location: locationValue == null ? undefined : String(locationValue).trim(),
     fuel_type: normalizeFuelTypeKey(rest.fuel_type) ?? rest.fuel_type,
     payment_method: normalizePaymentMethodKey(rest.payment_method) ?? rest.payment_method,
     entry_source: normalizeFuelLogEntrySource(rest.entry_source),
@@ -2083,8 +2126,8 @@ export async function saveFuelLog(payload: Partial<FuelLog>) {
     mileage:
       Number((result.data as { mileage?: number | null }).mileage) ||
       Number((result.data as FuelLog).odometer || 0),
-    station: normalizeFuelLogLocation((result.data as { location?: string }).location),
-    location: normalizeFuelLogLocation((result.data as { location?: string }).location),
+    station: String((result.data as { location?: string }).location ?? "").trim(),
+    location: String((result.data as { location?: string }).location ?? "").trim(),
     price_per_litre: (result.data as { price_per_litre?: number | null }).price_per_litre ?? null,
     entry_source: normalizeFuelLogEntrySource((result.data as { entry_source?: string | null }).entry_source),
     receipt_checked: Boolean((result.data as { receipt_checked?: boolean | null }).receipt_checked),

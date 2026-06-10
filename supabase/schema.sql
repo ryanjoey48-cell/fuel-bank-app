@@ -15,7 +15,7 @@ create table if not exists public.drivers (
 create table if not exists public.fuel_logs (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
-  driver_id uuid not null references public.drivers(id) on delete cascade,
+  driver_id uuid references public.drivers(id) on delete set null,
   date date not null,
   vehicle_reg text not null,
   odometer numeric(12, 2),
@@ -25,7 +25,7 @@ create table if not exists public.fuel_logs (
   price_per_litre numeric(12, 2),
   fuel_type text,
   payment_method text,
-  entry_source text not null default 'line_message' check (entry_source in ('line_message', 'direct_from_receipt', 'other')),
+  entry_source text not null default 'line_message' check (entry_source in ('line_message', 'direct_from_receipt', 'statement_manual', 'statement_import', 'other')),
   notes text,
   created_at timestamptz not null default now()
 );
@@ -103,6 +103,7 @@ create table if not exists public.vehicle_service_logs (
   service_type text not null default 'oil_change',
   service_date date not null,
   odometer numeric(12, 2) not null,
+  oil_change_odometer numeric(12, 2),
   interval_km numeric(12, 2),
   next_service_due_odometer numeric(12, 2),
   vehicle_type_snapshot text,
