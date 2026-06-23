@@ -32,6 +32,7 @@ import {
 import { fetchJson } from "@/lib/http";
 import { useLanguage } from "@/lib/language-provider";
 import { shipmentTranslations, type ShipmentTranslations } from "@/lib/shipment-translations";
+import type { GoogleMapsHealthStatus } from "@/lib/google-maps";
 import { filterShipments } from "@/lib/shipment-estimation";
 import { buildNormalizedShipmentRouteLabel, normalizeShipment } from "@/lib/shipment-normalization";
 import {
@@ -52,26 +53,63 @@ const STORAGE_KEYS = {
   kmPerLitre: "fuel-bank:shipments:last-km-per-litre",
   fuelPrice: "fuel-bank:shipments:last-fuel-price"
 } as const;
-const DEFAULT_DEPOT_LOCATION: StructuredLocation | null = (() => {
-  const lat = Number(process.env.NEXT_PUBLIC_DEFAULT_DEPOT_LAT || process.env.VITE_DEFAULT_DEPOT_LAT);
-  const lng = Number(process.env.NEXT_PUBLIC_DEFAULT_DEPOT_LNG || process.env.VITE_DEFAULT_DEPOT_LNG);
-  const label =
-    process.env.NEXT_PUBLIC_DEFAULT_DEPOT_LABEL ||
-    process.env.VITE_DEFAULT_DEPOT_LABEL ||
-    "Expert Express Sender Depot";
-
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    return null;
-  }
-
-  return {
-    label,
-    formatted_address: label,
-    place_id: null,
-    lat,
-    lng
-  };
-})();
+const VERIFIED_DEPOT_LOCATION = {
+  name: "Expert Express Sender co., ltd.",
+  label: "Expert Express Sender depot / lorry park",
+  address:
+    "88 Happy Place, Khwaeng Khlong Sam Prawet, Khet Lat Krabang, Krung Thep Maha Nakhon 10520, Thailand",
+  placeId: "ChIJ8fXnGABnHTERYQ4KR0ZGF-E",
+  mapsReference: "0x0:0xe1174646470a0e61",
+  lat: 13.7688008,
+  lng: 100.7657385
+} as const;
+const DEFAULT_DEPOT_NAME =
+  process.env.NEXT_PUBLIC_DEFAULT_DEPOT_NAME ||
+  process.env.VITE_DEFAULT_DEPOT_NAME ||
+  VERIFIED_DEPOT_LOCATION.name;
+const DEFAULT_DEPOT_LABEL =
+  process.env.NEXT_PUBLIC_DEFAULT_DEPOT_LABEL ||
+  process.env.VITE_DEFAULT_DEPOT_LABEL ||
+  VERIFIED_DEPOT_LOCATION.label;
+const DEFAULT_DEPOT_ADDRESS =
+  process.env.NEXT_PUBLIC_DEFAULT_DEPOT_ADDRESS ||
+  process.env.VITE_DEFAULT_DEPOT_ADDRESS ||
+  VERIFIED_DEPOT_LOCATION.address;
+const DEFAULT_DEPOT_PLACE_ID =
+  process.env.NEXT_PUBLIC_DEFAULT_DEPOT_PLACE_ID ||
+  process.env.VITE_DEFAULT_DEPOT_PLACE_ID ||
+  VERIFIED_DEPOT_LOCATION.placeId;
+const readDepotCoordinate = (value: string | undefined, fallback: number) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+const DEFAULT_DEPOT_LAT = readDepotCoordinate(
+  process.env.NEXT_PUBLIC_DEFAULT_DEPOT_LAT || process.env.VITE_DEFAULT_DEPOT_LAT,
+  VERIFIED_DEPOT_LOCATION.lat
+);
+const DEFAULT_DEPOT_LNG = readDepotCoordinate(
+  process.env.NEXT_PUBLIC_DEFAULT_DEPOT_LNG || process.env.VITE_DEFAULT_DEPOT_LNG,
+  VERIFIED_DEPOT_LOCATION.lng
+);
+const DEPOT_COORDINATES_CONFIGURED = Number.isFinite(DEFAULT_DEPOT_LAT) && Number.isFinite(DEFAULT_DEPOT_LNG);
+const DEFAULT_DEPOT_LOCATION: StructuredLocation = DEPOT_COORDINATES_CONFIGURED
+  ? {
+      label: DEFAULT_DEPOT_NAME,
+      formatted_address: DEFAULT_DEPOT_ADDRESS,
+      place_id: DEFAULT_DEPOT_PLACE_ID,
+      lat: DEFAULT_DEPOT_LAT,
+      lng: DEFAULT_DEPOT_LNG,
+      verified: true
+    }
+  : {
+      label: DEFAULT_DEPOT_NAME,
+      formatted_address: DEFAULT_DEPOT_ADDRESS,
+      place_id: null,
+      lat: Number.NaN,
+      lng: Number.NaN,
+      manual_text: `${DEFAULT_DEPOT_NAME}, ${DEFAULT_DEPOT_ADDRESS}`,
+      verified: false
+    };
 
 const LEGACY_STATUS_OPTIONS = [
   { value: "Draft", label: { en: "Draft", th: "ฉบับร่าง" } },
@@ -140,7 +178,7 @@ function createInitialForm(
     customer_name: "",
     goods_description: "",
     shipment_date: today(),
-    route_start_location: getLocationDisplay(DEFAULT_DEPOT_LOCATION),
+    route_start_location: DEFAULT_DEPOT_LOCATION.label,
     start_location: "",
     end_location: "",
     route_start_location_data: DEFAULT_DEPOT_LOCATION,
@@ -561,7 +599,8 @@ function createManualLocation(value: string): StructuredLocation | null {
     place_id: null,
     lat: Number.NaN,
     lng: Number.NaN,
-    manual_text: manualText
+    manual_text: manualText,
+    verified: false
   };
 }
 
@@ -580,7 +619,8 @@ function asStructuredLocation(value: unknown): StructuredLocation | null {
     place_id: record.place_id ?? null,
     lat,
     lng,
-    manual_text: record.manual_text
+    manual_text: record.manual_text,
+    verified: Boolean(record.verified ?? record.place_id)
   };
 }
 
@@ -1494,6 +1534,9 @@ export default function ShipmentsPage() {
   const [saving, setSaving] = useState(false);
   const [estimating, setEstimating] = useState(false);
   const [googleMapsConfigured, setGoogleMapsConfigured] = useState<boolean | null>(null);
+  const [googleMapsConfigMessage, setGoogleMapsConfigMessage] = useState<string | null>(null);
+  const [googleMapsStatus, setGoogleMapsStatus] = useState<GoogleMapsHealthStatus | null>(null);
+  const [googleMapsRetryKey, setGoogleMapsRetryKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [distanceMessage, setDistanceMessage] = useState<string | null>(null);
@@ -1678,6 +1721,66 @@ export default function ShipmentsPage() {
   }, [loadData]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const loadMapsServerStatus = async () => {
+      try {
+        const result = await fetchJson<{
+          configured?: boolean;
+          browserConfigured?: boolean;
+          serverConfigured?: boolean;
+          missingVariables?: string[];
+          serverSource?: string | null;
+          publicSource?: string | null;
+          legacyServerSource?: string | null;
+          legacyPublicSource?: string | null;
+          message?: string | null;
+        }>(`/api/location-autocomplete?language=${language}`);
+
+        if (cancelled) return;
+
+        const serverConfigured = Boolean(result.data?.serverConfigured ?? result.data?.configured);
+        setGoogleMapsStatus((current) => ({
+          hasPublicKey: Boolean(result.data?.browserConfigured ?? current?.hasPublicKey),
+          hasServerKey: serverConfigured,
+          scriptLoaded: Boolean(current?.scriptLoaded),
+          placesAvailable: Boolean(current?.placesAvailable),
+          directionsAvailable: Boolean(current?.directionsAvailable),
+          depotConfigured: DEPOT_COORDINATES_CONFIGURED,
+          publicSource: result.data?.publicSource ?? current?.publicSource ?? null,
+          serverSource: result.data?.serverSource ?? current?.serverSource ?? null,
+          legacyPublicSource: result.data?.legacyPublicSource ?? current?.legacyPublicSource ?? null,
+          legacyServerSource: result.data?.legacyServerSource ?? current?.legacyServerSource ?? null,
+          missingPublicVariables:
+            result.data?.missingVariables?.filter((name) => name.startsWith("NEXT_PUBLIC_")) ??
+            current?.missingPublicVariables ??
+            [],
+          missingServerVariables:
+            result.data?.missingVariables?.filter((name) => !name.startsWith("NEXT_PUBLIC_")) ??
+            current?.missingServerVariables ??
+            [],
+          errorCode: serverConfigured ? current?.errorCode ?? null : "MissingServerKey",
+          errorMessage: serverConfigured
+            ? current?.errorMessage ?? null
+            : result.data?.message ?? "Missing GOOGLE_MAPS_API_KEY"
+        }));
+      } catch (mapsError) {
+        if (!cancelled) {
+          setGoogleMapsConfigMessage(
+            mapsError instanceof Error ? mapsError.message : "Google Maps configuration check failed."
+          );
+        }
+      }
+    };
+
+    void loadMapsServerStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [language]);
+
+  useEffect(() => {
     const handleDataChanged = () => {
       void loadData();
     };
@@ -1757,17 +1860,49 @@ export default function ShipmentsPage() {
     [labels.routeChanged]
   );
 
-  const useDepotLocation = useCallback(() => {
-    if (!DEFAULT_DEPOT_LOCATION) {
-      setError(labels.depotMissing);
+  const handleGoogleMapsConfigurationChange = useCallback((configured: boolean, message?: string) => {
+    setGoogleMapsConfigured(configured);
+    setGoogleMapsConfigMessage(configured ? null : message ?? null);
+  }, []);
+
+  const handleGoogleMapsStatusChange = useCallback((status: GoogleMapsHealthStatus) => {
+    setGoogleMapsStatus((current) => ({
+      ...status,
+      hasServerKey: current?.hasServerKey ?? status.hasServerKey,
+      serverSource: current?.serverSource ?? status.serverSource,
+      legacyServerSource: current?.legacyServerSource ?? status.legacyServerSource,
+      missingServerVariables: current?.missingServerVariables ?? status.missingServerVariables
+    }));
+    if (status.errorMessage) {
+      setGoogleMapsConfigured(false);
+      setGoogleMapsConfigMessage(status.errorMessage);
       return;
     }
 
-    setError(null);
+    if (status.scriptLoaded && status.placesAvailable) {
+      setGoogleMapsConfigured(true);
+      setGoogleMapsConfigMessage(null);
+    }
+  }, []);
+  const retryGoogleMapsLoad = useCallback(() => {
+    if (typeof window !== "undefined") {
+      const loader = (window as Window & {
+        __fuelBankGoogleMapsLoader?: { retry?: () => void };
+      }).__fuelBankGoogleMapsLoader;
+      loader?.retry?.();
+    }
+    setGoogleMapsStatus(null);
+    setGoogleMapsConfigured(null);
+    setGoogleMapsConfigMessage(null);
+    setGoogleMapsRetryKey((current) => current + 1);
+  }, []);
+
+  const useDepotLocation = useCallback(() => {
+    setError(DEPOT_COORDINATES_CONFIGURED ? null : labels.depotMissing);
     setLocationField(
       "route_start_location",
       "route_start_location_data",
-      getLocationDisplay(DEFAULT_DEPOT_LOCATION),
+      DEFAULT_DEPOT_LOCATION.label,
       DEFAULT_DEPOT_LOCATION
     );
   }, [labels.depotMissing, setLocationField]);
@@ -1793,10 +1928,6 @@ export default function ShipmentsPage() {
 
     if (!form.route_start_location.trim() || !form.start_location.trim() || !form.end_location.trim()) {
       throw new Error(labels.routeKeyMissing);
-    }
-
-    if (googleMapsConfigured === false) {
-      throw new Error(labels.mapsUnavailableManualOnly);
     }
 
     const originKey = locationRouteKey(origin, form.route_start_location);
@@ -1875,8 +2006,6 @@ export default function ShipmentsPage() {
     form.route_start_location_data,
     form.start_location,
     form.start_location_data,
-    googleMapsConfigured,
-    labels.mapsUnavailableManualOnly,
     labels.routeKeyMissing,
     labels.routeReady
   ]);
@@ -2160,6 +2289,33 @@ export default function ShipmentsPage() {
     form.additional_dropoffs.some((stop, index) =>
       stop.trim() ? !hasCoordinates(form.additional_dropoff_data[index]) : false
     );
+  const googleMapsHealthLines = useMemo(() => {
+    if (!googleMapsStatus) {
+      return [
+        "Public key detected: checking",
+        "Script loaded: checking",
+        "Places library loaded: checking",
+        DEPOT_COORDINATES_CONFIGURED
+          ? "Depot coordinates configured: yes"
+          : "Depot coordinates configured: no"
+      ];
+    }
+
+    return [
+      googleMapsStatus.hasPublicKey
+        ? `Public key detected: yes (${googleMapsStatus.publicSource ?? "configured"})`
+        : `Public key detected: no - Missing NEXT_PUBLIC_GOOGLE_MAPS_API_KEY${googleMapsStatus.legacyPublicSource ? ` (legacy ${googleMapsStatus.legacyPublicSource} present but not used)` : ""}`,
+      googleMapsStatus.hasServerKey
+        ? `Server key detected: yes (${googleMapsStatus.serverSource ?? "configured"})`
+        : `Server key detected: no - Missing GOOGLE_MAPS_API_KEY${googleMapsStatus.legacyServerSource ? ` (legacy ${googleMapsStatus.legacyServerSource} present but not used)` : ""}`,
+      `Script loaded: ${googleMapsStatus.scriptLoaded ? "yes" : "no"}`,
+      `Places library loaded: ${googleMapsStatus.placesAvailable ? "yes" : "no"}`,
+      `Directions service available: ${googleMapsStatus.directionsAvailable ? "yes" : "no"}`,
+      `Depot coordinates configured: ${googleMapsStatus.depotConfigured ? "yes" : "no"}`,
+      `Error code: ${googleMapsStatus.errorCode ?? "none"}`
+    ];
+  }, [googleMapsStatus]);
+  const showGoogleMapsHealth = true;
 
   const handleSubmit = useCallback(
     async (event: React.FormEvent<HTMLFormElement>) => {
@@ -2557,7 +2713,11 @@ export default function ShipmentsPage() {
 
   return (
     <>
-      <GoogleMapsLoader />
+      <GoogleMapsLoader
+        key={googleMapsRetryKey}
+        depotConfigured={DEPOT_COORDINATES_CONFIGURED}
+        onStatusChange={handleGoogleMapsStatusChange}
+      />
 
       <div className="mb-6 hidden md:block">
         <Header title={labels.title} description={labels.description} />
@@ -2605,7 +2765,7 @@ export default function ShipmentsPage() {
                   helperText={labels.startRouteHelper}
                   invalidText={labels.validGoogleLocationRequired}
                   loadingText={labels.loadingSuggestions}
-                  onConfigurationChange={setGoogleMapsConfigured}
+                  onConfigurationChange={handleGoogleMapsConfigurationChange}
                 />
                 <LocationAutocomplete
                   label={labels.pickup}
@@ -2620,7 +2780,7 @@ export default function ShipmentsPage() {
                   helperText={labels.autocompleteHelper}
                   invalidText={labels.validGoogleLocationRequired}
                   loadingText={labels.loadingSuggestions}
-                  onConfigurationChange={setGoogleMapsConfigured}
+                  onConfigurationChange={handleGoogleMapsConfigurationChange}
                 />
                 <LocationAutocomplete
                   label={labels.dropoff}
@@ -2635,16 +2795,39 @@ export default function ShipmentsPage() {
                   helperText={labels.autocompleteHelper}
                   invalidText={labels.validGoogleLocationRequired}
                   loadingText={labels.loadingSuggestions}
-                  onConfigurationChange={setGoogleMapsConfigured}
+                  onConfigurationChange={handleGoogleMapsConfigurationChange}
                 />
                 <div className="flex flex-col gap-2 rounded-[1rem] border border-slate-200 bg-white/80 p-3 text-xs text-slate-500 lg:col-span-3 lg:flex-row lg:items-center lg:justify-between">
-                  <span>
-                    {DEFAULT_DEPOT_LOCATION ? getLocationDisplay(DEFAULT_DEPOT_LOCATION) : labels.depotMissing}
+                  <span className="space-y-1">
+                    <span className="block font-semibold text-slate-700">{DEFAULT_DEPOT_LOCATION.label}</span>
+                    <span className="block">{DEFAULT_DEPOT_LOCATION.formatted_address}</span>
+                    {!DEPOT_COORDINATES_CONFIGURED ? (
+                      <span className="block text-amber-700">{labels.depotMissing}</span>
+                    ) : null}
                   </span>
                   <button type="button" onClick={useDepotLocation} className="btn-secondary min-h-[40px] rounded-[0.9rem] px-4 py-2">
                     {labels.useDepotLocation}
                   </button>
                 </div>
+                {showGoogleMapsHealth ? (
+                  <div className="rounded-[1rem] border border-amber-200 bg-amber-50/80 p-3 text-xs text-amber-900 lg:col-span-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <p className="font-semibold">
+                        {googleMapsStatus?.errorMessage ??
+                          googleMapsConfigMessage ??
+                          "Google Maps configuration status"}
+                      </p>
+                      <button type="button" onClick={retryGoogleMapsLoad} className="table-action-secondary bg-white">
+                        Retry Google Maps
+                      </button>
+                    </div>
+                    <div className="mt-2 grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
+                      {googleMapsHealthLines.map((line) => (
+                        <span key={line}>{line}</span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
                 <div className="form-field justify-end lg:col-span-3">
                   <label className="form-label opacity-0">{labels.estimateRoute}</label>
                   <button
@@ -2738,7 +2921,7 @@ export default function ShipmentsPage() {
                           helperText={labels.autocompleteHelper}
                           invalidText={labels.validGoogleLocationRequired}
                           loadingText={labels.loadingSuggestions}
-                          onConfigurationChange={setGoogleMapsConfigured}
+                          onConfigurationChange={handleGoogleMapsConfigurationChange}
                         />
                         <div className="flex items-end">
                           <button
@@ -2800,7 +2983,7 @@ export default function ShipmentsPage() {
                     </p>
                     {googleMapsConfigured === false ? (
                       <p className="mt-2 text-xs font-semibold text-amber-700">
-                        {labels.mapsUnavailableManualOnly}
+                        {googleMapsConfigMessage ?? labels.mapsUnavailableManualOnly}
                       </p>
                     ) : routeHasManualUnverified ? (
                       <p className="mt-2 text-xs font-semibold text-amber-700">
