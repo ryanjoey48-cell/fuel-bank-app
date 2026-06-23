@@ -1,4 +1,9 @@
-import { getServerGoogleMapsApiKey } from "@/lib/google-maps";
+import {
+  extractGoogleMapsErrorCode,
+  getGoogleMapsEnvironmentStatus,
+  getGoogleMapsErrorMessage,
+  getServerGoogleMapsApiKey
+} from "@/lib/google-maps";
 import { createApiError, createApiSuccess, parseJsonSafely } from "@/lib/http";
 
 type PlacesAutocompleteNewResponse = {
@@ -24,6 +29,64 @@ type PlacesAutocompleteNewResponse = {
   };
 };
 
+type PlacesAutocompleteLegacyResponse = {
+  predictions?: Array<{
+    place_id?: string;
+    description?: string;
+    structured_formatting?: {
+      main_text?: string;
+      secondary_text?: string;
+    };
+  }>;
+  error_message?: string;
+  status?: string;
+};
+
+function mapLegacyPredictions(result: PlacesAutocompleteLegacyResponse) {
+  return (result.predictions ?? []).slice(0, 5).map((prediction) => ({
+    placeId: prediction.place_id ?? prediction.description ?? "",
+    description: prediction.description ?? "",
+    mainText:
+      prediction.structured_formatting?.main_text ??
+      prediction.description ??
+      "",
+    secondaryText: prediction.structured_formatting?.secondary_text ?? ""
+  }));
+}
+
+function createMapsConfigPayload() {
+  const status = getGoogleMapsEnvironmentStatus();
+  const missingVariables = [
+    ...status.missingServerVariables,
+    ...status.missingPublicVariables
+  ];
+  const message = missingVariables.length
+    ? `Missing ${missingVariables.join(" and ")}`
+    : status.legacyServerSource
+      ? `Missing GOOGLE_MAPS_API_KEY. Legacy ${status.legacyServerSource} is present but not used for stable deployments.`
+    : null;
+
+  return {
+    configured: status.hasServerKey,
+    browserConfigured: status.hasPublicKey,
+    serverConfigured: status.hasServerKey,
+    missingVariables,
+    serverSource: status.serverSource,
+    publicSource: status.publicSource,
+    legacyServerSource: status.legacyServerSource,
+    legacyPublicSource: status.legacyPublicSource,
+    message,
+    suggestions: [] as LocationSuggestion[]
+  };
+}
+
+type LocationSuggestion = {
+  placeId: string;
+  description: string;
+  mainText: string;
+  secondaryText: string;
+};
+
 export async function GET(request: Request) {
   try {
     const apiKey = getServerGoogleMapsApiKey();
@@ -34,16 +97,14 @@ export async function GET(request: Request) {
 
     if (!input) {
       return Response.json(
-        createApiSuccess({
-          configured: Boolean(apiKey),
-          suggestions: []
-        })
+        createApiSuccess(createMapsConfigPayload())
       );
     }
 
     if (!apiKey) {
+      const config = createMapsConfigPayload();
       return Response.json(
-        createApiError("Google Maps not configured - autocomplete unavailable"),
+        createApiError(config.message || "Missing GOOGLE_MAPS_API_KEY"),
         { status: 503 }
       );
     }
@@ -52,6 +113,7 @@ export async function GET(request: Request) {
       return Response.json(
         createApiSuccess({
           configured: true,
+          browserConfigured: getGoogleMapsEnvironmentStatus().hasPublicKey,
           suggestions: []
         })
       );
@@ -79,13 +141,41 @@ export async function GET(request: Request) {
         response
       ).catch(() => null);
 
-      return Response.json(
-        createApiError(
-          errorBody?.error?.message ||
-            "Unable to reach Google Maps autocomplete service."
-        ),
-        { status: 502 }
-      );
+      const legacyUrl = new URL("https://maps.googleapis.com/maps/api/place/autocomplete/json");
+      legacyUrl.searchParams.set("input", input);
+      legacyUrl.searchParams.set("key", apiKey);
+      legacyUrl.searchParams.set("language", language === "th" ? "th" : "en");
+      legacyUrl.searchParams.set("components", "country:th");
+      if (sessionToken) {
+        legacyUrl.searchParams.set("sessiontoken", sessionToken);
+      }
+
+      const legacyResponse = await fetch(legacyUrl, { cache: "no-store" });
+      const legacyResult = await parseJsonSafely<PlacesAutocompleteLegacyResponse>(legacyResponse);
+
+      if (
+        legacyResponse.ok &&
+        (legacyResult.status === "OK" || legacyResult.status === "ZERO_RESULTS")
+      ) {
+        return Response.json(
+          createApiSuccess({
+            configured: true,
+            browserConfigured: getGoogleMapsEnvironmentStatus().hasPublicKey,
+            suggestions: mapLegacyPredictions(legacyResult)
+          })
+        );
+      }
+
+      const rawMessage =
+        legacyResult.error_message ||
+        legacyResult.status ||
+        errorBody?.error?.message ||
+        "Unable to reach Google Maps autocomplete service.";
+      const errorCode = extractGoogleMapsErrorCode(rawMessage) ?? legacyResult.status ?? null;
+
+      return Response.json(createApiError(getGoogleMapsErrorMessage(errorCode, rawMessage) ?? rawMessage), {
+        status: 502
+      });
     }
 
     const result = await parseJsonSafely<PlacesAutocompleteNewResponse>(response);
@@ -93,6 +183,7 @@ export async function GET(request: Request) {
     return Response.json(
       createApiSuccess({
         configured: true,
+        browserConfigured: getGoogleMapsEnvironmentStatus().hasPublicKey,
         suggestions: (result.suggestions ?? [])
           .map((suggestion) => suggestion.placePrediction)
           .filter((prediction): prediction is NonNullable<typeof prediction> => Boolean(prediction))
@@ -115,8 +206,8 @@ export async function GET(request: Request) {
     );
   } catch {
     return Response.json(
-      createApiError("Unable to load location suggestions right now."),
-      { status: 500 }
+      createApiError("Google location search unavailable, manual entry still allowed."),
+      { status: 503 }
     );
   }
 }

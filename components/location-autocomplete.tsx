@@ -18,6 +18,7 @@ export type StructuredLocation = {
   lat: number;
   lng: number;
   manual_text?: string;
+  verified?: boolean;
 };
 
 type LocationAutocompleteProps = {
@@ -35,7 +36,16 @@ type LocationAutocompleteProps = {
   selectedLocation?: StructuredLocation | null;
   onSelectLocation?: (location: StructuredLocation) => void;
   onManualInput?: (value: string) => void;
-  onConfigurationChange?: (configured: boolean) => void;
+  onConfigurationChange?: (configured: boolean, message?: string) => void;
+};
+
+type AutocompleteConfigResponse = {
+  configured?: boolean;
+  browserConfigured?: boolean;
+  serverConfigured?: boolean;
+  missingVariables?: string[];
+  message?: string | null;
+  suggestions?: LocationSuggestion[];
 };
 
 export function LocationAutocomplete({
@@ -74,26 +84,36 @@ export function LocationAutocomplete({
       try {
         const result = await fetchJson<{
           configured?: boolean;
+          browserConfigured?: boolean;
+          serverConfigured?: boolean;
           suggestions?: LocationSuggestion[];
+          message?: string | null;
+          missingVariables?: string[];
         }>(`/api/location-autocomplete?language=${language}`);
 
         if (!cancelled) {
-          const configured = Boolean(result.data?.configured);
+          const configured = Boolean(result.data?.serverConfigured ?? result.data?.configured);
+          const configMessage =
+            result.data?.message ||
+            (result.data?.missingVariables?.length
+              ? `Missing ${result.data.missingVariables.join(" and ")}`
+              : configMissingMessage);
           if (process.env.NODE_ENV !== "production") {
             console.info(`[Fuel Bank] Google Maps autocomplete proxy ${configured ? "configured" : "not configured"}.`);
           }
           setMapsConfigured(configured);
-          onConfigurationChange?.(configured);
-          if (result.data?.configured === false) {
-            setStatusMessage(configMissingMessage);
+          onConfigurationChange?.(configured, configured ? undefined : configMessage);
+          if (!configured) {
+            setStatusMessage(configMessage);
           }
         }
-      } catch {
+      } catch (error) {
         if (!cancelled) {
           if (process.env.NODE_ENV !== "production") {
             console.info("[Fuel Bank] Google Maps autocomplete proxy configuration check failed.");
           }
           setMapsConfigured(null);
+          setStatusMessage(error instanceof Error ? error.message : "Google location search unavailable, manual entry still allowed.");
         }
       }
     };
@@ -126,10 +146,7 @@ export function LocationAutocomplete({
     const timeoutId = setTimeout(async () => {
       try {
         setLoading(true);
-        const result = await fetchJson<{
-          configured?: boolean;
-          suggestions?: LocationSuggestion[];
-        }>(
+        const result = await fetchJson<AutocompleteConfigResponse>(
           `/api/location-autocomplete?input=${encodeURIComponent(query)}&language=${language}&sessionToken=${encodeURIComponent(sessionToken)}`
         );
 
@@ -137,11 +154,16 @@ export function LocationAutocomplete({
           return;
         }
 
-        if (result.data?.configured === false) {
+        if (result.data?.configured === false || result.data?.serverConfigured === false) {
+          const configMessage =
+            result.data?.message ||
+            (result.data?.missingVariables?.length
+              ? `Missing ${result.data.missingVariables.join(" and ")}`
+              : configMissingMessage);
           setMapsConfigured(false);
-          onConfigurationChange?.(false);
+          onConfigurationChange?.(false, configMessage);
           setSuggestions([]);
-          setStatusMessage(configMissingMessage);
+          setStatusMessage(configMessage);
           setIsOpen(false);
           return;
         }
@@ -152,10 +174,14 @@ export function LocationAutocomplete({
         setSuggestions(result.data?.suggestions ?? []);
         setIsOpen(true);
         setActiveIndex(-1);
-      } catch {
+      } catch (error) {
         if (requestIdRef.current === nextRequestId) {
           setSuggestions([]);
-          setStatusMessage(helperText ?? null);
+          setStatusMessage(
+            error instanceof Error
+              ? `${error.message}. Manual entry still allowed.`
+              : "Google location search unavailable, manual entry still allowed."
+          );
         }
       } finally {
         if (requestIdRef.current === nextRequestId) {
@@ -196,7 +222,8 @@ export function LocationAutocomplete({
         formatted_address: result.data?.formatted_address || suggestion.description,
         place_id: result.data?.place_id || suggestion.placeId,
         lat: Number(result.data?.lat),
-        lng: Number(result.data?.lng)
+        lng: Number(result.data?.lng),
+        verified: true
       };
       if (!Number.isFinite(location.lat) || !Number.isFinite(location.lng)) {
         throw new Error(invalidText);
@@ -208,8 +235,8 @@ export function LocationAutocomplete({
       setActiveIndex(-1);
       setStatusMessage(helperText ?? null);
       setSessionToken(crypto.randomUUID());
-    } catch {
-      setStatusMessage(invalidText);
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : invalidText);
     } finally {
       setLoading(false);
     }
@@ -314,12 +341,12 @@ export function LocationAutocomplete({
 
       <p className="mt-2 text-sm text-slate-500">
         {mapsConfigured === false
-          ? `${configMissingMessage}. You can still type the full location manually.`
+          ? `${statusMessage ?? configMissingMessage}. You can still type the full location manually.`
           : loading
             ? loadingText
             : selectedLocation
               ? selectedLocation.place_id
-                ? selectedLocation.formatted_address
+                ? `Verified by Google: ${selectedLocation.formatted_address}`
                 : selectedLocation.manual_text
                   ? `${selectedLocation.manual_text} - manual/unverified`
                   : selectedLocation.formatted_address

@@ -1,14 +1,40 @@
-import { getServerGoogleMapsApiKey } from "@/lib/google-maps";
+import {
+  extractGoogleMapsErrorCode,
+  getGoogleMapsEnvironmentStatus,
+  getGoogleMapsErrorMessage,
+  getServerGoogleMapsApiKey
+} from "@/lib/google-maps";
 import { createApiError, createApiSuccess, parseJsonSafely } from "@/lib/http";
 
 type ComputeRoutesResponse = {
   routes?: Array<{
     distanceMeters?: number;
     duration?: string;
+    legs?: Array<{
+      distanceMeters?: number;
+      duration?: string;
+    }>;
   }>;
   error?: {
     message?: string;
   };
+};
+
+type DirectionsResponse = {
+  routes?: Array<{
+    legs?: Array<{
+      distance?: {
+        value?: number;
+      };
+      duration?: {
+        value?: number;
+      };
+      start_address?: string;
+      end_address?: string;
+    }>;
+  }>;
+  error_message?: string;
+  status?: string;
 };
 
 type RoutePoint = {
@@ -43,12 +69,111 @@ function toRouteWaypoint(point: string | RoutePoint | undefined) {
   return address ? { address } : null;
 }
 
+function toDirectionsWaypoint(point: string | RoutePoint | undefined) {
+  if (!point) return "";
+  if (typeof point === "string") {
+    return point.trim();
+  }
+
+  const lat = point.lat;
+  const lng = point.lng;
+  if (Number.isFinite(lat) && Number.isFinite(lng) && lat != null && lng != null) {
+    return `${lat},${lng}`;
+  }
+
+  if (point.place_id) {
+    return `place_id:${point.place_id.replace(/^places\//, "")}`;
+  }
+
+  return point.formatted_address?.trim() || point.label?.trim() || "";
+}
+
+function parseDurationSeconds(value: string | undefined) {
+  if (!value) return null;
+  const parsed = Number.parseInt(value.replace("s", ""), 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function fetchDirectionsEstimate(
+  apiKey: string,
+  body: { origin?: string | RoutePoint; destination?: string | RoutePoint; waypoints?: Array<string | RoutePoint> }
+) {
+  const origin = toDirectionsWaypoint(body.origin);
+  const destination = toDirectionsWaypoint(body.destination);
+
+  if (!origin || !destination) {
+    return null;
+  }
+
+  const directionsUrl = new URL("https://maps.googleapis.com/maps/api/directions/json");
+  directionsUrl.searchParams.set("origin", origin);
+  directionsUrl.searchParams.set("destination", destination);
+  directionsUrl.searchParams.set("key", apiKey);
+  directionsUrl.searchParams.set("language", "en");
+  directionsUrl.searchParams.set("region", "th");
+
+  const waypointValues = Array.isArray(body.waypoints)
+    ? body.waypoints.map(toDirectionsWaypoint).filter(Boolean)
+    : [];
+
+  if (waypointValues.length) {
+    directionsUrl.searchParams.set("waypoints", waypointValues.join("|"));
+  }
+
+  const directionsResponse = await fetch(directionsUrl, { cache: "no-store" });
+  const directionsData = await parseJsonSafely<DirectionsResponse>(directionsResponse);
+  const directionsLegs = directionsData.routes?.[0]?.legs ?? [];
+  const directionsDistanceMeters = directionsLegs.reduce(
+    (sum, leg) => sum + Number(leg.distance?.value || 0),
+    0
+  );
+  const directionsDurationSeconds = directionsLegs.reduce(
+    (sum, leg) => sum + Number(leg.duration?.value || 0),
+    0
+  );
+
+  if (
+    directionsResponse.ok &&
+    directionsData.status === "OK" &&
+    directionsDistanceMeters > 0
+  ) {
+    return {
+      ok: true as const,
+      data: {
+        distanceKm: Number((directionsDistanceMeters / 1000).toFixed(2)),
+        distanceMeters: directionsDistanceMeters,
+        durationSeconds: directionsDurationSeconds || null,
+        provider: "directions_api",
+        legs: directionsLegs.map((leg) => ({
+          distanceMeters: leg.distance?.value ?? null,
+          durationSeconds: leg.duration?.value ?? null,
+          startAddress: leg.start_address ?? null,
+          endAddress: leg.end_address ?? null
+        }))
+      }
+    };
+  }
+
+  const rawMessage =
+    directionsData.error_message ||
+    (directionsData.status && directionsData.status !== "ZERO_RESULTS"
+      ? `Google Directions returned ${directionsData.status}.`
+      : "Unable to reach Google Maps route service.");
+  const errorCode = extractGoogleMapsErrorCode(rawMessage) ?? directionsData.status ?? null;
+
+  return {
+    ok: false as const,
+    message: getGoogleMapsErrorMessage(errorCode, rawMessage) ?? rawMessage
+  };
+}
+
 export async function POST(request: Request) {
   try {
     const apiKey = getServerGoogleMapsApiKey();
 
     if (!apiKey) {
-      return Response.json(createApiError("Google Maps API key is missing."), {
+      const missingVariables = getGoogleMapsEnvironmentStatus().missingServerVariables;
+      return Response.json(createApiError(`Missing ${missingVariables.join(" and ") || "GOOGLE_MAPS_API_KEY"}`), {
         status: 503
       });
     }
@@ -78,7 +203,7 @@ export async function POST(request: Request) {
       headers: {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": apiKey,
-        "X-Goog-FieldMask": "routes.distanceMeters,routes.duration"
+        "X-Goog-FieldMask": "routes.distanceMeters,routes.duration,routes.legs.distanceMeters,routes.legs.duration"
       },
       body: JSON.stringify({
         origin,
@@ -97,29 +222,42 @@ export async function POST(request: Request) {
         () => null
       );
 
-      return Response.json(
-        createApiError(
-          errorBody?.error?.message || "Unable to reach Google Maps route service."
-        ),
-        { status: 502 }
-      );
+      const directionsEstimate = await fetchDirectionsEstimate(apiKey, body);
+      if (directionsEstimate?.ok) {
+        return Response.json(createApiSuccess(directionsEstimate.data));
+      }
+
+      const rawMessage =
+        directionsEstimate?.message ||
+        errorBody?.error?.message ||
+        "Unable to reach Google Maps route service.";
+      const errorCode = extractGoogleMapsErrorCode(rawMessage);
+
+      return Response.json(createApiError(getGoogleMapsErrorMessage(errorCode, rawMessage) ?? rawMessage), {
+        status: 502
+      });
     }
 
     const data = await parseJsonSafely<ComputeRoutesResponse>(response);
     const route = data.routes?.[0];
     const distanceMeters = route?.distanceMeters ?? null;
-    const durationSeconds = route?.duration
-      ? Number.parseInt(route.duration.replace("s", ""), 10)
-      : null;
+    const durationSeconds = parseDurationSeconds(route?.duration);
 
     if (distanceMeters == null) {
-      return Response.json(
-        createApiError(
-          data.error?.message ||
-            "Google Maps could not estimate this route. Please check the locations and try again."
-        ),
-        { status: 422 }
-      );
+      const directionsEstimate = await fetchDirectionsEstimate(apiKey, body);
+      if (directionsEstimate?.ok) {
+        return Response.json(createApiSuccess(directionsEstimate.data));
+      }
+
+      const rawMessage =
+        directionsEstimate?.message ||
+        data.error?.message ||
+        "Google Maps could not estimate this route. Please check the locations and try again.";
+      const errorCode = extractGoogleMapsErrorCode(rawMessage);
+
+      return Response.json(createApiError(getGoogleMapsErrorMessage(errorCode, rawMessage) ?? rawMessage), {
+        status: 422
+      });
     }
 
     return Response.json(
@@ -127,12 +265,16 @@ export async function POST(request: Request) {
         distanceKm: Number((distanceMeters / 1000).toFixed(2)),
         distanceMeters,
         durationSeconds: Number.isFinite(durationSeconds) ? durationSeconds : null,
-        provider: "routes_api"
+        provider: "routes_api",
+        legs: (route?.legs ?? []).map((leg) => ({
+          distanceMeters: leg.distanceMeters ?? null,
+          durationSeconds: parseDurationSeconds(leg.duration)
+        }))
       })
     );
   } catch {
-    return Response.json(createApiError("Unable to estimate distance right now."), {
-      status: 500
+    return Response.json(createApiError("Google route estimate unavailable right now."), {
+      status: 503
     });
   }
 }
