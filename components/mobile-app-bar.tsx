@@ -6,10 +6,13 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useLanguage } from "@/lib/language-provider";
 
-const PAGE_KEY_BY_PATH: Record<string, "dashboard" | "drivers" | "fuelLogs" | "transfers" | "weeklyMileage"> = {
+type PageKey = "dashboard" | "drivers" | "fuelLogs" | "fuelSpendReport" | "transfers" | "weeklyMileage";
+
+const PAGE_KEY_BY_PATH: Record<string, PageKey> = {
   "/dashboard": "dashboard",
   "/drivers": "drivers",
   "/fuel-logs": "fuelLogs",
+  "/fuel-spend-report": "fuelSpendReport",
   "/transfers": "transfers",
   "/weekly-mileage": "weeklyMileage"
 };
@@ -28,7 +31,9 @@ export function MobileAppBar({ open, onToggle }: MobileAppBarProps) {
       ? language === "th" ? "สมุดจองงาน" : "Booking Diary"
       : pathname === "/shipments"
         ? language === "th" ? "งานขนส่ง" : "Shipments"
-      : t.nav[pageKey];
+        : pathname === "/trip-journey"
+          ? "Trip Journey"
+          : t.nav[pageKey];
 
   return (
     <div className="mobile-app-bar fixed inset-x-0 top-0 z-30 border-b border-slate-200 bg-white/95 shadow-[0_12px_28px_rgba(15,23,42,0.07)] backdrop-blur-xl min-[1367px]:hidden">

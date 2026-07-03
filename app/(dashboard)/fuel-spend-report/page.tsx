@@ -6,7 +6,7 @@ import { EmptyState } from "@/components/empty-state";
 import { Header } from "@/components/header";
 import { fetchFuelLogsForExport } from "@/lib/data";
 import { exportToCsv } from "@/lib/export";
-import { shouldShowFuelLogLocationOption } from "@/lib/fuel-log-location";
+import { normalizeFuelLogLocation, shouldShowFuelLogLocationOption } from "@/lib/fuel-log-location";
 import { useLanguage } from "@/lib/language-provider";
 import { formatDate, formatNumber, normalizeDisplayName, normalizeVehicleRegistration, today } from "@/lib/utils";
 import type { FuelLogEntrySource, FuelLogWithDriver } from "@/types/database";
@@ -34,7 +34,7 @@ type GroupedFuelSpendRow = {
   checkedEntries: number;
   uncheckedEntries: number;
   uncheckedSpend: number;
-  averagePricePerLitre: number | null;
+  receiptCompliance: number;
   lastUsedDate: string;
   logs: FuelLogWithDriver[];
 };
@@ -108,6 +108,12 @@ function getCheckedStatusBadgeClass(checked: boolean) {
     : "border-amber-200 bg-amber-100 text-amber-800";
 }
 
+function getReceiptComplianceBadgeClass(compliance: number) {
+  if (compliance >= 100) return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (compliance > 0) return "border-amber-200 bg-amber-50 text-amber-800";
+  return "border-rose-200 bg-rose-50 text-rose-700";
+}
+
 export default function FuelSpendReportPage() {
   const { language, t } = useLanguage();
   const labels = t.fuelSpendReport;
@@ -163,12 +169,21 @@ export default function FuelSpendReportPage() {
     setExpandedRows(new Set());
   };
 
+  const toggleExpandedRow = (rowId: string) => {
+    setExpandedRows((current) => {
+      const next = new Set(current);
+      if (next.has(rowId)) next.delete(rowId);
+      else next.add(rowId);
+      return next;
+    });
+  };
+
   const normalizedLogs = useMemo(
     () =>
       fuelLogs.map((log) => ({
         ...log,
         driver: normalizeDisplayName(log.driver) || labels.unknownDriver,
-        location: normalizeDisplayName(log.location) || labels.unknownLocation,
+        location: normalizeFuelLogLocation(log.location) || labels.unknownLocation,
         vehicle_reg: normalizeVehicleRegistration(log.vehicle_reg) || "-"
       })),
     [fuelLogs, labels.unknownDriver, labels.unknownLocation]
@@ -230,7 +245,7 @@ export default function FuelSpendReportPage() {
           checkedEntries,
           uncheckedEntries,
           uncheckedSpend,
-          averagePricePerLitre: null,
+          receiptCompliance: log.receipt_checked ? 100 : 0,
           lastUsedDate: log.date,
           logs: [log]
         });
@@ -249,7 +264,7 @@ export default function FuelSpendReportPage() {
 
     const rows = Array.from(groups.values()).map((row) => ({
       ...row,
-      averagePricePerLitre: row.totalLitres > 0 ? row.totalSpend / row.totalLitres : null,
+      receiptCompliance: row.entryCount > 0 ? (row.checkedEntries / row.entryCount) * 100 : 0,
       logs: row.logs.sort((left, right) => right.date.localeCompare(left.date))
     }));
 
@@ -266,9 +281,12 @@ export default function FuelSpendReportPage() {
     const uncheckedEntries = filteredLogs.length - checkedEntries;
     const uncheckedSpend = filteredLogs.reduce((sum, log) => (log.receipt_checked ? sum : sum + getSafeNumber(log.total_cost)), 0);
     const locationCounts = new Map<string, number>();
+    const driverSpend = new Map<string, number>();
     filteredLogs.forEach((log) => locationCounts.set(log.location, (locationCounts.get(log.location) ?? 0) + 1));
+    filteredLogs.forEach((log) => driverSpend.set(log.driver, (driverSpend.get(log.driver) ?? 0) + getSafeNumber(log.total_cost)));
     const mostUsedStation =
       Array.from(locationCounts.entries()).sort((left, right) => right[1] - left[1])[0]?.[0] ?? "-";
+    const topSpendingDriver = Array.from(driverSpend.entries()).sort((left, right) => right[1] - left[1])[0];
 
     return {
       totalSpend,
@@ -278,7 +296,9 @@ export default function FuelSpendReportPage() {
       checkedEntries,
       uncheckedEntries,
       uncheckedSpend,
-      mostUsedStation
+      mostUsedStation,
+      topSpendingDriverName: topSpendingDriver?.[0] ?? "-",
+      topSpendingDriverSpend: topSpendingDriver?.[1] ?? 0
     };
   }, [filteredLogs]);
 
@@ -309,6 +329,8 @@ export default function FuelSpendReportPage() {
       { Section: labels.summaryTotals, Field: labels.checkedEntries, Value: summary.checkedEntries },
       { Section: labels.summaryTotals, Field: labels.uncheckedEntries, Value: summary.uncheckedEntries },
       { Section: labels.summaryTotals, Field: labels.uncheckedSpend, Value: summary.uncheckedSpend.toFixed(2) },
+      { Section: labels.summaryTotals, Field: labels.topSpendingDriver, Value: summary.topSpendingDriverName },
+      { Section: labels.summaryTotals, Field: labels.topSpendingDriverSpend, Value: summary.topSpendingDriverSpend.toFixed(2) },
       ...groupedRows.map((row) => ({
         Section: labels.groupedTable,
         [labels.driver]: row.driver,
@@ -319,7 +341,7 @@ export default function FuelSpendReportPage() {
         [labels.checkedEntries]: row.checkedEntries,
         [labels.uncheckedEntries]: row.uncheckedEntries,
         [labels.uncheckedSpend]: row.uncheckedSpend.toFixed(2),
-        [labels.averagePricePerLitre]: row.averagePricePerLitre?.toFixed(2) ?? "",
+        [labels.receiptCompliance]: `${Math.round(row.receiptCompliance)}%`,
         [labels.lastUsedDate]: row.lastUsedDate
       })),
       ...filteredLogs.map((log) => ({
@@ -423,8 +445,9 @@ export default function FuelSpendReportPage() {
         </div>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <SummaryCard label={labels.totalFuelSpend} value={formatBaht(summary.totalSpend)} />
+        <SummaryCard label={labels.topSpendingDriver} value={summary.topSpendingDriverName} secondaryValue={summary.entryCount > 0 ? formatBaht(summary.topSpendingDriverSpend) : "-"} />
         <SummaryCard label={labels.totalLitres} value={formatLitres(summary.totalLitres, language)} />
         <SummaryCard label={labels.averagePricePerLitre} value={formatPrice(summary.averagePricePerLitre)} />
         <SummaryCard label={labels.fuelEntries} value={formatNumber(summary.entryCount, language)} />
@@ -468,7 +491,7 @@ export default function FuelSpendReportPage() {
                     <th className="table-head-cell text-right">{labels.checkedEntries}</th>
                     <th className="table-head-cell text-right">{labels.uncheckedEntries}</th>
                     <th className="table-head-cell text-right">{labels.uncheckedSpend}</th>
-                    <th className="table-head-cell text-right">{labels.averagePricePerLitre}</th>
+                    <th className="table-head-cell text-right">{labels.receiptCompliance}</th>
                     <SortableHeader label={labels.lastUsedDate} active={sortKey === "lastUsedDate"} onClick={() => setSortKey("lastUsedDate")} />
                   </tr>
                 </thead>
@@ -477,12 +500,19 @@ export default function FuelSpendReportPage() {
                     const expanded = expandedRows.has(row.id);
                     return (
                       <Fragment key={row.id}>
-                        <tr className="enterprise-table-row cursor-pointer" onClick={() => setExpandedRows((current) => {
-                          const next = new Set(current);
-                          if (next.has(row.id)) next.delete(row.id);
-                          else next.add(row.id);
-                          return next;
-                        })}>
+                        <tr
+                          className="enterprise-table-row cursor-pointer"
+                          role="button"
+                          tabIndex={0}
+                          aria-expanded={expanded}
+                          onClick={() => toggleExpandedRow(row.id)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              toggleExpandedRow(row.id);
+                            }
+                          }}
+                        >
                           <td className="table-body-cell table-driver-name">{row.driver}</td>
                           <td className="table-body-cell text-slate-700">{row.location}</td>
                           <td className="table-body-cell text-right text-base font-bold text-slate-950">{formatBaht(row.totalSpend)}</td>
@@ -491,7 +521,11 @@ export default function FuelSpendReportPage() {
                           <td className="table-body-cell text-right font-medium text-emerald-700">{formatNumber(row.checkedEntries, language)}</td>
                           <td className="table-body-cell text-right font-semibold text-amber-700">{formatNumber(row.uncheckedEntries, language)}</td>
                           <td className="table-body-cell text-right font-semibold text-amber-700">{formatBaht(row.uncheckedSpend)}</td>
-                          <td className="table-body-cell text-right font-medium text-slate-800">{formatPrice(row.averagePricePerLitre)}</td>
+                          <td className="table-body-cell text-right">
+                            <span className={`inline-flex min-w-14 items-center justify-center rounded-full border px-2.5 py-1 text-xs font-semibold ${getReceiptComplianceBadgeClass(row.receiptCompliance)}`}>
+                              {formatNumber(row.receiptCompliance, language, 0)}%
+                            </span>
+                          </td>
                           <td className="table-body-cell text-right">
                             <span className="inline-flex items-center gap-2 font-medium text-slate-800">
                               {formatDate(row.lastUsedDate, language)}
@@ -567,11 +601,12 @@ function buildChartRows(logs: FuelLogWithDriver[], key: "driver" | "location") {
     .sort((left, right) => right.value - left.value);
 }
 
-function SummaryCard({ label, value }: { label: string; value: string }) {
+function SummaryCard({ label, value, secondaryValue }: { label: string; value: string; secondaryValue?: string }) {
   return (
     <div className="subtle-panel p-4">
       <p className="metric-label">{label}</p>
       <p className="mt-2 truncate text-xl font-bold text-slate-950">{value}</p>
+      {secondaryValue ? <p className="mt-1 text-sm font-semibold text-brand-700">{secondaryValue}</p> : null}
     </div>
   );
 }

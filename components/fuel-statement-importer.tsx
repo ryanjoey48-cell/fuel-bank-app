@@ -56,6 +56,16 @@ function getStatusClass(status: FuelStatementImportRow["status"]) {
   return "border-amber-200 bg-amber-50 text-amber-800";
 }
 
+function getReviewStatusLabel(row: FuelStatementImportRow) {
+  if (row.status === "Duplicate") return "Duplicate";
+  if (!row.vehicleReg.trim()) return "Missing vehicle";
+  if (!toNumber(row.litres) || !toNumber(row.totalCost)) return "Missing litres/cost";
+  if (!row.driverId) return "Missing driver";
+  if (row.status === "Ready") return "Matched";
+  if (row.status === "Invalid") return "Needs Review";
+  return "Needs Review";
+}
+
 function getDriverName(drivers: Driver[], driverId: string) {
   return drivers.find((driver) => String(driver.id) === String(driverId))?.name ?? "";
 }
@@ -346,7 +356,7 @@ export function FuelStatementImporter({
                       <p className="text-sm font-semibold text-slate-950">{row.vehicleReg || "-"}</p>
                       <p className="mt-1 text-xs text-slate-500">{row.date || "-"} | {row.fuelStation || "-"}</p>
                     </div>
-                    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getStatusClass(row.status)}`}>{row.status}</span>
+                    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getStatusClass(row.status)}`}>{getReviewStatusLabel(row)}</span>
                   </div>
                   <div className="mt-3 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
                     <MobileInput label="Log Date" type="date" value={row.date} onChange={(value) => updateRow(row.id, "date", value)} />
@@ -400,7 +410,7 @@ export function FuelStatementImporter({
                           <td className="table-body-cell min-w-[150px]"><select value={row.paymentMethod} onChange={(event) => updateRow(row.id, "paymentMethod", event.target.value)} className="form-input h-9 bg-white text-xs"><option value="company_card">{t.payment.method.company_card}</option><option value="cash">{t.payment.method.cash}</option><option value="bank_transfer">{t.payment.method.bank_transfer}</option><option value="other">{t.payment.method.other}</option></select></td>
                           <td className="table-body-cell min-w-[150px]"><select value={row.entrySource} onChange={(event) => updateRow(row.id, "entrySource", event.target.value)} className="form-input h-9 bg-white text-xs"><option value="statement_import">Statement import</option><option value="line_message">Line message</option><option value="direct_from_receipt">Direct from receipt</option><option value="other">Other</option></select></td>
                           <PreviewInput value={row.notes} onChange={(value) => updateRow(row.id, "notes", value)} wide />
-                          <td className="table-body-cell min-w-[190px]"><span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getStatusClass(row.status)}`}>{row.status}</span>{row.issues.length || row.reviewReasons.length ? <p className="mt-1 text-[11px] text-slate-500">{[...row.issues, ...row.reviewReasons].join(", ")}</p> : null}</td>
+                          <td className="table-body-cell min-w-[190px]"><span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getStatusClass(row.status)}`}>{getReviewStatusLabel(row)}</span>{row.issues.length || row.reviewReasons.length ? <p className="mt-1 text-[11px] text-slate-500">{[...row.issues, ...row.reviewReasons].join(", ")}</p> : null}</td>
                           <td className="table-body-cell"><button type="button" onClick={() => revalidateRows(rows.filter((item) => item.id !== row.id))} className="table-action-danger"><Trash2 className="h-3.5 w-3.5" /></button></td>
                         </tr>
                       ))}

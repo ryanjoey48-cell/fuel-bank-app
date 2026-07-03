@@ -54,14 +54,32 @@ export default function DashboardLayout({
   }, [pathname, router]);
 
   useEffect(() => {
+    document.body.style.overflow = "";
+    document.documentElement.style.overflow = "";
     setMobileMenuOpen(false);
   }, [pathname]);
 
   useEffect(() => {
-    document.body.style.overflow = mobileMenuOpen ? "hidden" : "";
+    if (!mobileMenuOpen) {
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
+      return;
+    }
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMobileMenuOpen(false);
+      }
+    };
+
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
 
     return () => {
       document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
+      window.removeEventListener("keydown", closeOnEscape);
     };
   }, [mobileMenuOpen]);
 

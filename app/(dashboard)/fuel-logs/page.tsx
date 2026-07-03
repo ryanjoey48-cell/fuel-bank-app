@@ -10,7 +10,8 @@ import {
   Info,
   ReceiptText,
   TrendingUp,
-  Wallet
+  Wallet,
+  X
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
@@ -35,6 +36,7 @@ import {
   fetchFuelLogRecentDaySummaries,
   fetchFuelLogTodayRows,
   fetchFuelLogsPage,
+  fetchTripFuelLogLinks,
   saveFuelLog,
   updateFuelLogReceiptCheck
 } from "@/lib/data";
@@ -52,12 +54,11 @@ import type {
   FuelLogReceiptSummary,
   FuelLogSortDirection,
   FuelLogSortKey,
-  FuelLogWithDriver
+  FuelLogWithDriver,
+  TripFuelLogLink
 } from "@/types/database";
 
 const PAGE_SIZE = 25;
-const EFFICIENCY_PREVIEW_PAGE_SIZE = 25;
-const MISSING_MILEAGE_PREVIEW_LIMIT = 8;
 const DEFAULT_FUEL_TYPE = "diesel";
 const DEFAULT_PAYMENT_METHOD = "company_card";
 const DEFAULT_ENTRY_SOURCE: FuelLogEntrySource = "line_message";
@@ -610,13 +611,12 @@ export default function FuelLogsPage() {
   const [fuelLogs, setFuelLogs] = useState<FuelLogWithDriver[]>([]);
   const [efficiencySourceLogs, setEfficiencySourceLogs] = useState<FuelLogWithDriver[]>([]);
   const [todayLogs, setTodayLogs] = useState<FuelLogWithDriver[]>([]);
+  const [tripFuelLinks, setTripFuelLinks] = useState<TripFuelLogLink[]>([]);
   const [last7DayRows, setLast7DayRows] = useState<FuelLogDaySummary[]>([]);
   const [form, setForm] = useState(initialForm);
   const [filters, setFilters] = useState<FuelLogFilters>(() => getStoredFilters());
   const [efficiencyFilters, setEfficiencyFilters] = useState<EfficiencyFilters>(initialEfficiencyFilters);
   const [efficiencyCalculationMode, setEfficiencyCalculationMode] = useState<EfficiencyCalculationMode>("per_fill");
-  const [efficiencyPreviewCount, setEfficiencyPreviewCount] = useState(EFFICIENCY_PREVIEW_PAGE_SIZE);
-  const [tripPreviewCount, setTripPreviewCount] = useState(EFFICIENCY_PREVIEW_PAGE_SIZE);
   const [missingMileageExpanded, setMissingMileageExpanded] = useState(false);
   const [sortKey, setSortKey] = useState<FuelLogSortKey>("date");
   const [sortDirection, setSortDirection] = useState<FuelLogSortDirection>("desc");
@@ -697,6 +697,16 @@ export default function FuelLogsPage() {
     }
     return counts;
   }, [fuelLogs]);
+  const tripLinkByFuelLogId = useMemo(
+    () => new Map(tripFuelLinks.map((link) => [String(link.fuel_log_id), link])),
+    [tripFuelLinks]
+  );
+  const getFuelTripLabel = (log: FuelLogWithDriver) =>
+    tripLinkByFuelLogId.has(String(log.id)) ? "Linked to trip" : "Not linked to trip";
+  const getFuelTripBadgeClass = (log: FuelLogWithDriver) =>
+    tripLinkByFuelLogId.has(String(log.id))
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : "border-slate-200 bg-slate-50 text-slate-600";
 
   const efficiencyRows = useMemo(() => buildEfficiencyRows(efficiencySourceLogs), [efficiencySourceLogs]);
 
@@ -757,16 +767,6 @@ export default function FuelLogsPage() {
   const missingMileageRows = useMemo(
     () => scopedEfficiencyRows.filter((row) => row.status === "missing_mileage"),
     [scopedEfficiencyRows]
-  );
-
-  const displayedEfficiencyRows = useMemo(
-    () => filteredEfficiencyRows.slice(0, efficiencyPreviewCount),
-    [efficiencyPreviewCount, filteredEfficiencyRows]
-  );
-
-  const missingMileagePreviewRows = useMemo(
-    () => missingMileageRows.slice(0, MISSING_MILEAGE_PREVIEW_LIMIT),
-    [missingMileageRows]
   );
 
   const tripSummaryLogs = useMemo(
@@ -851,20 +851,6 @@ export default function FuelLogsPage() {
     };
   }, [t.fuelLogs.efficiency, tripSummaryLogs]);
 
-  const displayedTripSummaryLogs = useMemo(
-    () => tripSummary.logs.slice(0, tripPreviewCount),
-    [tripPreviewCount, tripSummary.logs]
-  );
-
-  useEffect(() => {
-    setEfficiencyPreviewCount(EFFICIENCY_PREVIEW_PAGE_SIZE);
-    setTripPreviewCount(EFFICIENCY_PREVIEW_PAGE_SIZE);
-  }, [efficiencyCalculationMode, efficiencyFilters]);
-
-  useEffect(() => {
-    setMissingMileageExpanded(missingMileageRows.length > 0 && missingMileageRows.length <= MISSING_MILEAGE_PREVIEW_LIMIT);
-  }, [missingMileageRows.length]);
-
   const statusLabels: Record<EfficiencyStatus, string> = {
     missing_mileage: t.fuelLogs.efficiency.statusMissingMileage,
     not_enough_data: t.fuelLogs.efficiency.statusNotEnoughData,
@@ -926,14 +912,6 @@ export default function FuelLogsPage() {
     reliable_calculation: t.fuelLogs.efficiency.noteReliableCalculation
   };
 
-  const getEfficiencyStatusClass = (status: EfficiencyStatus) => {
-    if (status === "normal") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-    if (status === "needs_review" || status === "long_trip_check" || status === "too_short_to_judge" || status === "check_mileage" || status === "check_receipt") {
-      return "border-amber-200 bg-amber-50 text-amber-800";
-    }
-    return "border-slate-200 bg-slate-100 text-slate-600";
-  };
-
   const getTripStatusClass = (status: TripSummaryStatus) => {
     if (status === "calculated") return "border-emerald-200 bg-emerald-50 text-emerald-700";
     if (status === "check_receipts" || status === "missing_mileage" || status === "check_mileage") {
@@ -944,20 +922,6 @@ export default function FuelLogsPage() {
 
   const getEfficiencyNoteText = (row: EfficiencyRow) =>
     row.dataQualityNotes.map((note) => noteLabels[note]).filter(Boolean).join(" ");
-
-  const getEfficiencyTooltipText = (row: EfficiencyRow) => {
-    const calculated = row.kmPerLitre != null ? `${formatNumber(row.kmPerLitre, language, 2)} ${t.fuelLogs.efficiency.kmPerLitre}` : "-";
-    const reason =
-      row.resultReason === "too_short_to_judge" && row.kmDriven != null
-        ? `${t.fuelLogs.efficiency.onlyDrivenPrefix} ${formatNumber(row.kmDriven, language, 0)} ${t.fuelLogs.efficiency.onlyDrivenSuffix}`
-        : noteLabels[row.resultReason];
-    return [
-      `${t.fuelLogs.efficiency.calculated}: ${calculated}`,
-      `${t.fuelLogs.efficiency.reason}: ${reason}`,
-      `${t.fuelLogs.efficiency.receipt}: ${getReceiptCheckLabel(row.log.receipt_checked, language)}`,
-      `${t.fuelLogs.efficiency.includedInAverage}: ${row.includedInKpiAverage ? t.fuelLogs.efficiency.yes : t.fuelLogs.efficiency.no}`
-    ].join("\n");
-  };
 
   const getFuelLogWarnings = (log: FuelLogWithDriver) => {
     const warnings: string[] = [];
@@ -979,16 +943,21 @@ export default function FuelLogsPage() {
   }, [t.fuelLogs.unableToLoadFuelData]);
 
   const loadSummaryData = useCallback(async () => {
-    const [todayRows, recentDayRows, receiptSummaryRows, efficiencyRowsForAnalysis] = await Promise.all([
+    const [todayRows, recentDayRows, receiptSummaryRows, efficiencyRowsForAnalysis, tripLinks] = await Promise.all([
       fetchFuelLogTodayRows(todayValue),
       fetchFuelLogRecentDaySummaries(7),
       fetchFuelLogReceiptSummary(filters),
-      fetchFuelLogsForExport({})
+      fetchFuelLogsForExport({}),
+      fetchTripFuelLogLinks().catch((tripLinkError) => {
+        console.warn("Fuel logs trip links unavailable:", tripLinkError);
+        return [] as TripFuelLogLink[];
+      })
     ]);
     setTodayLogs(todayRows);
     setLast7DayRows(recentDayRows);
     setReceiptSummary(receiptSummaryRows);
     setEfficiencySourceLogs(efficiencyRowsForAnalysis);
+    setTripFuelLinks(tripLinks);
   }, [filters, todayValue]);
 
   const loadFuelLogPage = useCallback(
@@ -1689,26 +1658,30 @@ export default function FuelLogsPage() {
         </div>
 
         {missingMileageRows.length > 0 ? (
-          <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50/90 p-3 text-sm text-amber-900 shadow-[0_8px_22px_rgba(180,83,9,0.06)] sm:p-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                <div>
-                  <p className="font-semibold text-amber-950">
-                    {formatNumber(missingMileageRows.length, language)} {t.fuelLogs.efficiency.missingMileageSummarySuffix}
-                  </p>
-                  <p className="mt-1 text-xs leading-5 text-amber-800">{t.fuelLogs.efficiency.missingMileageWarning}</p>
-                </div>
-              </div>
-              <button type="button" onClick={() => setMissingMileageExpanded((current) => !current)} className="btn-secondary min-h-[38px] border-amber-200 px-3 py-2 text-xs text-amber-900 hover:border-amber-300 hover:text-amber-950">
-                {missingMileageExpanded ? t.fuelLogs.efficiency.hideMissingEntries : t.fuelLogs.efficiency.viewMissingEntries}
-              </button>
+          <div className="mt-4 flex flex-col gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <p className="font-medium">
+                {t.fuelLogs.efficiency.missingMileageEntries}: {formatNumber(missingMileageRows.length, language)}
+              </p>
             </div>
+            <button type="button" onClick={() => setMissingMileageExpanded(true)} className="btn-secondary min-h-[34px] border-amber-200 px-3 py-1.5 text-xs text-amber-900 hover:border-amber-300 hover:text-amber-950">
+              {t.fuelLogs.efficiency.viewMissingEntries}
+            </button>
             {missingMileageExpanded ? (
-            <div className="mt-3 rounded-2xl border border-amber-200 bg-white/85 p-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-800">{t.fuelLogs.efficiency.missingMileageEntries}</p>
+            <div role="dialog" aria-modal="true" aria-labelledby="missing-mileage-title" className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/45 p-3 sm:flex sm:items-center sm:justify-center sm:p-6">
+              <div className="mx-auto max-h-[calc(100vh-1.5rem)] w-full max-w-5xl overflow-y-auto rounded-lg border border-slate-200 bg-white p-4 shadow-2xl sm:max-h-[90vh] sm:p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p id="missing-mileage-title" className="font-semibold text-slate-950">{t.fuelLogs.efficiency.missingMileageEntries}</p>
+                  <p className="mt-1 text-xs text-slate-500">{formatNumber(missingMileageRows.length, language)} {t.common.entries}</p>
+                </div>
+                <button type="button" onClick={() => setMissingMileageExpanded(false)} className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900" aria-label="Close">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
               <div className="mt-3 space-y-2 md:hidden">
-                {missingMileagePreviewRows.map((row) => (
+                {missingMileageRows.map((row) => (
                   <div key={row.log.id} className="rounded-xl border border-amber-100 bg-white px-3 py-2">
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -1734,7 +1707,7 @@ export default function FuelLogsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {missingMileagePreviewRows.map((row) => (
+                    {missingMileageRows.map((row) => (
                       <tr key={row.log.id} className="border-t border-amber-100 text-slate-700">
                         <td className="px-3 py-2 font-medium">{formatDate(row.log.date, language)}</td>
                         <td className="px-3 py-2">{row.log.driver || "-"}</td>
@@ -1747,100 +1720,12 @@ export default function FuelLogsPage() {
                   </tbody>
                 </table>
               </div>
-              {missingMileageRows.length > 8 ? (
-                <p className="mt-3 text-xs text-amber-800">{t.fuelLogs.efficiency.missingMileageListLimit}</p>
-              ) : null}
+              </div>
             </div>
             ) : null}
           </div>
         ) : null}
 
-        <div className="mt-5">
-          {loading ? (
-            <p className="text-sm text-slate-500">{t.fuelLogs.loadingFuelLogs}</p>
-          ) : filteredEfficiencyRows.length === 0 ? (
-            <EmptyState title={t.fuelLogs.efficiency.noResultsTitle} description={t.fuelLogs.efficiency.noResultsDescription} />
-          ) : (
-            <>
-              <div className="space-y-3 md:hidden">
-                {displayedEfficiencyRows.map((row) => (
-                  <div key={row.log.id} className="subtle-panel p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{formatDate(row.log.date, language)}</p>
-                        <p className="mt-2 text-sm font-semibold text-slate-900">{row.log.driver || "-"}</p>
-                        <p className="mt-1 text-sm text-slate-500">{row.log.vehicle_reg || "-"}</p>
-                      </div>
-                      <button type="button" title={getEfficiencyTooltipText(row)} className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getEfficiencyStatusClass(row.status)}`}>{statusLabels[row.status]}</button>
-                    </div>
-                    <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                      <div><p className="text-xs text-slate-500">{t.fuelLogs.efficiency.previousMileage}</p><p className="font-semibold text-slate-900">{row.previousMileage ?? "-"}</p></div>
-                      <div><p className="text-xs text-slate-500">{t.fuelLogs.efficiency.currentMileage}</p><p className="font-semibold text-slate-900">{row.currentMileage ?? "-"}</p></div>
-                      <div><p className="text-xs text-slate-500">{t.fuelLogs.efficiency.kmDriven}</p><p className="font-semibold text-slate-900">{row.kmDriven != null ? formatNumber(row.kmDriven, language, 0) : "-"}</p></div>
-                      <div><p className="text-xs text-slate-500">{t.fuelLogs.efficiency.kmPerLitre}</p><p className="font-semibold text-slate-900">{row.kmPerLitre != null ? formatNumber(row.kmPerLitre, language, 2) : "-"}</p></div>
-                      <div><p className="text-xs text-slate-500">{t.fuelLogs.efficiency.daysSincePreviousFill}</p><p className="font-semibold text-slate-900">{row.daysSincePreviousFill ?? "-"}</p></div>
-                      <div><p className="text-xs text-slate-500">{t.fuelLogs.efficiency.receiptCheck}</p><span className={`mt-1 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getReceiptCheckBadgeClass(row.log.receipt_checked)}`}>{getReceiptCheckLabel(row.log.receipt_checked, language)}</span></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="hidden md:block">
-                <div className="table-shell rounded-2xl">
-                  <div className="table-scroll overflow-x-auto">
-                    <table className="min-w-[1220px] w-full text-sm [&_.table-body-cell]:py-2.5 [&_.table-head-cell]:py-2.5">
-                      <thead className="sticky top-0 z-10 bg-slate-100/95 text-slate-700 shadow-[inset_0_-1px_0_rgba(226,232,240,0.9)] backdrop-blur">
-                        <tr>
-                          <th className="table-head-cell text-left">{t.fuelLogs.efficiency.date}</th>
-                          <th className="table-head-cell text-left">{t.fuelLogs.efficiency.driver}</th>
-                          <th className="table-head-cell text-left">{t.fuelLogs.efficiency.vehicleReg}</th>
-                          <th className="table-head-cell text-right">{t.fuelLogs.efficiency.daysSincePreviousFill}</th>
-                          <th className="table-head-cell text-right">{t.fuelLogs.efficiency.previousMileage}</th>
-                          <th className="table-head-cell text-right">{t.fuelLogs.efficiency.currentMileage}</th>
-                          <th className="table-head-cell text-right">{t.fuelLogs.efficiency.kmDriven}</th>
-                          <th className="table-head-cell text-right">{t.fuelLogs.efficiency.litres}</th>
-                          <th className="table-head-cell text-right">{t.fuelLogs.efficiency.kmPerLitre}</th>
-                          <th className="table-head-cell text-left">{t.fuelLogs.efficiency.receiptCheck}</th>
-                          <th className="table-head-cell text-left">{t.fuelLogs.efficiency.result}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {displayedEfficiencyRows.map((row) => (
-                          <tr key={row.log.id} className="enterprise-table-row">
-                            <td className="table-body-cell whitespace-nowrap font-medium text-slate-700">{formatDate(row.log.date, language)}</td>
-                            <td className="table-body-cell whitespace-nowrap table-driver-name">{row.log.driver || "-"}</td>
-                            <td className="table-body-cell whitespace-nowrap text-slate-700">{row.log.vehicle_reg || "-"}</td>
-                            <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800">{row.daysSincePreviousFill ?? "-"}</td>
-                            <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800">{row.previousMileage ?? "-"}</td>
-                            <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800">{row.currentMileage ?? "-"}</td>
-                            <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800">{row.kmDriven != null ? formatNumber(row.kmDriven, language, 0) : "-"}</td>
-                            <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800">{row.litres != null ? formatNumber(row.litres, language, 2) : "-"}</td>
-                            <td className="table-body-cell whitespace-nowrap text-right text-base font-bold text-slate-950">{row.kmPerLitre != null ? formatNumber(row.kmPerLitre, language, 2) : "-"}</td>
-                            <td className="table-body-cell"><span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getReceiptCheckBadgeClass(row.log.receipt_checked)}`}>{getReceiptCheckLabel(row.log.receipt_checked, language)}</span></td>
-                            <td className="table-body-cell"><button type="button" title={getEfficiencyTooltipText(row)} className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getEfficiencyStatusClass(row.status)}`}>{statusLabels[row.status]}</button></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-              {filteredEfficiencyRows.length > EFFICIENCY_PREVIEW_PAGE_SIZE ? (
-                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-xs text-slate-500">
-                    {efficiencyPreviewCount === EFFICIENCY_PREVIEW_PAGE_SIZE
-                      ? t.fuelLogs.efficiency.previewLimit
-                      : `${formatNumber(displayedEfficiencyRows.length, language)} ${t.fuelLogs.efficiency.of} ${formatNumber(filteredEfficiencyRows.length, language)} ${t.common.entries}`}
-                  </p>
-                  {filteredEfficiencyRows.length > displayedEfficiencyRows.length ? (
-                    <button type="button" onClick={() => setEfficiencyPreviewCount((count) => count + EFFICIENCY_PREVIEW_PAGE_SIZE)} className="btn-secondary min-h-[38px] px-3 py-2 text-xs">
-                      {t.fuelLogs.efficiency.showMore}
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
-            </>
-          )}
-        </div>
           </>
         ) : (
           <>
@@ -1922,100 +1807,6 @@ export default function FuelLogsPage() {
               </div>
             </div>
 
-            <div className="mt-5">
-              <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h4 className="text-base font-semibold text-slate-950">{t.fuelLogs.efficiency.includedFuelLogs}</h4>
-                  <p className="mt-1 text-sm text-slate-500">{t.fuelLogs.efficiency.includedFuelLogsHelper}</p>
-                  <p className="mt-1 text-xs font-medium text-slate-500">{formatNumber(tripSummary.fuelLogCount, language)} {t.common.entries}</p>
-                </div>
-                <button type="button" title={tripStatusTooltips[tripSummary.status]} className={`inline-flex w-fit rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getTripStatusClass(tripSummary.status)}`}>
-                  {tripStatusLabels[tripSummary.status]}
-                </button>
-              </div>
-              {loading ? (
-                <p className="text-sm text-slate-500">{t.fuelLogs.loadingFuelLogs}</p>
-              ) : tripSummary.logs.length === 0 ? (
-                <EmptyState title={t.fuelLogs.efficiency.noResultsTitle} description={t.fuelLogs.efficiency.noResultsDescription} />
-              ) : (
-                <>
-                  <div className="space-y-3 md:hidden">
-                    {displayedTripSummaryLogs.map((log) => (
-                      <div key={log.id} className="subtle-panel p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{formatDate(log.date, language)}</p>
-                            <p className="mt-2 text-sm font-semibold text-slate-900">{log.driver || "-"}</p>
-                            <p className="mt-1 text-sm text-slate-500">{log.vehicle_reg || "-"}</p>
-                          </div>
-                          <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getReceiptCheckBadgeClass(log.receipt_checked)}`}>{getReceiptCheckLabel(log.receipt_checked, language)}</span>
-                        </div>
-                        <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                          <div><p className="text-xs text-slate-500">{t.fuelLogs.efficiency.mileage}</p><p className="font-semibold text-slate-900">{getMileageValue(log.mileage) != null ? formatNumber(Number(log.mileage), language, 0) : "-"}</p></div>
-                          <div><p className="text-xs text-slate-500">{t.fuelLogs.efficiency.litres}</p><p className="font-semibold text-slate-900">{formatNumber(Number(log.litres || 0), language, 2)}</p></div>
-                          <div><p className="text-xs text-slate-500">{t.fuelLogs.efficiency.totalCost}</p><p className="font-semibold text-slate-900">{formatCurrency(Number(log.total_cost || 0), language)}</p></div>
-                          <div><p className="text-xs text-slate-500">{t.fuelLogs.efficiency.pricePerLitre}</p><p className="font-semibold text-slate-900">{log.price_per_litre != null ? formatCurrency(Number(log.price_per_litre), language) : "-"}</p></div>
-                          <div className="col-span-2"><p className="text-xs text-slate-500">{t.fuelLogs.efficiency.entrySource}</p><p className="font-semibold text-slate-900">{sourceCopy.options[normalizeEntrySource(log.entry_source)]}</p></div>
-                          {log.notes ? <div className="col-span-2"><p className="text-xs text-slate-500">{t.fuelLogs.efficiency.notes}</p><p className="font-medium text-slate-700">{log.notes}</p></div> : null}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="hidden md:block">
-                    <div className="table-shell rounded-2xl">
-                      <div className="table-scroll overflow-x-auto">
-                        <table className="min-w-[1280px] w-full text-sm [&_.table-body-cell]:py-2.5 [&_.table-head-cell]:py-2.5">
-                          <thead className="sticky top-0 z-10 bg-slate-100/95 text-slate-700 shadow-[inset_0_-1px_0_rgba(226,232,240,0.9)] backdrop-blur">
-                            <tr>
-                              <th className="table-head-cell text-left">{t.fuelLogs.efficiency.date}</th>
-                              <th className="table-head-cell text-left">{t.fuelLogs.efficiency.driver}</th>
-                              <th className="table-head-cell text-left">{t.fuelLogs.efficiency.vehicleReg}</th>
-                              <th className="table-head-cell text-right">{t.fuelLogs.efficiency.mileage}</th>
-                              <th className="table-head-cell text-right">{t.fuelLogs.efficiency.litres}</th>
-                              <th className="table-head-cell text-right">{t.fuelLogs.efficiency.totalCost}</th>
-                              <th className="table-head-cell text-right">{t.fuelLogs.efficiency.pricePerLitre}</th>
-                              <th className="table-head-cell text-left">{t.fuelLogs.efficiency.receiptCheck}</th>
-                              <th className="table-head-cell text-left">{t.fuelLogs.efficiency.entrySource}</th>
-                              <th className="table-head-cell text-left">{t.fuelLogs.efficiency.notes}</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {displayedTripSummaryLogs.map((log) => (
-                              <tr key={log.id} className="enterprise-table-row">
-                                <td className="table-body-cell whitespace-nowrap font-medium text-slate-700">{formatDate(log.date, language)}</td>
-                                <td className="table-body-cell whitespace-nowrap table-driver-name">{log.driver || "-"}</td>
-                                <td className="table-body-cell whitespace-nowrap text-slate-700">{log.vehicle_reg || "-"}</td>
-                                <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800">{getMileageValue(log.mileage) != null ? formatNumber(Number(log.mileage), language, 0) : "-"}</td>
-                                <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800">{formatNumber(Number(log.litres || 0), language, 2)}</td>
-                                <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800">{formatCurrency(Number(log.total_cost || 0), language)}</td>
-                                <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800">{log.price_per_litre != null ? formatCurrency(Number(log.price_per_litre), language) : "-"}</td>
-                                <td className="table-body-cell"><span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getReceiptCheckBadgeClass(log.receipt_checked)}`}>{getReceiptCheckLabel(log.receipt_checked, language)}</span></td>
-                                <td className="table-body-cell"><span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getEntrySourceBadgeClass(normalizeEntrySource(log.entry_source))}`}>{sourceCopy.options[normalizeEntrySource(log.entry_source)]}</span></td>
-                                <td className="table-body-cell max-w-[260px] truncate text-slate-600" title={log.notes || ""}>{log.notes || "-"}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-                  {tripSummary.logs.length > EFFICIENCY_PREVIEW_PAGE_SIZE ? (
-                    <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="text-xs text-slate-500">
-                        {tripPreviewCount === EFFICIENCY_PREVIEW_PAGE_SIZE
-                          ? t.fuelLogs.efficiency.previewLimit
-                          : `${formatNumber(displayedTripSummaryLogs.length, language)} ${t.fuelLogs.efficiency.of} ${formatNumber(tripSummary.logs.length, language)} ${t.common.entries}`}
-                      </p>
-                      {tripSummary.logs.length > displayedTripSummaryLogs.length ? (
-                        <button type="button" onClick={() => setTripPreviewCount((count) => count + EFFICIENCY_PREVIEW_PAGE_SIZE)} className="btn-secondary min-h-[38px] px-3 py-2 text-xs">
-                          {t.fuelLogs.efficiency.showMore}
-                        </button>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </>
-              )}
-            </div>
           </>
         )}
       </section>
@@ -2211,6 +2002,7 @@ export default function FuelLogsPage() {
                         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{formatDate(log.date, language)}</p>
                         <p className="mt-2 text-sm font-semibold text-slate-900">{log.driver}</p>
                         <span className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getEntrySourceBadgeClass(normalizeEntrySource(log.entry_source))}`}>{sourceCopy.options[normalizeEntrySource(log.entry_source)]}</span>
+                        <span className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getFuelTripBadgeClass(log)}`}>{getFuelTripLabel(log)}</span>
                         <p className="mt-1 text-sm text-slate-500">{log.vehicle_reg}</p>
                       </div>
                       <p className="whitespace-nowrap rounded-full bg-slate-100 px-3 py-1 text-base font-bold text-slate-900">{formatCurrency(Number(log.total_cost || 0), language)}</p>
@@ -2252,6 +2044,7 @@ export default function FuelLogsPage() {
                           <th className="table-head-cell text-right">{t.fuelLogs.mileage}</th>
                           <th className="table-head-cell text-left">{t.fuelLogs.location}</th>
                           <th className="table-head-cell text-left">{sourceCopy.label}</th>
+                          <th className="table-head-cell text-left">Trip</th>
                           <th className="table-head-cell text-left">{receiptCopy.filterLabel}</th>
                           <th className="table-head-cell text-left">{t.common.action}</th>
                         </tr>
@@ -2279,6 +2072,7 @@ export default function FuelLogsPage() {
                             <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800">{log.mileage ?? "-"}</td>
                             <td className="table-body-cell min-w-[140px] text-slate-700">{log.location || "-"}</td>
                             <td className="table-body-cell"><span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getEntrySourceBadgeClass(normalizeEntrySource(log.entry_source))}`}>{sourceCopy.options[normalizeEntrySource(log.entry_source)]}</span></td>
+                            <td className="table-body-cell"><span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getFuelTripBadgeClass(log)}`}>{getFuelTripLabel(log)}</span></td>
                             <td className="table-body-cell"><span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getReceiptCheckBadgeClass(log.receipt_checked)}`}>{getReceiptCheckLabel(log.receipt_checked, language)}</span></td>
                             <td className="table-body-cell"><div className="flex gap-1.5"><button type="button" onClick={() => void handleReceiptToggle(log, !log.receipt_checked)} disabled={togglingReceiptId === String(log.id)} className="table-action-secondary min-w-[104px] disabled:opacity-50">{togglingReceiptId === String(log.id) ? t.common.saving : log.receipt_checked ? receiptCopy.markUnchecked : receiptCopy.markChecked}</button><button type="button" onClick={() => populateForm(log)} className="table-action-secondary min-w-[68px]">{t.common.edit}</button><button type="button" onClick={() => void handleDelete(String(log.id))} disabled={deletingId === String(log.id)} className="table-action-danger min-w-[68px] disabled:opacity-50">{deletingId === String(log.id) ? t.common.deleting : t.common.delete}</button></div></td>
                           </tr>

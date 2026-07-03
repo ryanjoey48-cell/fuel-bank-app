@@ -9,6 +9,7 @@ type LocationSuggestion = {
   description: string;
   mainText: string;
   secondaryText: string;
+  source?: "browser" | "server";
 };
 
 export type StructuredLocation = {
@@ -48,6 +49,146 @@ type AutocompleteConfigResponse = {
   suggestions?: LocationSuggestion[];
 };
 
+type BrowserPrediction = {
+  place_id?: string;
+  description?: string;
+  structured_formatting?: {
+    main_text?: string;
+    secondary_text?: string;
+  };
+};
+
+type BrowserPlacesApi = {
+  AutocompleteService?: new () => {
+    getPlacePredictions: (
+      request: Record<string, unknown>,
+      callback: (predictions: BrowserPrediction[] | null, status: string) => void
+    ) => void;
+  };
+  PlacesService?: new (node: HTMLDivElement) => {
+    getDetails: (
+      request: Record<string, unknown>,
+      callback: (place: Record<string, unknown> | null, status: string) => void
+    ) => void;
+  };
+  PlacesServiceStatus?: {
+    OK?: string;
+    ZERO_RESULTS?: string;
+  };
+};
+
+type BrowserGoogleMapsLoader = {
+  promise?: Promise<void>;
+};
+
+const GOOGLE_MAPS_STATUS_EVENT = "fuel-bank:google-maps-status";
+
+function getBrowserPlaces() {
+  return typeof window !== "undefined"
+    ? (window.google?.maps?.places as BrowserPlacesApi | undefined)
+    : undefined;
+}
+
+function mapBrowserPredictions(predictions: BrowserPrediction[] | null): LocationSuggestion[] {
+  return (predictions ?? []).slice(0, 5).map((prediction) => ({
+    placeId: prediction.place_id ?? prediction.description ?? "",
+    description: prediction.description ?? "",
+    mainText: prediction.structured_formatting?.main_text ?? prediction.description ?? "",
+    secondaryText: prediction.structured_formatting?.secondary_text ?? "",
+    source: "browser"
+  }));
+}
+
+function fetchBrowserPredictions(input: string, language: "en" | "th") {
+  const places = getBrowserPlaces();
+  if (!places?.AutocompleteService) {
+    return null;
+  }
+  const AutocompleteService = places.AutocompleteService;
+
+  return new Promise<LocationSuggestion[]>((resolve, reject) => {
+    const service = new AutocompleteService();
+    service.getPlacePredictions(
+      {
+        input,
+        componentRestrictions: { country: "th" },
+        language
+      },
+      (predictions, status) => {
+        const okStatus = places.PlacesServiceStatus?.OK ?? "OK";
+        const zeroResultsStatus = places.PlacesServiceStatus?.ZERO_RESULTS ?? "ZERO_RESULTS";
+        if (status === okStatus || status === zeroResultsStatus) {
+          resolve(mapBrowserPredictions(predictions));
+          return;
+        }
+        reject(new Error(`Places Autocomplete failed: ${status}`));
+      }
+    );
+  });
+}
+
+function getTextField(value: unknown) {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object" && "text" in value) {
+    const text = (value as { text?: unknown }).text;
+    return typeof text === "string" ? text : "";
+  }
+  return "";
+}
+
+function getBrowserPlaceDetails(placeId: string, invalidText: string) {
+  const places = getBrowserPlaces();
+  if (!places?.PlacesService) {
+    return null;
+  }
+  const PlacesService = places.PlacesService;
+
+  return new Promise<StructuredLocation>((resolve, reject) => {
+    const node = document.createElement("div");
+    const service = new PlacesService(node);
+    service.getDetails(
+      {
+        placeId: placeId.replace(/^places\//, ""),
+        fields: ["place_id", "name", "formatted_address", "geometry"]
+      },
+      (place, status) => {
+        const okStatus = places.PlacesServiceStatus?.OK ?? "OK";
+        if (status !== okStatus || !place) {
+          reject(new Error(`Place details failed: ${status}`));
+          return;
+        }
+
+        const geometry = place.geometry as
+          | {
+              location?: {
+                lat?: () => number;
+                lng?: () => number;
+              };
+            }
+          | undefined;
+        const lat = geometry?.location?.lat?.();
+        const lng = geometry?.location?.lng?.();
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+          reject(new Error(invalidText));
+          return;
+        }
+
+        const name = getTextField(place.name);
+        const formattedAddress = getTextField(place.formatted_address);
+        const resolvedPlaceId = getTextField(place.place_id) || placeId;
+        resolve({
+          label: name || formattedAddress || resolvedPlaceId,
+          formatted_address: formattedAddress || name || resolvedPlaceId,
+          place_id: resolvedPlaceId,
+          lat: Number(lat),
+          lng: Number(lng),
+          verified: true
+        });
+      }
+    );
+  });
+}
+
 export function LocationAutocomplete({
   label,
   value,
@@ -70,6 +211,7 @@ export function LocationAutocomplete({
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [mapsConfigured, setMapsConfigured] = useState<boolean | null>(null);
+  const [browserPlacesReady, setBrowserPlacesReady] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [sessionToken, setSessionToken] = useState(() => crypto.randomUUID());
   const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -92,7 +234,11 @@ export function LocationAutocomplete({
         }>(`/api/location-autocomplete?language=${language}`);
 
         if (!cancelled) {
-          const configured = Boolean(result.data?.serverConfigured ?? result.data?.configured);
+          const configured = Boolean(
+            result.data?.browserConfigured ??
+              result.data?.serverConfigured ??
+              result.data?.configured
+          );
           const configMessage =
             result.data?.message ||
             (result.data?.missingVariables?.length
@@ -126,6 +272,38 @@ export function LocationAutocomplete({
   }, [configMissingMessage, language, onConfigurationChange]);
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const updateBrowserStatus = () => {
+      const ready = Boolean(getBrowserPlaces()?.AutocompleteService);
+      setBrowserPlacesReady(ready);
+      if (ready) {
+        setMapsConfigured(true);
+        setStatusMessage(helperText ?? null);
+        onConfigurationChange?.(true);
+      }
+    };
+
+    updateBrowserStatus();
+
+    const loaderPromise = (window.__fuelBankGoogleMapsLoader as BrowserGoogleMapsLoader | undefined)?.promise;
+    if (loaderPromise) {
+      void loaderPromise.then(updateBrowserStatus).catch((error) => {
+        setStatusMessage(
+          error instanceof Error
+            ? error.message
+            : "Google Maps script failed to load. Manual entry still allowed."
+        );
+      });
+    }
+
+    window.addEventListener(GOOGLE_MAPS_STATUS_EVENT, updateBrowserStatus);
+    return () => window.removeEventListener(GOOGLE_MAPS_STATUS_EVENT, updateBrowserStatus);
+  }, [helperText, onConfigurationChange]);
+
+  useEffect(() => {
     if (disabled || mapsConfigured === false || !userEditedRef.current) {
       setSuggestions([]);
       setLoading(false);
@@ -146,6 +324,37 @@ export function LocationAutocomplete({
     const timeoutId = setTimeout(async () => {
       try {
         setLoading(true);
+        const browserPredictionRequest = browserPlacesReady
+          ? fetchBrowserPredictions(query, language)
+          : null;
+        const browserPredictions = browserPredictionRequest
+          ? await browserPredictionRequest.catch((error) => {
+              const message =
+                error instanceof Error
+                  ? error.message
+                  : "Places Autocomplete failed.";
+              if (process.env.NODE_ENV !== "production") {
+                console.warn("[Fuel Bank] Browser Places Autocomplete failed; trying server proxy.", message);
+              }
+              setStatusMessage(`${message} Trying server search...`);
+              return null;
+            })
+          : null;
+
+        if (requestIdRef.current !== nextRequestId) {
+          return;
+        }
+
+        if (browserPredictions) {
+          setMapsConfigured(true);
+          onConfigurationChange?.(true);
+          setStatusMessage(helperText ?? null);
+          setSuggestions(browserPredictions);
+          setIsOpen(true);
+          setActiveIndex(-1);
+          return;
+        }
+
         const result = await fetchJson<AutocompleteConfigResponse>(
           `/api/location-autocomplete?input=${encodeURIComponent(query)}&language=${language}&sessionToken=${encodeURIComponent(sessionToken)}`
         );
@@ -171,7 +380,7 @@ export function LocationAutocomplete({
         setMapsConfigured(true);
         onConfigurationChange?.(true);
         setStatusMessage(helperText ?? null);
-        setSuggestions(result.data?.suggestions ?? []);
+        setSuggestions((result.data?.suggestions ?? []).map((suggestion) => ({ ...suggestion, source: "server" })));
         setIsOpen(true);
         setActiveIndex(-1);
       } catch (error) {
@@ -180,7 +389,7 @@ export function LocationAutocomplete({
           setStatusMessage(
             error instanceof Error
               ? `${error.message}. Manual entry still allowed.`
-              : "Google location search unavailable, manual entry still allowed."
+              : "Places Autocomplete failed. Manual entry still allowed."
           );
         }
       } finally {
@@ -197,6 +406,7 @@ export function LocationAutocomplete({
     helperText,
     language,
     mapsConfigured,
+    browserPlacesReady,
     onConfigurationChange,
     sessionToken,
     value
@@ -214,6 +424,24 @@ export function LocationAutocomplete({
     userEditedRef.current = false;
     setLoading(true);
     try {
+      const browserDetailsRequest =
+        suggestion.source === "browser"
+          ? getBrowserPlaceDetails(suggestion.placeId, invalidText)
+          : null;
+      const browserDetails = browserDetailsRequest
+        ? await browserDetailsRequest.catch(() => null)
+        : null;
+      if (browserDetails) {
+        onChange(browserDetails.formatted_address || browserDetails.label);
+        onSelectLocation?.(browserDetails);
+        setSuggestions([]);
+        setIsOpen(false);
+        setActiveIndex(-1);
+        setStatusMessage(helperText ?? null);
+        setSessionToken(crypto.randomUUID());
+        return;
+      }
+
       const result = await fetchJson<StructuredLocation>(
         `/api/location-details?placeId=${encodeURIComponent(suggestion.placeId)}&language=${language}`
       );

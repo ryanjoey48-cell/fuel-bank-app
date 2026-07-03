@@ -84,6 +84,11 @@ export type OilChangeAlertRow = {
   reviewReasons: string[];
   currentOdometer: number | null;
   currentOdometerDate: string | null;
+  lastWeeklyMileageDate: string | null;
+  lastWeeklyMileageOdometer: number | null;
+  lastWeeklyMileageAddedAt: string | null;
+  daysSinceWeeklyMileage: number | null;
+  weeklyMileageUpdatedThisWeek: boolean;
   nextOilChangeDueOdometer: number | null;
   kmRemaining: number | null;
   overdueKm: number | null;
@@ -126,16 +131,90 @@ function getDriverKey(entry: WeeklyMileageEntry) {
 }
 
 function getVehicleKey(vehicleReg: string | null | undefined) {
-  return String(vehicleReg || "").trim().toLowerCase();
+  return String(vehicleReg || "")
+    .trim()
+    .replace(/\s+/g, "")
+    .replace(/-/g, "")
+    .toUpperCase();
+}
+
+function isActiveVehicleForOilService(vehicle: Vehicle) {
+  const extraFields = vehicle as Vehicle & {
+    is_active?: boolean | null;
+    archived?: boolean | null;
+    deleted_at?: string | null;
+    status?: string | null;
+  };
+  const status = String(extraFields.status ?? "").trim().toLowerCase();
+
+  return (
+    vehicle.active !== false &&
+    extraFields.is_active !== false &&
+    extraFields.archived !== true &&
+    !extraFields.deleted_at &&
+    !["inactive", "archived", "deleted", "retired"].includes(status)
+  );
 }
 
 function getWeekEntrySortValue(entry: WeeklyMileageEntry) {
   return `${entry.week_ending}::${entry.created_at || ""}::${String(entry.id)}`;
 }
 
+function compareWeeklyMileageEntries(left: WeeklyMileageEntry, right: WeeklyMileageEntry) {
+  const weekDiff = String(left.week_ending || "").localeCompare(String(right.week_ending || ""));
+  if (weekDiff !== 0) return weekDiff;
+
+  const createdDiff = String(left.created_at || "").localeCompare(String(right.created_at || ""));
+  if (createdDiff !== 0) return createdDiff;
+
+  return String(left.id).localeCompare(String(right.id));
+}
+
 function getNormalizedOdometer(entry: WeeklyMileageEntry) {
   const value = Number(entry.odometer_reading ?? entry.mileage);
   return Number.isFinite(value) ? value : null;
+}
+
+function parseDateValue(value: string | null | undefined) {
+  if (!value) return null;
+
+  const isoDateMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const parsed = isoDateMatch
+    ? new Date(Number(isoDateMatch[1]), Number(isoDateMatch[2]) - 1, Number(isoDateMatch[3]))
+    : new Date(value);
+
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getDateKey(value: string | null | undefined) {
+  const parsed = parseDateValue(value);
+  if (!parsed) return null;
+
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function isMileageDateInCurrentReportingWeek(
+  value: string | null | undefined,
+  currentReportingWeekEnding: string | null
+) {
+  const mileageDateKey = getDateKey(value);
+  const reportingWeekKey = getDateKey(currentReportingWeekEnding);
+  return mileageDateKey != null && reportingWeekKey != null && mileageDateKey === reportingWeekKey;
+}
+
+function getDaysSinceDate(value: string | null | undefined) {
+  const parsed = parseDateValue(value);
+  if (!parsed) return null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  parsed.setHours(0, 0, 0, 0);
+
+  const diff = today.getTime() - parsed.getTime();
+  return Math.max(0, Math.floor(diff / (24 * 60 * 60 * 1000)));
 }
 
 function getLatestWeeklyMileageByVehicle(entries: WeeklyMileageEntry[]) {
@@ -150,15 +229,28 @@ function getLatestWeeklyMileageByVehicle(entries: WeeklyMileageEntry[]) {
     }
 
     const previous = latestByVehicle.get(vehicleKey);
-    if (
-      !previous ||
-      getWeekEntrySortValue(entry).localeCompare(getWeekEntrySortValue(previous)) > 0
-    ) {
+    if (!previous || compareWeeklyMileageEntries(entry, previous) > 0) {
       latestByVehicle.set(vehicleKey, entry);
     }
   }
 
   return latestByVehicle;
+}
+
+function getCurrentReportingWeekEnding(entries: WeeklyMileageEntry[]) {
+  let latestEntry: WeeklyMileageEntry | null = null;
+
+  for (const entry of entries) {
+    if (!entry.week_ending) {
+      continue;
+    }
+
+    if (!latestEntry || compareWeeklyMileageEntries(entry, latestEntry) > 0) {
+      latestEntry = entry;
+    }
+  }
+
+  return latestEntry?.week_ending ?? null;
 }
 
 function buildOilChangeRow({
@@ -170,7 +262,8 @@ function buildOilChangeRow({
   lastOilChangeDate,
   lastOilChangeOdometer,
   oilChangeIntervalKm,
-  latestMileage
+  latestMileage,
+  currentReportingWeekEnding
 }: {
   vehicleId: string | null;
   registration: string;
@@ -181,6 +274,7 @@ function buildOilChangeRow({
   lastOilChangeOdometer: number | null;
   oilChangeIntervalKm: number | null | undefined;
   latestMileage: WeeklyMileageEntry | null;
+  currentReportingWeekEnding: string | null;
 }): OilChangeAlertRow {
   const vehicleTypeInterval = getOilChangeIntervalForVehicleType(vehicleType);
   const savedInterval =
@@ -198,6 +292,7 @@ function buildOilChangeRow({
     interval == null ? "Missing oil change interval" : ""
   ].filter(Boolean);
   const currentOdometer = latestMileage ? getNormalizedOdometer(latestMileage) : null;
+  const latestWeeklyMileageDate = latestMileage?.week_ending ?? null;
   const lastOdometer =
     lastOilChangeOdometer != null && Number.isFinite(Number(lastOilChangeOdometer))
       ? Number(lastOilChangeOdometer)
@@ -251,7 +346,15 @@ function buildOilChangeRow({
     intervalSource,
     reviewReasons,
     currentOdometer,
-    currentOdometerDate: latestMileage?.week_ending ?? null,
+    currentOdometerDate: latestWeeklyMileageDate,
+    lastWeeklyMileageDate: latestWeeklyMileageDate,
+    lastWeeklyMileageOdometer: currentOdometer,
+    lastWeeklyMileageAddedAt: latestMileage?.created_at ?? null,
+    daysSinceWeeklyMileage: getDaysSinceDate(latestWeeklyMileageDate),
+    weeklyMileageUpdatedThisWeek: isMileageDateInCurrentReportingWeek(
+      latestWeeklyMileageDate,
+      currentReportingWeekEnding
+    ),
     nextOilChangeDueOdometer: nextDue,
     kmRemaining,
     overdueKm,
@@ -270,9 +373,14 @@ export function buildOilChangeAlertRows({
   drivers?: Driver[];
 }) {
   const latestByVehicle = getLatestWeeklyMileageByVehicle(weeklyMileage);
+  const currentReportingWeekEnding = getCurrentReportingWeekEnding(weeklyMileage);
   const rowsByVehicleKey = new Map<string, OilChangeAlertRow>();
 
   for (const vehicle of vehicles) {
+    if (!isActiveVehicleForOilService(vehicle)) {
+      continue;
+    }
+
     const registration = vehicle.vehicle_reg || vehicle.registration || "";
     const vehicleKey = getVehicleKey(registration);
     if (!vehicleKey) {
@@ -290,38 +398,12 @@ export function buildOilChangeAlertRows({
         registration,
         vehicleName: vehicle.vehicle_name,
         driverName: matchedDriver?.name ?? null,
-        vehicleType: matchedDriver?.vehicle_type ?? vehicle.vehicle_type ?? null,
+        vehicleType: vehicle.vehicle_type ?? matchedDriver?.vehicle_type ?? null,
         lastOilChangeDate: vehicle.last_oil_change_date,
         lastOilChangeOdometer: vehicle.last_oil_change_odometer,
         oilChangeIntervalKm: vehicle.oil_change_interval_km,
-        latestMileage: latestByVehicle.get(vehicleKey) ?? null
-      })
-    );
-  }
-
-  for (const driver of drivers) {
-    const registration = driver.vehicle_reg || "";
-    const vehicleKey = getVehicleKey(registration);
-    if (!vehicleKey || rowsByVehicleKey.has(vehicleKey)) {
-      continue;
-    }
-
-    const assignedVehicle = driver.assigned_vehicle_id
-      ? vehicles.find((vehicle) => String(vehicle.id) === String(driver.assigned_vehicle_id))
-      : null;
-
-    rowsByVehicleKey.set(
-      vehicleKey,
-      buildOilChangeRow({
-        vehicleId: assignedVehicle ? String(assignedVehicle.id) : null,
-        registration,
-        vehicleName: assignedVehicle?.vehicle_name || driver.name || registration,
-        driverName: driver.name || null,
-        vehicleType: driver.vehicle_type ?? null,
-        lastOilChangeDate: assignedVehicle?.last_oil_change_date ?? null,
-        lastOilChangeOdometer: assignedVehicle?.last_oil_change_odometer ?? null,
-        oilChangeIntervalKm: assignedVehicle?.oil_change_interval_km ?? null,
-        latestMileage: latestByVehicle.get(vehicleKey) ?? null
+        latestMileage: latestByVehicle.get(vehicleKey) ?? null,
+        currentReportingWeekEnding
       })
     );
   }

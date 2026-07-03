@@ -1,12 +1,5 @@
-const CACHE_NAME = "fuel-bank-app-v1";
+const CACHE_NAME = "fuel-bank-app-v2";
 const APP_SHELL = [
-  "/",
-  "/login",
-  "/dashboard",
-  "/drivers",
-  "/fuel-logs",
-  "/transfers",
-  "/weekly-mileage",
   "/manifest.json",
   "/icon-192.png",
   "/icon-512.png",
@@ -44,19 +37,12 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  if (url.pathname.startsWith("/_next/")) {
+    return;
+  }
+
   if (request.mode === "navigate") {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
-          return response;
-        })
-        .catch(async () => {
-          const cachedResponse = await caches.match(request);
-          return cachedResponse || caches.match("/dashboard") || caches.match("/");
-        })
-    );
+    event.respondWith(fetch(request));
     return;
   }
 

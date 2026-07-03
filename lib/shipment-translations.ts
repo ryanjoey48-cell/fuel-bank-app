@@ -23,7 +23,7 @@ export const shipmentTranslations = {
     startRoute: "Start Route",
     startRouteHelper: "Route starts here and returns here after all drop-offs.",
     useDepotLocation: "Use depot location",
-    depotMissing: "Depot coordinates are not configured yet.",
+    depotMissing: "Depot location could not be verified. Please check Google Maps API configuration.",
     validGoogleLocationRequired: "Please select a valid location from the Google suggestions.",
     manualLocationWarning: "Manual/unverified location. Distance and travel time require valid coordinates.",
     mapsUnavailableManualOnly:
@@ -316,7 +316,7 @@ export const shipmentTranslations = {
     startRoute: "จุดเริ่มต้นเส้นทาง",
     startRouteHelper: "เส้นทางเริ่มจากจุดนี้และกลับมาจุดนี้หลังส่งครบทุกจุด",
     useDepotLocation: "ใช้ที่ตั้งคลัง",
-    depotMissing: "ยังไม่ได้ตั้งค่าพิกัดคลัง",
+    depotMissing: "ไม่สามารถยืนยันตำแหน่งคลังได้ โปรดตรวจสอบการตั้งค่า Google Maps API",
     validGoogleLocationRequired: "กรุณาเลือกสถานที่ที่ถูกต้องจากคำแนะนำของ Google",
     manualLocationWarning: "สถานที่นี้กรอกเอง/ยังไม่ยืนยัน ต้องมีพิกัดที่ถูกต้องก่อนคำนวณระยะทางและเวลา",
     mapsUnavailableManualOnly:

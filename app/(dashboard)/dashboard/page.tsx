@@ -1,65 +1,307 @@
 "use client";
 
-import { ArrowRightLeft, ClipboardCheck, Droplet, Fuel, PackageCheck, TrendingDown, TrendingUp, Truck, Wallet } from "lucide-react";
+import {
+  ArrowRightLeft,
+  CheckCircle2,
+  Droplet,
+  Fuel,
+  Gauge,
+  RefreshCw,
+  Wallet
+} from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { Header } from "@/components/header";
-import { fetchDrivers, fetchFuelLogs, fetchShipments, fetchTransfers, fetchVehicles, fetchWeeklyMileage } from "@/lib/data";
+import {
+  fetchDrivers,
+  fetchFuelLogs,
+  fetchOilChangeBaselinesForVehicles,
+  fetchTransfers,
+  fetchVehicles,
+  fetchWeeklyMileage
+} from "@/lib/data";
 import { getTransferTypeLabel } from "@/lib/localized-values";
 import { useLanguage } from "@/lib/language-provider";
-import { buildOilChangeAlertRows, buildWeeklyMileageSummary } from "@/lib/operations";
-import { normalizeShipment } from "@/lib/shipment-normalization";
-import { formatCurrency, formatDate, formatNumber } from "@/lib/utils";
+import { buildOilChangeAlertRows, type OilChangeAlertRow } from "@/lib/operations";
+import { formatCurrency, formatDate, formatNumber, normalizeVehicleRegistration } from "@/lib/utils";
 import type {
   BankTransferWithDriver,
   Driver,
+  DriverVehicleType,
   FuelLogWithDriver,
-  ShipmentWithDriver,
+  OilChangeBaseline,
   Vehicle,
   WeeklyMileageEntry
 } from "@/types/database";
 
-function isWithinRange(value: string, startDate: string, endDate: string) {
-  if (!value) return false;
-  if (startDate && value < startDate) return false;
-  if (endDate && value > endDate) return false;
-  return true;
+type AttentionTone = "danger" | "warning" | "info";
+
+type AttentionItem = {
+  count: number;
+  detail: string;
+  key: string;
+  title: string;
+  tone: AttentionTone;
+};
+
+type EfficiencyStats = {
+  averageKmPerLitre: number | null;
+  validRecordCount: number;
+  warnings: Array<{
+    log: FuelLogWithDriver;
+    kmDriven: number;
+    kmPerLitre: number;
+  }>;
+};
+
+type MonthRange = {
+  endDate: string;
+  monthKey: string;
+  startDate: string;
+};
+
+function pad2(value: number) {
+  return String(value).padStart(2, "0");
 }
 
-function getMonthKey(value = new Date()) {
-  return value.toISOString().slice(0, 7);
+function getLocalDateKey(value: Date) {
+  return `${value.getFullYear()}-${pad2(value.getMonth() + 1)}-${pad2(value.getDate())}`;
 }
 
-function startOfWeekKey(value = new Date(), offsetWeeks = 0) {
-  const date = new Date(value);
-  date.setHours(0, 0, 0, 0);
-  const day = date.getDay();
-  const mondayOffset = day === 0 ? -6 : 1 - day;
-  date.setDate(date.getDate() + mondayOffset + offsetWeeks * 7);
-  return date.toISOString().slice(0, 10);
+function getLocalMonthKey(value: Date) {
+  return `${value.getFullYear()}-${pad2(value.getMonth() + 1)}`;
 }
 
-function endOfWeekKey(value = new Date(), offsetWeeks = 0) {
-  const start = new Date(`${startOfWeekKey(value, offsetWeeks)}T00:00:00`);
-  start.setDate(start.getDate() + 6);
-  return start.toISOString().slice(0, 10);
+function getCurrentMonthKey() {
+  return getLocalMonthKey(new Date());
 }
 
-function percentChange(current: number, previous: number) {
-  if (!previous) return current ? 100 : 0;
-  return ((current - previous) / previous) * 100;
+function getMonthRange(monthKey: string): MonthRange {
+  const [yearText, monthText] = monthKey.split("-");
+  const year = Number(yearText);
+  const monthIndex = Number(monthText) - 1;
+  const safeDate =
+    Number.isFinite(year) && Number.isFinite(monthIndex)
+      ? new Date(year, monthIndex, 1)
+      : new Date();
+  const start = new Date(safeDate.getFullYear(), safeDate.getMonth(), 1);
+  const end = new Date(safeDate.getFullYear(), safeDate.getMonth() + 1, 0);
+
+  return {
+    monthKey: getLocalMonthKey(start),
+    startDate: getLocalDateKey(start),
+    endDate: getLocalDateKey(end)
+  };
 }
 
-function normalizeDuplicateKey(log: FuelLogWithDriver) {
+function shiftMonth(monthKey: string, offset: number) {
+  const range = getMonthRange(monthKey);
+  const [yearText, monthText] = range.monthKey.split("-");
+  const date = new Date(Number(yearText), Number(monthText) - 1 + offset, 1);
+  return getLocalMonthKey(date);
+}
+
+function isInRange(date: string | null | undefined, startDate: string, endDate: string) {
+  return Boolean(date) && date! >= startDate && date! <= endDate;
+}
+
+function getSafeNumber(value: unknown) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+const normalizeOilReg = (value: unknown) =>
+  String(value ?? "")
+    .trim()
+    .replace(/\s+/g, "")
+    .replace(/-/g, "")
+    .toUpperCase();
+
+function getMileageValue(value: number | null | undefined) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
+}
+
+function getFuelLogMileage(log: FuelLogWithDriver | null | undefined) {
+  if (!log) return null;
+  return getMileageValue(log.mileage ?? log.odometer);
+}
+
+function getFuelLogDuplicateKey(log: FuelLogWithDriver) {
   return [
     log.date,
-    String(log.driver_id || ""),
+    normalizeVehicleRegistration(log.vehicle_reg),
     Number(log.litres || 0).toFixed(2),
-    Number(log.total_cost || 0).toFixed(2)
+    Number(log.total_cost || 0).toFixed(2),
+    String(log.driver_id || "")
   ].join("::");
 }
 
-const KpiCard = memo(function KpiCard({
+function buildVehicleTypeLookup(vehicles: Vehicle[], drivers: Driver[]) {
+  const lookup = new Map<string, string>();
+
+  for (const vehicle of vehicles) {
+    const key = normalizeVehicleRegistration(vehicle.vehicle_reg || vehicle.registration);
+    if (key && vehicle.vehicle_type) {
+      lookup.set(key, String(vehicle.vehicle_type));
+    }
+  }
+
+  for (const driver of drivers) {
+    const key = normalizeVehicleRegistration(driver.vehicle_reg);
+    if (key && driver.vehicle_type && !lookup.has(key)) {
+      lookup.set(key, String(driver.vehicle_type));
+    }
+  }
+
+  return lookup;
+}
+
+function getKmPerLitreThresholds(vehicleType: string | null | undefined) {
+  const type = String(vehicleType ?? "").toUpperCase() as DriverVehicleType | string;
+  if (type === "FOUR_WHEEL_TRUCK") return { low: 3, high: 14 };
+  if (type === "EIGHTEEN_WHEELER") return { low: 1.2, high: 5.5 };
+  if (type === "SIX_WHEEL_TRUCK" || type === "SIX_PLUS_SIX_WHEELER") return { low: 1.5, high: 8 };
+  return { low: 1.5, high: 8 };
+}
+
+function buildEfficiencyStats({
+  allLogs,
+  monthlyLogs,
+  vehicleTypeLookup
+}: {
+  allLogs: FuelLogWithDriver[];
+  monthlyLogs: FuelLogWithDriver[];
+  vehicleTypeLookup: Map<string, string>;
+}): EfficiencyStats {
+  const monthlyIds = new Set(monthlyLogs.map((log) => String(log.id)));
+  const duplicateCounts = new Map<string, number>();
+  for (const log of allLogs) {
+    const key = getFuelLogDuplicateKey(log);
+    duplicateCounts.set(key, (duplicateCounts.get(key) ?? 0) + 1);
+  }
+
+  const previousByVehicle = new Map<string, FuelLogWithDriver>();
+  const warnings: EfficiencyStats["warnings"] = [];
+  const validValues: number[] = [];
+
+  for (const log of [...allLogs].sort((left, right) => {
+    const dateDiff = left.date.localeCompare(right.date);
+    if (dateDiff !== 0) return dateDiff;
+    return String(left.id).localeCompare(String(right.id));
+  })) {
+    const vehicleKey = normalizeVehicleRegistration(log.vehicle_reg);
+    const currentMileage = getFuelLogMileage(log);
+    const litres = Number(log.litres || 0);
+    const previous = vehicleKey ? previousByVehicle.get(vehicleKey) : null;
+    const previousMileage = getFuelLogMileage(previous);
+
+    if (vehicleKey && currentMileage != null) {
+      previousByVehicle.set(vehicleKey, log);
+    }
+
+    if (!monthlyIds.has(String(log.id))) {
+      continue;
+    }
+
+    if (
+      !vehicleKey ||
+      currentMileage == null ||
+      previousMileage == null ||
+      litres <= 0 ||
+      currentMileage <= previousMileage ||
+      (duplicateCounts.get(getFuelLogDuplicateKey(log)) ?? 0) > 1
+    ) {
+      continue;
+    }
+
+    const kmDriven = currentMileage - previousMileage;
+    if (kmDriven < 50 || kmDriven > 2000) {
+      continue;
+    }
+
+    const kmPerLitre = kmDriven / litres;
+    if (!Number.isFinite(kmPerLitre)) {
+      continue;
+    }
+
+    const thresholds = getKmPerLitreThresholds(vehicleTypeLookup.get(vehicleKey));
+    if (kmPerLitre < thresholds.low || kmPerLitre > thresholds.high) {
+      warnings.push({ log, kmDriven, kmPerLitre });
+      continue;
+    }
+
+    validValues.push(kmPerLitre);
+  }
+
+  return {
+    averageKmPerLitre:
+      validValues.length >= 3
+        ? validValues.reduce((sum, value) => sum + value, 0) / validValues.length
+        : null,
+    validRecordCount: validValues.length,
+    warnings: warnings.sort((left, right) => right.log.date.localeCompare(left.log.date)).slice(0, 20)
+  };
+}
+
+function hasMissingFuelDetails(log: FuelLogWithDriver) {
+  return (
+    !String(log.date || "").trim() ||
+    !String(log.vehicle_reg || "").trim() ||
+    !String(log.location || log.station || "").trim() ||
+    getSafeNumber(log.litres) <= 0 ||
+    getSafeNumber(log.total_cost) <= 0 ||
+    getFuelLogMileage(log) == null
+  );
+}
+
+function applyOilBaselinesLikeOilPage(vehicles: Vehicle[], baselines: OilChangeBaseline[]) {
+  return vehicles.map((vehicle) => {
+    const baselineForVehicle = baselines.find(
+      (baseline) => normalizeOilReg(baseline.vehicle_reg) === normalizeOilReg(vehicle.vehicle_reg)
+    );
+
+    if (!baselineForVehicle) {
+      return vehicle;
+    }
+
+    return {
+      ...vehicle,
+      last_oil_change_date: baselineForVehicle.last_oil_change_date,
+      last_oil_change_odometer: Number(baselineForVehicle.last_odometer),
+      oil_change_interval_km: Number(baselineForVehicle.interval_km)
+    };
+  });
+}
+
+function hasReliableOilBaseline(row: OilChangeAlertRow) {
+  return (
+    row.lastOilChangeOdometer != null &&
+    row.oilChangeIntervalKm != null &&
+    row.currentOdometer != null &&
+    row.currentOdometer >= row.lastOilChangeOdometer &&
+    row.nextOilChangeDueOdometer != null
+  );
+}
+
+function getOilAttentionRows(rows: OilChangeAlertRow[]) {
+  return rows.filter((row) => {
+    if (row.status === "not_set") return true;
+    if (row.status === "review_required") return true;
+    if (!hasReliableOilBaseline(row)) return false;
+    return row.status === "overdue" || row.status === "urgent" || row.status === "due_soon";
+  });
+}
+
+function StatusBadge({ checked }: { checked: boolean }) {
+  return (
+    <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${checked ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-100 text-slate-600"}`}>
+      {checked ? "Checked" : "Not Checked"}
+    </span>
+  );
+}
+
+const SummaryCard = memo(function SummaryCard({
   label,
   value,
   helper,
@@ -86,20 +328,65 @@ const KpiCard = memo(function KpiCard({
   );
 });
 
+function AttentionRow({ item }: { item: AttentionItem }) {
+  const toneClass =
+    item.tone === "danger"
+      ? "border-l-rose-500 bg-rose-50/70"
+      : item.tone === "warning"
+        ? "border-l-amber-500 bg-amber-50/70"
+        : "border-l-sky-500 bg-sky-50/70";
+
+  return (
+    <div className={`rounded-lg border border-slate-200 border-l-4 px-3.5 py-2.5 ${toneClass}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-slate-950">{item.title}</p>
+          <p className="mt-0.5 text-xs leading-5 text-slate-600">{item.detail}</p>
+        </div>
+        <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm">
+          {item.count}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { language, t } = useLanguage();
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [oilChangeBaselines, setOilChangeBaselines] = useState<OilChangeBaseline[]>([]);
   const [fuelLogs, setFuelLogs] = useState<FuelLogWithDriver[]>([]);
   const [transfers, setTransfers] = useState<BankTransferWithDriver[]>([]);
   const [weeklyMileage, setWeeklyMileage] = useState<WeeklyMileageEntry[]>([]);
-  const [shipments, setShipments] = useState<ShipmentWithDriver[]>([]);
-  const [selectedDriverId, setSelectedDriverId] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState(() => getCurrentMonthKey());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const copy = {
+    allIssues: language === "th" ? "View all issues" : "View all issues",
+    avgKmPerLitre: language === "th" ? "Average km/L" : "Average km/L",
+    currentMonth: language === "th" ? "Current month" : "Current month",
+    dateRange: language === "th" ? "Date range" : "Date range",
+    dueSoon: language === "th" ? "Due Soon" : "Due Soon",
+    latestFuel: language === "th" ? "Latest 5 fuel entries" : "Latest 5 fuel entries",
+    latestTransfers: language === "th" ? "Latest 5 bank transfers" : "Latest 5 bank transfers",
+    monthFuelSpend: language === "th" ? "This month fuel spend" : "This month fuel spend",
+    monthTransfers: language === "th" ? "This month bank transfers" : "This month bank transfers",
+    needsAttention: language === "th" ? "Needs Attention" : "Needs Attention",
+    needsBaseline: language === "th" ? "Needs baseline" : "Needs baseline",
+    noAttention: language === "th" ? "No urgent review items found for this month." : "No urgent review items found for this month.",
+    noFuel: language === "th" ? "No fuel entries for this month." : "No fuel entries for this month.",
+    noTransfers: language === "th" ? "No bank transfers for this month." : "No bank transfers for this month.",
+    notEnoughValidData: language === "th" ? "Not enough valid data" : "Not enough valid data",
+    oilDue: language === "th" ? "Oil changes due or overdue" : "Oil changes due or overdue",
+    overdue: language === "th" ? "Overdue" : "Overdue",
+    previousMonth: language === "th" ? "Previous month" : "Previous month",
+    selectedMonth: language === "th" ? "Selected month" : "Selected month",
+    totalOutflow: language === "th" ? "Total monthly outflow" : "Total monthly outflow",
+    unchecked: language === "th" ? "Unchecked records" : "Unchecked records"
+  };
 
   const loadData = useCallback(
     async (showBlockingLoader = false) => {
@@ -111,32 +398,23 @@ export default function DashboardPage() {
         }
         setError(null);
 
-        const [driverRows, vehicleRows, fuelRows, transferRows, mileageRows, shipmentRows] = await Promise.all([
+        const [driverRows, vehicleRows, fuelRows, transferRows, mileageRows] = await Promise.all([
           fetchDrivers(),
           fetchVehicles(),
           fetchFuelLogs(),
           fetchTransfers(),
-          fetchWeeklyMileage(),
-          fetchShipments()
+          fetchWeeklyMileage()
         ]);
-
-        console.log("Dashboard load success", {
-          drivers: driverRows.length,
-          vehicles: vehicleRows.length,
-          fuelLogs: fuelRows.length,
-          transfers: transferRows.length,
-          weeklyMileage: mileageRows.length,
-          shipments: shipmentRows.length
-        });
+        const baselineRows = await fetchOilChangeBaselinesForVehicles(vehicleRows);
 
         setDrivers(driverRows);
         setVehicles(vehicleRows);
+        setOilChangeBaselines(baselineRows);
         setFuelLogs(fuelRows);
         setTransfers(transferRows);
         setWeeklyMileage(mileageRows);
-        setShipments(shipmentRows);
-      } catch (error) {
-        console.error("Dashboard load error:", error);
+      } catch (err) {
+        console.error("Dashboard load error:", err);
         setError(t.dashboard.loadDashboardError);
       } finally {
         setLoading(false);
@@ -159,223 +437,203 @@ export default function DashboardPage() {
     return () => window.removeEventListener("fuel-bank:data-changed", handleDataChanged);
   }, [loadData]);
 
-  const filteredFuelLogs = useMemo(
-    () =>
-      fuelLogs.filter((log) => {
-        const driverMatch =
-          !selectedDriverId || String(log.driver_id || "") === String(selectedDriverId);
-        return driverMatch && isWithinRange(log.date, startDate, endDate);
-      }),
-    [endDate, fuelLogs, selectedDriverId, startDate]
+  const monthRange = useMemo(() => getMonthRange(selectedMonth), [selectedMonth]);
+  const dateRangeLabel = `${formatDate(monthRange.startDate, language)} - ${formatDate(monthRange.endDate, language)}`;
+  const monthlyFuelLogs = useMemo(
+    () => fuelLogs.filter((log) => isInRange(log.date, monthRange.startDate, monthRange.endDate)),
+    [fuelLogs, monthRange.endDate, monthRange.startDate]
+  );
+  const monthlyTransfers = useMemo(
+    () => transfers.filter((transfer) => isInRange(transfer.date, monthRange.startDate, monthRange.endDate)),
+    [monthRange.endDate, monthRange.startDate, transfers]
+  );
+  const vehicleTypeLookup = useMemo(
+    () => buildVehicleTypeLookup(vehicles, drivers),
+    [drivers, vehicles]
+  );
+  const vehiclesWithOilBaselines = useMemo(
+    () => applyOilBaselinesLikeOilPage(vehicles, oilChangeBaselines),
+    [oilChangeBaselines, vehicles]
   );
 
-  const filteredTransfers = useMemo(
-    () =>
-      transfers.filter((transfer) => {
-        const driverMatch =
-          !selectedDriverId || String(transfer.driver_id || "") === String(selectedDriverId);
-        return driverMatch && isWithinRange(transfer.date, startDate, endDate);
-      }),
-    [endDate, selectedDriverId, startDate, transfers]
+  const oilRows = useMemo(
+    () => buildOilChangeAlertRows({ vehicles: vehiclesWithOilBaselines, weeklyMileage, drivers }),
+    [drivers, vehiclesWithOilBaselines, weeklyMileage]
+  );
+  const oilAttentionRows = useMemo(() => getOilAttentionRows(oilRows), [oilRows]);
+  const oilDueRows = oilAttentionRows.filter((row) =>
+    hasReliableOilBaseline(row) &&
+    (row.status === "overdue" || row.status === "urgent" || row.status === "due_soon")
   );
 
-  const filteredWeeklyMileage = useMemo(
-    () =>
-      weeklyMileage.filter((entry) => {
-        const driverMatch =
-          !selectedDriverId || String(entry.driver_id || "") === String(selectedDriverId);
-        return driverMatch && isWithinRange(entry.week_ending, startDate, endDate);
-      }),
-    [endDate, selectedDriverId, startDate, weeklyMileage]
+  const monthlyFuelSpend = monthlyFuelLogs.reduce((sum, log) => sum + getSafeNumber(log.total_cost), 0);
+  const monthlyTransferTotal = monthlyTransfers.reduce((sum, transfer) => sum + getSafeNumber(transfer.amount), 0);
+  const efficiencyStats = useMemo(
+    () => buildEfficiencyStats({ allLogs: fuelLogs, monthlyLogs: monthlyFuelLogs, vehicleTypeLookup }),
+    [fuelLogs, monthlyFuelLogs, vehicleTypeLookup]
   );
-
-  const filteredShipments = useMemo(
-    () =>
-      shipments.filter((shipment) => {
-        const driverMatch =
-          !selectedDriverId || String(shipment.driver_id || "") === String(selectedDriverId);
-        return driverMatch && isWithinRange(shipment.shipment_date, startDate, endDate);
-      }),
-    [endDate, selectedDriverId, shipments, startDate]
-  );
-
-  const weeklySummaryRows = useMemo(
-    () => buildWeeklyMileageSummary(filteredWeeklyMileage),
-    [filteredWeeklyMileage]
-  );
-  const latestWeekRow = weeklySummaryRows[0] ?? null;
-  const totalFuelSpend = filteredFuelLogs.reduce((sum, log) => sum + Number(log.total_cost || 0), 0);
-  const totalFuelLitres = filteredFuelLogs.reduce((sum, log) => sum + Number(log.litres || 0), 0);
-  const totalTransfers = filteredTransfers.reduce(
-    (sum, transfer) => sum + Number(transfer.amount || 0),
-    0
-  );
-  const averagePricePerLitre = totalFuelLitres > 0 ? totalFuelSpend / totalFuelLitres : null;
-  const currentWeeklyDistance = latestWeekRow?.weeklyDistance ?? 0;
+  const uncheckedFuelCount = monthlyFuelLogs.filter((log) => !log.receipt_checked).length;
+  const uncheckedTransferCount = monthlyTransfers.filter((transfer) => transfer.receipt_status !== "approved").length;
+  const uncheckedRecords = uncheckedFuelCount + uncheckedTransferCount;
+  const missingFuelRows = monthlyFuelLogs.filter(hasMissingFuelDetails);
 
   const latestFuelLogs = useMemo(
     () =>
-      [...filteredFuelLogs]
-        .sort(
-          (left, right) =>
-            right.date.localeCompare(left.date) || String(right.id).localeCompare(String(left.id))
-        )
+      [...monthlyFuelLogs]
+        .sort((left, right) => right.date.localeCompare(left.date) || String(right.id).localeCompare(String(left.id)))
         .slice(0, 5),
-    [filteredFuelLogs]
+    [monthlyFuelLogs]
   );
-
   const latestTransfers = useMemo(
     () =>
-      [...filteredTransfers]
-        .sort(
-          (left, right) =>
-            right.date.localeCompare(left.date) || String(right.id).localeCompare(String(left.id))
-        )
+      [...monthlyTransfers]
+        .sort((left, right) => right.date.localeCompare(left.date) || String(right.id).localeCompare(String(left.id)))
         .slice(0, 5),
-    [filteredTransfers]
+    [monthlyTransfers]
   );
 
-  const oilChangeRows = useMemo(
-    () => buildOilChangeAlertRows({ vehicles, weeklyMileage, drivers }),
-    [drivers, vehicles, weeklyMileage]
-  );
-  const oilDueSoonRows = oilChangeRows.filter((row) => row.status === "due_soon");
-  const oilUrgentRows = oilChangeRows.filter((row) => row.status === "urgent");
-  const oilOverdueRows = oilChangeRows.filter((row) => row.status === "overdue");
-  const oilReviewRows = oilChangeRows.filter((row) => row.status === "review_required");
-  const oilActionRows = oilChangeRows
-    .filter((row) => row.status === "overdue" || row.status === "urgent" || row.status === "due_soon" || row.status === "review_required")
-    .slice(0, 4);
+  const attentionItems = useMemo(() => {
+    const items: AttentionItem[] = [];
+    const oilOverdueCount = oilDueRows.filter((row) => row.status === "overdue").length;
+    const oilDueSoonCount = oilDueRows.length - oilOverdueCount;
+    const needsBaselineCount = oilAttentionRows.filter((row) => row.status === "not_set" || !hasReliableOilBaseline(row)).length;
 
-  const completedServiceThisMonth = useMemo(() => {
-    const currentMonth = getMonthKey();
-    return vehicles.filter((vehicle) => vehicle.last_oil_change_date?.startsWith(currentMonth)).length;
-  }, [vehicles]);
-
-  const duplicateSuspicionCount = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const log of filteredFuelLogs) {
-      const key = normalizeDuplicateKey(log);
-      counts.set(key, (counts.get(key) ?? 0) + 1);
+    if (oilDueRows.length || needsBaselineCount) {
+      const firstOil = oilDueRows[0] ?? oilAttentionRows[0];
+      const detail = firstOil
+        ? firstOil.status === "overdue" && firstOil.overdueKm != null
+          ? `${firstOil.registration}: ${formatNumber(firstOil.overdueKm, language)} KM overdue`
+          : firstOil.status === "not_set"
+            ? `${firstOil.registration}: ${copy.needsBaseline}`
+            : `${firstOil.registration}: ${formatNumber(firstOil.kmRemaining ?? 0, language)} KM remaining`
+        : "";
+      items.push({
+        count: oilDueRows.length + needsBaselineCount,
+        detail: [
+          oilOverdueCount ? `${formatNumber(oilOverdueCount, language)} ${copy.overdue}` : "",
+          oilDueSoonCount ? `${formatNumber(oilDueSoonCount, language)} ${copy.dueSoon}` : "",
+          needsBaselineCount ? `${formatNumber(needsBaselineCount, language)} ${copy.needsBaseline}` : "",
+          detail
+        ].filter(Boolean).join(" | "),
+        key: "oil",
+        title: copy.oilDue,
+        tone: oilOverdueCount ? "danger" : "warning"
+      });
     }
-    return Array.from(counts.values()).filter((count) => count > 1).reduce((sum, count) => sum + count, 0);
-  }, [filteredFuelLogs]);
 
-  const uncheckedFuelLogs = filteredFuelLogs.filter((log) => !log.receipt_checked);
-  const highValueThreshold =
-    filteredFuelLogs.length > 0
-      ? totalFuelSpend / filteredFuelLogs.length * 1.6
-      : Number.POSITIVE_INFINITY;
-  const missingReceiptReviewAlerts = uncheckedFuelLogs.filter((log) => Number(log.total_cost || 0) >= highValueThreshold).length;
-
-  const normalizedShipments = useMemo(
-    () => filteredShipments.map((shipment) => normalizeShipment(shipment)),
-    [filteredShipments]
-  );
-  const currentMonth = getMonthKey();
-  const shipmentsThisMonth = normalizedShipments.filter((shipment) => shipment.shipmentDate.startsWith(currentMonth));
-  const totalEstimatedProfit = shipmentsThisMonth.reduce((sum, shipment) => sum + Number(shipment.profit ?? 0), 0);
-  const highestProfitShipment = [...shipmentsThisMonth]
-    .filter((shipment) => shipment.profit != null)
-    .sort((left, right) => Number(right.profit) - Number(left.profit))[0] ?? null;
-  const lowestMarginShipment = [...shipmentsThisMonth]
-    .filter((shipment) => shipment.marginPercent != null)
-    .sort((left, right) => Number(left.marginPercent) - Number(right.marginPercent))[0] ?? null;
-  const jobsPendingQuotation = normalizedShipments.filter((shipment) => shipment.status === "Draft" || shipment.quotePrice == null).length;
-
-  const currentWeekStart = startOfWeekKey();
-  const currentWeekEnd = endOfWeekKey();
-  const previousWeekStart = startOfWeekKey(new Date(), -1);
-  const previousWeekEnd = endOfWeekKey(new Date(), -1);
-  const currentWeekFuel = filteredFuelLogs
-    .filter((log) => log.date >= currentWeekStart && log.date <= currentWeekEnd)
-    .reduce((sum, log) => sum + Number(log.total_cost || 0), 0);
-  const previousWeekFuel = filteredFuelLogs
-    .filter((log) => log.date >= previousWeekStart && log.date <= previousWeekEnd)
-    .reduce((sum, log) => sum + Number(log.total_cost || 0), 0);
-  const currentWeekTransfers = filteredTransfers
-    .filter((transfer) => transfer.date >= currentWeekStart && transfer.date <= currentWeekEnd)
-    .reduce((sum, transfer) => sum + Number(transfer.amount || 0), 0);
-  const previousWeekTransfers = filteredTransfers
-    .filter((transfer) => transfer.date >= previousWeekStart && transfer.date <= previousWeekEnd)
-    .reduce((sum, transfer) => sum + Number(transfer.amount || 0), 0);
-  const previousWeekRow = weeklySummaryRows[1] ?? null;
-
-  const executiveCopy = {
-    en: {
-      receiptReconciliation: "Receipt Reconciliation Summary",
-      shipmentProfit: "Shipment Profit Snapshot",
-      serviceManagement: "Service Management Summary",
-      weeklyComparison: "This Week vs Last Week",
-      totalFuelLogs: "Total fuel logs",
-      checkedReceipts: "Checked receipts",
-      uncheckedReceipts: "Unchecked receipts",
-      duplicateSuspicion: "Duplicate suspicion",
-      missingReceiptAlerts: "Missing receipt review alerts",
-      jobsThisMonth: "Jobs this month",
-      totalProfit: "Total estimated profit",
-      highestProfit: "Highest profit shipment",
-      lowestMargin: "Lowest margin shipment",
-      pendingQuote: "Jobs pending quotation",
-      overdue: "Overdue oil changes",
-      urgent: "Urgent upcoming services",
-      dueSoon: "Vehicles due soon",
-      completedMonth: "Service completed this month",
-      fuelSpendChange: "Fuel spend change",
-      mileageChange: "Mileage change",
-      transferChange: "Transfer cost change",
-      noData: "No data yet"
-    },
-    th: {
-      receiptReconciliation: "สรุปตรวจใบเสร็จ",
-      shipmentProfit: "ภาพรวมกำไรงานขนส่ง",
-      serviceManagement: "สรุปงานบริการ",
-      weeklyComparison: "สัปดาห์นี้เทียบสัปดาห์ก่อน",
-      totalFuelLogs: "รายการน้ำมันทั้งหมด",
-      checkedReceipts: "ใบเสร็จตรวจแล้ว",
-      uncheckedReceipts: "ใบเสร็จยังไม่ตรวจ",
-      duplicateSuspicion: "รายการที่อาจซ้ำ",
-      missingReceiptAlerts: "เตือนตรวจใบเสร็จ",
-      jobsThisMonth: "งานเดือนนี้",
-      totalProfit: "กำไรประมาณการรวม",
-      highestProfit: "งานกำไรสูงสุด",
-      lowestMargin: "งานมาร์จิ้นต่ำสุด",
-      pendingQuote: "งานรอเสนอราคา",
-      overdue: "เปลี่ยนน้ำมันเกินกำหนด",
-      urgent: "งานบริการเร่งด่วน",
-      dueSoon: "รถใกล้ถึงกำหนด",
-      completedMonth: "บริการเสร็จในเดือนนี้",
-      fuelSpendChange: "การเปลี่ยนแปลงค่าน้ำมัน",
-      mileageChange: "การเปลี่ยนแปลงระยะทาง",
-      transferChange: "การเปลี่ยนแปลงเงินโอน",
-      noData: "ยังไม่มีข้อมูล"
+    if (missingFuelRows.length) {
+      items.push({
+        count: missingFuelRows.length,
+        detail: "Missing mileage, litres, cost, driver, vehicle, or station.",
+        key: "missing-fuel-fields",
+        title: "Missing fuel log details",
+        tone: "warning"
+      });
     }
-  }[language];
 
-  const kpiCards = [
+    if (uncheckedFuelCount) {
+      items.push({
+        count: uncheckedFuelCount,
+        detail: "Fuel records in this month are still Not Checked.",
+        key: "unchecked-fuel",
+        title: "Fuel logs not checked",
+        tone: "info"
+      });
+    }
+
+    if (uncheckedTransferCount) {
+      items.push({
+        count: uncheckedTransferCount,
+        detail: "Bank transfers in this month are still Not Checked.",
+        key: "unchecked-transfers",
+        title: "Bank transfers not checked",
+        tone: "info"
+      });
+    }
+
+    return items;
+  }, [copy.dueSoon, copy.needsBaseline, copy.oilDue, copy.overdue, language, missingFuelRows.length, oilAttentionRows, oilDueRows, uncheckedFuelCount, uncheckedTransferCount]);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV === "production") {
+      return;
+    }
+
+    console.info("Dashboard calculation debug", {
+      selectedMonthStart: monthRange.startDate,
+      selectedMonthEnd: monthRange.endDate,
+      fuelLogsLoaded: fuelLogs.length,
+      monthlyFuelLogs: monthlyFuelLogs.length,
+      fuelSpendCalculated: monthlyFuelSpend,
+      bankTransfersLoaded: transfers.length,
+      monthlyBankTransfers: monthlyTransfers.length,
+      bankTransferTotalCalculated: monthlyTransferTotal,
+      uncheckedFuelCount,
+      uncheckedTransferCount,
+      averageKmPerLitreValidRecordCount: efficiencyStats.validRecordCount,
+      suspiciousKmPerLitreCountHidden: efficiencyStats.warnings.length,
+      oilChangeItemsCount: oilDueRows.length,
+      oilBaselineCount: oilChangeBaselines.length
+    });
+  }, [
+    efficiencyStats.validRecordCount,
+    efficiencyStats.warnings.length,
+    fuelLogs.length,
+    monthlyFuelLogs.length,
+    monthlyFuelSpend,
+    monthlyTransferTotal,
+    monthlyTransfers.length,
+    monthRange.endDate,
+    monthRange.startDate,
+    oilChangeBaselines.length,
+    oilDueRows.length,
+    transfers.length,
+    uncheckedFuelCount,
+    uncheckedTransferCount
+  ]);
+
+  const visibleAttentionItems = attentionItems.slice(0, 5);
+  const hiddenAttentionItems = attentionItems.slice(5);
+
+  const summaryCards = [
     {
-      label: t.dashboard.totalFuelSpend,
-      value: formatCurrency(totalFuelSpend, language),
-      helper: `${formatNumber(filteredFuelLogs.length, language)} ${t.dashboard.fuelHelper}`,
-      icon: Wallet
-    },
-    {
-      label: t.dashboard.averagePricePerLitre,
-      value: averagePricePerLitre != null ? formatCurrency(averagePricePerLitre, language) : "-",
-      helper: t.dashboard.basedOnFilteredFuelEntries,
+      label: copy.monthFuelSpend,
+      value: formatCurrency(monthlyFuelSpend, language),
+      helper: `${formatNumber(monthlyFuelLogs.length, language)} fuel entries | ${dateRangeLabel}`,
       icon: Fuel
     },
     {
-      label: t.dashboard.weeklyDistance,
-      value: formatNumber(currentWeeklyDistance, language),
-      helper: latestWeekRow ? formatDate(latestWeekRow.weekEnding, language) : t.dashboard.noMileageDataDescription,
-      icon: Truck
+      label: copy.monthTransfers,
+      value: formatCurrency(monthlyTransferTotal, language),
+      helper: `${formatNumber(monthlyTransfers.length, language)} transfers | ${dateRangeLabel}`,
+      icon: ArrowRightLeft
     },
     {
-      label: t.dashboard.totalTransfers,
-      value: formatCurrency(totalTransfers, language),
-      helper: `${formatNumber(filteredTransfers.length, language)} ${t.dashboard.transferHelper}`,
-      icon: ArrowRightLeft
+      label: copy.totalOutflow,
+      value: formatCurrency(monthlyFuelSpend + monthlyTransferTotal, language),
+      helper: dateRangeLabel,
+      icon: Wallet
+    },
+    {
+      label: copy.avgKmPerLitre,
+      value:
+        efficiencyStats.averageKmPerLitre != null
+          ? formatNumber(efficiencyStats.averageKmPerLitre, language, 2)
+          : copy.notEnoughValidData,
+      helper: `${formatNumber(efficiencyStats.validRecordCount, language)} valid records this month`,
+      icon: Gauge
+    },
+    {
+      label: copy.oilDue,
+      value: formatNumber(oilDueRows.length, language),
+      helper: `${formatNumber(oilAttentionRows.filter((row) => row.status === "not_set").length, language)} need baseline`,
+      icon: Droplet
+    },
+    {
+      label: copy.unchecked,
+      value: formatNumber(uncheckedRecords, language),
+      helper: `${formatNumber(uncheckedFuelCount, language)} fuel, ${formatNumber(uncheckedTransferCount, language)} transfers | ${monthRange.monthKey}`,
+      icon: CheckCircle2
     }
   ];
 
@@ -385,316 +643,101 @@ export default function DashboardPage() {
         <Header title={t.dashboard.title} description={t.dashboard.description} />
       </div>
 
-      <section className="surface-card p-4 sm:p-5">
-        <div className="mb-4 flex flex-col gap-3.5 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h3 className="text-base font-semibold text-slate-900">{t.dashboard.filtersTitle}</h3>
-            <p className="mt-1 text-sm text-slate-500">{t.dashboard.filtersDescription}</p>
-          </div>
-          <div className="flex items-center gap-3">
-            {refreshing ? <span className="loading-inline">{t.common.loading}</span> : null}
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedDriverId("");
-                setStartDate("");
-                setEndDate("");
-              }}
-              className="btn-secondary w-full sm:w-auto"
-            >
-              {t.dashboard.resetFilters}
-            </button>
-          </div>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-3">
-          <div className="space-y-2">
-            <label className="form-label">{t.dashboard.driverFilter}</label>
-            <select value={selectedDriverId} onChange={(event) => setSelectedDriverId(event.target.value)}>
-              <option value="">{t.dashboard.allDrivers}</option>
-              {drivers.map((driver) => (
-                <option key={driver.id} value={String(driver.id)}>
-                  {driver.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-2">
-            <label className="form-label">{t.dashboard.startDate}</label>
-            <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <label className="form-label">{t.dashboard.endDate}</label>
-            <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
-          </div>
-        </div>
-      </section>
-
-      {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+      {error ? <p className="mb-4 text-sm text-rose-600">{error}</p> : null}
 
       {loading ? (
-        <EmptyState title={t.common.loading} description={t.dashboard.loadingData} />
+        <section className="surface-card p-5 text-sm text-slate-500">{t.common.loading}</section>
       ) : (
         <>
-          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {kpiCards.map((card) => (
-              <KpiCard key={card.label} {...card} />
+          <section className="surface-card p-4 sm:p-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <h3 className="section-title">{copy.selectedMonth}</h3>
+                <p className="section-subtitle">{copy.dateRange}: {dateRangeLabel}</p>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-[auto_auto_auto] sm:items-end">
+                <button type="button" onClick={() => setSelectedMonth(getCurrentMonthKey())} className="btn-secondary">
+                  {copy.currentMonth}
+                </button>
+                <button type="button" onClick={() => setSelectedMonth((month) => shiftMonth(month, -1))} className="btn-secondary">
+                  {copy.previousMonth}
+                </button>
+                <label className="min-w-[170px]">
+                  <span className="form-label">{copy.selectedMonth}</span>
+                  <input
+                    type="month"
+                    value={monthRange.monthKey}
+                    onChange={(event) => setSelectedMonth(event.target.value || getCurrentMonthKey())}
+                    className="form-input bg-white"
+                  />
+                </label>
+              </div>
+            </div>
+          </section>
+
+          <section className="mt-5 surface-card p-4 sm:p-5">
+            <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="section-title">{copy.needsAttention}</h3>
+                <p className="section-subtitle">{dateRangeLabel}</p>
+              </div>
+              {refreshing ? (
+                <span className="inline-flex items-center gap-2 text-xs font-semibold text-slate-500">
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  {t.common.loading}
+                </span>
+              ) : null}
+            </div>
+            {visibleAttentionItems.length ? (
+              <div className="grid gap-2 lg:grid-cols-2">
+                {visibleAttentionItems.map((item) => <AttentionRow key={item.key} item={item} />)}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+                {copy.noAttention}
+              </div>
+            )}
+            {hiddenAttentionItems.length ? (
+              <details className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <summary className="cursor-pointer text-sm font-semibold text-slate-700">
+                  {copy.allIssues} ({formatNumber(hiddenAttentionItems.length, language)})
+                </summary>
+                <div className="mt-2 grid gap-2 lg:grid-cols-2">
+                  {hiddenAttentionItems.map((item) => <AttentionRow key={item.key} item={item} />)}
+                </div>
+              </details>
+            ) : null}
+          </section>
+
+          <section className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {summaryCards.map((card) => (
+              <SummaryCard key={card.label} {...card} />
             ))}
           </section>
 
-          <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-            <section className="surface-card p-4 sm:p-5">
-              <div className="mb-4 flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="section-title">{executiveCopy.receiptReconciliation}</h3>
-                  <p className="section-subtitle">{executiveCopy.missingReceiptAlerts}</p>
-                </div>
-                <ClipboardCheck className="h-5 w-5 text-brand-700" />
-              </div>
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-                {[
-                  [executiveCopy.totalFuelLogs, filteredFuelLogs.length, "text-slate-950"],
-                  [executiveCopy.checkedReceipts, filteredFuelLogs.filter((log) => log.receipt_checked).length, "text-emerald-700"],
-                  [executiveCopy.uncheckedReceipts, uncheckedFuelLogs.length, "text-amber-700"],
-                  [executiveCopy.duplicateSuspicion, duplicateSuspicionCount, "text-rose-700"],
-                  [executiveCopy.missingReceiptAlerts, missingReceiptReviewAlerts, "text-orange-700"]
-                ].map(([label, value, className]) => (
-                  <div key={String(label)} className="subtle-panel p-3.5">
-                    <p className="metric-label">{label}</p>
-                    <p className={`mt-2 text-2xl font-semibold ${className}`}>{formatNumber(Number(value), language)}</p>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="surface-card p-4 sm:p-5">
-              <div className="mb-4">
-                <h3 className="section-title">{executiveCopy.weeklyComparison}</h3>
-                <p className="section-subtitle">{formatDate(currentWeekStart, language)} - {formatDate(currentWeekEnd, language)}</p>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-3">
-                {[
-                  { label: executiveCopy.fuelSpendChange, current: currentWeekFuel, previous: previousWeekFuel, money: true },
-                  { label: executiveCopy.mileageChange, current: latestWeekRow?.weeklyDistance ?? 0, previous: previousWeekRow?.weeklyDistance ?? 0, money: false },
-                  { label: executiveCopy.transferChange, current: currentWeekTransfers, previous: previousWeekTransfers, money: true }
-                ].map((item) => {
-                  const change = percentChange(item.current, item.previous);
-                  const improving = change <= 0;
-                  return (
-                    <div key={item.label} className="subtle-panel p-3.5">
-                      <p className="metric-label">{item.label}</p>
-                      <p className="mt-2 whitespace-nowrap text-xl font-semibold text-slate-950">
-                        {item.money ? formatCurrency(item.current, language) : formatNumber(item.current, language)}
-                      </p>
-                      <p className={`mt-1 inline-flex items-center gap-1 text-xs font-semibold ${improving ? "text-emerald-700" : "text-rose-700"}`}>
-                        {improving ? <TrendingDown className="h-3.5 w-3.5" /> : <TrendingUp className="h-3.5 w-3.5" />}
-                        {formatNumber(Math.abs(change), language, 1)}%
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          </section>
-
-          <section className="surface-card p-4 sm:p-5">
-              <div className="mb-4 flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="section-title">{executiveCopy.shipmentProfit}</h3>
-                  <p className="section-subtitle">{executiveCopy.jobsThisMonth}</p>
-                </div>
-                <PackageCheck className="h-5 w-5 text-brand-700" />
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <KpiCard label={executiveCopy.jobsThisMonth} value={formatNumber(shipmentsThisMonth.length, language)} helper={executiveCopy.pendingQuote} icon={PackageCheck} />
-                <KpiCard label={executiveCopy.totalProfit} value={formatCurrency(totalEstimatedProfit, language)} helper={executiveCopy.shipmentProfit} icon={Wallet} />
-                <div className="subtle-panel p-3.5">
-                  <p className="metric-label">{executiveCopy.highestProfit}</p>
-                  <p className="mt-2 truncate text-sm font-semibold text-slate-950">{highestProfitShipment?.jobReference ?? "-"}</p>
-                  <p className="mt-1 whitespace-nowrap text-sm text-emerald-700">{highestProfitShipment?.profit != null ? formatCurrency(highestProfitShipment.profit, language) : "-"}</p>
-                </div>
-                <div className="subtle-panel p-3.5">
-                  <p className="metric-label">{executiveCopy.lowestMargin}</p>
-                  <p className="mt-2 truncate text-sm font-semibold text-slate-950">{lowestMarginShipment?.jobReference ?? "-"}</p>
-                  <p className="mt-1 whitespace-nowrap text-sm text-rose-700">{lowestMarginShipment?.marginPercent != null ? `${formatNumber(lowestMarginShipment.marginPercent, language, 1)}%` : "-"}</p>
-                </div>
-                <div className="subtle-panel p-3.5">
-                  <p className="metric-label">{executiveCopy.pendingQuote}</p>
-                  <p className="mt-2 text-2xl font-semibold text-amber-700">{formatNumber(jobsPendingQuotation, language)}</p>
-                </div>
-              </div>
-          </section>
-
-          <section className="surface-card overflow-hidden p-0">
-            <div className="border-b border-slate-100 bg-slate-950 px-5 py-4 text-white sm:px-6">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-300">{executiveCopy.serviceManagement}</p>
-                  <h3 className="mt-1 text-lg font-semibold">{t.weeklyMileage.oil.title}</h3>
-                </div>
-                <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-slate-100">
-                  <Droplet className="h-4 w-4" />
-                  {language === "th" ? "รอบบริการตามประเภทรถ" : "Type-based intervals"}
-                </div>
-              </div>
-            </div>
-
-            <div className="grid gap-0 md:grid-cols-[0.9fr_1.1fr]">
-              <div className="grid grid-cols-2 divide-x divide-y divide-slate-100 border-b border-slate-100 sm:grid-cols-3 lg:grid-cols-6 md:border-b-0 md:border-r">
-                <div className="p-4 sm:p-5">
-                  <p className="metric-label">{language === "th" ? "ทั้งหมด" : "Total"}</p>
-                  <p className="mt-2 text-2xl font-semibold text-slate-950">{formatNumber(oilChangeRows.length, language)}</p>
-                </div>
-                <div className="p-4 sm:p-5">
-                  <p className="metric-label">{executiveCopy.urgent}</p>
-                  <p className="mt-2 text-2xl font-semibold text-orange-700">{formatNumber(oilUrgentRows.length, language)}</p>
-                </div>
-                <div className="p-4 sm:p-5">
-                  <p className="metric-label">{executiveCopy.dueSoon}</p>
-                  <p className="mt-2 text-2xl font-semibold text-amber-700">{formatNumber(oilDueSoonRows.length, language)}</p>
-                </div>
-                <div className="p-4 sm:p-5">
-                  <p className="metric-label">{language === "th" ? "ตรวจสอบ" : "Review"}</p>
-                  <p className="mt-2 text-2xl font-semibold text-sky-700">{formatNumber(oilReviewRows.length, language)}</p>
-                </div>
-                <div className="p-4 sm:p-5">
-                  <p className="metric-label">{executiveCopy.overdue}</p>
-                  <p className="mt-2 text-2xl font-semibold text-rose-700">{formatNumber(oilOverdueRows.length, language)}</p>
-                </div>
-                <div className="p-4 sm:p-5">
-                  <p className="metric-label">{executiveCopy.completedMonth}</p>
-                  <p className="mt-2 text-2xl font-semibold text-emerald-700">{formatNumber(completedServiceThisMonth, language)}</p>
-                </div>
-              </div>
-
-              <div className="p-4 sm:p-5">
-                {oilActionRows.length === 0 ? (
-                  <div className="flex min-h-[96px] items-center justify-center rounded-lg border border-emerald-100 bg-emerald-50/70 px-4 text-sm font-medium text-emerald-700">
-                    {language === "th" ? "ไม่มีรถที่ใกล้ถึงกำหนดหรือเกินกำหนดในมุมมองนี้" : "No vehicles are due soon or overdue in this view."}
-                  </div>
-                ) : (
-                  <div className="space-y-2.5">
-                    {oilActionRows.map((row) => (
-                      <div key={row.registration} className="flex items-center justify-between gap-3 border-b border-slate-100 pb-2.5 last:border-b-0 last:pb-0">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-slate-950">{row.registration}</p>
-                          <p className="mt-0.5 text-xs text-slate-500">
-                            {row.status === "review_required"
-                              ? row.reviewReasons.join("; ") || (language === "th" ? "ต้องตรวจสอบ" : "Review required")
-                              : row.status === "overdue"
-                              ? `${formatNumber(row.overdueKm ?? 0, language)} KM ${language === "th" ? "เกินกำหนด" : "overdue"}`
-                              : `${formatNumber(row.kmRemaining ?? 0, language)} KM ${language === "th" ? "คงเหลือ" : "remaining"}`}
-                          </p>
-                        </div>
-                        <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold ${row.status === "overdue" ? "border-rose-200 bg-rose-50 text-rose-700" : row.status === "urgent" ? "border-orange-200 bg-orange-50 text-orange-800" : row.status === "review_required" ? "border-sky-200 bg-sky-50 text-sky-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
-                          {row.status === "overdue" ? executiveCopy.overdue : row.status === "urgent" ? executiveCopy.urgent : row.status === "review_required" ? (language === "th" ? "ตรวจสอบ" : "Review") : executiveCopy.dueSoon}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </section>
-
-          <section className="surface-card p-5 sm:p-6">
-              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <h3 className="section-title">{t.dashboard.weeklySummaryTitle}</h3>
-                  <p className="section-subtitle">{t.dashboard.weeklySummaryDescription}</p>
-                </div>
-                {latestWeekRow ? (
-                  <span className="badge-muted">{formatDate(latestWeekRow.weekEnding, language)}</span>
-                ) : null}
-              </div>
-
-              {latestWeekRow ? (
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="subtle-panel p-4">
-                    <p className="metric-label">{t.dashboard.weeklyDistance}</p>
-                    <p className="mt-2 text-[2rem] font-semibold tracking-[-0.05em] text-slate-950">
-                      {formatNumber(latestWeekRow.weeklyDistance, language)}
-                    </p>
-                  </div>
-                  <div className="subtle-panel p-4">
-                    <p className="metric-label">{t.dashboard.highestOdometer}</p>
-                    <p className="mt-2 text-[1.55rem] font-semibold tracking-[-0.04em] text-slate-950">
-                      {latestWeekRow.highestOdometer != null
-                        ? formatNumber(latestWeekRow.highestOdometer, language)
-                        : "-"}
-                    </p>
-                  </div>
-                  <div className="subtle-panel p-4">
-                    <p className="metric-label">{t.dashboard.lowestOdometer}</p>
-                    <p className="mt-2 text-[1.55rem] font-semibold tracking-[-0.04em] text-slate-950">
-                      {latestWeekRow.lowestOdometer != null
-                        ? formatNumber(latestWeekRow.lowestOdometer, language)
-                        : "-"}
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <EmptyState
-                  title={t.dashboard.noMileageDataTitle}
-                  description={t.dashboard.noMileageDataDescription}
-                />
-              )}
-
-              {weeklySummaryRows.length > 0 ? (
-                <div className="mt-4 table-shell">
-                  <div className="table-scroll">
-                    <table className="w-full min-w-[620px]">
-                      <thead>
-                        <tr>
-                          <th className="table-head-cell">{t.dashboard.table.weekEnding}</th>
-                          <th className="table-head-cell text-right">{t.dashboard.highestOdometer}</th>
-                          <th className="table-head-cell text-right">{t.dashboard.lowestOdometer}</th>
-                          <th className="table-head-cell text-right">{t.dashboard.weeklyDistance}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {weeklySummaryRows.slice(0, 4).map((row) => (
-                          <tr key={row.weekEnding} className="enterprise-table-row">
-                            <td className="table-body-cell supporting-date-strong">
-                              {formatDate(row.weekEnding, language)}
-                            </td>
-                            <td className="table-body-cell text-right">
-                              {row.highestOdometer != null ? formatNumber(row.highestOdometer, language) : "-"}
-                            </td>
-                            <td className="table-body-cell text-right">
-                              {row.lowestOdometer != null ? formatNumber(row.lowestOdometer, language) : "-"}
-                            </td>
-                            <td className="table-body-cell text-right font-semibold text-slate-950">
-                              {formatNumber(row.weeklyDistance, language)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ) : null}
-          </section>
-
-          <section className="grid gap-4 xl:grid-cols-2">
+          <section className="mt-5 grid gap-4 xl:grid-cols-2">
             <section className="surface-card p-5 sm:p-6">
-              <div className="mb-4">
-                <h3 className="section-title">{t.dashboard.latestFuelActivity}</h3>
-                <p className="section-subtitle">{t.dashboard.latestFuelDescription}</p>
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="section-title">{copy.latestFuel}</h3>
+                  <p className="section-subtitle">{dateRangeLabel}</p>
+                </div>
+                <Fuel className="h-5 w-5 text-brand-700" />
               </div>
 
               {latestFuelLogs.length === 0 ? (
-                <EmptyState title={t.dashboard.noFuelTitle} description={t.dashboard.noFuelDescription} />
+                <EmptyState title={copy.noFuel} description="" />
               ) : (
                 <div className="table-shell">
                   <div className="table-scroll">
-                    <table className="w-full min-w-[620px]">
+                    <table className="w-full min-w-[720px]">
                       <thead>
                         <tr>
                           <th className="table-head-cell">{t.dashboard.table.date}</th>
                           <th className="table-head-cell">{t.dashboard.table.driver}</th>
                           <th className="table-head-cell">{t.dashboard.table.vehicle}</th>
                           <th className="table-head-cell text-right">{t.dashboard.table.cost}</th>
+                          <th className="table-head-cell">{copy.unchecked}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -703,9 +746,8 @@ export default function DashboardPage() {
                             <td className="table-body-cell supporting-date-strong">{formatDate(log.date, language)}</td>
                             <td className="table-body-cell table-driver-name">{log.driver || "-"}</td>
                             <td className="table-body-cell">{log.vehicle_reg || "-"}</td>
-                            <td className="table-body-cell text-right font-semibold text-slate-950">
-                              {formatCurrency(Number(log.total_cost || 0), language)}
-                            </td>
+                            <td className="table-body-cell text-right font-semibold text-slate-950">{formatCurrency(Number(log.total_cost || 0), language)}</td>
+                            <td className="table-body-cell"><StatusBadge checked={log.receipt_checked} /></td>
                           </tr>
                         ))}
                       </tbody>
@@ -716,36 +758,37 @@ export default function DashboardPage() {
             </section>
 
             <section className="surface-card p-5 sm:p-6">
-              <div className="mb-4">
-                <h3 className="section-title">{t.dashboard.latestTransfers}</h3>
-                <p className="section-subtitle">{t.dashboard.latestTransferDescription}</p>
+              <div className="mb-4 flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="section-title">{copy.latestTransfers}</h3>
+                  <p className="section-subtitle">{dateRangeLabel}</p>
+                </div>
+                <ArrowRightLeft className="h-5 w-5 text-brand-700" />
               </div>
 
               {latestTransfers.length === 0 ? (
-                <EmptyState title={t.dashboard.noTransferTitle} description={t.dashboard.noTransferDescription} />
+                <EmptyState title={copy.noTransfers} description="" />
               ) : (
                 <div className="table-shell">
                   <div className="table-scroll">
-                    <table className="w-full min-w-[620px]">
+                    <table className="w-full min-w-[720px]">
                       <thead>
                         <tr>
                           <th className="table-head-cell">{t.dashboard.table.date}</th>
                           <th className="table-head-cell">{t.dashboard.table.driver}</th>
                           <th className="table-head-cell">{t.dashboard.table.type}</th>
                           <th className="table-head-cell text-right">{t.dashboard.table.amount}</th>
+                          <th className="table-head-cell">{copy.unchecked}</th>
                         </tr>
                       </thead>
                       <tbody>
                         {latestTransfers.map((transfer) => (
                           <tr key={transfer.id} className="enterprise-table-row">
-                            <td className="table-body-cell supporting-date-strong">
-                              {formatDate(transfer.date, language)}
-                            </td>
+                            <td className="table-body-cell supporting-date-strong">{formatDate(transfer.date, language)}</td>
                             <td className="table-body-cell table-driver-name">{transfer.driver || "-"}</td>
                             <td className="table-body-cell">{getTransferTypeLabel(t, transfer.transfer_type)}</td>
-                            <td className="table-body-cell text-right font-semibold text-slate-950">
-                              {formatCurrency(Number(transfer.amount || 0), language)}
-                            </td>
+                            <td className="table-body-cell text-right font-semibold text-slate-950">{formatCurrency(Number(transfer.amount || 0), language)}</td>
+                            <td className="table-body-cell"><StatusBadge checked={transfer.receipt_status === "approved"} /></td>
                           </tr>
                         ))}
                       </tbody>

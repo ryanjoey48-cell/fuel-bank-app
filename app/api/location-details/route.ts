@@ -37,6 +37,12 @@ type LegacyPlaceDetailsResponse = {
   status?: string;
 };
 
+function logGoogleMapsDetailsError(error: unknown) {
+  console.warn("[Fuel Bank] Google location details failed", {
+    message: error instanceof Error ? error.message : String(error)
+  });
+}
+
 export async function GET(request: Request) {
   try {
     const apiKey = getServerGoogleMapsApiKey();
@@ -136,9 +142,10 @@ export async function GET(request: Request) {
         lng
       })
     );
-  } catch {
+  } catch (error) {
+    logGoogleMapsDetailsError(error);
     return Response.json(
-      createApiError("Google location details unavailable, manual entry still allowed."),
+      createApiError("Google Maps place details failed. Manual entry still allowed."),
       { status: 503 }
     );
   }

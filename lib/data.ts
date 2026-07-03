@@ -32,6 +32,11 @@ import type {
   RouteDistanceEstimate,
   Shipment,
   ShipmentWithDriver,
+  TripFuelLogLink,
+  TripFuelSource,
+  TripJourney,
+  TripJourneyStatus,
+  TripJourneyWithFuel,
   Vehicle,
   VehicleServiceLog,
   WeeklyMileageEntry
@@ -43,9 +48,106 @@ function stripUndefined<T extends Record<string, unknown>>(payload: T) {
   ) as T;
 }
 
+function omitKey<T extends Record<string, unknown>, K extends keyof T>(payload: T, key: K) {
+  return Object.fromEntries(
+    Object.entries(payload).filter(([entryKey]) => entryKey !== key)
+  ) as Omit<T, K>;
+}
+
 const isUuid = (value: unknown) =>
   typeof value === "string" &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
+const isMissingBookingReferenceColumnError = (error: { code?: string; message?: string } | null | undefined) =>
+  Boolean(
+    error &&
+      (error.code === "42703" || error.code === "PGRST204") &&
+      error.message?.includes("booking_reference")
+  );
+
+const isMissingTripOptionalColumnError = (error: { code?: string; message?: string } | null | undefined) =>
+  Boolean(
+    error &&
+      (error.code === "42703" || error.code === "PGRST204") &&
+      [
+        "booking_reference",
+        "start_location_type",
+        "start_location",
+        "depot_address",
+        "manual_actual_km",
+        "manual_estimated_distance_km",
+        "estimated_distance_source",
+        "estimated_duration_minutes",
+        "google_maps_route_url"
+      ].some((column) => error.message?.includes(column))
+  );
+
+function omitTripOptionalColumns<T extends Record<string, unknown>>(payload: T) {
+  return Object.fromEntries(
+    Object.entries(payload).filter(
+      ([key]) =>
+        ![
+          "booking_reference",
+          "start_location_type",
+          "start_location",
+          "depot_address",
+          "manual_actual_km",
+          "manual_estimated_distance_km",
+          "estimated_distance_source",
+          "estimated_duration_minutes",
+          "google_maps_route_url"
+        ].includes(key)
+    )
+  ) as Partial<T>;
+}
+
+const BOOKING_DIARY_ROUTE_COLUMNS = new Set([
+  "pickup_place_id",
+  "dropoff_place_id",
+  "pickup_address",
+  "dropoff_address",
+  "estimated_distance_km",
+  "estimated_duration_minutes",
+  "google_maps_route_url",
+  "distance_source",
+  "route_calculated_at"
+]);
+
+async function writeBookingDiaryWithSchemaFallback({
+  id,
+  payload
+}: {
+  id?: string;
+  payload: Record<string, unknown>;
+}) {
+  let activePayload = { ...payload };
+
+  for (let attempt = 0; attempt < BOOKING_DIARY_ROUTE_COLUMNS.size + 2; attempt += 1) {
+    const result = id
+      ? await supabase.from("booking_diary").update(activePayload).eq("id", id).select().single()
+      : await supabase.from("booking_diary").insert(activePayload).select().single();
+
+    if (!result.error) {
+      return result;
+    }
+
+    const missingColumn = getMissingColumnName(result.error);
+    if (missingColumn && BOOKING_DIARY_ROUTE_COLUMNS.has(missingColumn) && missingColumn in activePayload) {
+      logDataError("saveBookingDiaryEntry optional route column missing; retrying without it:", result.error, {
+        missingColumn
+      });
+      const { [missingColumn]: _removed, ...nextPayload } = activePayload;
+      activePayload = nextPayload;
+      continue;
+    }
+
+    return result;
+  }
+
+  return id
+    ? await supabase.from("booking_diary").update(activePayload).eq("id", id).select().single()
+    : await supabase.from("booking_diary").insert(activePayload).select().single();
+}
 
 function serializeError(error: unknown) {
   if (error instanceof Error) {
@@ -248,7 +350,7 @@ function isMissingTableError(error: unknown) {
   }
 
   const record = error as Record<string, unknown>;
-  const message = String(record.message ?? "").toLowerCase();
+  const message = String(record.message ?? record.details ?? record.hint ?? "").toLowerCase();
 
   return (
     record.code === "PGRST205" ||
@@ -263,12 +365,6 @@ async function insertVehicleServiceLogWithSchemaFallback(payload: Record<string,
   const removedColumns: string[] = [];
 
   for (let attempt = 0; attempt < 10; attempt += 1) {
-    console.log("vehicle_service_logs insert payload attempt:", {
-      attempt: attempt + 1,
-      removedColumns,
-      payload: activePayload
-    });
-
     const result = await supabase
       .from("vehicle_service_logs")
       .insert(activePayload)
@@ -296,6 +392,78 @@ async function insertVehicleServiceLogWithSchemaFallback(payload: Record<string,
   return supabase
     .from("vehicle_service_logs")
     .insert(activePayload)
+    .select()
+    .single();
+}
+
+async function updateVehicleServiceLogWithSchemaFallback(id: string, payload: Record<string, unknown>) {
+  let activePayload = { ...payload };
+
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const result = await supabase
+      .from("vehicle_service_logs")
+      .update(activePayload)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (!result.error) {
+      return result;
+    }
+
+    const missingColumn = getMissingColumnName(result.error);
+    if (missingColumn && missingColumn in activePayload && isMissingColumnError(result.error)) {
+      logDataError("vehicle_service_logs column missing; retrying update without it:", result.error, {
+        missingColumn
+      });
+      const { [missingColumn]: _removed, ...nextPayload } = activePayload;
+      activePayload = nextPayload;
+      continue;
+    }
+
+    return result;
+  }
+
+  return supabase
+    .from("vehicle_service_logs")
+    .update(activePayload)
+    .eq("id", id)
+    .select()
+    .single();
+}
+
+async function updateOilChangeHistoryWithSchemaFallback(id: string, payload: Record<string, unknown>) {
+  let activePayload = { ...payload };
+
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const result = await supabase
+      .from("oil_change_history")
+      .update(activePayload)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (!result.error) {
+      return result;
+    }
+
+    const missingColumn = getMissingColumnName(result.error);
+    if (missingColumn && missingColumn in activePayload && isMissingColumnError(result.error)) {
+      logDataError("oil_change_history column missing; retrying update without it:", result.error, {
+        missingColumn
+      });
+      const { [missingColumn]: _removed, ...nextPayload } = activePayload;
+      activePayload = nextPayload;
+      continue;
+    }
+
+    return result;
+  }
+
+  return supabase
+    .from("oil_change_history")
+    .update(activePayload)
+    .eq("id", id)
     .select()
     .single();
 }
@@ -365,6 +533,10 @@ const readCache = new Map<string, CacheEntry<unknown>>();
 
 function clearReadCache() {
   readCache.clear();
+}
+
+export function clearDataReadCache() {
+  clearReadCache();
 }
 
 async function readThroughCache<T>(
@@ -576,7 +748,7 @@ function normalizeOilChangeBaselineRow(row: OilChangeBaseline) {
 function normalizeOilChangeHistoryRow(row: OilChangeHistory): VehicleServiceLog {
   const odometer = Number(row.odometer ?? 0);
   return {
-    id: row.id,
+    id: `oil-change-history-${row.id}`,
     vehicle_id: null,
     vehicle_reg: normalizeVehicleRegistration(row.vehicle_reg),
     service_type: "oil_change",
@@ -591,8 +763,32 @@ function normalizeOilChangeHistoryRow(row: OilChangeHistory): VehicleServiceLog 
   };
 }
 
+function getServiceLogSortTime(log: VehicleServiceLog) {
+  const serviceDateTime = log.service_date ? new Date(log.service_date).getTime() : Number.NEGATIVE_INFINITY;
+  const createdAtTime = log.created_at ? new Date(log.created_at).getTime() : Number.NEGATIVE_INFINITY;
+  return {
+    serviceDateTime: Number.isNaN(serviceDateTime) ? Number.NEGATIVE_INFINITY : serviceDateTime,
+    createdAtTime: Number.isNaN(createdAtTime) ? Number.NEGATIVE_INFINITY : createdAtTime
+  };
+}
+
+function sortServiceLogsByLatest(logs: VehicleServiceLog[]) {
+  return [...logs].sort((left, right) => {
+    const leftTime = getServiceLogSortTime(left);
+    const rightTime = getServiceLogSortTime(right);
+    const serviceDateDiff = rightTime.serviceDateTime - leftTime.serviceDateTime;
+    if (serviceDateDiff !== 0) return serviceDateDiff;
+    const createdAtDiff = rightTime.createdAtTime - leftTime.createdAtTime;
+    if (createdAtDiff !== 0) return createdAtDiff;
+    return String(right.id).localeCompare(String(left.id));
+  });
+}
+
 function normalizeOilChangeVehicleRegKey(value: unknown) {
-  return String(value ?? "").trim().toUpperCase();
+  return normalizeVehicleRegistration(String(value ?? ""))
+    .replace(/\s+/g, "")
+    .replace(/-/g, "")
+    .toLowerCase();
 }
 
 async function syncOilChangeOdometerToWeeklyMileage({
@@ -682,11 +878,6 @@ export function applyOilChangeBaselinesToVehicles(
     }
 
     const baseline = baselineMap.get(key) ?? null;
-    console.log("oil change baseline vehicle merge", {
-      vehicle_reg: vehicleReg,
-      normalizedVehicleReg: key,
-      matchedBaseline: baseline
-    });
 
     if (baseline) {
       vehicleMap.set(key, {
@@ -701,27 +892,6 @@ export function applyOilChangeBaselinesToVehicles(
     }
 
     vehicleMap.set(key, vehicle);
-  }
-
-  for (const baseline of baselineMap.values()) {
-    const key = normalizeOilChangeVehicleRegKey(baseline.vehicle_reg);
-    if (!key || vehicleMap.has(key)) continue;
-
-    vehicleMap.set(key, {
-      id: baseline.id,
-      user_id: "",
-      vehicle_reg: baseline.vehicle_reg,
-      registration: baseline.vehicle_reg,
-      vehicle_name: baseline.vehicle_reg,
-      vehicle_category: "",
-      vehicle_type: null,
-      active: true,
-      last_oil_change_date: baseline.last_oil_change_date,
-      last_oil_change_odometer: baseline.last_odometer,
-      oil_change_interval_km: baseline.interval_km,
-      created_at: baseline.created_at,
-      updated_at: baseline.updated_at
-    });
   }
 
   return Array.from(vehicleMap.values()).sort((a, b) =>
@@ -834,8 +1004,8 @@ function mapFuelLogRows(
         : log.odometer != null
           ? Number(log.odometer)
           : null,
-    station: String(log.location ?? "").trim(),
-    location: String(log.location ?? "").trim(),
+    station: normalizeFuelLogLocation(log.location),
+    location: normalizeFuelLogLocation(log.location),
     price_per_litre: log.price_per_litre,
     fuel_type: normalizeFuelTypeKey(log.fuel_type) ?? log.fuel_type,
     payment_method: normalizePaymentMethodKey(log.payment_method) ?? log.payment_method,
@@ -1021,8 +1191,6 @@ export async function fetchVehicles() {
       throw error;
     }
 
-    console.log("fetchVehicles success", { rowCount: (data ?? []).length });
-
     const merged = mergeVehicleRowsByRegistration((data ?? []) as Vehicle[]);
     if (merged.length !== (data ?? []).length) {
       console.warn("fetchVehicles merged duplicate vehicle registrations for shared oil-change view:", {
@@ -1063,13 +1231,6 @@ export async function fetchOilChangeBaselinesForVehicles(_vehicles: Vehicle[]) {
     .from("oil_change_baselines")
     .select("*");
 
-  console.log("fetched oil_change_baselines", {
-    table: "oil_change_baselines",
-    rowCount: (data ?? []).length,
-    rows: data ?? [],
-    error
-  });
-
   if (error) {
     logDataError("fetchOilChangeBaselinesForVehicles error:", error);
     throw new Error(
@@ -1082,46 +1243,55 @@ export async function fetchOilChangeBaselinesForVehicles(_vehicles: Vehicle[]) {
 }
 
 export async function fetchOilChangeHistory() {
-  return readThroughCache("oil_change_history:all", async () => {
-    const serviceLogResult = await supabase
-      .from("vehicle_service_logs")
-      .select("*")
-      .eq("service_type", "oil_change")
-      .order("service_date", { ascending: false })
-      .order("created_at", { ascending: false });
+  const serviceLogResult = await supabase
+    .from("vehicle_service_logs")
+    .select("*")
+    .order("service_date", { ascending: false })
+    .order("created_at", { ascending: false });
 
-    if (!serviceLogResult.error) {
-      console.log("fetchOilChangeHistory vehicle_service_logs success", {
-        rowCount: (serviceLogResult.data ?? []).length
-      });
-      return ((serviceLogResult.data ?? []) as VehicleServiceLog[]).map(normalizeServiceLogRow);
-    }
+  const serviceLogs: VehicleServiceLog[] = [];
+  let canReadServiceLogs = false;
 
-    if (!isMissingTableError(serviceLogResult.error) && !isMissingColumnError(serviceLogResult.error)) {
-      logDataError("fetchOilChangeHistory vehicle_service_logs error:", serviceLogResult.error);
+  if (!serviceLogResult.error) {
+    canReadServiceLogs = true;
+    serviceLogs.push(
+      ...((serviceLogResult.data ?? []) as VehicleServiceLog[])
+        .filter((log) => !log.service_type || log.service_type === "oil_change")
+        .map(normalizeServiceLogRow)
+    );
+  } else if (!isMissingTableError(serviceLogResult.error) && !isMissingColumnError(serviceLogResult.error)) {
+    logDataError("fetchOilChangeHistory vehicle_service_logs error:", serviceLogResult.error);
+    throw new Error(
+      getServiceSchemaSetupMessage(serviceLogResult.error) ??
+        String(serviceLogResult.error.message ?? "Unable to load oil change service history from Supabase.")
+    );
+  }
+
+  const legacyResult = await supabase
+    .from("oil_change_history")
+    .select("*")
+    .order("oil_change_date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (legacyResult.error) {
+    if (!canReadServiceLogs && !isMissingTableError(legacyResult.error) && !isMissingColumnError(legacyResult.error)) {
+      logDataError("fetchOilChangeHistory fallback error:", legacyResult.error);
       throw new Error(
-        getServiceSchemaSetupMessage(serviceLogResult.error) ??
-          String(serviceLogResult.error.message ?? "Unable to load oil change service history from Supabase.")
+        getServiceSchemaSetupMessage(legacyResult.error) ??
+          String(legacyResult.error.message ?? "Unable to load oil change history from Supabase.")
       );
     }
 
-    const { data, error } = await supabase
-      .from("oil_change_history")
-      .select("*")
-      .order("oil_change_date", { ascending: false })
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      logDataError("fetchOilChangeHistory fallback error:", error);
-      throw new Error(
-        getServiceSchemaSetupMessage(error) ??
-          String(error.message ?? "Unable to load oil change history from Supabase.")
-      );
+    if (!isMissingTableError(legacyResult.error) && !isMissingColumnError(legacyResult.error)) {
+      logDataError("fetchOilChangeHistory legacy warning:", legacyResult.error);
     }
+  }
 
-    console.log("fetchOilChangeHistory fallback success", { rowCount: (data ?? []).length });
-    return ((data ?? []) as OilChangeHistory[]).map(normalizeOilChangeHistoryRow);
-  });
+  const legacyLogs = legacyResult.error
+    ? []
+    : ((legacyResult.data ?? []) as OilChangeHistory[]).map(normalizeOilChangeHistoryRow);
+
+  return sortServiceLogsByLatest([...serviceLogs, ...legacyLogs]);
 }
 
 async function ensureVehicleForService({
@@ -1222,6 +1392,80 @@ async function ensureVehicleForService({
   return normalizeVehicleRow(created.data as Vehicle);
 }
 
+async function ensureVehicleForWeeklyMileage({
+  registration,
+  driverId
+}: {
+  registration: string;
+  driverId?: string | null;
+}) {
+  const normalizedRegistration = normalizeVehicleRegistration(registration);
+  if (!normalizedRegistration) {
+    return null;
+  }
+
+  const existing = await supabase
+    .from("vehicles")
+    .select("*");
+
+  if (existing.error) {
+    if (!isMissingTableError(existing.error)) {
+      logDataError("ensureVehicleForWeeklyMileage lookup warning:", existing.error, {
+        registration: normalizedRegistration
+      });
+    }
+    return null;
+  }
+
+  const registrationKey = normalizeOilChangeVehicleRegKey(normalizedRegistration);
+  const existingVehicle = ((existing.data ?? []) as Vehicle[]).find(
+    (vehicle) => normalizeOilChangeVehicleRegKey(vehicle.vehicle_reg ?? vehicle.registration) === registrationKey
+  );
+
+  const drivers = await fetchDrivers().catch(() => [] as Driver[]);
+  const matchedDriver =
+    (driverId ? drivers.find((driver) => String(driver.id) === String(driverId)) : null) ??
+    drivers.find((driver) => normalizeComparableText(driver.vehicle_reg) === normalizeComparableText(normalizedRegistration)) ??
+    null;
+  const vehicleType = matchedDriver?.vehicle_type ?? null;
+  const intervalKm = getOilChangeIntervalForVehicleType(vehicleType);
+
+  if (existingVehicle) {
+    const normalizedExistingVehicle = normalizeVehicleRow(existingVehicle);
+    if (normalizedExistingVehicle.active === false) {
+      return normalizedExistingVehicle;
+    }
+
+    const updatePayload = stripUndefined({
+      vehicle_type: normalizedExistingVehicle.vehicle_type || vehicleType || undefined,
+      oil_change_interval_km: normalizedExistingVehicle.oil_change_interval_km ?? intervalKm ?? undefined
+    });
+
+    if (Object.keys(updatePayload).length === 0) {
+      return normalizedExistingVehicle;
+    }
+
+    const updated = await supabase
+      .from("vehicles")
+      .update(updatePayload)
+      .eq("id", normalizedExistingVehicle.id)
+      .select()
+      .single();
+
+    if (updated.error) {
+      logDataError("ensureVehicleForWeeklyMileage update warning:", updated.error, {
+        registration: normalizedRegistration,
+        updatePayload
+      });
+      return normalizedExistingVehicle;
+    }
+
+    return normalizeVehicleRow(updated.data as Vehicle);
+  }
+
+  return null;
+}
+
 export async function saveOilChangeService(payload: {
   vehicleId?: string | null;
   vehicleReg: string;
@@ -1235,8 +1479,6 @@ export async function saveOilChangeService(payload: {
   updateExistingLog?: boolean;
   recordHistory?: boolean;
 }) {
-  console.groupCollapsed("Oil change service save");
-  console.log("incoming payload", payload);
   const serviceDate = payload.serviceDate?.trim();
   const serviceOdometer = Math.trunc(Number(payload.serviceOdometer));
   const intervalKm = Math.trunc(
@@ -1254,11 +1496,6 @@ export async function saveOilChangeService(payload: {
       throw new Error("Interval KM must be greater than zero.");
     }
 
-    console.log("step", "ensure vehicle", {
-      table: "vehicles",
-      vehicleId: payload.vehicleId,
-      registration: payload.vehicleReg
-    });
     const vehicle = await ensureVehicleForService({
       vehicleId: payload.vehicleId,
       registration: payload.vehicleReg,
@@ -1273,30 +1510,60 @@ export async function saveOilChangeService(payload: {
     };
 
     let historyRow: VehicleServiceLog | null = null;
-    if (payload.recordHistory) {
-      const historyPayload = stripUndefined({
-        vehicle_id: isUuid(vehicle.id) ? vehicle.id : undefined,
-        vehicle_reg: vehicle.vehicle_reg,
-        service_type: "oil_change",
-        service_date: serviceDate,
-        odometer: serviceOdometer,
-        oil_change_odometer: serviceOdometer,
-        interval_km: intervalKm,
-        next_service_due_odometer: Math.trunc(serviceOdometer + intervalKm),
-        vehicle_type_snapshot: payload.vehicleType ?? vehicle.vehicle_type ?? null,
-        notes: payload.notes?.trim() || null
-      });
-      console.log("step", "insert oil change history", {
-        table: "vehicle_service_logs",
-        operation: "insert",
-        payload: historyPayload
-      });
-      const historyResult = await insertVehicleServiceLogWithSchemaFallback(historyPayload);
+    const historyPayload = stripUndefined({
+      vehicle_id: isUuid(vehicle.id) ? vehicle.id : undefined,
+      vehicle_reg: vehicle.vehicle_reg,
+      service_type: "oil_change",
+      service_date: serviceDate,
+      odometer: serviceOdometer,
+      oil_change_odometer: serviceOdometer,
+      interval_km: intervalKm,
+      next_service_due_odometer: Math.trunc(serviceOdometer + intervalKm),
+      vehicle_type_snapshot: payload.vehicleType ?? vehicle.vehicle_type ?? null,
+      notes: payload.notes?.trim() || null
+    });
+    const canUpdateServiceLog =
+      payload.updateExistingLog &&
+      payload.serviceLogId &&
+      !payload.serviceLogId.startsWith("oil-change-history-");
+    const legacyHistoryId =
+      payload.updateExistingLog && payload.serviceLogId?.startsWith("oil-change-history-")
+        ? payload.serviceLogId.replace(/^oil-change-history-/, "")
+        : null;
 
-      console.log("saveOilChangeService oil_change_history insert response:", {
-        data: historyResult.data,
-        error: historyResult.error
+    if (canUpdateServiceLog) {
+      const historyResult = await updateVehicleServiceLogWithSchemaFallback(payload.serviceLogId!, historyPayload);
+
+      if (historyResult.error || !historyResult.data) {
+        logDataError("saveOilChangeService history update error:", historyResult.error, historyPayload);
+        throw new Error(
+          getServiceSchemaSetupMessage(historyResult.error) ??
+            historyResult.error?.message ??
+            "Failed to update oil change history - try again."
+        );
+      }
+
+      historyRow = normalizeServiceLogRow(historyResult.data as VehicleServiceLog);
+    } else if (legacyHistoryId) {
+      const legacyPayload = stripUndefined({
+        vehicle_reg: vehicle.vehicle_reg,
+        oil_change_date: serviceDate,
+        odometer: serviceOdometer
       });
+      const legacyResult = await updateOilChangeHistoryWithSchemaFallback(legacyHistoryId, legacyPayload);
+
+      if (legacyResult.error || !legacyResult.data) {
+        logDataError("saveOilChangeService legacy history update error:", legacyResult.error, legacyPayload);
+        throw new Error(
+          getServiceSchemaSetupMessage(legacyResult.error) ??
+            legacyResult.error?.message ??
+            "Failed to update oil change history - try again."
+        );
+      }
+
+      historyRow = normalizeOilChangeHistoryRow(legacyResult.data as OilChangeHistory);
+    } else if (payload.recordHistory) {
+      const historyResult = await insertVehicleServiceLogWithSchemaFallback(historyPayload);
 
       if (historyResult.error || !historyResult.data) {
         logDataError("saveOilChangeService history error:", historyResult.error, historyPayload);
@@ -1310,26 +1577,9 @@ export async function saveOilChangeService(payload: {
       historyRow = normalizeServiceLogRow(historyResult.data as VehicleServiceLog);
     }
 
-    console.log("step", "upsert oil change baseline", {
-      table: "oil_change_baselines",
-      operation: "upsert",
-      conflictColumn: "vehicle_reg",
-      payload: oilChangeBaselinePayload
-    });
-    console.log("save oil_change_baselines payload", oilChangeBaselinePayload);
     const baselineUpsertResult = await supabase
       .from("oil_change_baselines")
       .upsert(oilChangeBaselinePayload, { onConflict: "vehicle_reg" });
-
-    console.log("saveOilChangeService oil_change_baselines upsert response:", {
-      table: "oil_change_baselines",
-      conflictColumn: "vehicle_reg",
-      payload: oilChangeBaselinePayload,
-      data: baselineUpsertResult.data,
-      error: baselineUpsertResult.error
-    });
-    console.log("Supabase save response", baselineUpsertResult);
-    console.log("Supabase save error", baselineUpsertResult.error);
 
     if (baselineUpsertResult.error) {
       logDataError("saveOilChangeService baseline error:", baselineUpsertResult.error, oilChangeBaselinePayload);
@@ -1345,13 +1595,6 @@ export async function saveOilChangeService(payload: {
       .select("*")
       .eq("vehicle_reg", oilChangeBaselinePayload.vehicle_reg)
       .single();
-
-    console.log("saveOilChangeService oil_change_baselines refetch response:", {
-      table: "oil_change_baselines",
-      vehicle_reg: oilChangeBaselinePayload.vehicle_reg,
-      data: baselineResult.data,
-      error: baselineResult.error
-    });
 
     if (baselineResult.error || !baselineResult.data) {
       logDataError("saveOilChangeService baseline refetch error:", baselineResult.error, oilChangeBaselinePayload);
@@ -1387,11 +1630,6 @@ export async function saveOilChangeService(payload: {
     dispatchDataChange("oil_change_baselines");
     dispatchDataChange("oil_change_history");
     dispatchDataChange("vehicle_service_logs");
-    console.log("success", {
-      vehicle: updatedVehicle,
-      baseline,
-      serviceLog: baselineServiceLog
-    });
     return {
       vehicle: updatedVehicle,
       serviceLog: baselineServiceLog
@@ -1399,8 +1637,6 @@ export async function saveOilChangeService(payload: {
   } catch (error) {
     console.error("Oil change service save failed", serializeError(error));
     throw error;
-  } finally {
-    console.groupEnd();
   }
 }
 
@@ -1770,7 +2006,6 @@ export async function fetchWeeklyMileage() {
     .order("id", { ascending: false });
 
   if (!modernQuery.error) {
-    console.log("fetchWeeklyMileage success", { rowCount: (modernQuery.data ?? []).length });
     let driverLookup = new Map<string, string>();
 
     try {
@@ -1817,7 +2052,6 @@ export async function fetchWeeklyMileage() {
     throw legacyQuery.error;
   }
 
-  console.log("fetchWeeklyMileage legacy success", { rowCount: (legacyQuery.data ?? []).length });
   return ((legacyQuery.data ?? []) as Array<{
     id: string;
     week_ending: string;
@@ -1934,15 +2168,26 @@ export async function fetchBookingDiaryEntries() {
     vehicle: normalizeVehicleRegistration(booking.vehicle),
     driver: normalizeDisplayName(booking.driver),
     notes: booking.notes ?? null,
+    pickup_place_id: booking.pickup_place_id ?? null,
+    dropoff_place_id: booking.dropoff_place_id ?? null,
+    pickup_address: booking.pickup_address ?? null,
+    dropoff_address: booking.dropoff_address ?? null,
+    estimated_distance_km: parseOptionalNumeric(booking.estimated_distance_km),
+    estimated_duration_minutes: parseOptionalNumeric(booking.estimated_duration_minutes),
+    google_maps_route_url: booking.google_maps_route_url ?? null,
+    distance_source: booking.distance_source ?? null,
+    route_calculated_at: booking.route_calculated_at ?? null,
     created_by: booking.created_by ?? null,
     modified_by: booking.modified_by ?? null
   }));
 }
 
 export async function saveBookingDiaryEntry(
-  payload: Partial<Omit<BookingDiaryEntry, "amount_pallets" | "weight">> & {
+  payload: Partial<Omit<BookingDiaryEntry, "amount_pallets" | "weight" | "estimated_distance_km" | "estimated_duration_minutes">> & {
     amount_pallets?: string | number | null;
     weight?: string | number | null;
+    estimated_distance_km?: string | number | null;
+    estimated_duration_minutes?: string | number | null;
   }
 ) {
   const { id, ...rest } = payload;
@@ -1958,6 +2203,15 @@ export async function saveBookingDiaryEntry(
     pickup: rest.pickup?.trim(),
     warehouse_no: rest.warehouse_no?.trim() || null,
     dropoff: rest.dropoff?.trim(),
+    pickup_place_id: rest.pickup_place_id?.trim() || null,
+    dropoff_place_id: rest.dropoff_place_id?.trim() || null,
+    pickup_address: rest.pickup_address?.trim() || null,
+    dropoff_address: rest.dropoff_address?.trim() || null,
+    estimated_distance_km: parseOptionalNumeric(rest.estimated_distance_km),
+    estimated_duration_minutes: parseOptionalNumeric(rest.estimated_duration_minutes),
+    google_maps_route_url: rest.google_maps_route_url?.trim() || null,
+    distance_source: rest.distance_source?.trim() || null,
+    route_calculated_at: rest.route_calculated_at || null,
     vehicle: normalizeVehicleRegistration(rest.vehicle) || null,
     driver: normalizeDisplayName(rest.driver) || null,
     notes: rest.notes?.trim() || null,
@@ -1965,9 +2219,7 @@ export async function saveBookingDiaryEntry(
     ...(!id ? { created_by: audit.name } : {})
   });
 
-  const result = id
-    ? await supabase.from("booking_diary").update(cleaned).eq("id", id).select().single()
-    : await supabase.from("booking_diary").insert(cleaned).select().single();
+  const result = await writeBookingDiaryWithSchemaFallback({ id, payload: cleaned });
 
   if (result.error) {
     logDataError("saveBookingDiaryEntry error:", result.error, { id, payload: cleaned });
@@ -1999,6 +2251,470 @@ export async function deleteBookingDiaryEntry(id: string) {
   }
 
   dispatchDataChange("booking_diary");
+}
+
+function normalizeTripStatus(value: unknown): TripJourneyStatus {
+  if (
+    value === "created" ||
+    value === "missing_mileage" ||
+    value === "missing_fuel" ||
+    value === "missing_estimated_distance" ||
+    value === "completed"
+  ) {
+    return value;
+  }
+
+  return "created";
+}
+
+function normalizeTripFuelSource(value: unknown): TripFuelSource {
+  return value === "manual" ? "manual" : "linked";
+}
+
+function getEffectiveTripEstimatedKm({
+  estimatedDistanceKm,
+  manualEstimatedDistanceKm
+}: {
+  estimatedDistanceKm: number | null;
+  manualEstimatedDistanceKm: number | null;
+}) {
+  if (manualEstimatedDistanceKm != null && manualEstimatedDistanceKm > 0) {
+    return manualEstimatedDistanceKm;
+  }
+  if (estimatedDistanceKm != null && estimatedDistanceKm > 0) {
+    return estimatedDistanceKm;
+  }
+  return null;
+}
+
+function normalizeTripJourneyRow(row: TripJourney): TripJourney {
+  const raw = row as TripJourney & {
+    booking_diary_id?: string | null;
+    booking_reference?: string | null;
+    date?: string | null;
+    load_text?: string | null;
+    notes?: string | null;
+    manual_litres?: number | null;
+  };
+  const bookingDiaryId = isUuid(raw.booking_diary_id)
+    ? raw.booking_diary_id
+    : isUuid(row.booking_id)
+      ? row.booking_id
+      : null;
+
+  return {
+    ...row,
+    booking_diary_id: bookingDiaryId,
+    booking_id: bookingDiaryId,
+    booking_reference: raw.booking_reference ?? (!isUuid(row.booking_id) ? row.booking_id : null),
+    trip_date: row.trip_date ?? raw.date ?? "",
+    pickup_time: row.pickup_time ?? null,
+    start_location_type: row.start_location_type === "custom" ? "custom" : "depot",
+    start_location: row.start_location ?? row.depot_address ?? null,
+    depot_address: row.depot_address ?? null,
+    pickup_location: row.pickup_location ?? null,
+    dropoff_location: row.dropoff_location ?? null,
+    route: row.route ?? null,
+    vehicle_type: row.vehicle_type ?? null,
+    vehicle_reg: normalizeVehicleRegistration(row.vehicle_reg),
+    driver: normalizeDisplayName(row.driver),
+    load_details: row.load_details ?? raw.load_text ?? null,
+    warehouse_no: row.warehouse_no ?? null,
+    booking_notes: row.booking_notes ?? raw.notes ?? null,
+    start_mileage: parseOptionalNumeric(row.start_mileage),
+    end_mileage: parseOptionalNumeric(row.end_mileage),
+    manual_actual_km: parseOptionalNumeric(row.manual_actual_km ?? row.actual_distance_km),
+    actual_distance_km: parseOptionalNumeric(row.actual_distance_km),
+    return_to_depot: Boolean(row.return_to_depot),
+    estimated_distance_km: parseOptionalNumeric(row.estimated_distance_km),
+    estimated_duration_minutes: parseOptionalNumeric(row.estimated_duration_minutes),
+    google_maps_route_url: row.google_maps_route_url ?? null,
+    estimated_distance_source: row.estimated_distance_source ?? null,
+    manual_estimated_distance_km: parseOptionalNumeric(row.manual_estimated_distance_km),
+    manual_litres_used: parseOptionalNumeric(row.manual_litres_used ?? raw.manual_litres),
+    manual_fuel_cost: parseOptionalNumeric(row.manual_fuel_cost),
+    fuel_source: normalizeTripFuelSource(row.fuel_source),
+    waiting_idle_notes: row.waiting_idle_notes ?? null,
+    extra_route_notes: row.extra_route_notes ?? null,
+    status: normalizeTripStatus(row.status)
+  };
+}
+
+function calculateTripStatusFromValues({
+  startMileage,
+  endMileage,
+  manualActualKm,
+  estimatedDistanceKm,
+  manualEstimatedDistanceKm,
+  manualLitresUsed,
+  manualFuelCost,
+  fuelSource,
+  linkedFuelLogs
+}: {
+  startMileage: number | null;
+  endMileage: number | null;
+  manualActualKm: number | null;
+  estimatedDistanceKm: number | null;
+  manualEstimatedDistanceKm: number | null;
+  manualLitresUsed: number | null;
+  manualFuelCost: number | null;
+  fuelSource: TripFuelSource;
+  linkedFuelLogs?: FuelLogWithDriver[];
+}): TripJourneyStatus {
+  const mileageDistance =
+    startMileage != null && endMileage != null && endMileage > startMileage
+      ? endMileage - startMileage
+      : null;
+  const actualDistanceKm = manualActualKm != null && manualActualKm > 0 ? manualActualKm : mileageDistance;
+  if (actualDistanceKm == null) {
+    return "missing_mileage";
+  }
+
+  const estimatedKm = getEffectiveTripEstimatedKm({ estimatedDistanceKm, manualEstimatedDistanceKm });
+  if (estimatedKm == null || estimatedKm <= 0) {
+    return "missing_estimated_distance";
+  }
+
+  const linkedFuelLitres = (linkedFuelLogs ?? []).reduce((sum, log) => sum + Number(log.litres || 0), 0);
+  const linkedFuelCost = (linkedFuelLogs ?? []).reduce((sum, log) => sum + Number(log.total_cost || 0), 0);
+  const hasLinkedFuel = linkedFuelLitres > 0 && linkedFuelCost > 0;
+  const hasManualFuel = (manualLitresUsed != null && manualLitresUsed > 0) && (manualFuelCost != null && manualFuelCost > 0);
+  const hasFuel = fuelSource === "manual" ? hasManualFuel : hasLinkedFuel;
+
+  if (!hasFuel) {
+    return "missing_fuel";
+  }
+
+  return "completed";
+}
+
+function mapBookingToTripPayload(booking: BookingDiaryEntry) {
+  const loadParts = [
+    booking.amount_pallets != null ? `${booking.amount_pallets} pallets` : "",
+    booking.weight != null ? `${booking.weight} kg` : "",
+    booking.dimensions ?? ""
+  ].filter(Boolean);
+
+  return {
+    booking_id: booking.id,
+    booking_reference: booking.booking_id ?? null,
+    start_location: "Expert Express Sender Co., Ltd. 88 Happy Place, Khwaeng Khlong Sam Prawet, Khet Lat Krabang, Bangkok 10520, Thailand",
+    start_location_type: "depot",
+    depot_address: "Expert Express Sender Co., Ltd. 88 Happy Place, Khwaeng Khlong Sam Prawet, Khet Lat Krabang, Bangkok 10520, Thailand",
+    date: booking.booking_date,
+    pickup_time: booking.pickup_time ?? null,
+    pickup_location: booking.pickup,
+    dropoff_location: booking.dropoff,
+    route: [booking.pickup, booking.dropoff].filter(Boolean).join(" -> "),
+    vehicle_reg: normalizeVehicleRegistration(booking.vehicle) || null,
+    driver: normalizeDisplayName(booking.driver) || null,
+    load_text: loadParts.join(" | ") || null,
+    warehouse_no: booking.warehouse_no ?? null,
+    notes: booking.notes ?? null,
+    estimated_distance_km: parseOptionalNumeric(booking.estimated_distance_km),
+    estimated_duration_minutes: parseOptionalNumeric(booking.estimated_duration_minutes),
+    google_maps_route_url: booking.google_maps_route_url ?? null,
+    estimated_distance_source: booking.distance_source ?? null,
+    fuel_source: "manual" as TripFuelSource,
+    status: "created" as TripJourneyStatus
+  };
+}
+
+export async function fetchTripJourneys(): Promise<TripJourneyWithFuel[]> {
+  const tripResult = await supabase
+    .from("trip_journeys")
+    .select("*")
+    .order("date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (tripResult.error) {
+    if (isMissingTableError(tripResult.error)) {
+      return [];
+    }
+    logDataError("fetchTripJourneys error:", tripResult.error);
+    throw new Error(tripResult.error.message || "Unable to load trip journeys.");
+  }
+
+  const trips = ((tripResult.data ?? []) as TripJourney[]).map(normalizeTripJourneyRow);
+  const linkResult = await supabase.from("trip_fuel_logs").select("*");
+  const links = linkResult.error
+    ? []
+    : ((linkResult.data ?? []) as TripFuelLogLink[]);
+
+  if (linkResult.error && !isMissingTableError(linkResult.error)) {
+    logDataError("fetchTripJourneys trip_fuel_logs warning:", linkResult.error);
+  }
+
+  const fuelLogs = await fetchFuelLogs().catch((error) => {
+    logDataError("fetchTripJourneys fuel log warning:", error);
+    return [] as FuelLogWithDriver[];
+  });
+  const fuelById = new Map(fuelLogs.map((log) => [String(log.id), log]));
+  const linksByTrip = new Map<string, FuelLogWithDriver[]>();
+
+  for (const link of links) {
+    const log = fuelById.get(String(link.fuel_log_id));
+    if (!log) continue;
+    linksByTrip.set(String(link.trip_journey_id), [...(linksByTrip.get(String(link.trip_journey_id)) ?? []), log]);
+  }
+
+  return trips.map((trip) => ({
+    ...trip,
+    status: calculateTripStatusFromValues({
+      startMileage: trip.start_mileage,
+      endMileage: trip.end_mileage,
+      manualActualKm: trip.manual_actual_km ?? null,
+      estimatedDistanceKm: trip.estimated_distance_km,
+      manualEstimatedDistanceKm: trip.manual_estimated_distance_km,
+      manualLitresUsed: trip.manual_litres_used,
+      manualFuelCost: trip.manual_fuel_cost,
+      fuelSource: trip.fuel_source,
+      linkedFuelLogs: linksByTrip.get(String(trip.id)) ?? []
+    }),
+    linkedFuelLogs: linksByTrip.get(String(trip.id)) ?? []
+  }));
+}
+
+export async function fetchTripJourneyById(id: string) {
+  const trips = await fetchTripJourneys();
+  return trips.find((trip) => String(trip.id) === String(id)) ?? null;
+}
+
+export async function createTripJourneyFromBooking(booking: BookingDiaryEntry) {
+  const existing = await supabase
+    .from("trip_journeys")
+    .select("*")
+    .eq("booking_id", booking.id)
+    .limit(1)
+    .maybeSingle();
+
+  if (!existing.error && existing.data) {
+    return normalizeTripJourneyRow(existing.data as TripJourney);
+  }
+
+  if (existing.error && isMissingTableError(existing.error)) {
+    throw new Error("Trip Journey database tables are not set up yet. Apply the trip_journeys migration in Supabase, then try again.");
+  }
+
+  if (existing.error && !isMissingTableError(existing.error)) {
+    logDataError("createTripJourneyFromBooking existing lookup error:", existing.error, { bookingId: booking.id });
+    throw new Error(existing.error.message || "Unable to check existing trip record.");
+  }
+
+  const payload = stripUndefined(mapBookingToTripPayload(booking));
+  let result = await supabase.from("trip_journeys").insert(payload).select().single();
+
+  if (isMissingTripOptionalColumnError(result.error) || isMissingBookingReferenceColumnError(result.error)) {
+    const fallbackPayload = omitTripOptionalColumns(payload);
+    result = await supabase.from("trip_journeys").insert(fallbackPayload).select().single();
+  }
+
+  if (result.error) {
+    logDataError("createTripJourneyFromBooking error:", result.error, payload);
+    throw new Error(
+      result.error.message ||
+        result.error.details ||
+        result.error.hint ||
+        "Unable to create trip record. Apply the Trip Journey migration first."
+    );
+  }
+
+  dispatchDataChange("trip_journeys");
+  return normalizeTripJourneyRow(result.data as TripJourney);
+}
+
+export async function saveTripJourney(
+  payload: Partial<TripJourney> & {
+    id?: string | null;
+    linkedFuelLogs?: FuelLogWithDriver[];
+  }
+) {
+  const fuelSource = normalizeTripFuelSource(payload.fuel_source);
+  const startMileage = parseOptionalNumeric(payload.start_mileage);
+  const endMileage = parseOptionalNumeric(payload.end_mileage);
+  const estimatedDistanceKm = parseOptionalNumeric(payload.estimated_distance_km);
+  const manualEstimatedDistanceKm = parseOptionalNumeric(payload.manual_estimated_distance_km);
+  const manualActualKm = parseOptionalNumeric(payload.manual_actual_km);
+  const manualLitresUsed = parseOptionalNumeric(payload.manual_litres_used);
+  const manualFuelCost = parseOptionalNumeric(payload.manual_fuel_cost);
+  const actualDistanceKm =
+    manualActualKm != null && manualActualKm > 0
+      ? manualActualKm
+      : startMileage != null && endMileage != null && endMileage > startMileage
+        ? endMileage - startMileage
+        : null;
+  const effectiveEstimatedDistanceKm = getEffectiveTripEstimatedKm({
+    estimatedDistanceKm,
+    manualEstimatedDistanceKm
+  });
+  const distanceDifferenceKm =
+    actualDistanceKm != null && effectiveEstimatedDistanceKm != null
+      ? actualDistanceKm - effectiveEstimatedDistanceKm
+      : null;
+  const distanceDifferencePercent =
+    distanceDifferenceKm != null && effectiveEstimatedDistanceKm != null && effectiveEstimatedDistanceKm > 0
+      ? (distanceDifferenceKm / effectiveEstimatedDistanceKm) * 100
+      : null;
+  const status = calculateTripStatusFromValues({
+    startMileage,
+    endMileage,
+    manualActualKm,
+    estimatedDistanceKm,
+    manualEstimatedDistanceKm,
+    manualLitresUsed,
+    manualFuelCost,
+    fuelSource,
+    linkedFuelLogs: payload.linkedFuelLogs
+  });
+  const bookingDiaryId = payload.booking_diary_id ?? payload.booking_id ?? null;
+  const cleaned = stripUndefined({
+    booking_id: isUuid(bookingDiaryId) ? bookingDiaryId : undefined,
+    booking_reference: payload.booking_reference?.trim() || (!isUuid(bookingDiaryId) && bookingDiaryId ? String(bookingDiaryId) : undefined),
+    date: payload.trip_date,
+    start_location_type: payload.start_location_type === "custom" ? "custom" : "depot",
+    start_location: payload.start_location?.trim() || null,
+    depot_address: payload.depot_address?.trim() || null,
+    pickup_time: payload.pickup_time || null,
+    pickup_location: payload.pickup_location?.trim() || null,
+    dropoff_location: payload.dropoff_location?.trim() || null,
+    route: payload.route?.trim() || null,
+    vehicle_type: payload.vehicle_type?.trim() || null,
+    vehicle_reg: normalizeVehicleRegistration(payload.vehicle_reg) || null,
+    driver: normalizeDisplayName(payload.driver) || null,
+    load_text: payload.load_details?.trim() || null,
+    warehouse_no: payload.warehouse_no?.trim() || null,
+    notes: payload.booking_notes?.trim() || null,
+    start_mileage: startMileage,
+    end_mileage: endMileage,
+    actual_distance_km: actualDistanceKm,
+    manual_actual_km: manualActualKm,
+    return_to_depot: Boolean(payload.return_to_depot),
+    estimated_distance_km: estimatedDistanceKm,
+    estimated_duration_minutes: parseOptionalNumeric(payload.estimated_duration_minutes),
+    google_maps_route_url: payload.google_maps_route_url?.trim() || null,
+    manual_estimated_distance_km: manualEstimatedDistanceKm,
+    distance_difference_km: distanceDifferenceKm,
+    distance_difference_percent: distanceDifferencePercent,
+    manual_litres: manualLitresUsed,
+    manual_fuel_cost: manualFuelCost,
+    fuel_source: fuelSource,
+    waiting_idle_notes: payload.waiting_idle_notes?.trim() || null,
+    extra_route_notes: payload.extra_route_notes?.trim() || null,
+    status
+  });
+
+  let result = payload.id
+    ? await supabase.from("trip_journeys").update(cleaned).eq("id", payload.id).select().single()
+    : await supabase.from("trip_journeys").insert(cleaned).select().single();
+
+  if (isMissingTripOptionalColumnError(result.error) || isMissingBookingReferenceColumnError(result.error)) {
+    const fallbackPayload = {
+      ...omitTripOptionalColumns(cleaned),
+      estimated_distance_km: effectiveEstimatedDistanceKm
+    };
+    result = payload.id
+      ? await supabase.from("trip_journeys").update(fallbackPayload).eq("id", payload.id).select().single()
+      : await supabase.from("trip_journeys").insert(fallbackPayload).select().single();
+  }
+
+  if (result.error) {
+    logDataError("saveTripJourney error:", result.error, cleaned);
+    throw new Error(result.error.message || "Unable to save trip journey.");
+  }
+
+  dispatchDataChange("trip_journeys");
+  return normalizeTripJourneyRow(result.data as TripJourney);
+}
+
+export async function deleteTripJourney(id: string) {
+  const linkResult = await supabase
+    .from("trip_fuel_logs")
+    .delete()
+    .eq("trip_journey_id", id);
+
+  if (linkResult.error && !isMissingTableError(linkResult.error)) {
+    logDataError("deleteTripJourney link cleanup error:", linkResult.error, { id });
+    throw new Error("Unable to remove linked fuel log relationships for this trip.");
+  }
+
+  const tripResult = await supabase
+    .from("trip_journeys")
+    .delete()
+    .eq("id", id);
+
+  if (tripResult.error) {
+    logDataError("deleteTripJourney trip delete error:", tripResult.error, { id });
+    throw new Error("Unable to delete this trip. Please try again.");
+  }
+
+  dispatchDataChange("trip_fuel_logs");
+  dispatchDataChange("trip_journeys");
+}
+
+export async function linkFuelLogToTrip(tripJourneyId: string, fuelLogId: string) {
+  const { error } = await supabase
+    .from("trip_fuel_logs")
+    .insert({ trip_journey_id: tripJourneyId, fuel_log_id: String(fuelLogId) });
+
+  if (error) {
+    logDataError("linkFuelLogToTrip error:", error, { tripJourneyId, fuelLogId });
+    if (error.code === "22P02" || error.message?.includes("invalid input syntax for type uuid")) {
+      throw new Error(
+        "Fuel log linking needs the Trip Fuel Logs migration that changes fuel_log_id to text. Run the migration, then try linking again."
+      );
+    }
+    if (error.code === "23505") {
+      throw new Error("This fuel log is already linked to a trip. Unlink it first if you need to move it.");
+    }
+    throw new Error(error.message || "Unable to link fuel log to trip.");
+  }
+
+  dispatchDataChange("trip_fuel_logs");
+}
+
+export async function unlinkFuelLogFromTrip(tripJourneyId: string, fuelLogId: string) {
+  const { error } = await supabase
+    .from("trip_fuel_logs")
+    .delete()
+    .eq("trip_journey_id", tripJourneyId)
+    .eq("fuel_log_id", fuelLogId);
+
+  if (error) {
+    logDataError("unlinkFuelLogFromTrip error:", error, { tripJourneyId, fuelLogId });
+    if (error.code === "22P02" || error.message?.includes("invalid input syntax for type uuid")) {
+      throw new Error(
+        "Fuel log unlinking needs the Trip Fuel Logs migration that changes fuel_log_id to text. Run the migration, then try again."
+      );
+    }
+    throw new Error(error.message || "Unable to unlink fuel log from trip.");
+  }
+
+  dispatchDataChange("trip_fuel_logs");
+}
+
+export async function fetchTripFuelLogLinks(): Promise<TripFuelLogLink[]> {
+  const { data, error } = await supabase.from("trip_fuel_logs").select("*");
+
+  if (error) {
+    if (isMissingTableError(error)) {
+      return [];
+    }
+    logDataError("fetchTripFuelLogLinks error:", error);
+    throw new Error(error.message || "Unable to load trip fuel links.");
+  }
+
+  return (data ?? []) as TripFuelLogLink[];
+}
+
+export async function fetchTripJourneysByBookingIds(bookingIds: string[]) {
+  if (!bookingIds.length) return [] as TripJourney[];
+  const bookingIdSet = new Set(bookingIds.map((id) => String(id)));
+  const trips = await fetchTripJourneys();
+  return trips.filter(
+    (trip) =>
+      bookingIdSet.has(String(trip.booking_id ?? "")) ||
+      bookingIdSet.has(String(trip.booking_diary_id ?? ""))
+  );
 }
 
 export async function fetchRouteDistanceEstimate(
@@ -2126,8 +2842,8 @@ export async function saveFuelLog(payload: Partial<FuelLog>) {
     mileage:
       Number((result.data as { mileage?: number | null }).mileage) ||
       Number((result.data as FuelLog).odometer || 0),
-    station: String((result.data as { location?: string }).location ?? "").trim(),
-    location: String((result.data as { location?: string }).location ?? "").trim(),
+    station: normalizeFuelLogLocation((result.data as { location?: string }).location),
+    location: normalizeFuelLogLocation((result.data as { location?: string }).location),
     price_per_litre: (result.data as { price_per_litre?: number | null }).price_per_litre ?? null,
     entry_source: normalizeFuelLogEntrySource((result.data as { entry_source?: string | null }).entry_source),
     receipt_checked: Boolean((result.data as { receipt_checked?: boolean | null }).receipt_checked),
@@ -2169,6 +2885,36 @@ export async function deleteFuelLog(id: string) {
   }
 
   dispatchDataChange("fuel_logs");
+}
+
+export async function updateTransferReceiptStatus(
+  id: string,
+  status: NonNullable<BankTransfer["receipt_status"]>
+) {
+  const receiptStatus = normalizeTransferReceiptStatus(status);
+  const result = await supabase
+    .from("bank_transfers")
+    .update({ receipt_status: receiptStatus })
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (result.error) {
+    logDataError("updateTransferReceiptStatus error:", result.error, { id, receiptStatus });
+    throw new Error(
+      result.error.message ||
+        result.error.details ||
+        result.error.hint ||
+        "Unable to update transfer check status."
+    );
+  }
+
+  dispatchDataChange("bank_transfers");
+  return {
+    receipt_status: normalizeTransferReceiptStatus(
+      (result.data as { receipt_status?: string | null }).receipt_status
+    )
+  };
 }
 
 export async function saveTransfer(
@@ -2262,6 +3008,7 @@ export async function deleteTransfer(id: string) {
 export async function saveWeeklyMileage(payload: Partial<WeeklyMileageEntry>) {
   const { id, ...rest } = payload;
   const odometerReading = rest.odometer_reading ?? rest.mileage;
+  const normalizedVehicleReg = normalizeVehicleRegistration(rest.vehicle_reg);
   const normalizedOdometerReading =
     odometerReading != null && Number.isFinite(Number(odometerReading))
       ? Math.trunc(Number(odometerReading))
@@ -2269,13 +3016,16 @@ export async function saveWeeklyMileage(payload: Partial<WeeklyMileageEntry>) {
   const modernPayload = stripUndefined({
     week_ending: rest.week_ending,
     driver_id: rest.driver_id,
-    vehicle_reg: rest.vehicle_reg,
+    vehicle_reg: normalizedVehicleReg,
     odometer_reading: normalizedOdometerReading,
     mileage: normalizedOdometerReading
   });
 
   if (modernPayload.odometer_reading == null) {
     throw new Error("Odometer reading must be a valid number.");
+  }
+  if (!modernPayload.vehicle_reg) {
+    throw new Error("Vehicle registration is required.");
   }
 
   const modernResult = id
@@ -2288,10 +3038,16 @@ export async function saveWeeklyMileage(payload: Partial<WeeklyMileageEntry>) {
     : await supabase.from("weekly_mileage").insert(modernPayload).select().single();
 
   if (!modernResult.error) {
+    await ensureVehicleForWeeklyMileage({
+      registration: normalizedVehicleReg,
+      driverId: rest.driver_id
+    });
     dispatchDataChange("weekly_mileage");
+    dispatchDataChange("vehicles");
     return {
       ...(modernResult.data as WeeklyMileageEntry),
       driver: "",
+      vehicle_reg: normalizeVehicleRegistration((modernResult.data as WeeklyMileageEntry).vehicle_reg),
       mileage: Number(
         (modernResult.data as WeeklyMileageEntry).odometer_reading ??
           (modernResult.data as WeeklyMileageEntry).mileage ??
@@ -2317,7 +3073,7 @@ export async function saveWeeklyMileage(payload: Partial<WeeklyMileageEntry>) {
   const legacyPayload = stripUndefined({
     week_ending: rest.week_ending,
     driver: driverName || undefined,
-    vehicle_reg: rest.vehicle_reg,
+    vehicle_reg: normalizedVehicleReg,
     mileage: normalizedOdometerReading
   });
 
@@ -2340,11 +3096,17 @@ export async function saveWeeklyMileage(payload: Partial<WeeklyMileageEntry>) {
     );
   }
 
+  await ensureVehicleForWeeklyMileage({
+    registration: normalizedVehicleReg,
+    driverId: rest.driver_id
+  });
   dispatchDataChange("weekly_mileage");
+  dispatchDataChange("vehicles");
   return {
     ...(legacyResult.data as WeeklyMileageEntry),
     driver: driverName,
     driver_id: rest.driver_id ?? "",
+    vehicle_reg: normalizeVehicleRegistration((legacyResult.data as { vehicle_reg?: string }).vehicle_reg ?? normalizedVehicleReg),
     mileage: Number((legacyResult.data as { mileage?: number }).mileage || modernPayload.odometer_reading || 0),
     odometer_reading: Number((legacyResult.data as { mileage?: number }).mileage || modernPayload.odometer_reading || 0),
     user_id: ""

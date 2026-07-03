@@ -87,6 +87,12 @@ type LocationSuggestion = {
   secondaryText: string;
 };
 
+function logGoogleMapsRouteError(scope: string, error: unknown) {
+  console.warn(scope, {
+    message: error instanceof Error ? error.message : String(error)
+  });
+}
+
 export async function GET(request: Request) {
   try {
     const apiKey = getServerGoogleMapsApiKey();
@@ -204,9 +210,10 @@ export async function GET(request: Request) {
           }))
       })
     );
-  } catch {
+  } catch (error) {
+    logGoogleMapsRouteError("[Fuel Bank] Google location autocomplete failed", error);
     return Response.json(
-      createApiError("Google location search unavailable, manual entry still allowed."),
+      createApiError("Google Maps API request failed. Manual entry still allowed."),
       { status: 503 }
     );
   }

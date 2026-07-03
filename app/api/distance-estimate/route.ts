@@ -6,20 +6,6 @@ import {
 } from "@/lib/google-maps";
 import { createApiError, createApiSuccess, parseJsonSafely } from "@/lib/http";
 
-type ComputeRoutesResponse = {
-  routes?: Array<{
-    distanceMeters?: number;
-    duration?: string;
-    legs?: Array<{
-      distanceMeters?: number;
-      duration?: string;
-    }>;
-  }>;
-  error?: {
-    message?: string;
-  };
-};
-
 type DirectionsResponse = {
   routes?: Array<{
     legs?: Array<{
@@ -45,30 +31,6 @@ type RoutePoint = {
   lng?: number;
 };
 
-function toRouteWaypoint(point: string | RoutePoint | undefined) {
-  if (!point) return null;
-  if (typeof point === "string") {
-    const address = point.trim();
-    return address ? { address } : null;
-  }
-
-  const lat = point.lat;
-  const lng = point.lng;
-  if (Number.isFinite(lat) && Number.isFinite(lng) && lat != null && lng != null) {
-    return {
-      location: {
-        latLng: {
-          latitude: lat,
-          longitude: lng
-        }
-      }
-    };
-  }
-
-  const address = point.formatted_address?.trim() || point.label?.trim();
-  return address ? { address } : null;
-}
-
 function toDirectionsWaypoint(point: string | RoutePoint | undefined) {
   if (!point) return "";
   if (typeof point === "string") {
@@ -88,12 +50,6 @@ function toDirectionsWaypoint(point: string | RoutePoint | undefined) {
   return point.formatted_address?.trim() || point.label?.trim() || "";
 }
 
-function parseDurationSeconds(value: string | undefined) {
-  if (!value) return null;
-  const parsed = Number.parseInt(value.replace("s", ""), 10);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
 async function fetchDirectionsEstimate(
   apiKey: string,
   body: { origin?: string | RoutePoint; destination?: string | RoutePoint; waypoints?: Array<string | RoutePoint> }
@@ -111,6 +67,7 @@ async function fetchDirectionsEstimate(
   directionsUrl.searchParams.set("key", apiKey);
   directionsUrl.searchParams.set("language", "en");
   directionsUrl.searchParams.set("region", "th");
+  directionsUrl.searchParams.set("mode", "driving");
 
   const waypointValues = Array.isArray(body.waypoints)
     ? body.waypoints.map(toDirectionsWaypoint).filter(Boolean)
@@ -167,6 +124,12 @@ async function fetchDirectionsEstimate(
   };
 }
 
+function logGoogleMapsDistanceError(error: unknown) {
+  console.warn("[Fuel Bank] Google route estimate failed", {
+    message: error instanceof Error ? error.message : String(error)
+  });
+}
+
 export async function POST(request: Request) {
   try {
     const apiKey = getServerGoogleMapsApiKey();
@@ -186,11 +149,8 @@ export async function POST(request: Request) {
       return Response.json(createApiError("Invalid request body."), { status: 400 });
     }
 
-    const origin = toRouteWaypoint(body.origin);
-    const destination = toRouteWaypoint(body.destination);
-    const waypoints = Array.isArray(body.waypoints)
-      ? body.waypoints.map((waypoint) => toRouteWaypoint(waypoint)).filter((waypoint): waypoint is NonNullable<typeof waypoint> => Boolean(waypoint))
-      : [];
+    const origin = toDirectionsWaypoint(body.origin);
+    const destination = toDirectionsWaypoint(body.destination);
 
     if (!origin || !destination) {
       return Response.json(createApiError("Origin and destination are required."), {
@@ -198,82 +158,23 @@ export async function POST(request: Request) {
       });
     }
 
-    const response = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": apiKey,
-        "X-Goog-FieldMask": "routes.distanceMeters,routes.duration,routes.legs.distanceMeters,routes.legs.duration"
-      },
-      body: JSON.stringify({
-        origin,
-        destination,
-        intermediates: waypoints,
-        travelMode: "DRIVE",
-        routingPreference: "TRAFFIC_UNAWARE",
-        languageCode: "en-US",
-        units: "METRIC"
-      }),
-      cache: "no-store"
+    const directionsEstimate = await fetchDirectionsEstimate(apiKey, body);
+
+    if (directionsEstimate?.ok) {
+      return Response.json(createApiSuccess(directionsEstimate.data));
+    }
+
+    const rawMessage =
+      directionsEstimate?.message ||
+      "Google Maps could not estimate this route. Please check the locations and try again.";
+    const errorCode = extractGoogleMapsErrorCode(rawMessage);
+
+    return Response.json(createApiError(getGoogleMapsErrorMessage(errorCode, rawMessage) ?? rawMessage), {
+      status: 422
     });
-
-    if (!response.ok) {
-      const errorBody = await parseJsonSafely<ComputeRoutesResponse | null>(response).catch(
-        () => null
-      );
-
-      const directionsEstimate = await fetchDirectionsEstimate(apiKey, body);
-      if (directionsEstimate?.ok) {
-        return Response.json(createApiSuccess(directionsEstimate.data));
-      }
-
-      const rawMessage =
-        directionsEstimate?.message ||
-        errorBody?.error?.message ||
-        "Unable to reach Google Maps route service.";
-      const errorCode = extractGoogleMapsErrorCode(rawMessage);
-
-      return Response.json(createApiError(getGoogleMapsErrorMessage(errorCode, rawMessage) ?? rawMessage), {
-        status: 502
-      });
-    }
-
-    const data = await parseJsonSafely<ComputeRoutesResponse>(response);
-    const route = data.routes?.[0];
-    const distanceMeters = route?.distanceMeters ?? null;
-    const durationSeconds = parseDurationSeconds(route?.duration);
-
-    if (distanceMeters == null) {
-      const directionsEstimate = await fetchDirectionsEstimate(apiKey, body);
-      if (directionsEstimate?.ok) {
-        return Response.json(createApiSuccess(directionsEstimate.data));
-      }
-
-      const rawMessage =
-        directionsEstimate?.message ||
-        data.error?.message ||
-        "Google Maps could not estimate this route. Please check the locations and try again.";
-      const errorCode = extractGoogleMapsErrorCode(rawMessage);
-
-      return Response.json(createApiError(getGoogleMapsErrorMessage(errorCode, rawMessage) ?? rawMessage), {
-        status: 422
-      });
-    }
-
-    return Response.json(
-      createApiSuccess({
-        distanceKm: Number((distanceMeters / 1000).toFixed(2)),
-        distanceMeters,
-        durationSeconds: Number.isFinite(durationSeconds) ? durationSeconds : null,
-        provider: "routes_api",
-        legs: (route?.legs ?? []).map((leg) => ({
-          distanceMeters: leg.distanceMeters ?? null,
-          durationSeconds: parseDurationSeconds(leg.duration)
-        }))
-      })
-    );
-  } catch {
-    return Response.json(createApiError("Google route estimate unavailable right now."), {
+  } catch (error) {
+    logGoogleMapsDistanceError(error);
+    return Response.json(createApiError("Google Maps could not calculate this route. You can enter the estimated distance manually."), {
       status: 503
     });
   }

@@ -9,8 +9,10 @@ import {
   fetchDrivers,
   fetchOilChangeBaselinesForVehicles,
   fetchOilChangeHistory,
+  clearDataReadCache,
   fetchVehicles,
   fetchWeeklyMileage,
+  applyOilChangeBaselinesToVehicles,
   saveOilChangeService,
   saveWeeklyMileage
 } from "@/lib/data";
@@ -39,8 +41,29 @@ const normalizeReg = (value: unknown) =>
     .toUpperCase();
 const CURRENT_ODOMETER_BELOW_SERVICE_REASON =
   "Current odometer is lower than the last oil change mileage. Please check mileage data.";
+
+const getServiceLogSortTime = (log: VehicleServiceLog) => {
+  const serviceDateTime = log.service_date ? new Date(log.service_date).getTime() : Number.NEGATIVE_INFINITY;
+  const createdAtTime = log.created_at ? new Date(log.created_at).getTime() : Number.NEGATIVE_INFINITY;
+  return {
+    serviceDateTime: Number.isNaN(serviceDateTime) ? Number.NEGATIVE_INFINITY : serviceDateTime,
+    createdAtTime: Number.isNaN(createdAtTime) ? Number.NEGATIVE_INFINITY : createdAtTime
+  };
+};
+
+const compareServiceLogsByLatest = (left: VehicleServiceLog, right: VehicleServiceLog) => {
+  const leftTime = getServiceLogSortTime(left);
+  const rightTime = getServiceLogSortTime(right);
+  const serviceDateDiff = rightTime.serviceDateTime - leftTime.serviceDateTime;
+  if (serviceDateDiff !== 0) return serviceDateDiff;
+  const createdAtDiff = rightTime.createdAtTime - leftTime.createdAtTime;
+  if (createdAtDiff !== 0) return createdAtDiff;
+  return String(right.id).localeCompare(String(left.id));
+};
+
 type OilActionMode = "set" | "edit" | "mark";
 type OilFilter = "all" | "overdue" | "urgent" | "due_soon" | "review_required" | "not_set" | "ok";
+type WeeklyMileageUpdateFilter = "all" | "updated_this_week" | "not_updated_this_week";
 type OilReportScope = "all" | "overdue" | "urgent_overdue" | "due_soon" | "review_required";
 type WeeklyMileageDebugInfo = {
   userEmail: string | null;
@@ -70,6 +93,7 @@ export default function WeeklyMileagePage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [savingService, setSavingService] = useState(false);
   const [oilFilter, setOilFilter] = useState<OilFilter>("all");
+  const [weeklyMileageUpdateFilter, setWeeklyMileageUpdateFilter] = useState<WeeklyMileageUpdateFilter>("all");
   const [serviceModal, setServiceModal] = useState<{
     mode: OilActionMode;
     vehicleId: string | null;
@@ -94,9 +118,7 @@ export default function WeeklyMileagePage() {
   const [tablePage, setTablePage] = useState(1);
   const [debugInfo, setDebugInfo] = useState<WeeklyMileageDebugInfo | null>(null);
   const isEditing = Boolean(form.id);
-  const showWeeklyMileageDebug =
-    process.env.NODE_ENV !== "production" ||
-    process.env.NEXT_PUBLIC_WEEKLY_MILEAGE_DEBUG === "true";
+  const showWeeklyMileageDebug = process.env.NEXT_PUBLIC_SHOW_DEBUG === "true";
 
   const selectedDriver = useMemo(
     () => drivers.find((driver) => String(driver.id) === String(form.driver_id)),
@@ -120,40 +142,48 @@ export default function WeeklyMileagePage() {
     [sortedEntries]
   );
   const oilChangeRows = useMemo(() => {
-    const vehiclesWithBaselines = vehicles.map((vehicle) => {
-      const baselineForVehicle = oilChangeBaselines.find(
-        (baseline) => normalizeReg(baseline.vehicle_reg) === normalizeReg(vehicle.vehicle_reg)
-      );
+    const hasReal701Mileage = sortedEntries.some((entry) => normalizeReg(entry.vehicle_reg) === "7015145");
+    const latestServiceByVehicle = new Map<string, VehicleServiceLog>();
 
-      console.log("Oil baseline matching", {
-        vehicle: vehicle.vehicle_reg,
-        normalizedVehicle: normalizeReg(vehicle.vehicle_reg),
-        baselineRegs: oilChangeBaselines.map((baseline) => ({
-          raw: baseline.vehicle_reg,
-          normalized: normalizeReg(baseline.vehicle_reg)
-        })),
-        matched: baselineForVehicle ?? null
-      });
-
-      if (!baselineForVehicle) {
-        return vehicle;
+    for (const log of serviceLogs) {
+      const key = normalizeReg(log.vehicle_reg);
+      if (!key) continue;
+      const existing = latestServiceByVehicle.get(key);
+      if (!existing || compareServiceLogsByLatest(log, existing) < 0) {
+        latestServiceByVehicle.set(key, log);
       }
+    }
 
-      console.log("Oil baseline applied to vehicle", {
-        vehicle: vehicle.vehicle_reg,
-        baseline: baselineForVehicle
-      });
+    const vehiclesWithBaselines = applyOilChangeBaselinesToVehicles(vehicles, oilChangeBaselines)
+      .map((vehicle) => {
+        const key = normalizeReg(vehicle.vehicle_reg || vehicle.registration);
+        const latestLog = latestServiceByVehicle.get(key);
 
-      return {
-        ...vehicle,
-        last_oil_change_date: baselineForVehicle.last_oil_change_date,
-        last_oil_change_odometer: Number(baselineForVehicle.last_odometer),
-        oil_change_interval_km: Number(baselineForVehicle.interval_km)
-      };
-    });
+        if (!latestLog) {
+          return vehicle;
+        }
+
+        const oilChangeOdometer = Number(latestLog.oil_change_odometer ?? latestLog.odometer);
+        const intervalKm = Number(latestLog.interval_km);
+
+        return {
+          ...vehicle,
+          vehicle_reg: vehicle.vehicle_reg || latestLog.vehicle_reg,
+          registration: vehicle.registration || latestLog.vehicle_reg,
+          vehicle_type: vehicle.vehicle_type || latestLog.vehicle_type_snapshot || null,
+          last_oil_change_date: latestLog.service_date || vehicle.last_oil_change_date,
+          last_oil_change_odometer: Number.isFinite(oilChangeOdometer)
+            ? Math.trunc(oilChangeOdometer)
+            : vehicle.last_oil_change_odometer,
+          oil_change_interval_km: Number.isFinite(intervalKm) && intervalKm > 0
+            ? Math.trunc(intervalKm)
+            : vehicle.oil_change_interval_km
+        };
+      })
+      .filter((vehicle) => !(hasReal701Mileage && normalizeReg(vehicle.vehicle_reg || vehicle.registration) === "12345"));
 
     return buildOilChangeAlertRows({ vehicles: vehiclesWithBaselines, weeklyMileage: sortedEntries, drivers });
-  }, [drivers, oilChangeBaselines, sortedEntries, vehicles]);
+  }, [drivers, oilChangeBaselines, serviceLogs, sortedEntries, vehicles]);
   const oilSummary = useMemo(
     () => ({
       overdue: oilChangeRows.filter((row) => row.status === "overdue").length,
@@ -175,19 +205,50 @@ export default function WeeklyMileagePage() {
     }),
     [oilChangeRows]
   );
+  const weeklyMileageUpdateSummary = useMemo(
+    () => ({
+      total: oilChangeRows.length,
+      updatedThisWeek: oilChangeRows.filter(
+        (row) => row.lastWeeklyMileageDate && row.weeklyMileageUpdatedThisWeek
+      ).length,
+      notUpdatedThisWeek: oilChangeRows.filter(
+        (row) => row.lastWeeklyMileageDate && !row.weeklyMileageUpdatedThisWeek
+      ).length
+    }),
+    [oilChangeRows]
+  );
   const filteredOilChangeRows = useMemo(
-    () =>
-      oilFilter === "all"
-        ? oilChangeRows
-        : oilChangeRows.filter((row) => row.status === oilFilter),
-    [oilChangeRows, oilFilter]
+    () => {
+      const statusFilteredRows =
+        oilFilter === "all"
+          ? oilChangeRows
+          : oilChangeRows.filter((row) => row.status === oilFilter);
+
+      if (weeklyMileageUpdateFilter === "updated_this_week") {
+        return statusFilteredRows.filter(
+          (row) => row.lastWeeklyMileageDate && row.weeklyMileageUpdatedThisWeek
+        );
+      }
+
+      if (weeklyMileageUpdateFilter === "not_updated_this_week") {
+        return statusFilteredRows.filter(
+          (row) => row.lastWeeklyMileageDate && !row.weeklyMileageUpdatedThisWeek
+        );
+      }
+
+      return statusFilteredRows;
+    },
+    [oilChangeRows, oilFilter, weeklyMileageUpdateFilter]
   );
   const serviceLogsByVehicle = useMemo(() => {
     const map = new Map<string, VehicleServiceLog[]>();
     for (const log of serviceLogs) {
-      const key = log.vehicle_reg.trim().toLowerCase();
+      const key = normalizeReg(log.vehicle_reg);
       if (!key) continue;
       map.set(key, [...(map.get(key) ?? []), log]);
+    }
+    for (const [key, logs] of map.entries()) {
+      map.set(key, [...logs].sort(compareServiceLogsByLatest));
     }
     return map;
   }, [serviceLogs]);
@@ -257,32 +318,19 @@ export default function WeeklyMileagePage() {
       : null;
 
   const loadData = useCallback(async () => {
+    clearDataReadCache();
     setLoading(true);
     setError(null);
     setLoadError(null);
-    const { data: authData, error: authError } = await supabase.auth.getUser();
+    setDebugInfo(null);
+    const authResult = showWeeklyMileageDebug ? await supabase.auth.getUser() : null;
     const queryFilters = {
       vehicles: "select * from vehicles order by vehicle_reg; no client user_id/company_id filter",
       weeklyMileage:
         "select id, week_ending, driver_id, vehicle_reg, odometer_reading, created_at, user_id from weekly_mileage; no client user_id/company_id filter",
       oilChangeBaselines: "select * from oil_change_baselines; merged into cards by normalizeReg(vehicle_reg); no client user_id/company_id filter",
-      serviceHistory: "select * from oil_change_history order by oil_change_date, created_at; no client user_id/company_id filter"
+      serviceHistory: "select * from vehicle_service_logs where service_type is null or service_type = oil_change, plus legacy oil_change_history; newest service_date wins; no client user_id/company_id filter"
     };
-
-    console.groupCollapsed("Weekly Mileage diagnostics");
-    console.log("current user", {
-      id: authData.user?.id ?? null,
-      email: authData.user?.email ?? null,
-      authError: authError?.message ?? null
-    });
-    console.log("tables queried", {
-      weeklyMileage: "weekly_mileage",
-      vehicles: "vehicles",
-      oilChangeBaselines: "oil_change_baselines",
-      serviceHistory: "oil_change_history",
-      filtersApplied: queryFilters
-    });
-    console.groupEnd();
 
     const [driverResult, vehicleResult, mileageResult, serviceLogResult] = await Promise.allSettled([
       fetchDrivers(),
@@ -296,14 +344,6 @@ export default function WeeklyMileagePage() {
             .then((value) => ({ status: "fulfilled" as const, value }))
             .catch((reason) => ({ status: "rejected" as const, reason }))
         : ({ status: "rejected" as const, reason: new Error("Skipped oil baseline lookup because vehicles failed to load.") });
-
-    console.groupCollapsed("Weekly mileage page data load");
-    console.log("drivers", driverResult);
-    console.log("vehicles", vehicleResult);
-    console.log("weekly_mileage", mileageResult);
-    console.log("oil_change_baselines", baselineResult);
-    console.log("oil_change_history", serviceLogResult);
-    console.groupEnd();
 
     if (driverResult.status === "fulfilled") {
       setDrivers(driverResult.value);
@@ -358,51 +398,38 @@ export default function WeeklyMileagePage() {
       setLoadError(t.weeklyMileage.notifications.loadFailed.replace("{items}", "oil baselines"));
     }
 
-    console.log("Weekly mileage page load result", {
-      drivers: driverResult.status === "fulfilled" ? driverResult.value.length : "failed",
-      vehicles: vehicleResult.status === "fulfilled" ? vehicleResult.value.length : "failed",
-      weeklyMileage: mileageResult.status === "fulfilled" ? mileageResult.value.length : "failed",
-      oilBaselines: baselineResult.status === "fulfilled" ? baselineResult.value.length : "failed",
-      serviceLogs: serviceLogResult.status === "fulfilled" ? serviceLogResult.value.length : "failed",
-      errors: {
-        drivers: driverResult.status === "rejected" ? String(driverResult.reason) : null,
-        vehicles: vehicleResult.status === "rejected" ? String(vehicleResult.reason) : null,
-        weeklyMileage: mileageResult.status === "rejected" ? String(mileageResult.reason) : null,
-        oilBaselines: baselineResult.status === "rejected" ? String(baselineResult.reason) : null,
-        serviceLogs: serviceLogResult.status === "rejected" ? String(serviceLogResult.reason) : null
-      }
-    });
-
-    setDebugInfo({
-      userEmail: authData.user?.email ?? null,
-      userId: authData.user?.id ?? null,
-      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ?? "missing",
-      tables: {
-        vehicles: "public.vehicles",
-        weeklyMileage: "public.weekly_mileage",
-        oilChangeBaselines: "public.oil_change_baselines",
-        serviceHistory: "public.oil_change_history"
-      },
-      filters: queryFilters,
-      rowCounts: {
-        drivers: driverResult.status === "fulfilled" ? driverResult.value.length : "failed",
-        vehicles: vehicleResult.status === "fulfilled" ? vehicleResult.value.length : "failed",
-        weeklyMileage: mileageResult.status === "fulfilled" ? mileageResult.value.length : "failed",
-        oilChangeBaselines: baselineResult.status === "fulfilled" ? baselineResult.value.length : "failed",
-        serviceHistory: serviceLogResult.status === "fulfilled" ? serviceLogResult.value.length : "failed"
-      },
-      errors: {
-        auth: authError?.message ?? null,
-        drivers: driverResult.status === "rejected" ? String(driverResult.reason) : null,
-        vehicles: vehicleResult.status === "rejected" ? String(vehicleResult.reason) : null,
-        weeklyMileage: mileageResult.status === "rejected" ? String(mileageResult.reason) : null,
-        oilChangeBaselines: baselineResult.status === "rejected" ? String(baselineResult.reason) : null,
-        serviceHistory: serviceLogResult.status === "rejected" ? String(serviceLogResult.reason) : null
-      }
-    });
+    if (showWeeklyMileageDebug) {
+      setDebugInfo({
+        userEmail: authResult?.data.user?.email ?? null,
+        userId: authResult?.data.user?.id ?? null,
+        supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL ?? "missing",
+        tables: {
+          vehicles: "public.vehicles",
+          weeklyMileage: "public.weekly_mileage",
+          oilChangeBaselines: "public.oil_change_baselines",
+          serviceHistory: "public.vehicle_service_logs + public.oil_change_history"
+        },
+        filters: queryFilters,
+        rowCounts: {
+          drivers: driverResult.status === "fulfilled" ? driverResult.value.length : "failed",
+          vehicles: vehicleResult.status === "fulfilled" ? vehicleResult.value.length : "failed",
+          weeklyMileage: mileageResult.status === "fulfilled" ? mileageResult.value.length : "failed",
+          oilChangeBaselines: baselineResult.status === "fulfilled" ? baselineResult.value.length : "failed",
+          serviceHistory: serviceLogResult.status === "fulfilled" ? serviceLogResult.value.length : "failed"
+        },
+        errors: {
+          auth: authResult?.error?.message ?? null,
+          drivers: driverResult.status === "rejected" ? String(driverResult.reason) : null,
+          vehicles: vehicleResult.status === "rejected" ? String(vehicleResult.reason) : null,
+          weeklyMileage: mileageResult.status === "rejected" ? String(mileageResult.reason) : null,
+          oilChangeBaselines: baselineResult.status === "rejected" ? String(baselineResult.reason) : null,
+          serviceHistory: serviceLogResult.status === "rejected" ? String(serviceLogResult.reason) : null
+        }
+      });
+    }
 
     setLoading(false);
-  }, [language, t.nav.drivers, t.weeklyMileage.notifications.loadFailed, t.weeklyMileage.title]);
+  }, [language, showWeeklyMileageDebug, t.nav.drivers, t.weeklyMileage.notifications.loadFailed, t.weeklyMileage.title]);
 
   useEffect(() => {
     void loadData();
@@ -560,7 +587,21 @@ export default function WeeklyMileagePage() {
     }
 
     const usedKm = row.currentOdometer - row.lastOilChangeOdometer;
-    return Math.max(0, Math.min(100, Math.round((usedKm / row.oilChangeIntervalKm) * 100)));
+    const safeUsedKm = Math.max(0, usedKm);
+    const realPercent = (safeUsedKm / row.oilChangeIntervalKm) * 100;
+    const displayPercent =
+      safeUsedKm === 0
+        ? "0"
+        : realPercent < 1
+          ? (Math.ceil(realPercent * 10) / 10).toFixed(1)
+          : (Math.round(realPercent * 10) / 10).toFixed(realPercent >= 10 && Number.isInteger(Math.round(realPercent * 10) / 10) ? 0 : 1);
+    const barPercent = safeUsedKm > 0 ? Math.max(Math.min(realPercent, 100), 1) : 0;
+
+    return {
+      realPercent,
+      displayPercent,
+      barPercent
+    };
   };
 
   const actionLine = (row: (typeof oilChangeRows)[number]) => {
@@ -603,9 +644,81 @@ export default function WeeklyMileagePage() {
   const formatKmValue = (value: number | null) =>
     value != null && Number.isFinite(value) ? formatNumber(value, language) : "-";
 
+  const parseDateValue = (value: string | null | undefined) => {
+    if (!value) return null;
+    const isoDateMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const parsed = isoDateMatch
+      ? new Date(Number(isoDateMatch[1]), Number(isoDateMatch[2]) - 1, Number(isoDateMatch[3]))
+      : new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  const getDaysSinceWeeklyMileageAdded = (addedAt: string | null) => {
+    const parsed = parseDateValue(addedAt);
+    if (!parsed) return null;
+    const now = new Date();
+    const diff = now.getTime() - parsed.getTime();
+    return Math.max(0, Math.floor(diff / (24 * 60 * 60 * 1000)));
+  };
+
+  const formatWeeklyMileageAddedAge = (addedAt: string | null) => {
+    const days = getDaysSinceWeeklyMileageAdded(addedAt);
+    if (days == null) return "";
+    if (days === 0) return t.weeklyMileage.oil.addedToday;
+    if (days === 1) return t.weeklyMileage.oil.addedOneDayAgo;
+    return t.weeklyMileage.oil.addedDaysAgo.replace("{days}", formatNumber(days, language));
+  };
+
   const todayKey = () => new Date().toISOString().slice(0, 10);
   const getLatestServiceLog = (registration: string) =>
-    serviceLogsByVehicle.get(registration.trim().toLowerCase())?.[0] ?? null;
+    serviceLogsByVehicle.get(normalizeReg(registration))?.[0] ?? null;
+  const getVehicleBaselineHistoryLog = (registration: string): VehicleServiceLog | null => {
+    const key = normalizeReg(registration);
+    const vehicle = vehicles.find((item) => normalizeReg(item.vehicle_reg || item.registration) === key);
+    if (!vehicle?.last_oil_change_date || vehicle.last_oil_change_odometer == null) {
+      return null;
+    }
+
+    const odometer = Number(vehicle.last_oil_change_odometer);
+    const intervalKm =
+      vehicle.oil_change_interval_km != null && Number.isFinite(Number(vehicle.oil_change_interval_km))
+        ? Number(vehicle.oil_change_interval_km)
+        : null;
+
+    return {
+      id: `vehicle-baseline-${key}-${vehicle.last_oil_change_date}`,
+      vehicle_id: vehicle.id,
+      vehicle_reg: vehicle.vehicle_reg || registration,
+      service_type: "oil_change",
+      service_date: vehicle.last_oil_change_date,
+      odometer,
+      oil_change_odometer: odometer,
+      service_odometer: odometer,
+      interval_km: intervalKm,
+      next_service_due_odometer: intervalKm != null ? Math.trunc(odometer + intervalKm) : null,
+      vehicle_type_snapshot: vehicle.vehicle_type ?? null,
+      notes: t.weeklyMileage.oil.oilChangedNote,
+      created_at: vehicle.last_oil_change_date
+    };
+  };
+
+  const appendBaselineHistoryLog = (registration: string, logs: VehicleServiceLog[]) => {
+    const baselineLog = getVehicleBaselineHistoryLog(registration);
+    if (!baselineLog) {
+      return logs;
+    }
+
+    const baselineOdometer = Number(baselineLog.oil_change_odometer ?? baselineLog.odometer);
+    const alreadyIncluded = logs.some((log) => {
+      const logOdometer = Number(log.oil_change_odometer ?? log.odometer);
+      return log.service_date === baselineLog.service_date && logOdometer === baselineOdometer;
+    });
+
+    return alreadyIncluded
+      ? logs
+      : [...logs, baselineLog].sort(compareServiceLogsByLatest);
+  };
+
   const openServiceModal = (mode: OilActionMode, row: (typeof oilChangeRows)[number]) => {
     const latestLog = getLatestServiceLog(row.registration);
     const defaultInterval =
@@ -619,21 +732,6 @@ export default function WeeklyMileagePage() {
       mode === "mark"
         ? row.currentOdometer ?? row.lastOilChangeOdometer ?? ""
         : row.lastOilChangeOdometer ?? latestLog?.odometer ?? row.currentOdometer ?? "";
-
-    console.log("Weekly Mileage oil change action clicked:", {
-      action: mode,
-      vehicleRegistration: row.registration,
-      vehicleId: row.vehicleId,
-      currentStatus: row.status,
-      lastOilChangeDate: row.lastOilChangeDate,
-      lastOilChangeOdometer: row.lastOilChangeOdometer,
-      latestServiceLog: latestLog,
-      defaults: {
-        serviceDate: defaultDate,
-        serviceOdometer: defaultOdometer,
-        intervalKm: defaultInterval
-      }
-    });
 
     setError(null);
     setSuccessMessage(null);
@@ -696,9 +794,7 @@ export default function WeeklyMileagePage() {
         updateExistingLog: serviceModal.mode === "edit",
         recordHistory: serviceModal.mode === "mark"
       };
-      console.log("Weekly Mileage oil change save payload:", servicePayload);
-      const result = await saveOilChangeService(servicePayload);
-      console.log("Weekly Mileage oil change save result:", result);
+      await saveOilChangeService(servicePayload);
 
       await loadData();
       setSuccessMessage(
@@ -718,9 +814,40 @@ export default function WeeklyMileagePage() {
     }
   };
 
-  const selectedHistoryLogs = historyVehicleReg
-    ? serviceLogsByVehicle.get(historyVehicleReg.trim().toLowerCase()) ?? []
-    : [];
+  const openServiceHistory = async (registration: string) => {
+    setHistoryVehicleReg(registration);
+    await loadData();
+  };
+
+  const selectedHistoryRow = historyVehicleReg
+    ? oilChangeRows.find((row) => normalizeReg(row.registration) === normalizeReg(historyVehicleReg)) ?? null
+    : null;
+  const selectedHistoryLogs = (() => {
+    const logs = historyVehicleReg
+      ? appendBaselineHistoryLog(historyVehicleReg, serviceLogsByVehicle.get(normalizeReg(historyVehicleReg)) ?? [])
+      : [];
+    if (logs.length || !selectedHistoryRow?.lastOilChangeDate || selectedHistoryRow.lastOilChangeOdometer == null) {
+      return logs;
+    }
+
+    return [
+      {
+        id: `baseline-${normalizeReg(selectedHistoryRow.registration)}`,
+        vehicle_id: selectedHistoryRow.vehicleId,
+        vehicle_reg: selectedHistoryRow.registration,
+        service_type: "oil_change",
+        service_date: selectedHistoryRow.lastOilChangeDate,
+        odometer: selectedHistoryRow.lastOilChangeOdometer,
+        oil_change_odometer: selectedHistoryRow.lastOilChangeOdometer,
+        service_odometer: selectedHistoryRow.lastOilChangeOdometer,
+        interval_km: selectedHistoryRow.oilChangeIntervalKm,
+        next_service_due_odometer: selectedHistoryRow.nextOilChangeDueOdometer,
+        vehicle_type_snapshot: selectedHistoryRow.vehicleType,
+        notes: t.weeklyMileage.oil.oilChangedNote,
+        created_at: selectedHistoryRow.lastOilChangeDate
+      } satisfies VehicleServiceLog
+    ];
+  })();
 
   const exportWeeklyMileage = () =>
     exportToCsv(
@@ -796,6 +923,10 @@ export default function WeeklyMileagePage() {
       "Driver Name": row.driverName ?? "",
       "Vehicle Type": row.vehicleType ? vehicleTypeLabel(row.vehicleType) : "",
       "Current Odometer": row.currentOdometer ?? "",
+      "Last Weekly Mileage Date": row.lastWeeklyMileageDate ?? "",
+      "Last Weekly Mileage Odometer": row.lastWeeklyMileageOdometer ?? "",
+      "Days Since Weekly Mileage Added": row.daysSinceWeeklyMileage ?? "",
+      "Weekly Mileage Updated This Week": row.weeklyMileageUpdatedThisWeek ? "Yes" : "No",
       "Last Oil Change Date": row.lastOilChangeDate ?? "",
       "Last Oil Change Odometer": row.lastOilChangeOdometer ?? "",
       "Service Interval KM": row.oilChangeIntervalKm ?? "",
@@ -1085,24 +1216,179 @@ export default function WeeklyMileagePage() {
               ))}
             </div>
 
+            <div className="mb-5 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <h4 className="text-sm font-bold uppercase tracking-normal text-slate-900">
+                    Weekly Mileage Update Status
+                  </h4>
+                  <p className="mt-1 text-sm font-semibold text-slate-500">
+                    Vehicles Checked: {formatNumber(weeklyMileageUpdateSummary.total, language)}
+                  </p>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[420px]">
+                  {[
+                    {
+                      key: "updated",
+                      label: t.weeklyMileage.oil.thisWeek,
+                      value: weeklyMileageUpdateSummary.updatedThisWeek,
+                      className: "border-emerald-200 bg-emerald-50 text-emerald-800"
+                    },
+                    {
+                      key: "not-updated",
+                      label: t.weeklyMileage.oil.notUpdatedThisWeek,
+                      value: weeklyMileageUpdateSummary.notUpdatedThisWeek,
+                      className: "border-amber-200 bg-amber-50 text-amber-800"
+                    }
+                  ].map((item) => (
+                    <div key={item.key} className={`rounded-lg border px-3 py-2 ${item.className}`}>
+                      <p className="text-xs font-bold uppercase leading-4 tracking-normal text-current/70">{item.label}</p>
+                      <p className="mt-1 text-2xl font-bold tracking-normal text-current">
+                        {formatNumber(item.value, language)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {[
+                  {
+                    key: "all",
+                    label: t.weeklyMileage.oil.filters.all
+                  },
+                  {
+                    key: "updated_this_week",
+                    label: t.weeklyMileage.oil.thisWeek
+                  },
+                  {
+                    key: "not_updated_this_week",
+                    label: t.weeklyMileage.oil.notUpdatedThisWeek
+                  }
+                ].map((filter) => (
+                  <button
+                    key={filter.key}
+                    type="button"
+                    onClick={() => setWeeklyMileageUpdateFilter(filter.key as WeeklyMileageUpdateFilter)}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                      weeklyMileageUpdateFilter === filter.key
+                        ? "border-slate-900 bg-slate-900 text-white"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                    }`}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {filteredOilChangeRows.length === 0 ? (
               <EmptyState title={t.weeklyMileage.oil.noVehiclesInStatusTitle} description={t.weeklyMileage.oil.noVehiclesInStatusDescription} />
             ) : (
               <div className="space-y-4">
                 {filteredOilChangeRows.map((row) => {
-                  const vehicleLogs = serviceLogsByVehicle.get(row.registration.trim().toLowerCase()) ?? [];
+                  const vehicleLogs = appendBaselineHistoryLog(
+                    row.registration,
+                    serviceLogsByVehicle.get(normalizeReg(row.registration)) ?? []
+                  );
                   const primaryAction =
                     row.status === "not_set"
                       ? t.weeklyMileage.oil.setBaseline
                       : t.weeklyMileage.oil.markOilChanged;
                   const progress = getServiceProgress(row);
+                  const serviceHistoryCount =
+                    vehicleLogs.length ||
+                    (row.lastOilChangeDate && row.lastOilChangeOdometer != null ? 1 : 0);
+                  const weeklyMileageUpdatedThisWeek = row.weeklyMileageUpdatedThisWeek;
+                  const weeklyMileageAddedAge = formatWeeklyMileageAddedAge(row.lastWeeklyMileageAddedAt);
+                  const oilCardMetricBoxes = [
+                    {
+                      key: "current-odometer",
+                      className: "border-white/80 bg-white/70",
+                      content: (
+                        <>
+                          <p className="metric-label">{t.weeklyMileage.oil.currentOdometer}</p>
+                          <p className="mt-1 text-lg font-bold text-slate-950">
+                            {row.currentOdometer == null ? t.weeklyMileage.oil.noData : formatKmValue(row.currentOdometer)}
+                          </p>
+                        </>
+                      )
+                    },
+                    {
+                      key: "next-service-due",
+                      className: "border-white/80 bg-white/70",
+                      content: (
+                        <>
+                          <p className="metric-label">{t.weeklyMileage.nextServiceDue}</p>
+                          <p className="mt-1 text-lg font-bold text-slate-950">{formatKmValue(row.nextOilChangeDueOdometer)}</p>
+                        </>
+                      )
+                    },
+                    {
+                      key: "km-remaining",
+                      className: "border-white/80 bg-white/70",
+                      content: (
+                        <>
+                          <p className="metric-label">{t.weeklyMileage.oil.kmRemaining}</p>
+                          <p className={`mt-1 text-2xl font-bold tracking-normal ${kmRemainingClass(row.kmRemaining)}`}>
+                            {row.kmRemaining == null ? "-" : formatKmValue(row.kmRemaining)}
+                          </p>
+                        </>
+                      )
+                    },
+                    {
+                      key: "last-weekly-mileage",
+                      className:
+                        row.lastWeeklyMileageDate && !weeklyMileageUpdatedThisWeek
+                          ? "border-amber-300 bg-amber-50"
+                          : "border-white/80 bg-white/70",
+                      content: (
+                        <>
+                          <p className="mt-1.5 text-[10px] font-bold uppercase leading-4 tracking-normal text-slate-500">
+                            {t.weeklyMileage.oil.lastWeeklyMileageAdded}
+                          </p>
+                          {row.lastWeeklyMileageDate ? (
+                            <>
+                              <p className="mt-1 text-base font-bold text-slate-950">
+                                {formatDate(row.lastWeeklyMileageDate, language)}
+                              </p>
+                              <p className="mt-1 text-xs font-semibold text-slate-600">
+                                {t.weeklyMileage.oil.odometer}: {formatKmValue(row.lastWeeklyMileageOdometer)}
+                              </p>
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <span
+                                  className={`inline-flex rounded-full px-2 py-0.5 text-xs font-bold ${
+                                    weeklyMileageUpdatedThisWeek
+                                      ? "bg-emerald-100 text-emerald-700"
+                                      : "bg-amber-100 text-amber-800"
+                                  }`}
+                                >
+                                  {weeklyMileageUpdatedThisWeek
+                                    ? t.weeklyMileage.oil.thisWeek
+                                    : t.weeklyMileage.oil.notUpdatedThisWeek}
+                                </span>
+                                {weeklyMileageAddedAge ? (
+                                  <span className="text-xs font-semibold text-slate-500">
+                                    {weeklyMileageAddedAge}
+                                  </span>
+                                ) : null}
+                              </div>
+                            </>
+                          ) : (
+                            <p className="mt-1 text-sm font-semibold text-slate-500">
+                              {t.weeklyMileage.oil.noWeeklyMileageFound}
+                            </p>
+                          )}
+                        </>
+                      )
+                    }
+                  ];
 
                   return (
                     <article
                       key={row.registration}
                       className={`rounded-lg border p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-xl sm:p-5 ${oilCardClass(row.status)}`}
                     >
-                      <div className="grid gap-4 xl:grid-cols-[minmax(190px,0.75fr)_minmax(0,1.35fr)_minmax(190px,0.55fr)] xl:items-start">
+                      <div className="grid gap-4 xl:grid-cols-[minmax(190px,0.68fr)_minmax(0,1.8fr)_minmax(190px,0.52fr)] xl:items-start">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <h4 className="text-2xl font-bold tracking-normal text-slate-950">{row.registration}</h4>
@@ -1121,21 +1407,12 @@ export default function WeeklyMileagePage() {
                           ) : null}
                         </div>
 
-                        <div className="grid gap-3 sm:grid-cols-3">
-                          <div className="rounded-lg border border-white/80 bg-white/70 p-3">
-                            <p className="metric-label">{t.weeklyMileage.oil.currentOdometer}</p>
-                            <p className="mt-1 text-lg font-bold text-slate-950">{row.currentOdometer == null ? t.weeklyMileage.oil.noData : formatKmValue(row.currentOdometer)}</p>
-                          </div>
-                          <div className="rounded-lg border border-white/80 bg-white/70 p-3">
-                            <p className="metric-label">{t.weeklyMileage.nextServiceDue}</p>
-                            <p className="mt-1 text-lg font-bold text-slate-950">{formatKmValue(row.nextOilChangeDueOdometer)}</p>
-                          </div>
-                          <div className="rounded-lg border border-white/80 bg-white/70 p-3">
-                            <p className="metric-label">{t.weeklyMileage.oil.kmRemaining}</p>
-                            <p className={`mt-1 text-2xl font-bold tracking-normal ${kmRemainingClass(row.kmRemaining)}`}>
-                              {row.kmRemaining == null ? "-" : formatKmValue(row.kmRemaining)}
-                            </p>
-                          </div>
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                          {oilCardMetricBoxes.map((box) => (
+                            <div key={box.key} className={`min-h-[116px] rounded-lg border p-3 ${box.className}`}>
+                              {box.content}
+                            </div>
+                          ))}
                         </div>
 
                         <div className="flex flex-col gap-2 sm:flex-row xl:flex-col">
@@ -1147,7 +1424,7 @@ export default function WeeklyMileagePage() {
                             <Pencil className="h-4 w-4" />
                             {row.status === "not_set" ? t.weeklyMileage.oil.setBaseline : t.common.edit}
                           </button>
-                          <button type="button" onClick={() => setHistoryVehicleReg(row.registration)} className="btn-secondary w-full justify-center gap-2">
+                          <button type="button" onClick={() => void openServiceHistory(row.registration)} className="btn-secondary w-full justify-center gap-2">
                             <History className="h-4 w-4" />
                             {t.weeklyMileage.oil.serviceHistory}
                           </button>
@@ -1157,12 +1434,12 @@ export default function WeeklyMileagePage() {
                       <div className="mt-4">
                         <div className="mb-2 flex items-center justify-between gap-3 text-xs font-semibold text-slate-500">
                           <span>{t.weeklyMileage.oil.oilServiceUsage}</span>
-                          <span>{progress == null ? t.weeklyMileage.oil.waitingForBaseline : t.weeklyMileage.oil.percentUsed.replace("{percent}", String(progress))}</span>
+                          <span>{progress == null ? t.weeklyMileage.oil.waitingForBaseline : t.weeklyMileage.oil.percentUsed.replace("{percent}", progress.displayPercent)}</span>
                         </div>
                         <div className="h-2.5 overflow-hidden rounded-full bg-white/80 ring-1 ring-slate-200/70">
                           <div
                             className={`h-full rounded-full transition-all duration-500 ${progressBarClass(row.status)}`}
-                            style={{ width: `${progress ?? 0}%` }}
+                            style={{ width: `${progress?.barPercent ?? 0}%` }}
                           />
                         </div>
                       </div>
@@ -1186,7 +1463,7 @@ export default function WeeklyMileagePage() {
                         </div>
                         <div>
                           <p className="metric-label">{t.weeklyMileage.oil.history}</p>
-                          <p className="mt-1 font-semibold text-slate-900">{vehicleLogs.length ? `${formatNumber(vehicleLogs.length, language)} ${t.weeklyMileage.oil.records}` : t.weeklyMileage.oil.noRecords}</p>
+                          <p className="mt-1 font-semibold text-slate-900">{serviceHistoryCount ? `${formatNumber(serviceHistoryCount, language)} ${t.weeklyMileage.oil.records}` : t.weeklyMileage.oil.noRecords}</p>
                         </div>
                       </div>
                     </article>

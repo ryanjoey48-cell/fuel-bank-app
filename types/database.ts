@@ -161,6 +161,73 @@ export type FuelLogReceiptSummary = {
 
 export type BankTransferWithDriver = BankTransfer;
 
+export type TripFuelSource = "linked" | "manual";
+
+export type TripJourneyStatus =
+  | "created"
+  | "missing_mileage"
+  | "missing_fuel"
+  | "missing_estimated_distance"
+  | "completed";
+
+export type TripJourney = {
+  id: string;
+  booking_diary_id: string | null;
+  booking_id: string | null;
+  booking_reference?: string | null;
+  trip_date: string;
+  date?: string | null;
+  pickup_time: string | null;
+  start_location_type?: "depot" | "custom" | string | null;
+  start_location?: string | null;
+  depot_address?: string | null;
+  pickup_location: string | null;
+  dropoff_location: string | null;
+  route: string | null;
+  vehicle_type: string | null;
+  vehicle_reg: string | null;
+  driver: string | null;
+  load_details: string | null;
+  load_text?: string | null;
+  warehouse_no: string | null;
+  booking_notes: string | null;
+  notes?: string | null;
+  start_mileage: number | null;
+  end_mileage: number | null;
+  actual_distance_km?: number | null;
+  manual_actual_km?: number | null;
+  distance_difference_km?: number | null;
+  distance_difference_percent?: number | null;
+  return_to_depot: boolean;
+  estimated_distance_km: number | null;
+  estimated_duration_minutes?: number | null;
+  google_maps_route_url?: string | null;
+  estimated_distance_source: string | null;
+  manual_estimated_distance_km: number | null;
+  manual_litres_used: number | null;
+  manual_litres?: number | null;
+  manual_fuel_cost: number | null;
+  fuel_source: TripFuelSource;
+  waiting_idle_notes: string | null;
+  extra_route_notes: string | null;
+  status: TripJourneyStatus;
+  created_at: string;
+  updated_at: string;
+  user_id?: string | null;
+};
+
+export type TripFuelLogLink = {
+  id: string;
+  trip_journey_id: string;
+  fuel_log_id: string;
+  created_at: string;
+  user_id?: string | null;
+};
+
+export type TripJourneyWithFuel = TripJourney & {
+  linkedFuelLogs: FuelLogWithDriver[];
+};
+
 export type BookingDiaryEntry = {
   id: string;
   booking_id: string | null;
@@ -172,6 +239,15 @@ export type BookingDiaryEntry = {
   pickup: string;
   warehouse_no: string | null;
   dropoff: string;
+  pickup_place_id?: string | null;
+  dropoff_place_id?: string | null;
+  pickup_address?: string | null;
+  dropoff_address?: string | null;
+  estimated_distance_km?: number | null;
+  estimated_duration_minutes?: number | null;
+  google_maps_route_url?: string | null;
+  distance_source?: string | null;
+  route_calculated_at?: string | null;
   vehicle: string | null;
   driver: string | null;
   notes: string | null;

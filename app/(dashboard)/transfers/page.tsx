@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, Trash2 } from "lucide-react";
+import { CheckCircle2, Download, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { Header } from "@/components/header";
@@ -9,7 +9,7 @@ import {
   normalizeTransferTypeKey,
   TRANSFER_TYPE_KEYS
 } from "@/lib/localized-values";
-import { deleteTransfer, fetchDrivers, fetchTransfers, saveTransfer } from "@/lib/data";
+import { deleteTransfer, fetchDrivers, fetchTransfers, saveTransfer, updateTransferReceiptStatus } from "@/lib/data";
 import { exportToCsv } from "@/lib/export";
 import { applyRequiredValidationMessage, clearValidationMessage } from "@/lib/form-validation";
 import { useLanguage } from "@/lib/language-provider";
@@ -17,6 +17,7 @@ import { formatCurrency, formatDate, formatNumber, today } from "@/lib/utils";
 import type { BankTransferWithDriver, Driver } from "@/types/database";
 
 const PAGE_SIZE = 25;
+type TransferCheckFilter = "all" | "checked" | "not_checked";
 
 function createInitialForm(defaultTransferType: string) {
   return {
@@ -38,10 +39,19 @@ export default function TransfersPage() {
     label: t.transfer.type[value]
   }));
   const receiptStatusOptions = [
-    { value: "pending" as const, label: language === "th" ? "Pending" : "Pending" },
-    { value: "submitted" as const, label: language === "th" ? "Submitted" : "Submitted" },
-    { value: "approved" as const, label: language === "th" ? "Approved" : "Approved" }
+    { value: "pending" as const, label: language === "th" ? "Not Checked" : "Not Checked" },
+    { value: "submitted" as const, label: language === "th" ? "Needs Review" : "Needs Review" },
+    { value: "approved" as const, label: language === "th" ? "Checked" : "Checked" }
   ];
+  const reviewCopy = {
+    all: language === "th" ? "All" : "All",
+    checked: language === "th" ? "Checked" : "Checked",
+    notChecked: language === "th" ? "Not Checked" : "Not Checked",
+    filterLabel: language === "th" ? "Checked status" : "Checked status",
+    markChecked: language === "th" ? "Mark Checked" : "Mark Checked",
+    markNotChecked: language === "th" ? "Mark Not Checked" : "Mark Not Checked",
+    unableToUpdate: language === "th" ? "Unable to update transfer check status." : "Unable to update transfer check status."
+  };
 
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [transfers, setTransfers] = useState<BankTransferWithDriver[]>([]);
@@ -49,6 +59,8 @@ export default function TransfersPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [checkFilter, setCheckFilter] = useState<TransferCheckFilter>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -60,10 +72,17 @@ export default function TransfersPage() {
   );
   const sortedTransfers = useMemo(
     () =>
-      [...transfers].sort(
+      [...transfers]
+        .filter((transfer) => {
+          const checked = transfer.receipt_status === "approved";
+          if (checkFilter === "checked") return checked;
+          if (checkFilter === "not_checked") return !checked;
+          return true;
+        })
+        .sort(
         (left, right) => right.date.localeCompare(left.date) || String(right.id).localeCompare(String(left.id))
       ),
-    [transfers]
+    [checkFilter, transfers]
   );
   const totalPages = Math.max(1, Math.ceil(sortedTransfers.length / PAGE_SIZE));
   const pagedTransfers = useMemo(() => {
@@ -180,6 +199,27 @@ export default function TransfersPage() {
     }
   };
 
+  const handleCheckToggle = async (transfer: BankTransferWithDriver) => {
+    const checked = transfer.receipt_status === "approved";
+    try {
+      setTogglingId(String(transfer.id));
+      setError(null);
+      setSuccessMessage(null);
+      await updateTransferReceiptStatus(String(transfer.id), checked ? "pending" : "approved");
+      setTransfers((current) =>
+        current.map((item) =>
+          String(item.id) === String(transfer.id)
+            ? { ...item, receipt_status: checked ? "pending" : "approved" }
+            : item
+        )
+      );
+    } catch (err) {
+      setError(err instanceof Error && err.message ? err.message : reviewCopy.unableToUpdate);
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
   const exportTransfers = () =>
     exportToCsv(
       sortedTransfers.map((transfer) => ({
@@ -188,7 +228,8 @@ export default function TransfersPage() {
         Vehicle: transfer.vehicle_reg,
         Amount: transfer.amount,
         Type: getTransferTypeLabel(t, transfer.transfer_type),
-        ReceiptStatus: transfer.receipt_status ?? "pending",
+        CheckedStatus: transfer.receipt_status === "approved" ? "Checked" : "Not Checked",
+        ReceiptStatus: receiptStatusOptions.find((option) => option.value === (transfer.receipt_status ?? "pending"))?.label ?? "Not Checked",
         Notes: transfer.notes ?? ""
       })),
       "transfers-report"
@@ -377,6 +418,25 @@ export default function TransfersPage() {
             </div>
           </div>
 
+          <div className="mb-4 flex flex-col gap-2 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <label className="text-sm font-semibold text-slate-700" htmlFor="transfer-check-filter">
+              {reviewCopy.filterLabel}
+            </label>
+            <select
+              id="transfer-check-filter"
+              value={checkFilter}
+              onChange={(event) => {
+                setCheckFilter(event.target.value as TransferCheckFilter);
+                setCurrentPage(1);
+              }}
+              className="form-input bg-white sm:max-w-[220px]"
+            >
+              <option value="all">{reviewCopy.all}</option>
+              <option value="checked">{reviewCopy.checked}</option>
+              <option value="not_checked">{reviewCopy.notChecked}</option>
+            </select>
+          </div>
+
           {loading ? (
             <p className="text-sm text-slate-500">{t.transfers.loadingTransfers}</p>
             ) : sortedTransfers.length === 0 ? (
@@ -384,7 +444,7 @@ export default function TransfersPage() {
           ) : (
             <>
               <div className="space-y-3.5 md:hidden">
-                {transfers.map((transfer) => (
+                {pagedTransfers.map((transfer) => (
                   <div key={transfer.id} className="subtle-panel p-4">
                     <div className="flex flex-col gap-2.5 min-[400px]:flex-row min-[400px]:items-start min-[400px]:justify-between">
                       <div>
@@ -408,6 +468,19 @@ export default function TransfersPage() {
                       {transfer.notes || "-"}
                     </p>
                     <div className="mt-4 flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void handleCheckToggle(transfer)}
+                        disabled={togglingId === String(transfer.id)}
+                        className="btn-secondary w-full gap-2 disabled:opacity-50"
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                        {togglingId === String(transfer.id)
+                          ? t.common.saving
+                          : transfer.receipt_status === "approved"
+                            ? reviewCopy.markNotChecked
+                            : reviewCopy.markChecked}
+                      </button>
                       <button
                         type="button"
                         onClick={() =>
@@ -451,14 +524,14 @@ export default function TransfersPage() {
                           <th className="table-head-cell text-left">{t.transfers.driver}</th>
                           <th className="table-head-cell text-left">{t.fuelLogs.vehicleReg}</th>
                           <th className="table-head-cell text-left">{t.transfers.type}</th>
-                          <th className="table-head-cell text-left">Receipt status</th>
+                          <th className="table-head-cell text-left">{reviewCopy.filterLabel}</th>
                           <th className="table-head-cell text-right">{t.transfers.amount}</th>
                           <th className="table-head-cell text-left">{t.transfers.notes}</th>
                           <th className="table-head-cell text-left">{t.common.action}</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {transfers.map((transfer) => (
+                        {pagedTransfers.map((transfer) => (
                           <tr key={transfer.id} className="enterprise-table-row">
                             <td className="table-body-cell supporting-date-strong">{formatDate(transfer.date, language)}</td>
                             <td className="table-body-cell whitespace-nowrap table-driver-name">{transfer.driver}</td>
@@ -467,7 +540,9 @@ export default function TransfersPage() {
                               {getTransferTypeLabel(t, transfer.transfer_type)}
                             </td>
                             <td className="table-body-cell whitespace-nowrap text-slate-700">
-                              {receiptStatusOptions.find((option) => option.value === (transfer.receipt_status ?? "pending"))?.label}
+                              <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${transfer.receipt_status === "approved" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-100 text-slate-600"}`}>
+                                {receiptStatusOptions.find((option) => option.value === (transfer.receipt_status ?? "pending"))?.label}
+                              </span>
                             </td>
                             <td className="table-body-cell text-right font-semibold text-slate-950">
                               {formatCurrency(transfer.amount, language)}
@@ -477,6 +552,19 @@ export default function TransfersPage() {
                             </td>
                             <td className="table-body-cell">
                               <div className="flex flex-col gap-2 sm:flex-row">
+                                <button
+                                  type="button"
+                                  onClick={() => void handleCheckToggle(transfer)}
+                                  disabled={togglingId === String(transfer.id)}
+                                  className="table-action-secondary min-w-[132px] gap-1.5 disabled:opacity-50"
+                                >
+                                  <CheckCircle2 className="h-3.5 w-3.5" />
+                                  {togglingId === String(transfer.id)
+                                    ? t.common.saving
+                                    : transfer.receipt_status === "approved"
+                                      ? reviewCopy.markNotChecked
+                                      : reviewCopy.markChecked}
+                                </button>
                                 <button
                                   type="button"
                                   onClick={() =>
