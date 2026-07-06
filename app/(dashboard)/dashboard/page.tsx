@@ -365,27 +365,36 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
 
   const copy = {
-    allIssues: language === "th" ? "View all issues" : "View all issues",
-    avgKmPerLitre: language === "th" ? "Average km/L" : "Average km/L",
-    currentMonth: language === "th" ? "Current month" : "Current month",
-    dateRange: language === "th" ? "Date range" : "Date range",
-    dueSoon: language === "th" ? "Due Soon" : "Due Soon",
-    latestFuel: language === "th" ? "Latest 5 fuel entries" : "Latest 5 fuel entries",
-    latestTransfers: language === "th" ? "Latest 5 bank transfers" : "Latest 5 bank transfers",
-    monthFuelSpend: language === "th" ? "This month fuel spend" : "This month fuel spend",
-    monthTransfers: language === "th" ? "This month bank transfers" : "This month bank transfers",
-    needsAttention: language === "th" ? "Needs Attention" : "Needs Attention",
-    needsBaseline: language === "th" ? "Needs baseline" : "Needs baseline",
-    noAttention: language === "th" ? "No urgent review items found for this month." : "No urgent review items found for this month.",
-    noFuel: language === "th" ? "No fuel entries for this month." : "No fuel entries for this month.",
-    noTransfers: language === "th" ? "No bank transfers for this month." : "No bank transfers for this month.",
-    notEnoughValidData: language === "th" ? "Not enough valid data" : "Not enough valid data",
-    oilDue: language === "th" ? "Oil changes due or overdue" : "Oil changes due or overdue",
-    overdue: language === "th" ? "Overdue" : "Overdue",
-    previousMonth: language === "th" ? "Previous month" : "Previous month",
-    selectedMonth: language === "th" ? "Selected month" : "Selected month",
-    totalOutflow: language === "th" ? "Total monthly outflow" : "Total monthly outflow",
-    unchecked: language === "th" ? "Unchecked records" : "Unchecked records"
+    allIssues: language === "th" ? "ดูรายการทั้งหมด" : "View all issues",
+    avgKmPerLitre: language === "th" ? "เฉลี่ย กม./ลิตร" : "Average km/L",
+    bankTransfersNotChecked: language === "th" ? "รายการโอนเงินยังไม่ได้ตรวจสอบ" : "Bank transfers not checked",
+    currentMonth: language === "th" ? "เดือนปัจจุบัน" : "Current month",
+    dateRange: language === "th" ? "ช่วงวันที่" : "Date range",
+    dueSoon: language === "th" ? "ใกล้ครบกำหนด" : "Due Soon",
+    fuelEntries: language === "th" ? "รายการน้ำมัน" : "fuel entries",
+    fuelLogsNotChecked: language === "th" ? "บันทึกน้ำมันยังไม่ได้ตรวจสอบ" : "Fuel logs not checked",
+    latestFuel: language === "th" ? "บันทึกน้ำมันล่าสุด 5 รายการ" : "Latest 5 fuel entries",
+    latestTransfers: language === "th" ? "รายการโอนเงินล่าสุด 5 รายการ" : "Latest 5 bank transfers",
+    missingFuelDetail: language === "th" ? "ขาดเลขไมล์ ลิตร ค่าใช้จ่าย พนักงานขับรถ รถ หรือสถานี" : "Missing mileage, litres, cost, driver, vehicle, or station.",
+    missingFuelTitle: language === "th" ? "ข้อมูลบันทึกน้ำมันไม่ครบ" : "Missing fuel log details",
+    monthFuelSpend: language === "th" ? "ค่าน้ำมันเดือนนี้" : "This month fuel spend",
+    monthTransfers: language === "th" ? "ยอดโอนเงินเดือนนี้" : "This month bank transfers",
+    needsAttention: language === "th" ? "ต้องตรวจสอบ" : "Needs Attention",
+    needsBaseline: language === "th" ? "ต้องตั้งค่าเริ่มต้น" : "Needs baseline",
+    noAttention: language === "th" ? "ไม่พบรายการเร่งด่วนที่ต้องตรวจสอบในเดือนนี้" : "No urgent review items found for this month.",
+    noFuel: language === "th" ? "ไม่มีรายการน้ำมันในเดือนนี้" : "No fuel entries for this month.",
+    noTransfers: language === "th" ? "ไม่มีรายการโอนเงินในเดือนนี้" : "No bank transfers for this month.",
+    notCheckedThisMonth: language === "th" ? "รายการในเดือนนี้ยังไม่ได้ตรวจสอบ" : "records in this month are still Not Checked.",
+    notEnoughValidData: language === "th" ? "ข้อมูลที่ถูกต้องยังไม่เพียงพอ" : "Not enough valid data",
+    oilDue: language === "th" ? "เปลี่ยนน้ำมันเครื่องครบกำหนดหรือเกินกำหนด" : "Oil changes due or overdue",
+    overdue: language === "th" ? "เกินกำหนด" : "Overdue",
+    previousMonth: language === "th" ? "เดือนก่อนหน้า" : "Previous month",
+    remaining: language === "th" ? "กม. คงเหลือ" : "KM remaining",
+    selectedMonth: language === "th" ? "เดือนที่เลือก" : "Selected month",
+    totalOutflow: language === "th" ? "ยอดเงินออกทั้งหมดต่อเดือน" : "Total monthly outflow",
+    transfers: language === "th" ? "รายการโอน" : "transfers",
+    unchecked: language === "th" ? "รายการยังไม่ได้ตรวจสอบ" : "Unchecked records",
+    validRecordsThisMonth: language === "th" ? "รายการที่ถูกต้องในเดือนนี้" : "valid records this month"
   };
 
   const loadData = useCallback(
@@ -502,10 +511,10 @@ export default function DashboardPage() {
       const firstOil = oilDueRows[0] ?? oilAttentionRows[0];
       const detail = firstOil
         ? firstOil.status === "overdue" && firstOil.overdueKm != null
-          ? `${firstOil.registration}: ${formatNumber(firstOil.overdueKm, language)} KM overdue`
+          ? `${firstOil.registration}: ${formatNumber(firstOil.overdueKm, language)} ${copy.overdue}`
           : firstOil.status === "not_set"
             ? `${firstOil.registration}: ${copy.needsBaseline}`
-            : `${firstOil.registration}: ${formatNumber(firstOil.kmRemaining ?? 0, language)} KM remaining`
+            : `${firstOil.registration}: ${formatNumber(firstOil.kmRemaining ?? 0, language)} ${copy.remaining}`
         : "";
       items.push({
         count: oilDueRows.length + needsBaselineCount,
@@ -524,9 +533,9 @@ export default function DashboardPage() {
     if (missingFuelRows.length) {
       items.push({
         count: missingFuelRows.length,
-        detail: "Missing mileage, litres, cost, driver, vehicle, or station.",
+        detail: copy.missingFuelDetail,
         key: "missing-fuel-fields",
-        title: "Missing fuel log details",
+        title: copy.missingFuelTitle,
         tone: "warning"
       });
     }
@@ -534,9 +543,9 @@ export default function DashboardPage() {
     if (uncheckedFuelCount) {
       items.push({
         count: uncheckedFuelCount,
-        detail: "Fuel records in this month are still Not Checked.",
+        detail: `${copy.fuelEntries} ${copy.notCheckedThisMonth}`,
         key: "unchecked-fuel",
-        title: "Fuel logs not checked",
+        title: copy.fuelLogsNotChecked,
         tone: "info"
       });
     }
@@ -544,15 +553,15 @@ export default function DashboardPage() {
     if (uncheckedTransferCount) {
       items.push({
         count: uncheckedTransferCount,
-        detail: "Bank transfers in this month are still Not Checked.",
+        detail: `${copy.transfers} ${copy.notCheckedThisMonth}`,
         key: "unchecked-transfers",
-        title: "Bank transfers not checked",
+        title: copy.bankTransfersNotChecked,
         tone: "info"
       });
     }
 
     return items;
-  }, [copy.dueSoon, copy.needsBaseline, copy.oilDue, copy.overdue, language, missingFuelRows.length, oilAttentionRows, oilDueRows, uncheckedFuelCount, uncheckedTransferCount]);
+  }, [copy.bankTransfersNotChecked, copy.dueSoon, copy.fuelEntries, copy.fuelLogsNotChecked, copy.missingFuelDetail, copy.missingFuelTitle, copy.needsBaseline, copy.notCheckedThisMonth, copy.oilDue, copy.overdue, copy.remaining, copy.transfers, language, missingFuelRows.length, oilAttentionRows, oilDueRows, uncheckedFuelCount, uncheckedTransferCount]);
 
   useEffect(() => {
     if (process.env.NODE_ENV === "production") {
@@ -599,7 +608,7 @@ export default function DashboardPage() {
     {
       label: copy.monthFuelSpend,
       value: formatCurrency(monthlyFuelSpend, language),
-      helper: `${formatNumber(monthlyFuelLogs.length, language)} fuel entries | ${dateRangeLabel}`,
+      helper: `${formatNumber(monthlyFuelLogs.length, language)} ${copy.fuelEntries} | ${dateRangeLabel}`,
       icon: Fuel
     },
     {
@@ -620,19 +629,19 @@ export default function DashboardPage() {
         efficiencyStats.averageKmPerLitre != null
           ? formatNumber(efficiencyStats.averageKmPerLitre, language, 2)
           : copy.notEnoughValidData,
-      helper: `${formatNumber(efficiencyStats.validRecordCount, language)} valid records this month`,
+      helper: `${formatNumber(efficiencyStats.validRecordCount, language)} ${copy.validRecordsThisMonth}`,
       icon: Gauge
     },
     {
       label: copy.oilDue,
       value: formatNumber(oilDueRows.length, language),
-      helper: `${formatNumber(oilAttentionRows.filter((row) => row.status === "not_set").length, language)} need baseline`,
+      helper: `${formatNumber(oilAttentionRows.filter((row) => row.status === "not_set").length, language)} ${copy.needsBaseline}`,
       icon: Droplet
     },
     {
       label: copy.unchecked,
       value: formatNumber(uncheckedRecords, language),
-      helper: `${formatNumber(uncheckedFuelCount, language)} fuel, ${formatNumber(uncheckedTransferCount, language)} transfers | ${monthRange.monthKey}`,
+      helper: `${formatNumber(uncheckedFuelCount, language)} ${copy.fuelEntries}, ${formatNumber(uncheckedTransferCount, language)} ${copy.transfers} | ${monthRange.monthKey}`,
       icon: CheckCircle2
     }
   ];

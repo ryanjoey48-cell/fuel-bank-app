@@ -6,14 +6,17 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useLanguage } from "@/lib/language-provider";
 
-type PageKey = "dashboard" | "drivers" | "fuelLogs" | "fuelSpendReport" | "transfers" | "weeklyMileage";
+type PageKey = "dashboard" | "bookingDiary" | "drivers" | "fuelLogs" | "fuelSpendReport" | "shipments" | "transfers" | "tripJourney" | "weeklyMileage";
 
 const PAGE_KEY_BY_PATH: Record<string, PageKey> = {
+  "/booking-diary": "bookingDiary",
   "/dashboard": "dashboard",
   "/drivers": "drivers",
   "/fuel-logs": "fuelLogs",
   "/fuel-spend-report": "fuelSpendReport",
+  "/shipments": "shipments",
   "/transfers": "transfers",
+  "/trip-journey": "tripJourney",
   "/weekly-mileage": "weeklyMileage"
 };
 
@@ -24,16 +27,9 @@ type MobileAppBarProps = {
 
 export function MobileAppBar({ open, onToggle }: MobileAppBarProps) {
   const pathname = usePathname();
-  const { language, t } = useLanguage();
+  const { t } = useLanguage();
   const pageKey = PAGE_KEY_BY_PATH[pathname] ?? "dashboard";
-  const pageLabel =
-    pathname === "/booking-diary"
-      ? language === "th" ? "สมุดจองงาน" : "Booking Diary"
-      : pathname === "/shipments"
-        ? language === "th" ? "งานขนส่ง" : "Shipments"
-        : pathname === "/trip-journey"
-          ? "Trip Journey"
-          : t.nav[pageKey];
+  const pageLabel = t.nav[pageKey];
 
   return (
     <div className="mobile-app-bar fixed inset-x-0 top-0 z-30 border-b border-slate-200 bg-white/95 shadow-[0_12px_28px_rgba(15,23,42,0.07)] backdrop-blur-xl min-[1367px]:hidden">

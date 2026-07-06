@@ -21,7 +21,6 @@ import {
   X
 } from "lucide-react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { Fragment, type RefObject, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { GoogleMapsLoader } from "@/components/google-maps-loader";
@@ -605,7 +604,6 @@ function LocationCombobox({
 }
 
 export default function BookingDiaryPage() {
-  const router = useRouter();
   const { language } = useLanguage();
   const languageKey = language === "th" ? "th" : "en";
   const copy = { ...labels.en, ...labels[languageKey], ...labelExtras[languageKey] };
@@ -992,7 +990,11 @@ export default function BookingDiaryPage() {
       setNotice(null);
       const trip = await createTripJourneyFromBooking(booking);
       setTripsByBookingId((current) => new Map(current).set(String(booking.id), trip));
-      router.push(`/trip-journey?tripId=${encodeURIComponent(String(trip.id))}&bookingId=${encodeURIComponent(String(booking.id))}`);
+      const params = new URLSearchParams({
+        tripId: String(trip.id),
+        bookingId: String(booking.id)
+      });
+      window.location.assign(`/trip-journey?${params.toString()}#trip-records`);
     } catch (err) {
       console.error("Create trip record error:", err);
       setError(err instanceof Error && err.message ? err.message : "Unable to create trip record.");
@@ -1485,7 +1487,7 @@ export default function BookingDiaryPage() {
           <EmptyState title={copy.noBookings} description={copy.noBookingsDescription} />
         ) : (
           <>
-            <div className="booking-paper-diary lg:hidden">
+            <div className="booking-paper-diary md:hidden">
               {paginatedGroups.map(({ date, entries, totalEntries }) => {
                 const expanded = expandedDateKeys.has(date);
 
@@ -1746,7 +1748,7 @@ export default function BookingDiaryPage() {
               ))}
             </div>
 
-            <div className="table-shell booking-desktop-table hidden lg:block">
+            <div className="table-shell booking-desktop-table hidden md:block">
               <div className="table-scroll">
                 <table className="min-w-[980px]">
                   <thead>
@@ -1804,7 +1806,7 @@ export default function BookingDiaryPage() {
                               </span>
                             </td>
                             <td className="booking-desktop-cell text-right">
-                              <div className="flex justify-end gap-1.5">
+                              <div className="flex flex-wrap justify-end gap-1.5">
                                 <button
                                   type="button"
                                   onClick={(event) => {

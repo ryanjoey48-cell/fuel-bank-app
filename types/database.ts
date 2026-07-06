@@ -178,9 +178,14 @@ export type TripJourney = {
   trip_date: string;
   date?: string | null;
   pickup_time: string | null;
-  start_location_type?: "depot" | "custom" | string | null;
+  start_location_type?: "depot" | "custom" | "pickup_only" | string | null;
   start_location?: string | null;
   depot_address?: string | null;
+  route_start_type?: "depot" | "custom" | "pickup_only" | string | null;
+  depot_address_used?: string | null;
+  custom_start_address?: string | null;
+  pickup_address?: string | null;
+  dropoff_address?: string | null;
   pickup_location: string | null;
   dropoff_location: string | null;
   route: string | null;
@@ -203,6 +208,12 @@ export type TripJourney = {
   estimated_duration_minutes?: number | null;
   google_maps_route_url?: string | null;
   estimated_distance_source: string | null;
+  google_estimated_km?: number | null;
+  google_estimated_minutes?: number | null;
+  route_source?: string | null;
+  booking_estimated_km?: number | null;
+  booking_estimated_minutes?: number | null;
+  booking_google_maps_route_url?: string | null;
   manual_estimated_distance_km: number | null;
   manual_litres_used: number | null;
   manual_litres?: number | null;

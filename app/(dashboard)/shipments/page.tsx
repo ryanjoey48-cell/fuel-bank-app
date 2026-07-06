@@ -135,6 +135,7 @@ type FormState = {
   customer_name: string;
   goods_description: string;
   shipment_date: string;
+  start_from_depot: boolean;
   route_start_location: string;
   start_location: string;
   end_location: string;
@@ -178,6 +179,7 @@ function createInitialForm(
     customer_name: "",
     goods_description: "",
     shipment_date: today(),
+    start_from_depot: true,
     route_start_location: DEFAULT_DEPOT_LOCATION.label,
     start_location: "",
     end_location: "",
@@ -628,6 +630,28 @@ function locationRouteKey(location: StructuredLocation | null | undefined, fallb
   return hasCoordinates(location)
     ? `${location!.lat.toFixed(6)},${location!.lng.toFixed(6)}`
     : normalizeLocationKey(getLocationDisplay(location, fallback));
+}
+
+function isDefaultDepotLocation(value: string | null | undefined, location?: StructuredLocation | null) {
+  const candidate = normalizeLocationKey(
+    [
+      value,
+      location?.label,
+      location?.formatted_address,
+      location?.manual_text
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
+  const depotLabel = normalizeLocationKey(DEFAULT_DEPOT_LOCATION.label);
+  const depotAddress = normalizeLocationKey(DEFAULT_DEPOT_LOCATION.formatted_address);
+  return (
+    Boolean(candidate) &&
+    (candidate.includes(depotLabel) ||
+      candidate.includes(depotAddress) ||
+      candidate.includes("expert express sender") ||
+      candidate.includes("happy place"))
+  );
 }
 
 const LOCATION_DATA_PREFIX = "Location data:";
@@ -1860,6 +1884,46 @@ export default function ShipmentsPage() {
     [labels.routeChanged]
   );
 
+  const setRouteStartLocation = useCallback(
+    (value: string, location: StructuredLocation | null, startFromDepot = false) => {
+      setForm((current) => ({
+        ...current,
+        start_from_depot: startFromDepot,
+        route_start_location: value,
+        route_start_location_data: location,
+        cost_estimation_status: "pending",
+        cost_estimation_note: labels.routeChanged
+      }));
+      setDistanceMessage(null);
+    },
+    [labels.routeChanged]
+  );
+
+  const handleStartFromDepotChange = useCallback(
+    (checked: boolean) => {
+      if (checked) {
+        setError(DEPOT_COORDINATES_CONFIGURED ? null : labels.depotMissing);
+        setRouteStartLocation(DEFAULT_DEPOT_LOCATION.label, DEFAULT_DEPOT_LOCATION, true);
+        return;
+      }
+
+      setForm((current) => ({
+        ...current,
+        start_from_depot: false,
+        route_start_location: isDefaultDepotLocation(current.route_start_location, current.route_start_location_data)
+          ? ""
+          : current.route_start_location,
+        route_start_location_data: isDefaultDepotLocation(current.route_start_location, current.route_start_location_data)
+          ? null
+          : current.route_start_location_data,
+        cost_estimation_status: "pending",
+        cost_estimation_note: labels.routeChanged
+      }));
+      setDistanceMessage(null);
+    },
+    [labels.depotMissing, labels.routeChanged, setRouteStartLocation]
+  );
+
   const handleGoogleMapsConfigurationChange = useCallback((configured: boolean, message?: string) => {
     setGoogleMapsConfigured(configured);
     setGoogleMapsConfigMessage(configured ? null : message ?? null);
@@ -1899,16 +1963,13 @@ export default function ShipmentsPage() {
 
   const useDepotLocation = useCallback(() => {
     setError(DEPOT_COORDINATES_CONFIGURED ? null : labels.depotMissing);
-    setLocationField(
-      "route_start_location",
-      "route_start_location_data",
-      DEFAULT_DEPOT_LOCATION.label,
-      DEFAULT_DEPOT_LOCATION
-    );
-  }, [labels.depotMissing, setLocationField]);
+    setRouteStartLocation(DEFAULT_DEPOT_LOCATION.label, DEFAULT_DEPOT_LOCATION, true);
+  }, [labels.depotMissing, setRouteStartLocation]);
 
   const estimateRoute = useCallback(async () => {
-    const origin = form.route_start_location_data ?? createManualLocation(form.route_start_location);
+    const origin = form.start_from_depot
+      ? DEFAULT_DEPOT_LOCATION
+      : form.route_start_location_data ?? createManualLocation(form.route_start_location);
     const pickup = form.start_location_data ?? createManualLocation(form.start_location);
     const mainDropoff = form.end_location_data ?? createManualLocation(form.end_location);
     const additionalDropoffEntries = form.additional_dropoffs
@@ -2004,6 +2065,7 @@ export default function ShipmentsPage() {
     form.include_return_to_start,
     form.route_start_location,
     form.route_start_location_data,
+    form.start_from_depot,
     form.start_location,
     form.start_location_data,
     labels.routeKeyMissing,
@@ -2033,19 +2095,22 @@ export default function ShipmentsPage() {
     const status = STATUS_OPTIONS.some((option) => option.value === normalized.status)
       ? normalized.status
       : "Draft";
+    const routeStartLocationData =
+      asStructuredLocation(shipment.start_location_data) ??
+      savedLocationData?.route_start_location ??
+      createManualLocation(normalized.startRoute);
+    const startsFromDepot = isDefaultDepotLocation(normalized.startRoute, routeStartLocationData);
     const nextForm: FormState = {
       id: normalized.id,
       job_reference: normalized.jobReference,
       customer_name: normalized.customerName,
       goods_description: normalized.jobDescription,
       shipment_date: toDateInputValue(normalized.shipmentDate) || today(),
-      route_start_location: normalized.startRoute,
+      start_from_depot: startsFromDepot,
+      route_start_location: startsFromDepot ? DEFAULT_DEPOT_LOCATION.label : normalized.startRoute,
       start_location: normalized.pickupLocation,
       end_location: normalized.dropoffLocation,
-      route_start_location_data:
-        asStructuredLocation(shipment.start_location_data) ??
-        savedLocationData?.route_start_location ??
-        createManualLocation(normalized.startRoute),
+      route_start_location_data: startsFromDepot ? DEFAULT_DEPOT_LOCATION : routeStartLocationData,
       start_location_data:
         asStructuredLocation(shipment.pickup_location_data) ??
         savedLocationData?.start_location ??
@@ -2275,7 +2340,7 @@ export default function ShipmentsPage() {
 
   const canSave =
     Boolean(form.job_reference.trim()) &&
-    hasCoordinates(form.route_start_location_data) &&
+    hasCoordinates(form.start_from_depot ? DEFAULT_DEPOT_LOCATION : form.route_start_location_data) &&
     hasCoordinates(form.start_location_data) &&
     hasCoordinates(form.end_location_data) &&
     form.additional_dropoffs.every((stop, index) =>
@@ -2283,7 +2348,10 @@ export default function ShipmentsPage() {
     ) &&
     Boolean(form.estimated_distance_km.trim());
   const routeHasManualUnverified =
-    Boolean(form.route_start_location.trim() && !hasCoordinates(form.route_start_location_data)) ||
+    Boolean(
+      form.route_start_location.trim() &&
+        !hasCoordinates(form.start_from_depot ? DEFAULT_DEPOT_LOCATION : form.route_start_location_data)
+    ) ||
     Boolean(form.start_location.trim() && !hasCoordinates(form.start_location_data)) ||
     Boolean(form.end_location.trim() && !hasCoordinates(form.end_location_data)) ||
     form.additional_dropoffs.some((stop, index) =>
@@ -2343,8 +2411,12 @@ export default function ShipmentsPage() {
         return;
       }
 
+      const effectiveRouteStartLocation = form.start_from_depot
+        ? DEFAULT_DEPOT_LOCATION
+        : form.route_start_location_data;
+
       if (
-        !hasCoordinates(form.route_start_location_data) ||
+        !hasCoordinates(effectiveRouteStartLocation) ||
         !hasCoordinates(form.start_location_data) ||
         !hasCoordinates(form.end_location_data) ||
         form.additional_dropoffs.some((stop, index) =>
@@ -2392,7 +2464,8 @@ export default function ShipmentsPage() {
         const additionalDropoffLocations = form.additional_dropoff_data.filter(
           (location): location is StructuredLocation => hasCoordinates(location)
         );
-        const routeStartLabel = getLocationDisplay(form.route_start_location_data, form.route_start_location);
+        const routeStartData = form.start_from_depot ? DEFAULT_DEPOT_LOCATION : form.route_start_location_data;
+        const routeStartLabel = getLocationDisplay(routeStartData, form.route_start_location);
         const pickupLabel = getLocationDisplay(form.start_location_data, form.start_location);
         const dropoffLabel = getLocationDisplay(form.end_location_data, form.end_location);
         const statusToSave =
@@ -2421,7 +2494,7 @@ export default function ShipmentsPage() {
           end_location: routeStartLabel,
           pickup_location: pickupLabel,
           dropoff_location: dropoffLabel,
-          start_location_data: form.route_start_location_data,
+          start_location_data: routeStartData,
           pickup_location_data: form.start_location_data,
           dropoff_location_data: form.end_location_data,
           additional_dropoffs_data: additionalDropoffLocations,
@@ -2454,7 +2527,7 @@ export default function ShipmentsPage() {
                 ? `${labels.additionalDropoffs}: ${additionalDropoffs.join(" | ")}`
                 : "",
               buildLocationDataLine({
-                route_start_location: form.route_start_location_data,
+                route_start_location: routeStartData,
                 start_location: form.start_location_data,
                 end_location: form.end_location_data,
                 additional_dropoffs: additionalDropoffLocations
@@ -2752,21 +2825,35 @@ export default function ShipmentsPage() {
           <form onSubmit={handleSubmit} className="space-y-3">
             <SectionCard title={labels.routeTitle} description={labels.routeDescription}>
               <div className="grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
-                <LocationAutocomplete
-                  label={labels.startRoute}
-                  value={form.route_start_location}
-                  onChange={(value) => setLocationField("route_start_location", "route_start_location_data", value, createManualLocation(value))}
-                  onManualInput={(value) => setLocationField("route_start_location", "route_start_location_data", value, createManualLocation(value))}
-                  onSelectLocation={(location) => setLocationField("route_start_location", "route_start_location_data", getLocationDisplay(location), location)}
-                  selectedLocation={form.route_start_location_data}
-                  required
-                  language={language}
-                  configMissingMessage={labels.autocompleteUnavailable}
-                  helperText={labels.startRouteHelper}
-                  invalidText={labels.validGoogleLocationRequired}
-                  loadingText={labels.loadingSuggestions}
-                  onConfigurationChange={handleGoogleMapsConfigurationChange}
-                />
+                <div className="space-y-2">
+                  <label className="flex items-start gap-2 rounded-[0.9rem] border border-brand-100 bg-brand-50/70 px-3 py-2 text-sm font-semibold text-slate-800">
+                    <input
+                      type="checkbox"
+                      checked={form.start_from_depot}
+                      onChange={(event) => handleStartFromDepotChange(event.target.checked)}
+                      className="mt-0.5 h-4 w-4"
+                    />
+                    <span>
+                      <span className="block">{labels.startFromDepot}</span>
+                      <span className="block text-xs font-normal text-slate-500">{labels.startFromDepotHelper}</span>
+                    </span>
+                  </label>
+                  <LocationAutocomplete
+                    label={labels.startRoute}
+                    value={form.route_start_location}
+                    onChange={(value) => setRouteStartLocation(value, createManualLocation(value), false)}
+                    onManualInput={(value) => setRouteStartLocation(value, createManualLocation(value), false)}
+                    onSelectLocation={(location) => setRouteStartLocation(getLocationDisplay(location), location, false)}
+                    selectedLocation={form.route_start_location_data}
+                    required
+                    language={language}
+                    configMissingMessage={labels.autocompleteUnavailable}
+                    helperText={labels.startRouteHelper}
+                    invalidText={labels.validGoogleLocationRequired}
+                    loadingText={labels.loadingSuggestions}
+                    onConfigurationChange={handleGoogleMapsConfigurationChange}
+                  />
+                </div>
                 <LocationAutocomplete
                   label={labels.pickup}
                   value={form.start_location}
@@ -2797,18 +2884,24 @@ export default function ShipmentsPage() {
                   loadingText={labels.loadingSuggestions}
                   onConfigurationChange={handleGoogleMapsConfigurationChange}
                 />
-                <div className="flex flex-col gap-2 rounded-[1rem] border border-slate-200 bg-white/80 p-3 text-xs text-slate-500 lg:col-span-3 lg:flex-row lg:items-center lg:justify-between">
-                  <span className="space-y-1">
-                    <span className="block font-semibold text-slate-700">{DEFAULT_DEPOT_LOCATION.label}</span>
+                {form.start_from_depot ? (
+                  <div className="flex flex-col gap-2 rounded-[1rem] border border-emerald-100 bg-emerald-50/70 p-3 text-xs text-slate-600 lg:col-span-3">
+                    <span className="block font-semibold text-emerald-800">{DEFAULT_DEPOT_LOCATION.label}</span>
                     <span className="block">{DEFAULT_DEPOT_LOCATION.formatted_address}</span>
                     {!DEPOT_COORDINATES_CONFIGURED ? (
                       <span className="block text-amber-700">{labels.depotMissing}</span>
-                    ) : null}
-                  </span>
-                  <button type="button" onClick={useDepotLocation} className="btn-secondary min-h-[40px] rounded-[0.9rem] px-4 py-2">
-                    {labels.useDepotLocation}
-                  </button>
-                </div>
+                    ) : (
+                      <span className="block text-emerald-700">Verified by Google and used as the route start.</span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2 rounded-[1rem] border border-slate-200 bg-white/80 p-3 text-xs text-slate-500 lg:col-span-3 lg:flex-row lg:items-center lg:justify-between">
+                    <span>Custom route start is active. Select a Google suggestion before estimating or saving.</span>
+                    <button type="button" onClick={useDepotLocation} className="btn-secondary min-h-[40px] rounded-[0.9rem] px-4 py-2">
+                      {labels.useDepotLocation}
+                    </button>
+                  </div>
+                )}
                 {showGoogleMapsHealth ? (
                   <div className="rounded-[1rem] border border-amber-200 bg-amber-50/80 p-3 text-xs text-amber-900 lg:col-span-3">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">

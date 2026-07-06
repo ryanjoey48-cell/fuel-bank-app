@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  BarChart3,
+  Gauge,
   Link2,
+  MapPinned,
   RefreshCw,
   Save,
   Trash2,
@@ -21,10 +24,477 @@ import {
   saveTripJourney,
   unlinkFuelLogFromTrip
 } from "@/lib/data";
+import { useLanguage } from "@/lib/language-provider";
 import type { Driver, FuelLogWithDriver, TripFuelSource, TripJourneyWithFuel, Vehicle } from "@/types/database";
 
 const DEPOT_ADDRESS =
   "Expert Express Sender Co., Ltd. 88 Happy Place, Khwaeng Khlong Sam Prawet, Khet Lat Krabang, Bangkok 10520, Thailand";
+
+const tripJourneyCopy = {
+  en: {
+    tripJourney: "Trip Journey",
+    tripPerformance: "Trip Performance",
+    description: "Compare booking routes against actual mileage and fuel usage by driver, vehicle, and route.",
+    refresh: "Refresh",
+    tripStatus: "Trip Status",
+    trips: "Trips",
+    trip: "trip",
+    completed: "Completed",
+    complete: "Complete",
+    missingMileage: "Missing mileage",
+    missingMileageTitle: "Missing Mileage",
+    missingEstimate: "Missing estimate",
+    missingEstimateTitle: "Missing Estimate",
+    missingFuel: "Missing fuel",
+    missingFuelTitle: "Missing Fuel",
+    created: "Created",
+    distanceFuel: "Distance & Fuel",
+    actualKm: "Actual KM",
+    estimatedKm: "Estimated KM",
+    difference: "Difference",
+    litres: "Litres",
+    fuel: "Fuel",
+    fuelCost: "Fuel Cost",
+    cost: "Cost",
+    efficiency: "Efficiency",
+    avgKmL: "Avg KM/L",
+    avgCostKm: "Avg Cost/KM",
+    bestDriver: "Best Driver",
+    worstDriver: "Worst Driver",
+    filters: "Filters",
+    filtersDescription: "Date, driver, vehicle, route, data status and fuel link.",
+    allDrivers: "All drivers",
+    allVehicles: "All vehicles",
+    route: "Route",
+    allData: "All data",
+    missingDataOnly: "Missing data only",
+    completedOnly: "Completed only",
+    allFuelLinks: "All fuel links",
+    fuelLogsLinked: "Fuel logs linked",
+    fuelLogsNotLinked: "Fuel logs not linked",
+    resetFilters: "Reset filters",
+    needsAttention: "Needs Attention",
+    needsAttentionDescription: "Select a missing item to focus the trip list.",
+    actualKmNeeded: "Actual KM is needed for efficiency.",
+    comparePlannedActual: "Compare planned vs actual route.",
+    linkFuelLogsOrManual: "Link fuel logs or enter manually.",
+    showAllTrips: "Show all trips",
+    tripRecords: "Trip Records",
+    tripRecordsDescription: "Compact list of booking journeys. Review one trip to edit details.",
+    newestTripsFirst: "Newest trips first.",
+    loadingTripJourneys: "Loading trip journeys...",
+    noTripRecordsYet: "No trip records yet",
+    noTripRecordsDescription: "Create a trip from the Booking Diary to start tracking performance.",
+    selectedTrip: "Selected trip",
+    reviewEdit: "Review / Edit",
+    delete: "Delete",
+    deleteTrip: "Delete trip",
+    needsAttentionAction: "Needs attention",
+    loadMoreTrips: "Load more trips",
+    selectedTripOverview: "Selected Trip Overview",
+    driver: "Driver",
+    vehicle: "Vehicle",
+    fuelLogs: "Fuel Logs",
+    noneLinked: "None linked",
+    linked: "linked",
+    noFuel: "No fuel",
+    noFuelCost: "No fuel cost",
+    nextAction: "Next action",
+    manageFuelLogs: "Manage fuel logs",
+    backToTripList: "Back to trip list",
+    overview: "Overview",
+    journeyDetails: "Journey Details",
+    notes: "Notes",
+    date: "Date",
+    pickupTime: "Pickup time",
+    bookingRef: "Booking ref",
+    bookingInfo: "Booking Info",
+    driverVehicle: "Driver & Vehicle",
+    driverVehicleHelper: "Pulled from the Drivers and Vehicles pages. Manual typing is still allowed.",
+    selectOrTypeDriver: "Select or type driver",
+    selectOrTypeVehicle: "Select or type vehicle",
+    manualDriverEntry: "Manual driver entry",
+    manualVehicleEntry: "Manual vehicle entry",
+    routeGoogleMaps: "Route & Google Maps",
+    routeGoogleMapsHelper: "Booking distance is pickup to drop-off only. Trip Journey can calculate the selected full driver route.",
+    calculateRouteDistance: "Calculate route distance",
+    calculating: "Calculating...",
+    startLocationType: "Start location type",
+    startsFromDepot: "Starts from depot",
+    startsFromCustom: "Starts from custom location",
+    startsPickupDropoffOnly: "No depot / pickup to drop-off only",
+    depotAddress: "Depot address",
+    startLocation: "Start location",
+    enterStartLocation: "Enter start location",
+    pickupLocation: "Pickup location",
+    dropoffLocation: "Drop-off location",
+    returnToDepot: "Return to depot",
+    routePreview: "Route preview",
+    googleEstimatedKm: "Google estimated KM",
+    googleEstimatedTime: "Google estimated time",
+    routeSource: "Route source",
+    bookingEstimate: "Booking estimate",
+    bookingEstimateHelper: "Pickup to drop-off only",
+    tripJourneyEstimate: "Trip Journey estimate",
+    tripJourneyEstimateHelper: "Selected full route",
+    routeSummary: "Route summary",
+    bookingRouteLabel: "Booking",
+    tripRouteLabel: "Trip route",
+    pickupDropoffOnly: "Pickup -> Drop-off only",
+    tripMapsEstimate: "Trip route Google estimate",
+    bookingEstimateFallback: "Booking estimate fallback",
+    displayEstimatePriority: "Displayed estimate uses manual override first, then Trip Journey Google estimate, then Booking estimate.",
+    openInGoogleMaps: "Open in Google Maps",
+    manualEstimatedOverride: "Manual estimated KM override",
+    manualEstimateHelper: "Use this if Google Maps is not available or the estimate needs correcting.",
+    actualDistance: "Actual Distance",
+    manualActualKm: "Manual actual KM",
+    startMileage: "Start mileage",
+    endMileage: "End mileage",
+    estimatedKmShort: "Est. KM",
+    fuelStatus: "Fuel status",
+    saveTrip: "Save trip",
+    saving: "Saving...",
+    noUnsavedChanges: "No unsaved changes",
+    unsavedChanges: "Unsaved changes",
+    tripSavedSuccessfully: "Trip saved successfully",
+    editDoesNotChangeBooking: "Editing here will not change the original Booking Diary entry.",
+    fuelSummary: "Fuel Summary",
+    fuelSource: "Fuel source",
+    useLinkedFuelLogs: "Use linked fuel logs",
+    useManualFuelEntry: "Use manual fuel entry",
+    manualLitresUsed: "Manual litres used",
+    manualFuelCost: "Manual fuel cost",
+    linkedFuelLogs: "Linked Fuel Logs",
+    noFuelLogsLinkedYet: "No fuel logs linked yet.",
+    unlink: "Unlink",
+    addSearchFuelLogs: "Add / Search Fuel Logs",
+    hide: "Hide",
+    addFuelLog: "Add fuel log",
+    suggestedLogs: "Suggested logs",
+    noSuggestedFuelLogs: "No suggested fuel logs found.",
+    link: "Link",
+    searchFuelPlaceholder: "Search vehicle, driver, station, date",
+    noOtherFuelLogs: "No other unlinked fuel logs match.",
+    loadMore: "Load more",
+    waitingIdleNotes: "Waiting / idle notes",
+    extraRouteNotes: "Extra route notes",
+    performanceComparison: "Performance Comparison",
+    comparisonDescription: "Completed trips only are used for efficiency averages. Completed = actual km, estimated km, fuel litres and fuel cost are all present.",
+    sortBestKmL: "Sort: Best KM/L",
+    sortLowestCostKm: "Sort: Lowest cost/km",
+    sortHighestFuelCost: "Sort: Highest fuel cost",
+    sortMostActualKm: "Sort: Most actual km",
+    sortMostCompletedTrips: "Sort: Most completed trips",
+    moreCompletedTripsNeeded: "More completed trips are needed for reliable comparison.",
+    bestKmLDriver: "Best KM/L driver",
+    lowestCostKmDriver: "Lowest cost/km driver",
+    bestVehicle: "Best vehicle",
+    lowestVehicleCostKm: "Lowest vehicle cost/km",
+    mostExpensiveTrip: "Most expensive trip",
+    biggestDistanceDifference: "Biggest distance difference",
+    dataQuality: "Data Quality",
+    drivers: "Drivers",
+    vehicles: "Vehicles",
+    routes: "Routes",
+    rank: "Rank",
+    label: "Label",
+    avgEstKm: "Avg est. km",
+    avgActualKm: "Avg actual km",
+    avgDifference: "Avg difference",
+    avgFuelCost: "Avg fuel cost",
+    deleteTripQuestion: "Delete trip?",
+    deleteTripDescription: "This will delete the trip journey record only. It will not delete the original Booking Diary entry or any Fuel Logs.",
+    cancel: "Cancel",
+    deleting: "Deleting...",
+    reviewPerformance: "Review performance",
+    addActualKm: "Add actual km",
+    addEstimate: "Add estimate",
+    reviewDetails: "Review details",
+    missingMileageHelper: "Actual KM is required before efficiency can be calculated.",
+    missingEstimateHelper: "Estimated KM lets you compare planned vs actual distance.",
+    missingFuelHelper: "Link fuel logs or enter manual fuel to complete this trip.",
+    completedHelper: "This trip is complete and included in performance comparison.",
+    reviewHelper: "Review trip details and complete the missing fields.",
+    googleMapsEstimate: "Google Maps estimate",
+    manualOverride: "Manual override",
+    notCalculated: "Not calculated",
+    usingManualActualKm: "Using manual actual km",
+    usingMileageCalculation: "Using mileage calculation",
+    actualKmMissing: "Actual km missing",
+    needsMoreData: "Needs more data",
+    limitedData: "Limited data",
+    good: "Good",
+    bestKmL: "Best KM/L",
+    lowestCostKm: "Lowest cost/km",
+    overEstimate: "Over estimate",
+    highCostKm: "High cost/km",
+    lowEfficiency: "Low efficiency",
+    average: "Average",
+    unknownRoute: "Unknown route",
+    depot: "Depot",
+    customStart: "Custom start",
+    unassigned: "Unassigned",
+    missing: "Missing",
+    distance: "Distance",
+    kmL: "KM/L",
+    costKm: "Cost/KM",
+    noFuelManualWarning: "Linked fuel logs exist, but this trip is using manual fuel entry.",
+    unableToLoadTripJourneys: "Unable to load Trip Journey records.",
+    dataQualityNoFuelCost: "Some trips have no valid fuel cost.",
+    dataQualityLinkedNoCost: "Some linked fuel logs have no fuel cost.",
+    dataQualityEstimateNoActual: "Some trips have estimates but no actual km.",
+    dataQualityActualNoFuel: "Some trips have actual km but no active fuel data.",
+    driverMatched: "Driver matched from Drivers page.",
+    vehicleCanBeTyped: "Vehicle can come from the list or be typed manually.",
+    vehicleUpdatedFromDriver: "Vehicle updated from selected driver. You can still change it.",
+    manualDriverEntryMessage: "Manual driver entry. Vehicle can still be selected or typed.",
+    routeDistanceCalculated: "Trip route distance calculated. Save trip to store it.",
+    fuelLogLinked: "Fuel log linked to trip.",
+    fuelLogUnlinked: "Fuel log unlinked from trip.",
+    routeStartRequired: "Please enter a start location before calculating distance.",
+    routePickupDropoffRequired: "Please enter pickup and drop-off locations before calculating distance.",
+    routeCalculateFailed: "Could not calculate route distance. You can enter manual estimated KM instead.",
+    uuidReferenceError: "A numeric booking or fuel-log reference was sent to a UUID database field. Apply the Trip Journey reference migration, then try again.",
+    unableToCompleteAction: "Unable to complete this Trip Journey action."
+  },
+  th: {
+    tripJourney: "เส้นทางการเดินทาง",
+    tripPerformance: "ประสิทธิภาพการเดินทาง",
+    description: "เปรียบเทียบเส้นทางจากการจองกับระยะทางจริงและการใช้น้ำมันตามพนักงานขับรถ รถ และเส้นทาง",
+    refresh: "รีเฟรช",
+    tripStatus: "สถานะทริป",
+    trips: "ทริป",
+    trip: "ทริป",
+    completed: "เสร็จสิ้น",
+    complete: "เสร็จสิ้น",
+    missingMileage: "ขาดเลขไมล์",
+    missingMileageTitle: "ขาดเลขไมล์",
+    missingEstimate: "ขาดระยะทางประมาณการ",
+    missingEstimateTitle: "ขาดระยะทางประมาณการ",
+    missingFuel: "ขาดข้อมูลน้ำมัน",
+    missingFuelTitle: "ขาดข้อมูลน้ำมัน",
+    created: "สร้างแล้ว",
+    distanceFuel: "ระยะทางและน้ำมัน",
+    actualKm: "กม. จริง",
+    estimatedKm: "กม. ประมาณการ",
+    difference: "ส่วนต่าง",
+    litres: "ลิตร",
+    fuel: "น้ำมัน",
+    fuelCost: "ค่าน้ำมัน",
+    cost: "ค่าใช้จ่าย",
+    efficiency: "ประสิทธิภาพ",
+    avgKmL: "เฉลี่ย กม./ลิตร",
+    avgCostKm: "เฉลี่ยค่าใช้จ่าย/กม.",
+    bestDriver: "พนักงานขับรถดีที่สุด",
+    worstDriver: "พนักงานขับรถที่ต้องปรับปรุง",
+    filters: "ตัวกรอง",
+    filtersDescription: "วันที่ พนักงานขับรถ รถ เส้นทาง สถานะข้อมูล และการเชื่อมโยงน้ำมัน",
+    allDrivers: "พนักงานขับรถทั้งหมด",
+    allVehicles: "รถทั้งหมด",
+    route: "เส้นทาง",
+    allData: "ข้อมูลทั้งหมด",
+    missingDataOnly: "เฉพาะข้อมูลที่ขาด",
+    completedOnly: "เฉพาะที่เสร็จสิ้น",
+    allFuelLinks: "การเชื่อมโยงน้ำมันทั้งหมด",
+    fuelLogsLinked: "เชื่อมโยงบันทึกน้ำมันแล้ว",
+    fuelLogsNotLinked: "ยังไม่เชื่อมโยงบันทึกน้ำมัน",
+    resetFilters: "รีเซ็ตตัวกรอง",
+    needsAttention: "ต้องตรวจสอบ",
+    needsAttentionDescription: "เลือกรายการที่ขาดเพื่อดูทริปที่ต้องแก้ไข",
+    actualKmNeeded: "ต้องมี กม. จริงเพื่อคำนวณประสิทธิภาพ",
+    comparePlannedActual: "เปรียบเทียบเส้นทางที่วางแผนกับเส้นทางจริง",
+    linkFuelLogsOrManual: "เชื่อมโยงบันทึกน้ำมันหรือกรอกด้วยตนเอง",
+    showAllTrips: "แสดงทริปทั้งหมด",
+    tripRecords: "รายการทริป",
+    tripRecordsDescription: "รายการเดินทางจากการจองแบบย่อ ตรวจสอบแต่ละทริปเพื่อแก้ไขรายละเอียด",
+    newestTripsFirst: "แสดงทริปล่าสุดก่อน",
+    loadingTripJourneys: "กำลังโหลดทริป...",
+    noTripRecordsYet: "ยังไม่มีรายการทริป",
+    noTripRecordsDescription: "สร้างทริปจากสมุดบันทึกการจองเพื่อเริ่มติดตามประสิทธิภาพ",
+    selectedTrip: "ทริปที่เลือก",
+    reviewEdit: "ตรวจสอบ / แก้ไข",
+    delete: "ลบ",
+    deleteTrip: "ลบทริป",
+    needsAttentionAction: "ต้องตรวจสอบ",
+    loadMoreTrips: "โหลดทริปเพิ่มเติม",
+    selectedTripOverview: "ภาพรวมทริปที่เลือก",
+    driver: "พนักงานขับรถ",
+    vehicle: "รถ",
+    fuelLogs: "บันทึกน้ำมัน",
+    noneLinked: "ยังไม่เชื่อมโยง",
+    linked: "เชื่อมโยง",
+    noFuel: "ไม่มีข้อมูลน้ำมัน",
+    noFuelCost: "ไม่มีค่าน้ำมัน",
+    nextAction: "สิ่งที่ต้องทำต่อ",
+    manageFuelLogs: "จัดการบันทึกน้ำมัน",
+    backToTripList: "กลับไปรายการทริป",
+    overview: "ภาพรวม",
+    journeyDetails: "รายละเอียดการเดินทาง",
+    notes: "หมายเหตุ",
+    date: "วันที่",
+    pickupTime: "เวลารับสินค้า",
+    bookingRef: "เลขอ้างอิงการจอง",
+    bookingInfo: "ข้อมูลการจอง",
+    driverVehicle: "พนักงานขับรถและรถ",
+    driverVehicleHelper: "ดึงข้อมูลจากหน้าพนักงานขับรถและรถ ยังสามารถพิมพ์เองได้",
+    selectOrTypeDriver: "เลือกหรือพิมพ์ชื่อพนักงานขับรถ",
+    selectOrTypeVehicle: "เลือกหรือพิมพ์ทะเบียนรถ",
+    manualDriverEntry: "กรอกพนักงานขับรถเอง",
+    manualVehicleEntry: "กรอกรถเอง",
+    routeGoogleMaps: "เส้นทางและ Google Maps",
+    routeGoogleMapsHelper: "เลือกจุดเริ่มต้น แล้วคำนวณหรือแก้ไขระยะทางประมาณการ",
+    calculateRouteDistance: "คำนวณระยะทางเส้นทาง",
+    calculating: "กำลังคำนวณ...",
+    startLocationType: "ประเภทจุดเริ่มต้น",
+    startsFromDepot: "เริ่มจากคลัง",
+    startsFromCustom: "เริ่มจากสถานที่อื่น",
+    depotAddress: "ที่อยู่คลัง",
+    startLocation: "จุดเริ่มต้น",
+    enterStartLocation: "กรอกจุดเริ่มต้น",
+    pickupLocation: "สถานที่รับสินค้า",
+    dropoffLocation: "สถานที่ส่งสินค้า",
+    returnToDepot: "กลับคลัง",
+    routePreview: "ตัวอย่างเส้นทาง",
+    googleEstimatedKm: "กม. ประมาณการจาก Google",
+    googleEstimatedTime: "เวลาโดยประมาณจาก Google",
+    routeSource: "แหล่งข้อมูลเส้นทาง",
+    manualEstimatedOverride: "แก้ไข กม. ประมาณการเอง",
+    manualEstimateHelper: "ใช้เมื่อ Google Maps ไม่พร้อมใช้งานหรือจำเป็นต้องแก้ไขระยะทาง",
+    actualDistance: "ระยะทางจริง",
+    manualActualKm: "กม. จริงที่กรอกเอง",
+    startMileage: "เลขไมล์เริ่มต้น",
+    endMileage: "เลขไมล์สิ้นสุด",
+    estimatedKmShort: "กม. ประมาณการ",
+    fuelStatus: "สถานะน้ำมัน",
+    saveTrip: "บันทึกทริป",
+    saving: "กำลังบันทึก...",
+    noUnsavedChanges: "ไม่มีการเปลี่ยนแปลง",
+    unsavedChanges: "มีการเปลี่ยนแปลงที่ยังไม่บันทึก",
+    tripSavedSuccessfully: "บันทึกทริปสำเร็จ",
+    editDoesNotChangeBooking: "การแก้ไขที่นี่จะไม่เปลี่ยนข้อมูลสมุดบันทึกการจองเดิม",
+    fuelSummary: "สรุปน้ำมัน",
+    fuelSource: "แหล่งข้อมูลน้ำมัน",
+    useLinkedFuelLogs: "ใช้บันทึกน้ำมันที่เชื่อมโยง",
+    useManualFuelEntry: "กรอกน้ำมันเอง",
+    manualLitresUsed: "ลิตรที่ใช้เอง",
+    manualFuelCost: "ค่าน้ำมันที่กรอกเอง",
+    linkedFuelLogs: "บันทึกน้ำมันที่เชื่อมโยง",
+    noFuelLogsLinkedYet: "ยังไม่มีบันทึกน้ำมันที่เชื่อมโยง",
+    unlink: "ยกเลิกเชื่อมโยง",
+    addSearchFuelLogs: "เพิ่ม / ค้นหาบันทึกน้ำมัน",
+    hide: "ซ่อน",
+    addFuelLog: "เพิ่มบันทึกน้ำมัน",
+    suggestedLogs: "บันทึกที่แนะนำ",
+    noSuggestedFuelLogs: "ไม่พบบันทึกน้ำมันที่แนะนำ",
+    link: "เชื่อมโยง",
+    searchFuelPlaceholder: "ค้นหารถ พนักงานขับ สถานี วันที่",
+    noOtherFuelLogs: "ไม่พบบันทึกน้ำมันอื่นที่ยังไม่เชื่อมโยง",
+    loadMore: "โหลดเพิ่มเติม",
+    waitingIdleNotes: "หมายเหตุการรอ / จอดเดินเบา",
+    extraRouteNotes: "หมายเหตุเส้นทางเพิ่มเติม",
+    performanceComparison: "การเปรียบเทียบประสิทธิภาพ",
+    comparisonDescription: "ใช้เฉพาะทริปที่เสร็จสิ้นในการคำนวณค่าเฉลี่ยประสิทธิภาพ เสร็จสิ้น = มี กม. จริง กม. ประมาณการ ลิตรน้ำมัน และค่าน้ำมันครบ",
+    sortBestKmL: "เรียง: กม./ลิตร ดีที่สุด",
+    sortLowestCostKm: "เรียง: ค่าใช้จ่าย/กม. ต่ำสุด",
+    sortHighestFuelCost: "เรียง: ค่าน้ำมันสูงสุด",
+    sortMostActualKm: "เรียง: กม. จริงมากที่สุด",
+    sortMostCompletedTrips: "เรียง: ทริปเสร็จสิ้นมากที่สุด",
+    moreCompletedTripsNeeded: "ต้องมีทริปที่เสร็จสิ้นมากกว่านี้เพื่อเปรียบเทียบให้แม่นยำ",
+    bestKmLDriver: "พนักงานขับรถ กม./ลิตร ดีที่สุด",
+    lowestCostKmDriver: "พนักงานขับรถค่าใช้จ่าย/กม. ต่ำสุด",
+    bestVehicle: "รถดีที่สุด",
+    lowestVehicleCostKm: "รถค่าใช้จ่าย/กม. ต่ำสุด",
+    mostExpensiveTrip: "ทริปที่แพงที่สุด",
+    biggestDistanceDifference: "ส่วนต่างระยะทางมากที่สุด",
+    dataQuality: "คุณภาพข้อมูล",
+    drivers: "พนักงานขับรถ",
+    vehicles: "รถ",
+    routes: "เส้นทาง",
+    rank: "อันดับ",
+    label: "ป้ายกำกับ",
+    avgEstKm: "เฉลี่ย กม. ประมาณการ",
+    avgActualKm: "เฉลี่ย กม. จริง",
+    avgDifference: "ส่วนต่างเฉลี่ย",
+    avgFuelCost: "ค่าน้ำมันเฉลี่ย",
+    deleteTripQuestion: "ลบทริปนี้?",
+    deleteTripDescription: "จะลบเฉพาะรายการทริปนี้ ไม่ลบรายการจองเดิมหรือบันทึกน้ำมัน",
+    cancel: "ยกเลิก",
+    deleting: "กำลังลบ...",
+    reviewPerformance: "ตรวจสอบประสิทธิภาพ",
+    addActualKm: "เพิ่ม กม. จริง",
+    addEstimate: "เพิ่มระยะทางประมาณการ",
+    reviewDetails: "ตรวจสอบรายละเอียด",
+    missingMileageHelper: "ต้องมี กม. จริงก่อนคำนวณประสิทธิภาพ",
+    missingEstimateHelper: "กม. ประมาณการช่วยเปรียบเทียบแผนกับระยะจริง",
+    missingFuelHelper: "เชื่อมโยงบันทึกน้ำมันหรือกรอกน้ำมันเองเพื่อให้ทริปครบถ้วน",
+    completedHelper: "ทริปนี้ครบถ้วนและรวมอยู่ในการเปรียบเทียบประสิทธิภาพ",
+    reviewHelper: "ตรวจสอบรายละเอียดทริปและกรอกข้อมูลที่ขาด",
+    googleMapsEstimate: "ประมาณการจาก Google Maps",
+    manualOverride: "แก้ไขเอง",
+    notCalculated: "ยังไม่คำนวณ",
+    usingManualActualKm: "ใช้ กม. จริงที่กรอกเอง",
+    usingMileageCalculation: "ใช้การคำนวณจากเลขไมล์",
+    actualKmMissing: "ยังไม่มี กม. จริง",
+    needsMoreData: "ต้องมีข้อมูลเพิ่มเติม",
+    limitedData: "ข้อมูลจำกัด",
+    good: "ดี",
+    bestKmL: "กม./ลิตร ดีที่สุด",
+    lowestCostKm: "ค่าใช้จ่าย/กม. ต่ำสุด",
+    overEstimate: "เกินประมาณการ",
+    highCostKm: "ค่าใช้จ่าย/กม. สูง",
+    lowEfficiency: "ประสิทธิภาพต่ำ",
+    average: "เฉลี่ย",
+    unknownRoute: "ไม่ทราบเส้นทาง",
+    depot: "คลัง",
+    customStart: "จุดเริ่มต้นอื่น",
+    unassigned: "ยังไม่กำหนด",
+    missing: "ขาดข้อมูล",
+    distance: "ระยะทาง",
+    kmL: "กม./ลิตร",
+    costKm: "ค่าใช้จ่าย/กม.",
+    noFuelManualWarning: "มีบันทึกน้ำมันที่เชื่อมโยงไว้ แต่ทริปนี้ใช้การกรอกน้ำมันด้วยตนเอง",
+    unableToLoadTripJourneys: "ไม่สามารถโหลดรายการทริปได้",
+    dataQualityNoFuelCost: "บางทริปไม่มีค่าน้ำมันที่ถูกต้อง",
+    dataQualityLinkedNoCost: "บันทึกน้ำมันที่เชื่อมโยงบางรายการไม่มีค่าน้ำมัน",
+    dataQualityEstimateNoActual: "บางทริปมีระยะประมาณการแต่ไม่มี กม. จริง",
+    dataQualityActualNoFuel: "บางทริปมี กม. จริงแต่ไม่มีข้อมูลน้ำมันที่ใช้งาน",
+    driverMatched: "จับคู่พนักงานขับรถจากหน้าพนักงานขับรถแล้ว",
+    vehicleCanBeTyped: "สามารถเลือกหรือพิมพ์ทะเบียนรถเองได้",
+    vehicleUpdatedFromDriver: "อัปเดตรถจากพนักงานขับที่เลือกแล้ว ยังสามารถเปลี่ยนได้",
+    manualDriverEntryMessage: "กรอกพนักงานขับรถเอง ยังสามารถเลือกหรือพิมพ์รถได้",
+    routeDistanceCalculated: "คำนวณระยะทางเส้นทางแล้ว บันทึกทริปเพื่อจัดเก็บ",
+    fuelLogLinked: "เชื่อมโยงบันทึกน้ำมันกับทริปแล้ว",
+    fuelLogUnlinked: "ยกเลิกเชื่อมโยงบันทึกน้ำมันแล้ว",
+    routeStartRequired: "กรุณากรอกจุดเริ่มต้นก่อนคำนวณระยะทาง",
+    routePickupDropoffRequired: "กรุณากรอกสถานที่รับและส่งสินค้าก่อนคำนวณระยะทาง",
+    uuidReferenceError: "มีการส่งเลขอ้างอิงการจองหรือบันทึกน้ำมันไปยังช่องฐานข้อมูล UUID โปรดใช้ migration ของ Trip Journey แล้วลองอีกครั้ง",
+    unableToCompleteAction: "ไม่สามารถดำเนินการ Trip Journey นี้ได้"
+  }
+} as const;
+
+type TripJourneyCopy = { [K in keyof (typeof tripJourneyCopy)["en"]]: string };
+
+const tripJourneyCopyOverrides: Partial<Record<keyof typeof tripJourneyCopy, Partial<TripJourneyCopy>>> = {
+  th: {
+    routeGoogleMapsHelper: "ระยะทางจากการจองคือรับของไปส่งของเท่านั้น ส่วน Trip Journey สามารถคำนวณเส้นทางเต็มที่พนักงานขับรถเลือก",
+    startsPickupDropoffOnly: "ไม่ใช้คลัง / รับของไปส่งของเท่านั้น",
+    bookingEstimate: "ระยะทางจากการจอง",
+    bookingEstimateHelper: "รับของไปส่งของเท่านั้น",
+    tripJourneyEstimate: "ระยะทาง Trip Journey",
+    tripJourneyEstimateHelper: "เส้นทางเต็มตามที่เลือก",
+    routeSummary: "สรุปเส้นทาง",
+    bookingRouteLabel: "การจอง",
+    tripRouteLabel: "เส้นทางทริป",
+    pickupDropoffOnly: "รับของ -> ส่งของ เท่านั้น",
+    tripMapsEstimate: "ประมาณการเส้นทางทริปจาก Google",
+    bookingEstimateFallback: "ใช้ระยะทางจากการจองเป็นสำรอง",
+    displayEstimatePriority: "ระยะทางที่แสดงจะใช้ค่าที่แก้ไขเองก่อน จากนั้นใช้ประมาณการ Trip Journey จาก Google และสุดท้ายใช้ระยะทางจากการจอง",
+    openInGoogleMaps: "เปิดใน Google Maps",
+    routeDistanceCalculated: "คำนวณระยะทางเส้นทางทริปแล้ว บันทึกทริปเพื่อจัดเก็บ",
+    routeCalculateFailed: "ไม่สามารถคำนวณระยะทางได้ คุณสามารถกรอก กม. ประมาณการเองแทนได้"
+  }
+};
 
 type TripFilter = {
   fromDate: string;
@@ -42,9 +512,14 @@ type TripForm = {
   booking_reference: string;
   trip_date: string;
   pickup_time: string;
-  start_location_type: "depot" | "custom";
+  start_location_type: "depot" | "custom" | "pickup_only";
   start_location: string;
   depot_address: string;
+  route_start_type: "depot" | "custom" | "pickup_only";
+  depot_address_used: string;
+  custom_start_address: string;
+  pickup_address: string;
+  dropoff_address: string;
   pickup_location: string;
   dropoff_location: string;
   route: string;
@@ -59,6 +534,14 @@ type TripForm = {
   manual_actual_km: string;
   return_to_depot: boolean;
   estimated_distance_km: string;
+  estimated_duration_minutes: string;
+  google_maps_route_url: string;
+  google_estimated_km: string;
+  google_estimated_minutes: string;
+  route_source: string;
+  booking_estimated_km: string;
+  booking_estimated_minutes: string;
+  booking_google_maps_route_url: string;
   manual_estimated_distance_km: string;
   manual_litres_used: string;
   manual_fuel_cost: string;
@@ -168,44 +651,71 @@ function formatDuration(seconds: number | null | undefined) {
 
 function getEstimateSourceLabel(values: {
   estimated_distance_km?: number | string | null;
+  google_estimated_km?: number | string | null;
+  booking_estimated_km?: number | string | null;
   manual_estimated_distance_km?: number | string | null;
-}) {
+}, copy: TripJourneyCopy = tripJourneyCopy.en) {
   const manual = toNumber(values.manual_estimated_distance_km);
-  const google = toNumber(values.estimated_distance_km);
-  if (manual != null && manual > 0) return "Manual override";
-  if (google != null && google > 0) return "Google Maps estimate";
-  return "Not calculated";
+  const google = toNumber(values.google_estimated_km ?? values.estimated_distance_km);
+  const booking = toNumber(values.booking_estimated_km);
+  if (manual != null && manual > 0) return copy.manualOverride;
+  if (google != null && google > 0) return copy.tripMapsEstimate;
+  if (booking != null && booking > 0) return copy.bookingEstimateFallback;
+  return copy.notCalculated;
 }
 
-function getStartLocationType(trip: Pick<TripJourneyWithFuel, "start_location" | "depot_address" | "start_location_type">) {
-  if (trip.start_location_type === "custom") return "custom";
+type RouteStartType = "depot" | "custom" | "pickup_only";
+
+function getStartLocationType(trip: Pick<TripJourneyWithFuel, "start_location" | "depot_address" | "start_location_type" | "route_start_type">): RouteStartType {
+  if (trip.route_start_type === "pickup_only" || trip.start_location_type === "pickup_only") return "pickup_only";
+  if (trip.route_start_type === "custom" || trip.start_location_type === "custom") return "custom";
   if (trip.start_location && !isDepotLocation(trip.start_location)) return "custom";
   return "depot";
 }
 
 function getEffectiveEstimatedKm(values: {
   estimated_distance_km?: number | string | null;
+  google_estimated_km?: number | string | null;
+  booking_estimated_km?: number | string | null;
   manual_estimated_distance_km?: number | string | null;
 }) {
   const manual = toNumber(values.manual_estimated_distance_km);
   if (manual != null && manual > 0) return manual;
-  const google = toNumber(values.estimated_distance_km);
+  const google = toNumber(values.google_estimated_km);
   if (google != null && google > 0) return google;
+  const booking = toNumber(values.booking_estimated_km);
+  if (booking != null && booking > 0) return booking;
+  const legacy = toNumber(values.estimated_distance_km);
+  if (legacy != null && legacy > 0) return legacy;
   return null;
 }
 
 function tripToForm(trip: TripJourneyWithFuel): TripForm {
+  const startLocationType = getStartLocationType(trip);
+  const googleEstimatedKm = trip.google_estimated_km?.toString() ?? "";
+  const bookingEstimatedKm =
+    trip.booking_estimated_km?.toString() ??
+    (!trip.google_estimated_km && trip.booking_diary_id && trip.estimated_distance_km != null ? trip.estimated_distance_km.toString() : "");
+  const googleEstimatedMinutes = trip.google_estimated_minutes?.toString() ?? "";
+  const bookingEstimatedMinutes =
+    trip.booking_estimated_minutes?.toString() ??
+    (!trip.google_estimated_minutes && trip.booking_diary_id && trip.estimated_duration_minutes != null ? trip.estimated_duration_minutes.toString() : "");
   return {
     id: trip.id,
     booking_diary_id: trip.booking_diary_id ?? trip.booking_id ?? "",
     booking_reference: trip.booking_reference ?? "",
     trip_date: trip.trip_date,
     pickup_time: trip.pickup_time ?? "",
-    start_location_type: getStartLocationType(trip),
-    start_location: trip.start_location ?? DEPOT_ADDRESS,
-    depot_address: trip.depot_address ?? DEPOT_ADDRESS,
-    pickup_location: trip.pickup_location ?? "",
-    dropoff_location: trip.dropoff_location ?? "",
+    start_location_type: startLocationType,
+    start_location: startLocationType === "pickup_only" ? "" : trip.start_location ?? trip.custom_start_address ?? DEPOT_ADDRESS,
+    depot_address: trip.depot_address ?? trip.depot_address_used ?? DEPOT_ADDRESS,
+    route_start_type: startLocationType,
+    depot_address_used: trip.depot_address_used ?? trip.depot_address ?? DEPOT_ADDRESS,
+    custom_start_address: trip.custom_start_address ?? (startLocationType === "custom" ? trip.start_location ?? "" : ""),
+    pickup_address: trip.pickup_address ?? trip.pickup_location ?? "",
+    dropoff_address: trip.dropoff_address ?? trip.dropoff_location ?? "",
+    pickup_location: trip.pickup_address ?? trip.pickup_location ?? "",
+    dropoff_location: trip.dropoff_address ?? trip.dropoff_location ?? "",
     route: trip.route ?? "",
     vehicle_type: trip.vehicle_type ?? "",
     vehicle_reg: trip.vehicle_reg ?? "",
@@ -218,6 +728,14 @@ function tripToForm(trip: TripJourneyWithFuel): TripForm {
     manual_actual_km: trip.manual_actual_km?.toString() ?? "",
     return_to_depot: trip.return_to_depot,
     estimated_distance_km: trip.estimated_distance_km?.toString() ?? "",
+    estimated_duration_minutes: trip.estimated_duration_minutes?.toString() ?? "",
+    google_maps_route_url: trip.google_maps_route_url ?? "",
+    google_estimated_km: googleEstimatedKm,
+    google_estimated_minutes: googleEstimatedMinutes,
+    route_source: trip.route_source ?? trip.estimated_distance_source ?? "",
+    booking_estimated_km: bookingEstimatedKm,
+    booking_estimated_minutes: bookingEstimatedMinutes,
+    booking_google_maps_route_url: trip.booking_google_maps_route_url ?? "",
     manual_estimated_distance_km: trip.manual_estimated_distance_km?.toString() ?? "",
     manual_litres_used: trip.manual_litres_used?.toString() ?? "",
     manual_fuel_cost: trip.manual_fuel_cost?.toString() ?? "",
@@ -236,7 +754,7 @@ function getActualDistance(trip: Pick<TripJourneyWithFuel, "start_mileage" | "en
   return null;
 }
 
-function getEstimatedDistance(trip: Pick<TripJourneyWithFuel, "estimated_distance_km" | "manual_estimated_distance_km">) {
+function getEstimatedDistance(trip: Pick<TripJourneyWithFuel, "estimated_distance_km" | "google_estimated_km" | "booking_estimated_km" | "manual_estimated_distance_km">) {
   return getEffectiveEstimatedKm(trip);
 }
 
@@ -295,32 +813,51 @@ function isCompletedTrip(trip: TripJourneyWithFuel) {
   return getDerivedTripStatus(trip) === "completed";
 }
 
-function getHealthBadgeClass(label: string) {
-  if (["Good", "Best KM/L", "Lowest cost/km"].includes(label)) return "border-emerald-200 bg-emerald-50 text-emerald-800";
-  if (["Needs more data", "Limited data"].includes(label)) return "border-slate-200 bg-slate-50 text-slate-600";
+function getHealthBadgeClass(label: string, copy: TripJourneyCopy = tripJourneyCopy.en) {
+  if ([copy.good, copy.bestKmL, copy.lowestCostKm].includes(label)) return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  if ([copy.needsMoreData, copy.limitedData].includes(label)) return "border-slate-200 bg-slate-50 text-slate-600";
   return "border-amber-200 bg-amber-50 text-amber-800";
+}
+
+function getStatusAccent(status: string) {
+  if (status === "completed") return "border-l-emerald-400 bg-emerald-50/30";
+  if (status === "missing_fuel") return "border-l-amber-400 bg-amber-50/40";
+  if (status === "missing_mileage" || status === "missing_estimated_distance") return "border-l-orange-400 bg-orange-50/35";
+  return "border-l-brand-300 bg-brand-50/20";
+}
+
+function metricTileClass(tone: "purple" | "green" | "amber" | "rose" | "slate" = "slate") {
+  const tones = {
+    purple: "border-brand-100 bg-brand-50/75 text-brand-800",
+    green: "border-emerald-100 bg-emerald-50/75 text-emerald-800",
+    amber: "border-amber-100 bg-amber-50/80 text-amber-800",
+    rose: "border-rose-100 bg-rose-50/75 text-rose-800",
+    slate: "border-slate-200 bg-slate-50/90 text-slate-700"
+  };
+  return `rounded-lg border px-3 py-2 ${tones[tone]}`;
 }
 
 function getTripHealthLabel(
   metrics: ReturnType<typeof getTripMetrics>,
-  comparison: { averageKmPerLitre: number | null; averageCostPerKm: number | null; completedTrips: number }
+  comparison: { averageKmPerLitre: number | null; averageCostPerKm: number | null; completedTrips: number },
+  copy: TripJourneyCopy = tripJourneyCopy.en
 ) {
-  if (comparison.completedTrips < 2) return "Needs more data";
-  if (metrics.differencePercent != null && metrics.differencePercent > 15) return "Over estimate";
+  if (comparison.completedTrips < 2) return copy.needsMoreData;
+  if (metrics.differencePercent != null && metrics.differencePercent > 15) return copy.overEstimate;
   if (comparison.averageCostPerKm != null && metrics.costPerKm != null && metrics.costPerKm > comparison.averageCostPerKm * 1.2) {
-    return "High cost/km";
+    return copy.highCostKm;
   }
   if (comparison.averageKmPerLitre != null && metrics.kmPerLitre != null && metrics.kmPerLitre < comparison.averageKmPerLitre * 0.8) {
-    return "Low efficiency";
+    return copy.lowEfficiency;
   }
-  return "Good";
+  return copy.good;
 }
 
-function getPerformanceLabel(row: Pick<PerformanceRow, "completedTrips" | "kmPerLitre" | "costPerKm">, bestKmPerLitre: number | null, lowestCostPerKm: number | null) {
-  if (row.completedTrips === 0) return "Needs more data";
-  if (bestKmPerLitre != null && row.kmPerLitre === bestKmPerLitre) return "Best KM/L";
-  if (lowestCostPerKm != null && row.costPerKm === lowestCostPerKm) return "Lowest cost/km";
-  return "Average";
+function getPerformanceLabel(row: Pick<PerformanceRow, "completedTrips" | "kmPerLitre" | "costPerKm">, bestKmPerLitre: number | null, lowestCostPerKm: number | null, copy: TripJourneyCopy = tripJourneyCopy.en) {
+  if (row.completedTrips === 0) return copy.needsMoreData;
+  if (bestKmPerLitre != null && row.kmPerLitre === bestKmPerLitre) return copy.bestKmL;
+  if (lowestCostPerKm != null && row.costPerKm === lowestCostPerKm) return copy.lowestCostKm;
+  return copy.average;
 }
 
 function sortPerformanceRows<T extends PerformanceRow>(rows: T[], sort: ComparisonSort) {
@@ -341,22 +878,89 @@ function sortPerformanceRows<T extends PerformanceRow>(rows: T[], sort: Comparis
   return sorted.sort((a, b) => (b.kmPerLitre ?? -1) - (a.kmPerLitre ?? -1));
 }
 
-function getRoutePreview(trip: Pick<TripJourneyWithFuel, "start_location" | "pickup_location" | "dropoff_location" | "return_to_depot" | "depot_address" | "start_location_type">) {
-  const start = getStartLocationType(trip) === "depot" ? trip.depot_address || DEPOT_ADDRESS : trip.start_location || "";
-  const parts = [start, trip.pickup_location, trip.dropoff_location].filter(Boolean);
-  if (trip.return_to_depot) parts.push(trip.depot_address || DEPOT_ADDRESS);
-  return parts.join(" -> ");
-}
-
 function isDepotLocation(value: string | null | undefined) {
   const normalized = String(value ?? "").toLowerCase();
   return normalized.includes("expert express sender") || normalized.includes("happy place");
 }
 
-function shortenLocation(value: string | null | undefined) {
+function normalizeRouteLocation(value: string | null | undefined) {
+  const text = String(value ?? "").trim().toLowerCase();
+  if (!text) return "";
+  if (isDepotLocation(text)) return "depot";
+  return text
+    .replace(/,?\s*thailand$/i, "")
+    .replace(/,?\s*bangkok\s*\d*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function compactRouteParts(parts: string[]) {
+  return parts.filter(Boolean).filter((part, index, values) => {
+    if (index === 0) return true;
+    return normalizeRouteLocation(part) !== normalizeRouteLocation(values[index - 1]);
+  });
+}
+
+function buildMapsDirectionsUrl(origin: string, destination: string, waypoints: string[] = []) {
+  const url = new URL("https://www.google.com/maps/dir/");
+  url.searchParams.set("api", "1");
+  url.searchParams.set("origin", origin);
+  url.searchParams.set("destination", destination);
+  url.searchParams.set("travelmode", "driving");
+  if (waypoints.length > 0) {
+    url.searchParams.set("waypoints", waypoints.join("|"));
+  }
+  return url.toString();
+}
+
+function getTripRoutePlan(form: TripForm) {
+  const startType = form.start_location_type;
+  const depotAddress = form.depot_address.trim() || DEPOT_ADDRESS;
+  const customStart = form.start_location.trim();
+  const pickup = form.pickup_location.trim();
+  const dropoff = form.dropoff_location.trim();
+
+  if (!pickup || !dropoff) return null;
+  if (startType === "custom" && !customStart) return null;
+
+  const origin = startType === "pickup_only" ? pickup : startType === "depot" ? depotAddress : customStart;
+  const destination = form.return_to_depot ? depotAddress : dropoff;
+  const waypoints =
+    startType === "pickup_only"
+      ? form.return_to_depot
+        ? [dropoff]
+        : []
+      : form.return_to_depot
+        ? [pickup, dropoff]
+        : [pickup];
+
+  return {
+    startType,
+    origin,
+    destination,
+    waypoints,
+    depotAddress,
+    customStart,
+    pickup,
+    dropoff,
+    mapsUrl: buildMapsDirectionsUrl(origin, destination, waypoints)
+  };
+}
+
+function getRoutePreview(trip: Pick<TripJourneyWithFuel, "start_location" | "pickup_location" | "dropoff_location" | "return_to_depot" | "depot_address" | "start_location_type" | "route_start_type">) {
+  const startType = getStartLocationType(trip);
+  const start = startType === "pickup_only" ? "" : startType === "depot" ? trip.depot_address || DEPOT_ADDRESS : trip.start_location || "";
+  const parts = compactRouteParts([start, trip.pickup_location ?? "", trip.dropoff_location ?? ""]);
+  if (trip.return_to_depot && normalizeRouteLocation(parts[parts.length - 1]) !== "depot") {
+    parts.push(trip.depot_address || DEPOT_ADDRESS);
+  }
+  return parts.join(" -> ");
+}
+
+function shortenLocation(value: string | null | undefined, copy: TripJourneyCopy = tripJourneyCopy.en) {
   const text = String(value ?? "").trim();
   if (!text) return "";
-  if (isDepotLocation(text)) return "Depot";
+  if (isDepotLocation(text)) return copy.depot;
   return text
     .replace(/,?\s*Thailand$/i, "")
     .replace(/,?\s*Bangkok\s*\d*$/i, "")
@@ -364,30 +968,31 @@ function shortenLocation(value: string | null | undefined) {
     .trim();
 }
 
-function getShortRoutePreview(trip: Pick<TripJourneyWithFuel, "start_location" | "pickup_location" | "dropoff_location" | "return_to_depot" | "depot_address" | "start_location_type">) {
-  const parts = [
-    getStartLocationType(trip) === "depot" ? "Depot" : shortenLocation(trip.start_location) || "Custom start",
-    shortenLocation(trip.pickup_location),
-    shortenLocation(trip.dropoff_location)
-  ].filter(Boolean);
-  if (trip.return_to_depot) parts.push("Depot");
+function getShortRoutePreview(trip: Pick<TripJourneyWithFuel, "start_location" | "pickup_location" | "dropoff_location" | "return_to_depot" | "depot_address" | "start_location_type" | "route_start_type">, copy: TripJourneyCopy = tripJourneyCopy.en) {
+  const startType = getStartLocationType(trip);
+  const parts = compactRouteParts([
+    startType === "pickup_only" ? "" : startType === "depot" ? copy.depot : shortenLocation(trip.start_location, copy) || copy.customStart,
+    shortenLocation(trip.pickup_location, copy),
+    shortenLocation(trip.dropoff_location, copy)
+  ]);
+  if (trip.return_to_depot && normalizeRouteLocation(parts[parts.length - 1]) !== "depot") parts.push(copy.depot);
   return parts.join(" -> ");
 }
 
-function statusActionText(status: string) {
-  if (status === "completed") return "Review performance";
-  if (status === "missing_mileage") return "Add actual km";
-  if (status === "missing_estimated_distance") return "Add estimate";
-  if (status === "missing_fuel") return "Manage fuel logs";
-  return "Review details";
+function statusActionText(status: string, copy: TripJourneyCopy = tripJourneyCopy.en) {
+  if (status === "completed") return copy.reviewPerformance;
+  if (status === "missing_mileage") return copy.addActualKm;
+  if (status === "missing_estimated_distance") return copy.addEstimate;
+  if (status === "missing_fuel") return copy.manageFuelLogs;
+  return copy.reviewDetails;
 }
 
-function getNextActionHelper(status: string) {
-  if (status === "missing_mileage") return "Actual KM is required before efficiency can be calculated.";
-  if (status === "missing_estimated_distance") return "Estimated KM lets you compare planned vs actual distance.";
-  if (status === "missing_fuel") return "Link fuel logs or enter manual fuel to complete this trip.";
-  if (status === "completed") return "This trip is complete and included in performance comparison.";
-  return "Review trip details and complete the missing fields.";
+function getNextActionHelper(status: string, copy: TripJourneyCopy = tripJourneyCopy.en) {
+  if (status === "missing_mileage") return copy.missingMileageHelper;
+  if (status === "missing_estimated_distance") return copy.missingEstimateHelper;
+  if (status === "missing_fuel") return copy.missingFuelHelper;
+  if (status === "completed") return copy.completedHelper;
+  return copy.reviewHelper;
 }
 
 function actionTabForStatus(status: string): SelectedTripTab {
@@ -396,7 +1001,7 @@ function actionTabForStatus(status: string): SelectedTripTab {
   return "overview";
 }
 
-function getFormMetrics(form: TripForm, linkedFuelLogs: FuelLogWithDriver[]) {
+function getFormMetrics(form: TripForm, linkedFuelLogs: FuelLogWithDriver[], copy: TripJourneyCopy = tripJourneyCopy.en) {
   const startMileage = toNumber(form.start_mileage);
   const endMileage = toNumber(form.end_mileage);
   const manualActualKm = toNumber(form.manual_actual_km);
@@ -419,16 +1024,16 @@ function getFormMetrics(form: TripForm, linkedFuelLogs: FuelLogWithDriver[]) {
     fuelCost,
     kmPerLitre: actualDistance != null && fuelLitres != null && fuelLitres > 0 ? actualDistance / fuelLitres : null,
     costPerKm: actualDistance != null && actualDistance > 0 && fuelCost != null ? fuelCost / actualDistance : null,
-    actualSource: manualActualKm != null && manualActualKm > 0 ? "Using manual actual km" : startMileage != null && endMileage != null && endMileage > startMileage ? "Using mileage calculation" : "Actual km missing"
+    actualSource: manualActualKm != null && manualActualKm > 0 ? copy.usingManualActualKm : startMileage != null && endMileage != null && endMileage > startMileage ? copy.usingMileageCalculation : copy.actualKmMissing
   };
 }
 
-function statusLabel(status: string) {
-  if (status === "completed") return "Complete";
-  if (status === "missing_mileage") return "Missing Mileage";
-  if (status === "missing_fuel") return "Missing Fuel";
-  if (status === "missing_estimated_distance") return "Missing Estimate";
-  return "Created";
+function statusLabel(status: string, copy: TripJourneyCopy = tripJourneyCopy.en) {
+  if (status === "completed") return copy.complete;
+  if (status === "missing_mileage") return copy.missingMileageTitle;
+  if (status === "missing_fuel") return copy.missingFuelTitle;
+  if (status === "missing_estimated_distance") return copy.missingEstimateTitle;
+  return copy.created;
 }
 
 function statusClass(status: string) {
@@ -459,15 +1064,24 @@ function getFuelLogMatchScore(trip: TripJourneyWithFuel, log: FuelLogWithDriver)
   return sameVehicle + sameDriver - daysApart;
 }
 
-function getFriendlyTripError(err: unknown) {
+function getFriendlyTripError(err: unknown, copy: TripJourneyCopy = tripJourneyCopy.en) {
   const message = err instanceof Error ? err.message : "";
   if (message.includes("invalid input syntax for type uuid")) {
-    return "A numeric booking or fuel-log reference was sent to a UUID database field. Apply the Trip Journey reference migration, then try again.";
+    return copy.uuidReferenceError;
   }
-  return message || "Unable to complete this Trip Journey action.";
+  return message || copy.unableToCompleteAction;
 }
 
 export default function TripJourneyPage() {
+  const { language } = useLanguage();
+  const copy = useMemo<TripJourneyCopy>(
+    () => ({
+      ...tripJourneyCopy.en,
+      ...tripJourneyCopy[language],
+      ...(tripJourneyCopyOverrides[language] ?? {})
+    }),
+    [language]
+  );
   const manualActualKmRef = useRef<HTMLInputElement | null>(null);
   const manualEstimatedKmRef = useRef<HTMLInputElement | null>(null);
   const [trips, setTrips] = useState<TripJourneyWithFuel[]>([]);
@@ -564,11 +1178,11 @@ export default function TripJourneyPage() {
       }
     } catch (err) {
       console.error("Trip Journey load error:", err);
-      setError(err instanceof Error ? err.message : "Unable to load Trip Journey records.");
+      setError(err instanceof Error ? err.message : copy.unableToLoadTripJourneys);
     } finally {
       setLoading(false);
     }
-  }, [requestedBookingId, requestedTripId, selectedTripId]);
+  }, [copy, requestedBookingId, requestedTripId, selectedTripId]);
 
   useEffect(() => {
     void load();
@@ -652,6 +1266,24 @@ export default function TripJourneyPage() {
     [filteredTrips, visibleTripCount]
   );
 
+  useEffect(() => {
+    if (!selectedTripId) return;
+    const selectedIndex = filteredTrips.findIndex((trip) => trip.id === selectedTripId);
+    if (selectedIndex >= visibleTripCount) {
+      setVisibleTripCount(selectedIndex + 1);
+    }
+  }, [filteredTrips, selectedTripId, visibleTripCount]);
+
+  useEffect(() => {
+    if (!selectedTripId || window.location.hash !== "#trip-records") return;
+    window.requestAnimationFrame(() => {
+      document.getElementById(`trip-${selectedTripId}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center"
+      });
+    });
+  }, [selectedTripId, visibleTrips]);
+
   const summary = useMemo(() => {
     const completed = baseFilteredTrips.filter(isCompletedTrip);
     const totalActual = baseFilteredTrips.reduce((sum, trip) => sum + (getTripMetrics(trip).actualDistance ?? 0), 0);
@@ -697,23 +1329,23 @@ export default function TripJourneyPage() {
           kmPerLitre: litres > 0 ? actualKm / litres : null,
           costPerKm: actualKm > 0 ? cost / actualKm : null,
           averageDifferenceKm: completedTrips.length ? diff / completedTrips.length : null,
-          performanceLabel: "Average"
+          performanceLabel: copy.average
         };
       });
       const bestKmPerLitre = rows.filter((row) => row.kmPerLitre != null).sort((a, b) => (b.kmPerLitre ?? 0) - (a.kmPerLitre ?? 0))[0]?.kmPerLitre ?? null;
       const lowestCostPerKm = rows.filter((row) => row.costPerKm != null).sort((a, b) => (a.costPerKm ?? 0) - (b.costPerKm ?? 0))[0]?.costPerKm ?? null;
-      return rows.map((row) => ({ ...row, performanceLabel: getPerformanceLabel(row, bestKmPerLitre, lowestCostPerKm) }));
+      return rows.map((row) => ({ ...row, performanceLabel: getPerformanceLabel(row, bestKmPerLitre, lowestCostPerKm, copy) }));
     };
 
-    const driverRows = buildRows((trip) => trip.driver || "Unassigned");
-    const vehicleRows = buildRows((trip) => trip.vehicle_reg || trip.vehicle_type || "Unassigned");
-    const routeRows: RoutePerformanceRow[] = buildRows((trip) => getShortRoutePreview(trip) || trip.route || "Unknown route").map((row) => ({
+    const driverRows = buildRows((trip) => trip.driver || copy.unassigned);
+    const vehicleRows = buildRows((trip) => trip.vehicle_reg || trip.vehicle_type || copy.unassigned);
+    const routeRows: RoutePerformanceRow[] = buildRows((trip) => getShortRoutePreview(trip, copy) || trip.route || copy.unknownRoute).map((row) => ({
       ...row,
       route: row.name,
       averageActualKm: row.completedTrips ? row.actualKm / row.completedTrips : null,
       averageEstimatedKm: row.completedTrips ? row.estimatedKm / row.completedTrips : null,
       averageFuelCost: row.completedTrips ? row.cost / row.completedTrips : null,
-      performanceLabel: row.completedTrips <= 1 ? "Limited data" : row.performanceLabel
+      performanceLabel: row.completedTrips <= 1 ? copy.limitedData : row.performanceLabel
     }));
     const tripRows: TripComparisonRow[] = baseFilteredTrips.map((trip) => {
       const metrics = getTripMetrics(trip);
@@ -723,8 +1355,8 @@ export default function TripJourneyPage() {
         metrics,
         status,
         label: status === "completed"
-          ? getTripHealthLabel(metrics, { averageKmPerLitre, averageCostPerKm, completedTrips: completed.length })
-          : statusLabel(status)
+          ? getTripHealthLabel(metrics, { averageKmPerLitre, averageCostPerKm, completedTrips: completed.length }, copy)
+          : statusLabel(status, copy)
       };
     });
 
@@ -735,10 +1367,10 @@ export default function TripJourneyPage() {
     const mostExpensiveTrip = [...tripRows].filter((row) => row.status === "completed" && row.metrics.costPerKm != null).sort((a, b) => (b.metrics.costPerKm ?? 0) - (a.metrics.costPerKm ?? 0))[0] ?? null;
     const biggestDistanceDifference = [...tripRows].filter((row) => row.metrics.differenceKm != null).sort((a, b) => Math.abs(b.metrics.differenceKm ?? 0) - Math.abs(a.metrics.differenceKm ?? 0))[0] ?? null;
     const dataQualityNotes = [
-      baseFilteredTrips.some((trip) => (getTripMetrics(trip).fuel.cost ?? 0) <= 0) ? "Some trips have no valid fuel cost." : "",
-      baseFilteredTrips.some((trip) => trip.linkedFuelLogs.length > 0 && getTripMetrics(trip).fuel.linkedCost <= 0) ? "Some linked fuel logs have no fuel cost." : "",
-      baseFilteredTrips.some((trip) => (getTripMetrics(trip).estimatedDistance ?? 0) > 0 && (getTripMetrics(trip).actualDistance ?? 0) <= 0) ? "Some trips have estimates but no actual km." : "",
-      baseFilteredTrips.some((trip) => (getTripMetrics(trip).actualDistance ?? 0) > 0 && !hasValidActiveFuel(trip)) ? "Some trips have actual km but no active fuel data." : ""
+      baseFilteredTrips.some((trip) => (getTripMetrics(trip).fuel.cost ?? 0) <= 0) ? copy.dataQualityNoFuelCost : "",
+      baseFilteredTrips.some((trip) => trip.linkedFuelLogs.length > 0 && getTripMetrics(trip).fuel.linkedCost <= 0) ? copy.dataQualityLinkedNoCost : "",
+      baseFilteredTrips.some((trip) => (getTripMetrics(trip).estimatedDistance ?? 0) > 0 && (getTripMetrics(trip).actualDistance ?? 0) <= 0) ? copy.dataQualityEstimateNoActual : "",
+      baseFilteredTrips.some((trip) => (getTripMetrics(trip).actualDistance ?? 0) > 0 && !hasValidActiveFuel(trip)) ? copy.dataQualityActualNoFuel : ""
     ].filter(Boolean);
 
     return {
@@ -769,7 +1401,7 @@ export default function TripJourneyPage() {
       biggestDistanceDifference,
       dataQualityNotes
     };
-  }, [baseFilteredTrips]);
+  }, [baseFilteredTrips, copy]);
 
   const sortedDriverRows = useMemo(() => sortPerformanceRows(summary.driverRows, comparisonSort), [comparisonSort, summary.driverRows]);
   const sortedVehicleRows = useMemo(() => sortPerformanceRows(summary.vehicleRows, comparisonSort), [comparisonSort, summary.vehicleRows]);
@@ -792,7 +1424,7 @@ export default function TripJourneyPage() {
     () => Array.from(new Set(trips.map((trip) => trip.vehicle_reg).filter(Boolean))).sort() as string[],
     [trips]
   );
-  const selectedFormMetrics = form ? getFormMetrics(form, selectedTrip?.linkedFuelLogs ?? []) : null;
+  const selectedFormMetrics = form ? getFormMetrics(form, selectedTrip?.linkedFuelLogs ?? [], copy) : null;
   const selectedTripStatus = selectedTrip ? getDerivedTripStatus(selectedTrip) : null;
   const selectedTripHealth =
     selectedTrip && selectedTripStatus === "completed"
@@ -800,7 +1432,7 @@ export default function TripJourneyPage() {
           averageKmPerLitre: summary.averageKmPerLitre,
           averageCostPerKm: summary.averageCostPerKm,
           completedTrips: summary.completedTrips
-        })
+        }, copy)
       : null;
   const driverDatalistOptions = useMemo(() => {
     const values = new Set<string>();
@@ -829,9 +1461,17 @@ export default function TripJourneyPage() {
   const selectedEstimateSource = form
     ? getEstimateSourceLabel({
         estimated_distance_km: form.estimated_distance_km,
+        google_estimated_km: form.google_estimated_km,
+        booking_estimated_km: form.booking_estimated_km,
         manual_estimated_distance_km: form.manual_estimated_distance_km
-      })
-    : "Not calculated";
+      }, copy)
+    : copy.notCalculated;
+  const currentRoutePlan = form ? getTripRoutePlan(form) : null;
+  const currentGoogleMapsUrl = currentRoutePlan?.mapsUrl || form?.google_maps_route_url || "";
+  const bookingEstimateKm = form ? toNumber(form.booking_estimated_km) : null;
+  const bookingEstimateMinutes = form ? toNumber(form.booking_estimated_minutes) : null;
+  const tripGoogleEstimateKm = form ? toNumber(form.google_estimated_km) : null;
+  const tripGoogleEstimateMinutes = form ? toNumber(form.google_estimated_minutes) : null;
 
   const openTrip = (trip: TripJourneyWithFuel) => {
     setSelectedTripId(trip.id);
@@ -840,7 +1480,7 @@ export default function TripJourneyPage() {
     setSelectedTripTab("overview");
     setManualFuelExpanded(false);
     setDistanceMessage(null);
-    setDistanceDurationText(null);
+    setDistanceDurationText(trip.google_estimated_minutes ? formatDuration(trip.google_estimated_minutes * 60) : null);
     setDriverVehicleMessage(null);
     setNotice(null);
     setError(null);
@@ -861,16 +1501,16 @@ export default function TripJourneyPage() {
       if (!current) return current;
       const matchedDriver = drivers.find((driver) => normalizeLookup(driver.name) === normalizeLookup(value));
       if (!matchedDriver?.vehicle_reg) {
-        setDriverVehicleMessage(value.trim() ? "Manual driver entry. Vehicle can still be selected or typed." : null);
+        setDriverVehicleMessage(value.trim() ? copy.manualDriverEntryMessage : null);
         return { ...current, driver: value };
       }
 
       if (normalizeLookup(current.vehicle_reg) === normalizeLookup(matchedDriver.vehicle_reg)) {
-        setDriverVehicleMessage("Driver matched from Drivers page.");
+        setDriverVehicleMessage(copy.driverMatched);
         return { ...current, driver: value };
       }
 
-      setDriverVehicleMessage("Vehicle updated from selected driver. You can still change it.");
+      setDriverVehicleMessage(copy.vehicleUpdatedFromDriver);
       return {
         ...current,
         driver: value,
@@ -881,11 +1521,11 @@ export default function TripJourneyPage() {
   };
 
   const handleVehicleChange = (value: string) => {
-    setDriverVehicleMessage(value.trim() ? "Vehicle can come from the list or be typed manually." : null);
+    setDriverVehicleMessage(value.trim() ? copy.vehicleCanBeTyped : null);
     updateForm("vehicle_reg", value);
   };
 
-  const handleStartLocationTypeChange = (value: "depot" | "custom") => {
+  const handleStartLocationTypeChange = (value: RouteStartType) => {
     setHasUnsavedChanges(true);
     setDistanceMessage(null);
     setDistanceDurationText(null);
@@ -895,14 +1535,28 @@ export default function TripJourneyPage() {
         return {
           ...current,
           start_location_type: "depot",
+          route_start_type: "depot",
           depot_address: current.depot_address || DEPOT_ADDRESS,
-          start_location: current.depot_address || DEPOT_ADDRESS
+          depot_address_used: current.depot_address || DEPOT_ADDRESS,
+          start_location: current.depot_address || DEPOT_ADDRESS,
+          custom_start_address: ""
+        };
+      }
+      if (value === "pickup_only") {
+        return {
+          ...current,
+          start_location_type: "pickup_only",
+          route_start_type: "pickup_only",
+          start_location: "",
+          custom_start_address: ""
         };
       }
       return {
         ...current,
         start_location_type: "custom",
-        start_location: isDepotLocation(current.start_location) ? "" : current.start_location
+        route_start_type: "custom",
+        start_location: isDepotLocation(current.start_location) ? current.custom_start_address : current.start_location,
+        custom_start_address: isDepotLocation(current.start_location) ? current.custom_start_address : current.start_location
       };
     });
   };
@@ -934,30 +1588,32 @@ export default function TripJourneyPage() {
 
   const getCurrentRoutePreview = () => {
     if (!form) return "";
-    const start = form.start_location_type === "depot" ? "Depot" : shortenLocation(form.start_location) || "Custom start";
-    const parts = [start, shortenLocation(form.pickup_location), shortenLocation(form.dropoff_location)].filter(Boolean);
-    if (form.return_to_depot) parts.push("Depot");
+    const start =
+      form.start_location_type === "pickup_only"
+        ? ""
+        : form.start_location_type === "depot"
+          ? copy.depot
+          : shortenLocation(form.start_location, copy) || copy.customStart;
+    const parts = compactRouteParts([start, shortenLocation(form.pickup_location, copy), shortenLocation(form.dropoff_location, copy)]);
+    if (form.return_to_depot && normalizeRouteLocation(parts[parts.length - 1]) !== "depot") parts.push(copy.depot);
     return parts.join(" -> ");
   };
 
   const handleCalculateRouteDistance = async () => {
     if (!form) return;
-    const start = form.start_location_type === "depot" ? DEPOT_ADDRESS : form.start_location.trim();
     const pickup = form.pickup_location.trim();
     const dropoff = form.dropoff_location.trim();
 
-    if (!start) {
-      setDistanceMessage("Please enter a start location before calculating distance.");
-      return;
-    }
-
     if (!pickup || !dropoff) {
-      setDistanceMessage("Please enter pickup and drop-off locations before calculating distance.");
+      setDistanceMessage(copy.routePickupDropoffRequired);
       return;
     }
 
-    const destination = form.return_to_depot ? (form.depot_address.trim() || DEPOT_ADDRESS) : dropoff;
-    const waypoints = form.return_to_depot ? [pickup, dropoff] : [pickup];
+    const routePlan = getTripRoutePlan(form);
+    if (!routePlan) {
+      setDistanceMessage(copy.routeStartRequired);
+      return;
+    }
 
     try {
       setCalculatingDistance(true);
@@ -967,9 +1623,9 @@ export default function TripJourneyPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          origin: start,
-          destination,
-          waypoints
+          origin: routePlan.origin,
+          destination: routePlan.destination,
+          waypoints: routePlan.waypoints
         })
       });
       const result = (await response.json()) as {
@@ -983,24 +1639,35 @@ export default function TripJourneyPage() {
       }
 
       const distanceKm = Number(result.data.distanceKm);
+      const durationMinutes = result.data.durationSeconds ? Math.max(1, Math.round(result.data.durationSeconds / 60)) : null;
       const durationText = result.data.durationSeconds ? formatDuration(result.data.durationSeconds) : null;
       setHasUnsavedChanges(true);
       setForm((current) =>
         current
           ? {
               ...current,
-              start_location_type: form.start_location_type,
-              start_location: start,
-              depot_address: current.depot_address || DEPOT_ADDRESS,
-              estimated_distance_km: distanceKm.toFixed(2)
+              start_location_type: routePlan.startType,
+              route_start_type: routePlan.startType,
+              start_location: routePlan.startType === "pickup_only" ? "" : routePlan.origin,
+              depot_address: routePlan.depotAddress,
+              depot_address_used: routePlan.depotAddress,
+              custom_start_address: routePlan.startType === "custom" ? routePlan.customStart : "",
+              pickup_address: routePlan.pickup,
+              dropoff_address: routePlan.dropoff,
+              estimated_distance_km: distanceKm.toFixed(2),
+              estimated_duration_minutes: durationMinutes?.toString() ?? "",
+              google_estimated_km: distanceKm.toFixed(2),
+              google_estimated_minutes: durationMinutes?.toString() ?? "",
+              google_maps_route_url: routePlan.mapsUrl,
+              route_source: "google_maps_trip_journey"
             }
           : current
       );
-      setDistanceMessage(`Route distance calculated. Save trip to store it.`);
+      setDistanceMessage(copy.routeDistanceCalculated);
       setDistanceDurationText(durationText);
     } catch (err) {
       console.warn("Route distance calculation warning:", err);
-      setDistanceMessage("Could not calculate route distance. You can enter manual estimated KM instead.");
+      setDistanceMessage(copy.routeCalculateFailed);
     } finally {
       setCalculatingDistance(false);
     }
@@ -1009,7 +1676,7 @@ export default function TripJourneyPage() {
   const requestDeleteTrip = (trip: TripJourneyWithFuel) => {
     setDeleteTarget({
       id: trip.id,
-      label: `${formatDate(trip.trip_date)} | ${getShortRoutePreview(trip)}`
+      label: `${formatDate(trip.trip_date)} | ${getShortRoutePreview(trip, copy)}`
     });
   };
 
@@ -1052,12 +1719,31 @@ export default function TripJourneyPage() {
         booking_diary_id: form.booking_diary_id || selectedTrip?.booking_diary_id || selectedTrip?.booking_id || null,
         booking_reference: form.booking_reference || selectedTrip?.booking_reference || null,
         start_location_type: form.start_location_type,
-        start_location: form.start_location_type === "depot" ? form.depot_address || DEPOT_ADDRESS : form.start_location,
+        route_start_type: form.start_location_type,
+        start_location:
+          form.start_location_type === "pickup_only"
+            ? null
+            : form.start_location_type === "depot"
+              ? form.depot_address || DEPOT_ADDRESS
+              : form.start_location,
         depot_address: form.depot_address || DEPOT_ADDRESS,
+        depot_address_used: form.depot_address || DEPOT_ADDRESS,
+        custom_start_address: form.start_location_type === "custom" ? form.start_location : null,
+        pickup_address: form.pickup_location,
+        dropoff_address: form.dropoff_location,
         start_mileage: toNumber(form.start_mileage),
         end_mileage: toNumber(form.end_mileage),
         manual_actual_km: toNumber(form.manual_actual_km),
         estimated_distance_km: toNumber(form.estimated_distance_km),
+        estimated_duration_minutes: toNumber(form.estimated_duration_minutes),
+        google_estimated_km: toNumber(form.google_estimated_km),
+        google_estimated_minutes: toNumber(form.google_estimated_minutes),
+        route_source: form.route_source,
+        google_maps_route_url: form.google_maps_route_url,
+        booking_estimated_km: toNumber(form.booking_estimated_km),
+        booking_estimated_minutes: toNumber(form.booking_estimated_minutes),
+        booking_google_maps_route_url: form.booking_google_maps_route_url,
+        estimated_distance_source: form.route_source || selectedTrip?.estimated_distance_source || null,
         manual_estimated_distance_km: toNumber(form.manual_estimated_distance_km),
         manual_litres_used: toNumber(form.manual_litres_used),
         manual_fuel_cost: toNumber(form.manual_fuel_cost),
@@ -1065,11 +1751,11 @@ export default function TripJourneyPage() {
       });
       setSelectedTripId(saved.id);
       setHasUnsavedChanges(false);
-      setNotice("Trip saved successfully.");
+      setNotice(copy.tripSavedSuccessfully);
       await load();
     } catch (err) {
       console.error("Trip save error:", err);
-      setError(getFriendlyTripError(err));
+      setError(getFriendlyTripError(err, copy));
     } finally {
       setSaving(false);
     }
@@ -1080,10 +1766,10 @@ export default function TripJourneyPage() {
     try {
       setError(null);
       await linkFuelLogToTrip(selectedTripId, fuelLogId);
-      setNotice("Fuel log linked to trip.");
+      setNotice(copy.fuelLogLinked);
       await load();
     } catch (err) {
-      setError(getFriendlyTripError(err));
+      setError(getFriendlyTripError(err, copy));
     }
   };
 
@@ -1092,27 +1778,27 @@ export default function TripJourneyPage() {
     try {
       setError(null);
       await unlinkFuelLogFromTrip(selectedTripId, fuelLogId);
-      setNotice("Fuel log unlinked from trip.");
+      setNotice(copy.fuelLogUnlinked);
       await load();
     } catch (err) {
-      setError(getFriendlyTripError(err));
+      setError(getFriendlyTripError(err, copy));
     }
   };
 
   return (
-    <div className="space-y-5">
-      <section className="surface-card p-4 sm:p-5">
+    <div className="-m-4 space-y-5 bg-gradient-to-br from-brand-50/55 via-slate-50 to-white p-4 sm:-m-5 sm:p-5">
+      <section className="rounded-xl border border-brand-100/70 bg-white/95 p-4 shadow-sm shadow-brand-950/5 sm:p-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-xs font-semibold text-brand-700">Trip Journey</p>
-            <h2 className="mt-1 text-2xl font-bold tracking-normal text-slate-950">Trip Performance</h2>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">{copy.tripJourney}</p>
+            <h2 className="mt-1 text-2xl font-bold tracking-normal text-slate-950">{copy.tripPerformance}</h2>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
-              Compare booking routes against actual mileage and fuel usage by driver, vehicle, and route.
+              {copy.description}
             </p>
           </div>
           <button type="button" onClick={() => void load()} className="btn-secondary gap-2">
             <RefreshCw className="h-4 w-4" />
-            Refresh
+            {copy.refresh}
           </button>
         </div>
         {error ? <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{error}</div> : null}
@@ -1120,165 +1806,181 @@ export default function TripJourneyPage() {
       </section>
 
       <section className="grid gap-4 xl:grid-cols-3">
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-xl border border-brand-100 bg-white p-5 shadow-sm shadow-brand-950/5">
           <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-slate-500">Trip Status</p>
-              <p className="mt-1 text-3xl font-bold text-slate-950">{summary.totalTrips}</p>
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-brand-50 p-2 text-brand-700"><BarChart3 className="h-5 w-5" /></div>
+              <div>
+                <p className="text-sm font-semibold text-slate-500">{copy.tripStatus}</p>
+                <p className="mt-1 text-3xl font-bold text-slate-950">{summary.totalTrips}</p>
+              </div>
             </div>
-            <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-bold text-brand-700">Trips</span>
+            <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-bold text-brand-700">{copy.trips}</span>
           </div>
           <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-            <div><p className="text-slate-500">Completed</p><p className="font-bold text-emerald-700">{summary.completedTrips}</p></div>
-            <div><p className="text-slate-500">Missing mileage</p><p className="font-bold text-amber-700">{summary.missingMileage}</p></div>
-            <div><p className="text-slate-500">Missing estimate</p><p className="font-bold text-amber-700">{summary.missingEstimate}</p></div>
-            <div><p className="text-slate-500">Missing fuel</p><p className="font-bold text-amber-700">{summary.missingFuel}</p></div>
+            <div className={metricTileClass("green")}><p className="text-xs font-semibold opacity-80">{copy.completed}</p><p className="text-lg font-bold">{summary.completedTrips}</p></div>
+            <div className={metricTileClass(summary.missingMileage ? "amber" : "slate")}><p className="text-xs font-semibold opacity-80">{copy.missingMileage}</p><p className="text-lg font-bold">{summary.missingMileage}</p></div>
+            <div className={metricTileClass(summary.missingEstimate ? "amber" : "slate")}><p className="text-xs font-semibold opacity-80">{copy.missingEstimate}</p><p className="text-lg font-bold">{summary.missingEstimate}</p></div>
+            <div className={metricTileClass(summary.missingFuel ? "amber" : "slate")}><p className="text-xs font-semibold opacity-80">{copy.missingFuel}</p><p className="text-lg font-bold">{summary.missingFuel}</p></div>
           </div>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-sm font-semibold text-slate-500">Distance & Fuel</p>
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-emerald-50 p-2 text-emerald-700"><MapPinned className="h-5 w-5" /></div>
+            <p className="text-sm font-semibold text-slate-500">{copy.distanceFuel}</p>
+          </div>
           <div className="mt-3 grid grid-cols-2 gap-3">
-            <div><p className="text-xs text-slate-500">Actual KM</p><p className="text-xl font-bold text-slate-950">{formatNumber(summary.totalActual)}</p></div>
-            <div><p className="text-xs text-slate-500">Estimated KM</p><p className="text-xl font-bold text-slate-950">{formatNumber(summary.totalEstimated)}</p></div>
-            <div><p className="text-xs text-slate-500">Difference</p><p className="text-xl font-bold text-slate-950">{formatNumber(summary.averageDifference)} km</p></div>
-            <div><p className="text-xs text-slate-500">Litres</p><p className="text-xl font-bold text-slate-950">{formatNumber(summary.totalLitres, 2)}</p></div>
-            <div className="col-span-2"><p className="text-xs text-slate-500">Fuel Cost</p><p className="text-xl font-bold text-slate-950">{formatCurrency(summary.totalCost)}</p></div>
+            <div className={metricTileClass("purple")}><p className="text-xs font-semibold opacity-80">{copy.actualKm}</p><p className="text-xl font-bold text-slate-950">{formatNumber(summary.totalActual)}</p></div>
+            <div className={metricTileClass("slate")}><p className="text-xs font-semibold opacity-80">{copy.estimatedKm}</p><p className="text-xl font-bold text-slate-950">{formatNumber(summary.totalEstimated)}</p></div>
+            <div className={metricTileClass("amber")}><p className="text-xs font-semibold opacity-80">{copy.difference}</p><p className="text-xl font-bold text-slate-950">{formatNumber(summary.averageDifference)} km</p></div>
+            <div className={metricTileClass("green")}><p className="text-xs font-semibold opacity-80">{copy.litres}</p><p className="text-xl font-bold text-slate-950">{formatNumber(summary.totalLitres, 2)}</p></div>
+            <div className={`col-span-2 ${metricTileClass("purple")}`}><p className="text-xs font-semibold opacity-80">{copy.fuelCost}</p><p className="text-xl font-bold text-slate-950">{formatCurrency(summary.totalCost)}</p></div>
           </div>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-sm font-semibold text-slate-500">Efficiency</p>
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-amber-50 p-2 text-amber-700"><Gauge className="h-5 w-5" /></div>
+            <p className="text-sm font-semibold text-slate-500">{copy.efficiency}</p>
+          </div>
           <div className="mt-3 grid grid-cols-2 gap-3">
-            <div><p className="text-xs text-slate-500">Avg KM/L</p><p className="text-xl font-bold text-slate-950">{formatNumber(summary.averageKmPerLitre, 2)}</p></div>
-            <div><p className="text-xs text-slate-500">Avg Cost/KM</p><p className="text-xl font-bold text-slate-950">{formatCurrency(summary.averageCostPerKm)}</p></div>
-            <div className="col-span-2 rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Best Driver</p><p className="truncate font-bold text-slate-950">{summary.bestDriver}</p></div>
-            <div className="col-span-2 rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Worst Driver</p><p className="truncate font-bold text-slate-950">{summary.worstDriver}</p></div>
+            <div className={metricTileClass("green")}><p className="text-xs font-semibold opacity-80">{copy.avgKmL}</p><p className="text-xl font-bold text-slate-950">{formatNumber(summary.averageKmPerLitre, 2)}</p></div>
+            <div className={metricTileClass("amber")}><p className="text-xs font-semibold opacity-80">{copy.avgCostKm}</p><p className="text-xl font-bold text-slate-950">{formatCurrency(summary.averageCostPerKm)}</p></div>
+            <div className={`col-span-2 ${metricTileClass("green")}`}><p className="text-xs font-semibold opacity-80">{copy.bestDriver}</p><p className="truncate font-bold text-slate-950">{summary.bestDriver}</p></div>
+            <div className={`col-span-2 ${metricTileClass("amber")}`}><p className="text-xs font-semibold opacity-80">{copy.worstDriver}</p><p className="truncate font-bold text-slate-950">{summary.worstDriver}</p></div>
           </div>
         </div>
       </section>
 
-      <section className="surface-card p-4">
+      <section className="rounded-xl border border-slate-200 bg-white/95 p-4 shadow-sm shadow-slate-950/5">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-bold text-slate-950">{copy.filters}</h3>
+            <p className="text-xs text-slate-500">{copy.filtersDescription}</p>
+          </div>
+        </div>
         <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[repeat(7,minmax(0,1fr))_auto]">
           <input type="date" value={filters.fromDate} onChange={(event) => setFilters((current) => ({ ...current, fromDate: event.target.value }))} className="form-input bg-white" />
           <input type="date" value={filters.toDate} onChange={(event) => setFilters((current) => ({ ...current, toDate: event.target.value }))} className="form-input bg-white" />
           <select value={filters.driver} onChange={(event) => setFilters((current) => ({ ...current, driver: event.target.value }))} className="form-input bg-white">
-            <option value="">All drivers</option>
+            <option value="">{copy.allDrivers}</option>
             {driverOptions.map((driver) => <option key={driver} value={driver}>{driver}</option>)}
           </select>
           <select value={filters.vehicle} onChange={(event) => setFilters((current) => ({ ...current, vehicle: event.target.value }))} className="form-input bg-white">
-            <option value="">All vehicles</option>
+            <option value="">{copy.allVehicles}</option>
             {vehicleOptions.map((vehicle) => <option key={vehicle} value={vehicle}>{vehicle}</option>)}
           </select>
-          <input value={filters.route} onChange={(event) => setFilters((current) => ({ ...current, route: event.target.value }))} placeholder="Route" className="form-input bg-white" />
+          <input value={filters.route} onChange={(event) => setFilters((current) => ({ ...current, route: event.target.value }))} placeholder={copy.route} className="form-input bg-white" />
           <select value={filters.dataStatus} onChange={(event) => setFilters((current) => ({ ...current, dataStatus: event.target.value as TripFilter["dataStatus"] }))} className="form-input bg-white">
-            <option value="all">All data</option>
-            <option value="missing">Missing data only</option>
-            <option value="completed">Completed only</option>
+            <option value="all">{copy.allData}</option>
+            <option value="missing">{copy.missingDataOnly}</option>
+            <option value="completed">{copy.completedOnly}</option>
           </select>
           <select value={filters.fuelLink} onChange={(event) => setFilters((current) => ({ ...current, fuelLink: event.target.value as TripFilter["fuelLink"] }))} className="form-input bg-white">
-            <option value="all">All fuel links</option>
-            <option value="linked">Fuel logs linked</option>
-            <option value="not_linked">Fuel logs not linked</option>
+            <option value="all">{copy.allFuelLinks}</option>
+            <option value="linked">{copy.fuelLogsLinked}</option>
+            <option value="not_linked">{copy.fuelLogsNotLinked}</option>
           </select>
           <button type="button" onClick={() => { setFilters(emptyFilters); setAttentionFilter("all"); }} className="btn-secondary min-h-11 whitespace-nowrap px-4 py-2 text-sm">
-            Reset filters
+            {copy.resetFilters}
           </button>
         </div>
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <section className="rounded-xl border border-amber-100 bg-white p-4 shadow-sm shadow-amber-950/5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h3 className="section-title">Needs Attention</h3>
-            <p className="section-subtitle">Select a missing item to focus the trip list.</p>
+            <h3 className="section-title">{copy.needsAttention}</h3>
+            <p className="section-subtitle">{copy.needsAttentionDescription}</p>
           </div>
           <div className="grid gap-3 sm:grid-cols-3 lg:min-w-[640px]">
-            <button type="button" onClick={() => setAttentionFilter("missing_mileage")} className={`rounded-lg px-4 py-3 text-left transition ${attentionFilter === "missing_mileage" ? "bg-amber-100 ring-2 ring-amber-200" : "bg-amber-50 hover:bg-amber-100"}`}>
-              <p className="text-xs font-semibold text-amber-700">Missing mileage</p>
-              <p className="mt-1 text-lg font-bold text-amber-900">{summary.missingMileage} {summary.missingMileage === 1 ? "trip" : "trips"}</p>
-              <p className="mt-1 text-xs text-amber-700">Actual KM is needed for efficiency.</p>
+            <button type="button" onClick={() => setAttentionFilter("missing_mileage")} className={`rounded-lg border px-4 py-3 text-left transition ${attentionFilter === "missing_mileage" ? "border-brand-300 bg-brand-50 ring-2 ring-brand-100" : summary.missingMileage ? "border-amber-200 bg-amber-50 hover:border-amber-300" : "border-emerald-100 bg-emerald-50/60 hover:border-emerald-200"}`}>
+              <p className={`text-xs font-semibold ${summary.missingMileage ? "text-amber-700" : "text-emerald-700"}`}>{copy.missingMileage}</p>
+              <p className="mt-1 text-lg font-bold text-slate-950">{summary.missingMileage} {summary.missingMileage === 1 ? copy.trip : copy.trips}</p>
+              <p className="mt-1 text-xs text-slate-500">{copy.actualKmNeeded}</p>
             </button>
-            <button type="button" onClick={() => setAttentionFilter("missing_estimate")} className={`rounded-lg px-4 py-3 text-left transition ${attentionFilter === "missing_estimate" ? "bg-amber-100 ring-2 ring-amber-200" : "bg-amber-50 hover:bg-amber-100"}`}>
-              <p className="text-xs font-semibold text-amber-700">Missing estimate</p>
-              <p className="mt-1 text-lg font-bold text-amber-900">{summary.missingEstimate} {summary.missingEstimate === 1 ? "trip" : "trips"}</p>
-              <p className="mt-1 text-xs text-amber-700">Compare planned vs actual route.</p>
+            <button type="button" onClick={() => setAttentionFilter("missing_estimate")} className={`rounded-lg border px-4 py-3 text-left transition ${attentionFilter === "missing_estimate" ? "border-brand-300 bg-brand-50 ring-2 ring-brand-100" : summary.missingEstimate ? "border-amber-200 bg-amber-50 hover:border-amber-300" : "border-emerald-100 bg-emerald-50/60 hover:border-emerald-200"}`}>
+              <p className={`text-xs font-semibold ${summary.missingEstimate ? "text-amber-700" : "text-emerald-700"}`}>{copy.missingEstimate}</p>
+              <p className="mt-1 text-lg font-bold text-slate-950">{summary.missingEstimate} {summary.missingEstimate === 1 ? copy.trip : copy.trips}</p>
+              <p className="mt-1 text-xs text-slate-500">{copy.comparePlannedActual}</p>
             </button>
-            <button type="button" onClick={() => setAttentionFilter("missing_fuel")} className={`rounded-lg px-4 py-3 text-left transition ${attentionFilter === "missing_fuel" ? "bg-slate-100 ring-2 ring-slate-200" : "bg-slate-50 hover:bg-slate-100"}`}>
-              <p className="text-xs font-semibold text-slate-600">Missing fuel</p>
-              <p className="mt-1 text-lg font-bold text-slate-900">{summary.missingFuel} {summary.missingFuel === 1 ? "trip" : "trips"}</p>
-              <p className="mt-1 text-xs text-slate-500">Link fuel logs or enter manually.</p>
+            <button type="button" onClick={() => setAttentionFilter("missing_fuel")} className={`rounded-lg border px-4 py-3 text-left transition ${attentionFilter === "missing_fuel" ? "border-brand-300 bg-brand-50 ring-2 ring-brand-100" : summary.missingFuel ? "border-amber-200 bg-amber-50 hover:border-amber-300" : "border-emerald-100 bg-emerald-50/60 hover:border-emerald-200"}`}>
+              <p className={`text-xs font-semibold ${summary.missingFuel ? "text-amber-700" : "text-emerald-700"}`}>{copy.missingFuel}</p>
+              <p className="mt-1 text-lg font-bold text-slate-950">{summary.missingFuel} {summary.missingFuel === 1 ? copy.trip : copy.trips}</p>
+              <p className="mt-1 text-xs text-slate-500">{copy.linkFuelLogsOrManual}</p>
             </button>
           </div>
         </div>
         {attentionFilter !== "all" ? (
           <button type="button" onClick={() => setAttentionFilter("all")} className="btn-secondary mt-3 min-h-9 px-3 py-1.5 text-xs">
-            Show all trips
+            {copy.showAllTrips}
           </button>
         ) : null}
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <section id="trip-records" className="scroll-mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="section-title">Trip Records</h3>
-              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{filteredTrips.length} {filteredTrips.length === 1 ? "trip" : "trips"}</span>
+              <h3 className="section-title">{copy.tripRecords}</h3>
+              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{filteredTrips.length} {filteredTrips.length === 1 ? copy.trip : copy.trips}</span>
             </div>
-            <p className="section-subtitle">Compact list of booking journeys. Review one trip to edit details.</p>
+            <p className="section-subtitle">{copy.tripRecordsDescription}</p>
           </div>
-          <p className="text-xs font-semibold text-slate-500">Newest trips first.</p>
+          <p className="text-xs font-semibold text-slate-500">{copy.newestTripsFirst}</p>
         </div>
         {loading ? (
-          <p className="mt-4 text-sm text-slate-500">Loading trip journeys...</p>
+          <p className="mt-4 text-sm text-slate-500">{copy.loadingTripJourneys}</p>
         ) : filteredTrips.length === 0 ? (
-          <div className="mt-4"><EmptyState title="No trip records yet" description="Create a trip from the Booking Diary to start tracking performance." /></div>
+          <div className="mt-4"><EmptyState title={copy.noTripRecordsYet} description={copy.noTripRecordsDescription} /></div>
         ) : (
           <div className="mt-4 space-y-3">
             {visibleTrips.map((trip) => {
               const metrics = getTripMetrics(trip);
               const derivedStatus = getDerivedTripStatus(trip);
               const healthLabel = derivedStatus === "completed"
-                ? getTripHealthLabel(metrics, {
+                  ? getTripHealthLabel(metrics, {
                     averageKmPerLitre: summary.averageKmPerLitre,
                     averageCostPerKm: summary.averageCostPerKm,
                     completedTrips: summary.completedTrips
-                  })
-                : statusLabel(derivedStatus);
+                  }, copy)
+                : statusLabel(derivedStatus, copy);
               return (
-                <article key={trip.id} className={`rounded-lg border bg-white px-4 py-3 shadow-sm transition ${selectedTripId === trip.id ? "border-brand-300 ring-2 ring-brand-100" : "border-slate-200 hover:border-brand-200"}`}>
+                <article id={`trip-${trip.id}`} key={trip.id} className={`scroll-mt-6 rounded-xl border-l-4 px-4 py-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${getStatusAccent(derivedStatus)} ${selectedTripId === trip.id ? "border-brand-300 ring-2 ring-brand-200" : "border-slate-200 hover:border-brand-200"}`}>
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
+                        {selectedTripId === trip.id ? <span className="rounded-full bg-brand-600 px-2.5 py-1 text-[11px] font-bold text-white">{copy.selectedTrip}</span> : null}
                         <p className="text-sm font-bold text-slate-950">{formatDate(trip.trip_date)}</p>
-                        <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${statusClass(derivedStatus)}`}>{statusLabel(derivedStatus)}</span>
-                        <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${getHealthBadgeClass(healthLabel)}`}>{healthLabel}</span>
+                        <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${statusClass(derivedStatus)}`}>{statusLabel(derivedStatus, copy)}</span>
+                        <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${getHealthBadgeClass(healthLabel, copy)}`}>{healthLabel}</span>
                       </div>
-                      <p className="mt-1 truncate text-base font-bold leading-6 text-slate-900" title={getRoutePreview(trip)}>{getShortRoutePreview(trip)}</p>
+                      <p className="mt-2 truncate text-lg font-bold leading-6 text-slate-950" title={getRoutePreview(trip)}>{getShortRoutePreview(trip, copy)}</p>
                       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold text-slate-600">
-                        <span>Driver: {trip.driver || "-"}</span>
-                        <span>Vehicle: {trip.vehicle_reg || trip.vehicle_type || "-"}</span>
-                        <span>Fuel logs: {trip.linkedFuelLogs.length ? `${trip.linkedFuelLogs.length} linked` : "none"}</span>
+                        <span>{copy.driver}: {trip.driver || "-"}</span>
+                        <span>{copy.vehicle}: {trip.vehicle_reg || trip.vehicle_type || "-"}</span>
+                        <span>{copy.fuelLogs}: {trip.linkedFuelLogs.length ? `${trip.linkedFuelLogs.length} ${copy.linked}` : copy.noneLinked}</span>
                       </div>
                       {trip.fuel_source === "manual" && trip.linkedFuelLogs.length > 0 ? (
-                        <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600">Linked fuel logs exist, but this trip is using manual fuel entry.</p>
+                        <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600">{copy.noFuelManualWarning}</p>
                       ) : null}
                     </div>
                     <div className="grid gap-2 text-xs sm:grid-cols-4 lg:w-[680px]">
-                      <div className="rounded-lg bg-slate-50 px-3 py-2"><p className="font-semibold text-slate-500">Est. KM</p><p className="font-bold text-slate-950">{metrics.estimatedDistance == null ? "Missing" : `${formatNumber(metrics.estimatedDistance)} km`}</p><p className="text-[11px] text-slate-500">{getEstimateSourceLabel(trip)}</p></div>
-                      <div className="rounded-lg bg-slate-50 px-3 py-2"><p className="font-semibold text-slate-500">Actual KM</p><p className="font-bold text-slate-950">{metrics.actualDistance == null ? "Missing" : `${formatNumber(metrics.actualDistance)} km`}</p></div>
-                      <div className="rounded-lg bg-slate-50 px-3 py-2"><p className="font-semibold text-slate-500">Difference</p><p className="font-bold text-slate-950">{metrics.differenceKm == null ? "-" : `${formatNumber(metrics.differenceKm)} km`}</p></div>
-                      <div className="rounded-lg bg-slate-50 px-3 py-2"><p className="font-semibold text-slate-500">Fuel</p><p className="font-bold text-slate-950">{metrics.fuel.litres != null && metrics.fuel.litres > 0 ? `${formatNumber(metrics.fuel.litres, 2)} L` : "No fuel"}</p></div>
-                      <div className="rounded-lg bg-slate-50 px-3 py-2"><p className="font-semibold text-slate-500">Cost</p><p className="font-bold text-slate-950">{metrics.fuel.cost != null && metrics.fuel.cost > 0 ? formatCurrency(metrics.fuel.cost) : "No fuel cost"}</p></div>
-                      <div className="rounded-lg bg-slate-50 px-3 py-2"><p className="font-semibold text-slate-500">KM/L</p><p className="font-bold text-slate-950">{formatNumber(metrics.kmPerLitre, 2)}</p></div>
-                      <div className="rounded-lg bg-slate-50 px-3 py-2"><p className="font-semibold text-slate-500">Cost/KM</p><p className="font-bold text-slate-950">{formatCurrency(metrics.costPerKm)}</p></div>
+                      <div className={metricTileClass(metrics.estimatedDistance == null ? "amber" : "purple")}><p className="font-semibold opacity-80">{copy.estimatedKmShort}</p><p className="font-bold text-slate-950">{metrics.estimatedDistance == null ? copy.missing : `${formatNumber(metrics.estimatedDistance)} km`}</p><p className="text-[11px] text-slate-500">{getEstimateSourceLabel(trip, copy)}</p></div>
+                      <div className={metricTileClass(metrics.actualDistance == null ? "amber" : "green")}><p className="font-semibold opacity-80">{copy.actualKm}</p><p className="font-bold text-slate-950">{metrics.actualDistance == null ? copy.missing : `${formatNumber(metrics.actualDistance)} km`}</p></div>
+                      <div className={metricTileClass(metrics.differenceKm != null && metrics.differenceKm > 0 ? "amber" : "slate")}><p className="font-semibold opacity-80">{copy.difference}</p><p className="font-bold text-slate-950">{metrics.differenceKm == null ? "-" : `${formatNumber(metrics.differenceKm)} km`}</p></div>
+                      <div className={metricTileClass(metrics.fuel.litres != null && metrics.fuel.litres > 0 ? "green" : "amber")}><p className="font-semibold opacity-80">{copy.fuel}</p><p className="font-bold text-slate-950">{metrics.fuel.litres != null && metrics.fuel.litres > 0 ? `${formatNumber(metrics.fuel.litres, 2)} L` : copy.noFuel}</p></div>
+                      <div className={metricTileClass(metrics.fuel.cost != null && metrics.fuel.cost > 0 ? "slate" : "amber")}><p className="font-semibold opacity-80">{copy.cost}</p><p className="font-bold text-slate-950">{metrics.fuel.cost != null && metrics.fuel.cost > 0 ? formatCurrency(metrics.fuel.cost) : copy.noFuelCost}</p></div>
+                      <div className={metricTileClass("green")}><p className="font-semibold opacity-80">{copy.kmL}</p><p className="font-bold text-slate-950">{formatNumber(metrics.kmPerLitre, 2)}</p></div>
+                      <div className={metricTileClass("slate")}><p className="font-semibold opacity-80">{copy.costKm}</p><p className="font-bold text-slate-950">{formatCurrency(metrics.costPerKm)}</p></div>
                     </div>
                     <div className="flex shrink-0 flex-wrap items-center gap-2 lg:flex-col lg:items-end">
                       {derivedStatus !== "completed" ? (
                         <span className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                          Needs attention: {statusActionText(derivedStatus)}
+                          {copy.needsAttentionAction}: {statusActionText(derivedStatus, copy)}
                         </span>
                       ) : null}
-                      <button type="button" onClick={() => openTrip(trip)} className="btn-secondary min-h-8 px-3 py-1 text-xs">Review / Edit</button>
-                      <button type="button" onClick={() => requestDeleteTrip(trip)} className="min-h-8 rounded-lg border border-rose-200 bg-white px-3 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-50">Delete</button>
+                      <button type="button" onClick={() => openTrip(trip)} className="btn-secondary min-h-8 px-3 py-1 text-xs">{copy.reviewEdit}</button>
+                      <button type="button" onClick={() => requestDeleteTrip(trip)} className="min-h-8 rounded-lg border border-rose-200 bg-white px-3 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-50">{copy.delete}</button>
                     </div>
                   </div>
                 </article>
@@ -1286,7 +1988,7 @@ export default function TripJourneyPage() {
             })}
             {visibleTrips.length < filteredTrips.length ? (
               <button type="button" onClick={() => setVisibleTripCount((count) => count + 10)} className="btn-secondary w-full min-h-10 px-4 py-2 text-sm">
-                Load more trips
+                {copy.loadMoreTrips}
               </button>
             ) : null}
           </div>
@@ -1294,52 +1996,53 @@ export default function TripJourneyPage() {
       </section>
 
       {form && selectedTrip ? (
-        <section className="surface-card overflow-hidden p-0">
-          <div className="border-b border-slate-200 bg-white p-4">
+        <section className="overflow-hidden rounded-xl border border-brand-100 bg-white shadow-sm shadow-brand-950/5">
+          <div className="border-b border-brand-100 bg-gradient-to-r from-brand-50 via-white to-emerald-50/70 p-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-lg font-bold text-slate-950">Selected Trip Overview</h3>
-                  {selectedTripStatus ? <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${statusClass(selectedTripStatus)}`}>{statusLabel(selectedTripStatus)}</span> : null}
-                  {selectedTripHealth ? <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${getHealthBadgeClass(selectedTripHealth)}`}>{selectedTripHealth}</span> : null}
+                  <span className="rounded-full bg-brand-600 px-2.5 py-1 text-[11px] font-bold text-white">{copy.selectedTrip}</span>
+                  <h3 className="text-lg font-bold text-slate-950">{copy.selectedTripOverview}</h3>
+                  {selectedTripStatus ? <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${statusClass(selectedTripStatus)}`}>{statusLabel(selectedTripStatus, copy)}</span> : null}
+                  {selectedTripHealth ? <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${getHealthBadgeClass(selectedTripHealth, copy)}`}>{selectedTripHealth}</span> : null}
                 </div>
-                <p className="mt-1 max-w-4xl text-sm font-semibold leading-6 text-slate-700" title={getRoutePreview(selectedTrip)}>{getShortRoutePreview(selectedTrip)}</p>
+                <p className="mt-1 max-w-4xl text-sm font-semibold leading-6 text-slate-700" title={getRoutePreview(selectedTrip)}>{getShortRoutePreview(selectedTrip, copy)}</p>
               </div>
               <div className="flex min-w-[240px] flex-wrap gap-2 text-sm">
-                <div className="rounded-lg bg-slate-50 px-3 py-2"><p className="text-[11px] font-semibold text-slate-500">Driver</p><p className="font-bold text-slate-950">{selectedTrip.driver || "-"}</p></div>
-                <div className="rounded-lg bg-slate-50 px-3 py-2"><p className="text-[11px] font-semibold text-slate-500">Vehicle</p><p className="font-bold text-slate-950">{selectedTrip.vehicle_reg || "-"}</p></div>
+                <div className={metricTileClass("purple")}><p className="text-[11px] font-semibold opacity-80">{copy.driver}</p><p className="font-bold text-slate-950">{selectedTrip.driver || "-"}</p></div>
+                <div className={metricTileClass("slate")}><p className="text-[11px] font-semibold opacity-80">{copy.vehicle}</p><p className="font-bold text-slate-950">{selectedTrip.vehicle_reg || "-"}</p></div>
               </div>
             </div>
             <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"><p className="text-xs text-slate-500">Distance</p><p className="font-bold text-slate-950">Est. {formatNumber(selectedFormMetrics?.estimatedDistance)} km / Actual {formatNumber(selectedFormMetrics?.actualDistance)} km</p><p className="text-xs font-semibold text-slate-500">{selectedEstimateSource}</p></div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"><p className="text-xs text-slate-500">Fuel</p><p className="font-bold text-slate-950">{formatNumber(selectedFormMetrics?.fuelLitres, 2)} L / {formatCurrency(selectedFormMetrics?.fuelCost)}</p></div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"><p className="text-xs text-slate-500">Efficiency</p><p className="font-bold text-slate-950">{formatNumber(selectedFormMetrics?.kmPerLitre, 2)} KM/L / {formatCurrency(selectedFormMetrics?.costPerKm)}</p></div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"><p className="text-xs text-slate-500">Fuel Logs</p><p className="font-bold text-slate-950">{selectedTrip.linkedFuelLogs.length ? `${selectedTrip.linkedFuelLogs.length} linked` : "None linked"}</p></div>
+              <div className={metricTileClass("purple")}><p className="text-xs font-semibold opacity-80">{copy.distance}</p><p className="font-bold text-slate-950">{copy.estimatedKmShort} {formatNumber(selectedFormMetrics?.estimatedDistance)} km / {copy.actualKm} {formatNumber(selectedFormMetrics?.actualDistance)} km</p><p className="text-xs font-semibold text-slate-500">{selectedEstimateSource}</p></div>
+              <div className={metricTileClass(selectedFormMetrics?.fuelLitres && selectedFormMetrics?.fuelCost ? "green" : "amber")}><p className="text-xs font-semibold opacity-80">{copy.fuel}</p><p className="font-bold text-slate-950">{formatNumber(selectedFormMetrics?.fuelLitres, 2)} L / {formatCurrency(selectedFormMetrics?.fuelCost)}</p></div>
+              <div className={metricTileClass("green")}><p className="text-xs font-semibold opacity-80">{copy.efficiency}</p><p className="font-bold text-slate-950">{formatNumber(selectedFormMetrics?.kmPerLitre, 2)} {copy.kmL} / {formatCurrency(selectedFormMetrics?.costPerKm)}</p></div>
+              <div className={metricTileClass(selectedTrip.linkedFuelLogs.length ? "green" : "slate")}><p className="text-xs font-semibold opacity-80">{copy.fuelLogs}</p><p className="font-bold text-slate-950">{selectedTrip.linkedFuelLogs.length ? `${selectedTrip.linkedFuelLogs.length} ${copy.linked}` : copy.noneLinked}</p></div>
             </div>
-            <div className="mt-3 flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="mt-3 flex flex-col gap-3 rounded-lg border border-brand-100 bg-white/85 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-xs font-semibold text-slate-500">Next action</p>
-                <p className="text-sm font-bold text-slate-950">{statusActionText(selectedTripStatus ?? "created")}</p>
-                <p className="text-xs text-slate-500">{getNextActionHelper(selectedTripStatus ?? "created")}</p>
+                <p className="text-xs font-semibold text-slate-500">{copy.nextAction}</p>
+                <p className="text-sm font-bold text-slate-950">{statusActionText(selectedTripStatus ?? "created", copy)}</p>
+                <p className="text-xs text-slate-500">{getNextActionHelper(selectedTripStatus ?? "created", copy)}</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={() => handlePrimaryTripAction(selectedTripStatus ?? "created")} className="btn-primary min-h-9 px-3 py-1.5 text-sm">
-                  {statusActionText(selectedTripStatus ?? "created")}
+                  {statusActionText(selectedTripStatus ?? "created", copy)}
                 </button>
-                <button type="button" onClick={() => setSelectedTripTab("fuel")} className="btn-secondary min-h-9 px-3 py-1.5 text-sm">Manage fuel logs</button>
-                <button type="button" onClick={() => requestDeleteTrip(selectedTrip)} className="min-h-9 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-50">Delete trip</button>
-                <button type="button" onClick={() => { setSelectedTripId(null); setHasUnsavedChanges(false); }} className="btn-secondary min-h-9 px-3 py-1.5 text-sm">Back to trip list</button>
+                <button type="button" onClick={() => setSelectedTripTab("fuel")} className="btn-secondary min-h-9 px-3 py-1.5 text-sm">{copy.manageFuelLogs}</button>
+                <button type="button" onClick={() => requestDeleteTrip(selectedTrip)} className="min-h-9 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-50">{copy.deleteTrip}</button>
+                <button type="button" onClick={() => { setSelectedTripId(null); setHasUnsavedChanges(false); }} className="btn-secondary min-h-9 px-3 py-1.5 text-sm">{copy.backToTripList}</button>
               </div>
             </div>
           </div>
 
-          <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+          <div className="border-b border-slate-200 bg-slate-50/90 px-4 py-3">
             <div className="flex flex-wrap gap-2">
               {[
-                ["overview", "Overview"],
-                ["journey", "Journey Details"],
-                ["fuel", "Fuel Logs"],
-                ["notes", "Notes"]
+                ["overview", copy.overview],
+                ["journey", copy.journeyDetails],
+                ["fuel", copy.fuelLogs],
+                ["notes", copy.notes]
               ].map(([key, label]) => (
                 <button
                   key={key}
@@ -1355,13 +2058,13 @@ export default function TripJourneyPage() {
 
           <div className="p-4">
             {selectedTripTab === "overview" ? (
-              <div className="rounded-lg border border-slate-200 bg-white p-4">
-                  <h4 className="font-bold text-slate-950">Route</h4>
-                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-700" title={getRoutePreview(selectedTrip)}>{getShortRoutePreview(selectedTrip)}</p>
+              <div className="rounded-lg border border-brand-100 bg-brand-50/45 p-4">
+                  <h4 className="font-bold text-slate-950">{copy.route}</h4>
+                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-700" title={getRoutePreview(selectedTrip)}>{getShortRoutePreview(selectedTrip, copy)}</p>
                   <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                    <div><p className="text-xs text-slate-500">Date</p><p className="font-bold text-slate-950">{formatDate(selectedTrip.trip_date)}</p></div>
-                    <div><p className="text-xs text-slate-500">Pickup time</p><p className="font-bold text-slate-950">{selectedTrip.pickup_time || "-"}</p></div>
-                    <div><p className="text-xs text-slate-500">Booking ref</p><p className="font-bold text-slate-950">{selectedTrip.booking_reference || "-"}</p></div>
+                    <div><p className="text-xs text-slate-500">{copy.date}</p><p className="font-bold text-slate-950">{formatDate(selectedTrip.trip_date)}</p></div>
+                    <div><p className="text-xs text-slate-500">{copy.pickupTime}</p><p className="font-bold text-slate-950">{selectedTrip.pickup_time || "-"}</p></div>
+                    <div><p className="text-xs text-slate-500">{copy.bookingRef}</p><p className="font-bold text-slate-950">{selectedTrip.booking_reference || "-"}</p></div>
                   </div>
               </div>
             ) : null}
@@ -1369,113 +2072,146 @@ export default function TripJourneyPage() {
             {selectedTripTab === "journey" ? (
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
                 <div className="space-y-3">
-                  <section className="rounded-lg border border-slate-200 bg-white p-3">
-                    <h4 className="font-bold text-slate-950">Booking Info</h4>
+                  <section className="rounded-lg border border-brand-100 bg-white p-3 shadow-sm">
+                    <h4 className="rounded-md bg-brand-50 px-3 py-2 font-bold text-slate-950">{copy.bookingInfo}</h4>
                     <div className="mt-2 grid gap-3 sm:grid-cols-3">
-                      <div className="form-field"><label className="form-label">Booking reference</label><input value={form.booking_reference} onChange={(event) => updateForm("booking_reference", event.target.value)} className="form-input bg-white" /></div>
-                      <div className="form-field"><label className="form-label">Date</label><input type="date" value={form.trip_date} onChange={(event) => updateForm("trip_date", event.target.value)} className="form-input bg-white" /></div>
-                      <div className="form-field"><label className="form-label">Pickup time</label><input value={form.pickup_time} onChange={(event) => updateForm("pickup_time", event.target.value)} className="form-input bg-white" /></div>
+                      <div className="form-field"><label className="form-label">{copy.bookingRef}</label><input value={form.booking_reference} onChange={(event) => updateForm("booking_reference", event.target.value)} className="form-input bg-white" /></div>
+                      <div className="form-field"><label className="form-label">{copy.date}</label><input type="date" value={form.trip_date} onChange={(event) => updateForm("trip_date", event.target.value)} className="form-input bg-white" /></div>
+                      <div className="form-field"><label className="form-label">{copy.pickupTime}</label><input value={form.pickup_time} onChange={(event) => updateForm("pickup_time", event.target.value)} className="form-input bg-white" /></div>
                     </div>
                   </section>
 
-                  <section className="rounded-lg border border-slate-200 bg-white p-3">
-                    <h4 className="font-bold text-slate-950">Driver & Vehicle</h4>
-                    <p className="mt-1 text-xs text-slate-500">Pulled from the Drivers and Vehicles pages. Manual typing is still allowed.</p>
+                  <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+                    <h4 className="rounded-md bg-slate-50 px-3 py-2 font-bold text-slate-950">{copy.driverVehicle}</h4>
+                    <p className="mt-1 text-xs text-slate-500">{copy.driverVehicleHelper}</p>
                     <div className="mt-2 grid gap-3 sm:grid-cols-2">
                       <div className="form-field">
-                        <label className="form-label">Driver</label>
-                        <input list="trip-driver-options" value={form.driver} onChange={(event) => handleDriverChange(event.target.value)} placeholder="Select or type driver" className="form-input bg-white" />
+                        <label className="form-label">{copy.driver}</label>
+                        <input list="trip-driver-options" value={form.driver} onChange={(event) => handleDriverChange(event.target.value)} placeholder={copy.selectOrTypeDriver} className="form-input bg-white" />
                         <datalist id="trip-driver-options">
                           {driverDatalistOptions.map((driver) => <option key={driver} value={driver} />)}
-                          <option value="Manual driver entry" />
+                          <option value={copy.manualDriverEntry} />
                         </datalist>
                       </div>
                       <div className="form-field">
-                        <label className="form-label">Vehicle reg</label>
-                        <input list="trip-vehicle-options" value={form.vehicle_reg} onChange={(event) => handleVehicleChange(event.target.value)} placeholder="Select or type vehicle" className="form-input bg-white" />
+                        <label className="form-label">{copy.vehicle}</label>
+                        <input list="trip-vehicle-options" value={form.vehicle_reg} onChange={(event) => handleVehicleChange(event.target.value)} placeholder={copy.selectOrTypeVehicle} className="form-input bg-white" />
                         <datalist id="trip-vehicle-options">
                           {vehicleDatalistOptions.map((vehicle) => <option key={vehicle} value={vehicle} />)}
-                          <option value="Manual vehicle entry" />
+                          <option value={copy.manualVehicleEntry} />
                         </datalist>
                       </div>
                     </div>
                     {driverVehicleMessage ? <p className="mt-2 text-xs font-semibold text-slate-500">{driverVehicleMessage}</p> : null}
                   </section>
 
-                  <section className="rounded-lg border border-slate-200 bg-white p-3">
+                  <section className="rounded-lg border border-emerald-100 bg-white p-3 shadow-sm">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div>
-                        <h4 className="font-bold text-slate-950">Route & Google Maps</h4>
-                        <p className="mt-1 text-xs text-slate-500">Choose the start point, then calculate or manually override the estimated distance.</p>
+                        <h4 className="rounded-md bg-emerald-50 px-3 py-2 font-bold text-slate-950">{copy.routeGoogleMaps}</h4>
+                        <p className="mt-1 text-xs text-slate-500">{copy.routeGoogleMapsHelper}</p>
                       </div>
                       <button type="button" onClick={() => void handleCalculateRouteDistance()} disabled={calculatingDistance} className="btn-secondary min-h-9 px-3 py-1.5 text-sm">
-                        {calculatingDistance ? "Calculating..." : "Calculate route distance"}
+                        {calculatingDistance ? copy.calculating : copy.calculateRouteDistance}
                       </button>
                     </div>
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
                       <div className="sm:col-span-2">
-                        <p className="form-label">Start location type</p>
-                        <div className="grid gap-2 sm:grid-cols-2">
+                        <p className="form-label">{copy.startLocationType}</p>
+                        <div className="grid gap-2 lg:grid-cols-3">
                           <label className={`flex min-h-11 items-center gap-2 rounded-lg border px-3 text-sm font-semibold ${form.start_location_type === "depot" ? "border-brand-200 bg-brand-50 text-brand-800" : "border-slate-200 bg-white text-slate-700"}`}>
                             <input type="radio" name="trip-start-location-type" checked={form.start_location_type === "depot"} onChange={() => handleStartLocationTypeChange("depot")} className="h-4 w-4" />
-                            Starts from depot
+                            {copy.startsFromDepot}
                           </label>
                           <label className={`flex min-h-11 items-center gap-2 rounded-lg border px-3 text-sm font-semibold ${form.start_location_type === "custom" ? "border-brand-200 bg-brand-50 text-brand-800" : "border-slate-200 bg-white text-slate-700"}`}>
                             <input type="radio" name="trip-start-location-type" checked={form.start_location_type === "custom"} onChange={() => handleStartLocationTypeChange("custom")} className="h-4 w-4" />
-                            Starts from custom location
+                            {copy.startsFromCustom}
+                          </label>
+                          <label className={`flex min-h-11 items-center gap-2 rounded-lg border px-3 text-sm font-semibold ${form.start_location_type === "pickup_only" ? "border-brand-200 bg-brand-50 text-brand-800" : "border-slate-200 bg-white text-slate-700"}`}>
+                            <input type="radio" name="trip-start-location-type" checked={form.start_location_type === "pickup_only"} onChange={() => handleStartLocationTypeChange("pickup_only")} className="h-4 w-4" />
+                            {copy.startsPickupDropoffOnly}
                           </label>
                         </div>
                       </div>
-                      <div className="form-field sm:col-span-2">
-                        <label className="form-label">{form.start_location_type === "depot" ? "Depot address" : "Start location"}</label>
-                        <input value={form.start_location_type === "depot" ? form.depot_address || DEPOT_ADDRESS : form.start_location} onChange={(event) => updateForm("start_location", event.target.value)} disabled={form.start_location_type === "depot"} placeholder={form.start_location_type === "custom" ? "Enter start location" : "Depot address"} className="form-input bg-white disabled:bg-slate-100 disabled:text-slate-500" />
-                      </div>
-                      <div className="form-field"><label className="form-label">Pickup location</label><input value={form.pickup_location} onChange={(event) => updateForm("pickup_location", event.target.value)} className="form-input bg-white" /></div>
-                      <div className="form-field"><label className="form-label">Drop-off location</label><input value={form.dropoff_location} onChange={(event) => updateForm("dropoff_location", event.target.value)} className="form-input bg-white" /></div>
-                      <label className="flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700"><input type="checkbox" checked={form.return_to_depot} onChange={(event) => updateForm("return_to_depot", event.target.checked)} className="h-4 w-4" />Return to depot</label>
+                      {form.start_location_type !== "pickup_only" ? (
+                        <div className="form-field sm:col-span-2">
+                          <label className="form-label">{form.start_location_type === "depot" ? copy.depotAddress : copy.startLocation}</label>
+                          <input value={form.start_location_type === "depot" ? form.depot_address || DEPOT_ADDRESS : form.start_location} onChange={(event) => updateForm(form.start_location_type === "depot" ? "depot_address" : "start_location", event.target.value)} disabled={form.start_location_type === "depot"} placeholder={form.start_location_type === "custom" ? copy.enterStartLocation : copy.depotAddress} className="form-input bg-white disabled:bg-slate-100 disabled:text-slate-500" />
+                        </div>
+                      ) : null}
+                      <div className="form-field"><label className="form-label">{copy.pickupLocation}</label><input value={form.pickup_location} onChange={(event) => updateForm("pickup_location", event.target.value)} className="form-input bg-white" /></div>
+                      <div className="form-field"><label className="form-label">{copy.dropoffLocation}</label><input value={form.dropoff_location} onChange={(event) => updateForm("dropoff_location", event.target.value)} className="form-input bg-white" /></div>
+                      <label className="flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700"><input type="checkbox" checked={form.return_to_depot} onChange={(event) => updateForm("return_to_depot", event.target.checked)} className="h-4 w-4" />{copy.returnToDepot}</label>
                       <div className="rounded-lg border border-brand-100 bg-brand-50 px-3 py-2 text-sm sm:col-span-2">
-                        <p className="text-xs font-semibold text-slate-500">Route preview</p>
+                        <p className="text-xs font-semibold text-slate-500">{copy.routePreview}</p>
                         <p className="font-bold text-slate-950">{getCurrentRoutePreview() || "-"}</p>
                       </div>
                       <div className="grid gap-2 rounded-lg bg-slate-50 p-2 text-sm sm:col-span-2 md:grid-cols-3">
-                        <div className="px-1"><p className="text-xs font-semibold text-slate-500">Google estimated KM</p><p className="font-bold text-slate-950">{toNumber(form.estimated_distance_km) != null && toNumber(form.estimated_distance_km)! > 0 ? `${formatNumber(toNumber(form.estimated_distance_km), 2)} km` : "Not calculated"}</p></div>
-                        <div className="px-1"><p className="text-xs font-semibold text-slate-500">Google estimated time</p><p className="font-bold text-slate-950">{distanceDurationText ?? "-"}</p></div>
-                        <div className="px-1"><p className="text-xs font-semibold text-slate-500">Route source</p><p className="font-bold text-slate-950">{selectedEstimateSource}</p></div>
+                        <div className="rounded-md bg-white px-3 py-2">
+                          <p className="text-xs font-semibold text-slate-500">{copy.bookingEstimate}</p>
+                          <p className="font-bold text-slate-950">{bookingEstimateKm != null && bookingEstimateKm > 0 ? `${formatNumber(bookingEstimateKm, 2)} km` : copy.notCalculated}</p>
+                          <p className="text-xs text-slate-500">{copy.bookingEstimateHelper}{bookingEstimateMinutes != null && bookingEstimateMinutes > 0 ? ` / ${formatDuration(bookingEstimateMinutes * 60)}` : ""}</p>
+                        </div>
+                        <div className="rounded-md bg-white px-3 py-2">
+                          <p className="text-xs font-semibold text-slate-500">{copy.tripJourneyEstimate}</p>
+                          <p className="font-bold text-slate-950">{tripGoogleEstimateKm != null && tripGoogleEstimateKm > 0 ? `${formatNumber(tripGoogleEstimateKm, 2)} km` : copy.notCalculated}</p>
+                          <p className="text-xs text-slate-500">{copy.tripJourneyEstimateHelper}{tripGoogleEstimateMinutes != null && tripGoogleEstimateMinutes > 0 ? ` / ${formatDuration(tripGoogleEstimateMinutes * 60)}` : distanceDurationText ? ` / ${distanceDurationText}` : ""}</p>
+                        </div>
+                        <div className="rounded-md bg-white px-3 py-2">
+                          <p className="text-xs font-semibold text-slate-500">{copy.routeSource}</p>
+                          <p className="font-bold text-slate-950">{selectedEstimateSource}</p>
+                          <p className="text-xs text-slate-500">{copy.displayEstimatePriority}</p>
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm sm:col-span-2">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <p className="text-xs font-semibold text-slate-500">{copy.routeSummary}</p>
+                            <p className="font-bold text-slate-950">{copy.bookingRouteLabel}: {copy.pickupDropoffOnly} = {bookingEstimateKm != null && bookingEstimateKm > 0 ? `${formatNumber(bookingEstimateKm, 2)} km` : copy.notCalculated}{bookingEstimateMinutes != null && bookingEstimateMinutes > 0 ? ` / ${formatDuration(bookingEstimateMinutes * 60)}` : ""}</p>
+                            <p className="mt-1 font-bold text-slate-950">{copy.tripRouteLabel}: {getCurrentRoutePreview() || "-"} = {tripGoogleEstimateKm != null && tripGoogleEstimateKm > 0 ? `${formatNumber(tripGoogleEstimateKm, 2)} km` : copy.notCalculated}{tripGoogleEstimateMinutes != null && tripGoogleEstimateMinutes > 0 ? ` / ${formatDuration(tripGoogleEstimateMinutes * 60)}` : ""}</p>
+                          </div>
+                          {currentGoogleMapsUrl ? (
+                            <a href={currentGoogleMapsUrl} target="_blank" rel="noreferrer" className="btn-secondary min-h-9 shrink-0 px-3 py-1.5 text-sm">
+                              <MapPinned className="h-4 w-4" />
+                              {copy.openInGoogleMaps}
+                            </a>
+                          ) : null}
+                        </div>
                       </div>
                       <div className="form-field">
-                        <label className="form-label">Manual estimated KM override</label>
+                        <label className="form-label">{copy.manualEstimatedOverride}</label>
                         <input ref={manualEstimatedKmRef} type="number" min="0" step="0.01" value={form.manual_estimated_distance_km} onChange={(event) => updateForm("manual_estimated_distance_km", event.target.value)} className="form-input bg-white" />
-                        <p className="text-xs text-slate-500">Use this if Google Maps is not available or the estimate needs correcting.</p>
+                        <p className="text-xs text-slate-500">{copy.manualEstimateHelper}</p>
                       </div>
                     </div>
                     {distanceMessage ? <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600">{distanceMessage}</p> : null}
                   </section>
 
-                  <section className="rounded-lg border border-slate-200 bg-white p-3">
-                    <h4 className="font-bold text-slate-950">Actual Distance</h4>
+                  <section className="rounded-lg border border-amber-100 bg-white p-3 shadow-sm">
+                    <h4 className="rounded-md bg-amber-50 px-3 py-2 font-bold text-slate-950">{copy.actualDistance}</h4>
                     <div className="mt-2 grid gap-3 sm:grid-cols-3">
-                      <div className="form-field"><label className="form-label">Manual actual KM</label><input ref={manualActualKmRef} type="number" min="0" step="0.01" value={form.manual_actual_km} onChange={(event) => updateForm("manual_actual_km", event.target.value)} className="form-input bg-white" /></div>
-                      <div className="form-field"><label className="form-label">Start mileage</label><input type="number" min="0" value={form.start_mileage} onChange={(event) => updateForm("start_mileage", event.target.value)} className="form-input bg-white" /></div>
-                      <div className="form-field"><label className="form-label">End mileage</label><input type="number" min="0" value={form.end_mileage} onChange={(event) => updateForm("end_mileage", event.target.value)} className="form-input bg-white" /></div>
+                      <div className="form-field"><label className="form-label">{copy.manualActualKm}</label><input ref={manualActualKmRef} type="number" min="0" step="0.01" value={form.manual_actual_km} onChange={(event) => updateForm("manual_actual_km", event.target.value)} className="form-input bg-white" /></div>
+                      <div className="form-field"><label className="form-label">{copy.startMileage}</label><input type="number" min="0" value={form.start_mileage} onChange={(event) => updateForm("start_mileage", event.target.value)} className="form-input bg-white" /></div>
+                      <div className="form-field"><label className="form-label">{copy.endMileage}</label><input type="number" min="0" value={form.end_mileage} onChange={(event) => updateForm("end_mileage", event.target.value)} className="form-input bg-white" /></div>
                     </div>
                   </section>
                 </div>
-                <div className="self-start rounded-lg border border-slate-200 bg-slate-50 p-3 xl:sticky xl:top-4">
+                <div className="self-start rounded-lg border border-brand-100 bg-brand-50/60 p-3 shadow-sm xl:sticky xl:top-4">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="text-xs font-semibold text-slate-500">{selectedFormMetrics?.actualSource}</p>
                       <p className="text-xl font-bold text-slate-950">{formatNumber(selectedFormMetrics?.actualDistance)} km</p>
                     </div>
-                    {selectedTripStatus ? <span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${statusClass(selectedTripStatus)}`}>{statusLabel(selectedTripStatus)}</span> : null}
+                    {selectedTripStatus ? <span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${statusClass(selectedTripStatus)}`}>{statusLabel(selectedTripStatus, copy)}</span> : null}
                   </div>
                   <div className="mt-3 grid gap-2 text-sm">
-                    <div className="rounded-lg bg-white px-3 py-2"><p className="text-xs text-slate-500">Estimated KM</p><p className="font-bold text-slate-950">{formatNumber(selectedFormMetrics?.estimatedDistance)} km</p><p className="text-xs font-semibold text-slate-500">{selectedEstimateSource}</p></div>
-                    <div className="rounded-lg bg-white px-3 py-2"><p className="text-xs text-slate-500">Difference</p><p className="font-bold text-slate-950">{formatNumber(selectedFormMetrics?.differenceKm)} km</p></div>
-                    <div className="rounded-lg bg-white px-3 py-2"><p className="text-xs text-slate-500">Fuel status</p><p className="font-bold text-slate-950">{selectedFormMetrics?.fuelLitres && selectedFormMetrics?.fuelCost ? `${formatNumber(selectedFormMetrics.fuelLitres, 2)} L / ${formatCurrency(selectedFormMetrics.fuelCost)}` : "No fuel"}</p></div>
+                    <div className="rounded-lg bg-white px-3 py-2"><p className="text-xs text-slate-500">{copy.estimatedKm}</p><p className="font-bold text-slate-950">{formatNumber(selectedFormMetrics?.estimatedDistance)} km</p><p className="text-xs font-semibold text-slate-500">{selectedEstimateSource}</p></div>
+                    <div className="rounded-lg bg-white px-3 py-2"><p className="text-xs text-slate-500">{copy.difference}</p><p className="font-bold text-slate-950">{formatNumber(selectedFormMetrics?.differenceKm)} km</p></div>
+                    <div className="rounded-lg bg-white px-3 py-2"><p className="text-xs text-slate-500">{copy.fuelStatus}</p><p className="font-bold text-slate-950">{selectedFormMetrics?.fuelLitres && selectedFormMetrics?.fuelCost ? `${formatNumber(selectedFormMetrics.fuelLitres, 2)} L / ${formatCurrency(selectedFormMetrics.fuelCost)}` : copy.noFuel}</p></div>
                   </div>
-                  <button type="button" onClick={() => void handleSaveTrip()} disabled={saving} className="btn-primary mt-3 w-full gap-2"><Save className="h-4 w-4" />{saving ? "Saving..." : "Save trip"}</button>
-                  <p className={`mt-2 text-xs font-semibold ${hasUnsavedChanges ? "text-amber-700" : "text-emerald-700"}`}>{hasUnsavedChanges ? "Unsaved changes" : notice === "Trip saved successfully." ? "Trip saved successfully" : "No unsaved changes"}</p>
-                  <p className="mt-1 text-xs text-slate-500">Editing here will not change the original Booking Diary entry.</p>
+                  <button type="button" onClick={() => void handleSaveTrip()} disabled={saving} className="btn-primary mt-3 w-full gap-2"><Save className="h-4 w-4" />{saving ? copy.saving : copy.saveTrip}</button>
+                  <p className={`mt-2 text-xs font-semibold ${hasUnsavedChanges ? "text-amber-700" : "text-emerald-700"}`}>{hasUnsavedChanges ? copy.unsavedChanges : notice === copy.tripSavedSuccessfully ? copy.tripSavedSuccessfully : copy.noUnsavedChanges}</p>
+                  <p className="mt-1 text-xs text-slate-500">{copy.editDoesNotChangeBooking}</p>
                 </div>
               </div>
             ) : null}
@@ -1483,30 +2219,30 @@ export default function TripJourneyPage() {
             {selectedTripTab === "fuel" ? (
               <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
                 <div className="rounded-lg border border-slate-200 bg-white p-4">
-                  <h4 className="font-bold text-slate-950">Fuel Summary</h4>
+                  <h4 className="font-bold text-slate-950">{copy.fuelSummary}</h4>
                   <div className="mt-3 grid gap-3">
-                    <div className="form-field"><label className="form-label">Fuel source</label><select value={form.fuel_source} onChange={(event) => updateForm("fuel_source", event.target.value as TripFuelSource)} className="form-input bg-white"><option value="linked">Use linked fuel logs</option><option value="manual">Use manual fuel entry</option></select></div>
-                    {form.fuel_source === "manual" ? <><div className="form-field"><label className="form-label">Manual litres used</label><input type="number" min="0" step="0.01" value={form.manual_litres_used} onChange={(event) => updateForm("manual_litres_used", event.target.value)} className="form-input bg-white" /></div><div className="form-field"><label className="form-label">Manual fuel cost</label><input type="number" min="0" step="0.01" value={form.manual_fuel_cost} onChange={(event) => updateForm("manual_fuel_cost", event.target.value)} className="form-input bg-white" /></div></> : null}
+                    <div className="form-field"><label className="form-label">{copy.fuelSource}</label><select value={form.fuel_source} onChange={(event) => updateForm("fuel_source", event.target.value as TripFuelSource)} className="form-input bg-white"><option value="linked">{copy.useLinkedFuelLogs}</option><option value="manual">{copy.useManualFuelEntry}</option></select></div>
+                    {form.fuel_source === "manual" ? <><div className="form-field"><label className="form-label">{copy.manualLitresUsed}</label><input type="number" min="0" step="0.01" value={form.manual_litres_used} onChange={(event) => updateForm("manual_litres_used", event.target.value)} className="form-input bg-white" /></div><div className="form-field"><label className="form-label">{copy.manualFuelCost}</label><input type="number" min="0" step="0.01" value={form.manual_fuel_cost} onChange={(event) => updateForm("manual_fuel_cost", event.target.value)} className="form-input bg-white" /></div></> : null}
                     <div className="grid grid-cols-2 gap-2">
-                      <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Litres</p><p className="font-bold text-slate-950">{formatNumber(selectedFormMetrics?.fuelLitres, 2)}</p></div>
-                      <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Cost</p><p className="font-bold text-slate-950">{formatCurrency(selectedFormMetrics?.fuelCost)}</p></div>
-                      <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">KM/L</p><p className="font-bold text-slate-950">{formatNumber(selectedFormMetrics?.kmPerLitre, 2)}</p></div>
-                      <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">Cost/KM</p><p className="font-bold text-slate-950">{formatCurrency(selectedFormMetrics?.costPerKm)}</p></div>
+                      <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">{copy.litres}</p><p className="font-bold text-slate-950">{formatNumber(selectedFormMetrics?.fuelLitres, 2)}</p></div>
+                      <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">{copy.cost}</p><p className="font-bold text-slate-950">{formatCurrency(selectedFormMetrics?.fuelCost)}</p></div>
+                      <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">{copy.kmL}</p><p className="font-bold text-slate-950">{formatNumber(selectedFormMetrics?.kmPerLitre, 2)}</p></div>
+                      <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">{copy.costKm}</p><p className="font-bold text-slate-950">{formatCurrency(selectedFormMetrics?.costPerKm)}</p></div>
                     </div>
-                    <button type="button" onClick={() => void handleSaveTrip()} disabled={saving} className="btn-primary w-full gap-2"><Save className="h-4 w-4" />{saving ? "Saving..." : "Save trip"}</button>
+                    <button type="button" onClick={() => void handleSaveTrip()} disabled={saving} className="btn-primary w-full gap-2"><Save className="h-4 w-4" />{saving ? copy.saving : copy.saveTrip}</button>
                   </div>
                 </div>
                 <div className="space-y-4">
                   <div className="rounded-lg border border-slate-200 bg-white p-4">
-                    <h4 className="font-bold text-slate-950">Linked Fuel Logs</h4>
+                    <h4 className="font-bold text-slate-950">{copy.linkedFuelLogs}</h4>
                     <div className="mt-3 space-y-2">
-                      {selectedTrip.linkedFuelLogs.length === 0 ? <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-500">No fuel logs linked yet.</p> : null}
-                      {selectedTrip.linkedFuelLogs.map((log) => <div key={log.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3"><div className="min-w-0"><p className="truncate text-sm font-bold text-slate-900">{formatDate(log.date)} | {log.vehicle_reg} | {log.driver}</p><p className="text-xs text-slate-500">{formatNumber(Number(log.litres || 0), 2)} L | {formatCurrency(Number(log.total_cost || 0))} | {log.station || log.location}</p></div><button type="button" onClick={() => void handleUnlinkFuelLog(String(log.id))} className="btn-secondary min-h-8 gap-2 px-3 py-1 text-xs"><Unlink className="h-3.5 w-3.5" /> Unlink</button></div>)}
+                      {selectedTrip.linkedFuelLogs.length === 0 ? <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-500">{copy.noFuelLogsLinkedYet}</p> : null}
+                      {selectedTrip.linkedFuelLogs.map((log) => <div key={log.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3"><div className="min-w-0"><p className="truncate text-sm font-bold text-slate-900">{formatDate(log.date)} | {log.vehicle_reg} | {log.driver}</p><p className="text-xs text-slate-500">{formatNumber(Number(log.litres || 0), 2)} L | {formatCurrency(Number(log.total_cost || 0))} | {log.station || log.location}</p></div><button type="button" onClick={() => void handleUnlinkFuelLog(String(log.id))} className="btn-secondary min-h-8 gap-2 px-3 py-1 text-xs"><Unlink className="h-3.5 w-3.5" /> {copy.unlink}</button></div>)}
                     </div>
                   </div>
                   <div className="rounded-lg border border-slate-200 bg-white p-4">
-                    <div className="flex items-center justify-between gap-3"><h4 className="font-bold text-slate-950">Add / Search Fuel Logs</h4><button type="button" onClick={() => setManualFuelExpanded((current) => !current)} className="btn-secondary min-h-9 px-3 py-1.5 text-xs">{manualFuelExpanded ? "Hide" : "Add fuel log"}</button></div>
-                    {manualFuelExpanded ? <div className="mt-4 space-y-4"><div><p className="text-sm font-semibold text-slate-800">Suggested logs</p><div className="mt-2 space-y-2">{suggestedFuelLogs.length === 0 ? <p className="text-sm text-slate-500">No suggested fuel logs found.</p> : null}{suggestedFuelLogs.slice(0, 5).map((log) => <div key={log.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3"><div className="min-w-0"><p className="truncate text-sm font-bold text-slate-900">{formatDate(log.date)} | {log.vehicle_reg} | {log.driver}</p><p className="text-xs text-slate-500">{formatNumber(Number(log.litres || 0), 2)} L | {formatCurrency(Number(log.total_cost || 0))}</p></div><button type="button" onClick={() => void handleLinkFuelLog(String(log.id))} className="btn-primary min-h-8 gap-2 px-3 py-1 text-xs"><Link2 className="h-3.5 w-3.5" /> Link</button></div>)}</div></div><div className="grid gap-2 sm:grid-cols-2"><input value={manualFuelSearch} onChange={(event) => setManualFuelSearch(event.target.value)} placeholder="Search vehicle, driver, station, date" className="form-input bg-white" /><input type="date" value={manualFuelDate} onChange={(event) => setManualFuelDate(event.target.value)} className="form-input bg-white" /></div><div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">{manualFuelLogOptions.length === 0 ? <p className="text-sm text-slate-500">No other unlinked fuel logs match.</p> : null}{manualFuelLogOptions.map((log) => <div key={log.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3"><div className="min-w-0"><p className="truncate text-sm font-bold text-slate-900">{formatDate(log.date)} | {log.vehicle_reg} | {log.driver}</p><p className="text-xs text-slate-500">{formatNumber(Number(log.litres || 0), 2)} L | {formatCurrency(Number(log.total_cost || 0))} | {log.station || log.location}</p></div><button type="button" onClick={() => void handleLinkFuelLog(String(log.id))} className="btn-secondary min-h-8 gap-2 px-3 py-1 text-xs"><Link2 className="h-3.5 w-3.5" /> Link</button></div>)}</div>{manualFuelLogOptions.length < manualFuelLogMatches.length ? <button type="button" onClick={() => setVisibleManualFuelLogCount((count) => count + 10)} className="btn-secondary w-full min-h-9 px-3 py-1.5 text-xs">Load more</button> : null}</div> : null}
+                    <div className="flex items-center justify-between gap-3"><h4 className="font-bold text-slate-950">{copy.addSearchFuelLogs}</h4><button type="button" onClick={() => setManualFuelExpanded((current) => !current)} className="btn-secondary min-h-9 px-3 py-1.5 text-xs">{manualFuelExpanded ? copy.hide : copy.addFuelLog}</button></div>
+                    {manualFuelExpanded ? <div className="mt-4 space-y-4"><div><p className="text-sm font-semibold text-slate-800">{copy.suggestedLogs}</p><div className="mt-2 space-y-2">{suggestedFuelLogs.length === 0 ? <p className="text-sm text-slate-500">{copy.noSuggestedFuelLogs}</p> : null}{suggestedFuelLogs.slice(0, 5).map((log) => <div key={log.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3"><div className="min-w-0"><p className="truncate text-sm font-bold text-slate-900">{formatDate(log.date)} | {log.vehicle_reg} | {log.driver}</p><p className="text-xs text-slate-500">{formatNumber(Number(log.litres || 0), 2)} L | {formatCurrency(Number(log.total_cost || 0))}</p></div><button type="button" onClick={() => void handleLinkFuelLog(String(log.id))} className="btn-primary min-h-8 gap-2 px-3 py-1 text-xs"><Link2 className="h-3.5 w-3.5" /> {copy.link}</button></div>)}</div></div><div className="grid gap-2 sm:grid-cols-2"><input value={manualFuelSearch} onChange={(event) => setManualFuelSearch(event.target.value)} placeholder={copy.searchFuelPlaceholder} className="form-input bg-white" /><input type="date" value={manualFuelDate} onChange={(event) => setManualFuelDate(event.target.value)} className="form-input bg-white" /></div><div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">{manualFuelLogOptions.length === 0 ? <p className="text-sm text-slate-500">{copy.noOtherFuelLogs}</p> : null}{manualFuelLogOptions.map((log) => <div key={log.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3"><div className="min-w-0"><p className="truncate text-sm font-bold text-slate-900">{formatDate(log.date)} | {log.vehicle_reg} | {log.driver}</p><p className="text-xs text-slate-500">{formatNumber(Number(log.litres || 0), 2)} L | {formatCurrency(Number(log.total_cost || 0))} | {log.station || log.location}</p></div><button type="button" onClick={() => void handleLinkFuelLog(String(log.id))} className="btn-secondary min-h-8 gap-2 px-3 py-1 text-xs"><Link2 className="h-3.5 w-3.5" /> {copy.link}</button></div>)}</div>{manualFuelLogOptions.length < manualFuelLogMatches.length ? <button type="button" onClick={() => setVisibleManualFuelLogCount((count) => count + 10)} className="btn-secondary w-full min-h-9 px-3 py-1.5 text-xs">{copy.loadMore}</button> : null}</div> : null}
                   </div>
                 </div>
               </div>
@@ -1514,56 +2250,56 @@ export default function TripJourneyPage() {
 
             {selectedTripTab === "notes" ? (
               <div className="grid gap-4 lg:grid-cols-2">
-                <div className="form-field"><label className="form-label">Waiting / idle notes</label><textarea rows={5} value={form.waiting_idle_notes} onChange={(event) => updateForm("waiting_idle_notes", event.target.value)} className="form-textarea bg-white" /></div>
-                <div className="form-field"><label className="form-label">Extra route notes</label><textarea rows={5} value={form.extra_route_notes} onChange={(event) => updateForm("extra_route_notes", event.target.value)} className="form-textarea bg-white" /></div>
-                <button type="button" onClick={() => void handleSaveTrip()} disabled={saving} className="btn-primary gap-2 lg:col-span-2"><Save className="h-4 w-4" />{saving ? "Saving..." : "Save trip"}</button>
+                <div className="form-field"><label className="form-label">{copy.waitingIdleNotes}</label><textarea rows={5} value={form.waiting_idle_notes} onChange={(event) => updateForm("waiting_idle_notes", event.target.value)} className="form-textarea bg-white" /></div>
+                <div className="form-field"><label className="form-label">{copy.extraRouteNotes}</label><textarea rows={5} value={form.extra_route_notes} onChange={(event) => updateForm("extra_route_notes", event.target.value)} className="form-textarea bg-white" /></div>
+                <button type="button" onClick={() => void handleSaveTrip()} disabled={saving} className="btn-primary gap-2 lg:col-span-2"><Save className="h-4 w-4" />{saving ? copy.saving : copy.saveTrip}</button>
               </div>
             ) : null}
           </div>
         </section>
       ) : null}
 
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h3 className="section-title">Performance Comparison</h3>
-            <p className="section-subtitle">Completed trips only are used for efficiency averages. Completed = actual km, estimated km, fuel litres and fuel cost are all present.</p>
+            <h3 className="section-title">{copy.performanceComparison}</h3>
+            <p className="section-subtitle">{copy.comparisonDescription}</p>
           </div>
           <select value={comparisonSort} onChange={(event) => setComparisonSort(event.target.value as ComparisonSort)} className="form-input w-full bg-white sm:w-56">
-            <option value="best_kml">Sort: Best KM/L</option>
-            <option value="lowest_cost_per_km">Sort: Lowest cost/km</option>
-            <option value="highest_fuel_cost">Sort: Highest fuel cost</option>
-            <option value="most_actual_km">Sort: Most actual km</option>
-            <option value="most_completed_trips">Sort: Most completed trips</option>
+            <option value="best_kml">{copy.sortBestKmL}</option>
+            <option value="lowest_cost_per_km">{copy.sortLowestCostKm}</option>
+            <option value="highest_fuel_cost">{copy.sortHighestFuelCost}</option>
+            <option value="most_actual_km">{copy.sortMostActualKm}</option>
+            <option value="most_completed_trips">{copy.sortMostCompletedTrips}</option>
           </select>
         </div>
 
-        {summary.completedTrips < 2 ? <p className="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">More completed trips are needed for reliable comparison.</p> : null}
+        {summary.completedTrips < 2 ? <p className="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">{copy.moreCompletedTripsNeeded}</p> : null}
 
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><p className="text-xs font-semibold text-slate-500">Best KM/L driver</p><p className="mt-1 truncate font-bold text-slate-950">{summary.bestDriverByKmPerLitre?.name ?? "-"}</p><p className="text-xs text-slate-500">{formatNumber(summary.bestDriverByKmPerLitre?.kmPerLitre, 2)} KM/L</p></div>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><p className="text-xs font-semibold text-slate-500">Lowest cost/km driver</p><p className="mt-1 truncate font-bold text-slate-950">{summary.lowestCostDriver?.name ?? "-"}</p><p className="text-xs text-slate-500">{formatCurrency(summary.lowestCostDriver?.costPerKm)}</p></div>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><p className="text-xs font-semibold text-slate-500">Best vehicle</p><p className="mt-1 truncate font-bold text-slate-950">{summary.bestVehicleByKmPerLitre?.name ?? "-"}</p><p className="text-xs text-slate-500">{formatNumber(summary.bestVehicleByKmPerLitre?.kmPerLitre, 2)} KM/L</p></div>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><p className="text-xs font-semibold text-slate-500">Lowest vehicle cost/km</p><p className="mt-1 truncate font-bold text-slate-950">{summary.lowestCostVehicle?.name ?? "-"}</p><p className="text-xs text-slate-500">{formatCurrency(summary.lowestCostVehicle?.costPerKm)}</p></div>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><p className="text-xs font-semibold text-slate-500">Most expensive trip</p><p className="mt-1 truncate font-bold text-slate-950">{summary.mostExpensiveTrip ? getShortRoutePreview(summary.mostExpensiveTrip.trip) : "-"}</p><p className="text-xs text-slate-500">{formatCurrency(summary.mostExpensiveTrip?.metrics.costPerKm)}</p></div>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3"><p className="text-xs font-semibold text-slate-500">Biggest distance difference</p><p className="mt-1 truncate font-bold text-slate-950">{summary.biggestDistanceDifference ? getShortRoutePreview(summary.biggestDistanceDifference.trip) : "-"}</p><p className="text-xs text-slate-500">{formatNumber(summary.biggestDistanceDifference?.metrics.differenceKm)} km</p></div>
+          <div className={metricTileClass("green")}><p className="text-xs font-semibold opacity-80">{copy.bestKmLDriver}</p><p className="mt-1 truncate font-bold text-slate-950">{summary.bestDriverByKmPerLitre?.name ?? "-"}</p><p className="text-xs text-slate-500">{formatNumber(summary.bestDriverByKmPerLitre?.kmPerLitre, 2)} {copy.kmL}</p></div>
+          <div className={metricTileClass("green")}><p className="text-xs font-semibold opacity-80">{copy.lowestCostKmDriver}</p><p className="mt-1 truncate font-bold text-slate-950">{summary.lowestCostDriver?.name ?? "-"}</p><p className="text-xs text-slate-500">{formatCurrency(summary.lowestCostDriver?.costPerKm)}</p></div>
+          <div className={metricTileClass("purple")}><p className="text-xs font-semibold opacity-80">{copy.bestVehicle}</p><p className="mt-1 truncate font-bold text-slate-950">{summary.bestVehicleByKmPerLitre?.name ?? "-"}</p><p className="text-xs text-slate-500">{formatNumber(summary.bestVehicleByKmPerLitre?.kmPerLitre, 2)} {copy.kmL}</p></div>
+          <div className={metricTileClass("purple")}><p className="text-xs font-semibold opacity-80">{copy.lowestVehicleCostKm}</p><p className="mt-1 truncate font-bold text-slate-950">{summary.lowestCostVehicle?.name ?? "-"}</p><p className="text-xs text-slate-500">{formatCurrency(summary.lowestCostVehicle?.costPerKm)}</p></div>
+          <div className={metricTileClass("amber")}><p className="text-xs font-semibold opacity-80">{copy.mostExpensiveTrip}</p><p className="mt-1 truncate font-bold text-slate-950">{summary.mostExpensiveTrip ? getShortRoutePreview(summary.mostExpensiveTrip.trip, copy) : "-"}</p><p className="text-xs text-slate-500">{formatCurrency(summary.mostExpensiveTrip?.metrics.costPerKm)}</p></div>
+          <div className={metricTileClass("amber")}><p className="text-xs font-semibold opacity-80">{copy.biggestDistanceDifference}</p><p className="mt-1 truncate font-bold text-slate-950">{summary.biggestDistanceDifference ? getShortRoutePreview(summary.biggestDistanceDifference.trip, copy) : "-"}</p><p className="text-xs text-slate-500">{formatNumber(summary.biggestDistanceDifference?.metrics.differenceKm)} km</p></div>
         </div>
 
         {summary.dataQualityNotes.length > 0 ? (
           <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-            <p className="text-sm font-bold text-amber-900">Data Quality</p>
+            <p className="text-sm font-bold text-amber-900">{copy.dataQuality}</p>
             <div className="mt-2 flex flex-wrap gap-2">{summary.dataQualityNotes.map((note) => <span key={note} className="rounded-full bg-white/70 px-2.5 py-1 text-xs font-semibold text-amber-800">{note}</span>)}</div>
           </div>
         ) : null}
 
         <div className="mt-5 flex flex-wrap gap-2">
           {[
-            ["drivers", "Drivers"],
-            ["vehicles", "Vehicles"],
-            ["routes", "Routes"],
-            ["trips", "Trips"]
+            ["drivers", copy.drivers],
+            ["vehicles", copy.vehicles],
+            ["routes", copy.routes],
+            ["trips", copy.trips]
           ].map(([key, label]) => (
-            <button key={key} type="button" onClick={() => setComparisonTab(key as ComparisonTab)} className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${comparisonTab === key ? "bg-brand-50 text-brand-700 ring-1 ring-brand-100" : "bg-slate-50 text-slate-600 hover:bg-slate-100"}`}>{label}</button>
+            <button key={key} type="button" onClick={() => setComparisonTab(key as ComparisonTab)} className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${comparisonTab === key ? "border-brand-200 bg-brand-50 text-brand-700 ring-1 ring-brand-100" : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"}`}>{label}</button>
           ))}
         </div>
 
@@ -1571,24 +2307,24 @@ export default function TripJourneyPage() {
           <div className="mt-4">
             <div className="hidden overflow-x-auto lg:block">
               <table className="min-w-full divide-y divide-slate-200 text-sm">
-                <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-3 py-3 text-left">Rank</th><th className="px-3 py-3 text-left">{comparisonTab === "drivers" ? "Driver" : "Vehicle"}</th><th className="px-3 py-3 text-right">Completed</th><th className="px-3 py-3 text-right">Actual KM</th><th className="px-3 py-3 text-right">Litres</th><th className="px-3 py-3 text-right">Fuel Cost</th><th className="px-3 py-3 text-right">Avg KM/L</th><th className="px-3 py-3 text-right">Avg Cost/KM</th><th className="px-3 py-3 text-left">Label</th></tr></thead>
+                <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-3 py-3 text-left">{copy.rank}</th><th className="px-3 py-3 text-left">{comparisonTab === "drivers" ? copy.driver : copy.vehicle}</th><th className="px-3 py-3 text-right">{copy.completed}</th><th className="px-3 py-3 text-right">{copy.actualKm}</th><th className="px-3 py-3 text-right">{copy.litres}</th><th className="px-3 py-3 text-right">{copy.fuelCost}</th><th className="px-3 py-3 text-right">{copy.avgKmL}</th><th className="px-3 py-3 text-right">{copy.avgCostKm}</th><th className="px-3 py-3 text-left">{copy.label}</th></tr></thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
-                  {(comparisonTab === "drivers" ? sortedDriverRows : sortedVehicleRows).map((row, index) => <tr key={row.name}><td className="px-3 py-3 font-bold text-slate-950">#{index + 1}</td><td className="px-3 py-3 font-bold text-slate-950">{row.name}</td><td className="px-3 py-3 text-right font-semibold">{row.completedTrips}</td><td className="px-3 py-3 text-right">{formatNumber(row.actualKm)}</td><td className="px-3 py-3 text-right">{formatNumber(row.litres, 2)}</td><td className="px-3 py-3 text-right">{formatCurrency(row.cost)}</td><td className="px-3 py-3 text-right font-semibold">{formatNumber(row.kmPerLitre, 2)}</td><td className="px-3 py-3 text-right font-semibold">{formatCurrency(row.costPerKm)}</td><td className="px-3 py-3"><span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${getHealthBadgeClass(row.performanceLabel)}`}>{row.performanceLabel}</span></td></tr>)}
+                  {(comparisonTab === "drivers" ? sortedDriverRows : sortedVehicleRows).map((row, index) => <tr key={row.name} className="transition hover:bg-brand-50/45"><td className="px-3 py-3 font-bold text-slate-950">#{index + 1}</td><td className="px-3 py-3 font-bold text-slate-950">{row.name}</td><td className="px-3 py-3 text-right font-semibold">{row.completedTrips}</td><td className="px-3 py-3 text-right">{formatNumber(row.actualKm)}</td><td className="px-3 py-3 text-right">{formatNumber(row.litres, 2)}</td><td className="px-3 py-3 text-right">{formatCurrency(row.cost)}</td><td className="px-3 py-3 text-right font-semibold">{formatNumber(row.kmPerLitre, 2)}</td><td className="px-3 py-3 text-right font-semibold">{formatCurrency(row.costPerKm)}</td><td className="px-3 py-3"><span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${getHealthBadgeClass(row.performanceLabel, copy)}`}>{row.performanceLabel}</span></td></tr>)}
                 </tbody>
               </table>
             </div>
             <div className="grid gap-3 lg:hidden">
-              {(comparisonTab === "drivers" ? sortedDriverRows : sortedVehicleRows).map((row, index) => <article key={row.name} className="rounded-lg border border-slate-200 bg-slate-50 p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold text-slate-500">#{index + 1}</p><h4 className="mt-1 font-bold text-slate-950">{row.name}</h4></div><span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${getHealthBadgeClass(row.performanceLabel)}`}>{row.performanceLabel}</span></div><div className="mt-3 grid grid-cols-2 gap-3 text-sm"><div><p className="text-xs text-slate-500">Completed</p><p className="font-bold">{row.completedTrips}</p></div><div><p className="text-xs text-slate-500">Actual KM</p><p className="font-bold">{formatNumber(row.actualKm)}</p></div><div><p className="text-xs text-slate-500">Litres</p><p className="font-bold">{formatNumber(row.litres, 2)}</p></div><div><p className="text-xs text-slate-500">Fuel Cost</p><p className="font-bold">{formatCurrency(row.cost)}</p></div><div><p className="text-xs text-slate-500">Avg KM/L</p><p className="font-bold">{formatNumber(row.kmPerLitre, 2)}</p></div><div><p className="text-xs text-slate-500">Avg Cost/KM</p><p className="font-bold">{formatCurrency(row.costPerKm)}</p></div></div></article>)}
+              {(comparisonTab === "drivers" ? sortedDriverRows : sortedVehicleRows).map((row, index) => <article key={row.name} className="rounded-lg border border-slate-200 bg-slate-50 p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold text-slate-500">#{index + 1}</p><h4 className="mt-1 font-bold text-slate-950">{row.name}</h4></div><span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${getHealthBadgeClass(row.performanceLabel, copy)}`}>{row.performanceLabel}</span></div><div className="mt-3 grid grid-cols-2 gap-3 text-sm"><div><p className="text-xs text-slate-500">{copy.completed}</p><p className="font-bold">{row.completedTrips}</p></div><div><p className="text-xs text-slate-500">{copy.actualKm}</p><p className="font-bold">{formatNumber(row.actualKm)}</p></div><div><p className="text-xs text-slate-500">{copy.litres}</p><p className="font-bold">{formatNumber(row.litres, 2)}</p></div><div><p className="text-xs text-slate-500">{copy.fuelCost}</p><p className="font-bold">{formatCurrency(row.cost)}</p></div><div><p className="text-xs text-slate-500">{copy.avgKmL}</p><p className="font-bold">{formatNumber(row.kmPerLitre, 2)}</p></div><div><p className="text-xs text-slate-500">{copy.avgCostKm}</p><p className="font-bold">{formatCurrency(row.costPerKm)}</p></div></div></article>)}
             </div>
           </div>
         ) : null}
 
         {comparisonTab === "routes" ? (
-          <div className="mt-4 overflow-x-auto"><table className="min-w-full divide-y divide-slate-200 text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-3 py-3 text-left">Route</th><th className="px-3 py-3 text-right">Trips</th><th className="px-3 py-3 text-right">Avg est. km</th><th className="px-3 py-3 text-right">Avg actual km</th><th className="px-3 py-3 text-right">Avg difference</th><th className="px-3 py-3 text-right">Avg fuel cost</th><th className="px-3 py-3 text-right">Avg cost/km</th><th className="px-3 py-3 text-right">Avg KM/L</th><th className="px-3 py-3 text-left">Label</th></tr></thead><tbody className="divide-y divide-slate-100 bg-white">{sortedRouteRows.map((row) => <tr key={row.route}><td className="max-w-[280px] px-3 py-3 font-bold text-slate-950"><span className="line-clamp-2">{row.route}</span></td><td className="px-3 py-3 text-right">{row.completedTrips}</td><td className="px-3 py-3 text-right">{formatNumber(row.averageEstimatedKm)}</td><td className="px-3 py-3 text-right">{formatNumber(row.averageActualKm)}</td><td className="px-3 py-3 text-right">{formatNumber(row.averageDifferenceKm)}</td><td className="px-3 py-3 text-right">{formatCurrency(row.averageFuelCost)}</td><td className="px-3 py-3 text-right">{formatCurrency(row.costPerKm)}</td><td className="px-3 py-3 text-right">{formatNumber(row.kmPerLitre, 2)}</td><td className="px-3 py-3"><span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${getHealthBadgeClass(row.performanceLabel)}`}>{row.performanceLabel}</span></td></tr>)}</tbody></table></div>
+          <div className="mt-4 overflow-x-auto"><table className="min-w-full divide-y divide-slate-200 text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-3 py-3 text-left">{copy.route}</th><th className="px-3 py-3 text-right">{copy.trips}</th><th className="px-3 py-3 text-right">{copy.avgEstKm}</th><th className="px-3 py-3 text-right">{copy.avgActualKm}</th><th className="px-3 py-3 text-right">{copy.avgDifference}</th><th className="px-3 py-3 text-right">{copy.avgFuelCost}</th><th className="px-3 py-3 text-right">{copy.avgCostKm}</th><th className="px-3 py-3 text-right">{copy.avgKmL}</th><th className="px-3 py-3 text-left">{copy.label}</th></tr></thead><tbody className="divide-y divide-slate-100 bg-white">{sortedRouteRows.map((row) => <tr key={row.route} className="transition hover:bg-brand-50/45"><td className="max-w-[280px] px-3 py-3 font-bold text-slate-950"><span className="line-clamp-2">{row.route}</span></td><td className="px-3 py-3 text-right">{row.completedTrips}</td><td className="px-3 py-3 text-right">{formatNumber(row.averageEstimatedKm)}</td><td className="px-3 py-3 text-right">{formatNumber(row.averageActualKm)}</td><td className="px-3 py-3 text-right">{formatNumber(row.averageDifferenceKm)}</td><td className="px-3 py-3 text-right">{formatCurrency(row.averageFuelCost)}</td><td className="px-3 py-3 text-right">{formatCurrency(row.costPerKm)}</td><td className="px-3 py-3 text-right">{formatNumber(row.kmPerLitre, 2)}</td><td className="px-3 py-3"><span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${getHealthBadgeClass(row.performanceLabel, copy)}`}>{row.performanceLabel}</span></td></tr>)}</tbody></table></div>
         ) : null}
 
         {comparisonTab === "trips" ? (
-          <div className="mt-4 overflow-x-auto"><table className="min-w-full divide-y divide-slate-200 text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-3 py-3 text-left">Date</th><th className="px-3 py-3 text-left">Route</th><th className="px-3 py-3 text-left">Driver</th><th className="px-3 py-3 text-left">Vehicle</th><th className="px-3 py-3 text-right">Actual KM</th><th className="px-3 py-3 text-right">Estimated KM</th><th className="px-3 py-3 text-right">Difference</th><th className="px-3 py-3 text-right">Litres</th><th className="px-3 py-3 text-right">Fuel Cost</th><th className="px-3 py-3 text-right">KM/L</th><th className="px-3 py-3 text-right">Cost/KM</th><th className="px-3 py-3 text-left">Label</th></tr></thead><tbody className="divide-y divide-slate-100 bg-white">{sortedTripRows.map((row) => <tr key={row.trip.id}><td className="px-3 py-3">{formatDate(row.trip.trip_date)}</td><td className="max-w-[260px] px-3 py-3 font-bold text-slate-950"><span className="line-clamp-2">{getShortRoutePreview(row.trip)}</span></td><td className="px-3 py-3">{row.trip.driver || "-"}</td><td className="px-3 py-3">{row.trip.vehicle_reg || row.trip.vehicle_type || "-"}</td><td className="px-3 py-3 text-right">{formatNumber(row.metrics.actualDistance)}</td><td className="px-3 py-3 text-right">{formatNumber(row.metrics.estimatedDistance)}</td><td className="px-3 py-3 text-right">{formatNumber(row.metrics.differenceKm)}</td><td className="px-3 py-3 text-right">{formatNumber(row.metrics.fuel.litres, 2)}</td><td className="px-3 py-3 text-right">{formatCurrency(row.metrics.fuel.cost)}</td><td className="px-3 py-3 text-right">{formatNumber(row.metrics.kmPerLitre, 2)}</td><td className="px-3 py-3 text-right">{formatCurrency(row.metrics.costPerKm)}</td><td className="px-3 py-3"><span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${getHealthBadgeClass(row.label)}`}>{row.label}</span></td></tr>)}</tbody></table></div>
+          <div className="mt-4 overflow-x-auto"><table className="min-w-full divide-y divide-slate-200 text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-3 py-3 text-left">{copy.date}</th><th className="px-3 py-3 text-left">{copy.route}</th><th className="px-3 py-3 text-left">{copy.driver}</th><th className="px-3 py-3 text-left">{copy.vehicle}</th><th className="px-3 py-3 text-right">{copy.actualKm}</th><th className="px-3 py-3 text-right">{copy.estimatedKm}</th><th className="px-3 py-3 text-right">{copy.difference}</th><th className="px-3 py-3 text-right">{copy.litres}</th><th className="px-3 py-3 text-right">{copy.fuelCost}</th><th className="px-3 py-3 text-right">{copy.kmL}</th><th className="px-3 py-3 text-right">{copy.costKm}</th><th className="px-3 py-3 text-left">{copy.label}</th></tr></thead><tbody className="divide-y divide-slate-100 bg-white">{sortedTripRows.map((row) => <tr key={row.trip.id} className="transition hover:bg-brand-50/45"><td className="px-3 py-3">{formatDate(row.trip.trip_date)}</td><td className="max-w-[260px] px-3 py-3 font-bold text-slate-950"><span className="line-clamp-2">{getShortRoutePreview(row.trip, copy)}</span></td><td className="px-3 py-3">{row.trip.driver || "-"}</td><td className="px-3 py-3">{row.trip.vehicle_reg || row.trip.vehicle_type || "-"}</td><td className="px-3 py-3 text-right">{formatNumber(row.metrics.actualDistance)}</td><td className="px-3 py-3 text-right">{formatNumber(row.metrics.estimatedDistance)}</td><td className="px-3 py-3 text-right">{formatNumber(row.metrics.differenceKm)}</td><td className="px-3 py-3 text-right">{formatNumber(row.metrics.fuel.litres, 2)}</td><td className="px-3 py-3 text-right">{formatCurrency(row.metrics.fuel.cost)}</td><td className="px-3 py-3 text-right">{formatNumber(row.metrics.kmPerLitre, 2)}</td><td className="px-3 py-3 text-right">{formatCurrency(row.metrics.costPerKm)}</td><td className="px-3 py-3"><span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${getHealthBadgeClass(row.label, copy)}`}>{row.label}</span></td></tr>)}</tbody></table></div>
         ) : null}
       </section>
 
@@ -1600,19 +2336,19 @@ export default function TripJourneyPage() {
                 <Trash2 className="h-5 w-5" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-slate-950">Delete trip?</h3>
+                <h3 className="text-lg font-bold text-slate-950">{copy.deleteTripQuestion}</h3>
                 <p className="mt-2 text-sm leading-6 text-slate-600">
-                  This will delete the trip journey record only. It will not delete the original Booking Diary entry or any Fuel Logs.
+                  {copy.deleteTripDescription}
                 </p>
                 <p className="mt-2 text-xs font-semibold text-slate-500">{deleteTarget.label}</p>
               </div>
             </div>
             <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button type="button" onClick={() => setDeleteTarget(null)} disabled={deleting} className="btn-secondary justify-center">
-                Cancel
+                {copy.cancel}
               </button>
               <button type="button" onClick={() => void handleConfirmDeleteTrip()} disabled={deleting} className="min-h-10 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60">
-                {deleting ? "Deleting..." : "Delete trip"}
+                {deleting ? copy.deleting : copy.deleteTrip}
               </button>
             </div>
           </div>

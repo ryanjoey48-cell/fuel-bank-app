@@ -37,6 +37,9 @@ export const translations = {
     },
     nav: {
       dashboard: "Dashboard",
+      bookingDiary: "Booking Diary",
+      shipments: "Shipments",
+      tripJourney: "Trip Journey",
       drivers: "Drivers",
       fuelLogs: "Fuel Logs",
       fuelSpendReport: "Fuel Spend Report",
@@ -819,6 +822,9 @@ export const translations = {
     },
     nav: {
       dashboard: "แดชบอร์ด",
+      bookingDiary: "สมุดจองงาน",
+      shipments: "งานขนส่ง",
+      tripJourney: "เส้นทางการเดินทาง",
       drivers: "คนขับ",
       fuelLogs: "บันทึกน้ำมัน",
       fuelSpendReport: "รายงานค่าน้ำมัน",

@@ -78,7 +78,18 @@ const isMissingTripOptionalColumnError = (error: { code?: string; message?: stri
         "manual_estimated_distance_km",
         "estimated_distance_source",
         "estimated_duration_minutes",
-        "google_maps_route_url"
+        "google_maps_route_url",
+        "google_estimated_km",
+        "google_estimated_minutes",
+        "route_source",
+        "route_start_type",
+        "depot_address_used",
+        "custom_start_address",
+        "pickup_address",
+        "dropoff_address",
+        "booking_estimated_km",
+        "booking_estimated_minutes",
+        "booking_google_maps_route_url"
       ].some((column) => error.message?.includes(column))
   );
 
@@ -95,7 +106,18 @@ function omitTripOptionalColumns<T extends Record<string, unknown>>(payload: T) 
           "manual_estimated_distance_km",
           "estimated_distance_source",
           "estimated_duration_minutes",
-          "google_maps_route_url"
+          "google_maps_route_url",
+          "google_estimated_km",
+          "google_estimated_minutes",
+          "route_source",
+          "route_start_type",
+          "depot_address_used",
+          "custom_start_address",
+          "pickup_address",
+          "dropoff_address",
+          "booking_estimated_km",
+          "booking_estimated_minutes",
+          "booking_google_maps_route_url"
         ].includes(key)
     )
   ) as Partial<T>;
@@ -2273,13 +2295,23 @@ function normalizeTripFuelSource(value: unknown): TripFuelSource {
 
 function getEffectiveTripEstimatedKm({
   estimatedDistanceKm,
+  googleEstimatedKm,
+  bookingEstimatedKm,
   manualEstimatedDistanceKm
 }: {
   estimatedDistanceKm: number | null;
+  googleEstimatedKm?: number | null;
+  bookingEstimatedKm?: number | null;
   manualEstimatedDistanceKm: number | null;
 }) {
   if (manualEstimatedDistanceKm != null && manualEstimatedDistanceKm > 0) {
     return manualEstimatedDistanceKm;
+  }
+  if (googleEstimatedKm != null && googleEstimatedKm > 0) {
+    return googleEstimatedKm;
+  }
+  if (bookingEstimatedKm != null && bookingEstimatedKm > 0) {
+    return bookingEstimatedKm;
   }
   if (estimatedDistanceKm != null && estimatedDistanceKm > 0) {
     return estimatedDistanceKm;
@@ -2309,9 +2341,24 @@ function normalizeTripJourneyRow(row: TripJourney): TripJourney {
     booking_reference: raw.booking_reference ?? (!isUuid(row.booking_id) ? row.booking_id : null),
     trip_date: row.trip_date ?? raw.date ?? "",
     pickup_time: row.pickup_time ?? null,
-    start_location_type: row.start_location_type === "custom" ? "custom" : "depot",
+    start_location_type:
+      row.route_start_type === "pickup_only" || row.start_location_type === "pickup_only"
+        ? "pickup_only"
+        : row.route_start_type === "custom" || row.start_location_type === "custom"
+          ? "custom"
+          : "depot",
     start_location: row.start_location ?? row.depot_address ?? null,
     depot_address: row.depot_address ?? null,
+    route_start_type:
+      row.route_start_type === "pickup_only" || row.start_location_type === "pickup_only"
+        ? "pickup_only"
+        : row.route_start_type === "custom" || row.start_location_type === "custom"
+          ? "custom"
+          : "depot",
+    depot_address_used: row.depot_address_used ?? row.depot_address ?? null,
+    custom_start_address: row.custom_start_address ?? (row.start_location_type === "custom" ? row.start_location : null),
+    pickup_address: row.pickup_address ?? row.pickup_location ?? null,
+    dropoff_address: row.dropoff_address ?? row.dropoff_location ?? null,
     pickup_location: row.pickup_location ?? null,
     dropoff_location: row.dropoff_location ?? null,
     route: row.route ?? null,
@@ -2330,6 +2377,12 @@ function normalizeTripJourneyRow(row: TripJourney): TripJourney {
     estimated_duration_minutes: parseOptionalNumeric(row.estimated_duration_minutes),
     google_maps_route_url: row.google_maps_route_url ?? null,
     estimated_distance_source: row.estimated_distance_source ?? null,
+    google_estimated_km: parseOptionalNumeric(row.google_estimated_km),
+    google_estimated_minutes: parseOptionalNumeric(row.google_estimated_minutes),
+    route_source: row.route_source ?? row.estimated_distance_source ?? null,
+    booking_estimated_km: parseOptionalNumeric(row.booking_estimated_km),
+    booking_estimated_minutes: parseOptionalNumeric(row.booking_estimated_minutes),
+    booking_google_maps_route_url: row.booking_google_maps_route_url ?? null,
     manual_estimated_distance_km: parseOptionalNumeric(row.manual_estimated_distance_km),
     manual_litres_used: parseOptionalNumeric(row.manual_litres_used ?? raw.manual_litres),
     manual_fuel_cost: parseOptionalNumeric(row.manual_fuel_cost),
@@ -2345,6 +2398,8 @@ function calculateTripStatusFromValues({
   endMileage,
   manualActualKm,
   estimatedDistanceKm,
+  googleEstimatedKm,
+  bookingEstimatedKm,
   manualEstimatedDistanceKm,
   manualLitresUsed,
   manualFuelCost,
@@ -2355,6 +2410,8 @@ function calculateTripStatusFromValues({
   endMileage: number | null;
   manualActualKm: number | null;
   estimatedDistanceKm: number | null;
+  googleEstimatedKm?: number | null;
+  bookingEstimatedKm?: number | null;
   manualEstimatedDistanceKm: number | null;
   manualLitresUsed: number | null;
   manualFuelCost: number | null;
@@ -2370,7 +2427,12 @@ function calculateTripStatusFromValues({
     return "missing_mileage";
   }
 
-  const estimatedKm = getEffectiveTripEstimatedKm({ estimatedDistanceKm, manualEstimatedDistanceKm });
+  const estimatedKm = getEffectiveTripEstimatedKm({
+    estimatedDistanceKm,
+    googleEstimatedKm,
+    bookingEstimatedKm,
+    manualEstimatedDistanceKm
+  });
   if (estimatedKm == null || estimatedKm <= 0) {
     return "missing_estimated_distance";
   }
@@ -2395,26 +2457,43 @@ function mapBookingToTripPayload(booking: BookingDiaryEntry) {
     booking.dimensions ?? ""
   ].filter(Boolean);
 
+  const bookingEstimatedKm = parseOptionalNumeric(booking.estimated_distance_km);
+  const bookingEstimatedMinutes = parseOptionalNumeric(booking.estimated_duration_minutes);
+  const pickupAddress = booking.pickup_address || booking.pickup;
+  const dropoffAddress = booking.dropoff_address || booking.dropoff;
+
   return {
     booking_id: booking.id,
     booking_reference: booking.booking_id ?? null,
     start_location: "Expert Express Sender Co., Ltd. 88 Happy Place, Khwaeng Khlong Sam Prawet, Khet Lat Krabang, Bangkok 10520, Thailand",
     start_location_type: "depot",
     depot_address: "Expert Express Sender Co., Ltd. 88 Happy Place, Khwaeng Khlong Sam Prawet, Khet Lat Krabang, Bangkok 10520, Thailand",
+    route_start_type: "depot",
+    depot_address_used: "Expert Express Sender Co., Ltd. 88 Happy Place, Khwaeng Khlong Sam Prawet, Khet Lat Krabang, Bangkok 10520, Thailand",
+    custom_start_address: null,
+    pickup_address: pickupAddress,
+    dropoff_address: dropoffAddress,
     date: booking.booking_date,
     pickup_time: booking.pickup_time ?? null,
-    pickup_location: booking.pickup,
-    dropoff_location: booking.dropoff,
+    pickup_location: pickupAddress,
+    dropoff_location: dropoffAddress,
     route: [booking.pickup, booking.dropoff].filter(Boolean).join(" -> "),
     vehicle_reg: normalizeVehicleRegistration(booking.vehicle) || null,
     driver: normalizeDisplayName(booking.driver) || null,
     load_text: loadParts.join(" | ") || null,
     warehouse_no: booking.warehouse_no ?? null,
     notes: booking.notes ?? null,
-    estimated_distance_km: parseOptionalNumeric(booking.estimated_distance_km),
-    estimated_duration_minutes: parseOptionalNumeric(booking.estimated_duration_minutes),
-    google_maps_route_url: booking.google_maps_route_url ?? null,
+    estimated_distance_km: bookingEstimatedKm,
+    estimated_duration_minutes: bookingEstimatedMinutes,
+    google_maps_route_url: null,
     estimated_distance_source: booking.distance_source ?? null,
+    booking_estimated_km: bookingEstimatedKm,
+    booking_estimated_minutes: bookingEstimatedMinutes,
+    booking_google_maps_route_url: booking.google_maps_route_url ?? null,
+    google_estimated_km: null,
+    google_estimated_minutes: null,
+    route_source: "booking_diary",
+    return_to_depot: false,
     fuel_source: "manual" as TripFuelSource,
     status: "created" as TripJourneyStatus
   };
@@ -2465,6 +2544,8 @@ export async function fetchTripJourneys(): Promise<TripJourneyWithFuel[]> {
       endMileage: trip.end_mileage,
       manualActualKm: trip.manual_actual_km ?? null,
       estimatedDistanceKm: trip.estimated_distance_km,
+      googleEstimatedKm: trip.google_estimated_km,
+      bookingEstimatedKm: trip.booking_estimated_km,
       manualEstimatedDistanceKm: trip.manual_estimated_distance_km,
       manualLitresUsed: trip.manual_litres_used,
       manualFuelCost: trip.manual_fuel_cost,
@@ -2533,6 +2614,8 @@ export async function saveTripJourney(
   const startMileage = parseOptionalNumeric(payload.start_mileage);
   const endMileage = parseOptionalNumeric(payload.end_mileage);
   const estimatedDistanceKm = parseOptionalNumeric(payload.estimated_distance_km);
+  const googleEstimatedKm = parseOptionalNumeric(payload.google_estimated_km);
+  const bookingEstimatedKm = parseOptionalNumeric(payload.booking_estimated_km);
   const manualEstimatedDistanceKm = parseOptionalNumeric(payload.manual_estimated_distance_km);
   const manualActualKm = parseOptionalNumeric(payload.manual_actual_km);
   const manualLitresUsed = parseOptionalNumeric(payload.manual_litres_used);
@@ -2545,6 +2628,8 @@ export async function saveTripJourney(
         : null;
   const effectiveEstimatedDistanceKm = getEffectiveTripEstimatedKm({
     estimatedDistanceKm,
+    googleEstimatedKm,
+    bookingEstimatedKm,
     manualEstimatedDistanceKm
   });
   const distanceDifferenceKm =
@@ -2560,6 +2645,8 @@ export async function saveTripJourney(
     endMileage,
     manualActualKm,
     estimatedDistanceKm,
+    googleEstimatedKm,
+    bookingEstimatedKm,
     manualEstimatedDistanceKm,
     manualLitresUsed,
     manualFuelCost,
@@ -2571,9 +2658,24 @@ export async function saveTripJourney(
     booking_id: isUuid(bookingDiaryId) ? bookingDiaryId : undefined,
     booking_reference: payload.booking_reference?.trim() || (!isUuid(bookingDiaryId) && bookingDiaryId ? String(bookingDiaryId) : undefined),
     date: payload.trip_date,
-    start_location_type: payload.start_location_type === "custom" ? "custom" : "depot",
+    start_location_type:
+      payload.start_location_type === "pickup_only"
+        ? "pickup_only"
+        : payload.start_location_type === "custom"
+          ? "custom"
+          : "depot",
     start_location: payload.start_location?.trim() || null,
     depot_address: payload.depot_address?.trim() || null,
+    route_start_type:
+      payload.route_start_type === "pickup_only" || payload.start_location_type === "pickup_only"
+        ? "pickup_only"
+        : payload.route_start_type === "custom" || payload.start_location_type === "custom"
+          ? "custom"
+          : "depot",
+    depot_address_used: payload.depot_address_used?.trim() || payload.depot_address?.trim() || null,
+    custom_start_address: payload.custom_start_address?.trim() || (payload.start_location_type === "custom" ? payload.start_location?.trim() || null : null),
+    pickup_address: payload.pickup_address?.trim() || payload.pickup_location?.trim() || null,
+    dropoff_address: payload.dropoff_address?.trim() || payload.dropoff_location?.trim() || null,
     pickup_time: payload.pickup_time || null,
     pickup_location: payload.pickup_location?.trim() || null,
     dropoff_location: payload.dropoff_location?.trim() || null,
@@ -2589,9 +2691,16 @@ export async function saveTripJourney(
     actual_distance_km: actualDistanceKm,
     manual_actual_km: manualActualKm,
     return_to_depot: Boolean(payload.return_to_depot),
-    estimated_distance_km: estimatedDistanceKm,
-    estimated_duration_minutes: parseOptionalNumeric(payload.estimated_duration_minutes),
+    estimated_distance_km: googleEstimatedKm ?? bookingEstimatedKm ?? estimatedDistanceKm,
+    estimated_duration_minutes: parseOptionalNumeric(payload.google_estimated_minutes ?? payload.estimated_duration_minutes ?? payload.booking_estimated_minutes),
     google_maps_route_url: payload.google_maps_route_url?.trim() || null,
+    estimated_distance_source: payload.estimated_distance_source?.trim() || payload.route_source?.trim() || null,
+    google_estimated_km: googleEstimatedKm,
+    google_estimated_minutes: parseOptionalNumeric(payload.google_estimated_minutes),
+    route_source: payload.route_source?.trim() || payload.estimated_distance_source?.trim() || null,
+    booking_estimated_km: bookingEstimatedKm,
+    booking_estimated_minutes: parseOptionalNumeric(payload.booking_estimated_minutes),
+    booking_google_maps_route_url: payload.booking_google_maps_route_url?.trim() || null,
     manual_estimated_distance_km: manualEstimatedDistanceKm,
     distance_difference_km: distanceDifferenceKm,
     distance_difference_percent: distanceDifferencePercent,
