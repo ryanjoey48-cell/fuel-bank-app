@@ -1277,7 +1277,7 @@ td {
   }
 
   .booking-paper-diary {
-    display: none !important;
+    display: grid !important;
     gap: 0.95rem;
   }
 
@@ -1323,7 +1323,7 @@ td {
   }
 
   .booking-desktop-table {
-    display: block !important;
+    display: none !important;
   }
 
   .booking-desktop-table .table-scroll {
@@ -1344,6 +1344,30 @@ td {
 }
 
 @media (min-width: 1024px) and (max-width: 1199px) {
+  .booking-paper-diary {
+    display: none !important;
+  }
+
+  .booking-desktop-table {
+    display: block !important;
+  }
+
+  .booking-desktop-table .table-scroll {
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .booking-desktop-table table {
+    min-width: 1180px;
+  }
+
+  .booking-desktop-table th:last-child,
+  .booking-desktop-table tbody tr:not(.booking-desktop-date-row) td:last-child {
+    width: 250px;
+    min-width: 250px;
+  }
+
   .booking-filter-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }

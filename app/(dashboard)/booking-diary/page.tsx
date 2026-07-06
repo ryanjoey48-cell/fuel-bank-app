@@ -1487,7 +1487,7 @@ export default function BookingDiaryPage() {
           <EmptyState title={copy.noBookings} description={copy.noBookingsDescription} />
         ) : (
           <>
-            <div className="booking-paper-diary md:hidden">
+            <div className="booking-paper-diary lg:hidden">
               {paginatedGroups.map(({ date, entries, totalEntries }) => {
                 const expanded = expandedDateKeys.has(date);
 
@@ -1748,7 +1748,7 @@ export default function BookingDiaryPage() {
               ))}
             </div>
 
-            <div className="table-shell booking-desktop-table hidden md:block">
+            <div className="table-shell booking-desktop-table hidden lg:block">
               <div className="table-scroll">
                 <table className="min-w-[980px]">
                   <thead>
