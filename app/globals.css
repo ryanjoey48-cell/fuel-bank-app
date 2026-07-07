@@ -18,6 +18,13 @@
   --brand-accent: #f28a2f;
   --table-row-hover: #f7f5fc;
   --table-row-zebra: rgba(15, 23, 42, 0.024);
+  --z-content: 1;
+  --z-sidebar: 100;
+  --z-header: 200;
+  --z-dropdown-backdrop: 8998;
+  --z-dropdown: 8999;
+  --z-modal: 10000;
+  --z-toast: 11000;
 }
 
 html {
@@ -53,6 +60,22 @@ body {
 ::selection {
   background: rgba(95, 51, 183, 0.16);
   color: #0f172a;
+}
+
+@keyframes account-dropdown-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.account-dropdown-panel {
+  animation: account-dropdown-in 160ms ease-out both;
+  transform-origin: top right;
 }
 
 input,

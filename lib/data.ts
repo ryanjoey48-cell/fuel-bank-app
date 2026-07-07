@@ -32,6 +32,9 @@ import type {
   RouteDistanceEstimate,
   Shipment,
   ShipmentWithDriver,
+  SupportTicket,
+  SupportTicketPriority,
+  SupportTicketStatus,
   TripFuelLogLink,
   TripFuelSource,
   TripJourney,
@@ -3462,4 +3465,131 @@ export async function markVehicleOilChanged({
 
   dispatchDataChange("vehicles");
   return normalizeVehicleRow(data as Vehicle);
+}
+
+export async function createSupportTicket(payload: {
+  user_id: string | null;
+  user_email: string;
+  user_role?: string | null;
+  category: string;
+  priority: string;
+  subject: string;
+  description: string;
+  page_path?: string | null;
+  current_url?: string | null;
+  browser_info?: string | null;
+  screen_size?: string | null;
+  screenshot_url?: string | null;
+}) {
+  const { data, error } = await supabase
+    .from("support_tickets")
+    .insert({
+      user_id: payload.user_id,
+      user_email: payload.user_email,
+      user_role: payload.user_role ?? null,
+      category: payload.category,
+      priority: payload.priority,
+      subject: payload.subject,
+      description: payload.description,
+      page_path: payload.page_path ?? null,
+      current_url: payload.current_url ?? null,
+      browser_info: payload.browser_info ?? null,
+      screen_size: payload.screen_size ?? null,
+      screenshot_url: payload.screenshot_url ?? null
+    })
+    .select()
+    .single();
+
+  if (error) {
+    logDataError("createSupportTicket error:", error, payload);
+    throw error;
+  }
+
+  dispatchDataChange("support_tickets");
+  return data as SupportTicket;
+}
+
+export async function fetchSupportTickets(filters?: {
+  status?: "" | SupportTicketStatus;
+  priority?: "" | SupportTicketPriority;
+}) {
+  let query = supabase
+    .from("support_tickets")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (filters?.status) {
+    query = query.eq("status", filters.status);
+  }
+
+  if (filters?.priority) {
+    query = query.eq("priority", filters.priority);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    logDataError("fetchSupportTickets error:", error, filters ?? {});
+    throw error;
+  }
+
+  return (data ?? []) as SupportTicket[];
+}
+
+export async function updateSupportTicketStatus(id: string, status: SupportTicketStatus) {
+  const { data, error } = await supabase
+    .from("support_tickets")
+    .update({ status })
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) {
+    logDataError("updateSupportTicketStatus error:", error, { id, status });
+    throw error;
+  }
+
+  dispatchDataChange("support_tickets");
+  return data as SupportTicket;
+}
+
+export async function fetchSupportTicketNotificationCount() {
+  const { count, error } = await supabase
+    .from("support_tickets")
+    .select("id", { count: "exact", head: true })
+    .in("status", ["Open", "In Progress", "Waiting"]);
+
+  if (error) {
+    logDataError("fetchSupportTicketNotificationCount error:", error, {});
+    return 0;
+  }
+
+  return count ?? 0;
+}
+
+export async function fetchUncheckedFuelLogCount() {
+  const { count, error } = await supabase
+    .from("fuel_logs")
+    .select("id", { count: "exact", head: true })
+    .eq("receipt_checked", false);
+
+  if (error) {
+    logDataError("fetchUncheckedFuelLogCount error:", error, {});
+    return 0;
+  }
+
+  return count ?? 0;
+}
+
+export async function fetchMissingMileageFuelLogCount() {
+  const { count, error } = await supabase
+    .from("fuel_logs")
+    .select("id", { count: "exact", head: true })
+    .or("mileage.is.null,mileage.lte.0");
+
+  if (error) {
+    logDataError("fetchMissingMileageFuelLogCount error:", error, {});
+    return 0;
+  }
+
+  return count ?? 0;
 }

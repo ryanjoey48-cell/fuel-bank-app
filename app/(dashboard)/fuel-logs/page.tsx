@@ -2,7 +2,7 @@
 
 import {
   AlertTriangle,
-  ArrowUpDown,
+  ChevronRight,
   Clock3,
   Download,
   Droplets,
@@ -13,7 +13,8 @@ import {
   Wallet,
   X
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { EmptyState } from "@/components/empty-state";
 import { FuelStatementImporter } from "@/components/fuel-statement-importer";
 import { Header } from "@/components/header";
@@ -227,8 +228,8 @@ function getReceiptCheckLabel(checked: boolean, language: "en" | "th") {
 
 function getReceiptCheckBadgeClass(checked: boolean) {
   return checked
-    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-    : "border-slate-200 bg-slate-100 text-slate-600";
+    ? "border-emerald-100 bg-emerald-50/70 text-emerald-700"
+    : "border-slate-200 bg-slate-50 text-slate-500";
 }
 
 function normalizeEntrySource(value: unknown): FuelLogEntrySource {
@@ -284,6 +285,11 @@ function getFuelLogDuplicateKey(log: Pick<FuelLogWithDriver, "date" | "driver_id
 
 function isMissingMileage(log: Pick<FuelLogWithDriver, "mileage">) {
   return log.mileage == null || Number(log.mileage) <= 0;
+}
+
+function formatMileageValue(value: number | null | undefined, language: "en" | "th") {
+  if (value == null || Number(value) <= 0) return "-";
+  return `${formatNumber(Number(value), language, 0)} km`;
 }
 
 function getMileageValue(value: number | null | undefined) {
@@ -450,32 +456,6 @@ function getStoredFilters(): FuelLogFilters {
     return initialFilters;
   }
 }
-function SortButton({
-  label,
-  active,
-  direction,
-  onClick,
-  align = "left"
-}: {
-  label: string;
-  active: boolean;
-  direction: FuelLogSortDirection;
-  onClick: () => void;
-  align?: "left" | "right";
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`inline-flex items-center gap-1 font-semibold ${align === "right" ? "justify-end" : "justify-start"}`}
-    >
-      <span>{label}</span>
-      <ArrowUpDown className={`h-3.5 w-3.5 ${active ? "text-brand-700" : "text-slate-400"}`} />
-      {active ? <span className="text-[11px] uppercase">{direction}</span> : null}
-    </button>
-  );
-}
-
 function getFuelTypeLabelWithFallback(t: ReturnType<typeof useLanguage>["t"], value: string | null | undefined) {
   return getFuelTypeLabel(t, normalizeFuelTypeKey(value) ?? DEFAULT_FUEL_TYPE);
 }
@@ -484,8 +464,42 @@ function getPaymentMethodLabelWithFallback(t: ReturnType<typeof useLanguage>["t"
   return getPaymentMethodLabel(t, normalizePaymentMethodKey(value) ?? DEFAULT_PAYMENT_METHOD);
 }
 
+function toDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getWeekStart(date: Date) {
+  const next = new Date(date);
+  const day = next.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  next.setDate(next.getDate() + diff);
+  return next;
+}
+
+function formatFuelDateHeading(value: string, language: "en" | "th") {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const parsed = match
+    ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+    : new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return formatDate(value, language);
+  }
+
+  return new Intl.DateTimeFormat(language === "th" ? "th-TH" : "en-GB", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric"
+  }).format(parsed);
+}
+
 export default function FuelLogsPage() {
   const { language, t } = useLanguage();
+  const searchParams = useSearchParams();
   const copy = {
     dateRange: language === "th" ? "ช่วงวันที่" : "Date range",
     driver: language === "th" ? "คนขับ" : "Driver",
@@ -536,6 +550,36 @@ export default function FuelLogsPage() {
     missingOdometer: language === "th" ? "ไม่มีเลขไมล์" : "Missing mileage"
   };
 
+  const uxCopy = {
+    openAnalysis: language === "th" ? "เปิดการวิเคราะห์" : "Open analysis",
+    hideAnalysis: language === "th" ? "ซ่อนการวิเคราะห์" : "Hide analysis",
+    last7DaysSummary: language === "th" ? "สรุป 7 วันล่าสุด" : "Last 7 Days Summary",
+    totalSpend: language === "th" ? "ยอดใช้จ่ายรวม" : "Total spend",
+    totalLitres: language === "th" ? "ลิตรรวม" : "Total litres",
+    averagePriceLitre: language === "th" ? "ราคาเฉลี่ย/ลิตร" : "Average price/L",
+    highestDay: language === "th" ? "วันที่ใช้จ่ายสูงสุด" : "Highest day",
+    viewDay: language === "th" ? "ดูวันนี้" : "View day",
+    quickFilters: language === "th" ? "ตัวกรองเร็ว" : "Quick filters",
+    today: language === "th" ? "วันนี้" : "Today",
+    yesterday: language === "th" ? "เมื่อวาน" : "Yesterday",
+    thisWeek: language === "th" ? "สัปดาห์นี้" : "This week",
+    thisMonth: language === "th" ? "เดือนนี้" : "This month",
+    notChecked: language === "th" ? "ยังไม่ตรวจ" : "Not checked",
+    checked: language === "th" ? "ตรวจแล้ว" : "Checked",
+    viewMissingMileage: language === "th" ? "ดูรายการขาดเลขไมล์" : "View missing mileage",
+    advancedFilters: language === "th" ? "ตัวกรองขั้นสูง" : "Advanced filters",
+    moreDetails: language === "th" ? "รายละเอียด" : "Details",
+    hideDetails: language === "th" ? "ซ่อนรายละเอียด" : "Hide details",
+    trip: language === "th" ? "ทริป" : "Trip",
+    notes: language === "th" ? "หมายเหตุ" : "Notes",
+    receiptSource: language === "th" ? "แหล่งใบเสร็จ" : "Receipt source",
+    pendingCheck: language === "th" ? "รอตรวจ" : "Pending check",
+    expandAll: language === "th" ? "ขยายทั้งหมด" : "Expand all",
+    collapseAll: language === "th" ? "ย่อทั้งหมด" : "Collapse all",
+    expand: language === "th" ? "เปิด" : "Expand",
+    collapse: language === "th" ? "ย่อ" : "Collapse"
+  };
+
   const exportButtonLabel = language === "th" ? "กำลังส่งออก..." : "Exporting...";
   const exportSuccessMessage =
     language === "th"
@@ -556,6 +600,7 @@ export default function FuelLogsPage() {
     filterLabel: language === "th" ? "สถานะตรวจใบเสร็จ" : "Receipt check",
     checked: language === "th" ? "ตรวจแล้ว" : "Checked",
     notChecked: language === "th" ? "ยังไม่ตรวจ" : "Not checked",
+    markShort: language === "th" ? "ทำเครื่องหมาย" : "Mark",
     markChecked: language === "th" ? "ทำเครื่องหมายว่าตรวจแล้ว" : "Mark checked",
     markUnchecked: language === "th" ? "ยกเลิกเครื่องหมายตรวจแล้ว" : "Mark unchecked",
     updated: language === "th" ? "อัปเดตสถานะตรวจใบเสร็จแล้ว" : "Receipt check status updated.",
@@ -617,9 +662,14 @@ export default function FuelLogsPage() {
   const [filters, setFilters] = useState<FuelLogFilters>(() => getStoredFilters());
   const [efficiencyFilters, setEfficiencyFilters] = useState<EfficiencyFilters>(initialEfficiencyFilters);
   const [efficiencyCalculationMode, setEfficiencyCalculationMode] = useState<EfficiencyCalculationMode>("per_fill");
+  const [efficiencyAnalysisOpen, setEfficiencyAnalysisOpen] = useState(false);
+  const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
   const [missingMileageExpanded, setMissingMileageExpanded] = useState(false);
-  const [sortKey, setSortKey] = useState<FuelLogSortKey>("date");
-  const [sortDirection, setSortDirection] = useState<FuelLogSortDirection>("desc");
+  const [missingMileageEntryFilter, setMissingMileageEntryFilter] = useState(false);
+  const [expandedFuelDates, setExpandedFuelDates] = useState<Set<string>>(new Set());
+  const [expandedFuelEntryDetails, setExpandedFuelEntryDetails] = useState<Set<string>>(new Set());
+  const [sortKey] = useState<FuelLogSortKey>("date");
+  const [sortDirection] = useState<FuelLogSortDirection>("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -634,7 +684,6 @@ export default function FuelLogsPage() {
   const [lastEditedFuelField, setLastEditedFuelField] = useState<"litres" | "total_cost" | "price_per_litre">("total_cost");
   const [pendingDraft, setPendingDraft] = useState<FuelDraft | null>(null);
   const [duplicateMatches, setDuplicateMatches] = useState<FuelLogWithDriver[]>([]);
-  const [highlightedFuelLogId, setHighlightedFuelLogId] = useState<string | null>(null);
   const [comparisonEntry, setComparisonEntry] = useState<FuelLogWithDriver | null>(null);
   const [receiptSummary, setReceiptSummary] = useState<FuelLogReceiptSummary>({
     total: 0,
@@ -656,6 +705,20 @@ export default function FuelLogsPage() {
     litresToday: todayLogs.reduce((sum, log) => sum + Number(log.litres || 0), 0),
     entriesToday: todayLogs.length
   };
+  const last7DaysSummary = useMemo(() => {
+    const totalSpend = last7DayRows.reduce((sum, row) => sum + Number(row.spend || 0), 0);
+    const totalLitres = last7DayRows.reduce((sum, row) => sum + Number(row.litres || 0), 0);
+    const totalEntries = last7DayRows.reduce((sum, row) => sum + Number(row.entries || 0), 0);
+    const highestDay = [...last7DayRows].sort((a, b) => Number(b.spend || 0) - Number(a.spend || 0))[0] ?? null;
+
+    return {
+      totalSpend,
+      totalLitres,
+      totalEntries,
+      averagePricePerLitre: totalLitres > 0 ? totalSpend / totalLitres : null,
+      highestDay
+    };
+  }, [last7DayRows]);
 
   const vehicleOptions = useMemo(
     () =>
@@ -689,14 +752,6 @@ export default function FuelLogsPage() {
       a.localeCompare(b, language === "th" ? "th" : "en", { sensitivity: "base" })
     );
   }, [efficiencySourceLogs, fuelLogs, language]);
-  const duplicateKeyCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const log of fuelLogs) {
-      const key = getFuelLogDuplicateKey(log);
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-    return counts;
-  }, [fuelLogs]);
   const tripLinkByFuelLogId = useMemo(
     () => new Map(tripFuelLinks.map((link) => [String(link.fuel_log_id), link])),
     [tripFuelLinks]
@@ -923,13 +978,55 @@ export default function FuelLogsPage() {
   const getEfficiencyNoteText = (row: EfficiencyRow) =>
     row.dataQualityNotes.map((note) => noteLabels[note]).filter(Boolean).join(" ");
 
-  const getFuelLogWarnings = (log: FuelLogWithDriver) => {
-    const warnings: string[] = [];
-    const duplicateKey = getFuelLogDuplicateKey(log);
-    if ((duplicateKeyCounts.get(duplicateKey) ?? 0) > 1) warnings.push(copy.possibleDuplicate);
-    if (isMissingMileage(log)) warnings.push(copy.missingOdometer);
-    return warnings;
-  };
+  const visibleFuelLogs = useMemo(
+    () => (missingMileageEntryFilter ? fuelLogs.filter((log) => isMissingMileage(log)) : fuelLogs),
+    [fuelLogs, missingMileageEntryFilter]
+  );
+
+  const groupedFuelLogs = useMemo(() => {
+    const groups = new Map<
+      string,
+      {
+        date: string;
+        logs: FuelLogWithDriver[];
+        totalCost: number;
+        totalLitres: number;
+        checked: number;
+        notChecked: number;
+        missingMileage: number;
+      }
+    >();
+
+    visibleFuelLogs.forEach((log) => {
+      const group = groups.get(log.date) ?? {
+        date: log.date,
+        logs: [],
+        totalCost: 0,
+        totalLitres: 0,
+        checked: 0,
+        notChecked: 0,
+        missingMileage: 0
+      };
+      group.logs.push(log);
+      group.totalCost += Number(log.total_cost || 0);
+      group.totalLitres += Number(log.litres || 0);
+      if (log.receipt_checked) {
+        group.checked += 1;
+      } else {
+        group.notChecked += 1;
+      }
+      if (isMissingMileage(log)) {
+        group.missingMileage += 1;
+      }
+      groups.set(log.date, group);
+    });
+
+    return Array.from(groups.values()).sort((left, right) => right.date.localeCompare(left.date));
+  }, [visibleFuelLogs]);
+  const visibleFuelDateKeys = useMemo(() => groupedFuelLogs.map((group) => group.date), [groupedFuelLogs]);
+  const allFuelDateGroupsExpanded =
+    visibleFuelDateKeys.length > 0 && visibleFuelDateKeys.every((date) => expandedFuelDates.has(date));
+  const fuelDateGroupControlLabel = allFuelDateGroupsExpanded ? uxCopy.collapseAll : uxCopy.expandAll;
 
   const loadDrivers = useCallback(async () => {
     try {
@@ -1016,6 +1113,14 @@ export default function FuelLogsPage() {
   }, [currentPage, loadFuelLogPage]);
 
   useEffect(() => {
+    if (!groupedFuelLogs.length) return;
+    setExpandedFuelDates((current) => {
+      if (current.size > 0) return current;
+      return new Set([groupedFuelLogs[0].date]);
+    });
+  }, [groupedFuelLogs]);
+
+  useEffect(() => {
     const handleDataChanged = () => {
       void loadFuelLogPage(currentPage);
     };
@@ -1083,7 +1188,6 @@ export default function FuelLogsPage() {
     setSubmitMode("save");
     setPendingDraft(null);
     setDuplicateMatches([]);
-    setHighlightedFuelLogId(null);
   };
 
   const populateForm = (log: FuelLogWithDriver) => {
@@ -1107,7 +1211,6 @@ export default function FuelLogsPage() {
     setSuccessMessage(null);
     setPendingDraft(null);
     setDuplicateMatches([]);
-    setHighlightedFuelLogId(String(log.id));
   };
 
   const handleDriverChange = (driverId: string) => {
@@ -1129,18 +1232,76 @@ export default function FuelLogsPage() {
     setCurrentPage(1);
   };
 
+  const applyQuickFilter = (
+    filter:
+      | "today"
+      | "yesterday"
+      | "week"
+      | "month"
+      | "missing_mileage"
+      | "not_checked"
+      | "checked"
+      | "shell"
+      | "bangchak"
+      | "na"
+  ) => {
+    setMissingMileageEntryFilter(false);
+    const now = new Date();
+    if (filter === "today") {
+      const date = toDateKey(now);
+      updateFilters((current) => ({ ...current, fromDate: date, toDate: date }));
+      return;
+    }
+    if (filter === "yesterday") {
+      const date = new Date(now);
+      date.setDate(now.getDate() - 1);
+      const key = toDateKey(date);
+      updateFilters((current) => ({ ...current, fromDate: key, toDate: key }));
+      return;
+    }
+    if (filter === "week") {
+      updateFilters((current) => ({ ...current, fromDate: toDateKey(getWeekStart(now)), toDate: toDateKey(now) }));
+      return;
+    }
+    if (filter === "month") {
+      updateFilters((current) => ({ ...current, fromDate: toDateKey(new Date(now.getFullYear(), now.getMonth(), 1)), toDate: toDateKey(now) }));
+      return;
+    }
+    if (filter === "not_checked" || filter === "checked") {
+      updateFilters((current) => ({ ...current, receiptCheckedStatus: filter }));
+      return;
+    }
+    if (filter === "shell") {
+      updateFilters((current) => ({ ...current, location: "Shell" }));
+      return;
+    }
+    if (filter === "bangchak") {
+      updateFilters((current) => ({ ...current, location: "Bangchak" }));
+      return;
+    }
+    if (filter === "na") {
+      updateFilters((current) => ({ ...current, location: "N/A" }));
+      return;
+    }
+    setMissingMileageEntryFilter(true);
+    setCurrentPage(1);
+  };
+
+  useEffect(() => {
+    const review = searchParams.get("review");
+    if (review === "missing_mileage") {
+      applyQuickFilter("missing_mileage");
+    }
+    if (review === "not_checked") {
+      applyQuickFilter("not_checked");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   const updateEfficiencyFilters = (
     updater: EfficiencyFilters | ((current: EfficiencyFilters) => EfficiencyFilters)
   ) => {
     setEfficiencyFilters((current) => (typeof updater === "function" ? updater(current) : updater));
-  };
-
-  const handleSortChange = (nextKey: FuelLogSortKey) => {
-    setSortDirection((current) =>
-      sortKey === nextKey ? (current === "desc" ? "asc" : "desc") : "desc"
-    );
-    setSortKey(nextKey);
-    setCurrentPage(1);
   };
 
   const handleInvalid = (
@@ -1552,6 +1713,36 @@ export default function FuelLogsPage() {
           </div>
           <button
             type="button"
+            onClick={() => setEfficiencyAnalysisOpen((current) => !current)}
+            className="btn-secondary w-full gap-2 sm:w-auto"
+          >
+            {efficiencyAnalysisOpen ? uxCopy.hideAnalysis : uxCopy.openAnalysis}
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+            <p className="text-xs font-semibold text-slate-500">{t.fuelLogs.efficiency.averageKmPerLitre}</p>
+            <p className="mt-1 text-lg font-bold text-slate-950">{efficiencySummary.averageKmPerLitre != null ? formatNumber(efficiencySummary.averageKmPerLitre, language, 2) : "-"}</p>
+          </div>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+            <p className="text-xs font-semibold text-amber-700">{t.fuelLogs.efficiency.missingMileageEntries}</p>
+            <p className="mt-1 text-lg font-bold text-amber-900">{formatNumber(efficiencySummary.missingMileageEntries, language)}</p>
+          </div>
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2">
+            <p className="text-xs font-semibold text-rose-700">{t.fuelLogs.efficiency.reviewNeeded}</p>
+            <p className="mt-1 text-lg font-bold text-rose-900">{formatNumber(efficiencySummary.reviewNeededEntries, language)}</p>
+          </div>
+          <button type="button" onClick={() => setEfficiencyAnalysisOpen((current) => !current)} className="btn-secondary min-h-[58px]">
+            {efficiencyAnalysisOpen ? uxCopy.collapse : uxCopy.openAnalysis}
+          </button>
+        </div>
+
+        {efficiencyAnalysisOpen ? (
+          <>
+        <div className="mt-4 flex justify-end">
+          <button
+            type="button"
             onClick={handleExportEfficiencyReport}
             disabled={efficiencyCalculationMode === "per_fill" ? !filteredEfficiencyRows.length : !tripSummary.logs.length}
             className="btn-secondary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
@@ -1809,12 +2000,22 @@ export default function FuelLogsPage() {
 
           </>
         )}
+
+          </>
+        ) : null}
       </section>
 
       <section className="surface-card mb-4.5 p-4 sm:p-5">
         <div className="mb-3.5">
           <h3 className="text-base font-semibold text-slate-900">{t.fuelLogs.spendByDayTitle}</h3>
           <p className="mt-1 text-sm text-slate-500">{t.fuelLogs.spendByDayDescription}</p>
+        </div>
+        <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="subtle-panel p-3"><p className="text-xs font-semibold text-slate-500">{uxCopy.totalSpend}</p><p className="mt-1 text-lg font-bold text-slate-950">{formatCurrency(last7DaysSummary.totalSpend, language)}</p></div>
+          <div className="subtle-panel p-3"><p className="text-xs font-semibold text-slate-500">{uxCopy.totalLitres}</p><p className="mt-1 text-lg font-bold text-slate-950">{formatNumber(last7DaysSummary.totalLitres, language, 2)}</p></div>
+          <div className="subtle-panel p-3"><p className="text-xs font-semibold text-slate-500">{uxCopy.averagePriceLitre}</p><p className="mt-1 text-lg font-bold text-slate-950">{last7DaysSummary.averagePricePerLitre != null ? formatCurrency(last7DaysSummary.averagePricePerLitre, language) : "-"}</p></div>
+          <div className="subtle-panel p-3"><p className="text-xs font-semibold text-slate-500">{uxCopy.highestDay}</p><p className="mt-1 text-lg font-bold text-slate-950">{last7DaysSummary.highestDay ? formatDate(last7DaysSummary.highestDay.date, language) : "-"}</p></div>
+          <div className="subtle-panel p-3"><p className="text-xs font-semibold text-slate-500">{t.common.entries}</p><p className="mt-1 text-lg font-bold text-slate-950">{formatNumber(last7DaysSummary.totalEntries, language)}</p></div>
         </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {last7DayRows.map((row) => (
@@ -1828,6 +2029,9 @@ export default function FuelLogsPage() {
                 <span>{formatNumber(row.litres, language, 2)} {t.fuelLogs.litres}</span>
                 <span>{formatNumber(row.entries, language)} {t.common.entries}</span>
               </div>
+              <button type="button" onClick={() => updateFilters((current) => ({ ...current, fromDate: row.date, toDate: row.date }))} className="btn-secondary mt-3 min-h-8 px-3 py-1 text-xs">
+                {uxCopy.viewDay}
+              </button>
             </div>
           ))}
         </div>
@@ -1953,7 +2157,7 @@ export default function FuelLogsPage() {
       </section>
 
       <section className="mt-5">
-        <section className="surface-card min-w-0 p-5 sm:p-6">
+        <section className="surface-card min-w-0 p-4 sm:p-5">
           <div className="mb-4 flex flex-col gap-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
               <div>
@@ -1970,117 +2174,195 @@ export default function FuelLogsPage() {
           <div className="mb-5 rounded-[1.5rem] border border-slate-200/80 bg-white/95 p-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)] backdrop-blur sm:p-5">
             <div className="mb-4 flex items-center justify-between gap-3">
               <p className="text-sm font-semibold text-slate-900">{copy.filters}</p>
-              <button type="button" onClick={() => updateFilters(initialFilters)} className="text-sm font-medium text-slate-500 hover:text-slate-900">{copy.clear}</button>
+              <button type="button" onClick={() => { setMissingMileageEntryFilter(false); updateFilters(initialFilters); }} className="text-sm font-medium text-slate-500 hover:text-slate-900">{copy.clear}</button>
+            </div>
+            <div className="mb-4">
+              <p className="mb-2 text-xs font-bold uppercase tracking-[0.14em] text-slate-500">{uxCopy.quickFilters}</p>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  ["today", uxCopy.today],
+                  ["yesterday", uxCopy.yesterday],
+                  ["week", uxCopy.thisWeek],
+                  ["month", uxCopy.thisMonth],
+                  ["missing_mileage", copy.missingOdometer],
+                  ["not_checked", uxCopy.notChecked],
+                  ["checked", uxCopy.checked],
+                  ["shell", "Shell"],
+                  ["bangchak", "Bangchak"],
+                  ["na", "N/A"]
+                ].map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => applyQuickFilter(key as Parameters<typeof applyQuickFilter>[0])}
+                    className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="space-y-3.5">
               <div className="grid gap-3 md:grid-cols-12">
                 <div className="md:col-span-5 lg:col-span-4"><label className="form-label">{copy.dateRange}</label><div className="grid grid-cols-2 gap-2"><input type="date" value={filters.fromDate ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, fromDate: event.target.value }))} className="form-input bg-white" /><input type="date" value={filters.toDate ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, toDate: event.target.value }))} className="form-input bg-white" /></div></div>
                 <div className="md:col-span-3 lg:col-span-4"><label className="form-label">{copy.driver}</label><select value={filters.driverId ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, driverId: event.target.value }))} className="form-input bg-white"><option value="">{copy.all}</option>{drivers.map((driver) => <option key={driver.id} value={String(driver.id)}>{driver.name}</option>)}</select></div>
                 <div className="md:col-span-4 lg:col-span-4"><label className="form-label">{copy.vehicle}</label><select value={filters.vehicleReg ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, vehicleReg: event.target.value }))} className="form-input bg-white"><option value="">{copy.all}</option>{vehicleOptions.map((vehicleReg) => <option key={vehicleReg} value={vehicleReg}>{vehicleReg}</option>)}</select></div>
+                <div className="md:col-span-4 lg:col-span-3"><label className="form-label">{receiptCopy.filterLabel}</label><select value={filters.receiptCheckedStatus ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, receiptCheckedStatus: event.target.value as FuelLogFilters["receiptCheckedStatus"] }))} className="form-input bg-white"><option value="">{copy.all}</option><option value="checked">{receiptCopy.checked}</option><option value="not_checked">{receiptCopy.notChecked}</option></select></div>
               </div>
+              <button type="button" onClick={() => setAdvancedFiltersOpen((current) => !current)} className="btn-secondary min-h-9 px-3 py-1.5 text-xs">
+                {advancedFiltersOpen ? uxCopy.collapse : uxCopy.advancedFilters}
+              </button>
+              {advancedFiltersOpen ? (
               <div className="grid gap-3 md:grid-cols-12">
                 <div className="md:col-span-3"><label className="form-label">{t.fuelLogs.location}</label><select value={filters.location ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, location: event.target.value }))} className="form-input bg-white"><option value="">{t.fuelLogs.allLocations}</option>{locationOptions.map((location) => <option key={location} value={location}>{location}</option>)}</select></div>
                 <div className="md:col-span-3"><label className="form-label">{copy.payment}</label><select value={filters.paymentMethod ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, paymentMethod: event.target.value }))} className="form-input bg-white"><option value="">{copy.all}</option>{paymentMethodOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
                 <div className="md:col-span-3"><label className="form-label">{sourceCopy.filterLabel}</label><select value={filters.entrySource ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, entrySource: event.target.value as FuelLogFilters["entrySource"] }))} className="form-input bg-white"><option value="">{sourceCopy.all}</option>{filterEntrySourceOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
-                <div className="md:col-span-3"><label className="form-label">{receiptCopy.filterLabel}</label><select value={filters.receiptCheckedStatus ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, receiptCheckedStatus: event.target.value as FuelLogFilters["receiptCheckedStatus"] }))} className="form-input bg-white"><option value="">{copy.all}</option><option value="checked">{receiptCopy.checked}</option><option value="not_checked">{receiptCopy.notChecked}</option></select></div>
                 <div className="md:col-span-3"><label className="form-label">{copy.totalCostRange}</label><div className="grid grid-cols-2 gap-2"><input type="number" min="0" step="0.01" value={filters.totalCostMin ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, totalCostMin: event.target.value }))} placeholder={copy.min} className="form-input bg-white" /><input type="number" min="0" step="0.01" value={filters.totalCostMax ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, totalCostMax: event.target.value }))} placeholder={copy.max} className="form-input bg-white" /></div></div>
               </div>
+              ) : null}
             </div>
           </div>
 
           {loading ? (
             <p className="text-sm text-slate-500">{t.fuelLogs.loadingFuelLogs}</p>
-          ) : totalCount === 0 ? (
+          ) : totalCount === 0 || groupedFuelLogs.length === 0 ? (
             <EmptyState title={copy.noResultsTitle} description={copy.noResultsDescription} />
           ) : (
             <>
-              <div className="space-y-3.5 md:hidden">
-                {fuelLogs.map((log) => (
-                  <div key={log.id} className="subtle-panel border-slate-200/80 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{formatDate(log.date, language)}</p>
-                        <p className="mt-2 text-sm font-semibold text-slate-900">{log.driver}</p>
-                        <span className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getEntrySourceBadgeClass(normalizeEntrySource(log.entry_source))}`}>{sourceCopy.options[normalizeEntrySource(log.entry_source)]}</span>
-                        <span className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getFuelTripBadgeClass(log)}`}>{getFuelTripLabel(log)}</span>
-                        <p className="mt-1 text-sm text-slate-500">{log.vehicle_reg}</p>
-                      </div>
-                      <p className="whitespace-nowrap rounded-full bg-slate-100 px-3 py-1 text-base font-bold text-slate-900">{formatCurrency(Number(log.total_cost || 0), language)}</p>
-                    </div>
-                    <div className="mt-4 grid grid-cols-2 gap-3">
-                      <div><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.litres}</p><p className="mt-1 text-sm font-medium text-slate-900">{formatNumber(Number(log.litres || 0), language, 2)}</p></div>
-                      <div><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.pricePerLitre}</p><p className="mt-1 text-sm font-medium text-slate-900">{log.price_per_litre != null ? formatCurrency(Number(log.price_per_litre), language) : "-"}</p></div>
-                      <div><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.mileage}</p><p className="mt-1 text-sm font-medium text-slate-900">{log.mileage ?? "-"}</p></div>
-                      <div><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.location}</p><p className="mt-1 text-sm font-medium text-slate-900">{log.location || "-"}</p></div>
-                      <div><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{receiptCopy.filterLabel}</p><span className={`mt-1 inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getReceiptCheckBadgeClass(log.receipt_checked)}`}>{getReceiptCheckLabel(log.receipt_checked, language)}</span></div>
-                    </div>
-                    {getFuelLogWarnings(log).length ? (
-                      <div className="mt-3 flex flex-wrap gap-1.5">
-                        {getFuelLogWarnings(log).map((warning) => (
-                          <span key={warning} className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-800">{warning}</span>
-                        ))}
-                      </div>
-                    ) : null}
-                    <div className="mt-4 flex gap-2">
-                      <button type="button" onClick={() => void handleReceiptToggle(log, !log.receipt_checked)} disabled={togglingReceiptId === String(log.id)} className="btn-secondary min-h-[46px] flex-1 px-4 py-2.5 disabled:opacity-50">{togglingReceiptId === String(log.id) ? t.common.saving : log.receipt_checked ? receiptCopy.markUnchecked : receiptCopy.markChecked}</button>
-                      <button type="button" onClick={() => populateForm(log)} className="btn-secondary min-h-[46px] flex-1 px-4 py-2.5">{t.common.edit}</button>
-                      <button type="button" onClick={() => void handleDelete(String(log.id))} disabled={deletingId === String(log.id)} className="btn-danger min-h-[46px] flex-1 px-4 py-2.5 disabled:opacity-50">{deletingId === String(log.id) ? t.common.deleting : t.common.delete}</button>
-                    </div>
-                  </div>
-                ))}
+              <div className="mb-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpandedFuelDates(
+                      allFuelDateGroupsExpanded ? new Set() : new Set(visibleFuelDateKeys)
+                    )
+                  }
+                  disabled={visibleFuelDateKeys.length === 0}
+                  className="booking-section-toggle min-h-[32px] px-2.5 text-[11px] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {fuelDateGroupControlLabel}
+                </button>
               </div>
-              <div className="hidden md:block">
-                <div className="table-shell rounded-2xl">
-                  <div className="table-scroll overflow-x-auto overflow-y-auto">
-                    <table className="min-w-[1240px] w-full text-sm">
-                      <thead className="sticky top-0 z-10 bg-slate-50/95 text-slate-600 backdrop-blur">
-                        <tr>
-                          <th className="table-head-cell text-left"><SortButton label={t.fuelLogs.date} active={sortKey === "date"} direction={sortDirection} onClick={() => handleSortChange("date")} /></th>
-                          <th className="table-head-cell text-left">{t.fuelLogs.driver}</th>
-                          <th className="table-head-cell text-left">{t.fuelLogs.vehicleReg}</th>
-                          <th className="table-head-cell text-right"><SortButton label={t.fuelLogs.litres} active={sortKey === "litres"} direction={sortDirection} align="right" onClick={() => handleSortChange("litres")} /></th>
-                          <th className="table-head-cell text-right"><SortButton label={t.fuelLogs.totalCost} active={sortKey === "total_cost"} direction={sortDirection} align="right" onClick={() => handleSortChange("total_cost")} /></th>
-                          <th className="table-head-cell text-right">{t.fuelLogs.pricePerLitre}</th>
-                          <th className="table-head-cell text-right">{t.fuelLogs.mileage}</th>
-                          <th className="table-head-cell text-left">{t.fuelLogs.location}</th>
-                          <th className="table-head-cell text-left">{sourceCopy.label}</th>
-                          <th className="table-head-cell text-left">Trip</th>
-                          <th className="table-head-cell text-left">{receiptCopy.filterLabel}</th>
-                          <th className="table-head-cell text-left">{t.common.action}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {fuelLogs.map((log) => {
-                          const warnings = getFuelLogWarnings(log);
-                          return (
-                          <tr key={log.id} className={`enterprise-table-row ${highlightedFuelLogId === String(log.id) || warnings.length ? "bg-amber-50/70" : ""}`}>
-                            <td className="table-body-cell whitespace-nowrap font-medium text-slate-700">{formatDate(log.date, language)}</td>
-                            <td className="table-body-cell whitespace-nowrap table-driver-name">{log.driver}</td>
-                            <td className="table-body-cell whitespace-nowrap text-slate-700">
-                              {log.vehicle_reg}
-                              {warnings.length ? (
-                                <div className="mt-1 flex flex-wrap gap-1">
-                                  {warnings.map((warning) => (
-                                    <span key={warning} className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800">{warning}</span>
-                                  ))}
-                                </div>
-                              ) : null}
-                            </td>
-                            <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800">{formatNumber(Number(log.litres || 0), language, 2)}</td>
-                            <td className="table-body-cell whitespace-nowrap text-right text-base font-bold text-slate-950">{formatCurrency(Number(log.total_cost || 0), language)}</td>
-                            <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800">{log.price_per_litre != null ? formatCurrency(Number(log.price_per_litre), language) : "-"}</td>
-                            <td className="table-body-cell whitespace-nowrap text-right font-medium text-slate-800">{log.mileage ?? "-"}</td>
-                            <td className="table-body-cell min-w-[140px] text-slate-700">{log.location || "-"}</td>
-                            <td className="table-body-cell"><span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getEntrySourceBadgeClass(normalizeEntrySource(log.entry_source))}`}>{sourceCopy.options[normalizeEntrySource(log.entry_source)]}</span></td>
-                            <td className="table-body-cell"><span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getFuelTripBadgeClass(log)}`}>{getFuelTripLabel(log)}</span></td>
-                            <td className="table-body-cell"><span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getReceiptCheckBadgeClass(log.receipt_checked)}`}>{getReceiptCheckLabel(log.receipt_checked, language)}</span></td>
-                            <td className="table-body-cell"><div className="flex gap-1.5"><button type="button" onClick={() => void handleReceiptToggle(log, !log.receipt_checked)} disabled={togglingReceiptId === String(log.id)} className="table-action-secondary min-w-[104px] disabled:opacity-50">{togglingReceiptId === String(log.id) ? t.common.saving : log.receipt_checked ? receiptCopy.markUnchecked : receiptCopy.markChecked}</button><button type="button" onClick={() => populateForm(log)} className="table-action-secondary min-w-[68px]">{t.common.edit}</button><button type="button" onClick={() => void handleDelete(String(log.id))} disabled={deletingId === String(log.id)} className="table-action-danger min-w-[68px] disabled:opacity-50">{deletingId === String(log.id) ? t.common.deleting : t.common.delete}</button></div></td>
-                          </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
+
+              <div className="table-shell booking-desktop-table block w-full">
+                <div className="table-scroll w-full overflow-x-auto">
+                  <table className="w-full min-w-[940px]">
+                    <thead>
+                      <tr>
+                        <th className="booking-desktop-head-cell w-[8%]">{t.fuelLogs.date}</th>
+                        <th className="booking-desktop-head-cell w-[15%]">{t.fuelLogs.driver}</th>
+                        <th className="booking-desktop-head-cell w-[10%]">{t.fuelLogs.vehicleReg}</th>
+                        <th className="booking-desktop-head-cell w-[8%] text-right">{t.fuelLogs.litres}</th>
+                        <th className="booking-desktop-head-cell w-[12%] text-right">{t.fuelLogs.totalCost}</th>
+                        <th className="booking-desktop-head-cell w-[10%] text-right">{t.fuelLogs.mileage}</th>
+                        <th className="booking-desktop-head-cell">{t.fuelLogs.location}</th>
+                        <th className="booking-desktop-head-cell w-[10%]">{receiptCopy.filterLabel}</th>
+                        <th className="booking-desktop-head-cell w-[148px] text-right">{t.common.action}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {groupedFuelLogs.map((group) => {
+                        const isExpanded = expandedFuelDates.has(group.date);
+                        return (
+                          <Fragment key={group.date}>
+                            <tr className="booking-desktop-date-row sticky top-0 z-20">
+                              <td colSpan={9}>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setExpandedFuelDates((current) => {
+                                      const next = new Set(current);
+                                      if (next.has(group.date)) next.delete(group.date);
+                                      else next.add(group.date);
+                                      return next;
+                                    })
+                                  }
+                                  className={`booking-desktop-date-heading ${isExpanded ? "booking-desktop-date-heading-open" : ""}`}
+                                  aria-expanded={isExpanded}
+                                >
+                                  <span className="booking-desktop-date-heading-main">
+                                    <span className="booking-date-chevron">
+                                      <ChevronRight className={`h-3.5 w-3.5 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`} />
+                                    </span>
+                                    <span className="min-w-0">
+                                      <span className="block">{formatFuelDateHeading(group.date, language)}</span>
+                                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] font-semibold normal-case tracking-normal text-slate-500">
+                                        <span>{formatNumber(group.logs.length, language)} {t.common.entries}</span>
+                                        <span>{formatCurrency(group.totalCost, language)}</span>
+                                        <span>{formatNumber(group.totalLitres, language, 2)} {t.fuelLogs.litres}</span>
+                                        <span>{formatNumber(group.missingMileage, language)} {copy.missingOdometer}</span>
+                                        <span>{formatNumber(group.notChecked, language)} {uxCopy.pendingCheck}</span>
+                                      </div>
+                                    </span>
+                                  </span>
+                                  <strong>{isExpanded ? uxCopy.collapse : uxCopy.expand}</strong>
+                                </button>
+                              </td>
+                            </tr>
+                            {isExpanded ? group.logs.map((log) => {
+                              const detailsExpanded = expandedFuelEntryDetails.has(String(log.id));
+                              const missingMileage = isMissingMileage(log);
+                              return (
+                                <Fragment key={log.id}>
+                                  <tr className="enterprise-table-row">
+                                    <td className="booking-desktop-cell whitespace-nowrap py-2 font-medium text-slate-600">{formatDate(log.date, language)}</td>
+                                    <td className="booking-desktop-cell whitespace-nowrap py-2 font-semibold text-slate-950">{log.driver}</td>
+                                    <td className="booking-desktop-cell whitespace-nowrap py-2 font-medium text-slate-500">{log.vehicle_reg}</td>
+                                    <td className="booking-desktop-cell whitespace-nowrap py-2 text-right text-[13.5px] font-bold tabular-nums text-slate-950">{formatNumber(Number(log.litres || 0), language, 2)}</td>
+                                    <td className="booking-desktop-cell whitespace-nowrap py-2 text-right text-[13.5px] font-bold tabular-nums text-slate-950">{formatCurrency(Number(log.total_cost || 0), language)}</td>
+                                    <td className="booking-desktop-cell whitespace-nowrap py-2 text-right text-[12.5px] tabular-nums text-slate-500">
+                                      {missingMileage ? (
+                                        <span className="inline-flex items-center justify-end gap-1.5">
+                                          <span>-</span>
+                                          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800">{copy.missingOdometer}</span>
+                                        </span>
+                                      ) : formatMileageValue(log.mileage, language)}
+                                    </td>
+                                    <td className="booking-desktop-cell max-w-[220px] py-2 text-slate-400" title={log.location || ""}>
+                                      <span className="block truncate">{log.location || "-"}</span>
+                                    </td>
+                                    <td className="booking-desktop-cell whitespace-nowrap py-2">
+                                      <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${getReceiptCheckBadgeClass(log.receipt_checked)}`}>{getReceiptCheckLabel(log.receipt_checked, language)}</span>
+                                    </td>
+                                    <td className="booking-desktop-cell py-2 text-right">
+                                      <div className="flex items-center justify-end gap-px whitespace-nowrap">
+                                        <button type="button" onClick={() => void handleReceiptToggle(log, !log.receipt_checked)} disabled={togglingReceiptId === String(log.id)} className="table-action-secondary min-h-6 px-1.5 text-[10px] disabled:opacity-50">{togglingReceiptId === String(log.id) ? t.common.saving : receiptCopy.markShort}</button>
+                                        <button type="button" onClick={() => populateForm(log)} className="table-action-secondary min-h-6 px-1.5 text-[10px]">{t.common.edit}</button>
+                                        <button type="button" onClick={() => void handleDelete(String(log.id))} disabled={deletingId === String(log.id)} className="table-action-danger min-h-6 px-1.5 text-[10px] disabled:opacity-50">{deletingId === String(log.id) ? t.common.deleting : t.common.delete}</button>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setExpandedFuelEntryDetails((current) => {
+                                              const next = new Set(current);
+                                              const id = String(log.id);
+                                              if (next.has(id)) next.delete(id);
+                                              else next.add(id);
+                                              return next;
+                                            })
+                                          }
+                                          className="inline-flex min-h-6 items-center gap-0.5 px-1 text-[10px] font-semibold text-slate-500 hover:text-slate-900"
+                                        >
+                                          <ChevronRight className={`h-3 w-3 transition-transform ${detailsExpanded ? "rotate-90" : ""}`} />
+                                          {detailsExpanded ? uxCopy.hideDetails : uxCopy.moreDetails}
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                  {detailsExpanded ? (
+                                    <tr className="bg-slate-50/80">
+                                      <td colSpan={9} className="px-4 py-2 text-xs text-slate-600">
+                                        {t.fuelLogs.pricePerLitre}: {log.price_per_litre != null ? formatCurrency(Number(log.price_per_litre), language) : "-"} | {uxCopy.trip}: {getFuelTripLabel(log)} | {sourceCopy.label}: {sourceCopy.options[normalizeEntrySource(log.entry_source)]} | {uxCopy.receiptSource}: {sourceCopy.options[normalizeEntrySource(log.entry_source)]} | {uxCopy.notes}: {log.notes || "-"}
+                                      </td>
+                                    </tr>
+                                  ) : null}
+                                </Fragment>
+                              );
+                            }) : null}
+                          </Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
               <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

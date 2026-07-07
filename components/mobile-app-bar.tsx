@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { Menu, X } from "lucide-react";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { AccountMenu } from "@/components/account-menu";
 import { useLanguage } from "@/lib/language-provider";
 
 type PageKey = "dashboard" | "bookingDiary" | "drivers" | "fuelLogs" | "fuelSpendReport" | "shipments" | "transfers" | "tripJourney" | "weeklyMileage";
@@ -69,6 +70,7 @@ export function MobileAppBar({ open, onToggle }: MobileAppBarProps) {
             </p>
           </div>
         </div>
+        <AccountMenu compact />
       </div>
     </div>
   );

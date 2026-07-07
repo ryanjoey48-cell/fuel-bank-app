@@ -159,6 +159,30 @@ export type FuelLogReceiptSummary = {
   notChecked: number;
 };
 
+export type SupportTicketStatus = "Open" | "In Progress" | "Waiting" | "Closed";
+export type SupportTicketCategory = "Bug" | "Feature Request" | "Question" | "Other";
+export type SupportTicketPriority = "Low" | "Medium" | "High";
+
+export type SupportTicket = {
+  id: string;
+  ticket_number: string;
+  user_id: string | null;
+  user_email: string;
+  user_role: string | null;
+  category: SupportTicketCategory | string;
+  priority: SupportTicketPriority | string;
+  subject: string;
+  description: string;
+  status: SupportTicketStatus | string;
+  page_path: string | null;
+  current_url: string | null;
+  browser_info: string | null;
+  screen_size: string | null;
+  screenshot_url: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type BankTransferWithDriver = BankTransfer;
 
 export type TripFuelSource = "linked" | "manual";

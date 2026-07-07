@@ -26,8 +26,10 @@ import {
   fetchDrivers,
   fetchRouteDistanceEstimate,
   fetchShipments,
+  fetchVehicles,
   saveRouteDistanceEstimate,
-  saveShipment
+  saveShipment,
+  saveTripJourney
 } from "@/lib/data";
 import { fetchJson } from "@/lib/http";
 import { useLanguage } from "@/lib/language-provider";
@@ -43,7 +45,7 @@ import {
   normalizeVehicleRegistration,
   today
 } from "@/lib/utils";
-import type { Driver, ShipmentWithDriver } from "@/types/database";
+import type { Driver, ShipmentWithDriver, Vehicle } from "@/types/database";
 
 const PAGE_SIZE = 8;
 const DEFAULT_KM_PER_LITRE = "3.5";
@@ -164,9 +166,18 @@ type FormState = {
   driver_id: string;
   vehicle_reg: string;
   notes: string;
+  auto_create_trip_journey: boolean;
   status: ShipmentStatus;
   cost_estimation_status: "ready" | "pending";
   cost_estimation_note: string;
+};
+
+type RouteEstimateMeta = {
+  estimatedAt: string;
+  routeLabels: string[];
+  legs: Array<{ label: string; distanceKm: number | null }>;
+  mapsUrl: string;
+  embedUrl: string | null;
 };
 
 function createInitialForm(
@@ -208,6 +219,7 @@ function createInitialForm(
     driver_id: "",
     vehicle_reg: "",
     notes: "",
+    auto_create_trip_journey: true,
     status: "Draft",
     cost_estimation_status: "pending",
     cost_estimation_note: ""
@@ -686,6 +698,7 @@ function buildLocationDataLine(data: {
 }
 
 function buildFormRouteKey(input: {
+  start_from_depot?: boolean;
   route_start_location: string;
   start_location: string;
   end_location: string;
@@ -696,17 +709,88 @@ function buildFormRouteKey(input: {
   additional_dropoff_data?: Array<StructuredLocation | null>;
   include_return_to_start: boolean;
 }) {
+  const startsFromDepot = input.start_from_depot !== false;
   return [
+    startsFromDepot ? locationRouteKey(input.route_start_location_data, input.route_start_location) : "pickup_only",
     locationRouteKey(input.start_location_data, input.start_location),
     locationRouteKey(input.end_location_data, input.end_location),
     ...input.additional_dropoffs.map((stop, index) =>
       locationRouteKey(input.additional_dropoff_data?.[index], stop)
     ),
-    locationRouteKey(input.route_start_location_data, input.route_start_location),
-    input.include_return_to_start ? "return" : "oneway"
+    startsFromDepot && input.include_return_to_start ? "return" : "oneway"
   ]
     .filter(Boolean)
     .join("__");
+}
+
+function getShortLocationLabel(value: string) {
+  const cleaned = value.trim();
+  if (!cleaned) return EMPTY_VALUE;
+  return cleaned.split(",").map((part) => part.trim()).filter(Boolean)[0] || cleaned;
+}
+
+function buildRouteEstimateMeta(input: {
+  origin: StructuredLocation;
+  destination: StructuredLocation;
+  waypoints: StructuredLocation[];
+  routeLabels: string[];
+  legs?: Array<{ distanceMeters?: number | null }> | null;
+}): RouteEstimateMeta {
+  const routeLabels = input.routeLabels.filter(Boolean);
+  const mapsPoint = (location: StructuredLocation) =>
+    hasCoordinates(location)
+      ? `${location.lat},${location.lng}`
+      : getLocationDisplay(location);
+  const mapsUrl = new URL("https://www.google.com/maps/dir/");
+  mapsUrl.searchParams.set("api", "1");
+  mapsUrl.searchParams.set("origin", mapsPoint(input.origin));
+  mapsUrl.searchParams.set("destination", mapsPoint(input.destination));
+  mapsUrl.searchParams.set("travelmode", "driving");
+  if (input.waypoints.length) {
+    mapsUrl.searchParams.set("waypoints", input.waypoints.map(mapsPoint).join("|"));
+  }
+
+  const publicMapsKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  let embedUrl: string | null = null;
+  if (publicMapsKey) {
+    const embed = new URL("https://www.google.com/maps/embed/v1/directions");
+    embed.searchParams.set("key", publicMapsKey);
+    embed.searchParams.set("origin", mapsPoint(input.origin));
+    embed.searchParams.set("destination", mapsPoint(input.destination));
+    embed.searchParams.set("mode", "driving");
+    if (input.waypoints.length) {
+      embed.searchParams.set("waypoints", input.waypoints.map(mapsPoint).join("|"));
+    }
+    embedUrl = embed.toString();
+  }
+
+  return {
+    estimatedAt: new Date().toISOString(),
+    routeLabels,
+    mapsUrl: mapsUrl.toString(),
+    embedUrl,
+    legs: routeLabels.slice(0, -1).map((label, index) => ({
+      label: `${getShortLocationLabel(label)} -> ${getShortLocationLabel(routeLabels[index + 1] ?? "")}`,
+      distanceKm:
+        input.legs?.[index]?.distanceMeters != null
+          ? Number((Number(input.legs[index].distanceMeters) / 1000).toFixed(1))
+          : null
+    }))
+  };
+}
+
+function generateJobReference(shipments: ShipmentWithDriver[], dateValue = today()) {
+  const dateKey = toDateInputValue(dateValue).replaceAll("-", "") || today().replaceAll("-", "");
+  const prefix = `EXP-${dateKey}-`;
+  const nextNumber =
+    shipments.reduce((max, shipment) => {
+      const reference = String(shipment.job_reference ?? "");
+      if (!reference.startsWith(prefix)) return max;
+      const suffix = Number(reference.slice(prefix.length));
+      return Number.isFinite(suffix) ? Math.max(max, suffix) : max;
+    }, 0) + 1;
+
+  return `${prefix}${String(nextNumber).padStart(3, "0")}`;
 }
 
 type QuotePdfData = {
@@ -1552,6 +1636,7 @@ export default function ShipmentsPage() {
   const { language } = useLanguage();
   const labels = shipmentTranslations[language] as ShipmentTranslations;
   const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [shipments, setShipments] = useState<ShipmentWithDriver[]>([]);
   const [form, setForm] = useState<FormState>(() => createInitialForm());
   const [loading, setLoading] = useState(true);
@@ -1565,6 +1650,11 @@ export default function ShipmentsPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [distanceMessage, setDistanceMessage] = useState<string | null>(null);
   const [lastEstimatedRouteKey, setLastEstimatedRouteKey] = useState("");
+  const [routeEstimateMeta, setRouteEstimateMeta] = useState<RouteEstimateMeta | null>(null);
+  const [manualVehicleDefaults, setManualVehicleDefaults] = useState({
+    vehicleType: false,
+    efficiency: false
+  });
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [selectedDriverFilter, setSelectedDriverFilter] = useState("");
@@ -1682,6 +1772,7 @@ export default function ShipmentsPage() {
         route_start_location: form.route_start_location,
         start_location: form.start_location,
         end_location: form.end_location,
+        start_from_depot: form.start_from_depot,
         route_start_location_data: form.route_start_location_data,
         start_location_data: form.start_location_data,
         end_location_data: form.end_location_data,
@@ -1697,6 +1788,7 @@ export default function ShipmentsPage() {
       form.include_return_to_start,
       form.route_start_location,
       form.route_start_location_data,
+      form.start_from_depot,
       form.start_location,
       form.start_location_data
     ]
@@ -1728,8 +1820,13 @@ export default function ShipmentsPage() {
     try {
       setLoading(true);
       setError(null);
-      const [driverRows, shipmentRows] = await Promise.all([fetchDrivers(), fetchShipments()]);
+      const [driverRows, vehicleRows, shipmentRows] = await Promise.all([
+        fetchDrivers(),
+        fetchVehicles().catch(() => [] as Vehicle[]),
+        fetchShipments()
+      ]);
       setDrivers(driverRows);
+      setVehicles(vehicleRows);
       setShipments(shipmentRows);
       applyDefaultsToFreshForm(shipmentRows);
     } catch (loadError) {
@@ -1743,6 +1840,19 @@ export default function ShipmentsPage() {
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    setForm((current) => {
+      if (current.id || current.job_reference.trim()) {
+        return current;
+      }
+
+      return {
+        ...current,
+        job_reference: generateJobReference(shipments, current.shipment_date)
+      };
+    });
+  }, [shipments]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1815,22 +1925,31 @@ export default function ShipmentsPage() {
 
   useEffect(() => {
     if (!selectedDriver) return;
+    const selectedVehicleReg = normalizeVehicleRegistration(selectedDriver.vehicle_reg);
+    const selectedVehicle = vehicles.find(
+      (vehicle) => normalizeVehicleRegistration(vehicle.vehicle_reg) === selectedVehicleReg
+    );
+    const historicalEfficiency = formatInputNumber(
+      shipments.find(
+        (shipment) =>
+          normalizeVehicleRegistration(shipment.vehicle_reg) === selectedVehicleReg &&
+          shipment.standard_km_per_litre != null
+      )?.standard_km_per_litre,
+      2
+    );
     setForm((current) => ({
       ...current,
-      vehicle_reg: normalizeVehicleRegistration(selectedDriver.vehicle_reg) || current.vehicle_reg,
-      vehicle_type: selectedDriver.vehicle_type || current.vehicle_type,
-      standard_km_per_litre:
-        formatInputNumber(
-          shipments.find(
-            (shipment) =>
-              normalizeVehicleRegistration(shipment.vehicle_reg) ===
-                normalizeVehicleRegistration(selectedDriver.vehicle_reg) &&
-              shipment.standard_km_per_litre != null
-          )?.standard_km_per_litre,
-          2
-        ) || current.standard_km_per_litre
+      vehicle_reg: current.vehicle_reg || selectedVehicleReg,
+      vehicle_type: manualVehicleDefaults.vehicleType
+        ? current.vehicle_type
+        : selectedDriver.vehicle_type || selectedVehicle?.vehicle_type || current.vehicle_type,
+      standard_km_per_litre: manualVehicleDefaults.efficiency
+        ? current.standard_km_per_litre
+        : formatInputNumber(selectedVehicle?.standard_km_per_litre, 2) ||
+          historicalEfficiency ||
+          current.standard_km_per_litre
     }));
-  }, [selectedDriver, shipments]);
+  }, [manualVehicleDefaults.efficiency, manualVehicleDefaults.vehicleType, selectedDriver, shipments, vehicles]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -1858,10 +1977,15 @@ export default function ShipmentsPage() {
 
   const resetForm = useCallback(() => {
     const defaults = getRouteDefaults(shipments);
-    setForm(createInitialForm(defaults.kmPerLitre, defaults.fuelPrice));
+    setForm({
+      ...createInitialForm(defaults.kmPerLitre, defaults.fuelPrice),
+      job_reference: generateJobReference(shipments)
+    });
+    setManualVehicleDefaults({ vehicleType: false, efficiency: false });
     setError(null);
     setSuccessMessage(null);
     setDistanceMessage(null);
+    setRouteEstimateMeta(null);
     setLastEstimatedRouteKey("");
   }, [shipments]);
 
@@ -1880,6 +2004,7 @@ export default function ShipmentsPage() {
         cost_estimation_note: labels.routeChanged
       }));
       setDistanceMessage(null);
+      setRouteEstimateMeta(null);
     },
     [labels.routeChanged]
   );
@@ -1895,6 +2020,7 @@ export default function ShipmentsPage() {
         cost_estimation_note: labels.routeChanged
       }));
       setDistanceMessage(null);
+      setRouteEstimateMeta(null);
     },
     [labels.routeChanged]
   );
@@ -1904,6 +2030,7 @@ export default function ShipmentsPage() {
       if (checked) {
         setError(DEPOT_COORDINATES_CONFIGURED ? null : labels.depotMissing);
         setRouteStartLocation(DEFAULT_DEPOT_LOCATION.label, DEFAULT_DEPOT_LOCATION, true);
+        setRouteEstimateMeta(null);
         return;
       }
 
@@ -1920,6 +2047,7 @@ export default function ShipmentsPage() {
         cost_estimation_note: labels.routeChanged
       }));
       setDistanceMessage(null);
+      setRouteEstimateMeta(null);
     },
     [labels.depotMissing, labels.routeChanged, setRouteStartLocation]
   );
@@ -1966,10 +2094,42 @@ export default function ShipmentsPage() {
     setRouteStartLocation(DEFAULT_DEPOT_LOCATION.label, DEFAULT_DEPOT_LOCATION, true);
   }, [labels.depotMissing, setRouteStartLocation]);
 
+  const handleVehicleChange = useCallback(
+    (value: string) => {
+      const normalizedReg = normalizeVehicleRegistration(value);
+      const selectedVehicle = vehicles.find(
+        (vehicle) => normalizeVehicleRegistration(vehicle.vehicle_reg) === normalizedReg
+      );
+      const historicalEfficiency = formatInputNumber(
+        shipments.find(
+          (shipment) =>
+            normalizeVehicleRegistration(shipment.vehicle_reg) === normalizedReg &&
+            shipment.standard_km_per_litre != null
+        )?.standard_km_per_litre,
+        2
+      );
+
+      setForm((current) => ({
+        ...current,
+        vehicle_reg: value,
+        vehicle_type: manualVehicleDefaults.vehicleType
+          ? current.vehicle_type
+          : selectedVehicle?.vehicle_type || current.vehicle_type,
+        standard_km_per_litre: manualVehicleDefaults.efficiency
+          ? current.standard_km_per_litre
+          : formatInputNumber(selectedVehicle?.standard_km_per_litre, 2) ||
+            historicalEfficiency ||
+            current.standard_km_per_litre,
+        driver_allowance:
+          current.driver_allowance ||
+          formatInputNumber(selectedVehicle?.default_driver_cost, 2) ||
+          current.driver_allowance
+      }));
+    },
+    [manualVehicleDefaults.efficiency, manualVehicleDefaults.vehicleType, shipments, vehicles]
+  );
+
   const estimateRoute = useCallback(async () => {
-    const origin = form.start_from_depot
-      ? DEFAULT_DEPOT_LOCATION
-      : form.route_start_location_data ?? createManualLocation(form.route_start_location);
     const pickup = form.start_location_data ?? createManualLocation(form.start_location);
     const mainDropoff = form.end_location_data ?? createManualLocation(form.end_location);
     const additionalDropoffEntries = form.additional_dropoffs
@@ -1984,16 +2144,36 @@ export default function ShipmentsPage() {
     const routeStops = [pickup, mainDropoff, ...additionalDropoffs].filter(
       (location): location is StructuredLocation => Boolean(location)
     );
-    const destination = form.include_return_to_start ? origin : routeStops[routeStops.length - 1];
-    const waypoints = form.include_return_to_start ? routeStops : routeStops.slice(0, -1);
+    const origin = form.start_from_depot ? DEFAULT_DEPOT_LOCATION : routeStops[0];
+    const destination =
+      form.start_from_depot && form.include_return_to_start
+        ? origin
+        : routeStops[routeStops.length - 1];
+    const waypoints = form.start_from_depot
+      ? form.include_return_to_start
+        ? routeStops
+        : routeStops.slice(0, -1)
+      : routeStops.slice(1, -1);
 
-    if (!form.route_start_location.trim() || !form.start_location.trim() || !form.end_location.trim()) {
+    if (!origin || !destination || !form.start_location.trim() || !form.end_location.trim()) {
       throw new Error(labels.routeKeyMissing);
     }
 
-    const originKey = locationRouteKey(origin, form.route_start_location);
+    const routeLabels = form.start_from_depot
+      ? [
+          getLocationDisplay(origin, form.route_start_location),
+          ...routeStops.map((location) => getLocationDisplay(location)),
+          ...(form.include_return_to_start ? [getLocationDisplay(origin, form.route_start_location)] : [])
+        ]
+      : routeStops.map((location) => getLocationDisplay(location));
+
+    const originKey = locationRouteKey(origin, form.start_from_depot ? form.route_start_location : form.start_location);
     const destinationKey = normalizeLocationKey(
-      [...waypoints.map((location) => locationRouteKey(location)), locationRouteKey(destination), form.include_return_to_start ? "return" : "oneway"].join(" | ")
+      [
+        ...waypoints.map((location) => locationRouteKey(location)),
+        locationRouteKey(destination),
+        form.start_from_depot && form.include_return_to_start ? "return" : "oneway"
+      ].join(" | ")
     );
     const cached = await fetchRouteDistanceEstimate(originKey, destinationKey).catch(() => null);
 
@@ -2011,6 +2191,7 @@ export default function ShipmentsPage() {
       }));
       setLastEstimatedRouteKey(currentRouteKey);
       setDistanceMessage(labels.routeReady);
+      setRouteEstimateMeta(buildRouteEstimateMeta({ origin, destination, waypoints, routeLabels }));
       return;
     }
 
@@ -2019,6 +2200,7 @@ export default function ShipmentsPage() {
       durationSeconds?: number | null;
       provider?: string;
       distanceMeters?: number | null;
+      legs?: Array<{ distanceMeters?: number | null }>;
     }>("/api/distance-estimate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2045,9 +2227,18 @@ export default function ShipmentsPage() {
     }));
     setLastEstimatedRouteKey(currentRouteKey);
     setDistanceMessage(labels.routeReady);
+    setRouteEstimateMeta(
+      buildRouteEstimateMeta({
+        origin,
+        destination,
+        waypoints,
+        routeLabels,
+        legs: result.data.legs ?? null
+      })
+    );
 
     await saveRouteDistanceEstimate({
-      origin_location: getLocationDisplay(origin, form.route_start_location),
+      origin_location: getLocationDisplay(origin, form.start_from_depot ? form.route_start_location : form.start_location),
       destination_location: getLocationDisplay(destination),
       origin_key: originKey,
       destination_key: destinationKey,
@@ -2064,7 +2255,6 @@ export default function ShipmentsPage() {
     form.end_location_data,
     form.include_return_to_start,
     form.route_start_location,
-    form.route_start_location_data,
     form.start_from_depot,
     form.start_location,
     form.start_location_data,
@@ -2146,14 +2336,17 @@ export default function ShipmentsPage() {
       driver_id: normalized.driverId,
       vehicle_reg: normalized.vehicleReg,
       notes: normalized.notes,
+      auto_create_trip_journey: false,
       status: status as FormState["status"],
       cost_estimation_status: normalized.costEstimationStatus,
       cost_estimation_note: normalized.costEstimationNote
     };
 
     setForm(nextForm);
+    setManualVehicleDefaults({ vehicleType: true, efficiency: true });
     setLastEstimatedRouteKey(buildFormRouteKey(nextForm));
     setDistanceMessage(null);
+    setRouteEstimateMeta(null);
     setError(null);
     setSuccessMessage(null);
     formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -2340,7 +2533,7 @@ export default function ShipmentsPage() {
 
   const canSave =
     Boolean(form.job_reference.trim()) &&
-    hasCoordinates(form.start_from_depot ? DEFAULT_DEPOT_LOCATION : form.route_start_location_data) &&
+    (!form.start_from_depot || hasCoordinates(DEFAULT_DEPOT_LOCATION)) &&
     hasCoordinates(form.start_location_data) &&
     hasCoordinates(form.end_location_data) &&
     form.additional_dropoffs.every((stop, index) =>
@@ -2348,10 +2541,7 @@ export default function ShipmentsPage() {
     ) &&
     Boolean(form.estimated_distance_km.trim());
   const routeHasManualUnverified =
-    Boolean(
-      form.route_start_location.trim() &&
-        !hasCoordinates(form.start_from_depot ? DEFAULT_DEPOT_LOCATION : form.route_start_location_data)
-    ) ||
+    Boolean(form.start_from_depot && form.route_start_location.trim() && !hasCoordinates(DEFAULT_DEPOT_LOCATION)) ||
     Boolean(form.start_location.trim() && !hasCoordinates(form.start_location_data)) ||
     Boolean(form.end_location.trim() && !hasCoordinates(form.end_location_data)) ||
     form.additional_dropoffs.some((stop, index) =>
@@ -2390,6 +2580,7 @@ export default function ShipmentsPage() {
       event.preventDefault();
       const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
       const requestedStatus = submitter?.dataset.status as ShipmentStatus | undefined;
+      const createAnother = submitter?.dataset.createAnother === "true";
 
       const distanceValue = parseNumber(form.estimated_distance_km);
       const durationValue = parseNumber(form.estimated_duration_minutes);
@@ -2401,7 +2592,7 @@ export default function ShipmentsPage() {
         return;
       }
 
-      if (!form.route_start_location.trim()) {
+      if (form.start_from_depot && !form.route_start_location.trim()) {
         setError(labels.validation.startRouteRequired);
         return;
       }
@@ -2411,12 +2602,10 @@ export default function ShipmentsPage() {
         return;
       }
 
-      const effectiveRouteStartLocation = form.start_from_depot
-        ? DEFAULT_DEPOT_LOCATION
-        : form.route_start_location_data;
+      const effectiveRouteStartLocation = form.start_from_depot ? DEFAULT_DEPOT_LOCATION : form.start_location_data;
 
       if (
-        !hasCoordinates(effectiveRouteStartLocation) ||
+        (form.start_from_depot && !hasCoordinates(effectiveRouteStartLocation)) ||
         !hasCoordinates(form.start_location_data) ||
         !hasCoordinates(form.end_location_data) ||
         form.additional_dropoffs.some((stop, index) =>
@@ -2464,10 +2653,13 @@ export default function ShipmentsPage() {
         const additionalDropoffLocations = form.additional_dropoff_data.filter(
           (location): location is StructuredLocation => hasCoordinates(location)
         );
-        const routeStartData = form.start_from_depot ? DEFAULT_DEPOT_LOCATION : form.route_start_location_data;
-        const routeStartLabel = getLocationDisplay(routeStartData, form.route_start_location);
+        const routeStartData = form.start_from_depot ? DEFAULT_DEPOT_LOCATION : form.start_location_data;
+        const routeStartLabel = form.start_from_depot
+          ? getLocationDisplay(routeStartData, form.route_start_location)
+          : getLocationDisplay(form.start_location_data, form.start_location);
         const pickupLabel = getLocationDisplay(form.start_location_data, form.start_location);
         const dropoffLabel = getLocationDisplay(form.end_location_data, form.end_location);
+        const driverName = drivers.find((driver) => String(driver.id) === String(form.driver_id))?.name ?? null;
         const statusToSave =
           requestedStatus === "Draft"
             ? "Draft"
@@ -2484,7 +2676,7 @@ export default function ShipmentsPage() {
           form.cargo_type.trim() ? `${labels.cargoType}: ${form.cargo_type.trim()}` : ""
         ].filter(Boolean);
 
-        await saveShipment({
+        const savedShipment = await saveShipment({
           id: form.id || undefined,
           job_reference: form.job_reference.trim(),
           customer_name: form.customer_name.trim() || null,
@@ -2546,8 +2738,64 @@ export default function ShipmentsPage() {
           cost_estimation_note: routeEstimateStale ? labels.routeChanged : form.cost_estimation_note
         });
 
+        if (!form.id && form.auto_create_trip_journey) {
+          await saveTripJourney({
+            booking_id: savedShipment.id,
+            booking_reference: savedShipment.job_reference ?? form.job_reference.trim(),
+            trip_date: toDateInputValue(form.shipment_date) || today(),
+            start_location_type: form.start_from_depot ? "depot" : "pickup_only",
+            route_start_type: form.start_from_depot ? "depot" : "pickup_only",
+            start_location: form.start_from_depot ? routeStartLabel : null,
+            depot_address: DEFAULT_DEPOT_LOCATION.formatted_address,
+            depot_address_used: form.start_from_depot ? DEFAULT_DEPOT_LOCATION.formatted_address : null,
+            custom_start_address: null,
+            pickup_location: pickupLabel,
+            dropoff_location: dropoffLabel,
+            pickup_address: pickupLabel,
+            dropoff_address: dropoffLabel,
+            return_to_depot: form.start_from_depot && form.include_return_to_start,
+            route: [pickupLabel, dropoffLabel, ...additionalDropoffs].filter(Boolean).join(" -> "),
+            vehicle_type: form.vehicle_type.trim() || null,
+            vehicle_reg: form.vehicle_reg.trim() || null,
+            driver: driverName,
+            load_details: form.goods_description.trim() || form.cargo_type.trim() || null,
+            booking_notes: form.notes.trim() || null,
+            estimated_distance_km: distanceValue,
+            google_estimated_km: distanceValue,
+            google_estimated_minutes: durationValue,
+            estimated_duration_minutes: durationValue,
+            estimated_distance_source: "shipment",
+            route_source: "shipment",
+            google_maps_route_url: routeEstimateMeta?.mapsUrl ?? null,
+            fuel_source: "manual"
+          }).catch((tripError) => {
+            console.warn("Trip Journey auto-create failed:", tripError);
+          });
+        }
+
         setSuccessMessage(form.id ? labels.shipmentUpdated : labels.shipmentSaved);
-        resetForm();
+        if (createAnother) {
+          const refreshedShipments = [savedShipment, ...shipments];
+          setForm({
+            ...createInitialForm(form.standard_km_per_litre, form.fuel_price_per_litre),
+            job_reference: generateJobReference(refreshedShipments),
+            shipment_date: form.shipment_date,
+            start_from_depot: form.start_from_depot,
+            route_start_location: form.start_from_depot ? DEFAULT_DEPOT_LOCATION.label : "",
+            route_start_location_data: form.start_from_depot ? DEFAULT_DEPOT_LOCATION : null,
+            driver_id: form.driver_id,
+            vehicle_reg: form.vehicle_reg,
+            vehicle_type: form.vehicle_type,
+            standard_km_per_litre: form.standard_km_per_litre,
+            fuel_price_per_litre: form.fuel_price_per_litre,
+            auto_create_trip_journey: form.auto_create_trip_journey
+          });
+          setDistanceMessage(null);
+          setRouteEstimateMeta(null);
+          setLastEstimatedRouteKey("");
+        } else {
+          resetForm();
+        }
         await loadData();
       } catch (saveError) {
         console.error("Shipment save failed:", saveError);
@@ -2561,6 +2809,7 @@ export default function ShipmentsPage() {
       estimatedFuelLitres,
       finalQuotePrice,
       form,
+      drivers,
       labels,
       language,
       loadData,
@@ -2568,7 +2817,9 @@ export default function ShipmentsPage() {
       parkingCost,
       recommendedQuotePrice,
       resetForm,
+      routeEstimateMeta?.mapsUrl,
       routeEstimateStale,
+      shipments,
       totalEstimatedJobCost
     ]
   );
@@ -2617,12 +2868,14 @@ export default function ShipmentsPage() {
     () =>
       Array.from(
         new Set(
-          shipments
-            .map((shipment) => normalizeVehicleRegistration(normalizeShipment(shipment).vehicleReg))
+          [
+            ...vehicles.map((vehicle) => normalizeVehicleRegistration(vehicle.vehicle_reg)),
+            ...shipments.map((shipment) => normalizeVehicleRegistration(normalizeShipment(shipment).vehicleReg))
+          ]
             .filter(Boolean)
         )
       ),
-    [shipments]
+    [shipments, vehicles]
   );
 
   const summary = useMemo(() => {
@@ -2838,21 +3091,23 @@ export default function ShipmentsPage() {
                       <span className="block text-xs font-normal text-slate-500">{labels.startFromDepotHelper}</span>
                     </span>
                   </label>
-                  <LocationAutocomplete
-                    label={labels.startRoute}
-                    value={form.route_start_location}
-                    onChange={(value) => setRouteStartLocation(value, createManualLocation(value), false)}
-                    onManualInput={(value) => setRouteStartLocation(value, createManualLocation(value), false)}
-                    onSelectLocation={(location) => setRouteStartLocation(getLocationDisplay(location), location, false)}
-                    selectedLocation={form.route_start_location_data}
-                    required
-                    language={language}
-                    configMissingMessage={labels.autocompleteUnavailable}
-                    helperText={labels.startRouteHelper}
-                    invalidText={labels.validGoogleLocationRequired}
-                    loadingText={labels.loadingSuggestions}
-                    onConfigurationChange={handleGoogleMapsConfigurationChange}
-                  />
+                  {form.start_from_depot ? (
+                    <LocationAutocomplete
+                      label={labels.startRoute}
+                      value={form.route_start_location}
+                      onChange={(value) => setRouteStartLocation(value, createManualLocation(value), false)}
+                      onManualInput={(value) => setRouteStartLocation(value, createManualLocation(value), false)}
+                      onSelectLocation={(location) => setRouteStartLocation(getLocationDisplay(location), location, false)}
+                      selectedLocation={form.route_start_location_data}
+                      required
+                      language={language}
+                      configMissingMessage={labels.autocompleteUnavailable}
+                      helperText={labels.startRouteHelper}
+                      invalidText={labels.validGoogleLocationRequired}
+                      loadingText={labels.loadingSuggestions}
+                      onConfigurationChange={handleGoogleMapsConfigurationChange}
+                    />
+                  ) : null}
                 </div>
                 <LocationAutocomplete
                   label={labels.pickup}
@@ -2896,7 +3151,7 @@ export default function ShipmentsPage() {
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2 rounded-[1rem] border border-slate-200 bg-white/80 p-3 text-xs text-slate-500 lg:col-span-3 lg:flex-row lg:items-center lg:justify-between">
-                    <span>Custom route start is active. Select a Google suggestion before estimating or saving.</span>
+                    <span>Pickup is the journey start. Route estimate will not include depot distance or depot time.</span>
                     <button type="button" onClick={useDepotLocation} className="btn-secondary min-h-[40px] rounded-[0.9rem] px-4 py-2">
                       {labels.useDepotLocation}
                     </button>
@@ -2945,13 +3200,15 @@ export default function ShipmentsPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={() =>
+                    onClick={() => {
                       setForm((current) => ({
                         ...current,
                         additional_dropoffs: [...current.additional_dropoffs, ""],
                         additional_dropoff_data: [...current.additional_dropoff_data, null]
-                      }))
-                    }
+                      }));
+                      setRouteEstimateMeta(null);
+                      setDistanceMessage(null);
+                    }}
                     className="btn-secondary min-h-[44px] gap-2 rounded-[1rem] px-4"
                   >
                     <Plus className="h-4 w-4" />
@@ -2979,6 +3236,7 @@ export default function ShipmentsPage() {
                               cost_estimation_note: labels.routeChanged
                             }));
                             setDistanceMessage(null);
+                            setRouteEstimateMeta(null);
                           }}
                           onManualInput={(value) => {
                             setForm((current) => ({
@@ -2993,6 +3251,7 @@ export default function ShipmentsPage() {
                               cost_estimation_note: labels.routeChanged
                             }));
                             setDistanceMessage(null);
+                            setRouteEstimateMeta(null);
                           }}
                           onSelectLocation={(location) => {
                             setForm((current) => ({
@@ -3007,6 +3266,7 @@ export default function ShipmentsPage() {
                               cost_estimation_note: labels.routeChanged
                             }));
                             setDistanceMessage(null);
+                            setRouteEstimateMeta(null);
                           }}
                           selectedLocation={form.additional_dropoff_data[index]}
                           language={language}
@@ -3019,7 +3279,7 @@ export default function ShipmentsPage() {
                         <div className="flex items-end">
                           <button
                             type="button"
-                            onClick={() =>
+                            onClick={() => {
                               setForm((current) => ({
                                 ...current,
                                 additional_dropoffs: current.additional_dropoffs.filter(
@@ -3028,8 +3288,10 @@ export default function ShipmentsPage() {
                                 additional_dropoff_data: current.additional_dropoff_data.filter(
                                   (_, itemIndex) => itemIndex !== index
                                 )
-                              }))
-                            }
+                              }));
+                              setRouteEstimateMeta(null);
+                              setDistanceMessage(null);
+                            }}
                             className="btn-secondary min-h-[56px] w-full gap-2 rounded-[1rem] px-4 sm:w-auto"
                           >
                             <X className="h-4 w-4" />
@@ -3042,26 +3304,29 @@ export default function ShipmentsPage() {
                 ) : null}
               </div>
 
-              <label className="mt-3 flex cursor-pointer items-center justify-between gap-4 rounded-[1.15rem] border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 shadow-[0_8px_20px_rgba(15,23,42,0.04)]">
-                <span>
-                  {labels.returnToStart}
-                  <span className="mt-0.5 block text-xs font-medium text-slate-500">
-                    {labels.returnToStartHelper}
+              {form.start_from_depot ? (
+                <label className="mt-3 flex cursor-pointer items-center justify-between gap-4 rounded-[1.15rem] border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-800 shadow-[0_8px_20px_rgba(15,23,42,0.04)]">
+                  <span>
+                    {labels.returnToStart}
+                    <span className="mt-0.5 block text-xs font-medium text-slate-500">
+                      {labels.returnToStartHelper}
+                    </span>
                   </span>
-                </span>
-                <input
-                  type="checkbox"
-                  checked={form.include_return_to_start}
-                  onChange={(event) => {
-                    setForm((current) => ({
-                      ...current,
-                      include_return_to_start: event.target.checked
-                    }));
-                    setDistanceMessage(null);
-                  }}
-                  className="h-5 w-5 rounded border-slate-300 p-0"
-                />
-              </label>
+                  <input
+                    type="checkbox"
+                    checked={form.include_return_to_start}
+                    onChange={(event) => {
+                      setForm((current) => ({
+                        ...current,
+                        include_return_to_start: event.target.checked
+                      }));
+                      setDistanceMessage(null);
+                      setRouteEstimateMeta(null);
+                    }}
+                    className="h-5 w-5 rounded border-slate-300 p-0"
+                  />
+                </label>
+              ) : null}
 
               <div className="mt-3 rounded-[1.35rem] border border-slate-200 bg-[linear-gradient(135deg,#ffffff_0%,#f5fbfa_48%,#fff7ed_100%)] p-3.5 sm:p-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -3133,12 +3398,78 @@ export default function ShipmentsPage() {
                   <span className="rounded-full border border-slate-200 bg-white px-3 py-1">
                     {labels.stops}: {formatNumber(2 + form.additional_dropoffs.filter(Boolean).length, language)}
                   </span>
-                  {form.include_return_to_start ? (
+                  {form.start_from_depot && form.include_return_to_start ? (
                     <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700">
                       {labels.returnToStartIncluded}
                     </span>
                   ) : null}
+                  {routeEstimateMeta ? (
+                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700">
+                      {language === "th" ? "ประเมินเส้นทางแล้ว" : "Route Estimated"} ·{" "}
+                      {formatDate(routeEstimateMeta.estimatedAt, language)}
+                    </span>
+                  ) : null}
                 </div>
+                {routeEstimateMeta ? (
+                  <div className="mt-3 grid gap-3 lg:grid-cols-[0.95fr_1.05fr]">
+                    <div className="rounded-[1.15rem] border border-slate-200 bg-white p-3.5">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                        {language === "th" ? "เส้นทางที่คำนวณ" : "Calculated Route"}
+                      </p>
+                      <div className="mt-3 space-y-2">
+                        {routeEstimateMeta.routeLabels.map((label, index) => (
+                          <div key={`${label}-${index}`} className="flex gap-2 text-sm text-slate-700">
+                            <span className="mt-1 h-2 w-2 flex-none rounded-full bg-teal-500" />
+                            <span className="min-w-0 truncate">{label}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-3 rounded-[1rem] border border-slate-100 bg-slate-50 p-3">
+                        <p className="text-xs font-semibold text-slate-700">
+                          {language === "th" ? "รายละเอียดแต่ละช่วง" : "Journey Breakdown"}
+                        </p>
+                        <div className="mt-2 space-y-1.5 text-xs text-slate-600">
+                          {routeEstimateMeta.legs.map((leg) => (
+                            <div key={leg.label} className="flex items-center justify-between gap-3">
+                              <span className="min-w-0 truncate">{leg.label}</span>
+                              <span className="flex-none font-semibold text-slate-800">
+                                {leg.distanceKm != null
+                                  ? formatDistance(leg.distanceKm, language, labels.distanceUnavailable)
+                                  : labels.distanceUnavailable}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <a
+                        href={routeEstimateMeta.mapsUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn-secondary mt-3 min-h-[40px] w-full gap-2 rounded-[0.9rem]"
+                      >
+                        <MapPinned className="h-4 w-4" />
+                        {language === "th" ? "เปิดใน Google Maps" : "Open in Google Maps"}
+                      </a>
+                    </div>
+                    <div className="overflow-hidden rounded-[1.15rem] border border-slate-200 bg-slate-100">
+                      {routeEstimateMeta.embedUrl ? (
+                        <iframe
+                          title={language === "th" ? "ตัวอย่างแผนที่เส้นทาง" : "Route map preview"}
+                          src={routeEstimateMeta.embedUrl}
+                          className="h-[260px] w-full border-0"
+                          loading="lazy"
+                          referrerPolicy="no-referrer-when-downgrade"
+                        />
+                      ) : (
+                        <div className="flex min-h-[220px] items-center justify-center p-4 text-center text-sm text-slate-500">
+                          {language === "th"
+                            ? "ตั้งค่า NEXT_PUBLIC_GOOGLE_MAPS_API_KEY เพื่อดูตัวอย่างแผนที่"
+                            : "Set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to show the map preview."}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </SectionCard>
 
@@ -3149,12 +3480,13 @@ export default function ShipmentsPage() {
                     <label className="form-label">{labels.fuelEfficiency}</label>
                     <input
                       value={form.standard_km_per_litre}
-                      onChange={(event) =>
+                      onChange={(event) => {
+                        setManualVehicleDefaults((current) => ({ ...current, efficiency: true }));
                         setForm((current) => ({
                           ...current,
                           standard_km_per_litre: event.target.value
-                        }))
-                      }
+                        }));
+                      }}
                       className="form-input bg-white"
                       inputMode="decimal"
                     />
@@ -3566,23 +3898,46 @@ export default function ShipmentsPage() {
                     <div className="form-field">
                       <label className="form-label">{labels.vehicle}</label>
                       <input
-                        value={form.vehicle_reg}
-                        onChange={(event) =>
-                          setForm((current) => ({ ...current, vehicle_reg: event.target.value }))
-                        }
+                      value={form.vehicle_reg}
+                        onChange={(event) => handleVehicleChange(event.target.value)}
                         className="form-input bg-white"
+                        list="shipment-vehicle-options"
                       />
                     </div>
                     <div className="form-field">
                       <label className="form-label">{labels.vehicleType}</label>
                       <input
                         value={form.vehicle_type}
-                        onChange={(event) =>
-                          setForm((current) => ({ ...current, vehicle_type: event.target.value }))
-                        }
+                        onChange={(event) => {
+                          setManualVehicleDefaults((current) => ({ ...current, vehicleType: true }));
+                          setForm((current) => ({ ...current, vehicle_type: event.target.value }));
+                        }}
                         className="form-input bg-white"
                       />
                     </div>
+                    <label className="flex cursor-pointer items-start gap-2 rounded-[1rem] border border-teal-100 bg-teal-50/70 px-3 py-2 text-sm font-semibold text-slate-800">
+                      <input
+                        type="checkbox"
+                        checked={form.auto_create_trip_journey}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            auto_create_trip_journey: event.target.checked
+                          }))
+                        }
+                        className="mt-0.5 h-4 w-4"
+                      />
+                      <span>
+                        <span className="block">
+                          {language === "th" ? "สร้าง Trip Journey อัตโนมัติ" : "Automatically create Trip Journey"}
+                        </span>
+                        <span className="block text-xs font-normal text-slate-500">
+                          {language === "th"
+                            ? "เปิดไว้เพื่อส่งระยะทางและเวลาโดยประมาณไปยัง Trip Journey"
+                            : "Keep this on to send the estimate into Trip Journey when saving."}
+                        </span>
+                      </span>
+                    </label>
                   </div>
                 </SectionCard>
               </div>
@@ -3599,6 +3954,15 @@ export default function ShipmentsPage() {
                 className="btn-primary min-w-[180px] disabled:opacity-70"
               >
                 {saving ? labels.saving : labels.saveShipment}
+              </button>
+              <button
+                type="submit"
+                data-status="Quoted"
+                data-create-another="true"
+                disabled={!canSave || saving || !defaultsReady}
+                className="btn-secondary min-w-[190px] disabled:opacity-70"
+              >
+                {language === "th" ? "บันทึกและสร้างรายการใหม่" : "Save & Create Another"}
               </button>
               <button
                 type="submit"

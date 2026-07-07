@@ -37,6 +37,43 @@ const tripJourneyCopy = {
     description: "Compare booking routes against actual mileage and fuel usage by driver, vehicle, and route.",
     refresh: "Refresh",
     tripStatus: "Trip Status",
+    operationsOverview: "Operations Overview",
+    tripsCompleted: "Trips completed",
+    tripsInProgress: "Trips in progress",
+    overallCompletion: "Overall completion",
+    fleetPerformance: "Fleet Performance",
+    fleetPerformanceHelper: "Completed trips, missing data, fuel readiness and route accuracy.",
+    driverLeaderboard: "Driver Leaderboard",
+    topDriversHelper: "Top 5 drivers from completed trips.",
+    routeAccuracy: "Route Accuracy",
+    averageDifference: "Average Difference",
+    largestDifference: "Largest Difference",
+    mostAccurateRoute: "Most Accurate Route",
+    leastAccurateRoute: "Least Accurate Route",
+    monthlyTrends: "Monthly Trends",
+    tripsCompletedTrend: "Trips Completed",
+    distanceTravelledTrend: "Distance Travelled",
+    fuelUsedTrend: "Fuel Used",
+    fuelCostTrend: "Fuel Cost",
+    quickFilters: "Quick Filters",
+    today: "Today",
+    yesterday: "Yesterday",
+    thisWeek: "This Week",
+    thisMonth: "This Month",
+    viewTrips: "View Trips",
+    view: "View",
+    edit: "Edit",
+    openBooking: "Open Booking",
+    openFuelLogs: "Open Fuel Logs",
+    completion: "Completion",
+    vehicleRegistration: "Registration",
+    estimatedVsActual: "Estimated vs Actual %",
+    distanceTravelled: "Distance travelled",
+    journeyTimeline: "Journey Timeline",
+    pickup: "Pickup",
+    dropoff: "Drop-off",
+    additionalStops: "Additional Stops",
+    return: "Return",
     trips: "Trips",
     trip: "trip",
     completed: "Completed",
@@ -83,8 +120,8 @@ const tripJourneyCopy = {
     tripRecordsDescription: "Compact list of booking journeys. Review one trip to edit details.",
     newestTripsFirst: "Newest trips first.",
     loadingTripJourneys: "Loading trip journeys...",
-    noTripRecordsYet: "No trip records yet",
-    noTripRecordsDescription: "Create a trip from the Booking Diary to start tracking performance.",
+    noTripRecordsYet: "No Trip Journeys have been created yet.",
+    noTripRecordsDescription: "Create a Booking and select \"Create Trip Journey\" or open a Booking Diary entry and click \"Create Trip\".",
     selectedTrip: "Selected trip",
     reviewEdit: "Review / Edit",
     delete: "Delete",
@@ -186,6 +223,12 @@ const tripJourneyCopy = {
     sortHighestFuelCost: "Sort: Highest fuel cost",
     sortMostActualKm: "Sort: Most actual km",
     sortMostCompletedTrips: "Sort: Most completed trips",
+    sortWorstKmL: "Sort: Worst KM/L",
+    sortLowestFuelCost: "Sort: Lowest fuel cost",
+    sortLongestTrip: "Sort: Longest trip",
+    sortShortestTrip: "Sort: Shortest trip",
+    sortMostAccurate: "Sort: Most accurate",
+    sortLeastAccurate: "Sort: Least accurate",
     moreCompletedTripsNeeded: "More completed trips are needed for reliable comparison.",
     bestKmLDriver: "Best KM/L driver",
     lowestCostKmDriver: "Lowest cost/km driver",
@@ -554,7 +597,17 @@ type SelectedTripTab = "overview" | "journey" | "fuel" | "notes";
 type AttentionFilter = "all" | "missing_mileage" | "missing_estimate" | "missing_fuel";
 type DerivedTripStatus = "completed" | "missing_mileage" | "missing_estimated_distance" | "missing_fuel";
 type ComparisonTab = "drivers" | "vehicles" | "routes" | "trips";
-type ComparisonSort = "best_kml" | "lowest_cost_per_km" | "highest_fuel_cost" | "most_actual_km" | "most_completed_trips";
+type ComparisonSort =
+  | "best_kml"
+  | "worst_kml"
+  | "lowest_cost_per_km"
+  | "highest_fuel_cost"
+  | "lowest_fuel_cost"
+  | "most_actual_km"
+  | "least_actual_km"
+  | "most_completed_trips"
+  | "most_accurate"
+  | "least_accurate";
 
 type PerformanceRow = {
   name: string;
@@ -634,6 +687,58 @@ function formatDate(value: string | null | undefined) {
   const parsed = new Date(`${value}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return value;
   return parsed.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function toDateKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getWeekStart(date: Date) {
+  const next = new Date(date);
+  const day = next.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  next.setDate(next.getDate() + diff);
+  return next;
+}
+
+function getTripCompletionPercent(trip: TripJourneyWithFuel) {
+  const metrics = getTripMetrics(trip);
+  const checks = [
+    (metrics.actualDistance ?? 0) > 0,
+    (metrics.estimatedDistance ?? 0) > 0,
+    hasValidActiveFuel(trip, metrics)
+  ];
+  return Math.round((checks.filter(Boolean).length / checks.length) * 100);
+}
+
+function getScoreTone(score: number) {
+  if (score >= 85) return "green";
+  if (score >= 65) return "amber";
+  return "rose";
+}
+
+function getScoreClass(score: number) {
+  const tone = getScoreTone(score);
+  if (tone === "green") return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  if (tone === "amber") return "border-amber-200 bg-amber-50 text-amber-800";
+  return "border-rose-200 bg-rose-50 text-rose-800";
+}
+
+function getTrendPolyline(values: number[]) {
+  if (values.length === 0) return "";
+  const max = Math.max(...values, 1);
+  const width = 220;
+  const height = 54;
+  return values
+    .map((value, index) => {
+      const x = values.length === 1 ? width : (index / (values.length - 1)) * width;
+      const y = height - (value / max) * height;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
 }
 
 function normalizeLookup(value: string | null | undefined) {
@@ -862,18 +967,35 @@ function getPerformanceLabel(row: Pick<PerformanceRow, "completedTrips" | "kmPer
 
 function sortPerformanceRows<T extends PerformanceRow>(rows: T[], sort: ComparisonSort) {
   const valueOrNullBottom = (value: number | null) => value == null ? Number.POSITIVE_INFINITY : value;
+  const accuracyValue = (row: PerformanceRow) =>
+    row.averageDifferenceKm == null ? Number.POSITIVE_INFINITY : Math.abs(row.averageDifferenceKm);
   const sorted = [...rows];
   if (sort === "lowest_cost_per_km") {
     return sorted.sort((a, b) => valueOrNullBottom(a.costPerKm) - valueOrNullBottom(b.costPerKm));
   }
+  if (sort === "worst_kml") {
+    return sorted.sort((a, b) => valueOrNullBottom(a.kmPerLitre) - valueOrNullBottom(b.kmPerLitre));
+  }
   if (sort === "highest_fuel_cost") {
     return sorted.sort((a, b) => b.cost - a.cost);
+  }
+  if (sort === "lowest_fuel_cost") {
+    return sorted.sort((a, b) => a.cost - b.cost);
   }
   if (sort === "most_actual_km") {
     return sorted.sort((a, b) => b.actualKm - a.actualKm);
   }
+  if (sort === "least_actual_km") {
+    return sorted.sort((a, b) => a.actualKm - b.actualKm);
+  }
   if (sort === "most_completed_trips") {
     return sorted.sort((a, b) => b.completedTrips - a.completedTrips);
+  }
+  if (sort === "most_accurate") {
+    return sorted.sort((a, b) => accuracyValue(a) - accuracyValue(b));
+  }
+  if (sort === "least_accurate") {
+    return sorted.sort((a, b) => accuracyValue(b) - accuracyValue(a));
   }
   return sorted.sort((a, b) => (b.kmPerLitre ?? -1) - (a.kmPerLitre ?? -1));
 }
@@ -1302,6 +1424,21 @@ export default function TripJourneyPage() {
       completed.length > 0
         ? completed.reduce((sum, trip) => sum + (getTripMetrics(trip).differenceKm ?? 0), 0) / completed.length
         : null;
+    const completionPercentage = baseFilteredTrips.length > 0
+      ? Math.round((completed.length / baseFilteredTrips.length) * 100)
+      : 0;
+    const routeAccuracyScore =
+      completed.length > 0
+        ? Math.max(
+            0,
+            100 -
+              completed.reduce((sum, trip) => {
+                const percent = Math.abs(getTripMetrics(trip).differencePercent ?? 0);
+                return sum + Math.min(percent, 100);
+              }, 0) /
+                completed.length
+          )
+        : 0;
 
     const buildRows = (getName: (trip: TripJourneyWithFuel) => string): PerformanceRow[] => {
       const rows = Array.from(
@@ -1366,6 +1503,36 @@ export default function TripJourneyPage() {
     const lowestCostVehicle = [...vehicleRows].filter((row) => row.costPerKm != null).sort((a, b) => (a.costPerKm ?? 0) - (b.costPerKm ?? 0))[0] ?? null;
     const mostExpensiveTrip = [...tripRows].filter((row) => row.status === "completed" && row.metrics.costPerKm != null).sort((a, b) => (b.metrics.costPerKm ?? 0) - (a.metrics.costPerKm ?? 0))[0] ?? null;
     const biggestDistanceDifference = [...tripRows].filter((row) => row.metrics.differenceKm != null).sort((a, b) => Math.abs(b.metrics.differenceKm ?? 0) - Math.abs(a.metrics.differenceKm ?? 0))[0] ?? null;
+    const accurateRouteRows = [...routeRows].filter((row) => row.averageDifferenceKm != null);
+    const mostAccurateRoute = [...accurateRouteRows].sort((a, b) => Math.abs(a.averageDifferenceKm ?? 0) - Math.abs(b.averageDifferenceKm ?? 0))[0] ?? null;
+    const leastAccurateRoute = [...accurateRouteRows].sort((a, b) => Math.abs(b.averageDifferenceKm ?? 0) - Math.abs(a.averageDifferenceKm ?? 0))[0] ?? null;
+    const largestRouteDifference = leastAccurateRoute?.averageDifferenceKm ?? null;
+    const fleetPerformanceScore = Math.round(
+      baseFilteredTrips.length > 0
+        ? Math.max(
+            0,
+            Math.min(
+              100,
+              completionPercentage * 0.55 +
+                routeAccuracyScore * 0.25 +
+                (100 - (baseFilteredTrips.filter((trip) => !hasValidActiveFuel(trip)).length / baseFilteredTrips.length) * 100) * 0.2
+            )
+          )
+        : 0
+    );
+    const monthMap = new Map<string, { label: string; completed: number; distance: number; litres: number; cost: number; kmL: number | null }>();
+    completed.forEach((trip) => {
+      const month = (trip.trip_date || "").slice(0, 7) || "Unknown";
+      const current = monthMap.get(month) ?? { label: month, completed: 0, distance: 0, litres: 0, cost: 0, kmL: null };
+      const metrics = getTripMetrics(trip);
+      current.completed += 1;
+      current.distance += metrics.actualDistance ?? 0;
+      current.litres += metrics.fuel.litres ?? 0;
+      current.cost += metrics.fuel.cost ?? 0;
+      current.kmL = current.litres > 0 ? current.distance / current.litres : null;
+      monthMap.set(month, current);
+    });
+    const monthlyTrends = Array.from(monthMap.values()).sort((a, b) => a.label.localeCompare(b.label)).slice(-6);
     const dataQualityNotes = [
       baseFilteredTrips.some((trip) => (getTripMetrics(trip).fuel.cost ?? 0) <= 0) ? copy.dataQualityNoFuelCost : "",
       baseFilteredTrips.some((trip) => trip.linkedFuelLogs.length > 0 && getTripMetrics(trip).fuel.linkedCost <= 0) ? copy.dataQualityLinkedNoCost : "",
@@ -1376,6 +1543,10 @@ export default function TripJourneyPage() {
     return {
       totalTrips: baseFilteredTrips.length,
       completedTrips: completed.length,
+      inProgressTrips: baseFilteredTrips.length - completed.length,
+      completionPercentage,
+      fleetPerformanceScore,
+      routeAccuracyScore,
       missingDataTrips: baseFilteredTrips.filter((trip) => !isCompletedTrip(trip)).length,
       missingMileage: baseFilteredTrips.filter((trip) => (getTripMetrics(trip).actualDistance ?? 0) <= 0).length,
       missingEstimate: baseFilteredTrips.filter((trip) => (getTripMetrics(trip).estimatedDistance ?? 0) <= 0).length,
@@ -1399,6 +1570,10 @@ export default function TripJourneyPage() {
       lowestCostVehicle,
       mostExpensiveTrip,
       biggestDistanceDifference,
+      mostAccurateRoute,
+      leastAccurateRoute,
+      largestRouteDifference,
+      monthlyTrends,
       dataQualityNotes
     };
   }, [baseFilteredTrips, copy]);
@@ -1406,12 +1581,30 @@ export default function TripJourneyPage() {
   const sortedDriverRows = useMemo(() => sortPerformanceRows(summary.driverRows, comparisonSort), [comparisonSort, summary.driverRows]);
   const sortedVehicleRows = useMemo(() => sortPerformanceRows(summary.vehicleRows, comparisonSort), [comparisonSort, summary.vehicleRows]);
   const sortedRouteRows = useMemo(() => sortPerformanceRows(summary.routeRows, comparisonSort), [comparisonSort, summary.routeRows]);
+  const topDriverRows = useMemo(
+    () =>
+      sortPerformanceRows(summary.driverRows, "best_kml").slice(0, 5).map((row) => {
+        const vehicleCounts = row.trips.reduce((map, trip) => {
+          const key = trip.vehicle_reg || trip.vehicle_type || "-";
+          map.set(key, (map.get(key) ?? 0) + 1);
+          return map;
+        }, new Map<string, number>());
+        const vehicle = Array.from(vehicleCounts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "-";
+        return { ...row, vehicle };
+      }),
+    [summary.driverRows]
+  );
   const sortedTripRows = useMemo(() => {
     return [...summary.tripRows].sort((a, b) => {
       if (comparisonSort === "lowest_cost_per_km") return (a.metrics.costPerKm ?? Number.POSITIVE_INFINITY) - (b.metrics.costPerKm ?? Number.POSITIVE_INFINITY);
+      if (comparisonSort === "worst_kml") return (a.metrics.kmPerLitre ?? Number.POSITIVE_INFINITY) - (b.metrics.kmPerLitre ?? Number.POSITIVE_INFINITY);
       if (comparisonSort === "highest_fuel_cost") return (b.metrics.fuel.cost ?? 0) - (a.metrics.fuel.cost ?? 0);
+      if (comparisonSort === "lowest_fuel_cost") return (a.metrics.fuel.cost ?? Number.POSITIVE_INFINITY) - (b.metrics.fuel.cost ?? Number.POSITIVE_INFINITY);
       if (comparisonSort === "most_actual_km") return (b.metrics.actualDistance ?? 0) - (a.metrics.actualDistance ?? 0);
+      if (comparisonSort === "least_actual_km") return (a.metrics.actualDistance ?? Number.POSITIVE_INFINITY) - (b.metrics.actualDistance ?? Number.POSITIVE_INFINITY);
       if (comparisonSort === "most_completed_trips") return a.status === b.status ? 0 : a.status === "completed" ? -1 : 1;
+      if (comparisonSort === "most_accurate") return Math.abs(a.metrics.differenceKm ?? Number.POSITIVE_INFINITY) - Math.abs(b.metrics.differenceKm ?? Number.POSITIVE_INFINITY);
+      if (comparisonSort === "least_accurate") return Math.abs(b.metrics.differenceKm ?? 0) - Math.abs(a.metrics.differenceKm ?? 0);
       return (b.metrics.kmPerLitre ?? -1) - (a.metrics.kmPerLitre ?? -1);
     });
   }, [comparisonSort, summary.tripRows]);
@@ -1488,6 +1681,43 @@ export default function TripJourneyPage() {
     params.set("tripId", trip.id);
     params.delete("trip");
     window.history.replaceState(null, "", `/trip-journey?${params.toString()}`);
+  };
+
+  const applyQuickFilter = (filter: "today" | "yesterday" | "week" | "month" | "missing_mileage" | "missing_fuel" | "completed") => {
+    const now = new Date();
+    setVisibleTripCount(10);
+    if (filter === "today") {
+      const date = toDateKey(now);
+      setFilters((current) => ({ ...current, fromDate: date, toDate: date, dataStatus: "all" }));
+      setAttentionFilter("all");
+      return;
+    }
+    if (filter === "yesterday") {
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      const date = toDateKey(yesterday);
+      setFilters((current) => ({ ...current, fromDate: date, toDate: date, dataStatus: "all" }));
+      setAttentionFilter("all");
+      return;
+    }
+    if (filter === "week") {
+      setFilters((current) => ({ ...current, fromDate: toDateKey(getWeekStart(now)), toDate: toDateKey(now), dataStatus: "all" }));
+      setAttentionFilter("all");
+      return;
+    }
+    if (filter === "month") {
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      setFilters((current) => ({ ...current, fromDate: toDateKey(firstDay), toDate: toDateKey(now), dataStatus: "all" }));
+      setAttentionFilter("all");
+      return;
+    }
+    if (filter === "completed") {
+      setFilters((current) => ({ ...current, dataStatus: "completed" }));
+      setAttentionFilter("all");
+      return;
+    }
+    setFilters((current) => ({ ...current, dataStatus: "all" }));
+    setAttentionFilter(filter);
   };
 
   const updateForm = (field: keyof TripForm, value: string | boolean) => {
@@ -1805,23 +2035,37 @@ export default function TripJourneyPage() {
         {notice ? <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">{notice}</div> : null}
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-3">
+      <section className="grid gap-4 xl:grid-cols-4">
         <div className="rounded-xl border border-brand-100 bg-white p-5 shadow-sm shadow-brand-950/5">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-brand-50 p-2 text-brand-700"><BarChart3 className="h-5 w-5" /></div>
               <div>
-                <p className="text-sm font-semibold text-slate-500">{copy.tripStatus}</p>
+                <p className="text-sm font-semibold text-slate-500">{copy.operationsOverview}</p>
                 <p className="mt-1 text-3xl font-bold text-slate-950">{summary.totalTrips}</p>
               </div>
             </div>
             <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-bold text-brand-700">{copy.trips}</span>
           </div>
           <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-            <div className={metricTileClass("green")}><p className="text-xs font-semibold opacity-80">{copy.completed}</p><p className="text-lg font-bold">{summary.completedTrips}</p></div>
+            <div className={metricTileClass("green")}><p className="text-xs font-semibold opacity-80">{copy.tripsCompleted}</p><p className="text-lg font-bold">{summary.completedTrips}</p></div>
+            <div className={metricTileClass(summary.inProgressTrips ? "amber" : "slate")}><p className="text-xs font-semibold opacity-80">{copy.tripsInProgress}</p><p className="text-lg font-bold">{summary.inProgressTrips}</p></div>
             <div className={metricTileClass(summary.missingMileage ? "amber" : "slate")}><p className="text-xs font-semibold opacity-80">{copy.missingMileage}</p><p className="text-lg font-bold">{summary.missingMileage}</p></div>
             <div className={metricTileClass(summary.missingEstimate ? "amber" : "slate")}><p className="text-xs font-semibold opacity-80">{copy.missingEstimate}</p><p className="text-lg font-bold">{summary.missingEstimate}</p></div>
             <div className={metricTileClass(summary.missingFuel ? "amber" : "slate")}><p className="text-xs font-semibold opacity-80">{copy.missingFuel}</p><p className="text-lg font-bold">{summary.missingFuel}</p></div>
+            <div className={metricTileClass("purple")}><p className="text-xs font-semibold opacity-80">{copy.overallCompletion}</p><p className="text-lg font-bold">{summary.completionPercentage}%</p></div>
+          </div>
+        </div>
+        <div className={`rounded-xl border p-5 shadow-sm shadow-slate-950/5 ${getScoreClass(summary.fleetPerformanceScore)}`}>
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-white/70 p-2"><Gauge className="h-5 w-5" /></div>
+            <p className="text-sm font-semibold">{copy.fleetPerformance}</p>
+          </div>
+          <p className="mt-4 text-5xl font-bold tracking-normal">{summary.fleetPerformanceScore}%</p>
+          <p className="mt-2 text-sm font-semibold opacity-80">{copy.fleetPerformanceHelper}</p>
+          <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+            <div className="rounded-lg bg-white/70 px-3 py-2"><p className="font-semibold opacity-70">{copy.overallCompletion}</p><p className="text-lg font-bold">{summary.completionPercentage}%</p></div>
+            <div className="rounded-lg bg-white/70 px-3 py-2"><p className="font-semibold opacity-70">{copy.routeAccuracy}</p><p className="text-lg font-bold">{formatNumber(summary.routeAccuracyScore)}%</p></div>
           </div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5">
@@ -1857,6 +2101,26 @@ export default function TripJourneyPage() {
             <h3 className="text-sm font-bold text-slate-950">{copy.filters}</h3>
             <p className="text-xs text-slate-500">{copy.filtersDescription}</p>
           </div>
+        </div>
+        <div className="mb-3 flex flex-wrap gap-2">
+          {[
+            ["today", copy.today],
+            ["yesterday", copy.yesterday],
+            ["week", copy.thisWeek],
+            ["month", copy.thisMonth],
+            ["missing_mileage", copy.missingMileageTitle],
+            ["missing_fuel", copy.missingFuelTitle],
+            ["completed", copy.completed]
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => applyQuickFilter(key as Parameters<typeof applyQuickFilter>[0])}
+              className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
+            >
+              {label}
+            </button>
+          ))}
         </div>
         <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[repeat(7,minmax(0,1fr))_auto]">
           <input type="date" value={filters.fromDate} onChange={(event) => setFilters((current) => ({ ...current, fromDate: event.target.value }))} className="form-input bg-white" />
@@ -1897,16 +2161,19 @@ export default function TripJourneyPage() {
               <p className={`text-xs font-semibold ${summary.missingMileage ? "text-amber-700" : "text-emerald-700"}`}>{copy.missingMileage}</p>
               <p className="mt-1 text-lg font-bold text-slate-950">{summary.missingMileage} {summary.missingMileage === 1 ? copy.trip : copy.trips}</p>
               <p className="mt-1 text-xs text-slate-500">{copy.actualKmNeeded}</p>
+              <span className="mt-3 inline-flex rounded-md bg-white/75 px-2.5 py-1 text-xs font-bold text-slate-700">{copy.viewTrips}</span>
             </button>
             <button type="button" onClick={() => setAttentionFilter("missing_estimate")} className={`rounded-lg border px-4 py-3 text-left transition ${attentionFilter === "missing_estimate" ? "border-brand-300 bg-brand-50 ring-2 ring-brand-100" : summary.missingEstimate ? "border-amber-200 bg-amber-50 hover:border-amber-300" : "border-emerald-100 bg-emerald-50/60 hover:border-emerald-200"}`}>
               <p className={`text-xs font-semibold ${summary.missingEstimate ? "text-amber-700" : "text-emerald-700"}`}>{copy.missingEstimate}</p>
               <p className="mt-1 text-lg font-bold text-slate-950">{summary.missingEstimate} {summary.missingEstimate === 1 ? copy.trip : copy.trips}</p>
               <p className="mt-1 text-xs text-slate-500">{copy.comparePlannedActual}</p>
+              <span className="mt-3 inline-flex rounded-md bg-white/75 px-2.5 py-1 text-xs font-bold text-slate-700">{copy.viewTrips}</span>
             </button>
             <button type="button" onClick={() => setAttentionFilter("missing_fuel")} className={`rounded-lg border px-4 py-3 text-left transition ${attentionFilter === "missing_fuel" ? "border-brand-300 bg-brand-50 ring-2 ring-brand-100" : summary.missingFuel ? "border-amber-200 bg-amber-50 hover:border-amber-300" : "border-emerald-100 bg-emerald-50/60 hover:border-emerald-200"}`}>
               <p className={`text-xs font-semibold ${summary.missingFuel ? "text-amber-700" : "text-emerald-700"}`}>{copy.missingFuel}</p>
               <p className="mt-1 text-lg font-bold text-slate-950">{summary.missingFuel} {summary.missingFuel === 1 ? copy.trip : copy.trips}</p>
               <p className="mt-1 text-xs text-slate-500">{copy.linkFuelLogsOrManual}</p>
+              <span className="mt-3 inline-flex rounded-md bg-white/75 px-2.5 py-1 text-xs font-bold text-slate-700">{copy.viewTrips}</span>
             </button>
           </div>
         </div>
@@ -1915,6 +2182,92 @@ export default function TripJourneyPage() {
             {copy.showAllTrips}
           </button>
         ) : null}
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-950/5">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-emerald-50 p-2 text-emerald-700"><MapPinned className="h-5 w-5" /></div>
+            <div>
+              <h3 className="section-title">{copy.routeAccuracy}</h3>
+              <p className="section-subtitle">{copy.comparePlannedActual}</p>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className={metricTileClass("purple")}><p className="text-xs font-semibold opacity-80">{copy.averageDifference}</p><p className="text-xl font-bold text-slate-950">{formatNumber(summary.averageDifference)} km</p></div>
+            <div className={metricTileClass(summary.largestRouteDifference != null ? "amber" : "slate")}><p className="text-xs font-semibold opacity-80">{copy.largestDifference}</p><p className="text-xl font-bold text-slate-950">{formatNumber(summary.largestRouteDifference)} km</p></div>
+            <div className={metricTileClass("green")}><p className="text-xs font-semibold opacity-80">{copy.mostAccurateRoute}</p><p className="truncate font-bold text-slate-950">{summary.mostAccurateRoute?.route ?? "-"}</p><p className="text-xs text-slate-500">{formatNumber(summary.mostAccurateRoute?.averageDifferenceKm)} km</p></div>
+            <div className={metricTileClass("amber")}><p className="text-xs font-semibold opacity-80">{copy.leastAccurateRoute}</p><p className="truncate font-bold text-slate-950">{summary.leastAccurateRoute?.route ?? "-"}</p><p className="text-xs text-slate-500">{formatNumber(summary.leastAccurateRoute?.averageDifferenceKm)} km</p></div>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-950/5">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-brand-50 p-2 text-brand-700"><BarChart3 className="h-5 w-5" /></div>
+            <div>
+              <h3 className="section-title">{copy.monthlyTrends}</h3>
+              <p className="section-subtitle">{summary.monthlyTrends.map((month) => month.label).join(" / ") || "-"}</p>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {[
+              { label: copy.tripsCompletedTrend, values: summary.monthlyTrends.map((month) => month.completed), value: summary.completedTrips },
+              { label: copy.distanceTravelledTrend, values: summary.monthlyTrends.map((month) => month.distance), value: summary.totalActual },
+              { label: copy.fuelUsedTrend, values: summary.monthlyTrends.map((month) => month.litres), value: summary.totalLitres },
+              { label: copy.fuelCostTrend, values: summary.monthlyTrends.map((month) => month.cost), value: summary.totalCost, money: true }
+            ].map((trend) => (
+              <div key={trend.label} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-xs font-bold uppercase text-slate-500">{trend.label}</p>
+                  <p className="font-bold text-slate-950">{trend.money ? formatCurrency(trend.value) : formatNumber(trend.value, trend.label === copy.fuelUsedTrend ? 2 : 0)}</p>
+                </div>
+                <svg viewBox="0 0 220 62" className="mt-2 h-16 w-full overflow-visible" role="img" aria-label={trend.label}>
+                  <polyline points={getTrendPolyline(trend.values)} fill="none" stroke="currentColor" strokeWidth="3" className="text-brand-600" vectorEffect="non-scaling-stroke" />
+                </svg>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h3 className="section-title">{copy.driverLeaderboard}</h3>
+            <p className="section-subtitle">{copy.topDriversHelper}</p>
+          </div>
+          <button type="button" onClick={() => { setComparisonTab("drivers"); setComparisonSort("best_kml"); }} className="btn-secondary min-h-9 px-3 py-1.5 text-xs">
+            {copy.sortBestKmL}
+          </button>
+        </div>
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-full divide-y divide-slate-200 text-sm">
+            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+              <tr>
+                <th className="px-3 py-3 text-left">{copy.rank}</th>
+                <th className="px-3 py-3 text-left">{copy.driver}</th>
+                <th className="px-3 py-3 text-left">{copy.vehicle}</th>
+                <th className="px-3 py-3 text-right">{copy.completed}</th>
+                <th className="px-3 py-3 text-right">{copy.avgKmL}</th>
+                <th className="px-3 py-3 text-right">{copy.avgCostKm}</th>
+                <th className="px-3 py-3 text-right">{copy.distanceTravelled}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 bg-white">
+              {topDriverRows.map((row, index) => (
+                <tr key={row.name} className="transition hover:bg-brand-50/45">
+                  <td className="px-3 py-3 font-bold text-slate-950">#{index + 1}</td>
+                  <td className="px-3 py-3 font-bold text-slate-950">{row.name}</td>
+                  <td className="px-3 py-3">{row.vehicle}</td>
+                  <td className="px-3 py-3 text-right font-semibold">{row.completedTrips}</td>
+                  <td className="px-3 py-3 text-right font-semibold">{formatNumber(row.kmPerLitre, 2)}</td>
+                  <td className="px-3 py-3 text-right">{formatCurrency(row.costPerKm)}</td>
+                  <td className="px-3 py-3 text-right">{formatNumber(row.actualKm)} km</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section id="trip-records" className="scroll-mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5">
@@ -1937,6 +2290,7 @@ export default function TripJourneyPage() {
             {visibleTrips.map((trip) => {
               const metrics = getTripMetrics(trip);
               const derivedStatus = getDerivedTripStatus(trip);
+              const completionPercent = getTripCompletionPercent(trip);
               const healthLabel = derivedStatus === "completed"
                   ? getTripHealthLabel(metrics, {
                     averageKmPerLitre: summary.averageKmPerLitre,
@@ -1964,7 +2318,7 @@ export default function TripJourneyPage() {
                         <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600">{copy.noFuelManualWarning}</p>
                       ) : null}
                     </div>
-                    <div className="grid gap-2 text-xs sm:grid-cols-4 lg:w-[680px]">
+                    <div className="grid gap-2 text-xs sm:grid-cols-4 lg:w-[760px]">
                       <div className={metricTileClass(metrics.estimatedDistance == null ? "amber" : "purple")}><p className="font-semibold opacity-80">{copy.estimatedKmShort}</p><p className="font-bold text-slate-950">{metrics.estimatedDistance == null ? copy.missing : `${formatNumber(metrics.estimatedDistance)} km`}</p><p className="text-[11px] text-slate-500">{getEstimateSourceLabel(trip, copy)}</p></div>
                       <div className={metricTileClass(metrics.actualDistance == null ? "amber" : "green")}><p className="font-semibold opacity-80">{copy.actualKm}</p><p className="font-bold text-slate-950">{metrics.actualDistance == null ? copy.missing : `${formatNumber(metrics.actualDistance)} km`}</p></div>
                       <div className={metricTileClass(metrics.differenceKm != null && metrics.differenceKm > 0 ? "amber" : "slate")}><p className="font-semibold opacity-80">{copy.difference}</p><p className="font-bold text-slate-950">{metrics.differenceKm == null ? "-" : `${formatNumber(metrics.differenceKm)} km`}</p></div>
@@ -1972,6 +2326,7 @@ export default function TripJourneyPage() {
                       <div className={metricTileClass(metrics.fuel.cost != null && metrics.fuel.cost > 0 ? "slate" : "amber")}><p className="font-semibold opacity-80">{copy.cost}</p><p className="font-bold text-slate-950">{metrics.fuel.cost != null && metrics.fuel.cost > 0 ? formatCurrency(metrics.fuel.cost) : copy.noFuelCost}</p></div>
                       <div className={metricTileClass("green")}><p className="font-semibold opacity-80">{copy.kmL}</p><p className="font-bold text-slate-950">{formatNumber(metrics.kmPerLitre, 2)}</p></div>
                       <div className={metricTileClass("slate")}><p className="font-semibold opacity-80">{copy.costKm}</p><p className="font-bold text-slate-950">{formatCurrency(metrics.costPerKm)}</p></div>
+                      <div className={metricTileClass(completionPercent === 100 ? "green" : "amber")}><p className="font-semibold opacity-80">{copy.completion}</p><p className="font-bold text-slate-950">{completionPercent}%</p></div>
                     </div>
                     <div className="flex shrink-0 flex-wrap items-center gap-2 lg:flex-col lg:items-end">
                       {derivedStatus !== "completed" ? (
@@ -1979,7 +2334,12 @@ export default function TripJourneyPage() {
                           {copy.needsAttentionAction}: {statusActionText(derivedStatus, copy)}
                         </span>
                       ) : null}
-                      <button type="button" onClick={() => openTrip(trip)} className="btn-secondary min-h-8 px-3 py-1 text-xs">{copy.reviewEdit}</button>
+                      <button type="button" onClick={() => openTrip(trip)} className="btn-secondary min-h-8 px-3 py-1 text-xs">{copy.view}</button>
+                      <button type="button" onClick={() => openTrip(trip)} className="btn-secondary min-h-8 px-3 py-1 text-xs">{copy.edit}</button>
+                      {trip.booking_id || trip.booking_diary_id ? (
+                        <a href={`/booking-diary?bookingId=${encodeURIComponent(String(trip.booking_id ?? trip.booking_diary_id))}`} className="btn-secondary min-h-8 px-3 py-1 text-xs">{copy.openBooking}</a>
+                      ) : null}
+                      <button type="button" onClick={() => { openTrip(trip); setSelectedTripTab("fuel"); }} className="btn-secondary min-h-8 px-3 py-1 text-xs">{copy.openFuelLogs}</button>
                       <button type="button" onClick={() => requestDeleteTrip(trip)} className="min-h-8 rounded-lg border border-rose-200 bg-white px-3 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-50">{copy.delete}</button>
                     </div>
                   </div>
@@ -2058,7 +2418,8 @@ export default function TripJourneyPage() {
 
           <div className="p-4">
             {selectedTripTab === "overview" ? (
-              <div className="rounded-lg border border-brand-100 bg-brand-50/45 p-4">
+              <div className="space-y-4">
+                <div className="rounded-lg border border-brand-100 bg-brand-50/45 p-4">
                   <h4 className="font-bold text-slate-950">{copy.route}</h4>
                   <p className="mt-2 text-sm font-semibold leading-6 text-slate-700" title={getRoutePreview(selectedTrip)}>{getShortRoutePreview(selectedTrip, copy)}</p>
                   <div className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -2066,6 +2427,29 @@ export default function TripJourneyPage() {
                     <div><p className="text-xs text-slate-500">{copy.pickupTime}</p><p className="font-bold text-slate-950">{selectedTrip.pickup_time || "-"}</p></div>
                     <div><p className="text-xs text-slate-500">{copy.bookingRef}</p><p className="font-bold text-slate-950">{selectedTrip.booking_reference || "-"}</p></div>
                   </div>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-white p-4">
+                  <h4 className="font-bold text-slate-950">{copy.journeyTimeline}</h4>
+                  <div className="mt-3 flex flex-col gap-2 md:flex-row md:items-stretch">
+                    {compactRouteParts(getShortRoutePreview(selectedTrip, copy).split(" -> ")).map((stop, index, routeStops) => (
+                      <div key={`${stop}-${index}`} className="flex flex-1 items-center gap-2">
+                        <div className="min-h-[72px] flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                          <p className="text-[11px] font-bold uppercase text-slate-500">
+                            {index === 0 ? copy.pickup : index === routeStops.length - 1 && selectedTrip.return_to_depot ? copy.return : index === routeStops.length - 1 ? copy.dropoff : copy.additionalStops}
+                          </p>
+                          <p className="mt-1 line-clamp-2 text-sm font-bold text-slate-950">{stop}</p>
+                        </div>
+                        {index < routeStops.length - 1 ? <span className="hidden text-slate-400 md:inline">→</span> : null}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 grid gap-2 sm:grid-cols-4">
+                    <div className={metricTileClass("purple")}><p className="text-xs font-semibold opacity-80">{copy.estimatedKm}</p><p className="font-bold text-slate-950">{formatNumber(selectedFormMetrics?.estimatedDistance)} km</p></div>
+                    <div className={metricTileClass("green")}><p className="text-xs font-semibold opacity-80">{copy.actualKm}</p><p className="font-bold text-slate-950">{formatNumber(selectedFormMetrics?.actualDistance)} km</p></div>
+                    <div className={metricTileClass("amber")}><p className="text-xs font-semibold opacity-80">{copy.difference}</p><p className="font-bold text-slate-950">{formatNumber(selectedFormMetrics?.differenceKm)} km</p></div>
+                    <div className={metricTileClass("slate")}><p className="text-xs font-semibold opacity-80">{copy.fuelUsedTrend}</p><p className="font-bold text-slate-950">{formatNumber(selectedFormMetrics?.fuelLitres, 2)} L</p></div>
+                  </div>
+                </div>
               </div>
             ) : null}
 
@@ -2267,10 +2651,15 @@ export default function TripJourneyPage() {
           </div>
           <select value={comparisonSort} onChange={(event) => setComparisonSort(event.target.value as ComparisonSort)} className="form-input w-full bg-white sm:w-56">
             <option value="best_kml">{copy.sortBestKmL}</option>
+            <option value="worst_kml">{copy.sortWorstKmL}</option>
             <option value="lowest_cost_per_km">{copy.sortLowestCostKm}</option>
             <option value="highest_fuel_cost">{copy.sortHighestFuelCost}</option>
+            <option value="lowest_fuel_cost">{copy.sortLowestFuelCost}</option>
             <option value="most_actual_km">{copy.sortMostActualKm}</option>
+            <option value="least_actual_km">{copy.sortShortestTrip}</option>
             <option value="most_completed_trips">{copy.sortMostCompletedTrips}</option>
+            <option value="most_accurate">{copy.sortMostAccurate}</option>
+            <option value="least_accurate">{copy.sortLeastAccurate}</option>
           </select>
         </div>
 
@@ -2307,9 +2696,9 @@ export default function TripJourneyPage() {
           <div className="mt-4">
             <div className="hidden overflow-x-auto lg:block">
               <table className="min-w-full divide-y divide-slate-200 text-sm">
-                <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-3 py-3 text-left">{copy.rank}</th><th className="px-3 py-3 text-left">{comparisonTab === "drivers" ? copy.driver : copy.vehicle}</th><th className="px-3 py-3 text-right">{copy.completed}</th><th className="px-3 py-3 text-right">{copy.actualKm}</th><th className="px-3 py-3 text-right">{copy.litres}</th><th className="px-3 py-3 text-right">{copy.fuelCost}</th><th className="px-3 py-3 text-right">{copy.avgKmL}</th><th className="px-3 py-3 text-right">{copy.avgCostKm}</th><th className="px-3 py-3 text-left">{copy.label}</th></tr></thead>
+                <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-3 py-3 text-left">{copy.rank}</th><th className="px-3 py-3 text-left">{comparisonTab === "drivers" ? copy.driver : copy.vehicleRegistration}</th><th className="px-3 py-3 text-right">{copy.completed}</th><th className="px-3 py-3 text-right">{copy.actualKm}</th><th className="px-3 py-3 text-right">{copy.litres}</th><th className="px-3 py-3 text-right">{copy.fuelCost}</th><th className="px-3 py-3 text-right">{copy.avgKmL}</th><th className="px-3 py-3 text-right">{copy.avgCostKm}</th><th className="px-3 py-3 text-right">{copy.estimatedVsActual}</th><th className="px-3 py-3 text-left">{copy.label}</th></tr></thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
-                  {(comparisonTab === "drivers" ? sortedDriverRows : sortedVehicleRows).map((row, index) => <tr key={row.name} className="transition hover:bg-brand-50/45"><td className="px-3 py-3 font-bold text-slate-950">#{index + 1}</td><td className="px-3 py-3 font-bold text-slate-950">{row.name}</td><td className="px-3 py-3 text-right font-semibold">{row.completedTrips}</td><td className="px-3 py-3 text-right">{formatNumber(row.actualKm)}</td><td className="px-3 py-3 text-right">{formatNumber(row.litres, 2)}</td><td className="px-3 py-3 text-right">{formatCurrency(row.cost)}</td><td className="px-3 py-3 text-right font-semibold">{formatNumber(row.kmPerLitre, 2)}</td><td className="px-3 py-3 text-right font-semibold">{formatCurrency(row.costPerKm)}</td><td className="px-3 py-3"><span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${getHealthBadgeClass(row.performanceLabel, copy)}`}>{row.performanceLabel}</span></td></tr>)}
+                  {(comparisonTab === "drivers" ? sortedDriverRows : sortedVehicleRows).map((row, index) => <tr key={row.name} className="transition hover:bg-brand-50/45"><td className="px-3 py-3 font-bold text-slate-950">#{index + 1}</td><td className="px-3 py-3 font-bold text-slate-950">{row.name}</td><td className="px-3 py-3 text-right font-semibold">{row.completedTrips}</td><td className="px-3 py-3 text-right">{formatNumber(row.actualKm)}</td><td className="px-3 py-3 text-right">{formatNumber(row.litres, 2)}</td><td className="px-3 py-3 text-right">{formatCurrency(row.cost)}</td><td className="px-3 py-3 text-right font-semibold">{formatNumber(row.kmPerLitre, 2)}</td><td className="px-3 py-3 text-right font-semibold">{formatCurrency(row.costPerKm)}</td><td className="px-3 py-3 text-right">{row.estimatedKm > 0 ? `${formatNumber(((row.actualKm - row.estimatedKm) / row.estimatedKm) * 100, 1)}%` : "-"}</td><td className="px-3 py-3"><span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${getHealthBadgeClass(row.performanceLabel, copy)}`}>{row.performanceLabel}</span></td></tr>)}
                 </tbody>
               </table>
             </div>
