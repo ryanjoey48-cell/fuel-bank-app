@@ -7,6 +7,7 @@ import {
   BarChart3,
   CalendarDays,
   ChevronRight,
+  CircleHelp,
   Droplets,
   LayoutDashboard,
   MapPinned,
@@ -20,7 +21,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { fetchSupportTicketNotificationCount } from "@/lib/data";
 import { useLanguage } from "@/lib/language-provider";
+import { supabase } from "@/lib/supabase";
 
 type SidebarProps = {
   open: boolean;
@@ -28,6 +31,7 @@ type SidebarProps = {
 };
 
 type NavigationItem = {
+  badgeCount?: number;
   href: string;
   label: string;
   icon: LucideIcon;
@@ -45,11 +49,40 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   const { t } = useLanguage();
   const [desktopExpanded, setDesktopExpanded] = useState(false);
   const [preferenceLoaded, setPreferenceLoaded] = useState(false);
+  const [supportTicketCount, setSupportTicketCount] = useState(0);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     setDesktopExpanded(window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true");
     setPreferenceLoaded(true);
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    supabase.auth.getUser().then(async ({ data }) => {
+      const email = data.user?.email?.toLowerCase() ?? "";
+      const role = String(data.user?.user_metadata?.role ?? data.user?.app_metadata?.role ?? "").toLowerCase();
+      const admin = email === "joeryan09@outlook.com" || role === "admin";
+      if (!active) return;
+      setIsAdmin(admin);
+      if (admin) {
+        setSupportTicketCount(await fetchSupportTicketNotificationCount(["Open", "In Progress"]));
+      }
+    });
+
+    const handleSupportChange = () => {
+      if (!active || !isAdmin) return;
+      void fetchSupportTicketNotificationCount(["Open", "In Progress"]).then((count) => {
+        if (active) setSupportTicketCount(count);
+      });
+    };
+
+    window.addEventListener("fuel-bank:data-changed", handleSupportChange);
+    return () => {
+      active = false;
+      window.removeEventListener("fuel-bank:data-changed", handleSupportChange);
+    };
+  }, [isAdmin]);
 
   useEffect(() => {
     if (!preferenceLoaded) {
@@ -87,7 +120,20 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         { href: "/weekly-mileage", label: t.nav.weeklyMileage, icon: Route },
         { href: "/drivers", label: t.nav.drivers, icon: Truck }
       ]
-    }
+    },
+    ...(isAdmin
+      ? [{
+          label: t.support.adminSectionTitle,
+          items: [
+            {
+              href: "/admin/support-tickets",
+              label: t.support.menu.adminSupportTickets,
+              icon: CircleHelp,
+              badgeCount: supportTicketCount
+            }
+          ]
+        }]
+      : [])
   ];
 
   return (
@@ -190,7 +236,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                 </p>
               </div>
               <div className="space-y-1.5">
-                {group.items.map(({ href, label, icon: Icon }) => {
+                {group.items.map(({ href, label, icon: Icon, badgeCount }) => {
                   const active = pathname === href;
 
                   return (
@@ -217,13 +263,18 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                       ) : null}
                       <div
                         className={clsx(
-                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-[1rem] border transition",
+                          "relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[1rem] border transition",
                           active
                             ? "border-[#8B7CF6]/60 bg-[#6750D8]/28 text-violet-50"
                             : "border-white/10 bg-white/[0.055] text-violet-100 group-hover:border-white/16 group-hover:bg-white/[0.09] group-hover:text-white"
                         )}
                       >
                         <Icon className="h-[18px] w-[18px]" />
+                        {badgeCount ? (
+                          <span className="absolute -right-1 -top-1 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-black leading-none text-white shadow-[0_0_0_2px_rgba(31,27,61,0.95)]">
+                            {badgeCount > 99 ? "99+" : badgeCount}
+                          </span>
+                        ) : null}
                       </div>
                       <div className={clsx("min-w-0 flex-1 overflow-hidden", !desktopExpanded && "min-[1367px]:hidden")}>
                         <p className="truncate font-semibold">{label}</p>
@@ -261,7 +312,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                 !desktopExpanded && "min-[1367px]:sr-only"
               )}
             >
-              Language
+              {t.common.language}
             </p>
             <LanguageSwitcher compact tone="sidebar" />
           </div>

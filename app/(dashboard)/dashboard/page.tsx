@@ -12,6 +12,7 @@ import {
   Plus,
   RefreshCw,
   Route,
+  Ticket,
   Truck,
   UserRound,
   Wallet
@@ -24,6 +25,7 @@ import {
   fetchDrivers,
   fetchFuelLogs,
   fetchOilChangeBaselinesForVehicles,
+  fetchSupportTicketNotificationCount,
   fetchTransfers,
   fetchTripJourneys,
   fetchVehicles,
@@ -488,6 +490,7 @@ export default function DashboardPage() {
   const [weeklyMileage, setWeeklyMileage] = useState<WeeklyMileageEntry[]>([]);
   const [bookings, setBookings] = useState<BookingDiaryEntry[]>([]);
   const [tripJourneys, setTripJourneys] = useState<TripJourneyWithFuel[]>([]);
+  const [supportTicketAttentionCount, setSupportTicketAttentionCount] = useState(0);
   const [selectedMonth, setSelectedMonth] = useState(() => getCurrentMonthKey());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -574,14 +577,15 @@ export default function DashboardPage() {
         }
         setError(null);
 
-        const [driverRows, vehicleRows, fuelRows, transferRows, mileageRows, bookingRows, tripRows] = await Promise.all([
+        const [driverRows, vehicleRows, fuelRows, transferRows, mileageRows, bookingRows, tripRows, supportTicketsWaiting] = await Promise.all([
           fetchDrivers(),
           fetchVehicles(),
           fetchFuelLogs(),
           fetchTransfers(),
           fetchWeeklyMileage(),
           fetchBookingDiaryEntries(),
-          fetchTripJourneys()
+          fetchTripJourneys(),
+          fetchSupportTicketNotificationCount(["Open", "In Progress", "Waiting"])
         ]);
         const baselineRows = await fetchOilChangeBaselinesForVehicles(vehicleRows);
 
@@ -593,6 +597,7 @@ export default function DashboardPage() {
         setWeeklyMileage(mileageRows);
         setBookings(bookingRows);
         setTripJourneys(tripRows);
+        setSupportTicketAttentionCount(supportTicketsWaiting);
       } catch (err) {
         console.error("Dashboard load error:", err);
         setError(t.dashboard.loadDashboardError);
@@ -734,6 +739,19 @@ export default function DashboardPage() {
     const oilDueSoonCount = oilDueRows.length - oilOverdueCount;
     const needsBaselineCount = oilAttentionRows.filter((row) => row.status === "not_set" || !hasReliableOilBaseline(row)).length;
 
+    if (supportTicketAttentionCount) {
+      items.push({
+        actionHref: "/admin/support-tickets",
+        actionLabel: t.support.notifications.viewTickets,
+        count: supportTicketAttentionCount,
+        detail: t.support.notifications.supportTicketsWaitingDetail,
+        icon: Ticket,
+        key: "support-tickets-waiting",
+        title: t.support.notifications.supportTicketsWaiting,
+        tone: "info"
+      });
+    }
+
     if (oilDueRows.length || needsBaselineCount) {
       const firstOil = oilDueRows[0] ?? oilAttentionRows[0];
       const detail = firstOil
@@ -813,7 +831,7 @@ export default function DashboardPage() {
     }
 
     return items;
-  }, [copy.bankTransfersNotChecked, copy.dueSoon, copy.fuelEntries, copy.fuelLogsNotChecked, copy.missingFuelDetail, copy.missingFuelTitle, copy.needsBaseline, copy.notCheckedThisMonth, copy.oilDue, copy.overdue, copy.remaining, copy.transfers, language, missingFuelRows.length, monthlyBookingsWithoutTrips.length, oilAttentionRows, oilDueRows, opsCopy.missingTripRecords, opsCopy.viewFuelLogs, opsCopy.viewLogs, opsCopy.viewTripJourney, opsCopy.viewVehicles, uncheckedFuelCount, uncheckedTransferCount]);
+  }, [copy.bankTransfersNotChecked, copy.dueSoon, copy.fuelEntries, copy.fuelLogsNotChecked, copy.missingFuelDetail, copy.missingFuelTitle, copy.needsBaseline, copy.notCheckedThisMonth, copy.oilDue, copy.overdue, copy.remaining, copy.transfers, language, missingFuelRows.length, monthlyBookingsWithoutTrips.length, oilAttentionRows, oilDueRows, opsCopy.missingTripRecords, opsCopy.viewFuelLogs, opsCopy.viewLogs, opsCopy.viewTripJourney, opsCopy.viewVehicles, supportTicketAttentionCount, t.support.notifications.supportTicketsWaiting, t.support.notifications.supportTicketsWaitingDetail, t.support.notifications.viewTickets, uncheckedFuelCount, uncheckedTransferCount]);
 
   useEffect(() => {
     if (process.env.NODE_ENV === "production") {

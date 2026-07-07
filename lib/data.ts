@@ -3481,16 +3481,39 @@ export async function createSupportTicket(payload: {
   screen_size?: string | null;
   screenshot_url?: string | null;
 }) {
+  const subject = payload.subject.trim();
+  const description = payload.description.trim();
+  const category = payload.category.trim();
+  const priority = payload.priority.trim();
+
+  if (!category || !priority || !subject || !description) {
+    throw new Error("Invalid request: category, priority, subject, and description are required.");
+  }
+
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData.user) {
+    logDataError("createSupportTicket auth error:", authError ?? new Error("No authenticated user."), payload);
+    throw new Error("Authentication required: please sign in again before submitting a support ticket.");
+  }
+
+  const authenticatedUser = authData.user;
+  const userId = authenticatedUser.id;
+  const userEmail = authenticatedUser.email || payload.user_email.trim();
+
+  if (!userEmail || userEmail === "unknown") {
+    throw new Error("Invalid request: authenticated user email is missing.");
+  }
+
   const { data, error } = await supabase
     .from("support_tickets")
     .insert({
-      user_id: payload.user_id,
-      user_email: payload.user_email,
+      user_id: userId,
+      user_email: userEmail,
       user_role: payload.user_role ?? null,
-      category: payload.category,
-      priority: payload.priority,
-      subject: payload.subject,
-      description: payload.description,
+      category,
+      priority,
+      subject,
+      description,
       page_path: payload.page_path ?? null,
       current_url: payload.current_url ?? null,
       browser_info: payload.browser_info ?? null,
@@ -3501,8 +3524,17 @@ export async function createSupportTicket(payload: {
     .single();
 
   if (error) {
-    logDataError("createSupportTicket error:", error, payload);
-    throw error;
+    const serialized = serializeError(error);
+    logDataError("createSupportTicket error:", error, { ...payload, user_id: userId, user_email: userEmail });
+    throw new Error(
+      [
+        "Support ticket submission failed.",
+        serialized.message,
+        serialized.code ? `Code: ${serialized.code}` : "",
+        serialized.details ? `Details: ${serialized.details}` : "",
+        serialized.hint ? `Hint: ${serialized.hint}` : ""
+      ].filter(Boolean).join(" ")
+    );
   }
 
   dispatchDataChange("support_tickets");
@@ -3552,11 +3584,95 @@ export async function updateSupportTicketStatus(id: string, status: SupportTicke
   return data as SupportTicket;
 }
 
-export async function fetchSupportTicketNotificationCount() {
+export async function updateSupportTicketAdminFields(id: string, payload: {
+  status?: SupportTicketStatus;
+  admin_note?: string | null;
+}) {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  const user = authData.user;
+  const role = String(user?.user_metadata?.role ?? user?.app_metadata?.role ?? "").toLowerCase();
+  const email = String(user?.email ?? "").toLowerCase();
+
+  if (authError || !user) {
+    logDataError("updateSupportTicketAdminFields auth error:", authError ?? new Error("No authenticated user."), { id, payload });
+    throw new Error("Authentication required: please sign in again before updating support tickets.");
+  }
+
+  if (email !== "joeryan09@outlook.com" && role !== "admin") {
+    throw new Error("Admin permission required to update support tickets.");
+  }
+
+  const updatePayload: Record<string, unknown> = {};
+  if (payload.status) updatePayload.status = payload.status;
+  if ("admin_note" in payload) updatePayload.admin_note = payload.admin_note;
+
+  const { data, error } = await supabase
+    .from("support_tickets")
+    .update(updatePayload)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) {
+    logDataError("updateSupportTicketAdminFields error:", error, { id, payload });
+    const serialized = serializeError(error);
+    throw new Error(
+      [
+        "Support ticket update failed.",
+        serialized.message,
+        serialized.code ? `Code: ${serialized.code}` : "",
+        serialized.details ? `Details: ${serialized.details}` : "",
+        serialized.hint ? `Hint: ${serialized.hint}` : ""
+      ].filter(Boolean).join(" ")
+    );
+  }
+
+  dispatchDataChange("support_tickets");
+  return data as SupportTicket;
+}
+
+export async function deleteSupportTicket(id: string) {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  const user = authData.user;
+  const role = String(user?.user_metadata?.role ?? user?.app_metadata?.role ?? "").toLowerCase();
+  const email = String(user?.email ?? "").toLowerCase();
+
+  if (authError || !user) {
+    logDataError("deleteSupportTicket auth error:", authError ?? new Error("No authenticated user."), { id });
+    throw new Error("Authentication required: please sign in again before deleting support tickets.");
+  }
+
+  if (email !== "joeryan09@outlook.com" && role !== "admin") {
+    throw new Error("Admin permission required to delete support tickets.");
+  }
+
+  const { error } = await supabase
+    .from("support_tickets")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    logDataError("deleteSupportTicket error:", error, { id });
+    const serialized = serializeError(error);
+    throw new Error(
+      [
+        "Support ticket delete failed.",
+        serialized.message,
+        serialized.code ? `Code: ${serialized.code}` : "",
+        serialized.details ? `Details: ${serialized.details}` : "",
+        serialized.hint ? `Hint: ${serialized.hint}` : ""
+      ].filter(Boolean).join(" ")
+    );
+  }
+
+  dispatchDataChange("support_tickets");
+}
+
+export async function fetchSupportTicketNotificationCount(statuses: SupportTicketStatus[] = ["Open", "In Progress"]) {
   const { count, error } = await supabase
     .from("support_tickets")
     .select("id", { count: "exact", head: true })
-    .in("status", ["Open", "In Progress", "Waiting"]);
+    .in("status", statuses);
 
   if (error) {
     logDataError("fetchSupportTicketNotificationCount error:", error, {});

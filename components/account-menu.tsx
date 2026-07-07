@@ -25,6 +25,7 @@ import {
   fetchVehicles,
   fetchWeeklyMileage
 } from "@/lib/data";
+import { useLanguage } from "@/lib/language-provider";
 import { buildOilChangeAlertRows } from "@/lib/operations";
 import { supabase } from "@/lib/supabase";
 
@@ -117,6 +118,7 @@ function getInitials(displayName: string, email: string) {
 export function AccountMenu({ compact = false }: AccountMenuProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const { t } = useLanguage();
   const rootRef = useRef<HTMLDivElement>(null);
   const notificationButtonRef = useRef<HTMLButtonElement>(null);
   const accountButtonRef = useRef<HTMLButtonElement>(null);
@@ -131,6 +133,7 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
   });
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [supportTicketCount, setSupportTicketCount] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -149,6 +152,28 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
       subscription.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    if (!isAdminUser(user)) {
+      setSupportTicketCount(0);
+      return;
+    }
+
+    let active = true;
+    const loadSupportCount = () => {
+      void fetchSupportTicketNotificationCount(["Open", "In Progress"]).then((count) => {
+        if (active) setSupportTicketCount(count);
+      });
+    };
+
+    loadSupportCount();
+    window.addEventListener("fuel-bank:data-changed", loadSupportCount);
+
+    return () => {
+      active = false;
+      window.removeEventListener("fuel-bank:data-changed", loadSupportCount);
+    };
+  }, [user]);
 
   useEffect(() => {
     setPortalReady(true);
@@ -217,9 +242,9 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
   const unreadNotificationCount = notifications.reduce((total, item) => total + (Number(item.value) || 0), 0);
 
   const routeItems: AccountRouteItem[] = [
-    { label: "My Profile", icon: UserCircle, href: "/profile" },
-    { label: "Change Password", icon: KeyRound, href: "/change-password" },
-    { label: "Support & Feedback", icon: HelpCircle, href: "/support" }
+    { label: t.support.menu.myProfile, icon: UserCircle, href: "/profile" },
+    { label: t.support.menu.changePassword, icon: KeyRound, href: "/change-password" },
+    { label: t.support.menu.supportFeedback, icon: HelpCircle, href: "/support" }
   ];
 
   const loadNotifications = async () => {
@@ -240,16 +265,16 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
 
       setNotifications([
         ...(isAdminUser(user) && supportTickets > 0
-          ? [{ label: "Support tickets", value: String(supportTickets), href: "/admin/support-tickets", icon: Ticket, tone: "purple" as const }]
+          ? [{ label: t.support.notifications.supportTickets, value: String(supportTickets), href: "/admin/support-tickets", icon: Ticket, tone: "purple" as const }]
           : []),
         ...(oilAttention > 0
-          ? [{ label: "Oil changes overdue", value: String(oilAttention), href: "/weekly-mileage", icon: Wrench, tone: "amber" as const }]
+          ? [{ label: t.support.notifications.oilChangesOverdue, value: String(oilAttention), href: "/weekly-mileage", icon: Wrench, tone: "amber" as const }]
           : []),
         ...(uncheckedFuel > 0
-          ? [{ label: "Fuel logs not checked", value: String(uncheckedFuel), href: "/fuel-logs?review=not_checked", icon: Fuel, tone: "slate" as const }]
+          ? [{ label: t.support.notifications.fuelLogsNotChecked, value: String(uncheckedFuel), href: "/fuel-logs?review=not_checked", icon: Fuel, tone: "slate" as const }]
           : []),
         ...(missingMileage > 0
-          ? [{ label: "Missing mileage/fuel details", value: String(missingMileage), href: "/fuel-logs?review=missing_mileage", icon: AlertTriangle, tone: "rose" as const }]
+          ? [{ label: t.support.notifications.missingMileageFuelDetails, value: String(missingMileage), href: "/fuel-logs?review=missing_mileage", icon: AlertTriangle, tone: "rose" as const }]
           : [])
       ]);
     } finally {
@@ -302,7 +327,7 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
         <>
           <button
             type="button"
-            aria-label="Close account menu"
+            aria-label={t.support.close}
             className="fixed inset-0 cursor-default bg-transparent"
             style={{ zIndex: "var(--z-dropdown-backdrop)" }}
             onClick={closeMenus}
@@ -319,14 +344,16 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
               }}
             >
               <div className="border-b border-slate-100 bg-slate-50/70 px-4 py-3">
-                <p className="text-sm font-semibold text-slate-950">Notifications</p>
+                <p className="text-sm font-semibold text-slate-950">{t.support.notifications.title}</p>
                 <p className="mt-0.5 text-xs text-slate-500">
-                  {unreadNotificationCount > 0 ? `${unreadNotificationCount} item${unreadNotificationCount === 1 ? "" : "s"} need attention` : "You're all caught up"}
+                  {unreadNotificationCount > 0
+                    ? t.support.notifications.needAttention.replace("{count}", String(unreadNotificationCount))
+                    : t.support.notifications.caughtUp}
                 </p>
               </div>
               <div className="grid max-h-[min(28rem,calc(100vh-7rem))] gap-1 overflow-y-auto p-2.5">
                 {notificationsLoading ? (
-                  <p className="rounded-2xl bg-slate-50 px-3 py-4 text-sm font-medium text-slate-500">Loading notifications...</p>
+                  <p className="rounded-2xl bg-slate-50 px-3 py-4 text-sm font-medium text-slate-500">{t.support.notifications.loading}</p>
                 ) : notifications.length ? notifications.map((item) => {
                   const Icon = item.icon;
                   const toneClass =
@@ -350,7 +377,7 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-semibold text-slate-800">{item.label}</span>
-                        <span className="block text-xs text-slate-500">Open details</span>
+                        <span className="block text-xs text-slate-500">{t.support.notifications.openDetails}</span>
                       </span>
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-700">
                         {item.value}
@@ -360,7 +387,7 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
                 }) : (
                   <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-6 text-center">
                     <Bell className="mx-auto h-5 w-5 text-slate-400" />
-                    <p className="mt-2 text-sm font-semibold text-slate-700">No notifications yet.</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-700">{t.support.notifications.noNotifications}</p>
                   </div>
                 )}
               </div>
@@ -384,11 +411,11 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-slate-950">{displayName}</p>
-                    <p className="truncate text-xs text-slate-500">{email || "Signed in user"}</p>
+                    <p className="truncate text-xs text-slate-500">{email || t.support.menu.signedInUser}</p>
                     <div className="mt-2 flex items-center gap-2">
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                        Signed in
+                        {t.support.menu.signedIn}
                       </span>
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-700">
                         {normalizedRole || "STAFF"}
@@ -422,7 +449,7 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
                     <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-50 text-brand-700">
                       <CircleHelp className="h-4 w-4" />
                     </span>
-                    Admin Support Tickets
+                    {t.support.menu.adminSupportTickets}
                   </button>
                 ) : null}
 
@@ -435,7 +462,7 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
                   <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
                     <LogOut className="h-4 w-4" />
                   </span>
-                  Sign Out
+                  {t.common.signOut}
                 </button>
               </div>
             </div>
@@ -452,10 +479,15 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
         type="button"
         onClick={openNotifications}
         className="relative flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm outline-none transition hover:border-brand-200 hover:text-brand-700 focus-visible:ring-2 focus-visible:ring-brand-200"
-        aria-label="Notifications"
+        aria-label={t.support.notifications.title}
         aria-expanded={notificationsOpen}
       >
         <Bell className="h-4.5 w-4.5" />
+        {supportTicketCount ? (
+          <span className="absolute -right-1 -top-1 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-black leading-none text-white shadow-[0_0_0_2px_white]">
+            {supportTicketCount > 99 ? "99+" : supportTicketCount}
+          </span>
+        ) : null}
       </button>
 
       <button
@@ -463,7 +495,7 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
         type="button"
         onClick={openMenu}
         className="flex min-w-0 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-2.5 py-2 text-left shadow-sm outline-none transition hover:border-brand-200 focus-visible:ring-2 focus-visible:ring-brand-200"
-        aria-label="Account menu"
+        aria-label={t.support.menu.accountMenu}
         aria-expanded={menuOpen}
       >
         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-xs font-bold text-brand-700">

@@ -4,20 +4,20 @@ create table if not exists support_tickets (
   id uuid primary key default gen_random_uuid(),
   ticket_number text unique,
   user_id uuid,
-  user_email text not null,
+  user_email text,
   user_role text,
-  category text not null,
-  priority text not null,
-  subject text not null,
-  description text not null,
-  status text not null default 'Open',
+  category text,
+  priority text,
+  subject text,
+  description text,
+  status text default 'Open',
   page_path text,
   current_url text,
   browser_info text,
   screen_size text,
   screenshot_url text,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
 );
 
 alter table if exists support_tickets
@@ -44,6 +44,11 @@ begin
   if new.ticket_number is null or length(trim(new.ticket_number)) = 0 then
     new.ticket_number := 'FB-' || nextval('support_ticket_number_seq')::text;
   end if;
+
+  if new.status is null or length(trim(new.status)) = 0 then
+    new.status := 'Open';
+  end if;
+
   new.updated_at := now();
   return new;
 end;
@@ -62,7 +67,7 @@ create policy "Users can create support tickets"
 on support_tickets
 for insert
 to authenticated
-with check (auth.uid() = user_id or user_id is null);
+with check (auth.uid() = user_id);
 
 drop policy if exists "Users can read their support tickets" on support_tickets;
 create policy "Users can read their support tickets"

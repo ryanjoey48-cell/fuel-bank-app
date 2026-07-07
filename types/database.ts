@@ -174,6 +174,7 @@ export type SupportTicket = {
   subject: string;
   description: string;
   status: SupportTicketStatus | string;
+  admin_note?: string | null;
   page_path: string | null;
   current_url: string | null;
   browser_info: string | null;
