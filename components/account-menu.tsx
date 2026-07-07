@@ -137,18 +137,24 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
 
   useEffect(() => {
     let active = true;
-    supabase.auth.getUser().then(({ data }) => {
-      if (active) setUser((data.user ?? null) as AccountUser | null);
-    });
+    const loadUser = () => {
+      void supabase.auth.getUser().then(({ data }) => {
+        if (active) setUser((data.user ?? null) as AccountUser | null);
+      });
+    };
+
+    loadUser();
+    window.addEventListener("fuel-bank:user-updated", loadUser);
 
     const {
       data: { subscription }
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser((session?.user ?? null) as AccountUser | null);
+      if (active) setUser((session?.user ?? null) as AccountUser | null);
     });
 
     return () => {
       active = false;
+      window.removeEventListener("fuel-bank:user-updated", loadUser);
       subscription.unsubscribe();
     };
   }, []);

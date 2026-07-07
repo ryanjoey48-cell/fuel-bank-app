@@ -634,6 +634,22 @@ export const translations = {
         accountMenu: "Account menu"
       }
     },
+    profile: {
+      title: "My Profile",
+      description: "View your Fuel Bank account details.",
+      name: "Name",
+      email: "Email",
+      role: "Role",
+      company: "Company",
+      accountCreated: "Account created",
+      lastLogin: "Last login",
+      editName: "Edit",
+      nameRequired: "Name is required.",
+      nameTooShort: "Name must be at least 2 characters.",
+      nameTooLong: "Name must be 80 characters or less.",
+      nameUpdated: "Name updated.",
+      updateNameError: "Unable to update name."
+    },
     shipments: shipmentTranslations.en,
     weeklyMileage: {
       title: "Weekly Mileage",
@@ -1520,6 +1536,22 @@ export const translations = {
         signedInUser: "ผู้ใช้ที่เข้าสู่ระบบ",
         accountMenu: "เมนูบัญชี"
       }
+    },
+    profile: {
+      title: "โปรไฟล์ของฉัน",
+      description: "ดูรายละเอียดบัญชี Fuel Bank ของคุณ",
+      name: "ชื่อ",
+      email: "อีเมล",
+      role: "บทบาท",
+      company: "บริษัท",
+      accountCreated: "สร้างบัญชีเมื่อ",
+      lastLogin: "เข้าสู่ระบบล่าสุด",
+      editName: "แก้ไข",
+      nameRequired: "ต้องระบุชื่อ",
+      nameTooShort: "ชื่อต้องมีอย่างน้อย 2 ตัวอักษร",
+      nameTooLong: "ชื่อต้องไม่เกิน 80 ตัวอักษร",
+      nameUpdated: "อัปเดตชื่อเรียบร้อยแล้ว",
+      updateNameError: "ไม่สามารถอัปเดตชื่อได้"
     },
     weeklyMileage: {
       title: "ระยะทางรายสัปดาห์",
