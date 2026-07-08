@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabase";
 import type { SupportTicket, SupportTicketCategory, SupportTicketPriority, SupportTicketStatus } from "@/types/database";
 
 const ADMIN_EMAIL = "joeryan09@outlook.com";
+const BUILD_MARKER = "Build: 57e52f2";
 const STATUSES: Array<"" | SupportTicketStatus> = ["", "Open", "In Progress", "Waiting", "Closed"];
 const STATUS_OPTIONS: SupportTicketStatus[] = ["Open", "In Progress", "Waiting", "Closed"];
 const PRIORITIES: Array<"" | SupportTicketPriority> = ["", "Low", "Medium", "High"];
@@ -213,6 +214,7 @@ export default function SupportTicketsAdminPage() {
       <div className="mb-6 hidden md:block">
         <Header title={t.support.adminTitle} description={t.support.adminDescription} />
       </div>
+      <p className="mb-3 text-xs font-semibold text-slate-400">{BUILD_MARKER}</p>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard label={t.support.openTickets} value={summary.open} tone="rose" />
