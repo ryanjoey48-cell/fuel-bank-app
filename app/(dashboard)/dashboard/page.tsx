@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   ArrowRightLeft,
@@ -328,30 +328,25 @@ export default function DashboardPage() {
     avgActualKm: language === "th" ? "ระยะทางใช้งานเฉลี่ย" : "Average working KM",
     avgEstimatedKm: language === "th" ? "กม. ประมาณการเฉลี่ย" : "Average estimated KM",
     basedOnOperationsRisk: language === "th" ? "อ้างอิงจากการซ่อมบำรุง รายการที่ยังไม่ตรวจ ทริปที่ต้องตรวจ และงานจองที่ยังไม่มีทริป" : "Based on maintenance, unchecked records, trip review, and bookings without trip records.",
-    bookingsCreatedToday: language === "th" ? "งานจองที่สร้างวันนี้" : "Bookings created today",
     bookingsWithoutTripRecords: language === "th" ? "งานจองที่ยังไม่มีทริป" : "Bookings without trip records",
     bookingsWithoutTripRecordsDetail: language === "th" ? "มีงานจองแล้ว แต่ยังไม่ได้สร้างรายการ Trip Journey" : "Bookings exist but no Trip Journey record has been created.",
     everythingGoodToday: language === "th" ? "ทุกอย่างดูเรียบร้อยวันนี้" : "Everything looks good today.",
     fleetHealth: language === "th" ? "สุขภาพฟลีทรถ" : "Fleet Health",
-    fuelLogsAddedToday: language === "th" ? "บันทึกน้ำมันวันนี้" : "Fuel logs added today",
     fuelLogsNotCheckedDetail: language === "th" ? "รายการน้ำมันยังต้องให้ผู้ดูแลตรวจสอบ" : "Fuel entries still need admin review.",
     fuelCycleDataNeeded: language === "th" ? "ต้องมีข้อมูลรอบน้ำมันที่ตรวจสอบแล้วมากกว่านี้ก่อนเปรียบเทียบประสิทธิภาพพนักงานขับรถ" : "More verified fuel cycle data is needed before driver efficiency can be compared.",
     fuelLogsReviewHelper: language === "th" ? "บันทึกน้ำมันอาจครอบคลุมหลายทริป ใช้เพื่อการตรวจสอบ ไม่ใช่น้ำมันจริงต่อทริป" : "Fuel logs may cover multiple trips and are used for review, not exact per-trip fuel use.",
     missingTripRecords: language === "th" ? "งานจองที่ยังไม่มีทริป" : "Trips without journey records",
     noTripData: language === "th" ? "ยังไม่มีข้อมูลทริป" : "No trip data available yet.",
-    officeWorkQueue: language === "th" ? "คิวงานสำนักงาน" : "Office Work Queue",
-    oilChangesCompletedToday: language === "th" ? "เปลี่ยนน้ำมันเครื่องวันนี้" : "Oil changes completed today",
+    officeWorkQueue: language === "th" ? "คิวงานสำนักงาน" : "Office Action Queue",
     oilChangesDueDetail: language === "th" ? "รถใกล้ครบกำหนดหรือเกินกำหนดเปลี่ยนน้ำมันเครื่อง" : "Vehicles are due soon or overdue.",
     operationsAttention: language === "th" ? "งานปฏิบัติการที่ต้องตรวจสอบ" : "Operations Requiring Attention",
     target: language === "th" ? "เป้าหมาย" : "Target",
-    todayActivity: language === "th" ? "กิจกรรมวันนี้" : "Today's Activity",
     totalActualFuelLogged: language === "th" ? "น้ำมันที่บันทึกเดือนนี้" : "Fuel logged this month",
     tripCompletion: language === "th" ? "เปอร์เซ็นต์ทริปครบถ้วน" : "Trip completion",
     tripJourneySummary: language === "th" ? "สรุป Trip Journey" : "Trip Journey Summary",
     tripsWaitingForReview: language === "th" ? "ทริปที่รอตรวจสอบ" : "Trips Waiting for Review",
     tripsWaitingForReviewDetail: language === "th" ? "ทริปที่เสร็จแล้วแต่ยังต้องยืนยัน เช่น คนขับ รถ เส้นทาง หรือการตรวจจากผู้ดูแล" : "Trips have been completed but still need driver, vehicle, route, or admin confirmation.",
     tripsCompletedThisMonth: language === "th" ? "ทริปที่เสร็จเดือนนี้" : "Trips completed this month",
-    tripsCreatedToday: language === "th" ? "ทริปที่สร้างวันนี้" : "Trips created today",
     viewFuelLogs: language === "th" ? "ดูบันทึกน้ำมัน" : "View Fuel Logs",
     viewLogs: language === "th" ? "ตรวจบันทึก" : "Review Logs",
     viewTripJourney: language === "th" ? "ดู Trip Journey" : "View Trip Journey",
@@ -480,13 +475,6 @@ export default function DashboardPage() {
   const totalFuelLoggedThisMonth = monthlyFuelLogs.reduce((sum, log) => sum + getSafeNumber(log.litres), 0);
   const tripsWaitingForReview = completedMonthlyTrips.filter((trip) => isTripWaitingForReview(trip));
   const tripCompletionPercentage = monthlyTrips.length ? (completedMonthlyTrips.length / monthlyTrips.length) * 100 : null;
-  const todayKey = getLocalDateKey(new Date());
-  const todayActivity = {
-    fuelLogs: fuelLogs.filter((log) => log.created_at?.slice(0, 10) === todayKey || log.date === todayKey).length,
-    trips: tripJourneys.filter((trip) => trip.created_at?.slice(0, 10) === todayKey).length,
-    bookings: bookings.filter((booking) => booking.created_at?.slice(0, 10) === todayKey).length,
-    oilChanges: vehiclesWithOilBaselines.filter((vehicle) => vehicle.last_oil_change_date === todayKey).length
-  };
   const fleetHealthDeductions =
     Math.min(25, oilDueRows.filter((row) => row.status === "overdue" || row.status === "urgent").length * 5) +
     Math.min(15, uncheckedFuelCount * 0.4) +
@@ -686,6 +674,16 @@ export default function DashboardPage() {
 
   const officeWorkQueue: AttentionItem[] = [
     {
+      actionHref: "/fuel-logs?review=not_checked",
+      actionLabel: opsCopy.viewLogs,
+      count: uncheckedFuelCount,
+      detail: opsCopy.fuelLogsNotCheckedDetail,
+      icon: ClipboardList,
+      key: "queue-fuel-not-checked",
+      title: copy.fuelLogsNotChecked,
+      tone: "info" as const
+    },
+    {
       actionHref: "/weekly-mileage",
       actionLabel: opsCopy.viewVehicles,
       count: oilDueRows.length,
@@ -714,16 +712,6 @@ export default function DashboardPage() {
       key: "queue-bookings-without-trips",
       title: opsCopy.bookingsWithoutTripRecords,
       tone: "warning" as const
-    },
-    {
-      actionHref: "/fuel-logs?review=not_checked",
-      actionLabel: opsCopy.viewLogs,
-      count: uncheckedFuelCount,
-      detail: opsCopy.fuelLogsNotCheckedDetail,
-      icon: ClipboardList,
-      key: "queue-fuel-not-checked",
-      title: copy.fuelLogsNotChecked,
-      tone: "info" as const
     }
   ].slice(0, 4);
 
@@ -879,24 +867,7 @@ export default function DashboardPage() {
             ))}
           </section>
 
-          <section className="mt-5 grid gap-4 xl:grid-cols-2">
-            <section className="surface-card p-5 sm:p-6">
-              <h3 className="section-title">{opsCopy.todayActivity}</h3>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                {[
-                  [opsCopy.fuelLogsAddedToday, todayActivity.fuelLogs],
-                  [opsCopy.tripsCreatedToday, todayActivity.trips],
-                  [opsCopy.bookingsCreatedToday, todayActivity.bookings],
-                  [opsCopy.oilChangesCompletedToday, todayActivity.oilChanges]
-                ].map(([label, value]) => (
-                  <div key={String(label)} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
-                    <p className="text-xs font-semibold text-slate-500">{label}</p>
-                    <p className="mt-1 text-2xl font-bold text-slate-950">{formatNumber(Number(value), language)}</p>
-                  </div>
-                ))}
-              </div>
-            </section>
-
+          <section className="mt-5">
             <section className="surface-card p-5 sm:p-6">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
@@ -905,7 +876,7 @@ export default function DashboardPage() {
                 </div>
                 <ClipboardList className="h-5 w-5 text-brand-700" />
               </div>
-              <div className="mt-4 grid gap-2">
+              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 {officeWorkQueue.map((item) => <AttentionRow key={item.key} item={item} />)}
               </div>
             </section>
