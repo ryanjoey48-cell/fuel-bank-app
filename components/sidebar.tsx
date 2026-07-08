@@ -249,7 +249,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                         "group relative flex w-full min-w-0 items-center gap-3 rounded-[1.2rem] px-3.5 py-3 text-[14px] font-medium transition duration-200",
                         !desktopExpanded && "min-[1367px]:justify-center min-[1367px]:gap-0 min-[1367px]:px-2 min-[1367px]:py-2",
                         active
-                          ? "border border-[#8B7CF6]/60 bg-[rgba(103,80,216,0.22)] text-slate-50 shadow-[0_16px_30px_rgba(20,16,52,0.2)]"
+                          ? "border border-[#A78BFA]/70 bg-[rgba(124,58,237,0.28)] text-slate-50 shadow-[0_16px_34px_rgba(20,16,52,0.24),0_0_22px_rgba(139,124,246,0.18),inset_0_1px_0_rgba(255,255,255,0.08)]"
                           : "border border-transparent text-slate-200 hover:border-white/10 hover:bg-white/[0.08] hover:text-white hover:shadow-[0_12px_24px_rgba(8,7,24,0.18)]"
                       )}
                       onClick={() => {
@@ -259,13 +259,13 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                       }}
                     >
                       {active ? (
-                        <span className="absolute left-0 top-1/2 hidden h-7 w-1 -translate-y-1/2 rounded-r-full bg-[#8B7CF6] shadow-[0_0_14px_rgba(139,124,246,0.55)] min-[1367px]:block" />
+                        <span className="absolute left-0 top-1/2 hidden h-7 w-1 -translate-y-1/2 rounded-r-full bg-[#A78BFA] shadow-[0_0_18px_rgba(167,139,250,0.72)] min-[1367px]:block" />
                       ) : null}
                       <div
                         className={clsx(
                           "relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[1rem] border transition",
                           active
-                            ? "border-[#8B7CF6]/60 bg-[#6750D8]/28 text-violet-50"
+                            ? "border-[#A78BFA]/70 bg-[#7C3AED]/32 text-violet-50 shadow-[0_0_18px_rgba(139,92,246,0.22)]"
                             : "border-white/10 bg-white/[0.055] text-violet-100 group-hover:border-white/16 group-hover:bg-white/[0.09] group-hover:text-white"
                         )}
                       >

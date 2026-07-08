@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  AlertTriangle,
   ArrowRightLeft,
   CalendarPlus,
   CheckCircle2,
@@ -14,7 +13,6 @@ import {
   Route,
   Ticket,
   Truck,
-  UserRound,
   Wallet
 } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
@@ -33,12 +31,11 @@ import {
 } from "@/lib/data";
 import { useLanguage } from "@/lib/language-provider";
 import { buildOilChangeAlertRows, type OilChangeAlertRow } from "@/lib/operations";
-import { formatCurrency, formatDate, formatNumber, normalizeVehicleRegistration } from "@/lib/utils";
+import { formatCurrency, formatDate, formatNumber } from "@/lib/utils";
 import type {
   BankTransferWithDriver,
   BookingDiaryEntry,
   Driver,
-  DriverVehicleType,
   FuelLogWithDriver,
   OilChangeBaseline,
   TripJourneyWithFuel,
@@ -57,22 +54,6 @@ type AttentionItem = {
   key: string;
   title: string;
   tone: AttentionTone;
-};
-
-type SpotlightRow = {
-  driver: string;
-  vehicle: string;
-  kmPerLitre: number;
-} | null;
-
-type EfficiencyStats = {
-  averageKmPerLitre: number | null;
-  validRecordCount: number;
-  warnings: Array<{
-    log: FuelLogWithDriver;
-    kmDriven: number;
-    kmPerLitre: number;
-  }>;
 };
 
 type MonthRange = {
@@ -156,144 +137,6 @@ const normalizeOilReg = (value: unknown) =>
     .replace(/-/g, "")
     .toUpperCase();
 
-function getMileageValue(value: number | null | undefined) {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
-}
-
-function getFuelLogMileage(log: FuelLogWithDriver | null | undefined) {
-  if (!log) return null;
-  return getMileageValue(log.mileage ?? log.odometer);
-}
-
-function getFuelLogDuplicateKey(log: FuelLogWithDriver) {
-  return [
-    log.date,
-    normalizeVehicleRegistration(log.vehicle_reg),
-    Number(log.litres || 0).toFixed(2),
-    Number(log.total_cost || 0).toFixed(2),
-    String(log.driver_id || "")
-  ].join("::");
-}
-
-function buildVehicleTypeLookup(vehicles: Vehicle[], drivers: Driver[]) {
-  const lookup = new Map<string, string>();
-
-  for (const vehicle of vehicles) {
-    const key = normalizeVehicleRegistration(vehicle.vehicle_reg || vehicle.registration);
-    if (key && vehicle.vehicle_type) {
-      lookup.set(key, String(vehicle.vehicle_type));
-    }
-  }
-
-  for (const driver of drivers) {
-    const key = normalizeVehicleRegistration(driver.vehicle_reg);
-    if (key && driver.vehicle_type && !lookup.has(key)) {
-      lookup.set(key, String(driver.vehicle_type));
-    }
-  }
-
-  return lookup;
-}
-
-function getKmPerLitreThresholds(vehicleType: string | null | undefined) {
-  const type = String(vehicleType ?? "").toUpperCase() as DriverVehicleType | string;
-  if (type === "FOUR_WHEEL_TRUCK") return { low: 3, high: 14 };
-  if (type === "EIGHTEEN_WHEELER") return { low: 1.2, high: 5.5 };
-  if (type === "SIX_WHEEL_TRUCK" || type === "SIX_PLUS_SIX_WHEELER") return { low: 1.5, high: 8 };
-  return { low: 1.5, high: 8 };
-}
-
-function buildEfficiencyStats({
-  allLogs,
-  monthlyLogs,
-  vehicleTypeLookup
-}: {
-  allLogs: FuelLogWithDriver[];
-  monthlyLogs: FuelLogWithDriver[];
-  vehicleTypeLookup: Map<string, string>;
-}): EfficiencyStats {
-  const monthlyIds = new Set(monthlyLogs.map((log) => String(log.id)));
-  const duplicateCounts = new Map<string, number>();
-  for (const log of allLogs) {
-    const key = getFuelLogDuplicateKey(log);
-    duplicateCounts.set(key, (duplicateCounts.get(key) ?? 0) + 1);
-  }
-
-  const previousByVehicle = new Map<string, FuelLogWithDriver>();
-  const warnings: EfficiencyStats["warnings"] = [];
-  const validValues: number[] = [];
-
-  for (const log of [...allLogs].sort((left, right) => {
-    const dateDiff = left.date.localeCompare(right.date);
-    if (dateDiff !== 0) return dateDiff;
-    return String(left.id).localeCompare(String(right.id));
-  })) {
-    const vehicleKey = normalizeVehicleRegistration(log.vehicle_reg);
-    const currentMileage = getFuelLogMileage(log);
-    const litres = Number(log.litres || 0);
-    const previous = vehicleKey ? previousByVehicle.get(vehicleKey) : null;
-    const previousMileage = getFuelLogMileage(previous);
-
-    if (vehicleKey && currentMileage != null) {
-      previousByVehicle.set(vehicleKey, log);
-    }
-
-    if (!monthlyIds.has(String(log.id))) {
-      continue;
-    }
-
-    if (
-      !vehicleKey ||
-      currentMileage == null ||
-      previousMileage == null ||
-      litres <= 0 ||
-      currentMileage <= previousMileage ||
-      (duplicateCounts.get(getFuelLogDuplicateKey(log)) ?? 0) > 1
-    ) {
-      continue;
-    }
-
-    const kmDriven = currentMileage - previousMileage;
-    if (kmDriven < 50 || kmDriven > 2000) {
-      continue;
-    }
-
-    const kmPerLitre = kmDriven / litres;
-    if (!Number.isFinite(kmPerLitre)) {
-      continue;
-    }
-
-    const thresholds = getKmPerLitreThresholds(vehicleTypeLookup.get(vehicleKey));
-    if (kmPerLitre < thresholds.low || kmPerLitre > thresholds.high) {
-      warnings.push({ log, kmDriven, kmPerLitre });
-      continue;
-    }
-
-    validValues.push(kmPerLitre);
-  }
-
-  return {
-    averageKmPerLitre:
-      validValues.length >= 3
-        ? validValues.reduce((sum, value) => sum + value, 0) / validValues.length
-        : null,
-    validRecordCount: validValues.length,
-    warnings: warnings.sort((left, right) => right.log.date.localeCompare(left.log.date)).slice(0, 20)
-  };
-}
-
-function hasMissingFuelDetails(log: FuelLogWithDriver) {
-  return (
-    !String(log.date || "").trim() ||
-    !String(log.vehicle_reg || "").trim() ||
-    !String(log.location || log.station || "").trim() ||
-    getSafeNumber(log.litres) <= 0 ||
-    getSafeNumber(log.total_cost) <= 0 ||
-    getFuelLogMileage(log) == null
-  );
-}
-
 function getActualTripDistance(trip: TripJourneyWithFuel) {
   if (trip.manual_actual_km != null && trip.manual_actual_km > 0) return trip.manual_actual_km;
   if (trip.start_mileage != null && trip.end_mileage != null && trip.end_mileage > trip.start_mileage) {
@@ -311,67 +154,18 @@ function getEstimatedTripDistance(trip: TripJourneyWithFuel) {
   return null;
 }
 
-function getTripFuelLitres(trip: TripJourneyWithFuel) {
-  if (trip.fuel_source === "manual") return trip.manual_litres_used != null && trip.manual_litres_used > 0 ? trip.manual_litres_used : null;
-  const linkedLitres = trip.linkedFuelLogs.reduce((sum, log) => sum + Number(log.litres || 0), 0);
-  return linkedLitres > 0 ? linkedLitres : null;
+function getWorkingTripDistance(trip: TripJourneyWithFuel) {
+  return getActualTripDistance(trip) ?? getEstimatedTripDistance(trip);
 }
 
-function buildDriverSpotlight({
-  allLogs,
-  monthlyLogs,
-  vehicleTypeLookup
-}: {
-  allLogs: FuelLogWithDriver[];
-  monthlyLogs: FuelLogWithDriver[];
-  vehicleTypeLookup: Map<string, string>;
-}): { best: SpotlightRow; worst: SpotlightRow } {
-  const monthlyIds = new Set(monthlyLogs.map((log) => String(log.id)));
-  const previousByVehicle = new Map<string, FuelLogWithDriver>();
-  const rows: Array<{ driver: string; vehicle: string; kmPerLitre: number }> = [];
-
-  for (const log of [...allLogs].sort((left, right) => left.date.localeCompare(right.date) || String(left.id).localeCompare(String(right.id)))) {
-    const vehicle = normalizeVehicleRegistration(log.vehicle_reg);
-    const currentMileage = getFuelLogMileage(log);
-    const previous = vehicle ? previousByVehicle.get(vehicle) : null;
-    const previousMileage = getFuelLogMileage(previous);
-    const litres = Number(log.litres || 0);
-
-    if (vehicle && currentMileage != null) previousByVehicle.set(vehicle, log);
-    if (!monthlyIds.has(String(log.id)) || !vehicle || currentMileage == null || previousMileage == null || currentMileage <= previousMileage || litres <= 0) continue;
-
-    const kmDriven = currentMileage - previousMileage;
-    if (kmDriven < 50 || kmDriven > 2000) continue;
-
-    const kmPerLitre = kmDriven / litres;
-    const thresholds = getKmPerLitreThresholds(vehicleTypeLookup.get(vehicle));
-    if (!Number.isFinite(kmPerLitre) || kmPerLitre < thresholds.low || kmPerLitre > thresholds.high) continue;
-
-    rows.push({
-      driver: log.driver || "-",
-      vehicle: log.vehicle_reg || "-",
-      kmPerLitre
-    });
-  }
-
-  const grouped = new Map<string, { driver: string; vehicle: string; total: number; count: number }>();
-  for (const row of rows) {
-    const key = `${row.driver}::${row.vehicle}`;
-    const current = grouped.get(key) ?? { driver: row.driver, vehicle: row.vehicle, total: 0, count: 0 };
-    current.total += row.kmPerLitre;
-    current.count += 1;
-    grouped.set(key, current);
-  }
-
-  const averaged = Array.from(grouped.values())
-    .filter((row) => row.count > 0)
-    .map((row) => ({ driver: row.driver, vehicle: row.vehicle, kmPerLitre: row.total / row.count }))
-    .sort((left, right) => right.kmPerLitre - left.kmPerLitre);
-
-  return {
-    best: averaged[0] ?? null,
-    worst: averaged.length > 1 ? averaged[averaged.length - 1] : null
-  };
+function isTripWaitingForReview(trip: TripJourneyWithFuel) {
+  if (trip.status !== "completed") return false;
+  if (!String(trip.driver || "").trim()) return true;
+  if (!String(trip.vehicle_reg || trip.vehicle_type || "").trim()) return true;
+  const estimated = getEstimatedTripDistance(trip);
+  const working = getWorkingTripDistance(trip);
+  if (estimated != null && working != null && estimated > 0 && Math.abs(working - estimated) / estimated > 0.2) return true;
+  return false;
 }
 
 function applyOilBaselinesLikeOilPage(vehicles: Vehicle[], baselines: OilChangeBaseline[]) {
@@ -498,7 +292,6 @@ export default function DashboardPage() {
 
   const copy = {
     allIssues: language === "th" ? "ดูรายการทั้งหมด" : "View all issues",
-    avgKmPerLitre: language === "th" ? "เฉลี่ย กม./ลิตร" : "Average km/L",
     bankTransfersNotChecked: language === "th" ? "รายการโอนเงินยังไม่ได้ตรวจสอบ" : "Bank transfers not checked",
     currentMonth: language === "th" ? "เดือนปัจจุบัน" : "Current month",
     dateRange: language === "th" ? "ช่วงวันที่" : "Date range",
@@ -507,8 +300,6 @@ export default function DashboardPage() {
     fuelLogsNotChecked: language === "th" ? "บันทึกน้ำมันยังไม่ได้ตรวจสอบ" : "Fuel logs not checked",
     latestFuel: language === "th" ? "บันทึกน้ำมันล่าสุด 5 รายการ" : "Latest 5 fuel entries",
     latestTransfers: language === "th" ? "รายการโอนเงินล่าสุด 5 รายการ" : "Latest 5 bank transfers",
-    missingFuelDetail: language === "th" ? "ขาดเลขไมล์ ลิตร ค่าใช้จ่าย พนักงานขับรถ รถ หรือสถานี" : "Missing mileage, litres, cost, driver, vehicle, or station.",
-    missingFuelTitle: language === "th" ? "ข้อมูลบันทึกน้ำมันไม่ครบ" : "Missing fuel log details",
     monthFuelSpend: language === "th" ? "ค่าน้ำมันเดือนนี้" : "This month fuel spend",
     monthTransfers: language === "th" ? "ยอดโอนเงินเดือนนี้" : "This month bank transfers",
     needsAttention: language === "th" ? "ต้องตรวจสอบ" : "Needs Attention",
@@ -517,7 +308,6 @@ export default function DashboardPage() {
     noFuel: language === "th" ? "ไม่มีรายการน้ำมันในเดือนนี้" : "No fuel entries for this month.",
     noTransfers: language === "th" ? "ไม่มีรายการโอนเงินในเดือนนี้" : "No bank transfers for this month.",
     notCheckedThisMonth: language === "th" ? "รายการในเดือนนี้ยังไม่ได้ตรวจสอบ" : "records in this month are still Not Checked.",
-    notEnoughValidData: language === "th" ? "ข้อมูลที่ถูกต้องยังไม่เพียงพอ" : "Not enough valid data",
     oilDue: language === "th" ? "เปลี่ยนน้ำมันเครื่องครบกำหนดหรือเกินกำหนด" : "Oil changes due or overdue",
     overdue: language === "th" ? "เกินกำหนด" : "Overdue",
     previousMonth: language === "th" ? "เดือนก่อนหน้า" : "Previous month",
@@ -525,8 +315,7 @@ export default function DashboardPage() {
     selectedMonth: language === "th" ? "เดือนที่เลือก" : "Selected month",
     totalOutflow: language === "th" ? "ยอดเงินออกทั้งหมดต่อเดือน" : "Total monthly outflow",
     transfers: language === "th" ? "รายการโอน" : "transfers",
-    unchecked: language === "th" ? "รายการยังไม่ได้ตรวจสอบ" : "Unchecked records",
-    validRecordsThisMonth: language === "th" ? "รายการที่ถูกต้องในเดือนนี้" : "valid records this month"
+    unchecked: language === "th" ? "รายการยังไม่ได้ตรวจสอบ" : "Unchecked records"
   };
 
   const opsCopy = {
@@ -536,35 +325,37 @@ export default function DashboardPage() {
     addTransfer: language === "th" ? "+ โอนเงิน" : "+ Transfer",
     addTripJourney: language === "th" ? "+ Trip Journey" : "+ Trip Journey",
     addVehicle: language === "th" ? "+ รถ" : "+ Vehicle",
-    addWeeklyMileage: language === "th" ? "+ เลขไมล์รายสัปดาห์" : "+ Weekly Mileage",
-    avgActualKm: language === "th" ? "กม. จริงเฉลี่ย" : "Average actual KM",
+    avgActualKm: language === "th" ? "ระยะทางใช้งานเฉลี่ย" : "Average working KM",
     avgEstimatedKm: language === "th" ? "กม. ประมาณการเฉลี่ย" : "Average estimated KM",
-    basedOnOperationsRisk: language === "th" ? "อ้างอิงจากข้อมูลน้ำมัน การซ่อมบำรุง การตรวจสอบ และทริป" : "Based on fuel, maintenance, review, and trip record risks.",
-    bestFuelEfficiency: language === "th" ? "ประหยัดน้ำมันดีที่สุด" : "Best Fuel Efficiency",
+    basedOnOperationsRisk: language === "th" ? "อ้างอิงจากการซ่อมบำรุง รายการที่ยังไม่ตรวจ ทริปที่ต้องตรวจ และงานจองที่ยังไม่มีทริป" : "Based on maintenance, unchecked records, trip review, and bookings without trip records.",
     bookingsCreatedToday: language === "th" ? "งานจองที่สร้างวันนี้" : "Bookings created today",
-    driverSpotlight: language === "th" ? "พนักงานขับรถที่ควรดู" : "Driver Spotlight",
+    bookingsWithoutTripRecords: language === "th" ? "งานจองที่ยังไม่มีทริป" : "Bookings without trip records",
+    bookingsWithoutTripRecordsDetail: language === "th" ? "มีงานจองแล้ว แต่ยังไม่ได้สร้างรายการ Trip Journey" : "Bookings exist but no Trip Journey record has been created.",
     everythingGoodToday: language === "th" ? "ทุกอย่างดูเรียบร้อยวันนี้" : "Everything looks good today.",
     fleetHealth: language === "th" ? "สุขภาพฟลีทรถ" : "Fleet Health",
     fuelLogsAddedToday: language === "th" ? "บันทึกน้ำมันวันนี้" : "Fuel logs added today",
+    fuelLogsNotCheckedDetail: language === "th" ? "รายการน้ำมันยังต้องให้ผู้ดูแลตรวจสอบ" : "Fuel entries still need admin review.",
+    fuelCycleDataNeeded: language === "th" ? "ต้องมีข้อมูลรอบน้ำมันที่ตรวจสอบแล้วมากกว่านี้ก่อนเปรียบเทียบประสิทธิภาพพนักงานขับรถ" : "More verified fuel cycle data is needed before driver efficiency can be compared.",
+    fuelLogsReviewHelper: language === "th" ? "บันทึกน้ำมันอาจครอบคลุมหลายทริป ใช้เพื่อการตรวจสอบ ไม่ใช่น้ำมันจริงต่อทริป" : "Fuel logs may cover multiple trips and are used for review, not exact per-trip fuel use.",
     missingTripRecords: language === "th" ? "งานจองที่ยังไม่มีทริป" : "Trips without journey records",
-    mileageUpdatesToday: language === "th" ? "เลขไมล์ที่อัปเดตวันนี้" : "Mileage updates today",
-    noSpotlight: language === "th" ? "ยังไม่มีข้อมูลประสิทธิภาพพนักงานขับรถเพียงพอ" : "Not enough driver efficiency data yet.",
     noTripData: language === "th" ? "ยังไม่มีข้อมูลทริป" : "No trip data available yet.",
+    officeWorkQueue: language === "th" ? "คิวงานสำนักงาน" : "Office Work Queue",
     oilChangesCompletedToday: language === "th" ? "เปลี่ยนน้ำมันเครื่องวันนี้" : "Oil changes completed today",
+    oilChangesDueDetail: language === "th" ? "รถใกล้ครบกำหนดหรือเกินกำหนดเปลี่ยนน้ำมันเครื่อง" : "Vehicles are due soon or overdue.",
     operationsAttention: language === "th" ? "งานปฏิบัติการที่ต้องตรวจสอบ" : "Operations Requiring Attention",
     target: language === "th" ? "เป้าหมาย" : "Target",
     todayActivity: language === "th" ? "กิจกรรมวันนี้" : "Today's Activity",
-    totalActualFuelLogged: language === "th" ? "น้ำมันจริงที่บันทึก" : "Total actual fuel logged",
-    totalEstimatedLitres: language === "th" ? "ลิตรประมาณการรวม" : "Total estimated litres",
+    totalActualFuelLogged: language === "th" ? "น้ำมันที่บันทึกเดือนนี้" : "Fuel logged this month",
     tripCompletion: language === "th" ? "เปอร์เซ็นต์ทริปครบถ้วน" : "Trip completion",
     tripJourneySummary: language === "th" ? "สรุป Trip Journey" : "Trip Journey Summary",
+    tripsWaitingForReview: language === "th" ? "ทริปที่รอตรวจสอบ" : "Trips Waiting for Review",
+    tripsWaitingForReviewDetail: language === "th" ? "ทริปที่เสร็จแล้วแต่ยังต้องยืนยัน เช่น คนขับ รถ เส้นทาง หรือการตรวจจากผู้ดูแล" : "Trips have been completed but still need driver, vehicle, route, or admin confirmation.",
     tripsCompletedThisMonth: language === "th" ? "ทริปที่เสร็จเดือนนี้" : "Trips completed this month",
     tripsCreatedToday: language === "th" ? "ทริปที่สร้างวันนี้" : "Trips created today",
     viewFuelLogs: language === "th" ? "ดูบันทึกน้ำมัน" : "View Fuel Logs",
     viewLogs: language === "th" ? "ตรวจบันทึก" : "Review Logs",
     viewTripJourney: language === "th" ? "ดู Trip Journey" : "View Trip Journey",
-    viewVehicles: language === "th" ? "ดูรถ" : "View Vehicles",
-    worstFuelEfficiency: language === "th" ? "ประหยัดน้ำมันต่ำสุด" : "Worst Fuel Efficiency"
+    viewVehicles: language === "th" ? "ดูรถ" : "View Vehicles"
   };
 
   const loadData = useCallback(
@@ -649,10 +440,6 @@ export default function DashboardPage() {
     () => tripJourneys.filter((trip) => isInRange(trip.trip_date, monthRange.startDate, monthRange.endDate)),
     [monthRange.endDate, monthRange.startDate, tripJourneys]
   );
-  const vehicleTypeLookup = useMemo(
-    () => buildVehicleTypeLookup(vehicles, drivers),
-    [drivers, vehicles]
-  );
   const vehiclesWithOilBaselines = useMemo(
     () => applyOilBaselinesLikeOilPage(vehicles, oilChangeBaselines),
     [oilChangeBaselines, vehicles]
@@ -672,17 +459,12 @@ export default function DashboardPage() {
   const monthlyTransferTotal = monthlyTransfers.reduce((sum, transfer) => sum + getSafeNumber(transfer.amount), 0);
   const previousMonthlyFuelSpend = previousMonthlyFuelLogs.reduce((sum, log) => sum + getSafeNumber(log.total_cost), 0);
   const previousMonthlyTransferTotal = previousMonthlyTransfers.reduce((sum, transfer) => sum + getSafeNumber(transfer.amount), 0);
-  const efficiencyStats = useMemo(
-    () => buildEfficiencyStats({ allLogs: fuelLogs, monthlyLogs: monthlyFuelLogs, vehicleTypeLookup }),
-    [fuelLogs, monthlyFuelLogs, vehicleTypeLookup]
-  );
   const uncheckedFuelCount = monthlyFuelLogs.filter((log) => !log.receipt_checked).length;
   const uncheckedTransferCount = monthlyTransfers.filter((transfer) => transfer.receipt_status !== "approved").length;
   const previousUncheckedFuelCount = previousMonthlyFuelLogs.filter((log) => !log.receipt_checked).length;
   const previousUncheckedTransferCount = previousMonthlyTransfers.filter((transfer) => transfer.receipt_status !== "approved").length;
   const uncheckedRecords = uncheckedFuelCount + uncheckedTransferCount;
   const previousUncheckedRecords = previousUncheckedFuelCount + previousUncheckedTransferCount;
-  const missingFuelRows = monthlyFuelLogs.filter(hasMissingFuelDetails);
   const tripBookingIds = new Set(
     tripJourneys
       .flatMap((trip) => [trip.booking_diary_id, trip.booking_id])
@@ -692,40 +474,31 @@ export default function DashboardPage() {
   const monthlyBookingsWithoutTrips = monthlyBookings.filter((booking) => !tripBookingIds.has(String(booking.id)));
   const completedMonthlyTrips = monthlyTrips.filter((trip) => trip.status === "completed");
   const estimatedTripDistances = monthlyTrips.map(getEstimatedTripDistance).filter((value): value is number => value != null && value > 0);
-  const actualTripDistances = monthlyTrips.map(getActualTripDistance).filter((value): value is number => value != null && value > 0);
-  const actualTripLitres = monthlyTrips.map(getTripFuelLitres).filter((value): value is number => value != null && value > 0);
+  const workingTripDistances = monthlyTrips.map(getWorkingTripDistance).filter((value): value is number => value != null && value > 0);
   const averageEstimatedTripKm = estimatedTripDistances.length ? estimatedTripDistances.reduce((sum, value) => sum + value, 0) / estimatedTripDistances.length : null;
-  const averageActualTripKm = actualTripDistances.length ? actualTripDistances.reduce((sum, value) => sum + value, 0) / actualTripDistances.length : null;
-  const totalEstimatedLitres = efficiencyStats.averageKmPerLitre && efficiencyStats.averageKmPerLitre > 0
-    ? estimatedTripDistances.reduce((sum, value) => sum + value, 0) / efficiencyStats.averageKmPerLitre
-    : null;
-  const totalActualFuelLogged = actualTripLitres.reduce((sum, value) => sum + value, 0);
+  const averageWorkingTripKm = workingTripDistances.length ? workingTripDistances.reduce((sum, value) => sum + value, 0) / workingTripDistances.length : null;
+  const totalFuelLoggedThisMonth = monthlyFuelLogs.reduce((sum, log) => sum + getSafeNumber(log.litres), 0);
+  const tripsWaitingForReview = completedMonthlyTrips.filter((trip) => isTripWaitingForReview(trip));
   const tripCompletionPercentage = monthlyTrips.length ? (completedMonthlyTrips.length / monthlyTrips.length) * 100 : null;
   const todayKey = getLocalDateKey(new Date());
   const todayActivity = {
     fuelLogs: fuelLogs.filter((log) => log.created_at?.slice(0, 10) === todayKey || log.date === todayKey).length,
     trips: tripJourneys.filter((trip) => trip.created_at?.slice(0, 10) === todayKey).length,
     bookings: bookings.filter((booking) => booking.created_at?.slice(0, 10) === todayKey).length,
-    mileage: weeklyMileage.filter((entry) => entry.created_at?.slice(0, 10) === todayKey).length,
     oilChanges: vehiclesWithOilBaselines.filter((vehicle) => vehicle.last_oil_change_date === todayKey).length
   };
   const fleetHealthDeductions =
-    Math.min(30, missingFuelRows.length * 2) +
     Math.min(25, oilDueRows.filter((row) => row.status === "overdue" || row.status === "urgent").length * 5) +
-    Math.min(20, uncheckedRecords * 0.5) +
-    Math.min(25, monthlyBookingsWithoutTrips.length * 3);
+    Math.min(15, uncheckedFuelCount * 0.4) +
+    Math.min(25, tripsWaitingForReview.length * 4) +
+    Math.min(20, monthlyBookingsWithoutTrips.length * 3);
   const fleetHealthScore = Math.max(0, Math.round(100 - fleetHealthDeductions));
   const fleetHealthClass =
     fleetHealthScore >= 85
-      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+      ? "dashboard-fleet-health-good"
       : fleetHealthScore >= 65
-        ? "border-amber-200 bg-amber-50 text-amber-800"
-        : "border-rose-200 bg-rose-50 text-rose-800";
-  const driverSpotlight = useMemo(
-    () => buildDriverSpotlight({ allLogs: fuelLogs, monthlyLogs: monthlyFuelLogs, vehicleTypeLookup }),
-    [fuelLogs, monthlyFuelLogs, vehicleTypeLookup]
-  );
-
+        ? "dashboard-fleet-health-watch"
+        : "dashboard-fleet-health-risk";
   const latestFuelLogs = useMemo(
     () =>
       [...monthlyFuelLogs]
@@ -778,15 +551,15 @@ export default function DashboardPage() {
       });
     }
 
-    if (missingFuelRows.length) {
+    if (tripsWaitingForReview.length) {
       items.push({
-        actionHref: "/fuel-logs?review=missing_mileage",
-        actionLabel: opsCopy.viewFuelLogs,
-        count: missingFuelRows.length,
-        detail: copy.missingFuelDetail,
-        icon: AlertTriangle,
-        key: "missing-fuel-fields",
-        title: copy.missingFuelTitle,
+        actionHref: "/trip-journey",
+        actionLabel: opsCopy.viewTripJourney,
+        count: tripsWaitingForReview.length,
+        detail: opsCopy.tripsWaitingForReviewDetail,
+        icon: Route,
+        key: "trips-waiting-review",
+        title: opsCopy.tripsWaitingForReview,
         tone: "warning"
       });
     }
@@ -831,7 +604,7 @@ export default function DashboardPage() {
     }
 
     return items;
-  }, [copy.bankTransfersNotChecked, copy.dueSoon, copy.fuelEntries, copy.fuelLogsNotChecked, copy.missingFuelDetail, copy.missingFuelTitle, copy.needsBaseline, copy.notCheckedThisMonth, copy.oilDue, copy.overdue, copy.remaining, copy.transfers, language, missingFuelRows.length, monthlyBookingsWithoutTrips.length, oilAttentionRows, oilDueRows, opsCopy.missingTripRecords, opsCopy.viewFuelLogs, opsCopy.viewLogs, opsCopy.viewTripJourney, opsCopy.viewVehicles, supportTicketAttentionCount, t.support.notifications.supportTicketsWaiting, t.support.notifications.supportTicketsWaitingDetail, t.support.notifications.viewTickets, uncheckedFuelCount, uncheckedTransferCount]);
+  }, [copy.bankTransfersNotChecked, copy.dueSoon, copy.fuelEntries, copy.fuelLogsNotChecked, copy.needsBaseline, copy.notCheckedThisMonth, copy.oilDue, copy.overdue, copy.remaining, copy.transfers, language, monthlyBookingsWithoutTrips.length, oilAttentionRows, oilDueRows, opsCopy.missingTripRecords, opsCopy.tripsWaitingForReview, opsCopy.tripsWaitingForReviewDetail, opsCopy.viewLogs, opsCopy.viewTripJourney, opsCopy.viewVehicles, supportTicketAttentionCount, t.support.notifications.supportTicketsWaiting, t.support.notifications.supportTicketsWaitingDetail, t.support.notifications.viewTickets, tripsWaitingForReview.length, uncheckedFuelCount, uncheckedTransferCount]);
 
   useEffect(() => {
     if (process.env.NODE_ENV === "production") {
@@ -849,14 +622,11 @@ export default function DashboardPage() {
       bankTransferTotalCalculated: monthlyTransferTotal,
       uncheckedFuelCount,
       uncheckedTransferCount,
-      averageKmPerLitreValidRecordCount: efficiencyStats.validRecordCount,
-      suspiciousKmPerLitreCountHidden: efficiencyStats.warnings.length,
+      tripsWaitingForReview: tripsWaitingForReview.length,
       oilChangeItemsCount: oilDueRows.length,
       oilBaselineCount: oilChangeBaselines.length
     });
   }, [
-    efficiencyStats.validRecordCount,
-    efficiencyStats.warnings.length,
     fuelLogs.length,
     monthlyFuelLogs.length,
     monthlyFuelSpend,
@@ -866,6 +636,7 @@ export default function DashboardPage() {
     monthRange.startDate,
     oilChangeBaselines.length,
     oilDueRows.length,
+    tripsWaitingForReview.length,
     transfers.length,
     uncheckedFuelCount,
     uncheckedTransferCount
@@ -894,13 +665,10 @@ export default function DashboardPage() {
       icon: Wallet
     },
     {
-      label: copy.avgKmPerLitre,
-      value:
-        efficiencyStats.averageKmPerLitre != null
-          ? formatNumber(efficiencyStats.averageKmPerLitre, language, 2)
-          : copy.notEnoughValidData,
-      helper: `${opsCopy.target} 5.50 | ${efficiencyStats.averageKmPerLitre != null ? formatNumber(5.5 - efficiencyStats.averageKmPerLitre, language, 2) : "-"} ${language === "th" ? "ต่างจากเป้าหมาย" : "from target"}`,
-      icon: Gauge
+      label: opsCopy.tripsWaitingForReview,
+      value: formatNumber(tripsWaitingForReview.length, language),
+      helper: opsCopy.tripsWaitingForReviewDetail,
+      icon: Route
     },
     {
       label: copy.oilDue,
@@ -915,6 +683,49 @@ export default function DashboardPage() {
       icon: CheckCircle2
     }
   ];
+
+  const officeWorkQueue: AttentionItem[] = [
+    {
+      actionHref: "/weekly-mileage",
+      actionLabel: opsCopy.viewVehicles,
+      count: oilDueRows.length,
+      detail: opsCopy.oilChangesDueDetail,
+      icon: Droplet,
+      key: "queue-oil",
+      title: copy.oilDue,
+      tone: oilDueRows.some((row) => row.status === "overdue" || row.status === "urgent") ? "danger" as const : "warning" as const
+    },
+    {
+      actionHref: "/trip-journey",
+      actionLabel: opsCopy.viewTripJourney,
+      count: tripsWaitingForReview.length,
+      detail: opsCopy.tripsWaitingForReviewDetail,
+      icon: Route,
+      key: "queue-trips-review",
+      title: opsCopy.tripsWaitingForReview,
+      tone: "warning" as const
+    },
+    {
+      actionHref: "/booking-diary",
+      actionLabel: opsCopy.viewTripJourney,
+      count: monthlyBookingsWithoutTrips.length,
+      detail: opsCopy.bookingsWithoutTripRecordsDetail,
+      icon: CalendarPlus,
+      key: "queue-bookings-without-trips",
+      title: opsCopy.bookingsWithoutTripRecords,
+      tone: "warning" as const
+    },
+    {
+      actionHref: "/fuel-logs?review=not_checked",
+      actionLabel: opsCopy.viewLogs,
+      count: uncheckedFuelCount,
+      detail: opsCopy.fuelLogsNotCheckedDetail,
+      icon: ClipboardList,
+      key: "queue-fuel-not-checked",
+      title: copy.fuelLogsNotChecked,
+      tone: "info" as const
+    }
+  ].slice(0, 4);
 
   return (
     <>
@@ -954,14 +765,13 @@ export default function DashboardPage() {
             </div>
           </section>
 
-          <section className="mt-4 surface-card p-3 sm:p-4">
+          <section className="mt-4 surface-card dashboard-quick-actions p-3 sm:p-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
               <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">{opsCopy.actions}</p>
               <div className="flex min-w-0 flex-wrap gap-2">
                 {[
                   { href: "/fuel-logs", label: opsCopy.addFuelLog, icon: Plus },
                   { href: "/trip-journey", label: opsCopy.addTripJourney, icon: Route },
-                  { href: "/weekly-mileage", label: opsCopy.addWeeklyMileage, icon: Gauge },
                   { href: "/transfers", label: opsCopy.addTransfer, icon: ArrowRightLeft },
                   { href: "/booking-diary", label: opsCopy.addBooking, icon: CalendarPlus },
                   { href: "/drivers", label: opsCopy.addVehicle, icon: Truck }
@@ -975,7 +785,7 @@ export default function DashboardPage() {
             </div>
           </section>
 
-          <section className="mt-5 surface-card p-4 sm:p-5">
+          <section className="mt-5 surface-card dashboard-attention-card p-4 sm:p-5">
             <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 className="section-title">{opsCopy.operationsAttention}</h3>
@@ -1020,14 +830,14 @@ export default function DashboardPage() {
               </div>
               <p className="mt-3 text-sm font-semibold opacity-85">{opsCopy.basedOnOperationsRisk}</p>
               <div className="mt-4 grid gap-2 text-sm">
-                <p className="flex justify-between gap-3 rounded-lg bg-white/70 px-3 py-2"><span>{copy.missingFuelTitle}</span><strong>{formatNumber(missingFuelRows.length, language)}</strong></p>
                 <p className="flex justify-between gap-3 rounded-lg bg-white/70 px-3 py-2"><span>{copy.oilDue}</span><strong>{formatNumber(oilDueRows.length, language)}</strong></p>
-                <p className="flex justify-between gap-3 rounded-lg bg-white/70 px-3 py-2"><span>{copy.unchecked}</span><strong>{formatNumber(uncheckedRecords, language)}</strong></p>
-                <p className="flex justify-between gap-3 rounded-lg bg-white/70 px-3 py-2"><span>{opsCopy.missingTripRecords}</span><strong>{formatNumber(monthlyBookingsWithoutTrips.length, language)}</strong></p>
+                <p className="flex justify-between gap-3 rounded-lg bg-white/70 px-3 py-2"><span>{copy.fuelLogsNotChecked}</span><strong>{formatNumber(uncheckedFuelCount, language)}</strong></p>
+                <p className="flex justify-between gap-3 rounded-lg bg-white/70 px-3 py-2"><span>{opsCopy.tripsWaitingForReview}</span><strong>{formatNumber(tripsWaitingForReview.length, language)}</strong></p>
+                <p className="flex justify-between gap-3 rounded-lg bg-white/70 px-3 py-2"><span>{opsCopy.bookingsWithoutTripRecords}</span><strong>{formatNumber(monthlyBookingsWithoutTrips.length, language)}</strong></p>
               </div>
             </article>
 
-            <article className="surface-card-soft p-5">
+            <article className="surface-card-soft dashboard-trip-summary p-5">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h3 className="section-title">{opsCopy.tripJourneySummary}</h3>
@@ -1036,22 +846,25 @@ export default function DashboardPage() {
                 <a href="/trip-journey" className="btn-primary min-h-9 px-3 py-1.5 text-xs">{opsCopy.viewTripJourney}</a>
               </div>
               {monthlyTrips.length || monthlyBookings.length ? (
-                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  {[
-                    [opsCopy.tripsCompletedThisMonth, formatNumber(completedMonthlyTrips.length, language)],
-                    [opsCopy.missingTripRecords, formatNumber(monthlyBookingsWithoutTrips.length, language)],
-                    [opsCopy.avgEstimatedKm, averageEstimatedTripKm != null ? `${formatNumber(averageEstimatedTripKm, language, 1)} km` : "-"],
-                    [opsCopy.avgActualKm, averageActualTripKm != null ? `${formatNumber(averageActualTripKm, language, 1)} km` : "-"],
-                    [opsCopy.totalEstimatedLitres, totalEstimatedLitres != null ? `${formatNumber(totalEstimatedLitres, language, 1)} L` : "-"],
-                    [opsCopy.totalActualFuelLogged, `${formatNumber(totalActualFuelLogged, language, 1)} L`],
-                    [opsCopy.tripCompletion, tripCompletionPercentage != null ? `${formatNumber(tripCompletionPercentage, language, 0)}%` : "-"]
-                  ].map(([label, value]) => (
-                    <div key={label} className="rounded-lg border border-slate-200 bg-white px-3 py-3">
-                      <p className="text-xs font-semibold text-slate-500">{label}</p>
-                      <p className="mt-1 text-xl font-bold text-slate-950">{value}</p>
-                    </div>
-                  ))}
-                </div>
+                <>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    {[
+                      [opsCopy.tripsCompletedThisMonth, formatNumber(completedMonthlyTrips.length, language)],
+                      [opsCopy.missingTripRecords, formatNumber(monthlyBookingsWithoutTrips.length, language)],
+                      [opsCopy.avgEstimatedKm, averageEstimatedTripKm != null ? `${formatNumber(averageEstimatedTripKm, language, 1)} km` : "-"],
+                      [opsCopy.avgActualKm, averageWorkingTripKm != null ? `${formatNumber(averageWorkingTripKm, language, 1)} km` : "-"],
+                      [opsCopy.tripsWaitingForReview, formatNumber(tripsWaitingForReview.length, language)],
+                      [opsCopy.totalActualFuelLogged, `${formatNumber(totalFuelLoggedThisMonth, language, 1)} L`],
+                      [opsCopy.tripCompletion, tripCompletionPercentage != null ? `${formatNumber(tripCompletionPercentage, language, 0)}%` : "-"]
+                    ].map(([label, value]) => (
+                      <div key={label} className="rounded-lg border border-slate-200 bg-white px-3 py-3">
+                        <p className="text-xs font-semibold text-slate-500">{label}</p>
+                        <p className="mt-1 text-xl font-bold text-slate-950">{value}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-3 rounded-lg border border-brand-100 bg-brand-50/70 px-3 py-2 text-xs font-semibold text-brand-800">{opsCopy.fuelLogsReviewHelper}</p>
+                </>
               ) : (
                 <div className="mt-4 rounded-lg border border-slate-200 bg-white px-4 py-5 text-sm font-semibold text-slate-600">
                   {opsCopy.noTripData}
@@ -1074,7 +887,6 @@ export default function DashboardPage() {
                   [opsCopy.fuelLogsAddedToday, todayActivity.fuelLogs],
                   [opsCopy.tripsCreatedToday, todayActivity.trips],
                   [opsCopy.bookingsCreatedToday, todayActivity.bookings],
-                  [opsCopy.mileageUpdatesToday, todayActivity.mileage],
                   [opsCopy.oilChangesCompletedToday, todayActivity.oilChanges]
                 ].map(([label, value]) => (
                   <div key={String(label)} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
@@ -1086,32 +898,16 @@ export default function DashboardPage() {
             </section>
 
             <section className="surface-card p-5 sm:p-6">
-              <h3 className="section-title">{opsCopy.driverSpotlight}</h3>
-              {driverSpotlight.best || driverSpotlight.worst ? (
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  {[
-                    { title: opsCopy.bestFuelEfficiency, row: driverSpotlight.best, tone: "emerald" },
-                    { title: opsCopy.worstFuelEfficiency, row: driverSpotlight.worst, tone: "amber" }
-                  ].map((spotlight) => (
-                    <div key={spotlight.title} className={`rounded-lg border px-3 py-3 ${spotlight.tone === "emerald" ? "border-emerald-100 bg-emerald-50" : "border-amber-100 bg-amber-50"}`}>
-                      <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{spotlight.title}</p>
-                      {spotlight.row ? (
-                        <>
-                          <p className="mt-2 flex items-center gap-2 text-sm font-bold text-slate-950"><UserRound className="h-4 w-4" />{spotlight.row.driver}</p>
-                          <p className="mt-1 text-xs font-semibold text-slate-600">{spotlight.row.vehicle}</p>
-                          <p className="mt-2 text-2xl font-black text-slate-950">{formatNumber(spotlight.row.kmPerLitre, language, 2)} km/L</p>
-                        </>
-                      ) : (
-                        <p className="mt-3 text-sm font-semibold text-slate-600">{opsCopy.noSpotlight}</p>
-                      )}
-                    </div>
-                  ))}
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h3 className="section-title">{opsCopy.officeWorkQueue}</h3>
+                  <p className="section-subtitle">{opsCopy.fuelCycleDataNeeded}</p>
                 </div>
-              ) : (
-                <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-5 text-sm font-semibold text-slate-600">
-                  {opsCopy.noSpotlight}
-                </div>
-              )}
+                <ClipboardList className="h-5 w-5 text-brand-700" />
+              </div>
+              <div className="mt-4 grid gap-2">
+                {officeWorkQueue.map((item) => <AttentionRow key={item.key} item={item} />)}
+              </div>
             </section>
           </section>
 

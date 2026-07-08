@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  AlertTriangle,
   Bell,
   ChevronDown,
   CircleHelp,
@@ -19,7 +18,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
 import {
   fetchDrivers,
-  fetchMissingMileageFuelLogCount,
   fetchSupportTicketNotificationCount,
   fetchUncheckedFuelLogCount,
   fetchVehicles,
@@ -256,9 +254,8 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
   const loadNotifications = async () => {
     setNotificationsLoading(true);
     try {
-      const [uncheckedFuel, missingMileage, supportTickets, oilAttention] = await Promise.all([
+      const [uncheckedFuel, supportTickets, oilAttention] = await Promise.all([
         fetchUncheckedFuelLogCount().catch(() => 0),
-        fetchMissingMileageFuelLogCount().catch(() => 0),
         isAdminUser(user) ? fetchSupportTicketNotificationCount().catch(() => 0) : Promise.resolve(0),
         Promise.all([fetchVehicles(), fetchWeeklyMileage(), fetchDrivers()])
           .then(([vehicles, weeklyMileage, drivers]) =>
@@ -278,9 +275,6 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
           : []),
         ...(uncheckedFuel > 0
           ? [{ label: t.support.notifications.fuelLogsNotChecked, value: String(uncheckedFuel), href: "/fuel-logs?review=not_checked", icon: Fuel, tone: "slate" as const }]
-          : []),
-        ...(missingMileage > 0
-          ? [{ label: t.support.notifications.missingMileageFuelDetails, value: String(missingMileage), href: "/fuel-logs?review=missing_mileage", icon: AlertTriangle, tone: "rose" as const }]
           : [])
       ]);
     } finally {

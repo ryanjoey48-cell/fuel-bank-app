@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   AlertTriangle,
@@ -64,6 +64,7 @@ const DEFAULT_FUEL_TYPE = "diesel";
 const DEFAULT_PAYMENT_METHOD = "company_card";
 const DEFAULT_ENTRY_SOURCE: FuelLogEntrySource = "line_message";
 const FILTER_STORAGE_KEY = "fuel-bank:fuel-logs-filters";
+const LANGUAGE_STORAGE_KEY = "fuel-bank-language";
 const efficiencyThresholds = {
   minReliableKmDriven: 100,
   longTripKmDriven: 1200,
@@ -188,6 +189,7 @@ type TripSummaryStatus =
   | "check_receipts"
   | "missing_mileage"
   | "check_mileage"
+  | "multiple_vehicles"
   | "not_enough_data";
 
 type TripSummary = {
@@ -204,6 +206,7 @@ type TripSummary = {
   receiptUncheckedCount: number;
   missingMileageCount: number;
   mileageRecordCount: number;
+  vehicleCount: number;
   status: TripSummaryStatus;
   reason: string;
 };
@@ -220,7 +223,7 @@ const initialEfficiencyFilters: EfficiencyFilters = {
 
 function getReceiptCheckLabel(checked: boolean, language: "en" | "th") {
   if (language === "th") {
-    return checked ? "ตรวจแล้ว" : "ยังไม่ตรวจ";
+    return checked ? "เธ•เธฃเธงเธเนเธฅเนเธง" : "เธขเธฑเธเนเธกเนเธ•เธฃเธงเธ";
   }
 
   return checked ? "Checked" : "Not checked";
@@ -323,6 +326,703 @@ function getInclusiveDaysBetweenDates(startDate: string | null | undefined, endD
   return Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1;
 }
 
+type BossPdfReportData = {
+  actualCalculation: string;
+  dataStatus: "ready" | "warning";
+  dataStatusDetail: string;
+  dataStatusTitle: string;
+  dateRange: string;
+  driver: string;
+  fuelLogs: BossPdfFuelLogRow[];
+  fuelEfficiency: string;
+  generatedAt: string;
+  moreFuelLogCount: number;
+  mileageRange: {
+    distanceTravelled: string;
+    endMileage: string;
+    startMileage: string;
+  };
+  totalFuelLogCount: number;
+  totalFuelCost: string;
+  totalLitres: string;
+  tripKm: string;
+  vehicleReg: string;
+};
+
+type BossPdfFuelLogRow = {
+  checkedStatus: string;
+  cost: string;
+  date: string;
+  litres: string;
+  mileage: string;
+  vehicle: string;
+};
+
+type PdfLogo = {
+  data: string;
+  dataUrl: string;
+  height: number;
+  width: number;
+} | null;
+
+function toPdfSafeText(value: unknown) {
+  return String(value ?? "")
+    .normalize("NFKD")
+    .replace(/[^\x20-\x7E]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function escapePdfText(value: unknown) {
+  const divideMarker = "__PDF_DIVIDE__";
+  const safe = String(value ?? "")
+    .normalize("NFKD")
+    .replace(/รท/g, divideMarker)
+    .replace(/[^\x20-\x7E]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return safe
+    .replace(/\\/g, "\\\\")
+    .replace(/\(/g, "\\(")
+    .replace(/\)/g, "\\)")
+    .replaceAll(divideMarker, "\\367");
+}
+
+function formatReportNumber(value: number | null | undefined, decimals = 0) {
+  if (value == null || !Number.isFinite(Number(value))) return "-";
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: decimals,
+    minimumFractionDigits: decimals
+  }).format(Number(value));
+}
+
+function formatReportCurrency(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(Number(value))) return "-";
+  return `THB ${formatReportNumber(Number(value), 2)}`;
+}
+
+function formatReportDate(value: string | null | undefined) {
+  if (!value) return "-";
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "-";
+  return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(date);
+}
+
+function formatFileDate(value: string | null | undefined) {
+  if (!value) return "NoDate";
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "NoDate";
+  return `${String(date.getDate()).padStart(2, "0")}-${String(date.getMonth() + 1).padStart(2, "0")}-${date.getFullYear()}`;
+}
+
+function getPdfFileSafePart(value: string) {
+  const safe = toPdfSafeText(value).replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  return safe || "All";
+}
+
+async function loadPdfLogo(): Promise<PdfLogo> {
+  try {
+    const response = await fetch("/logo.png");
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    const imageUrl = URL.createObjectURL(blob);
+    const image = new Image();
+    const loaded = new Promise<HTMLImageElement>((resolve, reject) => {
+      image.onload = () => resolve(image);
+      image.onerror = reject;
+    });
+    image.src = imageUrl;
+    await loaded;
+
+    const canvas = document.createElement("canvas");
+    const maxSize = 220;
+    const scale = Math.min(1, maxSize / Math.max(image.naturalWidth, image.naturalHeight));
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext("2d");
+    if (!context) return null;
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    URL.revokeObjectURL(imageUrl);
+
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+    const base64 = dataUrl.split(",")[1] ?? "";
+    return {
+      data: atob(base64),
+      dataUrl,
+      height: canvas.height,
+      width: canvas.width
+    };
+  } catch (error) {
+    console.warn("Unable to load PDF logo:", error);
+    return null;
+  }
+}
+
+function downloadBlob(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+type BossPdfCopy = {
+  actual: string;
+  checked: string;
+  checkedStatus: string;
+  companyName: string;
+  cost: string;
+  dataStatus: string;
+  date: string;
+  dateRange: string;
+  distanceTravelled: string;
+  driver: string;
+  endMileage: string;
+  footer: string;
+  formula: string;
+  formulaText: string;
+  fuelCost: string;
+  fuelEfficiency: string;
+  fuelLogsMayCoverMultipleJobs: string;
+  fuelLogsUsed: string;
+  fuelUsed: string;
+  generated: string;
+  howCalculated: string;
+  keySummary: string;
+  litres: string;
+  mileage: string;
+  mileageRange: string;
+  moreFuelLogsIncluded: (count: number) => string;
+  needsReceiptCheck: string;
+  notChecked: string;
+  periodFuelEfficiency: string;
+  readyToReview: string;
+  receiptWarning: string;
+  reportSentence: string;
+  reportTitle: string;
+  reportType: string;
+  selectedFilters: string;
+  startMileage: string;
+  status: string;
+  subtitle: string;
+  totalLitres: string;
+  vehicle: string;
+  vehicleReg: string;
+};
+
+function getBossPdfCopy(language: "en" | "th"): BossPdfCopy {
+  if (language === "th") {
+    return {
+      actual: "เธเธณเธเธงเธ“เธเธฃเธดเธ",
+      checked: "เธ•เธฃเธงเธเนเธฅเนเธง",
+      checkedStatus: "เธชเธ–เธฒเธเธฐเธ•เธฃเธงเธเธชเธญเธ",
+      companyName: "Expert Express Sender Co., Ltd.",
+      cost: "เธเนเธฒเนเธเนเธเนเธฒเธข",
+      dataStatus: "เธชเธ–เธฒเธเธฐเธเนเธญเธกเธนเธฅ",
+      date: "เธงเธฑเธเธ—เธตเน",
+      dateRange: "เธเนเธงเธเธงเธฑเธเธ—เธตเน",
+      distanceTravelled: "เธฃเธฐเธขเธฐเธ—เธฒเธเธฃเธงเธก",
+      driver: "เธเธเธเธฑเธ",
+      endMileage: "เน€เธฅเธเนเธกเธฅเนเธชเธดเนเธเธชเธธเธ”",
+      footer: "เธฃเธฒเธขเธเธฒเธเธเธฃเธฐเธชเธดเธ—เธเธดเธ เธฒเธเธเนเธณเธกเธฑเธเธ•เธฒเธกเธเนเธงเธเธงเธฑเธเธ—เธตเน เธฃเธฒเธขเธเธฒเธฃเน€เธ•เธดเธกเธเนเธณเธกเธฑเธเธญเธฒเธเธเธฃเธญเธเธเธฅเธธเธกเธซเธฅเธฒเธขเธเธฒเธ",
+      formula: "เธชเธนเธ•เธฃ",
+      formulaText: "เธฃเธฐเธขเธฐเธ—เธฒเธเธฃเธงเธก รท เธฅเธดเธ•เธฃเธ—เธฑเนเธเธซเธกเธ” = เธเธก./เธฅเธดเธ•เธฃ",
+      fuelCost: "เธเนเธฒเธเนเธณเธกเธฑเธเธ—เธฑเนเธเธซเธกเธ”",
+      fuelEfficiency: "เธเธก./เธฅเธดเธ•เธฃ",
+      fuelLogsMayCoverMultipleJobs: "เธฃเธฒเธขเธเธฒเธฃเน€เธ•เธดเธกเธเนเธณเธกเธฑเธเธญเธฒเธเธเธฃเธญเธเธเธฅเธธเธกเธซเธฅเธฒเธขเธเธฒเธ",
+      fuelLogsUsed: "เธฃเธฒเธขเธเธฒเธฃเน€เธ•เธดเธกเธเนเธณเธกเธฑเธเธ—เธตเนเนเธเนเธเธณเธเธงเธ“",
+      fuelUsed: "เธเนเธณเธกเธฑเธเธ—เธตเนเนเธเน",
+      generated: "เธชเธฃเนเธฒเธเน€เธกเธทเนเธญ",
+      howCalculated: "เธงเธดเธเธตเธเธณเธเธงเธ“",
+      keySummary: "เธชเธฃเธธเธเธชเธณเธเธฑเธ",
+      litres: "เธฅเธดเธ•เธฃ",
+      mileage: "เน€เธฅเธเนเธกเธฅเน",
+      mileageRange: "เธเนเธงเธเน€เธฅเธเนเธกเธฅเน",
+      moreFuelLogsIncluded: (count) => `+ ${count} เธฃเธฒเธขเธเธฒเธฃเน€เธ•เธดเธกเธเนเธณเธกเธฑเธเน€เธเธดเนเธกเน€เธ•เธดเธก`,
+      needsReceiptCheck: "เธ•เนเธญเธเธ•เธฃเธงเธเนเธเน€เธชเธฃเนเธ",
+      notChecked: "เธขเธฑเธเนเธกเนเธ•เธฃเธงเธ",
+      periodFuelEfficiency: "เธเธฃเธฐเธชเธดเธ—เธเธดเธ เธฒเธเธเนเธณเธกเธฑเธเธ•เธฒเธกเธเนเธงเธเธงเธฑเธเธ—เธตเน",
+      readyToReview: "เธเธฃเนเธญเธกเธ•เธฃเธงเธเธชเธญเธ",
+      receiptWarning: "เธกเธตเธเธฒเธเนเธเน€เธชเธฃเนเธเธ—เธตเนเธขเธฑเธเนเธกเนเนเธ”เนเธ•เธฃเธงเธ เธเธฃเธธเธ“เธฒเธ•เธฃเธงเธเธฃเธฒเธขเธเธฒเธฃเธเนเธณเธกเธฑเธเธเนเธญเธเนเธเนเธฃเธฒเธขเธเธฒเธเธเธตเนเน€เธเนเธเธเนเธญเธกเธนเธฅเธชเธฃเธธเธ",
+      reportSentence: "เธเธณเธเธงเธ“เธเธฃเธฐเธชเธดเธ—เธเธดเธ เธฒเธเธเนเธณเธกเธฑเธเธ•เธฒเธกเธเนเธงเธเธงเธฑเธเธ—เธตเนเธ—เธตเนเน€เธฅเธทเธญเธ เธฃเธฒเธขเธเธฒเธฃเน€เธ•เธดเธกเธเนเธณเธกเธฑเธเธญเธฒเธเธเธฃเธญเธเธเธฅเธธเธกเธซเธฅเธฒเธขเธเธฒเธ",
+      reportTitle: "เธฃเธฒเธขเธเธฒเธเธเธฃเธฐเธชเธดเธ—เธเธดเธ เธฒเธเธเธฒเธฃเนเธเนเธเนเธณเธกเธฑเธ",
+      reportType: "เธเธฃเธฐเน€เธ เธ—เธฃเธฒเธขเธเธฒเธ",
+      selectedFilters: "เธ•เธฑเธงเธเธฃเธญเธเธ—เธตเนเน€เธฅเธทเธญเธ",
+      startMileage: "เน€เธฅเธเนเธกเธฅเนเน€เธฃเธดเนเธกเธ•เนเธ",
+      status: "เธชเธ–เธฒเธเธฐ",
+      subtitle: "เธฃเธฒเธขเธเธฒเธเธเธฃเธฐเธชเธดเธ—เธเธดเธ เธฒเธเธเนเธณเธกเธฑเธเธ•เธฒเธกเธเนเธงเธเธงเธฑเธเธ—เธตเน",
+      totalLitres: "เธฅเธดเธ•เธฃเธ—เธฑเนเธเธซเธกเธ”",
+      vehicle: "เธฃเธ–",
+      vehicleReg: "เธ—เธฐเน€เธเธตเธขเธเธฃเธ–"
+    };
+  }
+
+  return {
+    actual: "Actual",
+    checked: "Checked",
+    checkedStatus: "Checked status",
+    companyName: "Expert Express Sender Co., Ltd.",
+    cost: "Cost",
+    dataStatus: "Data status",
+    date: "Date",
+    dateRange: "Date range",
+    distanceTravelled: "Distance travelled",
+    driver: "Driver",
+    endMileage: "End mileage",
+    footer: "Generated automatically from verified mileage and fuel log data.",
+    formula: "Formula",
+    formulaText: `Distance travelled ${String.fromCharCode(247)} Total litres = km/L`,
+    fuelCost: "Fuel cost",
+    fuelEfficiency: "Fuel efficiency",
+    fuelLogsMayCoverMultipleJobs: "Fuel logs may cover multiple jobs.",
+    fuelLogsUsed: "Fuel receipts included in this calculation",
+    fuelUsed: "Fuel used",
+    generated: "Generated",
+    howCalculated: "How this result was calculated",
+    keySummary: "Key summary",
+    litres: "Litres",
+    mileage: "Mileage",
+    mileageRange: "Mileage range",
+    moreFuelLogsIncluded: (count) => `+ ${count} more fuel logs included`,
+    needsReceiptCheck: "Needs receipt check",
+    notChecked: "Not checked",
+    periodFuelEfficiency: "Period fuel efficiency",
+    readyToReview: "Ready to review",
+    receiptWarning: "Some receipts are not checked yet.",
+    reportSentence:
+      "Fuel efficiency is calculated across the selected period. Fuel logs may cover multiple jobs, so this is a period-based report.",
+    reportTitle: "Fuel Efficiency Analysis",
+    reportType: "Report type",
+    selectedFilters: "Selected filters",
+    startMileage: "Start mileage",
+    status: "Status",
+    subtitle: "Period fuel efficiency report",
+    totalLitres: "Total litres",
+    vehicle: "Vehicle",
+    vehicleReg: "Vehicle reg"
+  };
+}
+
+function repairPossiblyMojibakeThai(value: string) {
+  if (!/[\u0080-\u009f]|เธ|เน/.test(value)) return value;
+  const bytes: number[] = [];
+  for (const character of value) {
+    const code = character.charCodeAt(0);
+    if (code <= 0xff) {
+      bytes.push(code);
+    } else if (code >= 0x0e01 && code <= 0x0e5b) {
+      bytes.push(code - 0x0d60);
+    } else {
+      bytes.push(...new TextEncoder().encode(character));
+    }
+  }
+  return new TextDecoder("utf-8").decode(new Uint8Array(bytes));
+}
+
+function getThaiBossPdfCopy(): BossPdfCopy {
+  return {
+    actual: "คำนวณจริง",
+    checked: "ตรวจแล้ว",
+    checkedStatus: "สถานะ",
+    companyName: "Expert Express Sender Co., Ltd.",
+    cost: "ค่าใช้จ่าย",
+    dataStatus: "สถานะข้อมูล",
+    date: "วันที่",
+    dateRange: "ช่วงวันที่",
+    distanceTravelled: "ระยะทางรวม",
+    driver: "คนขับ",
+    endMileage: "เลขไมล์สิ้นสุด",
+    footer: "สร้างอัตโนมัติจากข้อมูลเลขไมล์และรายการเติมน้ำมันที่ตรวจสอบแล้ว",
+    formula: "สูตร",
+    formulaText: `ระยะทางรวม ${String.fromCharCode(247)} ลิตรทั้งหมด = กม./ลิตร`,
+    fuelCost: "ค่าน้ำมันทั้งหมด",
+    fuelEfficiency: "กม./ลิตร",
+    fuelLogsMayCoverMultipleJobs: "รายการเติมน้ำมันอาจครอบคลุมหลายงาน",
+    fuelLogsUsed: "ใบเสร็จเติมน้ำมันที่ใช้ในการคำนวณ",
+    fuelUsed: "น้ำมันที่ใช้",
+    generated: "สร้างเมื่อ",
+    howCalculated: "วิธีคำนวณผลลัพธ์นี้",
+    keySummary: "สรุปสำคัญ",
+    litres: "ลิตร",
+    mileage: "เลขไมล์",
+    mileageRange: "ช่วงเลขไมล์",
+    moreFuelLogsIncluded: (count) => `+ ${count} รายการเติมน้ำมันเพิ่มเติม`,
+    needsReceiptCheck: "ต้องตรวจใบเสร็จ",
+    notChecked: "ยังไม่ตรวจ",
+    periodFuelEfficiency: "ประสิทธิภาพน้ำมันตามช่วงวันที่",
+    readyToReview: "พร้อมตรวจสอบ",
+    receiptWarning: "มีใบเสร็จเติมน้ำมันรอตรวจสอบ",
+    reportSentence: "",
+    reportTitle: "รายงานประสิทธิภาพการใช้น้ำมัน",
+    reportType: "ประเภทรายงาน",
+    selectedFilters: "ตัวกรองที่เลือก",
+    startMileage: "เลขไมล์เริ่มต้น",
+    status: "สถานะ",
+    subtitle: "รายงานประสิทธิภาพน้ำมันตามช่วงวันที่",
+    totalLitres: "ลิตรทั้งหมด",
+    vehicle: "รถ",
+    vehicleReg: "ทะเบียนรถ"
+  };
+}
+
+function normalizeBossPdfCopy(copy: BossPdfCopy, language: "en" | "th"): BossPdfCopy {
+  return language === "th" ? getThaiBossPdfCopy() : copy;
+}
+
+function getPdfFontFamily(language: "en" | "th") {
+  return language === "th"
+    ? '"BossPdfThai", Tahoma, sans-serif'
+    : 'Arial, "Helvetica Neue", Helvetica, sans-serif';
+}
+
+async function loadBossPdfThaiFont() {
+  if (typeof document === "undefined" || typeof FontFace === "undefined") return;
+  const fonts = document.fonts;
+  let fontAlreadyLoaded = false;
+  fonts.forEach((font) => {
+    if (font.family === "BossPdfThai") fontAlreadyLoaded = true;
+  });
+  if (fontAlreadyLoaded) return;
+  const response = await fetch("/fonts/boss-pdf-thai.ttf");
+  if (!response.ok) {
+    throw new Error("Unable to load Thai PDF font.");
+  }
+  const fontData = await response.arrayBuffer();
+  const font = new FontFace("BossPdfThai", fontData, {
+    style: "normal",
+    weight: "400"
+  });
+  await font.load();
+  fonts.add(font);
+  await fonts.ready;
+}
+
+function getCurrentPdfLanguage(fallback: "en" | "th") {
+  if (typeof window === "undefined") return fallback;
+  const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+  return stored === "en" || stored === "th" ? stored : fallback;
+}
+
+function normalizeFormulaSpacing(value: string) {
+  return value.replace(/\s*÷\s*/g, " ÷ ").replace(/\s+/g, " ").trim();
+}
+
+async function loadCanvasImage(dataUrl: string) {
+  const image = new Image();
+  const loaded = new Promise<HTMLImageElement>((resolve, reject) => {
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+  });
+  image.src = dataUrl;
+  return loaded;
+}
+
+function binaryStringFromDataUrl(dataUrl: string) {
+  return atob(dataUrl.split(",")[1] ?? "");
+}
+
+function buildSingleImagePdf(imageData: string, imageWidth: number, imageHeight: number) {
+  const pageWidth = 595;
+  const pageHeight = 842;
+  const contentStream = `q ${pageWidth} 0 0 ${pageHeight} 0 0 cm /PageImage Do Q`;
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /XObject << /PageImage 5 0 R >> >> /Contents 4 0 R >>`,
+    `<< /Length ${contentStream.length} >>\nstream\n${contentStream}\nendstream`,
+    `<< /Type /XObject /Subtype /Image /Width ${imageWidth} /Height ${imageHeight} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageData.length} >>\nstream\n${imageData}\nendstream`
+  ];
+
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  objects.forEach((object, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xrefOffset = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  offsets.slice(1).forEach((offset) => {
+    pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  });
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+
+  const bytes = new Uint8Array(pdf.length);
+  for (let index = 0; index < pdf.length; index += 1) {
+    bytes[index] = pdf.charCodeAt(index) & 0xff;
+  }
+  return new Blob([bytes], { type: "application/pdf" });
+}
+
+async function buildBossFuelEfficiencyCanvasPdf(data: BossPdfReportData, logo: PdfLogo, language: "en" | "th") {
+  if (language === "th") {
+    await loadBossPdfThaiFont();
+  }
+
+  const pageWidth = 595;
+  const pageHeight = 842;
+  const scale = 2;
+  const canvas = document.createElement("canvas");
+  canvas.width = pageWidth * scale;
+  canvas.height = pageHeight * scale;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("Unable to prepare PDF canvas.");
+  }
+
+  context.scale(scale, scale);
+  const copy = normalizeBossPdfCopy(getBossPdfCopy(language), language);
+  const fontFamily = getPdfFontFamily(language);
+  const margin = 42;
+  const contentWidth = pageWidth - margin * 2;
+  const isThai = language === "th";
+
+  const color = {
+    border: "#e2e8f0",
+    green: "#047857",
+    greenBg: "#ecfdf5",
+    greenBorder: "#86efac",
+    muted: "#64748b",
+    orange: "#9a3412",
+    orangeBg: "#fff7ed",
+    orangeBorder: "#fdba74",
+    purple: "#5b21b6",
+    soft: "#f8fafc",
+    text: "#0f172a"
+  };
+  const totalFuelLogsLabel = isThai ? "\u0e08\u0e33\u0e19\u0e27\u0e19\u0e43\u0e1a\u0e40\u0e2a\u0e23\u0e47\u0e08\u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14" : "Total fuel logs";
+
+  const setFont = (size: number, weight: 400 | 500 | 600 | 700 = 400) => {
+    context.font = `${weight} ${size}px ${fontFamily}`;
+  };
+  const drawText = (
+    value: unknown,
+    x: number,
+    y: number,
+    options: { color?: string; maxWidth?: number; size?: number; weight?: 400 | 500 | 600 | 700 } = {}
+  ) => {
+    const size = options.size ?? 9;
+    setFont(size, options.weight ?? 400);
+    context.fillStyle = options.color ?? color.text;
+    let textValue = String(value ?? "-").replace(/\s+/g, " ").trim();
+    if (options.maxWidth && context.measureText(textValue).width > options.maxWidth) {
+      while (textValue.length > 1 && context.measureText(`${textValue}...`).width > options.maxWidth) {
+        textValue = textValue.slice(0, -1);
+      }
+      textValue = `${textValue}...`;
+    }
+    context.fillText(textValue, x, y);
+  };
+  const fillRect = (x: number, y: number, width: number, height: number, fill: string, stroke?: string) => {
+    context.fillStyle = fill;
+    context.fillRect(x, y, width, height);
+    if (stroke) {
+      context.strokeStyle = stroke;
+      context.lineWidth = 1;
+      context.strokeRect(x + 0.5, y + 0.5, width - 1, height - 1);
+    }
+  };
+  const line = (x1: number, y1: number, x2: number, y2: number, stroke = color.border) => {
+    context.strokeStyle = stroke;
+    context.lineWidth = 1;
+    context.beginPath();
+    context.moveTo(x1, y1 + 0.5);
+    context.lineTo(x2, y2 + 0.5);
+    context.stroke();
+  };
+  const drawSectionTitle = (title: string, y: number) => {
+    drawText(title, margin, y, { size: isThai ? 9.5 : 10, weight: 700 });
+  };
+
+  fillRect(0, 0, pageWidth, pageHeight, "#ffffff");
+  fillRect(0, 0, 8, pageHeight, "#6d28d9");
+  fillRect(0, 0, pageWidth, 62, color.soft);
+
+  if (logo?.dataUrl) {
+    try {
+      const logoImage = await loadCanvasImage(logo.dataUrl);
+      context.drawImage(logoImage, margin, 18, 28, 28);
+    } catch {
+      fillRect(margin, 18, 28, 28, "#ede9fe", "#c4b5fd");
+      drawText("EES", margin + 6, 36, { color: color.purple, size: 8, weight: 700 });
+    }
+  } else {
+    fillRect(margin, 18, 28, 28, "#ede9fe", "#c4b5fd");
+    drawText("EES", margin + 6, 36, { color: color.purple, size: 8, weight: 700 });
+  }
+
+  drawText(copy.companyName, 82, 27, { size: isThai ? 8.2 : 9, weight: 700 });
+  drawText(copy.reportTitle, 82, 44, { color: color.purple, size: isThai ? 13 : 15, weight: 700, maxWidth: 275 });
+  drawText(copy.subtitle, 340, 31, { color: color.muted, size: isThai ? 7.4 : 8, maxWidth: 210, weight: 600 });
+  drawText(`${copy.generated}: ${data.generatedAt}`, 340, 46, { color: color.muted, size: isThai ? 7.2 : 7.6, maxWidth: 210 });
+
+  let y = 84;
+  drawSectionTitle(copy.selectedFilters, y);
+  y += 9;
+  const filterCards = [
+    [copy.driver, data.driver],
+    [copy.vehicleReg, data.vehicleReg],
+    [copy.dateRange, data.dateRange],
+    [copy.reportType, copy.periodFuelEfficiency]
+  ];
+  const filterWidths = [118, 100, 152, 120];
+  let x = margin;
+  filterCards.forEach(([label, value], index) => {
+    const width = filterWidths[index];
+    fillRect(x, y, width, 26, color.soft, color.border);
+    drawText(label, x + 7, y + 10, { color: color.muted, maxWidth: width - 14, size: isThai ? 6.4 : 6.8, weight: 700 });
+    drawText(value, x + 7, y + 21, { maxWidth: width - 14, size: isThai ? 7.1 : 7.8, weight: 700 });
+    x += width + 7;
+  });
+  y += 48;
+
+  drawSectionTitle(copy.keySummary, y);
+  y += 10;
+  const summaryCards = [
+    [copy.distanceTravelled, data.tripKm],
+    [copy.totalLitres, data.totalLitres],
+    [copy.fuelCost, data.totalFuelCost],
+    [copy.fuelEfficiency, data.fuelEfficiency]
+  ];
+  const summaryWidth = (contentWidth - 24) / 4;
+  summaryCards.forEach(([label, value], index) => {
+    const cardX = margin + index * (summaryWidth + 8);
+    const isEfficiency = index === 3;
+    fillRect(cardX, y, summaryWidth, 38, isEfficiency ? color.greenBg : "#ffffff", isEfficiency ? color.greenBorder : color.border);
+    drawText(label, cardX + 7, y + 12, { color: color.muted, maxWidth: summaryWidth - 14, size: isThai ? 6.2 : 6.8, weight: 700 });
+    drawText(value, cardX + 7, y + 29, {
+      color: isEfficiency ? color.green : color.text,
+      maxWidth: summaryWidth - 14,
+      size: isEfficiency ? (isThai ? 10.3 : 11.5) : isThai ? 9.2 : 10.4,
+      weight: 700
+    });
+  });
+  y += 60;
+
+  drawSectionTitle(copy.fuelLogsUsed, y);
+  y += 9;
+  const tableColumns = [
+    [copy.date, 69],
+    [copy.vehicle, 73],
+    [copy.mileage, 88],
+    [copy.litres, 65],
+    [copy.cost, 92],
+    [copy.checkedStatus, 82]
+  ] as [string, number][];
+  const tableWidth = tableColumns.reduce((sum, [, width]) => sum + width, 0);
+  const rowHeight = 18;
+  const totalRowHeight = 19;
+  const tableHeight = 20 + Math.max(1, data.fuelLogs.length) * rowHeight + totalRowHeight + (data.moreFuelLogCount > 0 ? 15 : 0);
+  fillRect(margin, y, tableWidth, tableHeight, "#ffffff", color.border);
+  fillRect(margin, y, tableWidth, 20, color.soft);
+  x = margin;
+  tableColumns.forEach(([label, width], index) => {
+    drawText(label, x + 5, y + 13, { color: color.muted, maxWidth: width - 8, size: isThai ? 6.2 : 6.8, weight: 700 });
+    if (index > 0) line(x, y, x, y + tableHeight, "#edf2f7");
+    x += width;
+  });
+  if (data.fuelLogs.length) {
+    data.fuelLogs.forEach((row, rowIndex) => {
+      const rowY = y + 20 + rowIndex * rowHeight;
+      line(margin, rowY, margin + tableWidth, rowY, "#edf2f7");
+      const values = [row.date, row.vehicle, row.mileage, row.litres, row.cost, row.checkedStatus];
+      x = margin;
+      values.forEach((value, index) => {
+        const width = tableColumns[index][1];
+        const isUnchecked = index === 5 && value === copy.notChecked;
+        drawText(value, x + 5, rowY + 12, {
+          color: isUnchecked ? color.orange : color.text,
+          maxWidth: width - 8,
+          size: isThai ? 6.6 : 7.4,
+          weight: index === 5 ? 700 : 400
+        });
+        x += width;
+      });
+    });
+  }
+  if (data.moreFuelLogCount > 0) {
+    drawText(copy.moreFuelLogsIncluded(data.moreFuelLogCount), margin + 6, y + tableHeight - 5, {
+      color: color.muted,
+      maxWidth: 300,
+      size: isThai ? 6.8 : 7.4,
+      weight: 700
+    });
+  }
+  const totalRowY = y + 20 + Math.max(1, data.fuelLogs.length) * rowHeight;
+  fillRect(margin, totalRowY, tableWidth, totalRowHeight, "#f8fafc");
+  line(margin, totalRowY, margin + tableWidth, totalRowY, color.border);
+  drawText(`${totalFuelLogsLabel}: ${data.totalFuelLogCount}`, margin + 7, totalRowY + 13, {
+    color: color.text,
+    maxWidth: 130,
+    size: isThai ? 6.8 : 7.5,
+    weight: 700
+  });
+  drawText(`${copy.totalLitres}: ${data.totalLitres}`, margin + 155, totalRowY + 13, {
+    color: color.text,
+    maxWidth: 140,
+    size: isThai ? 6.8 : 7.5,
+    weight: 700
+  });
+  drawText(`${copy.fuelCost}: ${data.totalFuelCost}`, margin + 310, totalRowY + 13, {
+    color: color.text,
+    maxWidth: 180,
+    size: isThai ? 6.8 : 7.5,
+    weight: 700
+  });
+  y += tableHeight + 21;
+
+  drawSectionTitle(copy.howCalculated, y);
+  y += 9;
+  fillRect(margin, y, contentWidth, 86, color.soft, color.border);
+  const calculationRows = [
+    [copy.mileageRange, `${data.mileageRange.startMileage} ${String.fromCharCode(8594)} ${data.mileageRange.endMileage}`],
+    [copy.distanceTravelled, data.mileageRange.distanceTravelled],
+    [copy.fuelUsed, data.totalLitres],
+    [copy.fuelEfficiency, data.actualCalculation]
+  ];
+  calculationRows.forEach(([label, value], index) => {
+    const rowY = y + 18 + index * 18;
+    drawText(label, margin + 12, rowY, {
+      color: color.muted,
+      maxWidth: 135,
+      size: isThai ? 7.1 : 7.8,
+      weight: 700
+    });
+    drawText(value, margin + 162, rowY, {
+      color: index === 3 ? color.green : color.text,
+      maxWidth: contentWidth - 178,
+      size: index === 3 ? (isThai ? 8.6 : 9.8) : isThai ? 7.8 : 8.8,
+      weight: 700
+    });
+  });
+  y += 106;
+
+  const isWarning = data.dataStatus === "warning";
+  const statusIcon = isWarning ? String.fromCharCode(9888) : String.fromCharCode(10003);
+  const statusText = isWarning ? data.dataStatusDetail : data.dataStatusTitle;
+  fillRect(margin, y, contentWidth, 28, isWarning ? color.orangeBg : color.greenBg, isWarning ? color.orangeBorder : color.greenBorder);
+  drawText(`${statusIcon} ${statusText}`, margin + 10, y + 18, {
+    color: isWarning ? color.orange : color.green,
+    maxWidth: contentWidth - 20,
+    size: isThai ? 7.4 : 8.4,
+    weight: 700
+  });
+
+  drawText(copy.companyName, margin, 786, { color: color.text, maxWidth: contentWidth, size: isThai ? 7 : 7.6, weight: 700 });
+  drawText("Fuel Efficiency Analysis Report", margin, 799, { color: color.muted, maxWidth: contentWidth, size: isThai ? 6.6 : 7.4, weight: 700 });
+  drawText(copy.footer, margin, 812, { color: color.muted, maxWidth: contentWidth, size: isThai ? 6.2 : 7 });
+
+  const pageImage = canvas.toDataURL("image/jpeg", 0.92);
+  return buildSingleImagePdf(binaryStringFromDataUrl(pageImage), canvas.width, canvas.height);
+}
+
+async function buildBossFuelEfficiencyPdf(data: BossPdfReportData, logo: PdfLogo, language: "en" | "th") {
+  return buildBossFuelEfficiencyCanvasPdf(data, logo, language);
+}
 function buildEfficiencyRows(logs: FuelLogWithDriver[]) {
   const previousByVehicle = new Map<string, FuelLogWithDriver>();
   const rows = [...logs]
@@ -501,93 +1201,93 @@ export default function FuelLogsPage() {
   const { language, t } = useLanguage();
   const searchParams = useSearchParams();
   const copy = {
-    dateRange: language === "th" ? "ช่วงวันที่" : "Date range",
-    driver: language === "th" ? "คนขับ" : "Driver",
-    vehicle: language === "th" ? "ทะเบียนรถ" : "Vehicle reg",
-    payment: language === "th" ? "วิธีชำระเงิน" : "Payment method",
-    totalCostRange: language === "th" ? "ช่วงยอดเงิน" : "Total cost range",
-    min: language === "th" ? "ต่ำสุด" : "Min",
-    max: language === "th" ? "สูงสุด" : "Max",
-    clear: language === "th" ? "ล้างตัวกรอง" : "Clear filters",
-    matches: language === "th" ? "รายการ" : "entries",
-    duplicateTitle: language === "th" ? "พบรายการที่อาจซ้ำกัน" : "Possible duplicate found",
+    dateRange: language === "th" ? "เธเนเธงเธเธงเธฑเธเธ—เธตเน" : "Date range",
+    driver: language === "th" ? "เธเธเธเธฑเธ" : "Driver",
+    vehicle: language === "th" ? "เธ—เธฐเน€เธเธตเธขเธเธฃเธ–" : "Vehicle reg",
+    payment: language === "th" ? "เธงเธดเธเธตเธเธณเธฃเธฐเน€เธเธดเธ" : "Payment method",
+    totalCostRange: language === "th" ? "เธเนเธงเธเธขเธญเธ”เน€เธเธดเธ" : "Total cost range",
+    min: language === "th" ? "เธ•เนเธณเธชเธธเธ”" : "Min",
+    max: language === "th" ? "เธชเธนเธเธชเธธเธ”" : "Max",
+    clear: language === "th" ? "เธฅเนเธฒเธเธ•เธฑเธงเธเธฃเธญเธ" : "Clear filters",
+    matches: language === "th" ? "เธฃเธฒเธขเธเธฒเธฃ" : "entries",
+    duplicateTitle: language === "th" ? "เธเธเธฃเธฒเธขเธเธฒเธฃเธ—เธตเนเธญเธฒเธเธเนเธณเธเธฑเธ" : "Possible duplicate found",
     duplicateHint:
       language === "th"
-        ? "วันที่ ทะเบียนรถ ยอดเงิน และลิตรใกล้เคียงกับรายการที่มีอยู่แล้ว"
+        ? "เธงเธฑเธเธ—เธตเน เธ—เธฐเน€เธเธตเธขเธเธฃเธ– เธขเธญเธ”เน€เธเธดเธ เนเธฅเธฐเธฅเธดเธ•เธฃเนเธเธฅเนเน€เธเธตเธขเธเธเธฑเธเธฃเธฒเธขเธเธฒเธฃเธ—เธตเนเธกเธตเธญเธขเธนเนเนเธฅเนเธง"
         : "This entry is close to an existing record on the same date and vehicle.",
-    saveAnyway: language === "th" ? "บันทึกต่อ" : "Save anyway",
-    cancel: language === "th" ? "ยกเลิก" : "Cancel",
-    deleteConfirm: language === "th" ? "ลบรายการนี้ใช่หรือไม่" : "Delete this fuel entry?",
-    filters: language === "th" ? "ตัวกรอง" : "Filters",
-    all: language === "th" ? "ทั้งหมด" : "All",
-    noResultsTitle: language === "th" ? "ไม่พบผลลัพธ์" : "No results",
+    saveAnyway: language === "th" ? "เธเธฑเธเธ—เธถเธเธ•เนเธญ" : "Save anyway",
+    cancel: language === "th" ? "เธขเธเน€เธฅเธดเธ" : "Cancel",
+    deleteConfirm: language === "th" ? "เธฅเธเธฃเธฒเธขเธเธฒเธฃเธเธตเนเนเธเนเธซเธฃเธทเธญเนเธกเน" : "Delete this fuel entry?",
+    filters: language === "th" ? "เธ•เธฑเธงเธเธฃเธญเธ" : "Filters",
+    all: language === "th" ? "เธ—เธฑเนเธเธซเธกเธ”" : "All",
+    noResultsTitle: language === "th" ? "เนเธกเนเธเธเธเธฅเธฅเธฑเธเธเน" : "No results",
     noResultsDescription:
       language === "th"
-        ? "ไม่พบรายการที่ตรงกับตัวกรองนี้"
+        ? "เนเธกเนเธเธเธฃเธฒเธขเธเธฒเธฃเธ—เธตเนเธ•เธฃเธเธเธฑเธเธ•เธฑเธงเธเธฃเธญเธเธเธตเน"
         : "No fuel entries match the current filters.",
     deleteError:
-      language === "th" ? "ไม่สามารถลบบันทึกรายการน้ำมันได้" : "Unable to delete fuel log.",
+      language === "th" ? "เนเธกเนเธชเธฒเธกเธฒเธฃเธ–เธฅเธเธเธฑเธเธ—เธถเธเธฃเธฒเธขเธเธฒเธฃเธเนเธณเธกเธฑเธเนเธ”เน" : "Unable to delete fuel log.",
     deleteSuccess:
-      language === "th" ? "ลบบันทึกรายการน้ำมันเรียบร้อยแล้ว" : "Fuel entry deleted successfully.",
+      language === "th" ? "เธฅเธเธเธฑเธเธ—เธถเธเธฃเธฒเธขเธเธฒเธฃเธเนเธณเธกเธฑเธเน€เธฃเธตเธขเธเธฃเนเธญเธขเนเธฅเนเธง" : "Fuel entry deleted successfully.",
     autoFillLabel:
       language === "th"
-        ? "กรอกจากคนขับอัตโนมัติ และยังแก้ไขได้"
+        ? "เธเธฃเธญเธเธเธฒเธเธเธเธเธฑเธเธญเธฑเธ•เนเธเธกเธฑเธ•เธด เนเธฅเธฐเธขเธฑเธเนเธเนเนเธเนเธ”เน"
         : "Auto-filled based on driver and can still be changed",
     noVehicleAssignedLabel:
       language === "th"
-        ? "คนขับยังไม่มีรถที่ผูกไว้ โปรดเลือกเอง"
+        ? "เธเธเธเธฑเธเธขเธฑเธเนเธกเนเธกเธตเธฃเธ–เธ—เธตเนเธเธนเธเนเธงเน เนเธเธฃเธ”เน€เธฅเธทเธญเธเน€เธญเธ"
         : "No vehicle assigned. Please select one manually.",
     previousEntryHelper:
       language === "th"
-        ? "ยังไม่มีรายการก่อนหน้านี้สำหรับรถคันนี้ในวันที่เลือกหรือน้อยกว่า"
+        ? "เธขเธฑเธเนเธกเนเธกเธตเธฃเธฒเธขเธเธฒเธฃเธเนเธญเธเธซเธเนเธฒเธเธตเนเธชเธณเธซเธฃเธฑเธเธฃเธ–เธเธฑเธเธเธตเนเนเธเธงเธฑเธเธ—เธตเนเน€เธฅเธทเธญเธเธซเธฃเธทเธญเธเนเธญเธขเธเธงเนเธฒ"
         : "No earlier entry for this vehicle on or before this date.",
     entrySeparator: " - ",
-    previousPage: language === "th" ? "ก่อนหน้า" : "Previous",
-    nextPage: language === "th" ? "ถัดไป" : "Next",
-    pageLabel: language === "th" ? "หน้า" : "Page",
-    ofLabel: language === "th" ? "จาก" : "of",
-    possibleDuplicate: language === "th" ? "อาจเป็นรายการซ้ำ" : "Possible duplicate entry",
-    missingOdometer: language === "th" ? "ไม่มีเลขไมล์" : "Missing mileage"
+    previousPage: language === "th" ? "เธเนเธญเธเธซเธเนเธฒ" : "Previous",
+    nextPage: language === "th" ? "เธ–เธฑเธ”เนเธ" : "Next",
+    pageLabel: language === "th" ? "เธซเธเนเธฒ" : "Page",
+    ofLabel: language === "th" ? "เธเธฒเธ" : "of",
+    possibleDuplicate: language === "th" ? "เธญเธฒเธเน€เธเนเธเธฃเธฒเธขเธเธฒเธฃเธเนเธณ" : "Possible duplicate entry",
+    missingOdometer: language === "th" ? "เนเธกเนเธกเธตเน€เธฅเธเนเธกเธฅเน" : "Missing mileage"
   };
 
   const uxCopy = {
-    openAnalysis: language === "th" ? "เปิดการวิเคราะห์" : "Open analysis",
-    hideAnalysis: language === "th" ? "ซ่อนการวิเคราะห์" : "Hide analysis",
-    last7DaysSummary: language === "th" ? "สรุป 7 วันล่าสุด" : "Last 7 Days Summary",
-    totalSpend: language === "th" ? "ยอดใช้จ่ายรวม" : "Total spend",
-    totalLitres: language === "th" ? "ลิตรรวม" : "Total litres",
-    averagePriceLitre: language === "th" ? "ราคาเฉลี่ย/ลิตร" : "Average price/L",
-    highestDay: language === "th" ? "วันที่ใช้จ่ายสูงสุด" : "Highest day",
-    viewDay: language === "th" ? "ดูวันนี้" : "View day",
-    quickFilters: language === "th" ? "ตัวกรองเร็ว" : "Quick filters",
-    today: language === "th" ? "วันนี้" : "Today",
-    yesterday: language === "th" ? "เมื่อวาน" : "Yesterday",
-    thisWeek: language === "th" ? "สัปดาห์นี้" : "This week",
-    thisMonth: language === "th" ? "เดือนนี้" : "This month",
-    notChecked: language === "th" ? "ยังไม่ตรวจ" : "Not checked",
-    checked: language === "th" ? "ตรวจแล้ว" : "Checked",
-    viewMissingMileage: language === "th" ? "ดูรายการขาดเลขไมล์" : "View missing mileage",
-    advancedFilters: language === "th" ? "ตัวกรองขั้นสูง" : "Advanced filters",
-    moreDetails: language === "th" ? "รายละเอียด" : "Details",
-    hideDetails: language === "th" ? "ซ่อนรายละเอียด" : "Hide details",
-    trip: language === "th" ? "ทริป" : "Trip",
-    notes: language === "th" ? "หมายเหตุ" : "Notes",
-    receiptSource: language === "th" ? "แหล่งใบเสร็จ" : "Receipt source",
-    pendingCheck: language === "th" ? "รอตรวจ" : "Pending check",
-    expandAll: language === "th" ? "ขยายทั้งหมด" : "Expand all",
-    collapseAll: language === "th" ? "ย่อทั้งหมด" : "Collapse all",
-    expand: language === "th" ? "เปิด" : "Expand",
-    collapse: language === "th" ? "ย่อ" : "Collapse"
+    openAnalysis: language === "th" ? "เน€เธเธดเธ”เธเธฒเธฃเธงเธดเน€เธเธฃเธฒเธฐเธซเน" : "Open analysis",
+    hideAnalysis: language === "th" ? "เธเนเธญเธเธเธฒเธฃเธงเธดเน€เธเธฃเธฒเธฐเธซเน" : "Hide analysis",
+    last7DaysSummary: language === "th" ? "เธชเธฃเธธเธ 7 เธงเธฑเธเธฅเนเธฒเธชเธธเธ”" : "Last 7 Days Summary",
+    totalSpend: language === "th" ? "เธขเธญเธ”เนเธเนเธเนเธฒเธขเธฃเธงเธก" : "Total spend",
+    totalLitres: language === "th" ? "เธฅเธดเธ•เธฃเธฃเธงเธก" : "Total litres",
+    averagePriceLitre: language === "th" ? "เธฃเธฒเธเธฒเน€เธเธฅเธตเนเธข/เธฅเธดเธ•เธฃ" : "Average price/L",
+    highestDay: language === "th" ? "เธงเธฑเธเธ—เธตเนเนเธเนเธเนเธฒเธขเธชเธนเธเธชเธธเธ”" : "Highest day",
+    viewDay: language === "th" ? "เธ”เธนเธงเธฑเธเธเธตเน" : "View day",
+    quickFilters: language === "th" ? "เธ•เธฑเธงเธเธฃเธญเธเน€เธฃเนเธง" : "Quick filters",
+    today: language === "th" ? "เธงเธฑเธเธเธตเน" : "Today",
+    yesterday: language === "th" ? "เน€เธกเธทเนเธญเธงเธฒเธ" : "Yesterday",
+    thisWeek: language === "th" ? "เธชเธฑเธเธ”เธฒเธซเนเธเธตเน" : "This week",
+    thisMonth: language === "th" ? "เน€เธ”เธทเธญเธเธเธตเน" : "This month",
+    notChecked: language === "th" ? "เธขเธฑเธเนเธกเนเธ•เธฃเธงเธ" : "Not checked",
+    checked: language === "th" ? "เธ•เธฃเธงเธเนเธฅเนเธง" : "Checked",
+    viewMissingMileage: language === "th" ? "เธ”เธนเธฃเธฒเธขเธเธฒเธฃเธเธฒเธ”เน€เธฅเธเนเธกเธฅเน" : "View missing mileage",
+    advancedFilters: language === "th" ? "เธ•เธฑเธงเธเธฃเธญเธเธเธฑเนเธเธชเธนเธ" : "Advanced filters",
+    moreDetails: language === "th" ? "เธฃเธฒเธขเธฅเธฐเน€เธญเธตเธขเธ”" : "Details",
+    hideDetails: language === "th" ? "เธเนเธญเธเธฃเธฒเธขเธฅเธฐเน€เธญเธตเธขเธ”" : "Hide details",
+    trip: language === "th" ? "เธ—เธฃเธดเธ" : "Trip",
+    notes: language === "th" ? "เธซเธกเธฒเธขเน€เธซเธ•เธธ" : "Notes",
+    receiptSource: language === "th" ? "เนเธซเธฅเนเธเนเธเน€เธชเธฃเนเธ" : "Receipt source",
+    pendingCheck: language === "th" ? "เธฃเธญเธ•เธฃเธงเธ" : "Pending check",
+    expandAll: language === "th" ? "เธเธขเธฒเธขเธ—เธฑเนเธเธซเธกเธ”" : "Expand all",
+    collapseAll: language === "th" ? "เธขเนเธญเธ—เธฑเนเธเธซเธกเธ”" : "Collapse all",
+    expand: language === "th" ? "เน€เธเธดเธ”" : "Expand",
+    collapse: language === "th" ? "เธขเนเธญ" : "Collapse"
   };
 
-  const exportButtonLabel = language === "th" ? "กำลังส่งออก..." : "Exporting...";
+  const exportButtonLabel = language === "th" ? "เธเธณเธฅเธฑเธเธชเนเธเธญเธญเธ..." : "Exporting...";
   const exportSuccessMessage =
     language === "th"
-      ? "ส่งออกรายการเติมน้ำมันสำเร็จ"
+      ? "เธชเนเธเธญเธญเธเธฃเธฒเธขเธเธฒเธฃเน€เธ•เธดเธกเธเนเธณเธกเธฑเธเธชเธณเน€เธฃเนเธ"
       : "Fuel logs exported successfully.";
   const exportErrorMessage =
     language === "th"
-      ? "ไม่สามารถส่งออกรายการเติมน้ำมันได้"
+      ? "เนเธกเนเธชเธฒเธกเธฒเธฃเธ–เธชเนเธเธญเธญเธเธฃเธฒเธขเธเธฒเธฃเน€เธ•เธดเธกเธเนเธณเธกเธฑเธเนเธ”เน"
       : "Unable to export fuel logs.";
 
   const statementEntryCopy = {
@@ -597,18 +1297,18 @@ export default function FuelLogsPage() {
   };
 
   const receiptCopy = {
-    filterLabel: language === "th" ? "สถานะตรวจใบเสร็จ" : "Receipt check",
-    checked: language === "th" ? "ตรวจแล้ว" : "Checked",
-    notChecked: language === "th" ? "ยังไม่ตรวจ" : "Not checked",
-    markShort: language === "th" ? "ทำเครื่องหมาย" : "Mark",
-    markChecked: language === "th" ? "ทำเครื่องหมายว่าตรวจแล้ว" : "Mark checked",
-    markUnchecked: language === "th" ? "ยกเลิกเครื่องหมายตรวจแล้ว" : "Mark unchecked",
-    updated: language === "th" ? "อัปเดตสถานะตรวจใบเสร็จแล้ว" : "Receipt check status updated.",
+    filterLabel: language === "th" ? "เธชเธ–เธฒเธเธฐเธ•เธฃเธงเธเนเธเน€เธชเธฃเนเธ" : "Receipt check",
+    checked: language === "th" ? "เธ•เธฃเธงเธเนเธฅเนเธง" : "Checked",
+    notChecked: language === "th" ? "เธขเธฑเธเนเธกเนเธ•เธฃเธงเธ" : "Not checked",
+    markShort: language === "th" ? "เธ—เธณเน€เธเธฃเธทเนเธญเธเธซเธกเธฒเธข" : "Mark",
+    markChecked: language === "th" ? "เธ—เธณเน€เธเธฃเธทเนเธญเธเธซเธกเธฒเธขเธงเนเธฒเธ•เธฃเธงเธเนเธฅเนเธง" : "Mark checked",
+    markUnchecked: language === "th" ? "เธขเธเน€เธฅเธดเธเน€เธเธฃเธทเนเธญเธเธซเธกเธฒเธขเธ•เธฃเธงเธเนเธฅเนเธง" : "Mark unchecked",
+    updated: language === "th" ? "เธญเธฑเธเน€เธ”เธ•เธชเธ–เธฒเธเธฐเธ•เธฃเธงเธเนเธเน€เธชเธฃเนเธเนเธฅเนเธง" : "Receipt check status updated.",
     error:
-      language === "th" ? "ไม่สามารถอัปเดตสถานะตรวจใบเสร็จได้" : "Unable to update receipt check status.",
-    totalCount: language === "th" ? "รายการเติมน้ำมันทั้งหมด" : "Total fuel logs",
-    checkedCount: language === "th" ? "ตรวจแล้ว" : "Checked",
-    notCheckedCount: language === "th" ? "ยังไม่ตรวจ" : "Not checked"
+      language === "th" ? "เนเธกเนเธชเธฒเธกเธฒเธฃเธ–เธญเธฑเธเน€เธ”เธ•เธชเธ–เธฒเธเธฐเธ•เธฃเธงเธเนเธเน€เธชเธฃเนเธเนเธ”เน" : "Unable to update receipt check status.",
+    totalCount: language === "th" ? "เธฃเธฒเธขเธเธฒเธฃเน€เธ•เธดเธกเธเนเธณเธกเธฑเธเธ—เธฑเนเธเธซเธกเธ”" : "Total fuel logs",
+    checkedCount: language === "th" ? "เธ•เธฃเธงเธเนเธฅเนเธง" : "Checked",
+    notCheckedCount: language === "th" ? "เธขเธฑเธเนเธกเนเธ•เธฃเธงเธ" : "Not checked"
   };
 
   const fuelTypeOptions = FUEL_TYPE_KEYS.map((value) => ({ value, label: t.fuel.type[value] }));
@@ -617,20 +1317,20 @@ export default function FuelLogsPage() {
     label: t.payment.method[value]
   }));
   const sourceCopy = {
-    label: language === "th" ? "แหล่งที่มา" : "Entry source",
-    filterLabel: language === "th" ? "แหล่งที่มารายการ" : "Log source",
-    all: language === "th" ? "ทุกแหล่งที่มา" : "All sources",
-    quickSelect: language === "th" ? "เลือกเร็ว" : "Quick select",
+    label: language === "th" ? "เนเธซเธฅเนเธเธ—เธตเนเธกเธฒ" : "Entry source",
+    filterLabel: language === "th" ? "เนเธซเธฅเนเธเธ—เธตเนเธกเธฒเธฃเธฒเธขเธเธฒเธฃ" : "Log source",
+    all: language === "th" ? "เธ—เธธเธเนเธซเธฅเนเธเธ—เธตเนเธกเธฒ" : "All sources",
+    quickSelect: language === "th" ? "เน€เธฅเธทเธญเธเน€เธฃเนเธง" : "Quick select",
     auditHint:
       language === "th"
-        ? "รายการนี้เพิ่มจากใบเสร็จจริง เหมาะสำหรับตรวจสอบย้อนหลัง"
+        ? "เธฃเธฒเธขเธเธฒเธฃเธเธตเนเน€เธเธดเนเธกเธเธฒเธเนเธเน€เธชเธฃเนเธเธเธฃเธดเธ เน€เธซเธกเธฒเธฐเธชเธณเธซเธฃเธฑเธเธ•เธฃเธงเธเธชเธญเธเธขเนเธญเธเธซเธฅเธฑเธ"
         : "Added from a physical receipt for audit/reconciliation.",
     options: {
-      line_message: language === "th" ? "ข้อความ LINE" : "Line message",
-      direct_from_receipt: language === "th" ? "จากใบเสร็จโดยตรง" : "Direct from receipt",
+      line_message: language === "th" ? "เธเนเธญเธเธงเธฒเธก LINE" : "Line message",
+      direct_from_receipt: language === "th" ? "เธเธฒเธเนเธเน€เธชเธฃเนเธเนเธ”เธขเธ•เธฃเธ" : "Direct from receipt",
       statement_manual: "Direct from statement",
       statement_import: language === "th" ? "Statement import" : "Statement import",
-      other: language === "th" ? "อื่นๆ" : "Other"
+      other: language === "th" ? "เธญเธทเนเธเน" : "Other"
     } satisfies Record<FuelLogEntrySource, string>
   };
   const manualEntrySourceOptions = ([
@@ -675,6 +1375,7 @@ export default function FuelLogsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportingBossPdf, setExportingBossPdf] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [togglingReceiptId, setTogglingReceiptId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -850,8 +1551,21 @@ export default function FuelLogsPage() {
   const tripSummary = useMemo<TripSummary>(() => {
     const logs = tripSummaryLogs;
     const mileageLogs = logs.filter((log) => getMileageValue(log.mileage) != null);
-    const startMileage = mileageLogs.length ? getMileageValue(mileageLogs[0].mileage) : null;
-    const endMileage = mileageLogs.length ? getMileageValue(mileageLogs[mileageLogs.length - 1].mileage) : null;
+    const vehicleKeys = new Set(
+      logs
+        .map((log) => normalizeVehicleRegistration(log.vehicle_reg))
+        .filter((vehicleReg): vehicleReg is string => Boolean(vehicleReg))
+    );
+    const mileageVehicleKeys = new Set(
+      mileageLogs
+        .map((log) => normalizeVehicleRegistration(log.vehicle_reg))
+        .filter((vehicleReg): vehicleReg is string => Boolean(vehicleReg))
+    );
+    const hasMultipleVehicles = vehicleKeys.size > 1 || mileageVehicleKeys.size > 1;
+    const canUseMileageRange = !hasMultipleVehicles;
+    const startMileage = canUseMileageRange && mileageLogs.length ? getMileageValue(mileageLogs[0].mileage) : null;
+    const endMileage =
+      canUseMileageRange && mileageLogs.length ? getMileageValue(mileageLogs[mileageLogs.length - 1].mileage) : null;
     const totalLitres = logs.reduce((sum, log) => sum + getNumericValue(log.litres), 0);
     const totalFuelCost = logs.reduce((sum, log) => sum + getNumericValue(log.total_cost), 0);
     const receiptCheckedCount = logs.filter((log) => log.receipt_checked).length;
@@ -863,7 +1577,10 @@ export default function FuelLogsPage() {
     let tripKm: number | null = null;
     let tripKmPerLitre: number | null = null;
 
-    if (mileageLogs.length < 2 || startMileage == null || endMileage == null) {
+    if (hasMultipleVehicles) {
+      status = "multiple_vehicles";
+      reason = "Select one vehicle for accurate mileage-based efficiency.";
+    } else if (mileageLogs.length < 2 || startMileage == null || endMileage == null) {
       status = "not_enough_data";
       reason = t.fuelLogs.efficiency.tripNeedTwoMileageRecords;
     } else if (endMileage <= startMileage) {
@@ -901,6 +1618,7 @@ export default function FuelLogsPage() {
       receiptUncheckedCount,
       missingMileageCount,
       mileageRecordCount: mileageLogs.length,
+      vehicleCount: vehicleKeys.size,
       status,
       reason
     };
@@ -922,6 +1640,7 @@ export default function FuelLogsPage() {
     check_receipts: t.fuelLogs.efficiency.statusCheckReceipts,
     missing_mileage: t.fuelLogs.efficiency.statusMissingMileage,
     check_mileage: t.fuelLogs.efficiency.statusCheckMileage,
+    multiple_vehicles: language === "th" ? "เลือกรถหนึ่งคัน" : "Select one vehicle",
     not_enough_data: t.fuelLogs.efficiency.statusNotEnoughData
   };
 
@@ -930,6 +1649,10 @@ export default function FuelLogsPage() {
     check_receipts: t.fuelLogs.efficiency.tripStatusCheckReceiptsTooltip,
     missing_mileage: t.fuelLogs.efficiency.tripStatusMissingMileageTooltip,
     check_mileage: t.fuelLogs.efficiency.tripStatusCheckMileageTooltip,
+    multiple_vehicles:
+      language === "th"
+        ? "กรุณาเลือกรถหนึ่งคันเพื่อคำนวณประสิทธิภาพจากเลขไมล์อย่างถูกต้อง"
+        : "Select one vehicle for accurate mileage-based efficiency.",
     not_enough_data: t.fuelLogs.efficiency.tripStatusNotEnoughDataTooltip
   };
 
@@ -940,6 +1663,14 @@ export default function FuelLogsPage() {
           efficiencyFilters.toDate ? formatDate(efficiencyFilters.toDate, language) : "-"
         }`
       : "-";
+  const selectedEfficiencyDriverLabel =
+    drivers.find((driver) => String(driver.id) === String(efficiencyFilters.driverId))?.name ||
+    t.fuelLogs.efficiency.allDrivers;
+  const selectedEfficiencyVehicleLabel = efficiencyFilters.vehicleReg || t.fuelLogs.efficiency.allVehicles;
+  const distanceTravelledLabel = language === "th" ? "ระยะทางรวม" : "Distance travelled";
+  const fuelEfficiencyLabel = language === "th" ? "ประสิทธิภาพน้ำมัน" : "Fuel efficiency";
+  const selectedPeriodLabel = language === "th" ? "ช่วงวันที่ที่เลือก" : "Selected period";
+  const divideSymbol = String.fromCharCode(247);
   const receiptsSummaryLabel = `${formatNumber(tripSummary.receiptCheckedCount, language)} ${t.fuelLogs.efficiency.of} ${formatNumber(
     tripSummary.fuelLogCount,
     language
@@ -949,7 +1680,9 @@ export default function FuelLogsPage() {
       ? `0 ${t.fuelLogs.efficiency.missingLower}`
       : `${formatNumber(tripSummary.missingMileageCount, language)} ${t.fuelLogs.efficiency.missingLower}`;
   const mileageClarityMessage =
-    tripSummary.mileageRecordCount < 2
+    tripSummary.status === "multiple_vehicles"
+      ? tripSummary.reason
+      : tripSummary.mileageRecordCount < 2
       ? t.fuelLogs.efficiency.tripNeedTwoMileageRecordsDateRange
       : tripSummary.missingMileageCount > 0
         ? t.fuelLogs.efficiency.tripMissingMileageCanStillCalculate
@@ -969,7 +1702,7 @@ export default function FuelLogsPage() {
 
   const getTripStatusClass = (status: TripSummaryStatus) => {
     if (status === "calculated") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-    if (status === "check_receipts" || status === "missing_mileage" || status === "check_mileage") {
+    if (status === "check_receipts" || status === "missing_mileage" || status === "check_mileage" || status === "multiple_vehicles") {
       return "border-amber-200 bg-amber-50 text-amber-800";
     }
     return "border-slate-200 bg-slate-100 text-slate-600";
@@ -1403,7 +2136,7 @@ export default function FuelLogsPage() {
         Number(form.mileage) < Number(comparisonEntry.mileage) &&
         !window.confirm(
           language === "th"
-            ? "เลขไมล์ต่ำกว่ารายการก่อนหน้า ต้องการบันทึกต่อหรือไม่"
+            ? "เน€เธฅเธเนเธกเธฅเนเธ•เนเธณเธเธงเนเธฒเธฃเธฒเธขเธเธฒเธฃเธเนเธญเธเธซเธเนเธฒ เธ•เนเธญเธเธเธฒเธฃเธเธฑเธเธ—เธถเธเธ•เนเธญเธซเธฃเธทเธญเนเธกเน"
             : "Mileage is lower than the previous reading. Save anyway?"
         )
       ) {
@@ -1504,10 +2237,6 @@ export default function FuelLogsPage() {
 
   const handleExportEfficiencyReport = () => {
     if (efficiencyCalculationMode === "trip_summary") {
-      const selectedDriverLabel =
-        drivers.find((driver) => String(driver.id) === String(efficiencyFilters.driverId))?.name ||
-        t.fuelLogs.efficiency.allDrivers;
-
       exportToCsv(
         [
           {
@@ -1518,12 +2247,12 @@ export default function FuelLogsPage() {
           {
             [t.fuelLogs.efficiency.reportSection]: t.fuelLogs.efficiency.summary,
             [t.fuelLogs.efficiency.field]: t.fuelLogs.efficiency.driver,
-            [t.fuelLogs.efficiency.value]: selectedDriverLabel
+            [t.fuelLogs.efficiency.value]: selectedEfficiencyDriverLabel
           },
           {
             [t.fuelLogs.efficiency.reportSection]: t.fuelLogs.efficiency.summary,
             [t.fuelLogs.efficiency.field]: t.fuelLogs.efficiency.vehicleReg,
-            [t.fuelLogs.efficiency.value]: efficiencyFilters.vehicleReg || t.fuelLogs.efficiency.allVehicles
+            [t.fuelLogs.efficiency.value]: selectedEfficiencyVehicleLabel
           },
           {
             [t.fuelLogs.efficiency.reportSection]: t.fuelLogs.efficiency.summary,
@@ -1626,6 +2355,105 @@ export default function FuelLogsPage() {
       })),
       "fuel-efficiency-report"
     );
+  };
+
+  const handleDownloadBossPdf = async () => {
+    if (!tripSummary.logs.length) return;
+
+    setExportingBossPdf(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const pdfLanguage = getCurrentPdfLanguage(language);
+      const bossPdfCopy = normalizeBossPdfCopy(getBossPdfCopy(pdfLanguage), pdfLanguage);
+      const sortedLogs = [...tripSummary.logs].sort(compareFuelLogsByMileageOrder);
+      const firstLogDate = sortedLogs[0]?.date ?? "";
+      const lastLogDate = sortedLogs[sortedLogs.length - 1]?.date ?? firstLogDate;
+      const reportStartDate = efficiencyFilters.fromDate || firstLogDate;
+      const reportEndDate = efficiencyFilters.toDate || lastLogDate;
+      const reportDateRange =
+        reportStartDate || reportEndDate
+          ? `${formatDate(reportStartDate, pdfLanguage)} - ${formatDate(reportEndDate, pdfLanguage)}`
+          : pdfLanguage === "th"
+            ? "-"
+            : "All dates";
+      const needsReceiptCheck = tripSummary.receiptUncheckedCount > 0;
+      const distanceTravelled = tripSummary.tripKm != null ? `${formatNumber(tripSummary.tripKm, pdfLanguage, 0)} km` : "-";
+      const totalLitres = `${formatNumber(tripSummary.totalLitres, pdfLanguage, 2)} L`;
+      const distanceForCalculation = tripSummary.tripKm != null ? formatNumber(tripSummary.tripKm, pdfLanguage, 0) : "-";
+      const litresForCalculation = formatNumber(tripSummary.totalLitres, pdfLanguage, 2);
+      const fuelEfficiency =
+        tripSummary.tripKmPerLitre != null ? `${formatNumber(tripSummary.tripKmPerLitre, pdfLanguage, 2)} km/L` : "-";
+      const fuelLogsForPdf = sortedLogs.slice(0, 3).map((log) => {
+        const mileageValue = getMileageValue(log.mileage);
+        return {
+          checkedStatus: log.receipt_checked ? bossPdfCopy.checked : bossPdfCopy.notChecked,
+          cost: formatCurrency(Number(log.total_cost || 0), pdfLanguage),
+          date: formatDate(log.date, pdfLanguage),
+          litres: `${formatNumber(Number(log.litres || 0), pdfLanguage, 2)} L`,
+          mileage: mileageValue != null ? `${formatNumber(mileageValue, pdfLanguage, 0)} km` : "-",
+          vehicle: log.vehicle_reg || "-"
+        };
+      });
+      const fileName = `Fuel_Efficiency_Report_${getPdfFileSafePart(selectedEfficiencyDriverLabel)}_${getPdfFileSafePart(
+        selectedEfficiencyVehicleLabel
+      )}_${formatFileDate(reportStartDate)}_to_${formatFileDate(reportEndDate)}.pdf`;
+      const needsVehicleSelection = tripSummary.status === "multiple_vehicles";
+      const needsDataReview = needsReceiptCheck || needsVehicleSelection;
+      const vehicleSelectionWarning =
+        pdfLanguage === "th"
+          ? "กรุณาเลือกรถหนึ่งคันเพื่อคำนวณประสิทธิภาพจากเลขไมล์อย่างถูกต้อง"
+          : "Select one vehicle for accurate mileage-based efficiency.";
+      const receiptVerificationWarning =
+        pdfLanguage === "th" ? "มีใบเสร็จเติมน้ำมันรอตรวจสอบ" : "Some fuel receipts are awaiting verification.";
+
+      const logo = await loadPdfLogo();
+      const pdf = await buildBossFuelEfficiencyPdf(
+        {
+          actualCalculation: normalizeFormulaSpacing(`${distanceForCalculation} ${String.fromCharCode(247)} ${litresForCalculation} = ${fuelEfficiency}`),
+          dataStatus: needsDataReview ? "warning" : "ready",
+          dataStatusDetail: needsVehicleSelection
+            ? vehicleSelectionWarning
+            : needsReceiptCheck
+              ? receiptVerificationWarning
+              : bossPdfCopy.fuelLogsMayCoverMultipleJobs,
+          dataStatusTitle: needsVehicleSelection ? tripStatusLabels.multiple_vehicles : needsReceiptCheck ? bossPdfCopy.needsReceiptCheck : bossPdfCopy.readyToReview,
+          dateRange: reportDateRange,
+          driver: selectedEfficiencyDriverLabel,
+          fuelLogs: fuelLogsForPdf,
+          fuelEfficiency,
+          generatedAt: new Intl.DateTimeFormat(pdfLanguage === "th" ? "th-TH" : "en-GB", {
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            month: "short",
+            year: "numeric"
+          }).format(new Date()),
+          mileageRange: {
+            distanceTravelled,
+            endMileage: tripSummary.endMileage != null ? `${formatNumber(tripSummary.endMileage, pdfLanguage, 0)} km` : "-",
+            startMileage: tripSummary.startMileage != null ? `${formatNumber(tripSummary.startMileage, pdfLanguage, 0)} km` : "-"
+          },
+          moreFuelLogCount: Math.max(0, sortedLogs.length - fuelLogsForPdf.length),
+          totalFuelLogCount: sortedLogs.length,
+          totalFuelCost: formatCurrency(tripSummary.totalFuelCost, pdfLanguage),
+          totalLitres,
+          tripKm: distanceTravelled,
+          vehicleReg: selectedEfficiencyVehicleLabel
+        },
+        logo,
+        pdfLanguage
+      );
+
+      downloadBlob(pdf, fileName);
+      setSuccessMessage(t.fuelLogs.efficiency.pdfDownloaded);
+    } catch (err) {
+      console.error("Fuel logs handleDownloadBossPdf error:", err);
+      setError(err instanceof Error && err.message ? err.message : t.fuelLogs.efficiency.pdfError);
+    } finally {
+      setExportingBossPdf(false);
+    }
   };
 
   const avgPriceToday = stats.litresToday > 0 ? stats.fuelSpendToday / stats.litresToday : 0;
@@ -1740,7 +2568,18 @@ export default function FuelLogsPage() {
 
         {efficiencyAnalysisOpen ? (
           <>
-        <div className="mt-4 flex justify-end">
+        <div className="mt-4 flex flex-col justify-end gap-2 sm:flex-row">
+          {efficiencyCalculationMode === "trip_summary" ? (
+            <button
+              type="button"
+              onClick={() => void handleDownloadBossPdf()}
+              disabled={!tripSummary.logs.length || exportingBossPdf}
+              className="btn-primary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            >
+              <Download className="h-4 w-4" />
+              {exportingBossPdf ? t.common.loading : t.fuelLogs.efficiency.downloadBossPdf}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={handleExportEfficiencyReport}
@@ -1844,7 +2683,7 @@ export default function FuelLogsPage() {
           <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.totalKmCalculated}</p><p className="mt-2 text-xl font-bold text-slate-950">{formatNumber(efficiencySummary.totalKm, language, 0)}</p></div>
           <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.totalLitresUsed}</p><p className="mt-2 text-xl font-bold text-slate-950">{formatNumber(efficiencySummary.totalLitres, language, 2)}</p></div>
           <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.missingMileageEntries}</p><p className="mt-2 text-xl font-bold text-rose-700">{formatNumber(efficiencySummary.missingMileageEntries, language)}</p></div>
-          <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.mileageCompliance}</p><p className="mt-2 text-xl font-bold text-brand-700">{efficiencySummary.mileageCompliance != null ? `${formatNumber(efficiencySummary.mileageCompliance, language, 0)}%` : "—"}</p><p className="mt-1 text-xs font-medium text-slate-500">{t.fuelLogs.efficiency.mileageProvided}</p></div>
+          <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.mileageCompliance}</p><p className="mt-2 text-xl font-bold text-brand-700">{efficiencySummary.mileageCompliance != null ? `${formatNumber(efficiencySummary.mileageCompliance, language, 0)}%` : "โ€”"}</p><p className="mt-1 text-xs font-medium text-slate-500">{t.fuelLogs.efficiency.mileageProvided}</p></div>
           <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.reviewNeeded}</p><p className="mt-2 text-xl font-bold text-amber-700">{formatNumber(efficiencySummary.reviewNeededEntries, language)}</p></div>
         </div>
 
@@ -1877,11 +2716,11 @@ export default function FuelLogsPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="font-semibold text-slate-900">{row.log.driver || "-"}</p>
-                        <p className="mt-0.5 text-xs text-slate-500">{formatDate(row.log.date, language)} · {row.log.vehicle_reg || "-"}</p>
+                        <p className="mt-0.5 text-xs text-slate-500">{formatDate(row.log.date, language)} ยท {row.log.vehicle_reg || "-"}</p>
                       </div>
                       <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">{t.fuelLogs.efficiency.needsMileage}</span>
                     </div>
-                    <p className="mt-2 text-xs text-slate-500">{formatNumber(Number(row.log.litres || 0), language, 2)} {t.fuelLogs.efficiency.litres} · {formatCurrency(Number(row.log.total_cost || 0), language)}</p>
+                    <p className="mt-2 text-xs text-slate-500">{formatNumber(Number(row.log.litres || 0), language, 2)} {t.fuelLogs.efficiency.litres} ยท {formatCurrency(Number(row.log.total_cost || 0), language)}</p>
                   </div>
                 ))}
               </div>
@@ -1921,9 +2760,9 @@ export default function FuelLogsPage() {
         ) : (
           <>
             <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
-              <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.tripKm}</p><p className="mt-2 text-xl font-bold text-slate-950">{tripSummary.tripKm != null ? formatNumber(tripSummary.tripKm, language, 0) : "-"}</p></div>
+              <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{distanceTravelledLabel}</p><p className="mt-2 text-xl font-bold text-slate-950">{tripSummary.tripKm != null ? formatNumber(tripSummary.tripKm, language, 0) : "-"}</p></div>
               <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.totalLitres}</p><p className="mt-2 text-xl font-bold text-slate-950">{formatNumber(tripSummary.totalLitres, language, 2)}</p></div>
-              <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.tripKmPerLitre}</p><p className="mt-2 text-xl font-bold text-brand-700">{tripSummary.tripKmPerLitre != null ? formatNumber(tripSummary.tripKmPerLitre, language, 2) : "-"}</p></div>
+              <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{fuelEfficiencyLabel}</p><p className="mt-2 text-xl font-bold text-brand-700">{tripSummary.tripKmPerLitre != null ? formatNumber(tripSummary.tripKmPerLitre, language, 2) : "-"}</p></div>
               <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.totalFuelCost}</p><p className="mt-2 text-xl font-bold text-slate-950">{formatCurrency(tripSummary.totalFuelCost, language)}</p></div>
               <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.averagePricePerLitre}</p><p className="mt-2 text-xl font-bold text-slate-950">{tripSummary.averagePricePerLitre != null ? formatCurrency(tripSummary.averagePricePerLitre, language) : "-"}</p></div>
               <div className="subtle-panel p-4">
@@ -1953,11 +2792,11 @@ export default function FuelLogsPage() {
                 </div>
                 <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.step} 2</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-900">{t.fuelLogs.efficiency.endMileage} - {t.fuelLogs.efficiency.startMileage} = {t.fuelLogs.efficiency.tripKm}</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-900">{t.fuelLogs.efficiency.endMileage} - {t.fuelLogs.efficiency.startMileage} = {distanceTravelledLabel}</p>
                 </div>
                 <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.step} 3</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-900">{t.fuelLogs.efficiency.tripKm} ÷ {t.fuelLogs.efficiency.totalLitres} = {t.fuelLogs.efficiency.tripKmPerLitre}</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-900">{distanceTravelledLabel} {divideSymbol} {t.fuelLogs.efficiency.totalLitres} = {fuelEfficiencyLabel}</p>
                 </div>
               </div>
             </div>
@@ -1969,14 +2808,14 @@ export default function FuelLogsPage() {
                   <div className="min-w-0">
                     <p className="font-semibold text-slate-950">{t.fuelLogs.efficiency.tripFormulaTitle}</p>
                     <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                      <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.tripPeriod}</p><p className="mt-1 font-semibold text-slate-900">{tripPeriodLabel}</p>{tripPeriodDays != null ? <p className="mt-0.5 text-xs text-slate-500">{t.fuelLogs.efficiency.numberOfDays}: {formatNumber(tripPeriodDays, language)} {t.fuelLogs.efficiency.days}</p> : null}</div>
+                      <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{selectedPeriodLabel}</p><p className="mt-1 font-semibold text-slate-900">{tripPeriodLabel}</p>{tripPeriodDays != null ? <p className="mt-0.5 text-xs text-slate-500">{t.fuelLogs.efficiency.numberOfDays}: {formatNumber(tripPeriodDays, language)} {t.fuelLogs.efficiency.days}</p> : null}</div>
                       <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.mileage}</p><p className="mt-1 font-semibold text-slate-900">{tripSummary.startMileage != null ? formatNumber(tripSummary.startMileage, language, 0) : "-"} {"->"} {tripSummary.endMileage != null ? formatNumber(tripSummary.endMileage, language, 0) : "-"}</p></div>
                       <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.tripDistance}</p><p className="mt-1 font-semibold text-slate-900">{tripSummary.endMileage != null ? formatNumber(tripSummary.endMileage, language, 0) : "-"} - {tripSummary.startMileage != null ? formatNumber(tripSummary.startMileage, language, 0) : "-"} = {tripSummary.tripKm != null ? formatNumber(tripSummary.tripKm, language, 0) : "-"} km</p></div>
                       <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.fuelUsed}</p><p className="mt-1 font-semibold text-slate-900">{formatNumber(tripSummary.totalLitres, language, 2)} {t.fuelLogs.efficiency.litres}</p></div>
                     </div>
                     <div className="mt-4 rounded-2xl border border-brand-100 bg-white/80 px-4 py-3">
                       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">{t.fuelLogs.efficiency.finalResult}</p>
-                      <p className="mt-2 text-lg font-bold text-slate-950">{tripSummary.tripKm != null ? formatNumber(tripSummary.tripKm, language, 0) : "-"} km ÷ {formatNumber(tripSummary.totalLitres, language, 2)}L = {tripSummary.tripKmPerLitre != null ? formatNumber(tripSummary.tripKmPerLitre, language, 2) : "-"} KM/L</p>
+                      <p className="mt-2 text-lg font-bold text-slate-950">{tripSummary.tripKm != null ? formatNumber(tripSummary.tripKm, language, 0) : "-"} km {divideSymbol} {formatNumber(tripSummary.totalLitres, language, 2)} L = {tripSummary.tripKmPerLitre != null ? formatNumber(tripSummary.tripKmPerLitre, language, 2) : "-"} KM/L</p>
                       {tripSummary.tripKmPerLitre != null ? <p className="mt-2 text-sm text-slate-600">{t.fuelLogs.efficiency.thisMeansVehicleTravelled} {formatNumber(tripSummary.tripKmPerLitre, language, 2)} km {t.fuelLogs.efficiency.forEveryOneLitre}</p> : null}
                     </div>
                   </div>
@@ -2041,19 +2880,19 @@ export default function FuelLogsPage() {
         <StatCard
           label={receiptCopy.totalCount}
           value={formatNumber(receiptSummary.total, language)}
-          helper={language === "th" ? "รวมตามตัวกรองปัจจุบัน" : "Based on the current filters."}
+          helper={language === "th" ? "เธฃเธงเธกเธ•เธฒเธกเธ•เธฑเธงเธเธฃเธญเธเธเธฑเธเธเธธเธเธฑเธ" : "Based on the current filters."}
           icon={<ReceiptText className="h-5 w-5" />}
         />
         <StatCard
           label={receiptCopy.checkedCount}
           value={formatNumber(receiptSummary.checked, language)}
-          helper={language === "th" ? "ตรวจเทียบใบเสร็จแล้ว" : "Marked as checked against receipt."}
+          helper={language === "th" ? "เธ•เธฃเธงเธเน€เธ—เธตเธขเธเนเธเน€เธชเธฃเนเธเนเธฅเนเธง" : "Marked as checked against receipt."}
           icon={<TrendingUp className="h-5 w-5" />}
         />
         <StatCard
           label={receiptCopy.notCheckedCount}
           value={formatNumber(receiptSummary.notChecked, language)}
-          helper={language === "th" ? "ยังรอตรวจเทียบใบเสร็จ" : "Still pending receipt check."}
+          helper={language === "th" ? "เธขเธฑเธเธฃเธญเธ•เธฃเธงเธเน€เธ—เธตเธขเธเนเธเน€เธชเธฃเนเธ" : "Still pending receipt check."}
           icon={<AlertTriangle className="h-5 w-5" />}
         />
       </section>
@@ -2244,7 +3083,102 @@ export default function FuelLogsPage() {
                 </button>
               </div>
 
-              <div className="table-shell booking-desktop-table block w-full">
+              <div className="space-y-3 md:hidden">
+                {groupedFuelLogs.map((group) => {
+                  const isExpanded = expandedFuelDates.has(group.date);
+                  return (
+                    <section key={group.date} className="rounded-[1rem] border border-slate-200 bg-white/90 p-3 shadow-sm">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedFuelDates((current) => {
+                            const next = new Set(current);
+                            if (next.has(group.date)) next.delete(group.date);
+                            else next.add(group.date);
+                            return next;
+                          })
+                        }
+                        className="flex w-full items-center justify-between gap-3 text-left"
+                        aria-expanded={isExpanded}
+                      >
+                        <span className="min-w-0">
+                          <span className="block text-xs font-bold uppercase tracking-[0.14em] text-brand-800">{formatFuelDateHeading(group.date, language)}</span>
+                          <span className="mt-1 block text-[11px] font-semibold text-slate-500">
+                            {formatNumber(group.logs.length, language)} {t.common.entries} | {formatCurrency(group.totalCost, language)} | {formatNumber(group.totalLitres, language, 2)} {t.fuelLogs.litres}
+                          </span>
+                        </span>
+                        <span className="booking-date-chevron">
+                          <ChevronRight className={`h-3.5 w-3.5 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`} />
+                        </span>
+                      </button>
+                      {isExpanded ? (
+                        <div className="mt-3 space-y-2">
+                          {group.logs.map((log) => {
+                            const detailsExpanded = expandedFuelEntryDetails.has(String(log.id));
+                            const missingMileage = isMissingMileage(log);
+                            return (
+                              <article key={log.id} className={`rounded-[0.9rem] border p-3 ${missingMileage ? "border-amber-200 bg-amber-50/50" : "border-slate-200 bg-white/85"}`}>
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{formatDate(log.date, language)}</p>
+                                    <p className="mt-1 truncate text-sm font-bold text-slate-950">{log.driver || "-"}</p>
+                                    <p className="truncate text-xs font-semibold text-slate-500">{log.vehicle_reg || "-"} | {log.location || log.station || "-"}</p>
+                                  </div>
+                                  <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${getReceiptCheckBadgeClass(log.receipt_checked)}`}>{getReceiptCheckLabel(log.receipt_checked, language)}</span>
+                                </div>
+                                <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                                  <div className="rounded-lg bg-slate-50 px-2 py-2">
+                                    <p className="font-semibold text-slate-500">{t.fuelLogs.litres}</p>
+                                    <p className="font-bold text-slate-950">{formatNumber(Number(log.litres || 0), language, 2)}</p>
+                                  </div>
+                                  <div className="rounded-lg bg-slate-50 px-2 py-2">
+                                    <p className="font-semibold text-slate-500">{t.fuelLogs.totalCost}</p>
+                                    <p className="font-bold text-slate-950">{formatCurrency(Number(log.total_cost || 0), language)}</p>
+                                  </div>
+                                  <div className="rounded-lg bg-slate-50 px-2 py-2">
+                                    <p className="font-semibold text-slate-500">{t.fuelLogs.mileage}</p>
+                                    <p className={`font-bold ${missingMileage ? "text-amber-700" : "text-slate-950"}`}>{missingMileage ? copy.missingOdometer : formatMileageValue(log.mileage, language)}</p>
+                                  </div>
+                                </div>
+                                <div className="mt-3 flex flex-wrap gap-1.5">
+                                  <button type="button" onClick={() => void handleReceiptToggle(log, !log.receipt_checked)} disabled={togglingReceiptId === String(log.id)} className="table-action-secondary min-h-7 px-2 text-[11px] disabled:opacity-50">{togglingReceiptId === String(log.id) ? t.common.saving : receiptCopy.markShort}</button>
+                                  <button type="button" onClick={() => populateForm(log)} className="table-action-secondary min-h-7 px-2 text-[11px]">{t.common.edit}</button>
+                                  <button type="button" onClick={() => void handleDelete(String(log.id))} disabled={deletingId === String(log.id)} className="table-action-danger min-h-7 px-2 text-[11px] disabled:opacity-50">{deletingId === String(log.id) ? t.common.deleting : t.common.delete}</button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setExpandedFuelEntryDetails((current) => {
+                                        const next = new Set(current);
+                                        const id = String(log.id);
+                                        if (next.has(id)) next.delete(id);
+                                        else next.add(id);
+                                        return next;
+                                      })
+                                    }
+                                    className="table-action-secondary min-h-7 px-2 text-[11px]"
+                                  >
+                                    {detailsExpanded ? uxCopy.hideDetails : uxCopy.moreDetails}
+                                  </button>
+                                </div>
+                                {detailsExpanded ? (
+                                  <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+                                    <p>{t.fuelLogs.pricePerLitre}: {log.price_per_litre != null ? formatCurrency(Number(log.price_per_litre), language) : "-"}</p>
+                                    <p>{uxCopy.trip}: {getFuelTripLabel(log)}</p>
+                                    <p>{sourceCopy.label}: {sourceCopy.options[normalizeEntrySource(log.entry_source)]}</p>
+                                    <p>{uxCopy.notes}: {log.notes || "-"}</p>
+                                  </div>
+                                ) : null}
+                              </article>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+                    </section>
+                  );
+                })}
+              </div>
+
+              <div className="table-shell booking-desktop-table hidden w-full md:block">
                 <div className="table-scroll w-full overflow-x-auto">
                   <table className="w-full min-w-[940px]">
                     <thead>

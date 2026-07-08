@@ -20,10 +20,10 @@ import {
   UserRound,
   X
 } from "lucide-react";
-import Image from "next/image";
 import { Fragment, type RefObject, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { GoogleMapsLoader } from "@/components/google-maps-loader";
+import { Header } from "@/components/header";
 import { LocationAutocomplete, type StructuredLocation } from "@/components/location-autocomplete";
 import type { GoogleMapsHealthStatus } from "@/lib/google-maps";
 import {
@@ -966,15 +966,15 @@ export default function BookingDiaryPage() {
 
   const getTripForBooking = (booking: BookingDiaryEntry) => tripsByBookingId.get(String(booking.id)) ?? null;
   const getTripStatusLabel = (status: TripJourneyStatus) => {
-    if (status === "completed") return "Complete";
-    if (status === "missing_mileage") return "Missing Mileage";
-    if (status === "missing_estimated_distance") return "Missing Estimate";
-    if (status === "missing_fuel") return "Missing Fuel";
-    return "Trip created";
+    if (status === "completed") return language === "th" ? "ทริปเสร็จสิ้น" : "Completed";
+    if (status === "missing_mileage") return language === "th" ? "ขาดเลขไมล์" : "Mileage missing";
+    if (status === "missing_estimated_distance") return language === "th" ? "ขาดระยะทางประมาณการ" : "Missing estimate";
+    if (status === "missing_fuel") return language === "th" ? "ต้องตรวจสอบน้ำมัน" : "Fuel check needed";
+    return language === "th" ? "สร้างทริปแล้ว" : "Trip created";
   };
   const getBookingTripLabel = (booking: BookingDiaryEntry) => {
     const trip = getTripForBooking(booking);
-    if (!trip) return "No trip record";
+    if (!trip) return language === "th" ? "ยังไม่มีทริป" : "No trip record";
     return getTripStatusLabel(trip.status);
   };
   const getBookingTripClass = (booking: BookingDiaryEntry) => {
@@ -983,6 +983,10 @@ export default function BookingDiaryPage() {
     if (trip.status === "completed") return "border-emerald-200 bg-emerald-50 text-emerald-700";
     return "border-amber-200 bg-amber-50 text-amber-800";
   };
+  const getTripButtonLabel = (booking: BookingDiaryEntry) =>
+    getTripForBooking(booking)
+      ? language === "th" ? "เปิดทริป" : "Open Trip"
+      : language === "th" ? "สร้างทริป" : "Create Trip";
 
   const createTripRecord = async (booking: BookingDiaryEntry) => {
     try {
@@ -1348,18 +1352,11 @@ export default function BookingDiaryPage() {
   return (
     <div className="booking-diary-page w-full max-w-full overflow-x-hidden">
       <GoogleMapsLoader onStatusChange={handleGoogleMapsStatusChange} />
+      <div className="mb-4 hidden md:block">
+        <Header title={copy.title} description={copy.description} />
+      </div>
       <section className="booking-diary-header">
-        <div className="booking-diary-logo">
-          <Image
-            src="/logo.png"
-            alt={copy.company}
-            width={64}
-            height={48}
-            className="h-12 w-auto object-contain brightness-105"
-            priority
-          />
-        </div>
-        <div className="booking-diary-title min-w-0">
+        <div className="booking-diary-title min-w-0 md:hidden">
           <p className="truncate text-[10px] font-bold uppercase tracking-[0.16em] text-brand-700">{copy.company}</p>
           <h1 className="truncate text-[1.2rem] font-semibold leading-7 text-slate-950 sm:text-[1.35rem]">{bookingTitle}</h1>
         </div>
@@ -1569,10 +1566,10 @@ export default function BookingDiaryPage() {
                             type="button"
                             onClick={() => void createTripRecord(booking)}
                             className="booking-entry-edit"
-                            aria-label={getTripForBooking(booking) ? "Open Trip" : "Create Trip"}
+                            aria-label={getTripButtonLabel(booking)}
                           >
                             <PackagePlus className="h-3.5 w-3.5" />
-                            {getTripForBooking(booking) ? "Open Trip" : "Create Trip"}
+                            {getTripButtonLabel(booking)}
                           </button>
                           <button type="button" onClick={() => openEdit(booking)} className="booking-entry-edit" aria-label={copy.editBooking}>
                             <Edit3 className="h-3.5 w-3.5" />
@@ -1814,10 +1811,10 @@ export default function BookingDiaryPage() {
                                     void createTripRecord(booking);
                                   }}
                                   className="table-action-secondary min-h-[36px] gap-1.5 px-2.5"
-                                  aria-label={getTripForBooking(booking) ? "Open Trip" : "Create Trip"}
+                                  aria-label={getTripButtonLabel(booking)}
                                 >
                                   <PackagePlus className="h-3.5 w-3.5" />
-                                  {getTripForBooking(booking) ? "Open Trip" : "Create Trip"}
+                                  {getTripButtonLabel(booking)}
                                 </button>
                                 <button
                                   type="button"

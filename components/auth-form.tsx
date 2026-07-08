@@ -56,12 +56,12 @@ export function AuthForm() {
         </h2>
       </div>
 
-      <div className="mb-8 flex rounded-[1rem] border border-slate-200 bg-slate-50 p-1.5">
+      <div className="mb-8 flex rounded-[1rem] border border-brand-100 bg-brand-50/60 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
         <button
           type="button"
           className={`flex-1 rounded-[1.05rem] px-4 py-3.5 text-sm font-medium transition ${
             mode === "login"
-              ? "bg-white text-brand-700 shadow-[0_12px_24px_rgba(95,51,183,0.12)]"
+              ? "bg-white/85 text-brand-700 shadow-[0_12px_24px_rgba(95,51,183,0.12)]"
               : "text-slate-500 hover:text-slate-700"
           }`}
           onClick={() => setMode("login")}
@@ -72,7 +72,7 @@ export function AuthForm() {
           type="button"
           className={`flex-1 rounded-[1.05rem] px-4 py-3.5 text-sm font-medium transition ${
             mode === "signup"
-              ? "bg-white text-brand-700 shadow-[0_12px_24px_rgba(95,51,183,0.12)]"
+              ? "bg-white/85 text-brand-700 shadow-[0_12px_24px_rgba(95,51,183,0.12)]"
               : "text-slate-500 hover:text-slate-700"
           }`}
           onClick={() => setMode("signup")}
@@ -108,7 +108,7 @@ export function AuthForm() {
         </div>
 
         {message ? (
-          <p className="rounded-[1rem] border border-slate-200 bg-white px-4.5 py-3.5 text-sm text-slate-700 shadow-[0_8px_18px_rgba(15,23,42,0.05)]">
+          <p className="app-card-soft px-4.5 py-3.5 text-sm text-slate-700">
             {message}
           </p>
         ) : null}

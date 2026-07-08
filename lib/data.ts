@@ -2426,29 +2426,15 @@ function calculateTripStatusFromValues({
       ? endMileage - startMileage
       : null;
   const actualDistanceKm = manualActualKm != null && manualActualKm > 0 ? manualActualKm : mileageDistance;
-  if (actualDistanceKm == null) {
-    return "missing_mileage";
-  }
-
   const estimatedKm = getEffectiveTripEstimatedKm({
     estimatedDistanceKm,
     googleEstimatedKm,
     bookingEstimatedKm,
     manualEstimatedDistanceKm
   });
-  if (estimatedKm == null || estimatedKm <= 0) {
-    return "missing_estimated_distance";
-  }
+  const workingDistanceKm = actualDistanceKm ?? estimatedKm;
 
-  const linkedFuelLitres = (linkedFuelLogs ?? []).reduce((sum, log) => sum + Number(log.litres || 0), 0);
-  const linkedFuelCost = (linkedFuelLogs ?? []).reduce((sum, log) => sum + Number(log.total_cost || 0), 0);
-  const hasLinkedFuel = linkedFuelLitres > 0 && linkedFuelCost > 0;
-  const hasManualFuel = (manualLitresUsed != null && manualLitresUsed > 0) && (manualFuelCost != null && manualFuelCost > 0);
-  const hasFuel = fuelSource === "manual" ? hasManualFuel : hasLinkedFuel;
-
-  if (!hasFuel) {
-    return "missing_fuel";
-  }
+  if (workingDistanceKm == null || workingDistanceKm <= 0) return "missing_mileage";
 
   return "completed";
 }
