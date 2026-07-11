@@ -673,6 +673,34 @@ function parseOptionalNumeric(value: unknown) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function normalizeLocationText(value: string | null | undefined) {
+  return (value ?? "").trim();
+}
+
+function isLikelyGoogleAddress(value: string | null | undefined, googleAddress?: string | null) {
+  const text = normalizeLocationText(value);
+  const address = normalizeLocationText(googleAddress);
+  if (!text) return false;
+  if (address && text.toLocaleLowerCase() === address.toLocaleLowerCase()) return true;
+  return text.length > 42 && (text.includes(",") || /\bThailand\b/i.test(text) || /\bTambon\b/i.test(text));
+}
+
+function getShortLocationName(value: string | null | undefined) {
+  const text = normalizeLocationText(value);
+  if (!text) return "";
+  const [firstPart] = text.split(",");
+  const cleaned = normalizeLocationText(firstPart);
+  if (cleaned) return cleaned;
+  return text.length > 42 ? text.slice(0, 42).trim() : text;
+}
+
+function getDiaryDisplayName(displayName: string | null | undefined, googleAddress?: string | null) {
+  const display = normalizeLocationText(displayName);
+  const google = normalizeLocationText(googleAddress);
+  if (display && !isLikelyGoogleAddress(display, google)) return display;
+  return getShortLocationName(display || google);
+}
+
 function generateBookingDiaryId(date = new Date()) {
   const pad = (value: number) => String(value).padStart(2, "0");
   const datePart = `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}`;
@@ -2550,8 +2578,8 @@ function mapBookingToTripPayload(booking: BookingDiaryEntry) {
 
   const bookingEstimatedKm = parseOptionalNumeric(booking.estimated_distance_km);
   const bookingEstimatedMinutes = parseOptionalNumeric(booking.estimated_duration_minutes);
-  const pickupDisplay = booking.pickup || booking.pickup_address || "";
-  const dropoffDisplay = booking.dropoff || booking.dropoff_address || "";
+  const pickupDisplay = getDiaryDisplayName(booking.pickup, booking.pickup_address) || booking.pickup || "";
+  const dropoffDisplay = getDiaryDisplayName(booking.dropoff, booking.dropoff_address) || booking.dropoff || "";
   const pickupAddress = booking.pickup_address || booking.pickup;
   const dropoffAddress = booking.dropoff_address || booking.dropoff;
 

@@ -340,15 +340,15 @@ function mapBookingToForm(booking: BookingDiaryEntry): BookingForm {
     amount_pallets: booking.amount_pallets != null ? String(booking.amount_pallets) : "",
     weight: booking.weight != null ? String(booking.weight) : "",
     dimensions: booking.dimensions ?? "",
-    pickup: booking.pickup,
+    pickup: getDiaryDisplayName(booking.pickup, booking.pickup_address),
     pickup_place_id: booking.pickup_place_id ?? "",
-    pickup_address: booking.pickup_address ?? "",
+    pickup_address: getGoogleAddressValue(booking.pickup_address, booking.pickup),
     pickup_lat: formatCoordinate(booking.pickup_lat),
     pickup_lng: formatCoordinate(booking.pickup_lng),
     warehouse_no: booking.warehouse_no ?? "",
-    dropoff: booking.dropoff,
+    dropoff: getDiaryDisplayName(booking.dropoff, booking.dropoff_address),
     dropoff_place_id: booking.dropoff_place_id ?? "",
-    dropoff_address: booking.dropoff_address ?? "",
+    dropoff_address: getGoogleAddressValue(booking.dropoff_address, booking.dropoff),
     dropoff_lat: formatCoordinate(booking.dropoff_lat),
     dropoff_lng: formatCoordinate(booking.dropoff_lng),
     estimated_distance_km: booking.estimated_distance_km != null ? String(booking.estimated_distance_km) : "",
@@ -385,6 +385,46 @@ function parseNumericInput(value: string) {
 function formatCoordinate(value: number | string | null | undefined) {
   const numeric = typeof value === "number" ? value : value ? Number.parseFloat(String(value)) : null;
   return numeric != null && Number.isFinite(numeric) ? String(numeric) : "";
+}
+
+function normalizeLocationText(value: string | null | undefined) {
+  return (value ?? "").trim();
+}
+
+function isLikelyGoogleAddress(value: string | null | undefined, googleAddress?: string | null) {
+  const text = normalizeLocationText(value);
+  const address = normalizeLocationText(googleAddress);
+  if (!text) return false;
+  if (address && text.toLocaleLowerCase() === address.toLocaleLowerCase()) return true;
+  return text.length > 42 && (text.includes(",") || /\bThailand\b/i.test(text) || /\bTambon\b/i.test(text));
+}
+
+function getShortLocationName(value: string | null | undefined) {
+  const text = normalizeLocationText(value);
+  if (!text) return "";
+  const [firstPart] = text.split(",");
+  const cleaned = normalizeLocationText(firstPart);
+  if (cleaned) return cleaned;
+  return text.length > 42 ? text.slice(0, 42).trim() : text;
+}
+
+function getDiaryDisplayName(displayName: string | null | undefined, googleAddress?: string | null) {
+  const display = normalizeLocationText(displayName);
+  const google = normalizeLocationText(googleAddress);
+  if (display && !isLikelyGoogleAddress(display, google)) return display;
+  return getShortLocationName(display || google);
+}
+
+function getGoogleAddressValue(googleAddress: string | null | undefined, fallbackDisplayName?: string | null) {
+  return normalizeLocationText(googleAddress) || normalizeLocationText(fallbackDisplayName);
+}
+
+function getBookingPickupDisplay(booking: Pick<BookingDiaryEntry, "pickup" | "pickup_address">) {
+  return getDiaryDisplayName(booking.pickup, booking.pickup_address) || booking.pickup || "-";
+}
+
+function getBookingDropoffDisplay(booking: Pick<BookingDiaryEntry, "dropoff" | "dropoff_address">) {
+  return getDiaryDisplayName(booking.dropoff, booking.dropoff_address) || booking.dropoff || "-";
 }
 
 function getCoordinateText(lat: string, lng: string) {
@@ -766,8 +806,8 @@ export default function BookingDiaryPage() {
     return () => window.clearTimeout(timer);
   }, [modalOpen]);
 
-  const pickupOptions = useMemo(() => uniqueSorted(bookings.map((booking) => booking.pickup)), [bookings]);
-  const dropoffOptions = useMemo(() => uniqueSorted(bookings.map((booking) => booking.dropoff)), [bookings]);
+  const pickupOptions = useMemo(() => uniqueSorted(bookings.map(getBookingPickupDisplay)), [bookings]);
+  const dropoffOptions = useMemo(() => uniqueSorted(bookings.map(getBookingDropoffDisplay)), [bookings]);
   const vehicleOptions = useMemo(
     () => uniqueSorted([...bookings.map((booking) => booking.vehicle), ...vehicles.map((vehicle) => vehicle.vehicle_reg)]),
     [bookings, vehicles]
@@ -777,7 +817,7 @@ export default function BookingDiaryPage() {
     [bookings, drivers]
   );
   const locationOptions = useMemo(
-    () => uniqueSorted([...LOCATION_SUGGESTIONS, ...bookings.map((booking) => booking.pickup), ...bookings.map((booking) => booking.dropoff)]),
+    () => uniqueSorted([...LOCATION_SUGGESTIONS, ...bookings.map(getBookingPickupDisplay), ...bookings.map(getBookingDropoffDisplay)]),
     [bookings]
   );
 
@@ -793,8 +833,10 @@ export default function BookingDiaryPage() {
       const queryMatch =
         !query ||
         [
-          booking.pickup,
-          booking.dropoff,
+          getBookingPickupDisplay(booking),
+          getBookingDropoffDisplay(booking),
+          booking.pickup_address,
+          booking.dropoff_address,
           booking.vehicle,
           booking.driver,
           booking.warehouse_no,
@@ -809,8 +851,8 @@ export default function BookingDiaryPage() {
         quickMatch &&
         queryMatch &&
         (!dateFilter || booking.booking_date === dateFilter) &&
-        (!pickupFilter || booking.pickup === pickupFilter) &&
-        (!dropoffFilter || booking.dropoff === dropoffFilter) &&
+        (!pickupFilter || getBookingPickupDisplay(booking) === pickupFilter) &&
+        (!dropoffFilter || getBookingDropoffDisplay(booking) === dropoffFilter) &&
         (!vehicleFilter || booking.vehicle === vehicleFilter) &&
         (!driverFilter || booking.driver === driverFilter)
       );
@@ -1200,7 +1242,7 @@ export default function BookingDiaryPage() {
     setRouteMessage(null);
     setForm((current) => ({
       ...current,
-      pickup: current.pickup.trim() || location.label || location.formatted_address,
+      pickup: current.pickup.trim() || getShortLocationName(location.label || location.formatted_address),
       pickup_place_id: location.place_id ?? "",
       pickup_address: location.formatted_address || location.label,
       pickup_lat: Number.isFinite(location.lat) ? String(location.lat) : "",
@@ -1212,7 +1254,7 @@ export default function BookingDiaryPage() {
     setRouteMessage(null);
     setForm((current) => ({
       ...current,
-      dropoff: current.dropoff.trim() || location.label || location.formatted_address,
+      dropoff: current.dropoff.trim() || getShortLocationName(location.label || location.formatted_address),
       dropoff_place_id: location.place_id ?? "",
       dropoff_address: location.formatted_address || location.label,
       dropoff_lat: Number.isFinite(location.lat) ? String(location.lat) : "",
@@ -1353,12 +1395,12 @@ export default function BookingDiaryPage() {
         "Amount / Pallets": booking.amount_pallets,
         Weight: booking.weight,
         Dimensions: booking.dimensions,
-        "Pickup Display Name": booking.pickup,
+        "Pickup Display Name": getBookingPickupDisplay(booking),
         "Pickup Google Maps Address": booking.pickup_address,
         "Pickup Latitude": booking.pickup_lat,
         "Pickup Longitude": booking.pickup_lng,
         "Warehouse / NO": booking.warehouse_no,
-        "Dropoff Display Name": booking.dropoff,
+        "Dropoff Display Name": getBookingDropoffDisplay(booking),
         "Dropoff Google Maps Address": booking.dropoff_address,
         "Dropoff Latitude": booking.dropoff_lat,
         "Dropoff Longitude": booking.dropoff_lng,
@@ -1633,7 +1675,7 @@ export default function BookingDiaryPage() {
                                 {formatPickupTime(booking.pickup_time) || "TBC"}
                               </span>
                             </span>
-                            <span className="booking-line-route">{booking.pickup} <span>-&gt;</span> {booking.dropoff}</span>
+                            <span className="booking-line-route">{getBookingPickupDisplay(booking)} <span>-&gt;</span> {getBookingDropoffDisplay(booking)}</span>
                             <span className="mt-1 flex flex-wrap gap-1.5">
                               <span className="inline-flex w-fit rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600">
                                 {formatDistanceKm(booking.estimated_distance_km) ?? copy.noEstimate}
@@ -1729,9 +1771,9 @@ export default function BookingDiaryPage() {
                   <summary className="booking-ledger-summary">
                     <div className="min-w-0">
                       <div className="booking-ledger-route">
-                        <span>{booking.pickup}</span>
+                        <span>{getBookingPickupDisplay(booking)}</span>
                         <span className="booking-ledger-arrow">-&gt;</span>
-                        <span>{booking.dropoff}</span>
+                        <span>{getBookingDropoffDisplay(booking)}</span>
                       </div>
                       <div className="booking-ledger-row">
                         <span><Truck className="booking-ledger-icon" />{booking.vehicle || "-"}</span>
@@ -1844,9 +1886,9 @@ export default function BookingDiaryPage() {
                     className="booking-entry-main"
                   >
                   <div className="booking-entry-route">
-                    <span>{booking.pickup}</span>
+                    <span>{getBookingPickupDisplay(booking)}</span>
                     <span className="booking-entry-arrow">→</span>
-                    <span>{booking.dropoff}</span>
+                    <span>{getBookingDropoffDisplay(booking)}</span>
                   </div>
                   <div className="booking-entry-assignment">
                     <span><Truck className="booking-card-icon" />{booking.vehicle || "-"}</span>
@@ -1858,9 +1900,9 @@ export default function BookingDiaryPage() {
                     <p><span>{booking.dimensions || "-"}</span>{copy.dimensions}</p>
                   </div>
                   <div className="booking-card-route booking-entry-extra">
-                    <p><MapPin className="booking-card-icon text-brand-600" /> <span>{booking.pickup}</span></p>
+                    <p><MapPin className="booking-card-icon text-brand-600" /> <span>{getBookingPickupDisplay(booking)}</span></p>
                     <p className="booking-card-warehouse">{copy.warehouseNo}: {booking.warehouse_no || "-"}</p>
-                    <p><MapPin className="booking-card-icon text-orange-500" /> <span>{booking.dropoff}</span></p>
+                    <p><MapPin className="booking-card-icon text-orange-500" /> <span>{getBookingDropoffDisplay(booking)}</span></p>
                   </div>
                   <div className="booking-card-meta">
                     <p><Truck className="booking-card-icon" />{booking.vehicle || "-"}</p>
@@ -1915,7 +1957,7 @@ export default function BookingDiaryPage() {
                               className="booking-desktop-cell max-w-[280px] font-semibold text-slate-900"
                               title={[booking.pickup_address || booking.pickup, booking.dropoff_address || booking.dropoff].filter(Boolean).join(" -> ")}
                             >
-                              <span className="block truncate">{booking.pickup} <span className="text-brand-600">-&gt;</span> {booking.dropoff}</span>
+                              <span className="block truncate">{getBookingPickupDisplay(booking)} <span className="text-brand-600">-&gt;</span> {getBookingDropoffDisplay(booking)}</span>
                               <span
                                 className={clsx(
                                   "mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold",
