@@ -34,6 +34,9 @@ type LocationAutocompleteProps = {
   helperText?: string;
   loadingText?: string;
   invalidText?: string;
+  verifiedText?: string;
+  manualUnverifiedText?: string;
+  manualEntryText?: string;
   selectedLocation?: StructuredLocation | null;
   onSelectLocation?: (location: StructuredLocation) => void;
   onManualInput?: (value: string) => void;
@@ -201,6 +204,9 @@ export function LocationAutocomplete({
   helperText,
   loadingText = "Loading location suggestions...",
   invalidText = "Please select a valid location from the Google suggestions.",
+  verifiedText = "Verified by Google",
+  manualUnverifiedText = "manual/unverified",
+  manualEntryText = "You can still type the full location manually.",
   selectedLocation,
   onSelectLocation,
   onManualInput,
@@ -569,14 +575,14 @@ export function LocationAutocomplete({
 
       <p className="mt-2 text-sm text-slate-500">
         {mapsConfigured === false
-          ? `${statusMessage ?? configMissingMessage}. You can still type the full location manually.`
+          ? `${statusMessage ?? configMissingMessage}. ${manualEntryText}`
           : loading
             ? loadingText
             : selectedLocation
               ? selectedLocation.place_id
-                ? `Verified by Google: ${selectedLocation.formatted_address}`
+                ? `${verifiedText}: ${selectedLocation.formatted_address}`
                 : selectedLocation.manual_text
-                  ? `${selectedLocation.manual_text} - manual/unverified`
+                  ? `${selectedLocation.manual_text} - ${manualUnverifiedText}`
                   : selectedLocation.formatted_address
               : statusMessage ?? helperText ?? "Type at least 2 characters, or paste the full location manually."}
       </p>

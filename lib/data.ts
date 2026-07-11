@@ -131,6 +131,10 @@ const BOOKING_DIARY_ROUTE_COLUMNS = new Set([
   "dropoff_place_id",
   "pickup_address",
   "dropoff_address",
+  "pickup_lat",
+  "pickup_lng",
+  "dropoff_lat",
+  "dropoff_lng",
   "estimated_distance_km",
   "estimated_duration_minutes",
   "google_maps_route_url",
@@ -2271,6 +2275,10 @@ export async function fetchBookingDiaryEntries() {
     dropoff_place_id: booking.dropoff_place_id ?? null,
     pickup_address: booking.pickup_address ?? null,
     dropoff_address: booking.dropoff_address ?? null,
+    pickup_lat: parseOptionalNumeric(booking.pickup_lat),
+    pickup_lng: parseOptionalNumeric(booking.pickup_lng),
+    dropoff_lat: parseOptionalNumeric(booking.dropoff_lat),
+    dropoff_lng: parseOptionalNumeric(booking.dropoff_lng),
     estimated_distance_km: parseOptionalNumeric(booking.estimated_distance_km),
     estimated_duration_minutes: parseOptionalNumeric(booking.estimated_duration_minutes),
     google_maps_route_url: booking.google_maps_route_url ?? null,
@@ -2282,11 +2290,27 @@ export async function fetchBookingDiaryEntries() {
 }
 
 export async function saveBookingDiaryEntry(
-  payload: Partial<Omit<BookingDiaryEntry, "amount_pallets" | "weight" | "estimated_distance_km" | "estimated_duration_minutes">> & {
+  payload: Partial<
+    Omit<
+      BookingDiaryEntry,
+      | "amount_pallets"
+      | "weight"
+      | "estimated_distance_km"
+      | "estimated_duration_minutes"
+      | "pickup_lat"
+      | "pickup_lng"
+      | "dropoff_lat"
+      | "dropoff_lng"
+    >
+  > & {
     amount_pallets?: string | number | null;
     weight?: string | number | null;
     estimated_distance_km?: string | number | null;
     estimated_duration_minutes?: string | number | null;
+    pickup_lat?: string | number | null;
+    pickup_lng?: string | number | null;
+    dropoff_lat?: string | number | null;
+    dropoff_lng?: string | number | null;
   }
 ) {
   const { id, ...rest } = payload;
@@ -2306,6 +2330,10 @@ export async function saveBookingDiaryEntry(
     dropoff_place_id: rest.dropoff_place_id?.trim() || null,
     pickup_address: rest.pickup_address?.trim() || null,
     dropoff_address: rest.dropoff_address?.trim() || null,
+    pickup_lat: parseOptionalNumeric(rest.pickup_lat),
+    pickup_lng: parseOptionalNumeric(rest.pickup_lng),
+    dropoff_lat: parseOptionalNumeric(rest.dropoff_lat),
+    dropoff_lng: parseOptionalNumeric(rest.dropoff_lng),
     estimated_distance_km: parseOptionalNumeric(rest.estimated_distance_km),
     estimated_duration_minutes: parseOptionalNumeric(rest.estimated_duration_minutes),
     google_maps_route_url: rest.google_maps_route_url?.trim() || null,
@@ -2522,6 +2550,8 @@ function mapBookingToTripPayload(booking: BookingDiaryEntry) {
 
   const bookingEstimatedKm = parseOptionalNumeric(booking.estimated_distance_km);
   const bookingEstimatedMinutes = parseOptionalNumeric(booking.estimated_duration_minutes);
+  const pickupDisplay = booking.pickup || booking.pickup_address || "";
+  const dropoffDisplay = booking.dropoff || booking.dropoff_address || "";
   const pickupAddress = booking.pickup_address || booking.pickup;
   const dropoffAddress = booking.dropoff_address || booking.dropoff;
 
@@ -2538,9 +2568,9 @@ function mapBookingToTripPayload(booking: BookingDiaryEntry) {
     dropoff_address: dropoffAddress,
     date: booking.booking_date,
     pickup_time: booking.pickup_time ?? null,
-    pickup_location: pickupAddress,
-    dropoff_location: dropoffAddress,
-    route: [booking.pickup, booking.dropoff].filter(Boolean).join(" -> "),
+    pickup_location: pickupDisplay || pickupAddress,
+    dropoff_location: dropoffDisplay || dropoffAddress,
+    route: [pickupDisplay, dropoffDisplay].filter(Boolean).join(" -> "),
     vehicle_reg: normalizeVehicleRegistration(booking.vehicle) || null,
     driver: normalizeDisplayName(booking.driver) || null,
     load_text: loadParts.join(" | ") || null,

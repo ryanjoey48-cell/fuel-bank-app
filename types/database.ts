@@ -282,6 +282,10 @@ export type BookingDiaryEntry = {
   dropoff_place_id?: string | null;
   pickup_address?: string | null;
   dropoff_address?: string | null;
+  pickup_lat?: number | null;
+  pickup_lng?: number | null;
+  dropoff_lat?: number | null;
+  dropoff_lng?: number | null;
   estimated_distance_km?: number | null;
   estimated_duration_minutes?: number | null;
   google_maps_route_url?: string | null;
