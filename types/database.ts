@@ -123,7 +123,7 @@ export type BankTransfer = {
 
 export type FuelLogWithDriver = FuelLog;
 
-export type FuelLogSortKey = "date" | "total_cost" | "litres";
+export type FuelLogSortKey = "date" | "total_cost" | "litres" | "price_per_litre";
 export type FuelLogSortDirection = "asc" | "desc";
 
 export type FuelLogFilters = {
@@ -256,7 +256,10 @@ export type TripFuelLogLink = {
   id: string;
   trip_journey_id: string;
   fuel_log_id: string;
+  link_type?: "confirmed" | "possible_match" | "manual_review" | "rejected" | string | null;
+  notes?: string | null;
   created_at: string;
+  created_by?: string | null;
   user_id?: string | null;
 };
 

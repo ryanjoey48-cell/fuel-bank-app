@@ -44,10 +44,11 @@ const tripJourneyCopy = {
     operationsOverview: "Operations Overview",
     fleetDistance: "Fleet Distance",
     tripsCompleted: "Trips completed",
+    completedTripsLabel: "Completed trips",
     tripsInProgress: "Trips in progress",
     overallCompletion: "Overall completion",
-    fleetPerformance: "Fleet Performance",
-    fleetPerformanceHelper: "Completed trips, missing data, fuel readiness and route accuracy.",
+    fleetPerformance: "Trip Data Readiness",
+    fleetPerformanceHelper: "Completed jobs with linked booking, distance, fuel, and mileage checks ready.",
     driverLeaderboard: "Driver Leaderboard",
     topDriversHelper: "Top 5 drivers from completed trips.",
     routeAccuracy: "Route Accuracy",
@@ -65,14 +66,15 @@ const tripJourneyCopy = {
     yesterday: "Yesterday",
     thisWeek: "This Week",
     thisMonth: "This Month",
-    viewTrips: "View Trips",
+    viewTrips: "Review trips",
+    fixNow: "Fix now",
     view: "View",
     edit: "Edit",
     openBooking: "Open Booking",
     openFuelLogs: "Open Fuel Logs",
     completion: "Completion",
     vehicleRegistration: "Registration",
-    estimatedVsActual: "Estimated vs Actual %",
+    estimatedVsActual: "Distance difference %",
     distanceTravelled: "Distance travelled",
     journeyTimeline: "Journey Timeline",
     pickup: "Pickup",
@@ -88,21 +90,28 @@ const tripJourneyCopy = {
     missingEstimate: "Missing estimate",
     missingEstimateTitle: "Missing Estimate",
     missingFuel: "Fuel check needed",
-    missingFuelTitle: "Fuel Check Needed",
-    fuelEventNearby: "Fuel Event Nearby",
-    noFuelEventNearby: "No fuel event nearby",
+    missingFuelTitle: "Fuel data needs review",
+    fuelEventNearby: "Fuel data linked",
+    noFuelEventNearby: "Fuel not linked",
     weeklyMileageVerified: "Weekly mileage verified",
-    weeklyMileageMissing: "Missing weekly mileage",
+    mileageVerification: "Mileage verification",
+    fuelCycleMileageVerified: "Mileage verified",
+    weeklyMileageMissing: "Mileage not verified",
     verified: "Verified",
     needsReview: "Needs Review",
     dataCompletion: "Data Completion",
     adminQueue: "Admin Queue",
     missingTripRecord: "Missing trip record",
-    missingFuelEvent: "Missing fuel event",
-    missingWeeklyMileage: "Missing weekly mileage",
+    missingFuelEvent: "Fuel not linked",
+    missingWeeklyMileage: "Mileage not verified",
     verifiedTrips: "Verified trips",
-    fuelCycle: "Fuel Cycle",
-    fuelCycles: "Fuel Cycles",
+    verifiedDataCheckedTrips: "Verified / data checked trips",
+    totalWorkingKm: "Total working KM",
+    verifiedWorkingKm: "Verified working KM",
+    comparisonNeedsChecksHelper: "Some completed trips still need fuel or mileage checks. Verified comparison uses Data checked trips.",
+    fuelCycle: "Since last fuel log",
+    fuelCycles: "Fleet fuel cycles",
+    fuelCyclesHelper: "Based on fuel log odometer readings. Individual trip cards may show their own fuel cycle.",
     belongsToFuelCycle: "Belongs to fuel cycle",
     notAssignedToFuelCycle: "Not assigned to fuel cycle yet",
     fuelCycleHelper: "Fuel logs may cover multiple trips. Fuel events are used for cycle and mileage checking, not exact per-trip fuel use.",
@@ -110,13 +119,15 @@ const tripJourneyCopy = {
     created: "Created",
     distanceFuel: "Distance & Fuel",
     actualKm: "Actual KM",
-    actualKmOverride: "Actual KM override",
-    actualKmOverrideHelper: "Optional. Leave blank unless you have a confirmed odometer/GPS distance.",
-    workingDistance: "Working distance",
+    mileage: "Mileage",
+    actualKmOverride: "Manual KM override",
+    actualKmOverrideHelper: "Optional. Use only when admin has confirmed the trip distance manually.",
+    workingDistance: "Working KM",
+    tripDistanceUsed: "Trip Distance Used",
     distanceSource: "Distance source",
     sourceGoogleEstimate: "Google estimate",
-    sourceManualActualKm: "Manual actual KM",
-    sourceOdometerVerified: "Odometer/weekly mileage verified",
+    sourceManualActualKm: "Manual override",
+    sourceOdometerVerified: "Odometer actual",
     sourceNotAvailable: "Not available",
     weeklyMileageOk: "OK",
     weeklyMileageWarning: "Warning",
@@ -143,12 +154,41 @@ const tripJourneyCopy = {
     allFuelLinks: "All fuel links",
     fuelLogsLinked: "Fuel logs linked",
     fuelLogsNotLinked: "Fuel logs not linked",
+    fuelLinked: "Fuel linked",
+    possibleFuelLogFound: "Possible fuel log found",
+    reviewLinkFuelLog: "Review & link fuel log",
+    fuelManuallyConfirmed: "Fuel manually confirmed",
+    fuelCycleLinked: "Fuel cycle linked",
+    fuelLogSupportsTrip: "Fuel log supports this trip",
+    fuelLogAlreadyLinkedCount: "Already linked to {count} other trip(s)",
+    distanceSinceLastFuelLog: "Distance since last fuel log",
+    linkedFuelCycle: "Linked fuel cycle",
+    fuelCycleAvailable: "Fuel cycle available",
+    fuelCycleVerified: "Fuel cycle checked",
+    fuelCycleNotCompleteYet: "Fuel cycle not complete yet",
+    fuelCycleDistance: "Fuel cycle distance",
+    linkedTripDistanceInCycle: "Trip distance in this cycle",
+    unallocatedDistance: "Other / unallocated movement",
+    coverage: "Coverage from linked trips",
+    partialCycleCoverage: "Partial cycle coverage",
+    mileageCheckAvailable: "Mileage check available",
+    cycleStatus: "Status",
+    fuelCycleNormalHelper: "This is normal. Fuel cycles can include depot movement, other jobs, or trips not yet linked.",
+    mileageCheckPending: "Mileage check pending",
+    waitingForNextFuelLog: "Waiting for next fuel log",
+    needsFuelLogReceiptCheck: "Needs receipt check",
+    mileageNeedsReview: "Mileage needs review",
+    fuelCycleNotVerified: "Fuel cycle not verified",
+    manuallyConfirmFuelCheck: "Manually confirm fuel check",
+    manualFuelConfirmationNote: "Fuel checked against weekly mileage / fuel cycle.",
+    linkToThisTrip: "Link to this trip",
+    rejectSuggestion: "Reject suggestion",
     resetFilters: "Reset filters",
     needsAttention: "Needs Attention",
     needsAttentionDescription: "Select a missing item to focus the trip list.",
     actualKmNeeded: "Distance is needed from an estimate, odometer, GPS, or weekly mileage.",
     comparePlannedActual: "Compare planned vs actual route.",
-    linkFuelLogsOrManual: "Link fuel logs or enter manually.",
+    linkFuelLogsOrManual: "Link or confirm the fuel data used for this trip.",
     showAllTrips: "Show all trips",
     tripRecords: "Trip Records",
     tripRecordsDescription: "Compact list of booking journeys. Review one trip to edit details.",
@@ -172,6 +212,7 @@ const tripJourneyCopy = {
     noFuelCost: "No fuel cost",
     nextAction: "Next action",
     manageFuelLogs: "Manage fuel logs",
+    linkFuelLogAction: "Link Fuel Log",
     backToTripList: "Back to trip list",
     overview: "Overview",
     journeyDetails: "Journey Details",
@@ -218,8 +259,8 @@ const tripJourneyCopy = {
     openInGoogleMaps: "Open in Google Maps",
     manualEstimatedOverride: "Manual estimated KM override",
     manualEstimateHelper: "Use this if Google Maps is not available or the estimate needs correcting.",
-    actualDistance: "Actual Distance",
-    manualActualKm: "Actual KM override",
+    actualDistance: "Odometer actual",
+    manualActualKm: "Manual KM override",
     startMileage: "Start mileage",
     endMileage: "End mileage",
     estimatedKmShort: "Est. KM",
@@ -251,7 +292,7 @@ const tripJourneyCopy = {
     waitingIdleNotes: "Waiting / idle notes",
     extraRouteNotes: "Extra route notes",
     performanceComparison: "Operations Comparison",
-    comparisonDescription: "Driver and vehicle comparison uses completed trip distance and fuel-cycle checks. Fuel events are not allocated as exact per-trip fuel use.",
+    comparisonDescription: "Driver and vehicle comparison separates completed trips from Data checked trips. Fuel events are not allocated as exact per-trip fuel use.",
     sortBestKmL: "Sort: Most working km",
     sortLowestCostKm: "Sort: Smallest variance",
     sortHighestFuelCost: "Sort: Largest variance",
@@ -263,11 +304,27 @@ const tripJourneyCopy = {
     sortShortestTrip: "Sort: Shortest trip",
     sortMostAccurate: "Sort: Most accurate",
     sortLeastAccurate: "Sort: Least accurate",
-    moreCompletedTripsNeeded: "More completed trips are needed for reliable comparison.",
-    bestKmLDriver: "Top driver by working km",
-    lowestCostKmDriver: "Most accurate driver",
-    bestVehicle: "Top vehicle by working km",
-    lowestVehicleCostKm: "Most accurate vehicle",
+    moreCompletedTripsNeeded: "More completed verified trips are needed for reliable comparison.",
+    reportsSecondary: "Comparison / Reports",
+    reportsSecondaryDescription: "Route accuracy, trends, leaderboards, and operations comparison.",
+    planned: "Planned",
+    inProgress: "In Progress",
+    dataReady: "Data Ready",
+    dataChecked: "Data checked",
+    needsFuelCheck: "Needs Fuel Check",
+    needsMileageCheck: "Needs Mileage Check",
+    needsReviewStatus: "Needs Review",
+    missingDistance: "Missing Distance",
+    bookingLinked: "Booking linked",
+    bookingNotLinked: "Booking not linked",
+    distanceMatched: "Distance matched",
+    distanceNeedsReview: "Distance needs review",
+    fuelNotLinked: "Fuel not linked",
+    mileageNotVerified: "Mileage not verified",
+    bestKmLDriver: "Current top driver by working km",
+    lowestCostKmDriver: "Current most accurate driver",
+    bestVehicle: "Current top vehicle by working km",
+    lowestVehicleCostKm: "Current most accurate vehicle",
     mostExpensiveTrip: "Fuel cycle check",
     biggestDistanceDifference: "Biggest distance difference",
     dataQuality: "Data Quality",
@@ -284,7 +341,7 @@ const tripJourneyCopy = {
     deleteTripDescription: "This will delete the trip journey record only. It will not delete the original Booking Diary entry or any Fuel Logs.",
     cancel: "Cancel",
     deleting: "Deleting...",
-    reviewPerformance: "Review performance",
+    reviewPerformance: "Review data",
     addActualKm: "Add actual km",
     addEstimate: "Add estimate",
     reviewDetails: "Review details",
@@ -513,6 +570,52 @@ const tripJourneyCopy = {
     sortMostAccurate: "เรียง: แม่นยำที่สุด",
     sortLeastAccurate: "เรียง: คลาดเคลื่อนมากที่สุด",
     moreCompletedTripsNeeded: "ต้องมีทริปที่เสร็จสิ้นมากกว่านี้เพื่อเปรียบเทียบให้แม่นยำ",
+    reportsSecondary: "การเปรียบเทียบ / รายงาน",
+    reportsSecondaryDescription: "ความแม่นยำเส้นทาง แนวโน้ม อันดับคนขับ และการเปรียบเทียบงาน",
+    planned: "วางแผนแล้ว",
+    inProgress: "กำลังดำเนินการ",
+    dataReady: "ข้อมูลพร้อม",
+    needsFuelCheck: "ต้องตรวจน้ำมัน",
+    needsMileageCheck: "ต้องตรวจเลขไมล์",
+    needsReviewStatus: "ต้องตรวจสอบ",
+    bookingLinked: "เชื่อมโยงการจองแล้ว",
+    bookingNotLinked: "ยังไม่เชื่อมโยงการจอง",
+    distanceMatched: "ระยะทางตรงกัน",
+    distanceNeedsReview: "ต้องตรวจระยะทาง",
+    fuelNotLinked: "ยังไม่เชื่อมโยงน้ำมัน",
+    mileageNotVerified: "ยังไม่ยืนยันเลขไมล์",
+    fixNow: "แก้ไขตอนนี้",
+    linkFuelLogAction: "เชื่อมโยงบันทึกน้ำมัน",
+    mileage: "เลขไมล์",
+    tripDistanceUsed: "ระยะทางที่ใช้กับทริป",
+    fuelLinked: "เชื่อมโยงน้ำมันแล้ว",
+    possibleFuelLogFound: "พบบันทึกน้ำมันที่อาจเกี่ยวข้อง",
+    reviewLinkFuelLog: "ตรวจและเชื่อมโยงน้ำมัน",
+    fuelManuallyConfirmed: "ยืนยันน้ำมันด้วยตนเอง",
+    fuelCycleLinked: "เชื่อมโยงรอบน้ำมันแล้ว",
+    fuelLogSupportsTrip: "บันทึกน้ำมันนี้ใช้สนับสนุนทริป",
+    fuelLogAlreadyLinkedCount: "เชื่อมโยงกับทริปอื่นแล้ว {count} ทริป",
+    distanceSinceLastFuelLog: "ระยะทางตั้งแต่เติมน้ำมันครั้งก่อน",
+    linkedFuelCycle: "รอบน้ำมันที่เชื่อมโยงแล้ว",
+    fuelCycleAvailable: "มีรอบน้ำมันให้ตรวจ",
+    fuelCycleVerified: "ยืนยันรอบน้ำมันแล้ว",
+    fuelCycleNotCompleteYet: "รอบน้ำมันยังไม่สมบูรณ์",
+    fuelCycleDistance: "ระยะทางรอบน้ำมัน",
+    linkedTripDistanceInCycle: "ระยะทางทริปที่เชื่อมในรอบ",
+    unallocatedDistance: "ระยะทางอื่น / ยังไม่จัดสรร",
+    coverage: "ครอบคลุม",
+    partialCycleCoverage: "ครอบคลุมบางส่วนของรอบน้ำมัน",
+    mileageCheckAvailable: "มีข้อมูลตรวจเลขไมล์",
+    mileageCheckPending: "รอตรวจเลขไมล์",
+    waitingForNextFuelLog: "รอบันทึกน้ำมันถัดไป",
+    needsFuelLogReceiptCheck: "ต้องตรวจใบเสร็จ",
+    mileageNeedsReview: "ต้องตรวจเลขไมล์",
+    fuelCycleNotVerified: "ยังไม่ยืนยันรอบน้ำมัน",
+    manuallyConfirmFuelCheck: "ยืนยันการตรวจน้ำมันด้วยตนเอง",
+    manualFuelConfirmationNote: "ตรวจน้ำมันกับเลขไมล์รายสัปดาห์ / รอบน้ำมันแล้ว",
+    linkToThisTrip: "เชื่อมโยงกับทริปนี้",
+    rejectSuggestion: "ปฏิเสธรายการแนะนำ",
+    missingDistance: "ขาดระยะทาง",
     bestKmLDriver: "พนักงานขับรถระยะทางใช้งานสูงสุด",
     lowestCostKmDriver: "พนักงานขับรถแม่นยำที่สุด",
     bestVehicle: "รถระยะทางใช้งานสูงสุด",
@@ -589,6 +692,41 @@ type TripJourneyCopy = { [K in keyof (typeof tripJourneyCopy)["en"]]: string };
 
 const tripJourneyCopyOverrides: Partial<Record<keyof typeof tripJourneyCopy, Partial<TripJourneyCopy>>> = {
   th: {
+    actualKmOverride: "แก้ไขกม. ด้วยตนเอง",
+    actualKmOverrideHelper: "ไม่บังคับ ใช้เมื่อผู้ดูแลยืนยันระยะทางของทริปด้วยตนเอง",
+    actualDistance: "เลขไมล์จริง",
+    manualActualKm: "แก้ไขกม. ด้วยตนเอง",
+    workingDistance: "กม. ที่ใช้คำนวณ",
+    completedTripsLabel: "ทริปที่เสร็จสิ้น",
+    verifiedDataCheckedTrips: "ทริปที่ตรวจข้อมูลแล้ว",
+    totalWorkingKm: "กม. ใช้งานทั้งหมด",
+    verifiedWorkingKm: "กม. ใช้งานที่ตรวจแล้ว",
+    comparisonNeedsChecksHelper: "บางทริปที่เสร็จสิ้นยังต้องตรวจน้ำมันหรือเลขไมล์ การเปรียบเทียบที่ยืนยันแล้วใช้เฉพาะทริปที่ตรวจข้อมูลแล้ว",
+    comparisonDescription: "การเปรียบเทียบคนขับและรถแยกทริปที่เสร็จสิ้นออกจากทริปที่ตรวจข้อมูลแล้ว ไม่กระจายน้ำมันหนึ่งใบเสร็จเป็นค่าน้ำมันจริงต่อทริป",
+    reviewPerformance: "ตรวจข้อมูล",
+    distanceSource: "ที่มาระยะทาง",
+    sourceGoogleEstimate: "ประมาณการจาก Google",
+    sourceManualActualKm: "แก้ไขด้วยตนเอง",
+    sourceOdometerVerified: "เลขไมล์จริง",
+    sourceNotAvailable: "ไม่มีข้อมูล",
+    estimatedVsActual: "เปอร์เซ็นต์ส่วนต่างระยะทาง",
+    mileageVerification: "การตรวจเลขไมล์",
+    fuelCycleMileageVerified: "ยืนยันเลขไมล์แล้ว",
+    fuelCycles: "รอบน้ำมันของรถทั้งหมด",
+    fuelCyclesHelper: "อ้างอิงจากเลขไมล์ในรายการเติมน้ำมัน การ์ดทริปแต่ละรายการอาจแสดงรอบน้ำมันของตัวเอง",
+    fuelCycleVerified: "ตรวจรอบน้ำมันแล้ว",
+    linkedTripDistanceInCycle: "ระยะทางทริปในรอบนี้",
+    unallocatedDistance: "การเคลื่อนที่อื่น / ยังไม่จัดสรร",
+    coverage: "สัดส่วนจากทริปที่เชื่อมแล้ว",
+    mileageCheckAvailable: "ตรวจเลขไมล์เสร็จแล้ว",
+    cycleStatus: "สถานะ",
+    fuelCycleNormalHelper: "เป็นเรื่องปกติ รอบน้ำมันอาจรวมการวิ่งกลับคลัง งานอื่น หรือทริปที่ยังไม่ได้เชื่อม",
+    dataChecked: "ตรวจข้อมูลแล้ว",
+    moreCompletedTripsNeeded: "ต้องมีทริปที่เสร็จสิ้นและตรวจสอบแล้วอย่างน้อย 5 ทริปเพื่อเปรียบเทียบให้เชื่อถือได้",
+    bestKmLDriver: "คนขับอันดับปัจจุบันตามระยะทางใช้งาน",
+    lowestCostKmDriver: "คนขับที่แม่นยำที่สุดในขณะนี้",
+    bestVehicle: "รถอันดับปัจจุบันตามระยะทางใช้งาน",
+    lowestVehicleCostKm: "รถที่แม่นยำที่สุดในขณะนี้",
     routeGoogleMapsHelper: "ระยะทางจากการจองคือรับของไปส่งของเท่านั้น ส่วน Trip Journey สามารถคำนวณเส้นทางเต็มที่พนักงานขับรถเลือก",
     startsPickupDropoffOnly: "ไม่ใช้คลัง / รับของไปส่งของเท่านั้น",
     bookingEstimate: "ระยะทางจากการจอง",
@@ -663,8 +801,11 @@ type TripForm = {
 };
 
 type SelectedTripTab = "overview" | "journey" | "fuel" | "notes";
-type AttentionFilter = "all" | "missing_mileage" | "missing_estimate" | "missing_fuel";
+type AttentionFilter = "all" | "missing_mileage" | "missing_estimate" | "missing_fuel" | "missing_weekly_mileage";
 type DerivedTripStatus = "completed" | "missing_mileage" | "missing_estimated_distance" | "missing_fuel";
+type TripJobStatus = "planned" | "in_progress" | "completed";
+type TripDataStatus = "data_ready" | "needs_fuel_check" | "needs_mileage_check" | "missing_estimate" | "missing_distance" | "needs_review";
+type FuelReviewStatus = "linked" | "possible" | "manual" | "cycle" | "not_linked";
 type ComparisonTab = "drivers" | "vehicles" | "routes" | "trips";
 type ComparisonSort =
   | "best_kml"
@@ -682,6 +823,9 @@ type PerformanceRow = {
   name: string;
   trips: TripJourneyWithFuel[];
   completedTrips: number;
+  verifiedTrips: number;
+  totalWorkingKm: number;
+  verifiedWorkingKm: number;
   actualKm: number;
   estimatedKm: number;
   litres: number;
@@ -919,13 +1063,20 @@ function tripToForm(trip: TripJourneyWithFuel): TripForm {
   };
 }
 
-function getActualDistance(trip: Pick<TripJourneyWithFuel, "start_mileage" | "end_mileage" | "manual_actual_km" | "actual_distance_km">) {
-  if (trip.manual_actual_km != null && trip.manual_actual_km > 0) return trip.manual_actual_km;
+function getOdometerActualDistance(trip: Pick<TripJourneyWithFuel, "start_mileage" | "end_mileage" | "actual_distance_km">) {
   if (trip.start_mileage != null && trip.end_mileage != null && trip.end_mileage > trip.start_mileage) {
     return trip.end_mileage - trip.start_mileage;
   }
   if (trip.actual_distance_km != null && trip.actual_distance_km > 0) return trip.actual_distance_km;
   return null;
+}
+
+function getManualDistanceOverride(trip: Pick<TripJourneyWithFuel, "manual_actual_km">) {
+  return trip.manual_actual_km != null && trip.manual_actual_km > 0 ? trip.manual_actual_km : null;
+}
+
+function getActualDistance(trip: Pick<TripJourneyWithFuel, "start_mileage" | "end_mileage" | "manual_actual_km" | "actual_distance_km">) {
+  return getManualDistanceOverride(trip) ?? getOdometerActualDistance(trip);
 }
 
 function getDistanceSourceLabel(trip: TripJourneyWithFuel, copy: TripJourneyCopy = tripJourneyCopy.en) {
@@ -959,29 +1110,37 @@ function getFuelTotals(trip: TripJourneyWithFuel) {
 }
 
 function getTripMetrics(trip: TripJourneyWithFuel) {
-  const actualDistance = getActualDistance(trip);
+  const manualDistance = getManualDistanceOverride(trip);
+  const odometerActualDistance = getOdometerActualDistance(trip);
+  const actualDistance = odometerActualDistance;
   const estimatedDistance = getEstimatedDistance(trip);
-  const workingDistance = actualDistance ?? estimatedDistance;
+  const workingDistance = manualDistance ?? odometerActualDistance ?? estimatedDistance;
   const fuel = getFuelTotals(trip);
   const differenceKm =
-    actualDistance != null && estimatedDistance != null ? actualDistance - estimatedDistance : null;
+    workingDistance != null && estimatedDistance != null ? workingDistance - estimatedDistance : null;
   const differencePercent =
     differenceKm != null && estimatedDistance != null && estimatedDistance > 0
       ? (differenceKm / estimatedDistance) * 100
       : null;
   const kmPerLitre =
-    actualDistance != null && fuel.litres != null && fuel.litres > 0 ? actualDistance / fuel.litres : null;
+    workingDistance != null && fuel.litres != null && fuel.litres > 0 ? workingDistance / fuel.litres : null;
   const costPerKm =
-    fuel.cost != null && actualDistance != null && actualDistance > 0 ? fuel.cost / actualDistance : null;
+    fuel.cost != null && workingDistance != null && workingDistance > 0 ? fuel.cost / workingDistance : null;
 
-  return { actualDistance, estimatedDistance, workingDistance, distanceSource: getDistanceSourceLabel(trip), fuel, differenceKm, differencePercent, kmPerLitre, costPerKm };
+  return { actualDistance, manualDistance, odometerActualDistance, estimatedDistance, workingDistance, distanceSource: getDistanceSourceLabel(trip), fuel, differenceKm, differencePercent, kmPerLitre, costPerKm };
 }
 
-function hasValidActiveFuel(trip: TripJourneyWithFuel, metrics = getTripMetrics(trip)) {
+function hasManualFuelConfirmation(trip: Pick<TripJourneyWithFuel, "fuel_source" | "manual_litres_used" | "manual_fuel_cost" | "extra_route_notes" | "waiting_idle_notes">) {
   if (trip.fuel_source === "manual") {
-    return (trip.manual_litres_used ?? 0) > 0 && (trip.manual_fuel_cost ?? 0) > 0;
+    const hasManualValues = (trip.manual_litres_used ?? 0) > 0 || (trip.manual_fuel_cost ?? 0) > 0;
+    const notes = `${trip.extra_route_notes ?? ""} ${trip.waiting_idle_notes ?? ""}`.toLowerCase();
+    return hasManualValues || notes.includes("[fuel checked]") || notes.includes("fuel checked") || notes.includes("ตรวจน้ำมัน");
   }
-  return metrics.fuel.linkedLitres > 0 && metrics.fuel.linkedCost > 0;
+  return false;
+}
+
+function hasValidActiveFuel(trip: TripJourneyWithFuel, _metrics = getTripMetrics(trip)) {
+  return trip.linkedFuelLogs.length > 0 || hasManualFuelConfirmation(trip);
 }
 
 function getDerivedTripStatus(trip: TripJourneyWithFuel): DerivedTripStatus {
@@ -996,6 +1155,54 @@ function isCompletedTrip(trip: TripJourneyWithFuel) {
 
 function hasFuelEvent(trip: TripJourneyWithFuel) {
   return trip.linkedFuelLogs.length > 0 || hasValidActiveFuel(trip);
+}
+
+function getDistanceToleranceKm(estimatedKm: number | null | undefined) {
+  if (estimatedKm == null || estimatedKm <= 0) return null;
+  if (estimatedKm < 10) return 3;
+  if (estimatedKm <= 100) return estimatedKm * 0.15;
+  return estimatedKm * 0.1;
+}
+
+function getDistanceReview(metrics: ReturnType<typeof getTripMetrics>) {
+  if ((metrics.estimatedDistance ?? 0) <= 0) return { matched: false, needsReview: true };
+  if ((metrics.workingDistance ?? 0) <= 0) return { matched: false, needsReview: true };
+  if (metrics.differenceKm == null) return { matched: true, needsReview: false };
+  const tolerance = getDistanceToleranceKm(metrics.estimatedDistance);
+  if (tolerance == null) return { matched: false, needsReview: true };
+  const matched = Math.abs(metrics.differenceKm) <= tolerance;
+  return { matched, needsReview: !matched };
+}
+
+function getFuelReviewStatus(trip: TripJourneyWithFuel, possibleFuelLogs: FuelLogWithDriver[] = [], fuelCycle: FuelCycle | null = null): FuelReviewStatus {
+  if (trip.linkedFuelLogs.length > 0) return fuelCycle ? "cycle" : "linked";
+  if (hasManualFuelConfirmation(trip)) return "manual";
+  if (possibleFuelLogs.length > 0) return "possible";
+  return "not_linked";
+}
+
+function getFuelStatusLabel(status: FuelReviewStatus, copy: TripJourneyCopy = tripJourneyCopy.en) {
+  if (status === "cycle") return copy.fuelCycleLinked;
+  if (status === "linked") return copy.fuelLinked;
+  if (status === "manual") return copy.fuelManuallyConfirmed;
+  if (status === "possible") return copy.possibleFuelLogFound;
+  return copy.fuelNotLinked;
+}
+
+function fuelStatusClass(status: FuelReviewStatus) {
+  if (status === "linked" || status === "cycle" || status === "manual") return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  if (status === "possible") return "border-yellow-200 bg-yellow-50 text-yellow-800";
+  return "border-orange-200 bg-orange-50 text-orange-800";
+}
+
+function getTripJobStatus(trip: TripJourneyWithFuel): TripJobStatus {
+  const status = String(trip.status ?? "").toLowerCase();
+  if (status === "completed" || getActualDistance(trip) != null) return "completed";
+  const tripDate = trip.trip_date ? new Date(`${trip.trip_date}T00:00:00`) : null;
+  const todayDate = new Date();
+  todayDate.setHours(0, 0, 0, 0);
+  if (tripDate && !Number.isNaN(tripDate.getTime()) && tripDate <= todayDate) return "in_progress";
+  return "planned";
 }
 
 function hasWeeklyMileageForTrip(trip: TripJourneyWithFuel, weeklyMileage: WeeklyMileageEntry[]) {
@@ -1060,6 +1267,70 @@ function getOperationalStatus(
   return { label: weeklyCheck.label, tone: weeklyCheck.tone };
 }
 
+function getTripDataReadiness(
+  trip: TripJourneyWithFuel,
+  weeklyMileage: WeeklyMileageEntry[],
+  copy: TripJourneyCopy = tripJourneyCopy.en,
+  comparisonTrips: TripJourneyWithFuel[] = [trip],
+  possibleFuelLogs: FuelLogWithDriver[] = [],
+  fuelCycle: FuelCycle | null = null
+) {
+  const metrics = getTripMetrics(trip);
+  const bookingLinked = Boolean(trip.booking_id || trip.booking_diary_id || trip.booking_reference);
+  const hasEstimate = (metrics.estimatedDistance ?? 0) > 0;
+  const hasWorkingDistance = (metrics.workingDistance ?? 0) > 0;
+  const fuelOk = hasFuelEvent(trip);
+  const weeklyCheck = getWeeklyMileageCheck(trip, comparisonTrips, weeklyMileage, copy);
+  const mileageVerifiedByFuelCycle = isFuelCycleMileageVerified(fuelCycle);
+  const weeklyOk = weeklyCheck.label === copy.weeklyMileageOk || mileageVerifiedByFuelCycle;
+  const distanceReview = getDistanceReview(metrics);
+  const issues = {
+    booking: !bookingLinked,
+    estimate: !hasEstimate,
+    fuel: !fuelOk,
+    possibleFuel: !fuelOk && possibleFuelLogs.length > 0,
+    mileage: !hasWorkingDistance,
+    weeklyMileage: !weeklyOk,
+    distanceConflict: distanceReview.needsReview && hasEstimate && hasWorkingDistance
+  };
+
+  let status: TripDataStatus = "data_ready";
+  if (issues.estimate) status = "missing_estimate";
+  if (issues.mileage) status = "missing_distance";
+  if (issues.fuel || issues.possibleFuel) status = "needs_fuel_check";
+  if (issues.weeklyMileage) status = "needs_mileage_check";
+  if (issues.booking || issues.distanceConflict || Object.values(issues).filter(Boolean).length > 1) status = "needs_review";
+
+  let label =
+    status === "data_ready"
+      ? copy.dataReady
+      : status === "needs_fuel_check"
+        ? copy.needsFuelCheck
+        : status === "needs_mileage_check"
+          ? copy.needsMileageCheck
+          : status === "missing_estimate"
+            ? copy.missingEstimate
+            : status === "missing_distance"
+              ? copy.missingDistance
+              : copy.needsReviewStatus;
+  const fuelCycleCoverage = getFuelCycleCoverage(fuelCycle, comparisonTrips);
+  if (status === "data_ready" && mileageVerifiedByFuelCycle && fuelCycleCoverage?.coveragePercent != null && fuelCycleCoverage.coveragePercent < 100) {
+    label = copy.dataChecked;
+  }
+  const tone: "green" | "amber" | "slate" = status === "data_ready" ? "green" : status === "needs_review" ? "amber" : "amber";
+
+  return { status, label, tone, issues, weeklyCheck, mileageVerifiedByFuelCycle };
+}
+
+function getMileageVerificationLabel(
+  dataReadiness: ReturnType<typeof getTripDataReadiness>,
+  weeklyCheckLabel: string,
+  copy: TripJourneyCopy = tripJourneyCopy.en
+) {
+  if (dataReadiness.issues.weeklyMileage) return weeklyCheckLabel;
+  return dataReadiness.mileageVerifiedByFuelCycle ? copy.fuelCycleMileageVerified : copy.weeklyMileageVerified;
+}
+
 function normalizeVehicleKey(value: string | null | undefined) {
   return String(value ?? "").trim().toLowerCase().replace(/\s+/g, "");
 }
@@ -1076,6 +1347,10 @@ function getWeekKey(value: string | null | undefined) {
 
 type FuelCycle = {
   key: string;
+  startFuelLogId: string;
+  endFuelLogId: string;
+  startFuelLog: FuelLogWithDriver;
+  endFuelLog: FuelLogWithDriver;
   driver: string;
   vehicleReg: string;
   startDate: string;
@@ -1085,6 +1360,8 @@ type FuelCycle = {
   distanceKm: number;
   litres: number;
   cost: number;
+  mileageValid: boolean;
+  receiptsChecked: boolean;
   kmPerLitre: number | null;
   costPerKm: number | null;
 };
@@ -1111,12 +1388,16 @@ function buildFuelCycles(fuelLogs: FuelLogWithDriver[]): FuelCycle[] {
       const end = sorted[index + 1];
       const startMileage = Number(start.mileage || 0);
       const endMileage = Number(end.mileage || 0);
-      if (endMileage <= startMileage) continue;
-      const distanceKm = endMileage - startMileage;
+      const mileageValid = endMileage > startMileage;
+      const distanceKm = mileageValid ? endMileage - startMileage : 0;
       const litres = Number(end.litres || 0);
       const cost = Number(end.total_cost || 0);
       cycles.push({
         key: `${key}|${start.id}|${end.id}`,
+        startFuelLogId: String(start.id),
+        endFuelLogId: String(end.id),
+        startFuelLog: start,
+        endFuelLog: end,
         driver: end.driver || start.driver || "",
         vehicleReg: end.vehicle_reg || start.vehicle_reg || "",
         startDate: start.date,
@@ -1126,6 +1407,8 @@ function buildFuelCycles(fuelLogs: FuelLogWithDriver[]): FuelCycle[] {
         distanceKm,
         litres,
         cost,
+        mileageValid,
+        receiptsChecked: Boolean(start.receipt_checked) && Boolean(end.receipt_checked),
         kmPerLitre: litres > 0 ? distanceKm / litres : null,
         costPerKm: distanceKm > 0 && cost > 0 ? cost / distanceKm : null
       });
@@ -1142,6 +1425,107 @@ function getFuelCycleForTrip(trip: TripJourneyWithFuel, cycles: FuelCycle[]) {
     if (driver && normalizeVehicleKey(cycle.driver) && normalizeVehicleKey(cycle.driver) !== driver) return false;
     return trip.trip_date >= cycle.startDate && trip.trip_date <= cycle.endDate;
   }) ?? null;
+}
+
+function isFuelCycleMileageVerified(cycle: FuelCycle | null) {
+  return Boolean(cycle && cycle.receiptsChecked && cycle.mileageValid && cycle.distanceKm > 0);
+}
+
+function isTripLinkedToFuelCycle(trip: TripJourneyWithFuel, cycle: FuelCycle) {
+  const cycleFuelLogIds = new Set([cycle.startFuelLogId, cycle.endFuelLogId]);
+  return trip.linkedFuelLogs.some((log) => cycleFuelLogIds.has(String(log.id)));
+}
+
+function getFuelCycleCoverage(cycle: FuelCycle | null, trips: TripJourneyWithFuel[]) {
+  if (!cycle) {
+    return null;
+  }
+
+  const linkedTrips = trips.filter((trip) => {
+    const sameVehicle = normalizeVehicleKey(trip.vehicle_reg || trip.vehicle_type || "") === normalizeVehicleKey(cycle.vehicleReg);
+    if (!sameVehicle) return false;
+    if (trip.trip_date < cycle.startDate || trip.trip_date > cycle.endDate) return false;
+    return isTripLinkedToFuelCycle(trip, cycle);
+  });
+  const linkedDistance = linkedTrips.reduce((sum, trip) => sum + (getTripMetrics(trip).workingDistance ?? 0), 0);
+  const unallocatedDistance = Math.max(cycle.distanceKm - linkedDistance, 0);
+  const coveragePercent = cycle.distanceKm > 0 ? Math.min(100, (linkedDistance / cycle.distanceKm) * 100) : null;
+
+  return { linkedTrips, linkedDistance, unallocatedDistance, coveragePercent };
+}
+
+function getIncompleteLinkedFuelLog(trip: TripJourneyWithFuel, fuelLogs: FuelLogWithDriver[], cycle: FuelCycle | null) {
+  if (cycle || trip.linkedFuelLogs.length === 0) return null;
+  const vehicle = normalizeVehicleKey(trip.vehicle_reg || trip.vehicle_type || "");
+  const driver = normalizeVehicleKey(trip.driver || "");
+  const sortedLogs = [...fuelLogs]
+    .filter((log) => normalizeVehicleKey(log.vehicle_reg) === vehicle && Number(log.mileage || 0) > 0)
+    .filter((log) => !driver || !normalizeVehicleKey(log.driver) || normalizeVehicleKey(log.driver) === driver)
+    .sort((left, right) => {
+      const dateCompare = left.date.localeCompare(right.date);
+      if (dateCompare !== 0) return dateCompare;
+      return Number(left.mileage || 0) - Number(right.mileage || 0);
+    });
+
+  for (const linkedLog of trip.linkedFuelLogs) {
+    if (Number(linkedLog.mileage || 0) <= 0) continue;
+    const linkedIndex = sortedLogs.findIndex((log) => String(log.id) === String(linkedLog.id));
+    if (linkedIndex >= 0 && linkedIndex === sortedLogs.length - 1) return linkedLog;
+  }
+
+  return null;
+}
+
+function getFuelCycleVerificationState(
+  cycle: FuelCycle | null,
+  copy: TripJourneyCopy,
+  incompleteLog: FuelLogWithDriver | null = null
+) {
+  if (!cycle) {
+    return incompleteLog
+      ? {
+          title: copy.fuelCycleNotCompleteYet,
+          status: copy.waitingForNextFuelLog,
+          tone: "amber" as const,
+          pendingNotes: [copy.waitingForNextFuelLog]
+        }
+      : {
+          title: copy.fuelCycleNotVerified,
+          status: copy.mileageCheckPending,
+          tone: "slate" as const,
+          pendingNotes: [copy.waitingForNextFuelLog]
+        };
+  }
+
+  if (!cycle.mileageValid) {
+    return {
+      title: copy.fuelCycleAvailable,
+      status: copy.mileageNeedsReview,
+      tone: "amber" as const,
+      pendingNotes: [copy.mileageNeedsReview]
+    };
+  }
+
+  const pendingNotes = [
+    !cycle.startFuelLog.receipt_checked ? `${formatDate(cycle.startFuelLog.date)} ${cycle.startFuelLog.vehicle_reg || ""}: ${copy.needsFuelLogReceiptCheck}` : "",
+    !cycle.endFuelLog.receipt_checked ? `${formatDate(cycle.endFuelLog.date)} ${cycle.endFuelLog.vehicle_reg || ""}: ${copy.needsFuelLogReceiptCheck}` : ""
+  ].filter(Boolean);
+
+  if (pendingNotes.length > 0) {
+    return {
+      title: copy.fuelCycleAvailable,
+      status: copy.mileageCheckPending,
+      tone: "amber" as const,
+      pendingNotes
+    };
+  }
+
+  return {
+    title: copy.fuelCycleVerified,
+    status: copy.mileageCheckAvailable,
+    tone: "green" as const,
+    pendingNotes: [] as string[]
+  };
 }
 
 function getHealthBadgeClass(label: string, copy: TripJourneyCopy = tripJourneyCopy.en) {
@@ -1181,10 +1565,11 @@ function getTripHealthLabel(
   return copy.good;
 }
 
-function getPerformanceLabel(row: Pick<PerformanceRow, "completedTrips" | "estimatedKm" | "averageDifferenceKm">, copy: TripJourneyCopy = tripJourneyCopy.en) {
-  if (row.completedTrips === 0) return copy.needsMoreData;
+function getPerformanceLabel(row: Pick<PerformanceRow, "completedTrips" | "verifiedTrips" | "estimatedKm" | "averageDifferenceKm">, copy: TripJourneyCopy = tripJourneyCopy.en) {
+  const comparisonTrips = row.verifiedTrips;
+  if (comparisonTrips === 0) return copy.needsMoreData;
   if (row.estimatedKm <= 0 || row.averageDifferenceKm == null) return copy.limitedData;
-  const percent = Math.abs(row.averageDifferenceKm) / (row.estimatedKm / row.completedTrips);
+  const percent = Math.abs(row.averageDifferenceKm) / (row.estimatedKm / comparisonTrips);
   if (percent <= 0.1) return copy.good;
   if (percent <= 0.2) return copy.overEstimate;
   return copy.needsReview;
@@ -1351,27 +1736,26 @@ function getFormMetrics(form: TripForm, linkedFuelLogs: FuelLogWithDriver[], cop
   const startMileage = toNumber(form.start_mileage);
   const endMileage = toNumber(form.end_mileage);
   const manualActualKm = toNumber(form.manual_actual_km);
-  const actualDistance =
-    manualActualKm != null && manualActualKm > 0
-      ? manualActualKm
-      : startMileage != null && endMileage != null && endMileage > startMileage
-        ? endMileage - startMileage
-        : null;
+  const odometerActualDistance = startMileage != null && endMileage != null && endMileage > startMileage ? endMileage - startMileage : null;
+  const manualDistance = manualActualKm != null && manualActualKm > 0 ? manualActualKm : null;
+  const actualDistance = odometerActualDistance;
   const estimatedDistance = getEffectiveEstimatedKm(form);
-  const workingDistance = actualDistance ?? estimatedDistance;
+  const workingDistance = manualDistance ?? odometerActualDistance ?? estimatedDistance;
   const linkedLitres = linkedFuelLogs.reduce((sum, log) => sum + Number(log.litres || 0), 0);
   const linkedCost = linkedFuelLogs.reduce((sum, log) => sum + Number(log.total_cost || 0), 0);
   const fuelLitres = form.fuel_source === "manual" ? toNumber(form.manual_litres_used) : linkedLitres || null;
   const fuelCost = form.fuel_source === "manual" ? toNumber(form.manual_fuel_cost) : linkedCost || null;
   return {
     actualDistance,
+    odometerActualDistance,
+    manualDistance,
     estimatedDistance,
     workingDistance,
-    differenceKm: actualDistance != null && estimatedDistance != null ? actualDistance - estimatedDistance : null,
+    differenceKm: workingDistance != null && estimatedDistance != null ? workingDistance - estimatedDistance : null,
     fuelLitres,
     fuelCost,
-    kmPerLitre: actualDistance != null && fuelLitres != null && fuelLitres > 0 ? actualDistance / fuelLitres : null,
-    costPerKm: actualDistance != null && actualDistance > 0 && fuelCost != null ? fuelCost / actualDistance : null,
+    kmPerLitre: workingDistance != null && fuelLitres != null && fuelLitres > 0 ? workingDistance / fuelLitres : null,
+    costPerKm: workingDistance != null && workingDistance > 0 && fuelCost != null ? fuelCost / workingDistance : null,
     actualSource: manualActualKm != null && manualActualKm > 0
       ? copy.sourceManualActualKm
       : startMileage != null && endMileage != null && endMileage > startMileage
@@ -1396,15 +1780,39 @@ function statusClass(status: string) {
   return "border-amber-200 bg-amber-50 text-amber-800";
 }
 
-function isSuggestedFuelLog(trip: TripJourneyWithFuel, log: FuelLogWithDriver, linkedFuelLogIds: Set<string>) {
-  if (linkedFuelLogIds.has(String(log.id))) return false;
-  const sameVehicle = trip.vehicle_reg && log.vehicle_reg && trip.vehicle_reg === log.vehicle_reg;
+function tripJobStatusLabel(status: TripJobStatus, copy: TripJourneyCopy = tripJourneyCopy.en) {
+  if (status === "completed") return copy.completed;
+  if (status === "in_progress") return copy.inProgress;
+  return copy.planned;
+}
+
+function tripJobStatusClass(status: TripJobStatus) {
+  if (status === "completed") return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  if (status === "in_progress") return "border-brand-200 bg-brand-50 text-brand-800";
+  return "border-slate-200 bg-slate-50 text-slate-700";
+}
+
+function dataStatusClass(status: TripDataStatus) {
+  if (status === "data_ready") return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  if (status === "needs_review") return "border-amber-200 bg-amber-50 text-amber-800";
+  if (status === "needs_fuel_check") return "border-orange-200 bg-orange-50 text-orange-800";
+  if (status === "missing_estimate" || status === "missing_distance") return "border-amber-200 bg-amber-50 text-amber-800";
+  return "border-yellow-200 bg-yellow-50 text-yellow-800";
+}
+
+function isFuelLogLinkedToTrip(trip: TripJourneyWithFuel, log: FuelLogWithDriver) {
+  return trip.linkedFuelLogs.some((linkedLog) => String(linkedLog.id) === String(log.id));
+}
+
+function isSuggestedFuelLog(trip: TripJourneyWithFuel, log: FuelLogWithDriver) {
+  if (isFuelLogLinkedToTrip(trip, log)) return false;
+  const sameVehicle = trip.vehicle_reg && log.vehicle_reg && normalizeVehicleKey(trip.vehicle_reg) === normalizeVehicleKey(log.vehicle_reg);
   const sameDriver = trip.driver && log.driver && trip.driver.toLowerCase() === log.driver.toLowerCase();
   const tripDate = new Date(`${trip.trip_date}T00:00:00`).getTime();
   const fuelDate = new Date(`${log.date}T00:00:00`).getTime();
   if (!Number.isFinite(tripDate) || !Number.isFinite(fuelDate)) return false;
   const daysApart = Math.abs(tripDate - fuelDate) / (24 * 60 * 60 * 1000);
-  return Boolean(daysApart <= 3 && (sameVehicle || (!trip.vehicle_reg && sameDriver)));
+  return Boolean(daysApart <= 3 && (sameVehicle || sameDriver));
 }
 
 function getFuelLogMatchScore(trip: TripJourneyWithFuel, log: FuelLogWithDriver) {
@@ -1416,6 +1824,14 @@ function getFuelLogMatchScore(trip: TripJourneyWithFuel, log: FuelLogWithDriver)
     ? Math.abs(tripDate - fuelDate) / (24 * 60 * 60 * 1000)
     : 999;
   return sameVehicle + sameDriver - daysApart;
+}
+
+function getPossibleFuelLogsForTrip(trip: TripJourneyWithFuel, fuelLogs: FuelLogWithDriver[], fuelCycle: FuelCycle | null = null) {
+  const cycleFuelLogIds = fuelCycle ? new Set([fuelCycle.startFuelLogId, fuelCycle.endFuelLogId]) : new Set<string>();
+  return fuelLogs
+    .filter((log) => !cycleFuelLogIds.has(String(log.id)))
+    .filter((log) => isSuggestedFuelLog(trip, log))
+    .sort((a, b) => getFuelLogMatchScore(trip, b) - getFuelLogMatchScore(trip, a));
 }
 
 function getFriendlyTripError(err: unknown, copy: TripJourneyCopy = tripJourneyCopy.en) {
@@ -1556,27 +1972,40 @@ export default function TripJourneyPage() {
     setVisibleTripCount(10);
   }, [attentionFilter, filters]);
 
-  const linkedFuelLogIds = useMemo(
-    () => new Set(trips.flatMap((trip) => trip.linkedFuelLogs.map((log) => String(log.id)))),
+  const fuelLogTripCounts = useMemo(
+    () =>
+      trips.reduce((map, trip) => {
+        trip.linkedFuelLogs.forEach((log) => {
+          const id = String(log.id);
+          map.set(id, (map.get(id) ?? 0) + 1);
+        });
+        return map;
+      }, new Map<string, number>()),
     [trips]
   );
   const selectedTrip = useMemo(
     () => trips.find((trip) => trip.id === selectedTripId) ?? null,
     [selectedTripId, trips]
   );
+  const fuelCycles = useMemo(() => buildFuelCycles(fuelLogs), [fuelLogs]);
+  const selectedTripFuelCycle = useMemo(
+    () => (selectedTrip ? getFuelCycleForTrip(selectedTrip, fuelCycles) : null),
+    [fuelCycles, selectedTrip]
+  );
   const suggestedFuelLogs = useMemo(
     () =>
       selectedTrip
         ? fuelLogs
-            .filter((log) => isSuggestedFuelLog(selectedTrip, log, linkedFuelLogIds))
+            .filter((log) => !new Set([selectedTripFuelCycle?.startFuelLogId, selectedTripFuelCycle?.endFuelLogId].filter(Boolean) as string[]).has(String(log.id)))
+            .filter((log) => isSuggestedFuelLog(selectedTrip, log))
             .sort((a, b) => getFuelLogMatchScore(selectedTrip, b) - getFuelLogMatchScore(selectedTrip, a))
         : [],
-    [fuelLogs, linkedFuelLogIds, selectedTrip]
+    [fuelLogs, selectedTrip, selectedTripFuelCycle]
   );
   const manualFuelLogMatches = useMemo(() => {
     const query = manualFuelSearch.trim().toLowerCase();
     return fuelLogs
-      .filter((log) => !linkedFuelLogIds.has(String(log.id)))
+      .filter((log) => !selectedTrip || !isFuelLogLinkedToTrip(selectedTrip, log))
       .filter((log) => !suggestedFuelLogs.some((suggested) => String(suggested.id) === String(log.id)))
       .filter((log) => !manualFuelDate || log.date === manualFuelDate)
       .filter((log) => {
@@ -1588,7 +2017,7 @@ export default function TripJourneyPage() {
           .includes(query);
       })
       .sort((a, b) => selectedTrip ? getFuelLogMatchScore(selectedTrip, b) - getFuelLogMatchScore(selectedTrip, a) : 0);
-  }, [fuelLogs, linkedFuelLogIds, manualFuelDate, manualFuelSearch, selectedTrip, suggestedFuelLogs]);
+  }, [fuelLogs, manualFuelDate, manualFuelSearch, selectedTrip, suggestedFuelLogs]);
   const manualFuelLogOptions = useMemo(
     () => manualFuelLogMatches.slice(0, visibleManualFuelLogCount),
     [manualFuelLogMatches, visibleManualFuelLogCount]
@@ -1596,30 +2025,34 @@ export default function TripJourneyPage() {
 
   const baseFilteredTrips = useMemo(() => {
     return trips.filter((trip) => {
-      const derivedStatus = getDerivedTripStatus(trip);
-      const missing = derivedStatus !== "completed";
+      const fuelCycle = getFuelCycleForTrip(trip, fuelCycles);
+      const possibleFuelLogs = getPossibleFuelLogsForTrip(trip, fuelLogs, fuelCycle);
+      const dataReadiness = getTripDataReadiness(trip, weeklyMileage, copy, trips, possibleFuelLogs, fuelCycle);
+      const missing = dataReadiness.status !== "data_ready";
       return (
         (!filters.fromDate || trip.trip_date >= filters.fromDate) &&
         (!filters.toDate || trip.trip_date <= filters.toDate) &&
         (!filters.driver || trip.driver === filters.driver) &&
         (!filters.vehicle || trip.vehicle_reg === filters.vehicle) &&
         (!filters.route || (trip.route ?? "").toLowerCase().includes(filters.route.toLowerCase())) &&
-        (filters.dataStatus === "all" || (filters.dataStatus === "missing" ? missing : derivedStatus === "completed")) &&
+        (filters.dataStatus === "all" || (filters.dataStatus === "missing" ? missing : dataReadiness.status === "data_ready")) &&
         (filters.fuelLink === "all" ||
           (filters.fuelLink === "linked" ? trip.linkedFuelLogs.length > 0 : trip.linkedFuelLogs.length === 0))
       );
     }).sort((a, b) => (b.trip_date || "").localeCompare(a.trip_date || ""));
-  }, [filters, trips]);
+  }, [copy, filters, fuelCycles, fuelLogs, trips, weeklyMileage]);
 
   const filteredTrips = useMemo(() => {
     return baseFilteredTrips.filter((trip) => {
       const metrics = getTripMetrics(trip);
       if (attentionFilter === "missing_mileage") return (metrics.workingDistance ?? 0) <= 0;
       if (attentionFilter === "missing_estimate") return (metrics.estimatedDistance ?? 0) <= 0;
-      if (attentionFilter === "missing_fuel") return !hasValidActiveFuel(trip, metrics);
+      const fuelCycle = getFuelCycleForTrip(trip, fuelCycles);
+      if (attentionFilter === "missing_fuel") return !hasValidActiveFuel(trip, metrics) || getPossibleFuelLogsForTrip(trip, fuelLogs, fuelCycle).length > 0;
+      if (attentionFilter === "missing_weekly_mileage") return getTripDataReadiness(trip, weeklyMileage, copy, baseFilteredTrips, [], fuelCycle).issues.weeklyMileage;
       return true;
     });
-  }, [attentionFilter, baseFilteredTrips]);
+  }, [attentionFilter, baseFilteredTrips, copy, fuelCycles, fuelLogs, weeklyMileage]);
 
   const visibleTrips = useMemo(
     () => filteredTrips.slice(0, visibleTripCount),
@@ -1645,21 +2078,21 @@ export default function TripJourneyPage() {
   }, [selectedTripId, visibleTrips]);
 
   const summary = useMemo(() => {
-    const fuelCycles = buildFuelCycles(fuelLogs);
     const completed = baseFilteredTrips.filter(isCompletedTrip);
     const totalActual = baseFilteredTrips.reduce((sum, trip) => sum + (getTripMetrics(trip).workingDistance ?? 0), 0);
     const totalEstimated = baseFilteredTrips.reduce((sum, trip) => sum + (getTripMetrics(trip).estimatedDistance ?? 0), 0);
     const fuelEventTrips = baseFilteredTrips.filter(hasFuelEvent);
     const fuelCycleTrips = baseFilteredTrips.filter((trip) => getFuelCycleForTrip(trip, fuelCycles));
-    const weeklyMileageTrips = baseFilteredTrips.filter((trip) => hasWeeklyMileageForTrip(trip, weeklyMileage));
-    const verifiedTrips = baseFilteredTrips.filter((trip) => {
-      const status = getOperationalStatus(trip, weeklyMileage, copy, baseFilteredTrips);
-      return status.label === copy.verified;
+    const weeklyMileageTrips = baseFilteredTrips.filter((trip) => hasWeeklyMileageForTrip(trip, weeklyMileage) || isFuelCycleMileageVerified(getFuelCycleForTrip(trip, fuelCycles)));
+    const readyTrips = baseFilteredTrips.filter((trip) => {
+      const fuelCycle = getFuelCycleForTrip(trip, fuelCycles);
+      return getTripDataReadiness(trip, weeklyMileage, copy, baseFilteredTrips, getPossibleFuelLogsForTrip(trip, fuelLogs, fuelCycle), fuelCycle).status === "data_ready";
     });
     const totalLitres = fuelLogs.reduce((sum, log) => sum + Number(log.litres || 0), 0);
     const totalCost = fuelLogs.reduce((sum, log) => sum + Number(log.total_cost || 0), 0);
     const averageKmPerLitre = null;
     const completedActual = completed.reduce((sum, trip) => sum + (getTripMetrics(trip).workingDistance ?? 0), 0);
+    const verifiedWorkingKm = readyTrips.reduce((sum, trip) => sum + (getTripMetrics(trip).workingDistance ?? 0), 0);
     const averageCostPerKm = null;
     const averageDifference =
       completed.length > 0
@@ -1692,21 +2125,30 @@ export default function TripJourneyPage() {
         }, new Map<string, { name: string; trips: TripJourneyWithFuel[] }>())
       ).map(([, row]) => {
         const completedTrips = row.trips.filter(isCompletedTrip);
-        const actualKm = completedTrips.reduce((sum, trip) => sum + (getTripMetrics(trip).workingDistance ?? 0), 0);
-        const estimatedKm = completedTrips.reduce((sum, trip) => sum + (getTripMetrics(trip).estimatedDistance ?? 0), 0);
-        const litres = completedTrips.reduce((sum, trip) => sum + (getTripMetrics(trip).fuel.litres ?? 0), 0);
-        const cost = completedTrips.reduce((sum, trip) => sum + (getTripMetrics(trip).fuel.cost ?? 0), 0);
-        const diff = completedTrips.reduce((sum, trip) => sum + (getTripMetrics(trip).differenceKm ?? 0), 0);
+        const verifiedTrips = completedTrips.filter((trip) => {
+          const fuelCycle = getFuelCycleForTrip(trip, fuelCycles);
+          return getTripDataReadiness(trip, weeklyMileage, copy, baseFilteredTrips, getPossibleFuelLogsForTrip(trip, fuelLogs, fuelCycle), fuelCycle).status === "data_ready";
+        });
+        const totalWorkingKm = completedTrips.reduce((sum, trip) => sum + (getTripMetrics(trip).workingDistance ?? 0), 0);
+        const verifiedWorkingKm = verifiedTrips.reduce((sum, trip) => sum + (getTripMetrics(trip).workingDistance ?? 0), 0);
+        const actualKm = verifiedWorkingKm;
+        const estimatedKm = verifiedTrips.reduce((sum, trip) => sum + (getTripMetrics(trip).estimatedDistance ?? 0), 0);
+        const litres = verifiedTrips.reduce((sum, trip) => sum + (getTripMetrics(trip).fuel.litres ?? 0), 0);
+        const cost = verifiedTrips.reduce((sum, trip) => sum + (getTripMetrics(trip).fuel.cost ?? 0), 0);
+        const diff = verifiedTrips.reduce((sum, trip) => sum + (getTripMetrics(trip).differenceKm ?? 0), 0);
         return {
           ...row,
           completedTrips: completedTrips.length,
+          verifiedTrips: verifiedTrips.length,
+          totalWorkingKm,
+          verifiedWorkingKm,
           actualKm,
           estimatedKm,
           litres,
           cost,
           kmPerLitre: litres > 0 ? actualKm / litres : null,
           costPerKm: actualKm > 0 ? cost / actualKm : null,
-          averageDifferenceKm: completedTrips.length ? diff / completedTrips.length : null,
+          averageDifferenceKm: verifiedTrips.length ? diff / verifiedTrips.length : null,
           performanceLabel: copy.average
         };
       });
@@ -1721,7 +2163,7 @@ export default function TripJourneyPage() {
       averageActualKm: row.completedTrips ? row.actualKm / row.completedTrips : null,
       averageEstimatedKm: row.completedTrips ? row.estimatedKm / row.completedTrips : null,
       averageFuelCost: row.completedTrips ? row.cost / row.completedTrips : null,
-      performanceLabel: row.completedTrips <= 1 ? copy.limitedData : row.performanceLabel
+      performanceLabel: row.verifiedTrips <= 1 ? copy.limitedData : row.performanceLabel
     }));
     const tripRows: TripComparisonRow[] = baseFilteredTrips.map((trip) => {
       const metrics = getTripMetrics(trip);
@@ -1754,7 +2196,7 @@ export default function TripJourneyPage() {
               100,
               completionPercentage * 0.55 +
                 routeAccuracyScore * 0.25 +
-                (verifiedTrips.length / baseFilteredTrips.length) * 100 * 0.2
+                (readyTrips.length / baseFilteredTrips.length) * 100 * 0.2
             )
           )
         : 0
@@ -1787,13 +2229,18 @@ export default function TripJourneyPage() {
       missingDataTrips: baseFilteredTrips.filter((trip) => !isCompletedTrip(trip)).length,
       missingMileage: baseFilteredTrips.filter((trip) => (getTripMetrics(trip).workingDistance ?? 0) <= 0).length,
       missingEstimate: baseFilteredTrips.filter((trip) => (getTripMetrics(trip).estimatedDistance ?? 0) <= 0).length,
-      missingFuel: baseFilteredTrips.filter((trip) => !hasFuelEvent(trip)).length,
-      missingWeeklyMileage: baseFilteredTrips.filter((trip) => !hasWeeklyMileageForTrip(trip, weeklyMileage)).length,
+      missingFuel: baseFilteredTrips.filter((trip) => {
+        const fuelCycle = getFuelCycleForTrip(trip, fuelCycles);
+        return !hasFuelEvent(trip) || getPossibleFuelLogsForTrip(trip, fuelLogs, fuelCycle).length > 0;
+      }).length,
+      missingWeeklyMileage: baseFilteredTrips.filter((trip) => getTripDataReadiness(trip, weeklyMileage, copy, baseFilteredTrips, [], getFuelCycleForTrip(trip, fuelCycles)).issues.weeklyMileage).length,
       fuelEventTrips: fuelEventTrips.length,
       fuelCycles: fuelCycles.length,
       fuelCycleTrips: fuelCycleTrips.length,
       weeklyMileageTrips: weeklyMileageTrips.length,
-      verifiedTrips: verifiedTrips.length,
+      verifiedTrips: readyTrips.length,
+      completedWorkingKm: completedActual,
+      verifiedWorkingKm,
       totalActual,
       totalEstimated,
       totalLitres,
@@ -1819,7 +2266,7 @@ export default function TripJourneyPage() {
       monthlyTrends,
       dataQualityNotes
     };
-  }, [baseFilteredTrips, copy, fuelLogs, weeklyMileage]);
+  }, [baseFilteredTrips, copy, fuelCycles, fuelLogs, weeklyMileage]);
 
   const sortedDriverRows = useMemo(() => sortPerformanceRows(summary.driverRows, comparisonSort), [comparisonSort, summary.driverRows]);
   const sortedVehicleRows = useMemo(() => sortPerformanceRows(summary.vehicleRows, comparisonSort), [comparisonSort, summary.vehicleRows]);
@@ -2250,6 +2697,24 @@ export default function TripJourneyPage() {
     }
   };
 
+  const handleManualFuelConfirm = async () => {
+    if (!form) return;
+    const note = `[Fuel checked] ${copy.manualFuelConfirmationNote}`;
+    setHasUnsavedChanges(true);
+    setForm((current) => {
+      if (!current) return current;
+      const existingNotes = current.extra_route_notes.trim();
+      return {
+        ...current,
+        fuel_source: "manual",
+        extra_route_notes: existingNotes.toLowerCase().includes("fuel checked")
+          ? current.extra_route_notes
+          : [existingNotes, note].filter(Boolean).join("\n")
+      };
+    });
+    setNotice(copy.fuelManuallyConfirmed);
+  };
+
   return (
     <div className="space-y-5">
       <div className="hidden md:block">
@@ -2309,7 +2774,7 @@ export default function TripJourneyPage() {
             <p className="text-sm font-semibold text-slate-500">{copy.fleetDistance}</p>
           </div>
           <div className="mt-3 grid grid-cols-2 gap-3">
-            <div className={metricTileClass("purple")}><p className="text-xs font-semibold opacity-80">{copy.actualKm}</p><p className="text-xl font-bold text-slate-950">{formatNumber(summary.totalActual)}</p></div>
+            <div className={metricTileClass("purple")}><p className="text-xs font-semibold opacity-80">{copy.workingDistance}</p><p className="text-xl font-bold text-slate-950">{formatNumber(summary.totalActual)}</p></div>
             <div className={metricTileClass("slate")}><p className="text-xs font-semibold opacity-80">{copy.estimatedKm}</p><p className="text-xl font-bold text-slate-950">{formatNumber(summary.totalEstimated)}</p></div>
             <div className={metricTileClass("amber")}><p className="text-xs font-semibold opacity-80">{copy.difference}</p><p className="text-xl font-bold text-slate-950">{formatNumber(summary.averageDifference)} km</p></div>
             <div className={metricTileClass("green")}><p className="text-xs font-semibold opacity-80">{copy.routeAccuracy}</p><p className="text-xl font-bold text-slate-950">{formatNumber(summary.routeAccuracyScore)}%</p></div>
@@ -2324,7 +2789,7 @@ export default function TripJourneyPage() {
             <div className={metricTileClass(summary.missingFuel ? "amber" : "green")}><p className="text-xs font-semibold opacity-80">{copy.missingFuelEvent}</p><p className="text-xl font-bold text-slate-950">{summary.missingFuel}</p></div>
             <div className={metricTileClass(summary.missingWeeklyMileage ? "amber" : "green")}><p className="text-xs font-semibold opacity-80">{copy.missingWeeklyMileage}</p><p className="text-xl font-bold text-slate-950">{summary.missingWeeklyMileage}</p></div>
             <div className={metricTileClass("green")}><p className="text-xs font-semibold opacity-80">{copy.verifiedTrips}</p><p className="text-xl font-bold text-slate-950">{summary.verifiedTrips}</p></div>
-            <div className={metricTileClass("slate")}><p className="text-xs font-semibold opacity-80">{copy.fuelCycles}</p><p className="text-xl font-bold text-slate-950">{summary.fuelCycles}</p></div>
+            <div className={metricTileClass("slate")}><p className="text-xs font-semibold opacity-80">{copy.fuelCycles}</p><p className="text-xl font-bold text-slate-950">{summary.fuelCycles}</p><p className="mt-1 text-[11px] font-semibold leading-4 text-slate-500">{copy.fuelCyclesHelper}</p></div>
           </div>
         </div>
       </section>
@@ -2390,24 +2855,30 @@ export default function TripJourneyPage() {
             <h3 className="section-title">{copy.needsAttention}</h3>
             <p className="section-subtitle">{copy.needsAttentionDescription}</p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-3 lg:min-w-[640px]">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 lg:min-w-[760px]">
             <button type="button" onClick={() => setAttentionFilter("missing_mileage")} className={`rounded-lg border px-4 py-3 text-left transition ${attentionFilter === "missing_mileage" ? "border-brand-300 bg-brand-50 ring-2 ring-brand-100" : summary.missingMileage ? "border-amber-200 bg-amber-50 hover:border-amber-300" : "border-emerald-100 bg-emerald-50/60 hover:border-emerald-200"}`}>
               <p className={`text-xs font-semibold ${summary.missingMileage ? "text-amber-700" : "text-emerald-700"}`}>{copy.missingMileage}</p>
               <p className="mt-1 text-lg font-bold text-slate-950">{summary.missingMileage} {summary.missingMileage === 1 ? copy.trip : copy.trips}</p>
               <p className="mt-1 text-xs text-slate-500">{copy.actualKmNeeded}</p>
-              <span className="mt-3 inline-flex rounded-md bg-white/75 px-2.5 py-1 text-xs font-bold text-slate-700">{copy.viewTrips}</span>
+              <span className="mt-3 inline-flex rounded-md bg-white/75 px-2.5 py-1 text-xs font-bold text-slate-700">{copy.fixNow}</span>
             </button>
             <button type="button" onClick={() => setAttentionFilter("missing_estimate")} className={`rounded-lg border px-4 py-3 text-left transition ${attentionFilter === "missing_estimate" ? "border-brand-300 bg-brand-50 ring-2 ring-brand-100" : summary.missingEstimate ? "border-amber-200 bg-amber-50 hover:border-amber-300" : "border-emerald-100 bg-emerald-50/60 hover:border-emerald-200"}`}>
               <p className={`text-xs font-semibold ${summary.missingEstimate ? "text-amber-700" : "text-emerald-700"}`}>{copy.missingEstimate}</p>
               <p className="mt-1 text-lg font-bold text-slate-950">{summary.missingEstimate} {summary.missingEstimate === 1 ? copy.trip : copy.trips}</p>
               <p className="mt-1 text-xs text-slate-500">{copy.comparePlannedActual}</p>
-              <span className="mt-3 inline-flex rounded-md bg-white/75 px-2.5 py-1 text-xs font-bold text-slate-700">{copy.viewTrips}</span>
+              <span className="mt-3 inline-flex rounded-md bg-white/75 px-2.5 py-1 text-xs font-bold text-slate-700">{copy.fixNow}</span>
             </button>
             <button type="button" onClick={() => setAttentionFilter("missing_fuel")} className={`rounded-lg border px-4 py-3 text-left transition ${attentionFilter === "missing_fuel" ? "border-brand-300 bg-brand-50 ring-2 ring-brand-100" : summary.missingFuel ? "border-amber-200 bg-amber-50 hover:border-amber-300" : "border-emerald-100 bg-emerald-50/60 hover:border-emerald-200"}`}>
               <p className={`text-xs font-semibold ${summary.missingFuel ? "text-amber-700" : "text-emerald-700"}`}>{copy.missingFuel}</p>
               <p className="mt-1 text-lg font-bold text-slate-950">{summary.missingFuel} {summary.missingFuel === 1 ? copy.trip : copy.trips}</p>
               <p className="mt-1 text-xs text-slate-500">{copy.linkFuelLogsOrManual}</p>
-              <span className="mt-3 inline-flex rounded-md bg-white/75 px-2.5 py-1 text-xs font-bold text-slate-700">{copy.viewTrips}</span>
+              <span className="mt-3 inline-flex rounded-md bg-white/75 px-2.5 py-1 text-xs font-bold text-slate-700">{copy.fixNow}</span>
+            </button>
+            <button type="button" onClick={() => setAttentionFilter("missing_weekly_mileage")} className={`rounded-lg border px-4 py-3 text-left transition ${attentionFilter === "missing_weekly_mileage" ? "border-brand-300 bg-brand-50 ring-2 ring-brand-100" : summary.missingWeeklyMileage ? "border-amber-200 bg-amber-50 hover:border-amber-300" : "border-emerald-100 bg-emerald-50/60 hover:border-emerald-200"}`}>
+              <p className={`text-xs font-semibold ${summary.missingWeeklyMileage ? "text-amber-700" : "text-emerald-700"}`}>{copy.mileageNotVerified}</p>
+              <p className="mt-1 text-lg font-bold text-slate-950">{summary.missingWeeklyMileage} {summary.missingWeeklyMileage === 1 ? copy.trip : copy.trips}</p>
+              <p className="mt-1 text-xs text-slate-500">{copy.mileageVerification}</p>
+              <span className="mt-3 inline-flex rounded-md bg-white/75 px-2.5 py-1 text-xs font-bold text-slate-700">{copy.fixNow}</span>
             </button>
           </div>
         </div>
@@ -2418,6 +2889,17 @@ export default function TripJourneyPage() {
         ) : null}
       </section>
 
+      <details className="rounded-xl border border-slate-200 bg-white/95 p-4 shadow-sm shadow-slate-950/5">
+        <summary className="cursor-pointer list-none">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="section-title">{copy.reportsSecondary}</h3>
+              <p className="section-subtitle">{copy.reportsSecondaryDescription}</p>
+            </div>
+            <span className="text-xs font-bold uppercase tracking-[0.14em] text-brand-700">{copy.view}</span>
+          </div>
+        </summary>
+        <div className="mt-4 space-y-4">
       <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-950/5">
           <div className="flex items-center gap-3">
@@ -2505,6 +2987,8 @@ export default function TripJourneyPage() {
           </table>
         </div>
       </section>
+        </div>
+      </details>
 
       <section id="trip-records" className="scroll-mt-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -2526,54 +3010,87 @@ export default function TripJourneyPage() {
             {visibleTrips.map((trip) => {
               const metrics = getTripMetrics(trip);
               const derivedStatus = getDerivedTripStatus(trip);
-              const operationalStatus = getOperationalStatus(trip, weeklyMileage, copy, baseFilteredTrips);
+              const jobStatus = getTripJobStatus(trip);
+              const fuelCycle = getFuelCycleForTrip(trip, fuelCycles);
+              const possibleFuelLogs = getPossibleFuelLogsForTrip(trip, fuelLogs, fuelCycle);
+              const fuelCycleCoverage = getFuelCycleCoverage(fuelCycle, baseFilteredTrips);
+              const incompleteFuelLog = getIncompleteLinkedFuelLog(trip, fuelLogs, fuelCycle);
+              const fuelCycleState = getFuelCycleVerificationState(fuelCycle, copy, incompleteFuelLog);
+              const fuelStatus = getFuelReviewStatus(trip, possibleFuelLogs, fuelCycle);
+              const dataReadiness = getTripDataReadiness(trip, weeklyMileage, copy, baseFilteredTrips, possibleFuelLogs, fuelCycle);
+              const mileageVerificationLabel = getMileageVerificationLabel(dataReadiness, dataReadiness.weeklyCheck.label, copy);
               const fuelEventOk = hasFuelEvent(trip);
-              const weeklyCheck = getWeeklyMileageCheck(trip, baseFilteredTrips, weeklyMileage, copy);
-              const fuelCycle = getFuelCycleForTrip(trip, buildFuelCycles(fuelLogs));
               const bookingLinked = Boolean(trip.booking_id || trip.booking_diary_id || trip.booking_reference);
+              const distanceReview = getDistanceReview(metrics);
+              const attentionAction = dataReadiness.status === "needs_fuel_check" ? (fuelStatus === "possible" ? copy.reviewLinkFuelLog : copy.linkFuelLogAction) : statusActionText(derivedStatus, copy);
+              const topPossibleFuelLog = possibleFuelLogs[0] ?? null;
               return (
-                <article id={`trip-${trip.id}`} key={trip.id} className={`scroll-mt-6 rounded-xl border-l-4 px-4 py-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${getStatusAccent(derivedStatus)} ${selectedTripId === trip.id ? "border-brand-300 ring-2 ring-brand-200" : "border-slate-200 hover:border-brand-200"}`}>
+                <article id={`trip-${trip.id}`} key={trip.id} className={`scroll-mt-6 rounded-xl border-l-4 px-4 py-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${getStatusAccent(dataReadiness.status === "data_ready" ? "completed" : "missing_fuel")} ${selectedTripId === trip.id ? "border-brand-300 ring-2 ring-brand-200" : "border-slate-200 hover:border-brand-200"}`}>
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         {selectedTripId === trip.id ? <span className="rounded-full bg-brand-600 px-2.5 py-1 text-[11px] font-bold text-white">{copy.selectedTrip}</span> : null}
                         <p className="text-sm font-bold text-slate-950">{formatDate(trip.trip_date)}</p>
-                        <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${statusClass(derivedStatus)}`}>{statusLabel(derivedStatus, copy)}</span>
-                        <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${metricTileClass(operationalStatus.tone).replace("rounded-lg border px-3 py-2", "")}`}>{operationalStatus.label}</span>
+                        <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${tripJobStatusClass(jobStatus)}`}>{copy.tripStatus}: {tripJobStatusLabel(jobStatus, copy)}</span>
+                        <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${dataStatusClass(dataReadiness.status)}`}>{copy.dataStatus}: {dataReadiness.label}</span>
                       </div>
                       <p className="mt-2 truncate text-lg font-bold leading-6 text-slate-950" title={getRoutePreview(trip)}>{getShortRoutePreview(trip, copy)}</p>
                       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold text-slate-600">
                         <span>{copy.driver}: {trip.driver || "-"}</span>
                         <span>{copy.vehicle}: {trip.vehicle_reg || trip.vehicle_type || "-"}</span>
-                        <span>{copy.fuelLogs}: {trip.linkedFuelLogs.length ? `${trip.linkedFuelLogs.length} ${copy.linked}` : copy.noneLinked}</span>
+                        <span>{copy.estimatedKm}: {metrics.estimatedDistance == null ? "-" : `${formatNumber(metrics.estimatedDistance)} km`}</span>
+                        <span>{copy.workingDistance}: {metrics.workingDistance == null ? "-" : `${formatNumber(metrics.workingDistance)} km`}</span>
+                        <span>{copy.difference}: {metrics.differenceKm == null ? "-" : `${formatNumber(metrics.differenceKm)} km`}</span>
+                        <span>{copy.distanceSource}: {metrics.distanceSource}</span>
                       </div>
-                      {trip.fuel_source === "manual" && trip.linkedFuelLogs.length > 0 ? (
-                        <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600">{copy.noFuelManualWarning}</p>
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${bookingLinked ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>{bookingLinked ? copy.bookingLinked : copy.bookingNotLinked}</span>
+                        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${distanceReview.matched ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>{distanceReview.matched ? copy.distanceMatched : copy.distanceNeedsReview}</span>
+                        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${fuelStatusClass(fuelStatus)}`}>{fuelCycle || incompleteFuelLog ? fuelCycleState.title : getFuelStatusLabel(fuelStatus, copy)}</span>
+                        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${dataReadiness.issues.weeklyMileage ? "border-yellow-200 bg-yellow-50 text-yellow-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>{mileageVerificationLabel}</span>
+                        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${dataReadiness.status === "data_ready" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>{dataReadiness.label}</span>
+                      </div>
+                      {fuelCycle && fuelCycleCoverage ? (
+                        <div className={`mt-2 rounded-lg border px-3 py-2 text-xs font-semibold ${fuelCycleState.tone === "green" ? "border-emerald-100 bg-emerald-50/70 text-emerald-900" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
+                          <p className="font-bold">{fuelCycleState.title}</p>
+                          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                            <span>{copy.fuelCycleDistance}: {formatNumber(fuelCycle.distanceKm)} km</span>
+                            <span>{copy.linkedTripDistanceInCycle}: {formatNumber(fuelCycleCoverage.linkedDistance)} km</span>
+                            <span>{copy.unallocatedDistance}: {formatNumber(fuelCycleCoverage.unallocatedDistance)} km</span>
+                            <span>{copy.coverage}: {formatNumber(fuelCycleCoverage.coveragePercent, 1)}%</span>
+                            <span>{copy.cycleStatus}: {fuelCycleCoverage.coveragePercent != null && fuelCycleCoverage.coveragePercent < 100 ? copy.partialCycleCoverage : fuelCycleState.status}</span>
+                          </div>
+                          {fuelCycleCoverage.coveragePercent != null && fuelCycleCoverage.coveragePercent < 100 ? <p className="mt-1 text-[11px]">{copy.fuelCycleNormalHelper}</p> : null}
+                          {fuelCycleState.pendingNotes.length > 0 ? <p className="mt-1 text-[11px]">{fuelCycleState.pendingNotes.join(" | ")}</p> : null}
+                        </div>
+                      ) : incompleteFuelLog ? (
+                        <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+                          <p className="font-bold">{fuelCycleState.title}</p>
+                          <p className="mt-1">{formatDate(incompleteFuelLog.date)} | {incompleteFuelLog.vehicle_reg || "-"} | {formatNumber(Number(incompleteFuelLog.mileage || 0))} km</p>
+                          <p className="mt-1">{fuelCycleState.status}</p>
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-xs font-semibold text-slate-500">{fuelCycleState.title}: {fuelCycleState.status}</p>
+                      )}
+                      {topPossibleFuelLog ? (
+                        <div className="mt-2 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs font-semibold text-yellow-900">
+                          <p>{copy.possibleFuelLogFound}: {formatDate(topPossibleFuelLog.date)} | {topPossibleFuelLog.vehicle_reg || "-"} | {topPossibleFuelLog.driver || "-"} | {formatNumber(Number(topPossibleFuelLog.litres || 0), 2)} L | {formatCurrency(Number(topPossibleFuelLog.total_cost || 0))}</p>
+                          <p className="mt-1 text-yellow-800">{topPossibleFuelLog.mileage ? `${copy.mileage}: ${formatNumber(Number(topPossibleFuelLog.mileage))} km` : ""}{topPossibleFuelLog.station || topPossibleFuelLog.location ? ` | ${topPossibleFuelLog.station || topPossibleFuelLog.location}` : ""}</p>
+                        </div>
                       ) : null}
                     </div>
-                    <div className="grid gap-2 text-xs sm:grid-cols-4 lg:w-[760px]">
-                      <div className={metricTileClass(metrics.estimatedDistance == null ? "amber" : "purple")}><p className="font-semibold opacity-80">{copy.estimatedKmShort}</p><p className="font-bold text-slate-950">{metrics.estimatedDistance == null ? copy.missing : `${formatNumber(metrics.estimatedDistance)} km`}</p><p className="text-[11px] text-slate-500">{getEstimateSourceLabel(trip, copy)}</p></div>
-                      <div className={metricTileClass(metrics.actualDistance == null ? "slate" : "green")}><p className="font-semibold opacity-80">{copy.actualKmOverride}</p><p className="font-bold text-slate-950">{metrics.actualDistance == null ? "-" : `${formatNumber(metrics.actualDistance)} km`}</p></div>
-                      <div className={metricTileClass(metrics.workingDistance == null ? "amber" : "green")}><p className="font-semibold opacity-80">{copy.workingDistance}</p><p className="font-bold text-slate-950">{metrics.workingDistance == null ? copy.missing : `${formatNumber(metrics.workingDistance)} km`}</p><p className="text-[11px] text-slate-500">{metrics.distanceSource}</p></div>
-                      <div className={metricTileClass(metrics.differenceKm != null && metrics.differenceKm > 0 ? "amber" : "slate")}><p className="font-semibold opacity-80">{copy.difference}</p><p className="font-bold text-slate-950">{metrics.differenceKm == null ? "-" : `${formatNumber(metrics.differenceKm)} km`}</p></div>
-                      <div className={metricTileClass(bookingLinked ? "green" : "amber")}><p className="font-semibold opacity-80">{copy.booking}</p><p className="font-bold text-slate-950">{bookingLinked ? copy.linked : copy.noneLinked}</p></div>
-                      <div className={metricTileClass(fuelEventOk ? "green" : "amber")}><p className="font-semibold opacity-80">{copy.fuelEventNearby}</p><p className="font-bold text-slate-950">{fuelEventOk ? copy.linked : copy.noFuelEventNearby}</p></div>
-                      <div className={metricTileClass(weeklyCheck.tone)}><p className="font-semibold opacity-80">{copy.weeklyMileageVerified}</p><p className="font-bold text-slate-950">{weeklyCheck.label}</p>{weeklyCheck.difference != null ? <p className="text-[11px] text-slate-500">{formatNumber(weeklyCheck.difference)} km</p> : null}</div>
-                      <div className={metricTileClass(fuelCycle ? "green" : "slate")}><p className="font-semibold opacity-80">{copy.fuelCycle}</p><p className="font-bold text-slate-950">{fuelCycle ? `${formatNumber(fuelCycle.distanceKm)} km` : copy.notAssignedToFuelCycle}</p></div>
-                      <div className={metricTileClass(operationalStatus.tone)}><p className="font-semibold opacity-80">{copy.dataStatus}</p><p className="font-bold text-slate-950">{operationalStatus.label}</p></div>
-                    </div>
                     <div className="flex shrink-0 flex-wrap items-center gap-2 lg:flex-col lg:items-end">
-                      {derivedStatus !== "completed" ? (
+                      {dataReadiness.status !== "data_ready" ? (
                         <span className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                          {copy.needsAttentionAction}: {statusActionText(derivedStatus, copy)}
+                          {copy.needsAttentionAction}: {attentionAction}
                         </span>
                       ) : null}
                       <button type="button" onClick={() => openTrip(trip)} className="btn-secondary min-h-8 px-3 py-1 text-xs">{copy.view}</button>
                       <button type="button" onClick={() => openTrip(trip)} className="btn-secondary min-h-8 px-3 py-1 text-xs">{copy.edit}</button>
+                      <button type="button" onClick={() => { openTrip(trip); setSelectedTripTab("fuel"); setManualFuelExpanded(true); }} className="btn-secondary min-h-8 px-3 py-1 text-xs">{fuelStatus === "possible" ? copy.reviewLinkFuelLog : fuelEventOk ? copy.openFuelLogs : copy.linkFuelLogAction}</button>
                       {trip.booking_id || trip.booking_diary_id ? (
                         <a href={`/booking-diary?bookingId=${encodeURIComponent(String(trip.booking_id ?? trip.booking_diary_id))}`} className="btn-secondary min-h-8 px-3 py-1 text-xs">{copy.openBooking}</a>
                       ) : null}
-                      <button type="button" onClick={() => { openTrip(trip); setSelectedTripTab("fuel"); }} className="btn-secondary min-h-8 px-3 py-1 text-xs">{copy.openFuelLogs}</button>
                       <button type="button" onClick={() => requestDeleteTrip(trip)} className="min-h-8 rounded-lg border border-rose-200 bg-white px-3 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-50">{copy.delete}</button>
                     </div>
                   </div>
@@ -2592,9 +3109,18 @@ export default function TripJourneyPage() {
       {form && selectedTrip ? (
         <section className="overflow-hidden rounded-xl border border-brand-100 bg-white shadow-sm shadow-brand-950/5">
           {(() => {
+            const selectedFuelCycle = selectedTripFuelCycle;
+            const selectedPossibleFuelLogs = getPossibleFuelLogsForTrip(selectedTrip, fuelLogs, selectedFuelCycle);
+            const selectedFuelCycleCoverage = getFuelCycleCoverage(selectedFuelCycle, baseFilteredTrips);
+            const selectedIncompleteFuelLog = getIncompleteLinkedFuelLog(selectedTrip, fuelLogs, selectedFuelCycle);
+            const selectedFuelCycleState = getFuelCycleVerificationState(selectedFuelCycle, copy, selectedIncompleteFuelLog);
+            const selectedFuelStatus = getFuelReviewStatus(selectedTrip, selectedPossibleFuelLogs, selectedFuelCycle);
             const selectedFuelEventOk = hasFuelEvent(selectedTrip);
             const selectedWeeklyCheck = getWeeklyMileageCheck(selectedTrip, baseFilteredTrips, weeklyMileage, copy);
-            const selectedOperationalStatus = getOperationalStatus(selectedTrip, weeklyMileage, copy, baseFilteredTrips);
+            const selectedDataReadiness = getTripDataReadiness(selectedTrip, weeklyMileage, copy, baseFilteredTrips, selectedPossibleFuelLogs, selectedFuelCycle);
+            const selectedJobStatus = getTripJobStatus(selectedTrip);
+            const selectedMileageTone = selectedDataReadiness.issues.weeklyMileage ? selectedWeeklyCheck.tone : "green";
+            const selectedMileageLabel = getMileageVerificationLabel(selectedDataReadiness, selectedWeeklyCheck.label, copy);
             return (
           <>
           <div className="border-b border-brand-100 bg-gradient-to-r from-brand-50 via-white to-emerald-50/70 p-4">
@@ -2603,8 +3129,8 @@ export default function TripJourneyPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-brand-600 px-2.5 py-1 text-[11px] font-bold text-white">{copy.selectedTrip}</span>
                   <h3 className="text-lg font-bold text-slate-950">{copy.selectedTripOverview}</h3>
-                  {selectedTripStatus ? <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${statusClass(selectedTripStatus)}`}>{statusLabel(selectedTripStatus, copy)}</span> : null}
-                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${metricTileClass(selectedOperationalStatus.tone).replace("rounded-lg border px-3 py-2", "")}`}>{selectedOperationalStatus.label}</span>
+                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${tripJobStatusClass(selectedJobStatus)}`}>{copy.tripStatus}: {tripJobStatusLabel(selectedJobStatus, copy)}</span>
+                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${dataStatusClass(selectedDataReadiness.status)}`}>{copy.dataStatus}: {selectedDataReadiness.label}</span>
                 </div>
                 <p className="mt-1 max-w-4xl text-sm font-semibold leading-6 text-slate-700" title={getRoutePreview(selectedTrip)}>{getShortRoutePreview(selectedTrip, copy)}</p>
               </div>
@@ -2615,10 +3141,30 @@ export default function TripJourneyPage() {
             </div>
             <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
               <div className={metricTileClass("purple")}><p className="text-xs font-semibold opacity-80">{copy.workingDistance}</p><p className="font-bold text-slate-950">{formatNumber(selectedFormMetrics?.workingDistance)} km</p><p className="text-xs font-semibold text-slate-500">{selectedFormMetrics?.actualSource}</p></div>
-              <div className={metricTileClass(selectedFuelEventOk ? "green" : "amber")}><p className="text-xs font-semibold opacity-80">{copy.fuelEventNearby}</p><p className="font-bold text-slate-950">{selectedTrip.linkedFuelLogs.length ? `${selectedTrip.linkedFuelLogs.length} ${copy.linked}` : copy.noFuelEventNearby}</p></div>
-              <div className={metricTileClass(selectedWeeklyCheck.tone)}><p className="text-xs font-semibold opacity-80">{copy.weeklyMileageVerified}</p><p className="font-bold text-slate-950">{selectedWeeklyCheck.label}</p>{selectedWeeklyCheck.difference != null ? <p className="text-xs font-semibold text-slate-500">{formatNumber(selectedWeeklyCheck.difference)} km</p> : null}</div>
-              <div className={metricTileClass(selectedOperationalStatus.tone)}><p className="text-xs font-semibold opacity-80">{copy.dataStatus}</p><p className="font-bold text-slate-950">{selectedOperationalStatus.label}</p></div>
+              <div className={metricTileClass(selectedFuelEventOk ? "green" : selectedFuelStatus === "possible" ? "amber" : "amber")}><p className="text-xs font-semibold opacity-80">{copy.fuelStatus}</p><p className="font-bold text-slate-950">{selectedFuelCycle || selectedIncompleteFuelLog ? selectedFuelCycleState.title : getFuelStatusLabel(selectedFuelStatus, copy)}</p></div>
+              <div className={metricTileClass(selectedMileageTone)}><p className="text-xs font-semibold opacity-80">{copy.mileageVerification}</p><p className="font-bold text-slate-950">{selectedMileageLabel}</p>{selectedWeeklyCheck.difference != null && selectedDataReadiness.issues.weeklyMileage ? <p className="text-xs font-semibold text-slate-500">{formatNumber(selectedWeeklyCheck.difference)} km</p> : null}</div>
+              <div className={metricTileClass(selectedDataReadiness.tone)}><p className="text-xs font-semibold opacity-80">{copy.dataStatus}</p><p className="font-bold text-slate-950">{selectedDataReadiness.label}</p></div>
             </div>
+            {selectedFuelCycle && selectedFuelCycleCoverage ? (
+              <div className={`mt-3 rounded-lg border px-3 py-2 text-xs font-semibold ${selectedFuelCycleState.tone === "green" ? "border-emerald-100 bg-emerald-50/70 text-emerald-900" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
+                <p className="font-bold">{selectedFuelCycleState.title}</p>
+                <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                  <span>{copy.fuelCycleDistance}: {formatNumber(selectedFuelCycle.distanceKm)} km</span>
+                  <span>{copy.linkedTripDistanceInCycle}: {formatNumber(selectedFuelCycleCoverage.linkedDistance)} km</span>
+                  <span>{copy.unallocatedDistance}: {formatNumber(selectedFuelCycleCoverage.unallocatedDistance)} km</span>
+                  <span>{copy.coverage}: {formatNumber(selectedFuelCycleCoverage.coveragePercent, 1)}%</span>
+                  <span>{copy.cycleStatus}: {selectedFuelCycleCoverage.coveragePercent != null && selectedFuelCycleCoverage.coveragePercent < 100 ? copy.partialCycleCoverage : selectedFuelCycleState.status}</span>
+                </div>
+                {selectedFuelCycleCoverage.coveragePercent != null && selectedFuelCycleCoverage.coveragePercent < 100 ? <p className="mt-1 text-[11px]">{copy.fuelCycleNormalHelper}</p> : null}
+                {selectedFuelCycleState.pendingNotes.length > 0 ? <p className="mt-1 text-[11px]">{selectedFuelCycleState.pendingNotes.join(" | ")}</p> : null}
+              </div>
+            ) : selectedIncompleteFuelLog ? (
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+                <p className="font-bold">{selectedFuelCycleState.title}</p>
+                <p className="mt-1">{formatDate(selectedIncompleteFuelLog.date)} | {selectedIncompleteFuelLog.vehicle_reg || "-"} | {formatNumber(Number(selectedIncompleteFuelLog.mileage || 0))} km</p>
+                <p className="mt-1">{selectedFuelCycleState.status}</p>
+              </div>
+            ) : null}
             <p className="mt-3 rounded-lg border border-brand-100 bg-brand-50/60 px-3 py-2 text-xs font-semibold text-brand-800">{copy.fuelCycleHelper}</p>
             <div className="mt-3 flex flex-col gap-3 rounded-lg border border-brand-100 bg-white/85 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -2852,10 +3398,45 @@ export default function TripJourneyPage() {
                     <div className="form-field"><label className="form-label">{copy.fuelSource}</label><select value={form.fuel_source} onChange={(event) => updateForm("fuel_source", event.target.value as TripFuelSource)} className="form-input bg-white"><option value="linked">{copy.useLinkedFuelLogs}</option><option value="manual">{copy.useManualFuelEntry}</option></select></div>
                     {form.fuel_source === "manual" ? <><div className="form-field"><label className="form-label">{copy.manualLitresUsed}</label><input type="number" min="0" step="0.01" value={form.manual_litres_used} onChange={(event) => updateForm("manual_litres_used", event.target.value)} className="form-input bg-white" /></div><div className="form-field"><label className="form-label">{copy.manualFuelCost}</label><input type="number" min="0" step="0.01" value={form.manual_fuel_cost} onChange={(event) => updateForm("manual_fuel_cost", event.target.value)} className="form-input bg-white" /></div></> : null}
                     <div className="grid grid-cols-2 gap-2">
-                      <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">{copy.fuelEventNearby}</p><p className="font-bold text-slate-950">{selectedTrip.linkedFuelLogs.length ? `${selectedTrip.linkedFuelLogs.length} ${copy.linked}` : copy.noFuelEventNearby}</p></div>
-                      <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">{copy.fuelCycle}</p><p className="font-bold text-slate-950">{getFuelCycleForTrip(selectedTrip, buildFuelCycles(fuelLogs)) ? copy.belongsToFuelCycle : copy.notAssignedToFuelCycle}</p></div>
+                      <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">{copy.fuelStatus}</p><p className="font-bold text-slate-950">{(() => {
+                        const incompleteLog = selectedTrip ? getIncompleteLinkedFuelLog(selectedTrip, fuelLogs, selectedTripFuelCycle) : null;
+                        return selectedTripFuelCycle || incompleteLog
+                          ? getFuelCycleVerificationState(selectedTripFuelCycle, copy, incompleteLog).title
+                          : getFuelStatusLabel(getFuelReviewStatus(selectedTrip, suggestedFuelLogs, selectedTripFuelCycle), copy);
+                      })()}</p></div>
+                      <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">{copy.fuelCycleDistance}</p><p className="font-bold text-slate-950">{selectedTripFuelCycle ? `${formatNumber(selectedTripFuelCycle.distanceKm)} km` : copy.fuelCycleNotVerified}</p></div>
                     </div>
+                    {(() => {
+                      const incompleteLog = selectedTrip ? getIncompleteLinkedFuelLog(selectedTrip, fuelLogs, selectedTripFuelCycle) : null;
+                      const cycleState = getFuelCycleVerificationState(selectedTripFuelCycle, copy, incompleteLog);
+                      if (!selectedTripFuelCycle && incompleteLog) {
+                        return (
+                          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+                            <p className="font-bold">{cycleState.title}</p>
+                            <p className="mt-1">{formatDate(incompleteLog.date)} | {incompleteLog.vehicle_reg || "-"} | {formatNumber(Number(incompleteLog.mileage || 0))} km</p>
+                            <p className="mt-1">{cycleState.status}</p>
+                          </div>
+                        );
+                      }
+                      if (!selectedTripFuelCycle) return null;
+                      const coverage = getFuelCycleCoverage(selectedTripFuelCycle, baseFilteredTrips);
+                      return coverage ? (
+                        <div className={`rounded-lg border px-3 py-2 text-xs font-semibold ${cycleState.tone === "green" ? "border-emerald-100 bg-emerald-50/70 text-emerald-900" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
+                          <p className="font-bold">{cycleState.title}</p>
+                          <div className="mt-1 grid gap-1">
+                            <p>{copy.fuelCycleDistance}: {formatNumber(selectedTripFuelCycle.distanceKm)} km</p>
+                            <p>{copy.linkedTripDistanceInCycle}: {formatNumber(coverage.linkedDistance)} km</p>
+                            <p>{copy.unallocatedDistance}: {formatNumber(coverage.unallocatedDistance)} km</p>
+                            <p>{copy.coverage}: {formatNumber(coverage.coveragePercent, 1)}%</p>
+                            <p>{copy.cycleStatus}: {coverage.coveragePercent != null && coverage.coveragePercent < 100 ? copy.partialCycleCoverage : cycleState.status}</p>
+                            {coverage.coveragePercent != null && coverage.coveragePercent < 100 ? <p>{copy.fuelCycleNormalHelper}</p> : null}
+                            {cycleState.pendingNotes.length > 0 ? <p>{cycleState.pendingNotes.join(" | ")}</p> : null}
+                          </div>
+                        </div>
+                      ) : null;
+                    })()}
                     <p className="rounded-lg border border-brand-100 bg-brand-50/60 px-3 py-2 text-xs font-semibold text-brand-800">{copy.fuelCycleHelper}</p>
+                    <button type="button" onClick={() => void handleManualFuelConfirm()} className="btn-secondary w-full min-h-9 px-3 py-1.5 text-sm">{copy.manuallyConfirmFuelCheck}</button>
                     <button type="button" onClick={() => void handleSaveTrip()} disabled={saving} className="btn-primary w-full gap-2"><Save className="h-4 w-4" />{saving ? copy.saving : copy.saveTrip}</button>
                   </div>
                 </div>
@@ -2864,12 +3445,12 @@ export default function TripJourneyPage() {
                     <h4 className="font-bold text-slate-950">{copy.linkedFuelLogs}</h4>
                     <div className="mt-3 space-y-2">
                       {selectedTrip.linkedFuelLogs.length === 0 ? <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-500">{copy.noFuelLogsLinkedYet}</p> : null}
-                      {selectedTrip.linkedFuelLogs.map((log) => <div key={log.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3"><div className="min-w-0"><p className="truncate text-sm font-bold text-slate-900">{formatDate(log.date)} | {log.vehicle_reg} | {log.driver}</p><p className="text-xs text-slate-500">{formatNumber(Number(log.litres || 0), 2)} L | {formatCurrency(Number(log.total_cost || 0))} | {log.station || log.location}</p></div><button type="button" onClick={() => void handleUnlinkFuelLog(String(log.id))} className="btn-secondary min-h-8 gap-2 px-3 py-1 text-xs"><Unlink className="h-3.5 w-3.5" /> {copy.unlink}</button></div>)}
+                      {selectedTrip.linkedFuelLogs.map((log) => <div key={log.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3"><div className="min-w-0"><p className="truncate text-sm font-bold text-slate-900">{formatDate(log.date)} | {log.vehicle_reg} | {log.driver}</p><p className="text-xs text-slate-500">{formatNumber(Number(log.litres || 0), 2)} L | {formatCurrency(Number(log.total_cost || 0))} | {log.mileage ? `${formatNumber(Number(log.mileage))} km | ` : ""}{log.station || log.location}</p><p className="text-[11px] font-semibold text-slate-500">{copy.fuelLogSupportsTrip}</p></div><button type="button" onClick={() => void handleUnlinkFuelLog(String(log.id))} className="btn-secondary min-h-8 gap-2 px-3 py-1 text-xs"><Unlink className="h-3.5 w-3.5" /> {copy.unlink}</button></div>)}
                     </div>
                   </div>
                   <div className="rounded-lg border border-slate-200 bg-white p-4">
                     <div className="flex items-center justify-between gap-3"><h4 className="font-bold text-slate-950">{copy.addSearchFuelLogs}</h4><button type="button" onClick={() => setManualFuelExpanded((current) => !current)} className="btn-secondary min-h-9 px-3 py-1.5 text-xs">{manualFuelExpanded ? copy.hide : copy.addFuelLog}</button></div>
-                    {manualFuelExpanded ? <div className="mt-4 space-y-4"><div><p className="text-sm font-semibold text-slate-800">{copy.suggestedLogs}</p><div className="mt-2 space-y-2">{suggestedFuelLogs.length === 0 ? <p className="text-sm text-slate-500">{copy.noSuggestedFuelLogs}</p> : null}{suggestedFuelLogs.slice(0, 5).map((log) => <div key={log.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3"><div className="min-w-0"><p className="truncate text-sm font-bold text-slate-900">{formatDate(log.date)} | {log.vehicle_reg} | {log.driver}</p><p className="text-xs text-slate-500">{formatNumber(Number(log.litres || 0), 2)} L | {formatCurrency(Number(log.total_cost || 0))}</p></div><button type="button" onClick={() => void handleLinkFuelLog(String(log.id))} className="btn-primary min-h-8 gap-2 px-3 py-1 text-xs"><Link2 className="h-3.5 w-3.5" /> {copy.link}</button></div>)}</div></div><div className="grid gap-2 sm:grid-cols-2"><input value={manualFuelSearch} onChange={(event) => setManualFuelSearch(event.target.value)} placeholder={copy.searchFuelPlaceholder} className="form-input bg-white" /><input type="date" value={manualFuelDate} onChange={(event) => setManualFuelDate(event.target.value)} className="form-input bg-white" /></div><div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">{manualFuelLogOptions.length === 0 ? <p className="text-sm text-slate-500">{copy.noOtherFuelLogs}</p> : null}{manualFuelLogOptions.map((log) => <div key={log.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3"><div className="min-w-0"><p className="truncate text-sm font-bold text-slate-900">{formatDate(log.date)} | {log.vehicle_reg} | {log.driver}</p><p className="text-xs text-slate-500">{formatNumber(Number(log.litres || 0), 2)} L | {formatCurrency(Number(log.total_cost || 0))} | {log.station || log.location}</p></div><button type="button" onClick={() => void handleLinkFuelLog(String(log.id))} className="btn-secondary min-h-8 gap-2 px-3 py-1 text-xs"><Link2 className="h-3.5 w-3.5" /> {copy.link}</button></div>)}</div>{manualFuelLogOptions.length < manualFuelLogMatches.length ? <button type="button" onClick={() => setVisibleManualFuelLogCount((count) => count + 10)} className="btn-secondary w-full min-h-9 px-3 py-1.5 text-xs">{copy.loadMore}</button> : null}</div> : null}
+                    {manualFuelExpanded ? <div className="mt-4 space-y-4"><div><p className="text-sm font-semibold text-slate-800">{copy.possibleFuelLogFound}</p><div className="mt-2 space-y-2">{suggestedFuelLogs.length === 0 ? <p className="text-sm text-slate-500">{copy.noSuggestedFuelLogs}</p> : null}{suggestedFuelLogs.map((log) => <div key={log.id} className="flex items-center justify-between gap-3 rounded-lg border border-yellow-200 bg-yellow-50 p-3"><div className="min-w-0"><p className="truncate text-sm font-bold text-slate-900">{formatDate(log.date)} | {log.vehicle_reg} | {log.driver}</p><p className="text-xs text-slate-600">{formatNumber(Number(log.litres || 0), 2)} L | {formatCurrency(Number(log.total_cost || 0))} | {log.mileage ? `${formatNumber(Number(log.mileage))} km | ` : ""}{log.station || log.location || "-"}</p>{(fuelLogTripCounts.get(String(log.id)) ?? 0) > 0 ? <p className="text-[11px] font-semibold text-yellow-800">{copy.fuelLogAlreadyLinkedCount.replace("{count}", String(fuelLogTripCounts.get(String(log.id)) ?? 0))}</p> : null}</div><button type="button" onClick={() => void handleLinkFuelLog(String(log.id))} className="btn-primary min-h-8 gap-2 px-3 py-1 text-xs"><Link2 className="h-3.5 w-3.5" /> {copy.linkToThisTrip}</button></div>)}</div></div><div className="grid gap-2 sm:grid-cols-2"><input value={manualFuelSearch} onChange={(event) => setManualFuelSearch(event.target.value)} placeholder={copy.searchFuelPlaceholder} className="form-input bg-white" /><input type="date" value={manualFuelDate} onChange={(event) => setManualFuelDate(event.target.value)} className="form-input bg-white" /></div><div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">{manualFuelLogOptions.length === 0 ? <p className="text-sm text-slate-500">{copy.noOtherFuelLogs}</p> : null}{manualFuelLogOptions.map((log) => <div key={log.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3"><div className="min-w-0"><p className="truncate text-sm font-bold text-slate-900">{formatDate(log.date)} | {log.vehicle_reg} | {log.driver}</p><p className="text-xs text-slate-500">{formatNumber(Number(log.litres || 0), 2)} L | {formatCurrency(Number(log.total_cost || 0))} | {log.mileage ? `${formatNumber(Number(log.mileage))} km | ` : ""}{log.station || log.location}</p>{(fuelLogTripCounts.get(String(log.id)) ?? 0) > 0 ? <p className="text-[11px] font-semibold text-slate-500">{copy.fuelLogAlreadyLinkedCount.replace("{count}", String(fuelLogTripCounts.get(String(log.id)) ?? 0))}</p> : null}</div><button type="button" onClick={() => void handleLinkFuelLog(String(log.id))} className="btn-secondary min-h-8 gap-2 px-3 py-1 text-xs"><Link2 className="h-3.5 w-3.5" /> {copy.linkToThisTrip}</button></div>)}</div>{manualFuelLogOptions.length < manualFuelLogMatches.length ? <button type="button" onClick={() => setVisibleManualFuelLogCount((count) => count + 10)} className="btn-secondary w-full min-h-9 px-3 py-1.5 text-xs">{copy.loadMore}</button> : null}</div> : null}
                   </div>
                 </div>
               </div>
@@ -2906,7 +3487,15 @@ export default function TripJourneyPage() {
           </select>
         </div>
 
-        {summary.completedTrips < 2 ? <p className="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">{copy.moreCompletedTripsNeeded}</p> : null}
+        {summary.verifiedTrips < 5 ? <p className="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">{copy.moreCompletedTripsNeeded}</p> : null}
+        {summary.completedTrips > summary.verifiedTrips ? <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">{copy.comparisonNeedsChecksHelper}</p> : null}
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className={metricTileClass("slate")}><p className="text-xs font-semibold opacity-80">{copy.completedTripsLabel}</p><p className="text-xl font-bold text-slate-950">{summary.completedTrips}</p></div>
+          <div className={metricTileClass("green")}><p className="text-xs font-semibold opacity-80">{copy.verifiedDataCheckedTrips}</p><p className="text-xl font-bold text-slate-950">{summary.verifiedTrips}</p></div>
+          <div className={metricTileClass("purple")}><p className="text-xs font-semibold opacity-80">{copy.totalWorkingKm}</p><p className="text-xl font-bold text-slate-950">{formatNumber(summary.completedWorkingKm)} km</p></div>
+          <div className={metricTileClass("green")}><p className="text-xs font-semibold opacity-80">{copy.verifiedWorkingKm}</p><p className="text-xl font-bold text-slate-950">{formatNumber(summary.verifiedWorkingKm)} km</p></div>
+        </div>
 
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
           <div className={metricTileClass("green")}><p className="text-xs font-semibold opacity-80">{copy.bestKmLDriver}</p><p className="mt-1 truncate font-bold text-slate-950">{summary.bestDriverByKmPerLitre?.name ?? "-"}</p><p className="text-xs text-slate-500">{formatNumber(summary.bestDriverByKmPerLitre?.actualKm)} km</p></div>
@@ -2939,14 +3528,14 @@ export default function TripJourneyPage() {
           <div className="mt-4">
             <div className="hidden overflow-x-auto lg:block">
               <table className="min-w-full divide-y divide-slate-200 text-sm">
-                <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-3 py-3 text-left">{copy.rank}</th><th className="px-3 py-3 text-left">{comparisonTab === "drivers" ? copy.driver : copy.vehicleRegistration}</th><th className="px-3 py-3 text-right">{copy.completed}</th><th className="px-3 py-3 text-right">{copy.workingDistance}</th><th className="px-3 py-3 text-right">{copy.estimatedKm}</th><th className="px-3 py-3 text-right">{copy.avgDifference}</th><th className="px-3 py-3 text-right">{copy.estimatedVsActual}</th><th className="px-3 py-3 text-left">{copy.label}</th></tr></thead>
+                <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-3 py-3 text-left">{copy.rank}</th><th className="px-3 py-3 text-left">{comparisonTab === "drivers" ? copy.driver : copy.vehicleRegistration}</th><th className="px-3 py-3 text-right">{copy.completedTripsLabel}</th><th className="px-3 py-3 text-right">{copy.verifiedDataCheckedTrips}</th><th className="px-3 py-3 text-right">{copy.totalWorkingKm}</th><th className="px-3 py-3 text-right">{copy.verifiedWorkingKm}</th><th className="px-3 py-3 text-right">{copy.avgDifference}</th><th className="px-3 py-3 text-right">{copy.estimatedVsActual}</th><th className="px-3 py-3 text-left">{copy.label}</th></tr></thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
-                  {(comparisonTab === "drivers" ? sortedDriverRows : sortedVehicleRows).map((row, index) => <tr key={row.name} className="transition hover:bg-brand-50/45"><td className="px-3 py-3 font-bold text-slate-950">#{index + 1}</td><td className="px-3 py-3 font-bold text-slate-950">{row.name}</td><td className="px-3 py-3 text-right font-semibold">{row.completedTrips}</td><td className="px-3 py-3 text-right">{formatNumber(row.actualKm)}</td><td className="px-3 py-3 text-right">{formatNumber(row.estimatedKm)}</td><td className="px-3 py-3 text-right">{formatNumber(row.averageDifferenceKm)}</td><td className="px-3 py-3 text-right">{row.estimatedKm > 0 ? `${formatNumber(((row.actualKm - row.estimatedKm) / row.estimatedKm) * 100, 1)}%` : "-"}</td><td className="px-3 py-3"><span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${getHealthBadgeClass(row.performanceLabel, copy)}`}>{row.performanceLabel}</span></td></tr>)}
+                  {(comparisonTab === "drivers" ? sortedDriverRows : sortedVehicleRows).map((row, index) => <tr key={row.name} className="transition hover:bg-brand-50/45"><td className="px-3 py-3 font-bold text-slate-950">#{index + 1}</td><td className="px-3 py-3 font-bold text-slate-950">{row.name}</td><td className="px-3 py-3 text-right font-semibold">{row.completedTrips}</td><td className="px-3 py-3 text-right font-semibold text-emerald-700">{row.verifiedTrips}</td><td className="px-3 py-3 text-right">{formatNumber(row.totalWorkingKm)}</td><td className="px-3 py-3 text-right">{formatNumber(row.verifiedWorkingKm)}</td><td className="px-3 py-3 text-right">{formatNumber(row.averageDifferenceKm)}</td><td className="px-3 py-3 text-right">{row.estimatedKm > 0 ? `${formatNumber(((row.actualKm - row.estimatedKm) / row.estimatedKm) * 100, 1)}%` : "-"}</td><td className="px-3 py-3"><span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${getHealthBadgeClass(row.performanceLabel, copy)}`}>{row.performanceLabel}</span></td></tr>)}
                 </tbody>
               </table>
             </div>
             <div className="grid gap-3 lg:hidden">
-              {(comparisonTab === "drivers" ? sortedDriverRows : sortedVehicleRows).map((row, index) => <article key={row.name} className="rounded-lg border border-slate-200 bg-slate-50 p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold text-slate-500">#{index + 1}</p><h4 className="mt-1 font-bold text-slate-950">{row.name}</h4></div><span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${getHealthBadgeClass(row.performanceLabel, copy)}`}>{row.performanceLabel}</span></div><div className="mt-3 grid grid-cols-2 gap-3 text-sm"><div><p className="text-xs text-slate-500">{copy.completed}</p><p className="font-bold">{row.completedTrips}</p></div><div><p className="text-xs text-slate-500">{copy.workingDistance}</p><p className="font-bold">{formatNumber(row.actualKm)}</p></div><div><p className="text-xs text-slate-500">{copy.estimatedKm}</p><p className="font-bold">{formatNumber(row.estimatedKm)}</p></div><div><p className="text-xs text-slate-500">{copy.avgDifference}</p><p className="font-bold">{formatNumber(row.averageDifferenceKm)}</p></div></div></article>)}
+              {(comparisonTab === "drivers" ? sortedDriverRows : sortedVehicleRows).map((row, index) => <article key={row.name} className="rounded-lg border border-slate-200 bg-slate-50 p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold text-slate-500">#{index + 1}</p><h4 className="mt-1 font-bold text-slate-950">{row.name}</h4></div><span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${getHealthBadgeClass(row.performanceLabel, copy)}`}>{row.performanceLabel}</span></div><div className="mt-3 grid grid-cols-2 gap-3 text-sm"><div><p className="text-xs text-slate-500">{copy.completedTripsLabel}</p><p className="font-bold">{row.completedTrips}</p></div><div><p className="text-xs text-slate-500">{copy.verifiedDataCheckedTrips}</p><p className="font-bold text-emerald-700">{row.verifiedTrips}</p></div><div><p className="text-xs text-slate-500">{copy.totalWorkingKm}</p><p className="font-bold">{formatNumber(row.totalWorkingKm)}</p></div><div><p className="text-xs text-slate-500">{copy.verifiedWorkingKm}</p><p className="font-bold">{formatNumber(row.verifiedWorkingKm)}</p></div></div></article>)}
             </div>
           </div>
         ) : null}

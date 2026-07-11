@@ -4,9 +4,12 @@ export type ShipmentQuotationInput = {
   fuelPricePerLitre: number | null;
   fuelRiskBufferPercent: number | null;
   tollEstimate: number | null;
+  parkingCost?: number | null;
   otherCosts: number | null;
   driverCost: number | null;
   marginPercent: number | null;
+  markupPercent?: number | null;
+  finalCustomerQuote?: number | null;
   actualDistanceKm: number | null;
   actualFuelLitres: number | null;
   actualFuelCost: number | null;
@@ -14,18 +17,33 @@ export type ShipmentQuotationInput = {
 };
 
 export type ShipmentQuotationValues = {
+  distanceKm: number | null;
+  fuelEfficiencyKmL: number | null;
+  fuelPricePerLitre: number | null;
   estimatedFuelLitres: number | null;
+  fuelCost: number | null;
   baseFuelCost: number | null;
   quotedFuelCost: number | null;
+  tolls: number;
+  parking: number;
+  driverCost: number;
   subtotalCost: number;
+  operatingCost: number;
+  markupPercent: number;
   quotedPrice: number;
+  recommendedQuote: number;
+  finalCustomerQuote: number;
   finalPrice: number;
+  expectedProfit: number | null;
+  marginPercent: number | null;
+  markupOnCostPercent: number | null;
+  isManualQuoteOverride: boolean;
   actualTotalCost: number | null;
   varianceAmount: number | null;
   variancePercent: number | null;
 };
 
-function finiteOrNull(value: number | null) {
+function finiteOrNull(value: number | null | undefined) {
   return value != null && Number.isFinite(value) ? value : null;
 }
 
@@ -36,14 +54,21 @@ function safeCost(value: number | null) {
 export function calculateShipmentQuotation(
   input: ShipmentQuotationInput
 ): ShipmentQuotationValues {
+  return calculateShipmentCosts(input);
+}
+
+export function calculateShipmentCosts(
+  input: ShipmentQuotationInput
+): ShipmentQuotationValues {
   const estimatedDistanceKm = finiteOrNull(input.estimatedDistanceKm);
   const standardKmPerLitre = finiteOrNull(input.standardKmPerLitre);
   const fuelPricePerLitre = finiteOrNull(input.fuelPricePerLitre);
   const fuelRiskBufferPercent = safeCost(input.fuelRiskBufferPercent);
   const tollEstimate = safeCost(input.tollEstimate);
-  const otherCosts = safeCost(input.otherCosts);
+  const parking = safeCost(input.parkingCost ?? input.otherCosts);
   const driverCost = safeCost(input.driverCost);
-  const marginPercent = safeCost(input.marginPercent);
+  const markupPercent = safeCost(input.markupPercent ?? input.marginPercent);
+  const manualFinalQuote = finiteOrNull(input.finalCustomerQuote);
   const actualFuelCost = finiteOrNull(input.actualFuelCost);
   const actualTolls = finiteOrNull(input.actualTolls);
 
@@ -64,8 +89,21 @@ export function calculateShipmentQuotation(
       ? baseFuelCost * (1 + fuelRiskBufferPercent / 100)
       : null;
 
-  const subtotalCost = safeCost(quotedFuelCost) + tollEstimate + otherCosts + driverCost;
-  const quotedPrice = subtotalCost * (1 + marginPercent / 100);
+  const subtotalCost = safeCost(quotedFuelCost) + tollEstimate + parking + driverCost;
+  const quotedPrice = subtotalCost * (1 + markupPercent / 100);
+  const finalCustomerQuote = manualFinalQuote ?? quotedPrice;
+  const expectedProfit =
+    finalCustomerQuote > 0 ? finalCustomerQuote - subtotalCost : null;
+  const marginPercent =
+    finalCustomerQuote > 0 && expectedProfit != null
+      ? (expectedProfit / finalCustomerQuote) * 100
+      : null;
+  const markupOnCostPercent =
+    subtotalCost > 0 && expectedProfit != null
+      ? (expectedProfit / subtotalCost) * 100
+      : null;
+  const isManualQuoteOverride =
+    manualFinalQuote != null && Math.abs(manualFinalQuote - quotedPrice) > 0.005;
 
   const hasActuals =
     finiteOrNull(input.actualDistanceKm) != null ||
@@ -82,12 +120,27 @@ export function calculateShipmentQuotation(
       : null;
 
   return {
+    distanceKm: estimatedDistanceKm,
+    fuelEfficiencyKmL: standardKmPerLitre,
+    fuelPricePerLitre,
     estimatedFuelLitres,
+    fuelCost: quotedFuelCost,
     baseFuelCost,
     quotedFuelCost,
+    tolls: tollEstimate,
+    parking,
+    driverCost,
     subtotalCost,
+    operatingCost: subtotalCost,
+    markupPercent,
     quotedPrice,
-    finalPrice: quotedPrice,
+    recommendedQuote: quotedPrice,
+    finalCustomerQuote,
+    finalPrice: finalCustomerQuote,
+    expectedProfit,
+    marginPercent,
+    markupOnCostPercent,
+    isManualQuoteOverride,
     actualTotalCost,
     varianceAmount,
     variancePercent

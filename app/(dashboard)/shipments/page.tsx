@@ -37,6 +37,7 @@ import { shipmentTranslations, type ShipmentTranslations } from "@/lib/shipment-
 import type { GoogleMapsHealthStatus } from "@/lib/google-maps";
 import { filterShipments } from "@/lib/shipment-estimation";
 import { buildNormalizedShipmentRouteLabel, normalizeShipment } from "@/lib/shipment-normalization";
+import { calculateShipmentCosts } from "@/lib/shipment-quotation";
 import {
   formatCurrency,
   formatDate,
@@ -820,6 +821,7 @@ type QuotePdfData = {
   quotePrice: number | null;
   profit: number | null;
   marginPercent: number | null;
+  markupOnCostPercent: number | null;
   status: string;
   notes: string;
 };
@@ -1138,6 +1140,12 @@ function openQuotePdfWindow(
     [
       labels.pdf.margin,
       data.marginPercent != null ? `${formatPdfNumber(data.marginPercent, language, 1)}%` : EMPTY_VALUE
+    ],
+    [
+      labels.markup,
+      data.markupOnCostPercent != null
+        ? `${formatPdfNumber(data.markupOnCostPercent, language, 1)}%`
+        : EMPTY_VALUE
     ]
   ];
   const customerChargeRows = buildCustomerChargeRows(data, language);
@@ -1651,6 +1659,7 @@ export default function ShipmentsPage() {
   const [distanceMessage, setDistanceMessage] = useState<string | null>(null);
   const [lastEstimatedRouteKey, setLastEstimatedRouteKey] = useState("");
   const [routeEstimateMeta, setRouteEstimateMeta] = useState<RouteEstimateMeta | null>(null);
+  const [manualQuoteOverride, setManualQuoteOverride] = useState(false);
   const [manualVehicleDefaults, setManualVehicleDefaults] = useState({
     vehicleType: false,
     efficiency: false
@@ -1685,21 +1694,38 @@ export default function ShipmentsPage() {
   const parkingCost = useMemo(() => parseNumber(form.parking_cost) ?? 0, [form.parking_cost]);
   const driverCost = useMemo(() => parseNumber(form.driver_allowance) ?? 0, [form.driver_allowance]);
   const marginPercent = useMemo(() => parseNumber(form.margin_percent) ?? 0, [form.margin_percent]);
-  const estimatedFuelLitres = useMemo(() => {
-    if (estimatedDistanceKm == null || kmPerLitre == null || kmPerLitre <= 0) {
-      return null;
-    }
-
-    return estimatedDistanceKm / kmPerLitre;
-  }, [estimatedDistanceKm, kmPerLitre]);
-
-  const estimatedFuelCost = useMemo(() => {
-    if (estimatedFuelLitres == null || fuelPricePerLitre == null || fuelPricePerLitre <= 0) {
-      return null;
-    }
-
-    return estimatedFuelLitres * fuelPricePerLitre;
-  }, [estimatedFuelLitres, fuelPricePerLitre]);
+  const shipmentCost = useMemo(
+    () =>
+      calculateShipmentCosts({
+        estimatedDistanceKm,
+        standardKmPerLitre: kmPerLitre,
+        fuelPricePerLitre,
+        fuelRiskBufferPercent: 0,
+        tollEstimate,
+        parkingCost,
+        otherCosts: parkingCost,
+        driverCost,
+        marginPercent,
+        markupPercent: marginPercent,
+        finalCustomerQuote: parseNumber(form.final_quote_price),
+        actualDistanceKm: null,
+        actualFuelLitres: null,
+        actualFuelCost: null,
+        actualTolls: null
+      }),
+    [
+      driverCost,
+      estimatedDistanceKm,
+      form.final_quote_price,
+      fuelPricePerLitre,
+      kmPerLitre,
+      marginPercent,
+      parkingCost,
+      tollEstimate
+    ]
+  );
+  const estimatedFuelLitres = shipmentCost.estimatedFuelLitres;
+  const estimatedFuelCost = shipmentCost.fuelCost;
   const fuelCalculationBasis = useMemo(
     () =>
       buildFuelCalculationBasis({
@@ -1717,29 +1743,25 @@ export default function ShipmentsPage() {
     [kmPerLitre, labels]
   );
 
-  const totalEstimatedJobCost = useMemo(() => {
-    return (estimatedFuelCost ?? 0) + tollEstimate + parkingCost + driverCost;
-  }, [driverCost, estimatedFuelCost, parkingCost, tollEstimate]);
+  const totalEstimatedJobCost = shipmentCost.operatingCost;
+  const recommendedQuotePrice = shipmentCost.recommendedQuote;
+  const finalQuotePrice = shipmentCost.finalCustomerQuote;
+  const expectedProfit = shipmentCost.expectedProfit;
+  const expectedMarginPercent = shipmentCost.marginPercent;
+  const markupOnCostPercent = shipmentCost.markupOnCostPercent;
+  const isManualQuoteOverride = shipmentCost.isManualQuoteOverride;
+  const finalQuoteBelowCost = finalQuotePrice > 0 && finalQuotePrice < totalEstimatedJobCost;
 
-  const recommendedQuotePrice = useMemo(
-    () => (totalEstimatedJobCost > 0 ? totalEstimatedJobCost * (1 + marginPercent / 100) : 0),
-    [marginPercent, totalEstimatedJobCost]
-  );
-  const finalQuotePrice = useMemo(
-    () => parseNumber(form.final_quote_price) ?? recommendedQuotePrice,
-    [form.final_quote_price, recommendedQuotePrice]
-  );
-  const expectedProfit = useMemo(
-    () => (finalQuotePrice > 0 ? finalQuotePrice - totalEstimatedJobCost : null),
-    [finalQuotePrice, totalEstimatedJobCost]
-  );
-  const expectedMarginPercent = useMemo(
-    () =>
-      finalQuotePrice > 0 && expectedProfit != null
-        ? (expectedProfit / finalQuotePrice) * 100
-        : null,
-    [expectedProfit, finalQuotePrice]
-  );
+  useEffect(() => {
+    if (manualQuoteOverride) return;
+    const nextQuote = recommendedQuotePrice > 0 ? formatInputNumber(recommendedQuotePrice, 2) : "";
+    setForm((current) =>
+      current.final_quote_price === nextQuote
+        ? current
+        : { ...current, final_quote_price: nextQuote }
+    );
+  }, [manualQuoteOverride, recommendedQuotePrice]);
+
   const customerOptions = useMemo(
     () =>
       Array.from(
@@ -1987,6 +2009,7 @@ export default function ShipmentsPage() {
     setDistanceMessage(null);
     setRouteEstimateMeta(null);
     setLastEstimatedRouteKey("");
+    setManualQuoteOverride(false);
   }, [shipments]);
 
   const setLocationField = useCallback(
@@ -2341,8 +2364,15 @@ export default function ShipmentsPage() {
       cost_estimation_status: normalized.costEstimationStatus,
       cost_estimation_note: normalized.costEstimationNote
     };
+    const savedFinalQuote = normalized.finalQuote;
+    const savedRecommendedQuote = normalized.systemRecommendedQuote;
 
     setForm(nextForm);
+    setManualQuoteOverride(
+      savedFinalQuote != null &&
+        savedRecommendedQuote != null &&
+        Math.abs(savedFinalQuote - savedRecommendedQuote) > 0.005
+    );
     setManualVehicleDefaults({ vehicleType: true, efficiency: true });
     setLastEstimatedRouteKey(buildFormRouteKey(nextForm));
     setDistanceMessage(null);
@@ -2403,6 +2433,7 @@ export default function ShipmentsPage() {
         quotePrice: finalQuotePrice > 0 ? finalQuotePrice : null,
         profit: expectedProfit,
         marginPercent: expectedMarginPercent,
+        markupOnCostPercent,
         status: form.status,
         notes: form.notes.trim()
       },
@@ -2436,6 +2467,7 @@ export default function ShipmentsPage() {
     form.weight,
     form.width,
     kmPerLitre,
+    markupOnCostPercent,
     parkingCost,
     tollEstimate,
     totalEstimatedJobCost,
@@ -2497,6 +2529,7 @@ export default function ShipmentsPage() {
         quotePrice: normalized.quotePrice,
         profit: normalized.profit,
         marginPercent: normalized.marginPercent,
+        markupOnCostPercent: normalized.markupPercent,
         status: normalized.status,
         notes: normalized.notes
       },
@@ -2793,6 +2826,7 @@ export default function ShipmentsPage() {
           setDistanceMessage(null);
           setRouteEstimateMeta(null);
           setLastEstimatedRouteKey("");
+          setManualQuoteOverride(false);
         } else {
           resetForm();
         }
@@ -3002,6 +3036,7 @@ export default function ShipmentsPage() {
       labels.export.headers.quotePrice,
       labels.export.headers.profit,
       labels.export.headers.marginPercent,
+      labels.markup,
       labels.export.headers.status,
       labels.export.headers.date
     ];
@@ -3019,6 +3054,7 @@ export default function ShipmentsPage() {
         String(normalized.quotePrice ?? ""),
         String(normalized.profit ?? ""),
         String(normalized.marginPercent ?? ""),
+        String(normalized.markupPercent ?? ""),
         normalized.status,
         normalized.shipmentDate
       ];
@@ -3622,9 +3658,16 @@ export default function ShipmentsPage() {
                       { label: labels.totalTravelTime, value: estimatedDurationMinutes, valueClass: "text-white", type: "duration" },
                       { label: labels.fuelCost, value: estimatedFuelCost, valueClass: "text-amber-200", type: "money" },
                       { label: labels.totalCost, value: totalEstimatedJobCost > 0 ? totalEstimatedJobCost : null, valueClass: "text-white", type: "money" },
+                      { label: labels.systemRecommendedQuote, value: recommendedQuotePrice > 0 ? recommendedQuotePrice : null, valueClass: "text-slate-100", type: "money" },
                       { label: labels.finalCustomerQuote, value: finalQuotePrice > 0 ? finalQuotePrice : null, valueClass: "text-emerald-200", type: "money" },
-                      { label: labels.expectedProfit, value: expectedProfit, valueClass: "text-emerald-200", type: "money" },
-                      { label: labels.expectedMargin, value: expectedMarginPercent, valueClass: "text-emerald-100", type: "percent" }
+                      {
+                        label: labels.expectedProfit,
+                        value: expectedProfit,
+                        valueClass: expectedProfit != null && expectedProfit < 0 ? "text-rose-200" : "text-emerald-200",
+                        type: "money"
+                      },
+                      { label: labels.expectedMargin, value: expectedMarginPercent, valueClass: expectedMarginPercent != null && expectedMarginPercent < 0 ? "text-rose-100" : "text-emerald-100", type: "percent" },
+                      { label: labels.markup, value: markupOnCostPercent, valueClass: markupOnCostPercent != null && markupOnCostPercent < 0 ? "text-rose-100" : "text-emerald-100", type: "percent" }
                     ].map(({ label, value, valueClass, type }) => {
                       const numericValue = typeof value === "number" ? value : null;
 
@@ -3676,18 +3719,53 @@ export default function ShipmentsPage() {
                       </p>
                     </div>
                     <div className="rounded-[1rem] border border-emerald-300/30 bg-emerald-400/10 p-3">
-                      <label className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-100">
-                        {labels.finalQuoteSentToCustomer}
-                      </label>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <label className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-100">
+                          {labels.finalQuoteSentToCustomer}
+                        </label>
+                        {isManualQuoteOverride ? (
+                          <span className="rounded-full border border-amber-200/40 bg-amber-300/15 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-100">
+                            {labels.manualOverride}
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="mt-2 text-xs font-semibold text-emerald-50/80">
+                        {labels.systemRecommendedQuote}: {formatCurrency(recommendedQuotePrice, language)}
+                      </p>
                       <input
                         value={form.final_quote_price}
-                        onChange={(event) =>
-                          setForm((current) => ({ ...current, final_quote_price: event.target.value }))
-                        }
+                        onChange={(event) => {
+                          const nextValue = event.target.value;
+                          const nextQuote = parseNumber(nextValue);
+                          setManualQuoteOverride(
+                            nextQuote != null && Math.abs(nextQuote - recommendedQuotePrice) > 0.005
+                          );
+                          setForm((current) => ({ ...current, final_quote_price: nextValue }));
+                        }}
                         placeholder={formatInputNumber(recommendedQuotePrice, 2)}
                         className="mt-2 min-h-[48px] rounded-[0.95rem] border-white/10 bg-white text-lg font-semibold text-slate-950"
                         inputMode="decimal"
                       />
+                      {isManualQuoteOverride ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setManualQuoteOverride(false);
+                            setForm((current) => ({
+                              ...current,
+                              final_quote_price: recommendedQuotePrice > 0 ? formatInputNumber(recommendedQuotePrice, 2) : ""
+                            }));
+                          }}
+                          className="mt-2 min-h-8 rounded-full border border-white/20 px-3 py-1 text-xs font-bold text-white transition hover:bg-white/10"
+                        >
+                          {labels.resetToRecommended}
+                        </button>
+                      ) : null}
+                      {finalQuoteBelowCost ? (
+                        <p className="mt-2 rounded-lg border border-rose-300/30 bg-rose-400/15 px-2 py-1.5 text-xs font-bold text-rose-100">
+                          {labels.finalQuoteBelowCost}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -4211,6 +4289,16 @@ export default function ShipmentsPage() {
                           : EMPTY_VALUE}
                       </p>
                     </div>
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                        {labels.markup}
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-slate-950">
+                        {normalized.markupPercent != null
+                          ? `${formatNumber(normalized.markupPercent, language, 1)}%`
+                          : EMPTY_VALUE}
+                      </p>
+                    </div>
                   </div>
 
                   <div className="mt-4 flex gap-2">
@@ -4263,6 +4351,7 @@ export default function ShipmentsPage() {
                         <th className="table-head-cell text-right">{labels.table.quote}</th>
                         <th className="table-head-cell text-right">{labels.table.profit}</th>
                         <th className="table-head-cell text-right">{labels.table.margin}</th>
+                        <th className="table-head-cell text-right">{labels.markup}</th>
                         <th className="table-head-cell">{labels.table.status}</th>
                         <th className="table-head-cell">{labels.table.date}</th>
                         <th className="table-head-cell">{labels.table.action}</th>
@@ -4306,6 +4395,11 @@ export default function ShipmentsPage() {
                           <td className="table-body-cell text-right text-base font-bold text-slate-950">
                             {normalized.marginPercent != null
                               ? `${formatNumber(normalized.marginPercent, language, 1)}%`
+                              : EMPTY_VALUE}
+                          </td>
+                          <td className="table-body-cell text-right text-base font-bold text-slate-950">
+                            {normalized.markupPercent != null
+                              ? `${formatNumber(normalized.markupPercent, language, 1)}%`
                               : EMPTY_VALUE}
                           </td>
                           <td className="table-body-cell">

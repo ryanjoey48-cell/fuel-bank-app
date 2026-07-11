@@ -2,6 +2,7 @@
 
 import {
   AlertTriangle,
+  ArrowUpDown,
   ChevronRight,
   Clock3,
   Download,
@@ -336,7 +337,6 @@ type BossPdfReportData = {
   fuelLogs: BossPdfFuelLogRow[];
   fuelEfficiency: string;
   generatedAt: string;
-  moreFuelLogCount: number;
   mileageRange: {
     distanceTravelled: string;
     endMileage: string;
@@ -497,7 +497,6 @@ type BossPdfCopy = {
   litres: string;
   mileage: string;
   mileageRange: string;
-  moreFuelLogsIncluded: (count: number) => string;
   needsReceiptCheck: string;
   notChecked: string;
   periodFuelEfficiency: string;
@@ -543,7 +542,6 @@ function getBossPdfCopy(language: "en" | "th"): BossPdfCopy {
       litres: "เธฅเธดเธ•เธฃ",
       mileage: "เน€เธฅเธเนเธกเธฅเน",
       mileageRange: "เธเนเธงเธเน€เธฅเธเนเธกเธฅเน",
-      moreFuelLogsIncluded: (count) => `+ ${count} เธฃเธฒเธขเธเธฒเธฃเน€เธ•เธดเธกเธเนเธณเธกเธฑเธเน€เธเธดเนเธกเน€เธ•เธดเธก`,
       needsReceiptCheck: "เธ•เนเธญเธเธ•เธฃเธงเธเนเธเน€เธชเธฃเนเธ",
       notChecked: "เธขเธฑเธเนเธกเนเธ•เธฃเธงเธ",
       periodFuelEfficiency: "เธเธฃเธฐเธชเธดเธ—เธเธดเธ เธฒเธเธเนเธณเธกเธฑเธเธ•เธฒเธกเธเนเธงเธเธงเธฑเธเธ—เธตเน",
@@ -588,7 +586,6 @@ function getBossPdfCopy(language: "en" | "th"): BossPdfCopy {
     litres: "Litres",
     mileage: "Mileage",
     mileageRange: "Mileage range",
-    moreFuelLogsIncluded: (count) => `+ ${count} more fuel logs included`,
     needsReceiptCheck: "Needs receipt check",
     notChecked: "Not checked",
     periodFuelEfficiency: "Period fuel efficiency",
@@ -651,7 +648,6 @@ function getThaiBossPdfCopy(): BossPdfCopy {
     litres: "ลิตร",
     mileage: "เลขไมล์",
     mileageRange: "ช่วงเลขไมล์",
-    moreFuelLogsIncluded: (count) => `+ ${count} รายการเติมน้ำมันเพิ่มเติม`,
     needsReceiptCheck: "ต้องตรวจใบเสร็จ",
     notChecked: "ยังไม่ตรวจ",
     periodFuelEfficiency: "ประสิทธิภาพน้ำมันตามช่วงวันที่",
@@ -726,17 +722,27 @@ function binaryStringFromDataUrl(dataUrl: string) {
   return atob(dataUrl.split(",")[1] ?? "");
 }
 
-function buildSingleImagePdf(imageData: string, imageWidth: number, imageHeight: number) {
+function buildImagePagesPdf(imagePages: Array<{ data: string; height: number; width: number }>) {
   const pageWidth = 595;
   const pageHeight = 842;
-  const contentStream = `q ${pageWidth} 0 0 ${pageHeight} 0 0 cm /PageImage Do Q`;
+  const kids = imagePages.map((_, index) => `${3 + index * 3} 0 R`).join(" ");
   const objects = [
     "<< /Type /Catalog /Pages 2 0 R >>",
-    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /XObject << /PageImage 5 0 R >> >> /Contents 4 0 R >>`,
-    `<< /Length ${contentStream.length} >>\nstream\n${contentStream}\nendstream`,
-    `<< /Type /XObject /Subtype /Image /Width ${imageWidth} /Height ${imageHeight} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageData.length} >>\nstream\n${imageData}\nendstream`
+    `<< /Type /Pages /Kids [${kids}] /Count ${imagePages.length} >>`
   ];
+
+  imagePages.forEach((page, index) => {
+    const imageName = `PageImage${index + 1}`;
+    const contentStream = `q ${pageWidth} 0 0 ${pageHeight} 0 0 cm /${imageName} Do Q`;
+    const pageObjectNumber = 3 + index * 3;
+    const contentObjectNumber = pageObjectNumber + 1;
+    const imageObjectNumber = pageObjectNumber + 2;
+    objects.push(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /XObject << /${imageName} ${imageObjectNumber} 0 R >> >> /Contents ${contentObjectNumber} 0 R >>`,
+      `<< /Length ${contentStream.length} >>\nstream\n${contentStream}\nendstream`,
+      `<< /Type /XObject /Subtype /Image /Width ${page.width} /Height ${page.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${page.data.length} >>\nstream\n${page.data}\nendstream`
+    );
+  });
 
   let pdf = "%PDF-1.4\n";
   const offsets = [0];
@@ -766,20 +772,13 @@ async function buildBossFuelEfficiencyCanvasPdf(data: BossPdfReportData, logo: P
   const pageWidth = 595;
   const pageHeight = 842;
   const scale = 2;
-  const canvas = document.createElement("canvas");
-  canvas.width = pageWidth * scale;
-  canvas.height = pageHeight * scale;
-  const context = canvas.getContext("2d");
-  if (!context) {
-    throw new Error("Unable to prepare PDF canvas.");
-  }
-
-  context.scale(scale, scale);
   const copy = normalizeBossPdfCopy(getBossPdfCopy(language), language);
   const fontFamily = getPdfFontFamily(language);
   const margin = 42;
   const contentWidth = pageWidth - margin * 2;
   const isThai = language === "th";
+  const tableBottom = 746;
+  const pageImages: Array<{ data: string; height: number; width: number }> = [];
 
   const color = {
     border: "#e2e8f0",
@@ -795,6 +794,9 @@ async function buildBossFuelEfficiencyCanvasPdf(data: BossPdfReportData, logo: P
     text: "#0f172a"
   };
   const totalFuelLogsLabel = isThai ? "\u0e08\u0e33\u0e19\u0e27\u0e19\u0e43\u0e1a\u0e40\u0e2a\u0e23\u0e47\u0e08\u0e17\u0e31\u0e49\u0e07\u0e2b\u0e21\u0e14" : "Total fuel logs";
+  let canvas!: HTMLCanvasElement;
+  let context!: CanvasRenderingContext2D;
+  let pageNumber = 0;
 
   const setFont = (size: number, weight: 400 | 500 | 600 | 700 = 400) => {
     context.font = `${weight} ${size}px ${fontFamily}`;
@@ -837,10 +839,48 @@ async function buildBossFuelEfficiencyCanvasPdf(data: BossPdfReportData, logo: P
   const drawSectionTitle = (title: string, y: number) => {
     drawText(title, margin, y, { size: isThai ? 9.5 : 10, weight: 700 });
   };
+  const drawFooter = () => {
+    drawText(copy.companyName, margin, 786, { color: color.text, maxWidth: contentWidth, size: isThai ? 7 : 7.6, weight: 700 });
+    drawText("Fuel Efficiency Analysis Report", margin, 799, { color: color.muted, maxWidth: contentWidth, size: isThai ? 6.6 : 7.4, weight: 700 });
+    drawText(copy.footer, margin, 812, { color: color.muted, maxWidth: contentWidth - 40, size: isThai ? 6.2 : 7 });
+    drawText(String(pageNumber), pageWidth - margin - 8, 812, { color: color.muted, size: 7, weight: 700 });
+  };
+  const startPage = (continuation = false) => {
+    pageNumber += 1;
+    canvas = document.createElement("canvas");
+    canvas.width = pageWidth * scale;
+    canvas.height = pageHeight * scale;
+    const nextContext = canvas.getContext("2d");
+    if (!nextContext) {
+      throw new Error("Unable to prepare PDF canvas.");
+    }
+    context = nextContext;
+    context.scale(scale, scale);
+    fillRect(0, 0, pageWidth, pageHeight, "#ffffff");
+    fillRect(0, 0, 8, pageHeight, "#6d28d9");
 
-  fillRect(0, 0, pageWidth, pageHeight, "#ffffff");
-  fillRect(0, 0, 8, pageHeight, "#6d28d9");
-  fillRect(0, 0, pageWidth, 62, color.soft);
+    if (continuation) {
+      fillRect(0, 0, pageWidth, 52, color.soft);
+      drawText(copy.companyName, margin, 22, { size: isThai ? 8 : 8.7, weight: 700 });
+      drawText(copy.reportTitle, margin, 39, { color: color.purple, size: isThai ? 10.5 : 12, weight: 700, maxWidth: 280 });
+      drawText(`${copy.generated}: ${data.generatedAt}`, 340, 30, { color: color.muted, size: isThai ? 6.8 : 7.4, maxWidth: 210 });
+      return 76;
+    }
+
+    fillRect(0, 0, pageWidth, 62, color.soft);
+    return 84;
+  };
+  const finishPage = () => {
+    drawFooter();
+    const pageImage = canvas.toDataURL("image/jpeg", 0.92);
+    pageImages.push({
+      data: binaryStringFromDataUrl(pageImage),
+      height: canvas.height,
+      width: canvas.width
+    });
+  };
+
+  let y = startPage(false);
 
   if (logo?.dataUrl) {
     try {
@@ -860,7 +900,6 @@ async function buildBossFuelEfficiencyCanvasPdf(data: BossPdfReportData, logo: P
   drawText(copy.subtitle, 340, 31, { color: color.muted, size: isThai ? 7.4 : 8, maxWidth: 210, weight: 600 });
   drawText(`${copy.generated}: ${data.generatedAt}`, 340, 46, { color: color.muted, size: isThai ? 7.2 : 7.6, maxWidth: 210 });
 
-  let y = 84;
   drawSectionTitle(copy.selectedFilters, y);
   y += 9;
   const filterCards = [
@@ -914,27 +953,39 @@ async function buildBossFuelEfficiencyCanvasPdf(data: BossPdfReportData, logo: P
     [copy.checkedStatus, 82]
   ] as [string, number][];
   const tableWidth = tableColumns.reduce((sum, [, width]) => sum + width, 0);
-  const rowHeight = 18;
-  const totalRowHeight = 19;
-  const tableHeight = 20 + Math.max(1, data.fuelLogs.length) * rowHeight + totalRowHeight + (data.moreFuelLogCount > 0 ? 15 : 0);
-  fillRect(margin, y, tableWidth, tableHeight, "#ffffff", color.border);
-  fillRect(margin, y, tableWidth, 20, color.soft);
-  x = margin;
-  tableColumns.forEach(([label, width], index) => {
-    drawText(label, x + 5, y + 13, { color: color.muted, maxWidth: width - 8, size: isThai ? 6.2 : 6.8, weight: 700 });
-    if (index > 0) line(x, y, x, y + tableHeight, "#edf2f7");
-    x += width;
-  });
+  const rowHeight = 20;
+  const totalRowHeight = 24;
+  const drawTableHeader = (headerY: number) => {
+    fillRect(margin, headerY, tableWidth, 20, color.soft, color.border);
+    x = margin;
+    tableColumns.forEach(([label, width], index) => {
+      drawText(label, x + 5, headerY + 13, { color: color.muted, maxWidth: width - 8, size: isThai ? 6.2 : 6.8, weight: 700 });
+      if (index > 0) line(x, headerY, x, headerY + 20, "#edf2f7");
+      x += width;
+    });
+    return headerY + 20;
+  };
+  const continueTableOnNewPage = () => {
+    finishPage();
+    y = startPage(true);
+    drawSectionTitle(copy.fuelLogsUsed, y);
+    y += 9;
+    y = drawTableHeader(y);
+  };
+
+  y = drawTableHeader(y);
   if (data.fuelLogs.length) {
-    data.fuelLogs.forEach((row, rowIndex) => {
-      const rowY = y + 20 + rowIndex * rowHeight;
-      line(margin, rowY, margin + tableWidth, rowY, "#edf2f7");
+    data.fuelLogs.forEach((row) => {
+      if (y + rowHeight > tableBottom) {
+        continueTableOnNewPage();
+      }
+      fillRect(margin, y, tableWidth, rowHeight, "#ffffff", color.border);
       const values = [row.date, row.vehicle, row.mileage, row.litres, row.cost, row.checkedStatus];
       x = margin;
       values.forEach((value, index) => {
         const width = tableColumns[index][1];
         const isUnchecked = index === 5 && value === copy.notChecked;
-        drawText(value, x + 5, rowY + 12, {
+        drawText(value, x + 5, y + 13, {
           color: isUnchecked ? color.orange : color.text,
           maxWidth: width - 8,
           size: isThai ? 6.6 : 7.4,
@@ -942,38 +993,41 @@ async function buildBossFuelEfficiencyCanvasPdf(data: BossPdfReportData, logo: P
         });
         x += width;
       });
+      y += rowHeight;
     });
+  } else {
+    fillRect(margin, y, tableWidth, rowHeight, "#ffffff", color.border);
+    drawText("-", margin + 5, y + 13, { color: color.muted, size: 7.4 });
+    y += rowHeight;
   }
-  if (data.moreFuelLogCount > 0) {
-    drawText(copy.moreFuelLogsIncluded(data.moreFuelLogCount), margin + 6, y + tableHeight - 5, {
-      color: color.muted,
-      maxWidth: 300,
-      size: isThai ? 6.8 : 7.4,
-      weight: 700
-    });
+  if (y + totalRowHeight > tableBottom) {
+    continueTableOnNewPage();
   }
-  const totalRowY = y + 20 + Math.max(1, data.fuelLogs.length) * rowHeight;
-  fillRect(margin, totalRowY, tableWidth, totalRowHeight, "#f8fafc");
-  line(margin, totalRowY, margin + tableWidth, totalRowY, color.border);
-  drawText(`${totalFuelLogsLabel}: ${data.totalFuelLogCount}`, margin + 7, totalRowY + 13, {
+  fillRect(margin, y, tableWidth, totalRowHeight, "#f8fafc", color.border);
+  drawText(`${totalFuelLogsLabel}: ${data.totalFuelLogCount}`, margin + 7, y + 15, {
     color: color.text,
     maxWidth: 130,
     size: isThai ? 6.8 : 7.5,
     weight: 700
   });
-  drawText(`${copy.totalLitres}: ${data.totalLitres}`, margin + 155, totalRowY + 13, {
+  drawText(`${copy.totalLitres}: ${data.totalLitres}`, margin + 155, y + 15, {
     color: color.text,
     maxWidth: 140,
     size: isThai ? 6.8 : 7.5,
     weight: 700
   });
-  drawText(`${copy.fuelCost}: ${data.totalFuelCost}`, margin + 310, totalRowY + 13, {
+  drawText(`${copy.fuelCost}: ${data.totalFuelCost}`, margin + 310, y + 15, {
     color: color.text,
     maxWidth: 180,
     size: isThai ? 6.8 : 7.5,
     weight: 700
   });
-  y += tableHeight + 21;
+  y += totalRowHeight + 21;
+
+  if (y + 150 > tableBottom) {
+    finishPage();
+    y = startPage(true);
+  }
 
   drawSectionTitle(copy.howCalculated, y);
   y += 9;
@@ -1012,12 +1066,8 @@ async function buildBossFuelEfficiencyCanvasPdf(data: BossPdfReportData, logo: P
     weight: 700
   });
 
-  drawText(copy.companyName, margin, 786, { color: color.text, maxWidth: contentWidth, size: isThai ? 7 : 7.6, weight: 700 });
-  drawText("Fuel Efficiency Analysis Report", margin, 799, { color: color.muted, maxWidth: contentWidth, size: isThai ? 6.6 : 7.4, weight: 700 });
-  drawText(copy.footer, margin, 812, { color: color.muted, maxWidth: contentWidth, size: isThai ? 6.2 : 7 });
-
-  const pageImage = canvas.toDataURL("image/jpeg", 0.92);
-  return buildSingleImagePdf(binaryStringFromDataUrl(pageImage), canvas.width, canvas.height);
+  finishPage();
+  return buildImagePagesPdf(pageImages);
 }
 
 async function buildBossFuelEfficiencyPdf(data: BossPdfReportData, logo: PdfLogo, language: "en" | "th") {
@@ -1134,6 +1184,18 @@ function getNumericValue(value: number | null | undefined) {
   return Number.isFinite(numericValue) ? numericValue : 0;
 }
 
+function getFuelLogPricePerLitre(log: Pick<FuelLogWithDriver, "litres" | "total_cost">) {
+  const litres = Number(log.litres || 0);
+  const totalCost = Number(log.total_cost || 0);
+  return litres > 0 && Number.isFinite(totalCost) ? totalCost / litres : null;
+}
+
+function formatPricePerLitre(value: number | null | undefined, language: "en" | "th") {
+  return value != null && Number.isFinite(value)
+    ? `THB ${formatNumber(value, language, 2)}/L`
+    : "—";
+}
+
 function getStoredFilters(): FuelLogFilters {
   if (typeof window === "undefined") return initialFilters;
   try {
@@ -1247,7 +1309,11 @@ export default function FuelLogsPage() {
     pageLabel: language === "th" ? "เธซเธเนเธฒ" : "Page",
     ofLabel: language === "th" ? "เธเธฒเธ" : "of",
     possibleDuplicate: language === "th" ? "เธญเธฒเธเน€เธเนเธเธฃเธฒเธขเธเธฒเธฃเธเนเธณ" : "Possible duplicate entry",
-    missingOdometer: language === "th" ? "เนเธกเนเธกเธตเน€เธฅเธเนเธกเธฅเน" : "Missing mileage"
+    missingOdometer: language === "th" ? "เนเธกเนเธกเธตเน€เธฅเธเนเธกเธฅเน" : "Missing mileage",
+    pricePerLitreThb: language === "th" ? "ราคาต่อลิตร (THB/L)" : "Price per litre (THB/L)",
+    averagePricePerLitreShort: language === "th" ? "เฉลี่ย THB/L" : "Avg THB/L",
+    sortAscending: language === "th" ? "เรียงจากต่ำไปสูง" : "Lowest to highest",
+    sortDescending: language === "th" ? "เรียงจากสูงไปต่ำ" : "Highest to lowest"
   };
 
   const uxCopy = {
@@ -1368,8 +1434,8 @@ export default function FuelLogsPage() {
   const [missingMileageEntryFilter, setMissingMileageEntryFilter] = useState(false);
   const [expandedFuelDates, setExpandedFuelDates] = useState<Set<string>>(new Set());
   const [expandedFuelEntryDetails, setExpandedFuelEntryDetails] = useState<Set<string>>(new Set());
-  const [sortKey] = useState<FuelLogSortKey>("date");
-  const [sortDirection] = useState<FuelLogSortDirection>("desc");
+  const [sortKey, setSortKey] = useState<FuelLogSortKey>("date");
+  const [sortDirection, setSortDirection] = useState<FuelLogSortDirection>("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -1453,16 +1519,55 @@ export default function FuelLogsPage() {
       a.localeCompare(b, language === "th" ? "th" : "en", { sensitivity: "base" })
     );
   }, [efficiencySourceLogs, fuelLogs, language]);
-  const tripLinkByFuelLogId = useMemo(
-    () => new Map(tripFuelLinks.map((link) => [String(link.fuel_log_id), link])),
+  const tripLinkCountByFuelLogId = useMemo(
+    () =>
+      tripFuelLinks.reduce((map, link) => {
+        const id = String(link.fuel_log_id);
+        map.set(id, (map.get(id) ?? 0) + 1);
+        return map;
+      }, new Map<string, number>()),
     [tripFuelLinks]
   );
-  const getFuelTripLabel = (log: FuelLogWithDriver) =>
-    tripLinkByFuelLogId.has(String(log.id)) ? "Linked to trip" : "Not linked to trip";
+  const getFuelTripLinkCount = (log: FuelLogWithDriver) => tripLinkCountByFuelLogId.get(String(log.id)) ?? 0;
+  const getFuelTripLabel = (log: FuelLogWithDriver) => {
+    const count = getFuelTripLinkCount(log);
+    if (count <= 0) return language === "th" ? "ยังไม่เชื่อมกับทริป" : "Not linked to trip";
+    const tripText = language === "th"
+      ? `เชื่อมกับ ${formatNumber(count, language)} ทริป`
+      : count === 1 ? "Linked to 1 trip" : `Linked to ${count} trips`;
+    const cycleText = language === "th" ? "ใช้ในรอบน้ำมัน" : "Used in fuel cycle";
+    return `${tripText} · ${cycleText}`;
+  };
   const getFuelTripBadgeClass = (log: FuelLogWithDriver) =>
-    tripLinkByFuelLogId.has(String(log.id))
+    getFuelTripLinkCount(log) > 0
       ? "border-emerald-200 bg-emerald-50 text-emerald-700"
       : "border-slate-200 bg-slate-50 text-slate-600";
+  const getPricePerLitreClass = (pricePerLitre: number | null, averagePricePerLitre: number | null) => {
+    if (pricePerLitre == null || averagePricePerLitre == null || averagePricePerLitre <= 0) {
+      return "text-slate-600";
+    }
+    if (pricePerLitre >= averagePricePerLitre * 1.1) return "text-rose-700";
+    if (pricePerLitre > averagePricePerLitre) return "text-amber-700";
+    if (pricePerLitre <= averagePricePerLitre * 0.9) return "text-emerald-700";
+    return "text-slate-700";
+  };
+  const toggleFuelLogSort = (nextSortKey: FuelLogSortKey) => {
+    setCurrentPage(1);
+    setSortKey((currentKey) => {
+      if (currentKey !== nextSortKey) {
+        setSortDirection(nextSortKey === "price_per_litre" ? "asc" : "desc");
+        return nextSortKey;
+      }
+      setSortDirection((currentDirection) => (currentDirection === "asc" ? "desc" : "asc"));
+      return currentKey;
+    });
+  };
+  const getSortLabel = (targetSortKey: FuelLogSortKey) =>
+    sortKey === targetSortKey
+      ? sortDirection === "asc"
+        ? copy.sortAscending
+        : copy.sortDescending
+      : "";
 
   const efficiencyRows = useMemo(() => buildEfficiencyRows(efficiencySourceLogs), [efficiencySourceLogs]);
 
@@ -1727,6 +1832,7 @@ export default function FuelLogsPage() {
         checked: number;
         notChecked: number;
         missingMileage: number;
+        averagePricePerLitre: number | null;
       }
     >();
 
@@ -1738,7 +1844,8 @@ export default function FuelLogsPage() {
         totalLitres: 0,
         checked: 0,
         notChecked: 0,
-        missingMileage: 0
+        missingMileage: 0,
+        averagePricePerLitre: null
       };
       group.logs.push(log);
       group.totalCost += Number(log.total_cost || 0);
@@ -1754,8 +1861,15 @@ export default function FuelLogsPage() {
       groups.set(log.date, group);
     });
 
-    return Array.from(groups.values()).sort((left, right) => right.date.localeCompare(left.date));
-  }, [visibleFuelLogs]);
+    groups.forEach((group) => {
+      group.averagePricePerLitre = group.totalLitres > 0 ? group.totalCost / group.totalLitres : null;
+    });
+
+    const groupedRows = Array.from(groups.values());
+    return sortKey === "price_per_litre"
+      ? groupedRows
+      : groupedRows.sort((left, right) => right.date.localeCompare(left.date));
+  }, [sortKey, visibleFuelLogs]);
   const visibleFuelDateKeys = useMemo(() => groupedFuelLogs.map((group) => group.date), [groupedFuelLogs]);
   const allFuelDateGroupsExpanded =
     visibleFuelDateKeys.length > 0 && visibleFuelDateKeys.every((date) => expandedFuelDates.has(date));
@@ -2210,7 +2324,7 @@ export default function FuelLogsPage() {
           [t.fuelLogs.mileage]: log.mileage ?? "",
           [t.fuelLogs.litres]: log.litres,
           [t.fuelLogs.totalCost]: log.total_cost,
-          [t.fuelLogs.pricePerLitre]: log.price_per_litre ?? "",
+          [copy.pricePerLitreThb]: getFuelLogPricePerLitre(log)?.toFixed(2) ?? "",
           [t.fuelLogs.location]: log.location,
           [t.fuelLogs.fuelType]: getFuelTypeLabelWithFallback(t, log.fuel_type),
           [t.fuelLogs.paymentMethod]: getPaymentMethodLabelWithFallback(t, log.payment_method),
@@ -2385,7 +2499,7 @@ export default function FuelLogsPage() {
       const litresForCalculation = formatNumber(tripSummary.totalLitres, pdfLanguage, 2);
       const fuelEfficiency =
         tripSummary.tripKmPerLitre != null ? `${formatNumber(tripSummary.tripKmPerLitre, pdfLanguage, 2)} km/L` : "-";
-      const fuelLogsForPdf = sortedLogs.slice(0, 3).map((log) => {
+      const fuelLogsForPdf = sortedLogs.map((log) => {
         const mileageValue = getMileageValue(log.mileage);
         return {
           checkedStatus: log.receipt_checked ? bossPdfCopy.checked : bossPdfCopy.notChecked,
@@ -2435,7 +2549,6 @@ export default function FuelLogsPage() {
             endMileage: tripSummary.endMileage != null ? `${formatNumber(tripSummary.endMileage, pdfLanguage, 0)} km` : "-",
             startMileage: tripSummary.startMileage != null ? `${formatNumber(tripSummary.startMileage, pdfLanguage, 0)} km` : "-"
           },
-          moreFuelLogCount: Math.max(0, sortedLogs.length - fuelLogsForPdf.length),
           totalFuelLogCount: sortedLogs.length,
           totalFuelCost: formatCurrency(tripSummary.totalFuelCost, pdfLanguage),
           totalLitres,
@@ -3104,7 +3217,7 @@ export default function FuelLogsPage() {
                         <span className="min-w-0">
                           <span className="block text-xs font-bold uppercase tracking-[0.14em] text-brand-800">{formatFuelDateHeading(group.date, language)}</span>
                           <span className="mt-1 block text-[11px] font-semibold text-slate-500">
-                            {formatNumber(group.logs.length, language)} {t.common.entries} | {formatCurrency(group.totalCost, language)} | {formatNumber(group.totalLitres, language, 2)} {t.fuelLogs.litres}
+                            {formatNumber(group.logs.length, language)} {t.common.entries} | {formatCurrency(group.totalCost, language)} | {formatNumber(group.totalLitres, language, 2)} {t.fuelLogs.litres} | {copy.averagePricePerLitreShort} {group.averagePricePerLitre != null ? formatNumber(group.averagePricePerLitre, language, 2) : "—"}
                           </span>
                         </span>
                         <span className="booking-date-chevron">
@@ -3116,6 +3229,7 @@ export default function FuelLogsPage() {
                           {group.logs.map((log) => {
                             const detailsExpanded = expandedFuelEntryDetails.has(String(log.id));
                             const missingMileage = isMissingMileage(log);
+                            const pricePerLitre = getFuelLogPricePerLitre(log);
                             return (
                               <article key={log.id} className={`rounded-[0.9rem] border p-3 ${missingMileage ? "border-amber-200 bg-amber-50/50" : "border-slate-200 bg-white/85"}`}>
                                 <div className="flex items-start justify-between gap-3">
@@ -3126,7 +3240,7 @@ export default function FuelLogsPage() {
                                   </div>
                                   <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${getReceiptCheckBadgeClass(log.receipt_checked)}`}>{getReceiptCheckLabel(log.receipt_checked, language)}</span>
                                 </div>
-                                <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                                <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                                   <div className="rounded-lg bg-slate-50 px-2 py-2">
                                     <p className="font-semibold text-slate-500">{t.fuelLogs.litres}</p>
                                     <p className="font-bold text-slate-950">{formatNumber(Number(log.litres || 0), language, 2)}</p>
@@ -3134,6 +3248,10 @@ export default function FuelLogsPage() {
                                   <div className="rounded-lg bg-slate-50 px-2 py-2">
                                     <p className="font-semibold text-slate-500">{t.fuelLogs.totalCost}</p>
                                     <p className="font-bold text-slate-950">{formatCurrency(Number(log.total_cost || 0), language)}</p>
+                                  </div>
+                                  <div className="rounded-lg bg-slate-50 px-2 py-2">
+                                    <p className="font-semibold text-slate-500">{copy.pricePerLitreThb}</p>
+                                    <p className={`font-bold ${getPricePerLitreClass(pricePerLitre, group.averagePricePerLitre)}`}>{formatPricePerLitre(pricePerLitre, language)}</p>
                                   </div>
                                   <div className="rounded-lg bg-slate-50 px-2 py-2">
                                     <p className="font-semibold text-slate-500">{t.fuelLogs.mileage}</p>
@@ -3162,7 +3280,7 @@ export default function FuelLogsPage() {
                                 </div>
                                 {detailsExpanded ? (
                                   <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
-                                    <p>{t.fuelLogs.pricePerLitre}: {log.price_per_litre != null ? formatCurrency(Number(log.price_per_litre), language) : "-"}</p>
+                                    <p>{copy.pricePerLitreThb}: {formatPricePerLitre(pricePerLitre, language)}</p>
                                     <p>{uxCopy.trip}: {getFuelTripLabel(log)}</p>
                                     <p>{sourceCopy.label}: {sourceCopy.options[normalizeEntrySource(log.entry_source)]}</p>
                                     <p>{uxCopy.notes}: {log.notes || "-"}</p>
@@ -3180,14 +3298,25 @@ export default function FuelLogsPage() {
 
               <div className="table-shell booking-desktop-table hidden w-full md:block">
                 <div className="table-scroll w-full overflow-x-auto">
-                  <table className="w-full min-w-[940px]">
+                  <table className="w-full min-w-[1060px]">
                     <thead>
                       <tr>
                         <th className="booking-desktop-head-cell w-[8%]">{t.fuelLogs.date}</th>
                         <th className="booking-desktop-head-cell w-[15%]">{t.fuelLogs.driver}</th>
                         <th className="booking-desktop-head-cell w-[10%]">{t.fuelLogs.vehicleReg}</th>
                         <th className="booking-desktop-head-cell w-[8%] text-right">{t.fuelLogs.litres}</th>
-                        <th className="booking-desktop-head-cell w-[12%] text-right">{t.fuelLogs.totalCost}</th>
+                        <th className="booking-desktop-head-cell w-[11%] text-right">{t.fuelLogs.totalCost}</th>
+                        <th className="booking-desktop-head-cell w-[12%] text-right">
+                          <button
+                            type="button"
+                            onClick={() => toggleFuelLogSort("price_per_litre")}
+                            className="inline-flex items-center justify-end gap-1 text-right font-semibold text-slate-600 transition hover:text-slate-950"
+                            title={getSortLabel("price_per_litre") || copy.pricePerLitreThb}
+                          >
+                            <span>{copy.pricePerLitreThb}</span>
+                            <ArrowUpDown className="h-3.5 w-3.5" />
+                          </button>
+                        </th>
                         <th className="booking-desktop-head-cell w-[10%] text-right">{t.fuelLogs.mileage}</th>
                         <th className="booking-desktop-head-cell">{t.fuelLogs.location}</th>
                         <th className="booking-desktop-head-cell w-[10%]">{receiptCopy.filterLabel}</th>
@@ -3200,7 +3329,7 @@ export default function FuelLogsPage() {
                         return (
                           <Fragment key={group.date}>
                             <tr className="booking-desktop-date-row sticky top-0 z-20">
-                              <td colSpan={9}>
+                              <td colSpan={10}>
                                 <button
                                   type="button"
                                   onClick={() =>
@@ -3224,6 +3353,7 @@ export default function FuelLogsPage() {
                                         <span>{formatNumber(group.logs.length, language)} {t.common.entries}</span>
                                         <span>{formatCurrency(group.totalCost, language)}</span>
                                         <span>{formatNumber(group.totalLitres, language, 2)} {t.fuelLogs.litres}</span>
+                                        <span>{copy.averagePricePerLitreShort} {group.averagePricePerLitre != null ? formatNumber(group.averagePricePerLitre, language, 2) : "—"}</span>
                                         <span>{formatNumber(group.missingMileage, language)} {copy.missingOdometer}</span>
                                         <span>{formatNumber(group.notChecked, language)} {uxCopy.pendingCheck}</span>
                                       </div>
@@ -3236,6 +3366,7 @@ export default function FuelLogsPage() {
                             {isExpanded ? group.logs.map((log) => {
                               const detailsExpanded = expandedFuelEntryDetails.has(String(log.id));
                               const missingMileage = isMissingMileage(log);
+                              const pricePerLitre = getFuelLogPricePerLitre(log);
                               return (
                                 <Fragment key={log.id}>
                                   <tr className="enterprise-table-row">
@@ -3244,6 +3375,9 @@ export default function FuelLogsPage() {
                                     <td className="booking-desktop-cell whitespace-nowrap py-2 font-medium text-slate-500">{log.vehicle_reg}</td>
                                     <td className="booking-desktop-cell whitespace-nowrap py-2 text-right text-[13.5px] font-bold tabular-nums text-slate-950">{formatNumber(Number(log.litres || 0), language, 2)}</td>
                                     <td className="booking-desktop-cell whitespace-nowrap py-2 text-right text-[13.5px] font-bold tabular-nums text-slate-950">{formatCurrency(Number(log.total_cost || 0), language)}</td>
+                                    <td className={`booking-desktop-cell whitespace-nowrap py-2 text-right text-[13px] font-bold tabular-nums ${getPricePerLitreClass(pricePerLitre, group.averagePricePerLitre)}`}>
+                                      {formatPricePerLitre(pricePerLitre, language)}
+                                    </td>
                                     <td className="booking-desktop-cell whitespace-nowrap py-2 text-right text-[12.5px] tabular-nums text-slate-500">
                                       {missingMileage ? (
                                         <span className="inline-flex items-center justify-end gap-1.5">
@@ -3284,8 +3418,8 @@ export default function FuelLogsPage() {
                                   </tr>
                                   {detailsExpanded ? (
                                     <tr className="bg-slate-50/80">
-                                      <td colSpan={9} className="px-4 py-2 text-xs text-slate-600">
-                                        {t.fuelLogs.pricePerLitre}: {log.price_per_litre != null ? formatCurrency(Number(log.price_per_litre), language) : "-"} | {uxCopy.trip}: {getFuelTripLabel(log)} | {sourceCopy.label}: {sourceCopy.options[normalizeEntrySource(log.entry_source)]} | {uxCopy.receiptSource}: {sourceCopy.options[normalizeEntrySource(log.entry_source)]} | {uxCopy.notes}: {log.notes || "-"}
+                                      <td colSpan={10} className="px-4 py-2 text-xs text-slate-600">
+                                        {copy.pricePerLitreThb}: {formatPricePerLitre(pricePerLitre, language)} | {uxCopy.trip}: {getFuelTripLabel(log)} | {sourceCopy.label}: {sourceCopy.options[normalizeEntrySource(log.entry_source)]} | {uxCopy.receiptSource}: {sourceCopy.options[normalizeEntrySource(log.entry_source)]} | {uxCopy.notes}: {log.notes || "-"}
                                       </td>
                                     </tr>
                                   ) : null}

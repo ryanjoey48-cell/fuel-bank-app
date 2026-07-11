@@ -1031,13 +1031,22 @@ function mapFuelLogRows(
           : null,
     station: normalizeFuelLogLocation(log.location),
     location: normalizeFuelLogLocation(log.location),
-    price_per_litre: log.price_per_litre,
+    price_per_litre:
+      Number(log.litres || 0) > 0
+        ? Number(log.total_cost || 0) / Number(log.litres || 0)
+        : null,
     fuel_type: normalizeFuelTypeKey(log.fuel_type) ?? log.fuel_type,
     payment_method: normalizePaymentMethodKey(log.payment_method) ?? log.payment_method,
     entry_source: normalizeFuelLogEntrySource(log.entry_source),
     receipt_checked: Boolean(log.receipt_checked),
     receipt_checked_at: log.receipt_checked_at ?? null
   })) as FuelLogWithDriver[];
+}
+
+function getFuelLogPricePerLitre(row: Pick<FuelLogWithDriver, "litres" | "total_cost">) {
+  const litres = Number(row.litres || 0);
+  const totalCost = Number(row.total_cost || 0);
+  return litres > 0 && Number.isFinite(totalCost) ? totalCost / litres : null;
 }
 
 async function runFuelLogQueryWithOptionalColumnFallback<T>(
@@ -1122,6 +1131,10 @@ function applyFuelLogOrdering<TQuery extends { order: Function }>(
   sortDirection: FuelLogSortDirection
 ) {
   const ascending = sortDirection === "asc";
+  if (sortKey === "price_per_litre") {
+    return query.order("date", { ascending: false }).order("id", { ascending: false });
+  }
+
   let nextQuery = query.order(sortKey, { ascending });
 
   if (sortKey === "date") {
@@ -1702,6 +1715,67 @@ export async function fetchFuelLogsPage({
   const safePage = Math.max(1, page);
   const from = (safePage - 1) * pageSize;
   const to = from + pageSize - 1;
+
+  if (sortKey === "price_per_litre") {
+    const batchSize = 1000;
+    const allRows: Parameters<typeof mapFuelLogRows>[0] = [];
+    let queryTotalCount = 0;
+    let batchFrom = 0;
+
+    while (true) {
+      const batchTo = batchFrom + batchSize - 1;
+      const fuelLogQuery = await runFuelLogQueryWithOptionalColumnFallback((columns) =>
+        applyFuelLogFilters(
+          supabase
+            .from("fuel_logs")
+            .select(columns, { count: batchFrom === 0 ? "exact" : undefined }),
+          filters
+        )
+          .order("date", { ascending: false })
+          .order("id", { ascending: false })
+          .range(batchFrom, batchTo)
+      );
+
+      if (fuelLogQuery.error) {
+        logDataError("fetchFuelLogsPage error:", fuelLogQuery.error, {
+          page: safePage,
+          pageSize,
+          sortKey,
+          sortDirection,
+          filters
+        });
+        throw fuelLogQuery.error;
+      }
+
+      const batchRows = (fuelLogQuery.data ?? []) as unknown as Parameters<typeof mapFuelLogRows>[0];
+      allRows.push(...batchRows);
+      if (batchFrom === 0) {
+        queryTotalCount = fuelLogQuery.count ?? batchRows.length;
+      }
+      if (batchRows.length < batchSize) break;
+      batchFrom += batchSize;
+    }
+
+    const mappedRows = mapFuelLogRows(allRows);
+    const direction = sortDirection === "asc" ? 1 : -1;
+    const sortedRows = mappedRows.sort((left, right) => {
+      const leftPrice = getFuelLogPricePerLitre(left);
+      const rightPrice = getFuelLogPricePerLitre(right);
+      if (leftPrice == null && rightPrice == null) {
+        return right.date.localeCompare(left.date) || String(right.id).localeCompare(String(left.id));
+      }
+      if (leftPrice == null) return 1;
+      if (rightPrice == null) return -1;
+      return (leftPrice - rightPrice) * direction;
+    });
+
+    return {
+      rows: sortedRows.slice(from, to + 1),
+      totalCount: queryTotalCount || mappedRows.length,
+      page: safePage,
+      pageSize
+    } satisfies PaginatedFuelLogsResult;
+  }
 
   const fuelLogQuery = await runFuelLogQueryWithOptionalColumnFallback((columns) =>
     applyFuelLogOrdering(
@@ -2425,14 +2499,14 @@ function calculateTripStatusFromValues({
     startMileage != null && endMileage != null && endMileage > startMileage
       ? endMileage - startMileage
       : null;
-  const actualDistanceKm = manualActualKm != null && manualActualKm > 0 ? manualActualKm : mileageDistance;
+  const actualDistanceKm = mileageDistance;
   const estimatedKm = getEffectiveTripEstimatedKm({
     estimatedDistanceKm,
     googleEstimatedKm,
     bookingEstimatedKm,
     manualEstimatedDistanceKm
   });
-  const workingDistanceKm = actualDistanceKm ?? estimatedKm;
+  const workingDistanceKm = (manualActualKm != null && manualActualKm > 0 ? manualActualKm : actualDistanceKm) ?? estimatedKm;
 
   if (workingDistanceKm == null || workingDistanceKm <= 0) return "missing_mileage";
 
@@ -2610,11 +2684,9 @@ export async function saveTripJourney(
   const manualLitresUsed = parseOptionalNumeric(payload.manual_litres_used);
   const manualFuelCost = parseOptionalNumeric(payload.manual_fuel_cost);
   const actualDistanceKm =
-    manualActualKm != null && manualActualKm > 0
-      ? manualActualKm
-      : startMileage != null && endMileage != null && endMileage > startMileage
-        ? endMileage - startMileage
-        : null;
+    startMileage != null && endMileage != null && endMileage > startMileage
+      ? endMileage - startMileage
+      : null;
   const effectiveEstimatedDistanceKm = getEffectiveTripEstimatedKm({
     estimatedDistanceKm,
     googleEstimatedKm,
@@ -2622,8 +2694,8 @@ export async function saveTripJourney(
     manualEstimatedDistanceKm
   });
   const distanceDifferenceKm =
-    actualDistanceKm != null && effectiveEstimatedDistanceKm != null
-      ? actualDistanceKm - effectiveEstimatedDistanceKm
+    (manualActualKm ?? actualDistanceKm) != null && effectiveEstimatedDistanceKm != null
+      ? (manualActualKm ?? actualDistanceKm ?? 0) - effectiveEstimatedDistanceKm
       : null;
   const distanceDifferencePercent =
     distanceDifferenceKm != null && effectiveEstimatedDistanceKm != null && effectiveEstimatedDistanceKm > 0
@@ -2762,9 +2834,13 @@ export async function linkFuelLogToTrip(tripJourneyId: string, fuelLogId: string
       );
     }
     if (error.code === "23505") {
-      throw new Error("This fuel log is already linked to a trip. Unlink it first if you need to move it.");
+      const details = `${error.message ?? ""} ${error.details ?? ""}`.toLowerCase();
+      if (details.includes("trip_fuel_logs_trip_fuel_unique_idx") || details.includes("trip_journey_id") || details.includes("duplicate key")) {
+        throw new Error("This fuel log is already linked to this trip.");
+      }
+      throw new Error("Could not link fuel log. Please refresh and try again.");
     }
-    throw new Error(error.message || "Unable to link fuel log to trip.");
+    throw new Error("Could not link fuel log. Please refresh and try again.");
   }
 
   dispatchDataChange("trip_fuel_logs");
