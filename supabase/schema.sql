@@ -112,6 +112,24 @@ create table if not exists public.vehicle_service_logs (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.oil_change_baselines (
+  id uuid primary key default gen_random_uuid(),
+  vehicle_reg text not null,
+  last_oil_change_date date not null,
+  last_odometer numeric not null,
+  interval_km numeric not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.oil_change_history (
+  id uuid primary key default gen_random_uuid(),
+  vehicle_reg text not null,
+  oil_change_date date not null,
+  odometer numeric not null,
+  created_at timestamptz not null default now()
+);
+
 alter table public.drivers
   drop constraint if exists drivers_assigned_vehicle_id_fkey;
 
@@ -162,6 +180,8 @@ create table if not exists public.vehicle_type_standards (
 alter table public.drivers enable row level security;
 alter table public.vehicles enable row level security;
 alter table public.vehicle_service_logs enable row level security;
+alter table public.oil_change_baselines enable row level security;
+alter table public.oil_change_history enable row level security;
 alter table public.vehicle_category_defaults enable row level security;
 alter table public.fuel_pricing_settings enable row level security;
 alter table public.fuel_logs enable row level security;
@@ -262,6 +282,22 @@ drop policy if exists "vehicle_service_logs_update_own" on public.vehicle_servic
 create policy "vehicle_service_logs_update_own" on public.vehicle_service_logs
 for update using (user_id is null or auth.uid() = user_id)
 with check (user_id is null or auth.uid() = user_id);
+
+drop policy if exists "Allow authenticated read oil baselines" on public.oil_change_baselines;
+create policy "Allow authenticated read oil baselines" on public.oil_change_baselines
+for select to authenticated using (true);
+
+drop policy if exists "Allow authenticated write oil baselines" on public.oil_change_baselines;
+create policy "Allow authenticated write oil baselines" on public.oil_change_baselines
+for all to authenticated using (true) with check (true);
+
+drop policy if exists "Allow authenticated read oil history" on public.oil_change_history;
+create policy "Allow authenticated read oil history" on public.oil_change_history
+for select to authenticated using (true);
+
+drop policy if exists "Allow authenticated write oil history" on public.oil_change_history;
+create policy "Allow authenticated write oil history" on public.oil_change_history
+for all to authenticated using (true) with check (true);
 
 drop policy if exists "vehicle_category_defaults_select_own" on public.vehicle_category_defaults;
 create policy "vehicle_category_defaults_select_own" on public.vehicle_category_defaults
@@ -492,6 +528,12 @@ create unique index if not exists vehicle_service_logs_unique_service_idx
     service_date,
     odometer
   );
+
+create unique index if not exists oil_change_baselines_vehicle_reg_unique_idx
+  on public.oil_change_baselines (vehicle_reg);
+
+create index if not exists oil_change_history_vehicle_reg_date_idx
+  on public.oil_change_history (lower(btrim(vehicle_reg)), oil_change_date desc, created_at desc);
 
 create unique index if not exists vehicle_category_defaults_user_category_key
   on public.vehicle_category_defaults (user_id, category_name);

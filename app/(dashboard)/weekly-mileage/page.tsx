@@ -80,6 +80,26 @@ type WeeklyMileageDebugInfo = {
   errors: Record<string, string | null>;
 };
 
+function describeLoadError(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return error == null ? null : String(error);
+  }
+
+  const record = error as Record<string, unknown>;
+  const parts = [
+    record.message,
+    record.code ? `code=${record.code}` : "",
+    record.details ? `details=${record.details}` : "",
+    record.hint ? `hint=${record.hint}` : "",
+    record.query ? `query=${record.query}` : "",
+    record.supabaseError ? `supabase=${JSON.stringify(record.supabaseError)}` : ""
+  ]
+    .map((part) => String(part ?? "").trim())
+    .filter(Boolean);
+
+  return parts.length ? parts.join(" | ") : String(error);
+}
+
 export default function WeeklyMileagePage() {
   const { language, t } = useLanguage();
   const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -112,6 +132,7 @@ export default function WeeklyMileagePage() {
   const [historyVehicleReg, setHistoryVehicleReg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [oilBaselineError, setOilBaselineError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [selectedWeek, setSelectedWeek] = useState("");
   const [comparisonDriverId, setComparisonDriverId] = useState("");
@@ -322,6 +343,7 @@ export default function WeeklyMileagePage() {
     setLoading(true);
     setError(null);
     setLoadError(null);
+    setOilBaselineError(null);
     setDebugInfo(null);
     const authResult = showWeeklyMileageDebug ? await supabase.auth.getUser() : null;
     const queryFilters = {
@@ -367,6 +389,12 @@ export default function WeeklyMileagePage() {
 
     if (baselineResult.status === "rejected") {
       console.error("Weekly mileage oil baselines query failed:", baselineResult.reason);
+      setOilBaselineError(
+        t.weeklyMileage.notifications.loadFailed.replace(
+          "{items}",
+          language === "th" ? "ข้อมูลฐานเปลี่ยนน้ำมัน" : "oil baselines"
+        )
+      );
     }
 
     if (mileageResult.status === "fulfilled") {
@@ -394,10 +422,6 @@ export default function WeeklyMileagePage() {
       setLoadError(t.weeklyMileage.notifications.loadFailed.replace("{items}", criticalFailures.join(language === "th" ? " และ " : " and ")));
     }
 
-    if (baselineResult.status === "rejected") {
-      setLoadError(t.weeklyMileage.notifications.loadFailed.replace("{items}", "oil baselines"));
-    }
-
     if (showWeeklyMileageDebug) {
       setDebugInfo({
         userEmail: authResult?.data.user?.email ?? null,
@@ -419,11 +443,11 @@ export default function WeeklyMileagePage() {
         },
         errors: {
           auth: authResult?.error?.message ?? null,
-          drivers: driverResult.status === "rejected" ? String(driverResult.reason) : null,
-          vehicles: vehicleResult.status === "rejected" ? String(vehicleResult.reason) : null,
-          weeklyMileage: mileageResult.status === "rejected" ? String(mileageResult.reason) : null,
-          oilChangeBaselines: baselineResult.status === "rejected" ? String(baselineResult.reason) : null,
-          serviceHistory: serviceLogResult.status === "rejected" ? String(serviceLogResult.reason) : null
+          drivers: driverResult.status === "rejected" ? describeLoadError(driverResult.reason) : null,
+          vehicles: vehicleResult.status === "rejected" ? describeLoadError(vehicleResult.reason) : null,
+          weeklyMileage: mileageResult.status === "rejected" ? describeLoadError(mileageResult.reason) : null,
+          oilChangeBaselines: baselineResult.status === "rejected" ? describeLoadError(baselineResult.reason) : null,
+          serviceHistory: serviceLogResult.status === "rejected" ? describeLoadError(serviceLogResult.reason) : null
         }
       });
     }
@@ -1102,6 +1126,17 @@ export default function WeeklyMileagePage() {
             Copy Report Summary
           </button>
         </div>
+
+        {oilBaselineError ? (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+            {oilBaselineError}
+            <span className="mt-1 block font-normal text-amber-700">
+              {language === "th"
+                ? "ข้อมูลระยะทางรายสัปดาห์ยังโหลดได้ตามปกติ แต่รายงานน้ำมันอาจไม่มีข้อมูลฐานล่าสุดจนกว่าจะซ่อมตารางหรือสิทธิ์ Supabase"
+                : "Weekly mileage records are still loaded. Oil service reporting may miss saved baselines until the Supabase table or policy is repaired."}
+            </span>
+          </div>
+        ) : null}
 
         <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
           {[

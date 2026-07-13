@@ -966,7 +966,7 @@ function getServiceSchemaSetupMessage(error: unknown) {
   }
 
   if (error && typeof error === "object") {
-    const record = error as Record<string, unknown>;
+    const record = error as unknown as Record<string, unknown>;
     const message = String(record.message ?? "").toLowerCase();
     if (record.code === "42501" || message.includes("row-level security") || message.includes("permission")) {
       return "Oil Change Service Management is blocked by Supabase permissions. Apply the latest RLS policy migration for oil_change_baselines and oil_change_history.";
@@ -1297,16 +1297,27 @@ export async function fetchVehicleServiceLogs() {
 }
 
 export async function fetchOilChangeBaselinesForVehicles(_vehicles: Vehicle[]) {
+  const queryDescription = "from oil_change_baselines select *";
   const { data, error } = await supabase
     .from("oil_change_baselines")
     .select("*");
 
   if (error) {
-    logDataError("fetchOilChangeBaselinesForVehicles error:", error);
-    throw new Error(
+    logDataError("fetchOilChangeBaselinesForVehicles error:", error, {
+      query: queryDescription,
+      table: "public.oil_change_baselines"
+    });
+    const message =
       getServiceSchemaSetupMessage(error) ??
-        String(error.message ?? "Unable to load oil change baselines from Supabase.")
-    );
+        String(error.message ?? "Unable to load oil change baselines from Supabase.");
+    const record = error as unknown as Record<string, unknown>;
+    throw Object.assign(new Error(message), {
+      code: record.code,
+      details: record.details,
+      hint: record.hint,
+      query: queryDescription,
+      supabaseError: serializeError(error)
+    });
   }
 
   return ((data ?? []) as OilChangeBaseline[]).map(normalizeOilChangeBaselineRow);
