@@ -1,7 +1,7 @@
 "use client";
 
 import { CheckCircle2, Copy, Download, History, Pencil, Plus, Trash2, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { Header } from "@/components/header";
 import {
@@ -32,7 +32,14 @@ import type { Driver, OilChangeBaseline, Vehicle, VehicleServiceLog, WeeklyMilea
 import type { OilChangeAlertRow, OilChangeStatus } from "@/lib/operations";
 
 const PAGE_SIZE = 25;
-const initialForm = { id: "", week_ending: "", driver_id: "", vehicle_reg: "", mileage: "" };
+const WEEKLY_MILEAGE_SELECTED_WEEK_KEY = "weekly-mileage-selected-week";
+const isValidDateKey = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
+const getStoredWeekEnding = () => {
+  if (typeof window === "undefined") return "";
+  const stored = window.localStorage.getItem(WEEKLY_MILEAGE_SELECTED_WEEK_KEY) ?? "";
+  return isValidDateKey(stored) ? stored : "";
+};
+const createInitialForm = (weekEnding = "") => ({ id: "", week_ending: weekEnding, driver_id: "", vehicle_reg: "", mileage: "" });
 const normalizeReg = (value: unknown) =>
   String(value ?? "")
     .trim()
@@ -79,6 +86,55 @@ type WeeklyMileageDebugInfo = {
   rowCounts: Record<string, number | "failed" | null>;
   errors: Record<string, string | null>;
 };
+type OilServicePdfLanguage = "en" | "th";
+type OilServicePdfLogo = {
+  dataUrl: string | null;
+};
+type OilServicePdfRow = {
+  currentOdometer: string;
+  driverName: string;
+  lastOilChangeDate: string;
+  nextServiceDue: string;
+  priorityKm: number;
+  serviceDelta: string;
+  vehicleReg: string;
+  vehicleType: string;
+};
+type OilServicePdfData = {
+  dueSoonRows: OilServicePdfRow[];
+  generatedAt: string;
+  okCount: string;
+  overdueRows: OilServicePdfRow[];
+  summary: {
+    dueSoon: string;
+    ok: string;
+    overdue: string;
+  };
+  weekEnding: string;
+};
+type OilServicePdfCopy = {
+  companyName: string;
+  currentOdometer: string;
+  driver: string;
+  dueSoon: string;
+  dueSoonCount: (count: string) => string;
+  dueSoonEmpty: string;
+  footer: string;
+  generated: string;
+  generating: string;
+  lastOilChange: string;
+  nextServiceDue: string;
+  ok: string;
+  overdue: string;
+  overdueBy: string;
+  overdueCount: (count: string) => string;
+  overdueEmpty: string;
+  overdueHeading: string;
+  reportTitle: string;
+  vehicleReg: string;
+  vehicleType: string;
+  weekEnding: string;
+};
 
 function describeLoadError(error: unknown) {
   if (!error || typeof error !== "object") {
@@ -100,16 +156,451 @@ function describeLoadError(error: unknown) {
   return parts.length ? parts.join(" | ") : String(error);
 }
 
+const getOilServicePdfCopy = (language: OilServicePdfLanguage): OilServicePdfCopy =>
+  language === "th"
+    ? {
+        companyName: "Expert Express Sender Co., Ltd.",
+        currentOdometer: "เลขไมล์ปัจจุบัน",
+        driver: "คนขับ",
+        dueSoon: "ใกล้ครบกำหนด",
+        dueSoonCount: (count) => `ใกล้ครบกำหนด ${count} คัน`,
+        dueSoonEmpty: "ไม่มีรถที่ใกล้ครบกำหนดในขณะนี้",
+        footer: "สร้างจาก Expert Express Sender Fleet Management",
+        generated: "สร้างเมื่อ",
+        generating: "กำลังสร้าง PDF...",
+        lastOilChange: "เปลี่ยนน้ำมันล่าสุด",
+        nextServiceDue: "ครบกำหนดที่เลขไมล์",
+        ok: "ปกติ",
+        overdue: "เกินกำหนด",
+        overdueBy: "เกินกำหนด",
+        overdueCount: (count) => `เกินกำหนด ${count} คัน`,
+        overdueEmpty: "ไม่มีรถที่เกินกำหนดในขณะนี้",
+        overdueHeading: "เกินกำหนด - ต้องดำเนินการทันที",
+        reportTitle: "รายงานบริการเปลี่ยนน้ำมันเครื่อง",
+        vehicleReg: "ทะเบียนรถ",
+        vehicleType: "ประเภทรถ",
+        weekEnding: "สัปดาห์สิ้นสุด"
+      }
+    : {
+        companyName: "Expert Express Sender Co., Ltd.",
+        currentOdometer: "Current odometer",
+        driver: "Driver",
+        dueSoon: "Due Soon",
+        dueSoonCount: (count) => `${count} vehicles due soon`,
+        dueSoonEmpty: "No vehicles are currently due soon.",
+        footer: "Generated from Expert Express Sender Fleet Management",
+        generated: "Generated",
+        generating: "Generating PDF...",
+        lastOilChange: "Last oil change",
+        nextServiceDue: "Next service due",
+        ok: "OK",
+        overdue: "Overdue",
+        overdueBy: "Overdue by",
+        overdueCount: (count) => `${count} vehicles overdue`,
+        overdueEmpty: "No vehicles are currently overdue.",
+        overdueHeading: "OVERDUE - IMMEDIATE ACTION REQUIRED",
+        reportTitle: "Oil Change Service Report",
+        vehicleReg: "Vehicle Registration",
+        vehicleType: "Vehicle Type",
+        weekEnding: "Week Ending"
+      };
+
+const getOilServicePdfFontFamily = (language: OilServicePdfLanguage) =>
+  language === "th" ? '"OilServicePdfThai", Tahoma, sans-serif' : 'Arial, "Helvetica Neue", Helvetica, sans-serif';
+
+async function loadOilServicePdfThaiFont() {
+  if (typeof document === "undefined" || typeof FontFace === "undefined") return;
+  let fontAlreadyLoaded = false;
+  document.fonts.forEach((font) => {
+    if (font.family === "OilServicePdfThai") fontAlreadyLoaded = true;
+  });
+  if (fontAlreadyLoaded) return;
+  const response = await fetch("/fonts/boss-pdf-thai.ttf");
+  if (!response.ok) {
+    throw new Error("Unable to load Thai PDF font.");
+  }
+  const fontData = await response.arrayBuffer();
+  const font = new FontFace("OilServicePdfThai", fontData, { style: "normal", weight: "400" });
+  await font.load();
+  document.fonts.add(font);
+  await document.fonts.ready;
+}
+
+function binaryStringFromDataUrl(dataUrl: string) {
+  return atob(dataUrl.split(",")[1] ?? "");
+}
+
+async function loadCanvasImage(dataUrl: string) {
+  const image = new Image();
+  const loaded = new Promise<HTMLImageElement>((resolve, reject) => {
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+  });
+  image.src = dataUrl;
+  return loaded;
+}
+
+async function loadOilServicePdfLogo(): Promise<OilServicePdfLogo> {
+  if (typeof document === "undefined") return { dataUrl: null };
+  try {
+    const response = await fetch("/logo.png");
+    if (!response.ok) return { dataUrl: null };
+    const blob = await response.blob();
+    const imageUrl = URL.createObjectURL(blob);
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const nextImage = new Image();
+      nextImage.onload = () => resolve(nextImage);
+      nextImage.onerror = reject;
+      nextImage.src = imageUrl;
+    });
+    const canvas = document.createElement("canvas");
+    const targetSize = 96;
+    canvas.width = targetSize;
+    canvas.height = targetSize;
+    const context = canvas.getContext("2d");
+    if (!context) return { dataUrl: null };
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, targetSize, targetSize);
+    const scale = Math.min(targetSize / image.width, targetSize / image.height);
+    const width = image.width * scale;
+    const height = image.height * scale;
+    context.drawImage(image, (targetSize - width) / 2, (targetSize - height) / 2, width, height);
+    URL.revokeObjectURL(imageUrl);
+    return { dataUrl: canvas.toDataURL("image/jpeg", 0.9) };
+  } catch (error) {
+    console.warn("Oil service PDF logo load failed:", error);
+    return { dataUrl: null };
+  }
+}
+
+function buildImagePagesPdf(imagePages: Array<{ data: string; height: number; width: number }>) {
+  const pageWidth = 595;
+  const pageHeight = 842;
+  const kids = imagePages.map((_, index) => `${3 + index * 3} 0 R`).join(" ");
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    `<< /Type /Pages /Kids [${kids}] /Count ${imagePages.length} >>`
+  ];
+
+  imagePages.forEach((page, index) => {
+    const imageName = `PageImage${index + 1}`;
+    const contentStream = `q ${pageWidth} 0 0 ${pageHeight} 0 0 cm /${imageName} Do Q`;
+    const pageObjectNumber = 3 + index * 3;
+    objects.push(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /XObject << /${imageName} ${pageObjectNumber + 2} 0 R >> >> /Contents ${pageObjectNumber + 1} 0 R >>`,
+      `<< /Length ${contentStream.length} >>\nstream\n${contentStream}\nendstream`,
+      `<< /Type /XObject /Subtype /Image /Width ${page.width} /Height ${page.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${page.data.length} >>\nstream\n${page.data}\nendstream`
+    );
+  });
+
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  objects.forEach((object, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xrefOffset = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  offsets.slice(1).forEach((offset) => {
+    pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  });
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+
+  const bytes = new Uint8Array(pdf.length);
+  for (let index = 0; index < pdf.length; index += 1) {
+    bytes[index] = pdf.charCodeAt(index) & 0xff;
+  }
+  return new Blob([bytes], { type: "application/pdf" });
+}
+
+function downloadBlob(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.rel = "noopener";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function buildOilServicePdf(data: OilServicePdfData, logo: OilServicePdfLogo, language: OilServicePdfLanguage) {
+  if (language === "th") {
+    await loadOilServicePdfThaiFont();
+  }
+
+  const pageWidth = 595;
+  const pageHeight = 842;
+  const scale = 2;
+  const margin = 38;
+  const contentWidth = pageWidth - margin * 2;
+  const tableBottom = 774;
+  const copy = getOilServicePdfCopy(language);
+  const fontFamily = getOilServicePdfFontFamily(language);
+  const isThai = language === "th";
+  const color = {
+    amber: "#92400e",
+    amberBg: "#fffbeb",
+    amberBorder: "#fcd34d",
+    border: "#e2e8f0",
+    green: "#047857",
+    greenBg: "#ecfdf5",
+    greenBorder: "#86efac",
+    muted: "#64748b",
+    purple: "#5b21b6",
+    red: "#b91c1c",
+    redBg: "#fff1f2",
+    redBorder: "#fecdd3",
+    soft: "#f8fafc",
+    text: "#0f172a"
+  };
+  const pageImages: Array<{ data: string; height: number; width: number }> = [];
+  let canvas!: HTMLCanvasElement;
+  let context!: CanvasRenderingContext2D;
+  let pageNumber = 0;
+  let y = 0;
+
+  const setFont = (size: number, weight: 400 | 500 | 600 | 700 = 400) => {
+    context.font = `${weight} ${size}px ${fontFamily}`;
+  };
+  const drawText = (
+    value: unknown,
+    x: number,
+    textY: number,
+    options: { color?: string; maxWidth?: number; size?: number; weight?: 400 | 500 | 600 | 700 } = {}
+  ) => {
+    const size = options.size ?? 8;
+    setFont(size, options.weight ?? 400);
+    context.fillStyle = options.color ?? color.text;
+    let textValue = String(value ?? "-").replace(/\s+/g, " ").trim() || "-";
+    if (options.maxWidth && context.measureText(textValue).width > options.maxWidth) {
+      while (textValue.length > 1 && context.measureText(`${textValue}...`).width > options.maxWidth) {
+        textValue = textValue.slice(0, -1);
+      }
+      textValue = `${textValue}...`;
+    }
+    context.fillText(textValue, x, textY);
+  };
+  const fillRect = (x: number, rectY: number, width: number, height: number, fill: string, stroke?: string) => {
+    context.fillStyle = fill;
+    context.fillRect(x, rectY, width, height);
+    if (stroke) {
+      context.strokeStyle = stroke;
+      context.lineWidth = 1;
+      context.strokeRect(x + 0.5, rectY + 0.5, width - 1, height - 1);
+    }
+  };
+  const line = (x1: number, lineY: number, x2: number, stroke = color.border) => {
+    context.strokeStyle = stroke;
+    context.lineWidth = 1;
+    context.beginPath();
+    context.moveTo(x1, lineY + 0.5);
+    context.lineTo(x2, lineY + 0.5);
+    context.stroke();
+  };
+  const drawFooter = () => {
+    line(margin, 798, pageWidth - margin);
+    drawText(copy.footer, margin, 817, { color: color.muted, maxWidth: contentWidth - 70, size: isThai ? 6.8 : 7.4 });
+    drawText(String(pageNumber), pageWidth - margin - 8, 817, { color: color.muted, size: 7, weight: 700 });
+  };
+  const startPage = async (continuation = false) => {
+    pageNumber += 1;
+    canvas = document.createElement("canvas");
+    canvas.width = pageWidth * scale;
+    canvas.height = pageHeight * scale;
+    const nextContext = canvas.getContext("2d");
+    if (!nextContext) throw new Error("Unable to prepare oil service PDF canvas.");
+    context = nextContext;
+    context.scale(scale, scale);
+    fillRect(0, 0, pageWidth, pageHeight, "#ffffff");
+    fillRect(0, 0, 8, pageHeight, color.purple);
+    fillRect(0, 0, pageWidth, continuation ? 56 : 72, color.soft);
+
+    if (!continuation && logo.dataUrl) {
+      try {
+        const logoImage = await loadCanvasImage(logo.dataUrl);
+        context.drawImage(logoImage, margin, 16, 34, 34);
+      } catch {
+        fillRect(margin, 16, 34, 34, "#ede9fe", "#c4b5fd");
+        drawText("EES", margin + 8, 37, { color: color.purple, size: 8, weight: 700 });
+      }
+    } else if (!continuation) {
+      fillRect(margin, 16, 34, 34, "#ede9fe", "#c4b5fd");
+      drawText("EES", margin + 8, 37, { color: color.purple, size: 8, weight: 700 });
+    }
+
+    drawText(copy.companyName, continuation ? margin : 82, continuation ? 23 : 28, {
+      size: isThai ? 8 : 9,
+      weight: 700
+    });
+    drawText(copy.reportTitle, continuation ? margin : 82, continuation ? 42 : 49, {
+      color: color.purple,
+      maxWidth: continuation ? 270 : 285,
+      size: isThai ? 12 : 15,
+      weight: 700
+    });
+    drawText(`${copy.generated}: ${data.generatedAt}`, 350, continuation ? 31 : 30, {
+      color: color.muted,
+      maxWidth: 205,
+      size: isThai ? 7 : 7.6,
+      weight: 600
+    });
+    if (!continuation) {
+      drawText(`${copy.weekEnding}: ${data.weekEnding}`, 350, 49, {
+        color: color.muted,
+        maxWidth: 205,
+        size: isThai ? 7 : 7.6,
+        weight: 600
+      });
+    }
+    y = continuation ? 78 : 94;
+  };
+  const finishPage = () => {
+    drawFooter();
+    pageImages.push({
+      data: binaryStringFromDataUrl(canvas.toDataURL("image/jpeg", 0.92)),
+      height: canvas.height,
+      width: canvas.width
+    });
+  };
+  const ensureSpace = async (height: number, continuationHeader?: string) => {
+    if (y + height <= tableBottom) return;
+    finishPage();
+    await startPage(true);
+    if (continuationHeader) {
+      drawSectionHeading(continuationHeader, color.purple);
+    }
+  };
+  const drawSectionHeading = (title: string, titleColor = color.text) => {
+    drawText(title, margin, y, { color: titleColor, maxWidth: contentWidth, size: isThai ? 10 : 11.5, weight: 700 });
+    y += 14;
+  };
+  const drawSummary = () => {
+    const gap = 10;
+    const cardWidth = (contentWidth - gap * 2) / 3;
+    const cards = [
+      { bg: color.redBg, border: color.redBorder, label: copy.overdue, text: data.summary.overdue, tone: color.red },
+      { bg: color.amberBg, border: color.amberBorder, label: copy.dueSoon, text: data.summary.dueSoon, tone: color.amber },
+      { bg: color.greenBg, border: color.greenBorder, label: copy.ok, text: data.summary.ok, tone: color.green }
+    ];
+    cards.forEach((card, index) => {
+      const x = margin + index * (cardWidth + gap);
+      fillRect(x, y, cardWidth, 50, card.bg, card.border);
+      drawText(card.label, x + 10, y + 16, { color: color.muted, maxWidth: cardWidth - 20, size: isThai ? 7.2 : 8, weight: 700 });
+      drawText(card.text, x + 10, y + 39, { color: card.tone, maxWidth: cardWidth - 20, size: isThai ? 16 : 18, weight: 700 });
+    });
+    y += 72;
+  };
+  const drawEmpty = async (message: string, sectionTitle: string) => {
+    await ensureSpace(34, sectionTitle);
+    fillRect(margin, y, contentWidth, 30, "#ffffff", color.border);
+    drawText(message, margin + 10, y + 19, { color: color.muted, maxWidth: contentWidth - 20, size: isThai ? 7.4 : 8.2, weight: 600 });
+    y += 42;
+  };
+  const drawVehicleRow = async (
+    row: OilServicePdfRow,
+    options: { accent: string; bg: string; border: string; deltaLabel: string; sectionTitle: string }
+  ) => {
+    await ensureSpace(58, options.sectionTitle);
+    fillRect(margin, y, contentWidth, 52, options.bg, options.border);
+    drawText(row.driverName, margin + 10, y + 16, {
+      color: color.text,
+      maxWidth: 145,
+      size: isThai ? 8.8 : 9.6,
+      weight: 700
+    });
+    drawText(`${copy.vehicleReg}: ${row.vehicleReg}`, margin + 10, y + 34, {
+      color: color.muted,
+      maxWidth: 145,
+      size: isThai ? 6.7 : 7.5,
+      weight: 700
+    });
+    drawText(`${copy.vehicleType}: ${row.vehicleType}`, margin + 10, y + 46, {
+      color: color.muted,
+      maxWidth: 145,
+      size: isThai ? 6.5 : 7.2
+    });
+
+    const detailX = margin + 170;
+    const detailWidth = contentWidth - 180;
+    const details = [
+      [`${copy.currentOdometer}:`, row.currentOdometer],
+      [`${copy.nextServiceDue}:`, row.nextServiceDue],
+      [`${options.deltaLabel}:`, row.serviceDelta],
+      [`${copy.lastOilChange}:`, row.lastOilChangeDate]
+    ];
+    details.forEach(([label, value], index) => {
+      const rowX = detailX + (index % 2) * 175;
+      const rowY = y + 17 + Math.floor(index / 2) * 22;
+      drawText(label, rowX, rowY, { color: color.muted, maxWidth: 78, size: isThai ? 6.4 : 7, weight: 700 });
+      drawText(value, rowX + 83, rowY, {
+        color: index === 2 ? options.accent : color.text,
+        maxWidth: detailWidth / 2 - 88,
+        size: isThai ? 7.1 : 7.8,
+        weight: 700
+      });
+    });
+    y += 60;
+  };
+  const drawDetailedSection = async (
+    title: string,
+    countText: string,
+    rows: OilServicePdfRow[],
+    emptyText: string,
+    options: { accent: string; bg: string; border: string; deltaLabel: string }
+  ) => {
+    await ensureSpace(72, title);
+    drawSectionHeading(title, options.accent);
+    drawText(countText, margin, y, { color: color.muted, maxWidth: contentWidth, size: isThai ? 7.3 : 8.1, weight: 700 });
+    y += 16;
+
+    if (!rows.length) {
+      await drawEmpty(emptyText, title);
+      return;
+    }
+
+    for (const row of rows) {
+      await drawVehicleRow(row, { ...options, sectionTitle: title });
+    }
+    y += 6;
+  };
+
+  await startPage(false);
+  drawSummary();
+  await drawDetailedSection(copy.overdueHeading, copy.overdueCount(data.summary.overdue), data.overdueRows, copy.overdueEmpty, {
+    accent: color.red,
+    bg: color.redBg,
+    border: color.redBorder,
+    deltaLabel: copy.overdueBy
+  });
+  await drawDetailedSection(copy.dueSoon, copy.dueSoonCount(data.summary.dueSoon), data.dueSoonRows, copy.dueSoonEmpty, {
+    accent: color.amber,
+    bg: color.amberBg,
+    border: color.amberBorder,
+    deltaLabel: language === "th" ? "เหลืออีก" : "KM remaining"
+  });
+  finishPage();
+
+  return buildImagePagesPdf(pageImages);
+}
+
 export default function WeeklyMileagePage() {
   const { language, t } = useLanguage();
+  const driverSelectRef = useRef<HTMLSelectElement | null>(null);
+  const odometerInputRef = useRef<HTMLInputElement | null>(null);
+  const vehicleInputRef = useRef<HTMLInputElement | null>(null);
+  const submitActionRef = useRef<"save" | "next">("save");
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [oilChangeBaselines, setOilChangeBaselines] = useState<OilChangeBaseline[]>([]);
   const [serviceLogs, setServiceLogs] = useState<VehicleServiceLog[]>([]);
   const [entries, setEntries] = useState<WeeklyMileageEntry[]>([]);
-  const [form, setForm] = useState(initialForm);
+  const [form, setForm] = useState(() => createInitialForm());
+  const [multiEntryMode, setMultiEntryMode] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [generatingOilServicePdf, setGeneratingOilServicePdf] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [savingService, setSavingService] = useState(false);
   const [oilFilter, setOilFilter] = useState<OilFilter>("all");
@@ -132,6 +623,7 @@ export default function WeeklyMileagePage() {
   const [historyVehicleReg, setHistoryVehicleReg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [assignmentLoadError, setAssignmentLoadError] = useState<string | null>(null);
   const [oilBaselineError, setOilBaselineError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [selectedWeek, setSelectedWeek] = useState("");
@@ -140,11 +632,126 @@ export default function WeeklyMileagePage() {
   const [debugInfo, setDebugInfo] = useState<WeeklyMileageDebugInfo | null>(null);
   const isEditing = Boolean(form.id);
   const showWeeklyMileageDebug = process.env.NEXT_PUBLIC_SHOW_DEBUG === "true";
+  const fastEntryCopy = language === "th"
+    ? {
+        multiEntryMode: "กรอกหลายคนขับสำหรับสัปดาห์นี้",
+        dateWillRemain: "วันที่จะคงเป็น {date} สำหรับรายการถัดไป",
+        saveAndAddNext: "บันทึกและเพิ่มคนขับถัดไป",
+        duplicateWarning: "มีรายการระยะทางรายสัปดาห์ของ {driver} วันที่ {date} แล้ว กรุณาแก้ไขรายการเดิมแทนการสร้างซ้ำ",
+        saveSuccessForDriver: "บันทึกระยะทางรายสัปดาห์ของ {driver} - {date} แล้ว"
+      }
+    : {
+        multiEntryMode: "Enter multiple drivers for this week",
+        dateWillRemain: "Date will remain as {date} for the next entry.",
+        saveAndAddNext: "Save & add next driver",
+        duplicateWarning: "A weekly mileage entry already exists for {driver} on {date}. Edit the existing record instead of creating a duplicate.",
+        saveSuccessForDriver: "Weekly mileage saved for {driver} - {date}."
+      };
+  const assignmentCopy = useMemo(
+    () =>
+      language === "th"
+        ? {
+            selectVehicle: "เลือกรถ",
+            searchRegistration: "ค้นหาทะเบียนรถ",
+            noDriverAssigned: "ยังไม่มีคนขับที่ผูกกับรถคันนี้",
+            assignmentMismatch: "คนขับและรถไม่ตรงกับการผูกประจำ",
+            multipleDriversAssigned: "มีคนขับหลายคนผูกกับรถคันนี้ กรุณาเลือกคนขับ",
+            unableToLoadAssignments: "ไม่สามารถโหลดข้อมูลการผูกคนขับและรถได้",
+            manualVehicleEntry: "พิมพ์ทะเบียนรถเองได้ หากรถยังไม่มีในรายการ",
+            vehicleType: "ประเภทรถ"
+          }
+        : {
+            selectVehicle: "Select vehicle",
+            searchRegistration: "Search registration",
+            noDriverAssigned: "No driver is currently assigned to this vehicle.",
+            assignmentMismatch: "Driver and vehicle differ from the normal assignment.",
+            multipleDriversAssigned: "Multiple drivers are assigned to this vehicle. Please select one.",
+            unableToLoadAssignments: "Unable to load driver and vehicle assignments.",
+            manualVehicleEntry: "Manual registration entry is still available when needed.",
+            vehicleType: "Vehicle type"
+          },
+    [language]
+  );
 
   const selectedDriver = useMemo(
     () => drivers.find((driver) => String(driver.id) === String(form.driver_id)),
     [drivers, form.driver_id]
   );
+
+  const activeVehicles = useMemo(
+    () =>
+      vehicles
+        .filter((vehicle) => vehicle.active !== false)
+        .filter((vehicle) => normalizeReg(vehicle.vehicle_reg || vehicle.registration))
+        .sort((left, right) =>
+          String(left.vehicle_reg || left.registration || "").localeCompare(String(right.vehicle_reg || right.registration || ""))
+        ),
+    [vehicles]
+  );
+  const vehiclesById = useMemo(
+    () => new Map(activeVehicles.map((vehicle) => [String(vehicle.id), vehicle])),
+    [activeVehicles]
+  );
+  const vehiclesByReg = useMemo(() => {
+    const map = new Map<string, Vehicle>();
+    for (const vehicle of activeVehicles) {
+      const key = normalizeReg(vehicle.vehicle_reg || vehicle.registration);
+      if (key && !map.has(key)) {
+        map.set(key, vehicle);
+      }
+    }
+    return map;
+  }, [activeVehicles]);
+  const getAssignedVehicleForDriver = useCallback(
+    (driver: Driver | undefined) => {
+      if (!driver) return null;
+      if (driver.assigned_vehicle_id) {
+        const assignedVehicle = vehiclesById.get(String(driver.assigned_vehicle_id));
+        if (assignedVehicle) return assignedVehicle;
+      }
+      const fallbackKey = normalizeReg(driver.vehicle_reg);
+      return fallbackKey ? vehiclesByReg.get(fallbackKey) ?? null : null;
+    },
+    [vehiclesById, vehiclesByReg]
+  );
+  const getAssignedVehicleRegForDriver = useCallback(
+    (driver: Driver | undefined) => {
+      const assignedVehicle = getAssignedVehicleForDriver(driver);
+      return assignedVehicle?.vehicle_reg || assignedVehicle?.registration || driver?.vehicle_reg || "";
+    },
+    [getAssignedVehicleForDriver]
+  );
+  const selectedVehicle = useMemo(
+    () => vehiclesByReg.get(normalizeReg(form.vehicle_reg)) ?? null,
+    [form.vehicle_reg, vehiclesByReg]
+  );
+  const assignedDriversForSelectedVehicle = useMemo(() => {
+    const vehicleKey = normalizeReg(form.vehicle_reg);
+    if (!vehicleKey) return [];
+    return drivers.filter((driver) => {
+      if (driver.active === false) return false;
+      if (selectedVehicle?.id && driver.assigned_vehicle_id) {
+        return String(driver.assigned_vehicle_id) === String(selectedVehicle.id);
+      }
+      if (driver.assigned_vehicle_id) return false;
+      return normalizeReg(driver.vehicle_reg) === vehicleKey;
+    });
+  }, [drivers, form.vehicle_reg, selectedVehicle]);
+  const selectedDriverAssignedVehicleReg = getAssignedVehicleRegForDriver(selectedDriver);
+  const hasManualAssignmentMismatch =
+    Boolean(selectedDriver && form.vehicle_reg && selectedDriverAssignedVehicleReg) &&
+    normalizeReg(selectedDriverAssignedVehicleReg) !== normalizeReg(form.vehicle_reg);
+  const showNoAssignedDriver =
+    Boolean(form.vehicle_reg && selectedVehicle && !form.driver_id && assignedDriversForSelectedVehicle.length === 0);
+  const showMultipleAssignedDrivers =
+    Boolean(form.vehicle_reg && !form.driver_id && assignedDriversForSelectedVehicle.length > 1);
+
+  useEffect(() => {
+    const storedWeekEnding = getStoredWeekEnding();
+    if (storedWeekEnding) {
+      setForm((current) => (current.week_ending ? current : { ...current, week_ending: storedWeekEnding }));
+    }
+  }, []);
 
   const sortedEntries = useMemo(
     () =>
@@ -343,6 +950,7 @@ export default function WeeklyMileagePage() {
     setLoading(true);
     setError(null);
     setLoadError(null);
+    setAssignmentLoadError(null);
     setOilBaselineError(null);
     setDebugInfo(null);
     const authResult = showWeeklyMileageDebug ? await supabase.auth.getUser() : null;
@@ -379,6 +987,7 @@ export default function WeeklyMileagePage() {
     } else {
       console.error("Weekly mileage vehicles query failed:", vehicleResult.reason);
       setVehicles([]);
+      setAssignmentLoadError(assignmentCopy.unableToLoadAssignments);
     }
 
     if (baselineResult.status === "fulfilled") {
@@ -413,7 +1022,6 @@ export default function WeeklyMileagePage() {
 
     const criticalFailures = [
       driverResult.status === "rejected" ? t.nav.drivers : "",
-      vehicleResult.status === "rejected" ? (language === "th" ? "รถ" : "vehicles") : "",
       mileageResult.status === "rejected" ? t.weeklyMileage.title : "",
       serviceLogResult.status === "rejected" ? (language === "th" ? "ประวัติบริการ" : "service history") : ""
     ].filter(Boolean);
@@ -453,7 +1061,7 @@ export default function WeeklyMileagePage() {
     }
 
     setLoading(false);
-  }, [language, showWeeklyMileageDebug, t.nav.drivers, t.weeklyMileage.notifications.loadFailed, t.weeklyMileage.title]);
+  }, [assignmentCopy.unableToLoadAssignments, language, showWeeklyMileageDebug, t.nav.drivers, t.weeklyMileage.notifications.loadFailed, t.weeklyMileage.title]);
 
   useEffect(() => {
     void loadData();
@@ -479,18 +1087,92 @@ export default function WeeklyMileagePage() {
     setTablePage(1);
   }, [selectedWeekValue]);
 
-  const resetForm = (clearMessages = true) => {
-    setForm(initialForm);
+  const rememberWeekEnding = (weekEnding: string) => {
+    if (typeof window === "undefined") return;
+    if (isValidDateKey(weekEnding)) {
+      window.localStorage.setItem(WEEKLY_MILEAGE_SELECTED_WEEK_KEY, weekEnding);
+    }
+  };
+
+  const focusDriverSelect = () => {
+    window.setTimeout(() => driverSelectRef.current?.focus(), 0);
+  };
+
+  const resetForm = (clearMessages = true, options?: { keepWeekEnding?: boolean; weekEnding?: string; focusDriver?: boolean }) => {
+    const nextWeekEnding = options?.keepWeekEnding ? options.weekEnding ?? form.week_ending : "";
+    setForm(createInitialForm(nextWeekEnding));
     setError(null);
     if (clearMessages) setSuccessMessage(null);
+    if (options?.focusDriver) {
+      focusDriverSelect();
+    }
   };
 
   const handleInvalid = (
     event: React.InvalidEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => applyRequiredValidationMessage(event, t.common.requiredField);
 
+  const getDriversAssignedToVehicle = useCallback(
+    (vehicleReg: string) => {
+      const selectedKey = normalizeReg(vehicleReg);
+      if (!selectedKey) return [];
+      const matchedVehicle = vehiclesByReg.get(selectedKey) ?? null;
+
+      return drivers.filter((driver) => {
+        if (driver.active === false) return false;
+        if (matchedVehicle?.id && driver.assigned_vehicle_id) {
+          return String(driver.assigned_vehicle_id) === String(matchedVehicle.id);
+        }
+        if (driver.assigned_vehicle_id) return false;
+        return normalizeReg(driver.vehicle_reg) === selectedKey;
+      });
+    },
+    [drivers, vehiclesByReg]
+  );
+
+  const handleDriverChange = (driverId: string) => {
+    const nextDriver = drivers.find((driver) => String(driver.id) === String(driverId));
+    const assignedVehicleReg = getAssignedVehicleRegForDriver(nextDriver);
+
+    setForm((current) => ({
+      ...current,
+      driver_id: driverId,
+      vehicle_reg: driverId ? assignedVehicleReg : current.vehicle_reg
+    }));
+
+    window.setTimeout(() => {
+      if (driverId && assignedVehicleReg) {
+        odometerInputRef.current?.focus();
+      } else if (driverId) {
+        vehicleInputRef.current?.focus();
+      }
+    }, 0);
+  };
+
+  const handleVehicleRegChange = (vehicleReg: string) => {
+    const assignedDrivers = getDriversAssignedToVehicle(vehicleReg);
+
+    setForm((current) => {
+      if (!normalizeReg(vehicleReg)) {
+        return { ...current, vehicle_reg: vehicleReg };
+      }
+
+      if (current.driver_id) {
+        return { ...current, vehicle_reg: vehicleReg };
+      }
+
+      return {
+        ...current,
+        vehicle_reg: vehicleReg,
+        driver_id: assignedDrivers.length === 1 ? String(assignedDrivers[0].id) : ""
+      };
+    });
+  };
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (saving) return;
+    const shouldAddNext = !isEditing && (submitActionRef.current === "next" || multiEntryMode);
     setSaving(true);
     setError(null);
     setSuccessMessage(null);
@@ -507,6 +1189,23 @@ export default function WeeklyMileagePage() {
       ) {
         throw new Error(t.weeklyMileage.mileageValidationError);
       }
+      const duplicateEntry = entries.find((entry) => {
+        if (form.id && String(entry.id) === String(form.id)) return false;
+        if (entry.week_ending !== form.week_ending) return false;
+        const sameDriver = String(entry.driver_id) === String(form.driver_id);
+        const sameVehicle = normalizeReg(entry.vehicle_reg) === normalizeReg(form.vehicle_reg);
+        return sameDriver || sameVehicle;
+      });
+
+      if (duplicateEntry) {
+        const duplicateDriver = drivers.find((driver) => String(driver.id) === String(duplicateEntry.driver_id));
+        const duplicateName = duplicateDriver?.name || duplicateEntry.driver || selectedDriver?.name || t.weeklyMileage.driver;
+        throw new Error(
+          fastEntryCopy.duplicateWarning
+            .replace("{driver}", duplicateName)
+            .replace("{date}", formatDate(form.week_ending, language))
+        );
+      }
 
       const savedEntry = await saveWeeklyMileage({
         id: form.id || undefined,
@@ -517,15 +1216,25 @@ export default function WeeklyMileagePage() {
       });
 
       setSelectedWeek(savedEntry.week_ending ?? form.week_ending);
-      resetForm(false);
+      rememberWeekEnding(savedEntry.week_ending ?? form.week_ending);
+      resetForm(false, {
+        keepWeekEnding: shouldAddNext,
+        weekEnding: savedEntry.week_ending ?? form.week_ending,
+        focusDriver: shouldAddNext && !isEditing
+      });
       setSuccessMessage(
-        isEditing ? t.weeklyMileage.notifications.updateSuccess : t.weeklyMileage.notifications.saveSuccess
+        isEditing
+          ? t.weeklyMileage.notifications.updateSuccess
+          : fastEntryCopy.saveSuccessForDriver
+              .replace("{driver}", savedEntry.driver || selectedDriver?.name || "")
+              .replace("{date}", formatDate(savedEntry.week_ending ?? form.week_ending, language))
       );
       await loadData();
     } catch (err) {
       console.error("Weekly mileage save error:", err);
       setError(err instanceof Error && err.message ? err.message : t.weeklyMileage.errorSave);
     } finally {
+      submitActionRef.current = "save";
       setSaving(false);
     }
   };
@@ -965,6 +1674,100 @@ export default function WeeklyMileagePage() {
     exportToCsv(buildOilReportExportRows(getOilReportRows(scope)), `oil-change-service-report-${fileSuffix}`);
   };
 
+  const oilServicePdfButtonCopy = language === "th"
+    ? {
+        download: "ดาวน์โหลด PDF บริการน้ำมันเครื่อง",
+        error: "ไม่สามารถสร้าง PDF รายงานบริการน้ำมันเครื่องได้",
+        generated: "ดาวน์โหลด PDF รายงานบริการน้ำมันเครื่องแล้ว",
+        generating: "กำลังสร้าง PDF...",
+        okFallbackWeek: "ไม่ระบุ",
+        unassigned: "ยังไม่ระบุคนขับ"
+      }
+    : {
+        download: "Download Oil Service PDF",
+        error: "Unable to generate oil service PDF.",
+        generated: "Oil service PDF downloaded.",
+        generating: "Generating PDF...",
+        okFallbackWeek: "Not available",
+        unassigned: "Unassigned"
+      };
+
+  const formatOilPdfKm = (value: number | null | undefined) =>
+    value == null || !Number.isFinite(Number(value)) ? "-" : `${formatNumber(Number(value), language, 0)} KM`;
+
+  const toOilServicePdfRow = (row: OilChangeAlertRow, serviceDelta: number | null | undefined): OilServicePdfRow => ({
+    currentOdometer: formatOilPdfKm(row.currentOdometer),
+    driverName: row.driverName?.trim() || oilServicePdfButtonCopy.unassigned,
+    lastOilChangeDate: row.lastOilChangeDate ? formatDate(row.lastOilChangeDate, language) : "-",
+    nextServiceDue: formatOilPdfKm(row.nextOilChangeDueOdometer),
+    priorityKm: Number(serviceDelta ?? Number.POSITIVE_INFINITY),
+    serviceDelta: formatOilPdfKm(serviceDelta),
+    vehicleReg: row.registration || "-",
+    vehicleType: row.vehicleType ? vehicleTypeLabel(row.vehicleType) : row.vehicleTypeLabel || "-"
+  });
+
+  const buildOilServicePdfData = (): OilServicePdfData => {
+    const overdueRows = oilChangeRows
+      .filter((row) => row.status === "overdue")
+      .map((row) => toOilServicePdfRow(row, row.overdueKm))
+      .sort((left, right) => {
+        const priorityDiff =
+          (Number.isFinite(right.priorityKm) ? right.priorityKm : -1) -
+          (Number.isFinite(left.priorityKm) ? left.priorityKm : -1);
+        return priorityDiff !== 0 ? priorityDiff : left.vehicleReg.localeCompare(right.vehicleReg);
+      });
+    const dueSoonRows = oilChangeRows
+      .filter((row) => row.status === "urgent" || row.status === "due_soon")
+      .map((row) => toOilServicePdfRow(row, row.kmRemaining))
+      .sort((left, right) => {
+        const priorityDiff =
+          (Number.isFinite(left.priorityKm) ? left.priorityKm : Number.POSITIVE_INFINITY) -
+          (Number.isFinite(right.priorityKm) ? right.priorityKm : Number.POSITIVE_INFINITY);
+        return priorityDiff !== 0 ? priorityDiff : left.vehicleReg.localeCompare(right.vehicleReg);
+      });
+    const pdfLanguage = language === "th" ? "th" : "en";
+    const generatedAt = new Intl.DateTimeFormat(pdfLanguage === "th" ? "th-TH" : "en-GB", {
+      dateStyle: "medium",
+      timeStyle: "short",
+      timeZone: "Asia/Bangkok"
+    }).format(new Date());
+
+    return {
+      dueSoonRows,
+      generatedAt,
+      okCount: formatNumber(oilReportSummary.ok, language, 0),
+      overdueRows,
+      summary: {
+        dueSoon: formatNumber(oilReportSummary.urgent + oilReportSummary.dueSoon, language, 0),
+        ok: formatNumber(oilReportSummary.ok, language, 0),
+        overdue: formatNumber(oilReportSummary.overdue, language, 0)
+      },
+      weekEnding: selectedWeekSummary?.weekEnding ? formatDate(selectedWeekSummary.weekEnding, language) : oilServicePdfButtonCopy.okFallbackWeek
+    };
+  };
+
+  const downloadOilServicePdf = async () => {
+    if (generatingOilServicePdf) return;
+    setGeneratingOilServicePdf(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const pdfLanguage = language === "th" ? "th" : "en";
+      const pdfData = buildOilServicePdfData();
+      const logo = await loadOilServicePdfLogo();
+      const pdf = await buildOilServicePdf(pdfData, logo, pdfLanguage);
+      const datePart = new Date().toISOString().slice(0, 10);
+      downloadBlob(pdf, `Expert-Express-Oil-Service-Report-${datePart}.pdf`);
+      setSuccessMessage(oilServicePdfButtonCopy.generated);
+    } catch (err) {
+      console.error("Oil service PDF generation failed:", err);
+      setError(err instanceof Error && err.message ? err.message : oilServicePdfButtonCopy.error);
+    } finally {
+      setGeneratingOilServicePdf(false);
+    }
+  };
+
   const copyOilReportSummary = async () => {
     const immediateRows = sortOilReportRows(
       oilChangeRows.filter((row) => row.status === "overdue" || row.status === "urgent")
@@ -1116,15 +1919,26 @@ export default function WeeklyMileagePage() {
             <h3 className="section-title">Oil Change Service Report</h3>
             <p className="section-subtitle">Export vehicles that are overdue, urgent, due soon, or ready for review.</p>
           </div>
-          <button
-            type="button"
-            onClick={() => void copyOilReportSummary()}
-            disabled={!oilChangeRows.length}
-            className="btn-secondary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-          >
-            <Copy className="h-4 w-4" />
-            Copy Report Summary
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <button
+              type="button"
+              onClick={() => void downloadOilServicePdf()}
+              disabled={generatingOilServicePdf}
+              className="btn-primary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            >
+              <Download className="h-4 w-4" />
+              {generatingOilServicePdf ? oilServicePdfButtonCopy.generating : oilServicePdfButtonCopy.download}
+            </button>
+            <button
+              type="button"
+              onClick={() => void copyOilReportSummary()}
+              disabled={!oilChangeRows.length}
+              className="btn-secondary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            >
+              <Copy className="h-4 w-4" />
+              Copy Report Summary
+            </button>
+          </div>
         </div>
 
         {oilBaselineError ? (
@@ -1529,26 +2343,42 @@ export default function WeeklyMileagePage() {
                   type="date"
                   required
                   value={form.week_ending}
-                  onChange={(event) => setForm((current) => ({ ...current, week_ending: event.target.value }))}
+                  onChange={(event) => {
+                    const nextWeekEnding = event.target.value;
+                    setForm((current) => ({ ...current, week_ending: nextWeekEnding }));
+                    rememberWeekEnding(nextWeekEnding);
+                  }}
                   onInvalid={handleInvalid}
                   onInput={clearValidationMessage}
                   className="form-input bg-white"
                 />
+                <label className="mt-3 flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={multiEntryMode}
+                    onChange={(event) => setMultiEntryMode(event.target.checked)}
+                    className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-600"
+                  />
+                  <span>
+                    <span className="block">{fastEntryCopy.multiEntryMode}</span>
+                    {multiEntryMode && form.week_ending ? (
+                      <span className="mt-1 block text-xs font-normal text-slate-500">
+                        {fastEntryCopy.dateWillRemain.replace("{date}", formatDate(form.week_ending, language))}
+                      </span>
+                    ) : null}
+                  </span>
+                </label>
               </div>
 
               <div className="form-field">
                 <label className="form-label form-label-required">{t.weeklyMileage.driver}</label>
                 <select
+                  ref={driverSelectRef}
                   required
                   value={form.driver_id}
                   onChange={(event) => {
                     clearValidationMessage(event);
-                    const nextDriver = drivers.find((driver) => String(driver.id) === event.target.value);
-                    setForm((current) => ({
-                      ...current,
-                      driver_id: event.target.value,
-                      vehicle_reg: nextDriver?.vehicle_reg ?? ""
-                    }));
+                    handleDriverChange(event.target.value);
                   }}
                   onInvalid={handleInvalid}
                   className="form-input bg-white"
@@ -1563,28 +2393,67 @@ export default function WeeklyMileagePage() {
               </div>
 
               <div className="form-field">
-                <label className="form-label">{t.weeklyMileage.vehicleReg}</label>
+                <label className="form-label form-label-required">{t.weeklyMileage.vehicleReg}</label>
                 <input
+                  ref={vehicleInputRef}
+                  list="weekly-mileage-vehicle-options"
+                  required
+                  placeholder={assignmentCopy.searchRegistration}
                   value={form.vehicle_reg}
-                  onChange={(event) => setForm((current) => ({ ...current, vehicle_reg: event.target.value }))}
+                  onChange={(event) => handleVehicleRegChange(event.target.value)}
+                  onInvalid={handleInvalid}
+                  onInput={clearValidationMessage}
                   className="form-input bg-white"
                 />
+                <datalist id="weekly-mileage-vehicle-options">
+                  {activeVehicles.map((vehicle) => {
+                    const registration = vehicle.vehicle_reg || vehicle.registration || "";
+                    const vehicleType = vehicle.vehicle_type ? ` - ${vehicle.vehicle_type}` : "";
+                    return (
+                      <option key={vehicle.id || registration} value={registration}>
+                        {registration}{vehicleType}
+                      </option>
+                    );
+                  })}
+                </datalist>
                 <p className="form-helper">
-                  {selectedDriver?.vehicle_reg?.trim()
+                  {assignmentLoadError
+                    ? assignmentLoadError
+                    : showMultipleAssignedDrivers
+                      ? assignmentCopy.multipleDriversAssigned
+                      : showNoAssignedDriver
+                        ? assignmentCopy.noDriverAssigned
+                        : hasManualAssignmentMismatch
+                          ? assignmentCopy.assignmentMismatch
+                          : selectedDriverAssignedVehicleReg?.trim()
                     ? t.weeklyMileage.autoFilledVehicle
                     : t.weeklyMileage.noVehicleAssigned}
                 </p>
+                {selectedVehicle?.vehicle_type ? (
+                  <p className="mt-1 text-xs text-slate-500">
+                    {assignmentCopy.vehicleType}: {selectedVehicle.vehicle_type}
+                  </p>
+                ) : null}
+                {!selectedVehicle && form.vehicle_reg ? (
+                  <p className="mt-1 text-xs text-slate-500">{assignmentCopy.manualVehicleEntry}</p>
+                ) : null}
               </div>
 
               <div className="form-field">
                 <label className="form-label form-label-required">{t.weeklyMileage.mileage}</label>
                 <input
+                  ref={odometerInputRef}
                   type="number"
                   min="0"
                   step="1"
                   required
                   value={form.mileage}
                   onChange={(event) => setForm((current) => ({ ...current, mileage: event.target.value }))}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && multiEntryMode) {
+                      submitActionRef.current = "next";
+                    }
+                  }}
                   onInvalid={handleInvalid}
                   onInput={clearValidationMessage}
                   className="form-input bg-white"
@@ -1606,9 +2475,21 @@ export default function WeeklyMileagePage() {
             {successMessage ? <p className="mt-3 text-sm text-emerald-600">{successMessage}</p> : null}
 
             <div className="sticky bottom-3 z-10 mt-4 flex flex-col gap-2.5 rounded-[1.5rem] border border-slate-200/80 bg-white/95 p-3 shadow-[0_10px_30px_rgba(15,23,42,0.08)] backdrop-blur sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none sm:flex-row sm:items-center">
-              <button type="submit" disabled={saving} className="btn-primary w-full sm:w-auto disabled:opacity-70">
+              <button type="submit" onClick={() => { submitActionRef.current = "save"; }} disabled={saving} className="btn-primary w-full sm:w-auto disabled:opacity-70">
                 {saving ? t.common.saving : isEditing ? t.weeklyMileage.updateEntry : t.weeklyMileage.saveEntry}
               </button>
+              {!isEditing ? (
+                <button
+                  type="submit"
+                  onClick={() => {
+                    submitActionRef.current = "next";
+                  }}
+                  disabled={saving}
+                  className="btn-secondary w-full sm:w-auto disabled:opacity-70"
+                >
+                  {saving ? t.common.saving : fastEntryCopy.saveAndAddNext}
+                </button>
+              ) : null}
               {isEditing ? (
                 <button type="button" onClick={() => resetForm()} className="btn-secondary w-full sm:w-auto">
                   {t.common.cancel}
