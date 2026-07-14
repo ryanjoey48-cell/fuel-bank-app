@@ -7,6 +7,7 @@ import { useLanguage } from "@/lib/language-provider";
 import { supabase } from "@/lib/supabase";
 
 type ProfileUser = {
+  id?: string;
   email?: string;
   created_at?: string;
   last_sign_in_at?: string | null;
@@ -101,6 +102,17 @@ export default function ProfilePage() {
           full_name: trimmedName
         }
       }) as ProfileUser;
+
+      if (updatedUser.id) {
+        const { error: bookingCreatorError } = await supabase
+          .from("booking_diary")
+          .update({ created_by: trimmedName })
+          .eq("created_by_user_id", updatedUser.id);
+
+        if (bookingCreatorError) {
+          console.warn("Booking creator display name refresh skipped:", bookingCreatorError);
+        }
+      }
 
       setUser(updatedUser);
       setEditingName(false);

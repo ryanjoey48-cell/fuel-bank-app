@@ -291,12 +291,14 @@ export type BookingDiaryEntry = {
   google_maps_route_url?: string | null;
   distance_source?: string | null;
   route_calculated_at?: string | null;
+  job_order_number: string | null;
   vehicle: string | null;
   driver: string | null;
   notes: string | null;
   status: string | null;
   created_at: string;
   updated_at: string;
+  created_by_user_id: string | null;
   created_by: string | null;
   modified_by: string | null;
 };

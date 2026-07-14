@@ -652,12 +652,14 @@ create table if not exists public.booking_diary (
   google_maps_route_url text,
   distance_source text,
   route_calculated_at timestamptz,
+  job_order_number text,
   vehicle text,
   driver text,
   notes text,
   status text,
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
+  created_by_user_id uuid references auth.users(id) on delete set null,
   created_by text,
   modified_by text
 );
@@ -674,10 +676,28 @@ create index if not exists booking_diary_vehicle_idx
 create index if not exists booking_diary_driver_idx
   on public.booking_diary (driver);
 
+create index if not exists booking_diary_created_by_user_id_idx
+  on public.booking_diary (created_by_user_id);
+
 create index if not exists booking_diary_booking_id_idx
   on public.booking_diary (booking_id);
 
 alter table public.booking_diary disable row level security;
+
+create or replace function public.set_booking_diary_created_by_user_id()
+returns trigger as $$
+begin
+  if new.created_by_user_id is null then
+    new.created_by_user_id := auth.uid();
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists set_booking_diary_created_by_user_id on public.booking_diary;
+create trigger set_booking_diary_created_by_user_id
+before insert on public.booking_diary
+for each row execute function public.set_booking_diary_created_by_user_id();
 
 drop trigger if exists set_booking_diary_updated_at on public.booking_diary;
 create trigger set_booking_diary_updated_at

@@ -127,6 +127,8 @@ function omitTripOptionalColumns<T extends Record<string, unknown>>(payload: T) 
 }
 
 const BOOKING_DIARY_ROUTE_COLUMNS = new Set([
+  "job_order_number",
+  "created_by_user_id",
   "pickup_place_id",
   "dropoff_place_id",
   "pickup_address",
@@ -632,6 +634,12 @@ function normalizeAuditName(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function getAccountNameFromEmail(value: string | null) {
+  if (!value) return null;
+  const [localPart] = value.split("@");
+  return normalizeAuditName(localPart?.replace(/[._-]+/g, " "));
+}
+
 async function getCurrentUserAudit() {
   const { data, error } = await supabase.auth.getUser();
   if (error) {
@@ -651,7 +659,7 @@ async function getCurrentUserAudit() {
     normalizeAuditName(metadata?.name) ||
     null;
   const email = normalizeAuditName(user?.email);
-  const name = displayName && email && displayName !== email ? `${displayName} (${email})` : displayName || email || null;
+  const name = displayName || getAccountNameFromEmail(email);
 
   return {
     id: user?.id ?? null,
@@ -2307,6 +2315,8 @@ export async function fetchBookingDiaryEntries() {
     weight: booking.weight ?? null,
     dimensions: booking.dimensions ?? null,
     warehouse_no: booking.warehouse_no ?? null,
+    job_order_number: booking.job_order_number?.trim() || null,
+    created_by_user_id: booking.created_by_user_id ?? null,
     vehicle: normalizeVehicleRegistration(booking.vehicle),
     driver: normalizeDisplayName(booking.driver),
     notes: booking.notes ?? null,
@@ -2380,9 +2390,10 @@ export async function saveBookingDiaryEntry(
     route_calculated_at: rest.route_calculated_at || null,
     vehicle: normalizeVehicleRegistration(rest.vehicle) || null,
     driver: normalizeDisplayName(rest.driver) || null,
+    job_order_number: rest.job_order_number?.trim() || null,
     notes: rest.notes?.trim() || null,
     modified_by: audit.name,
-    ...(!id ? { created_by: audit.name } : {})
+    ...(!id ? { created_by: audit.name, created_by_user_id: audit.id } : {})
   });
 
   const result = await writeBookingDiaryWithSchemaFallback({ id, payload: cleaned });

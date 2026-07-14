@@ -71,6 +71,7 @@ type BookingForm = {
   vehicle: string;
   driver: string;
   notes: string;
+  job_order_number: string;
 };
 
 type BookingSortKey =
@@ -80,6 +81,11 @@ type BookingSortKey =
   | "recent_last"
   | "pickup_earliest"
   | "pickup_latest";
+
+type CurrentBookingUser = {
+  id: string | null;
+  name: string | null;
+};
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
@@ -108,7 +114,8 @@ const emptyForm = (): BookingForm => ({
   route_calculated_at: "",
   vehicle: "",
   driver: "",
-  notes: ""
+  notes: "",
+  job_order_number: ""
 });
 
 const labels = {
@@ -128,7 +135,7 @@ const labels = {
     week: "This week",
     all: "All",
     search: "Search bookings",
-    searchPlaceholder: "Search pickup, dropoff, vehicle, driver, notes",
+    searchPlaceholder: "Search pickup, dropoff, vehicle, driver, notes, job order",
     date: "Date",
     time: "Time",
     pickupTime: "Pickup time",
@@ -209,6 +216,14 @@ const labels = {
     route: "Route",
     actions: "Actions",
     notesStatus: "Notes",
+    jobCompletionInvoicing: "Job completion / invoicing",
+    jobOrderNumber: "Job Order Number",
+    jobOrderNumberPlaceholder: "Enter job order number",
+    jobOrderNumberHelper: "Optional — this can be added after the job is completed to help with invoicing.",
+    jobOrderLabel: "Job Order",
+    addedBy: "Added by",
+    allUsers: "All users",
+    creatorUnavailable: "Creator unavailable",
     routeEstimate: "Route estimate",
     estimateHelper: "Booking estimate is pickup to drop-off only. Trip Journey can add depot start later.",
     estimatedDistance: "Estimated distance",
@@ -332,6 +347,21 @@ const locationLabelExtras = {
   }
 };
 
+const jobOrderLabelExtras = {
+  en: {},
+  th: {
+    searchPlaceholder: "ค้นหาต้นทาง ปลายทาง รถ คนขับ หมายเหตุ เลขใบงาน",
+    jobCompletionInvoicing: "จบงาน / ออกใบแจ้งหนี้",
+    jobOrderNumber: "เลขใบงาน",
+    jobOrderNumberPlaceholder: "กรอกเลขใบงาน",
+    jobOrderNumberHelper: "ไม่บังคับ - สามารถเพิ่มหลังจบงานเพื่อช่วยในการออกใบแจ้งหนี้",
+    jobOrderLabel: "เลขใบงาน",
+    addedBy: "เพิ่มโดย",
+    allUsers: "ผู้ใช้ทั้งหมด",
+    creatorUnavailable: "ไม่พบข้อมูลผู้เพิ่ม"
+  }
+};
+
 function mapBookingToForm(booking: BookingDiaryEntry): BookingForm {
   return {
     id: booking.id,
@@ -358,7 +388,8 @@ function mapBookingToForm(booking: BookingDiaryEntry): BookingForm {
     route_calculated_at: booking.route_calculated_at ?? "",
     vehicle: booking.vehicle ?? "",
     driver: booking.driver ?? "",
-    notes: booking.notes ?? ""
+    notes: booking.notes ?? "",
+    job_order_number: booking.job_order_number ?? ""
   };
 }
 
@@ -425,6 +456,38 @@ function getBookingPickupDisplay(booking: Pick<BookingDiaryEntry, "pickup" | "pi
 
 function getBookingDropoffDisplay(booking: Pick<BookingDiaryEntry, "dropoff" | "dropoff_address">) {
   return getDiaryDisplayName(booking.dropoff, booking.dropoff_address) || booking.dropoff || "-";
+}
+
+function getAccountNameFromEmail(value: string | null | undefined) {
+  if (!value) return "";
+  const [localPart] = value.split("@");
+  return localPart?.replace(/[._-]+/g, " ").trim() ?? "";
+}
+
+function getUserDisplayNameFromMetadata(user: { email?: string | null; user_metadata?: Record<string, unknown> } | null | undefined) {
+  const metadata = user?.user_metadata;
+  const fullName = typeof metadata?.full_name === "string" ? metadata.full_name.trim() : "";
+  const name = typeof metadata?.name === "string" ? metadata.name.trim() : "";
+  const email = typeof user?.email === "string" ? user.email.trim() : "";
+  return fullName || name || getAccountNameFromEmail(email) || null;
+}
+
+function getCreatorDisplayName(booking: BookingDiaryEntry, currentUser: CurrentBookingUser | null) {
+  if (booking.created_by_user_id && currentUser?.id === booking.created_by_user_id && currentUser.name) {
+    return currentUser.name;
+  }
+
+  const snapshot = (booking.created_by ?? "").trim();
+  if (!snapshot) return "";
+
+  const nameWithEmail = snapshot.match(/^(.+?)\s*\([^@\s]+@[^)]+\)$/);
+  if (nameWithEmail?.[1]?.trim()) return nameWithEmail[1].trim();
+
+  if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(snapshot)) {
+    return getAccountNameFromEmail(snapshot);
+  }
+
+  return snapshot;
 }
 
 function getCoordinateText(lat: string, lng: string) {
@@ -720,7 +783,7 @@ function LocationCombobox({
 export default function BookingDiaryPage() {
   const { language } = useLanguage();
   const languageKey = language === "th" ? "th" : "en";
-  const copy = { ...labels.en, ...labels[languageKey], ...labelExtras[languageKey], ...locationLabelExtras[languageKey] };
+  const copy = { ...labels.en, ...labels[languageKey], ...labelExtras[languageKey], ...locationLabelExtras[languageKey], ...jobOrderLabelExtras[languageKey] };
   const firstInputRef = useRef<HTMLInputElement | null>(null);
   const [bookings, setBookings] = useState<BookingDiaryEntry[]>([]);
   const [tripsByBookingId, setTripsByBookingId] = useState<Map<string, TripJourney>>(() => new Map());
@@ -735,7 +798,9 @@ export default function BookingDiaryPage() {
   const [dropoffFilter, setDropoffFilter] = useState("");
   const [vehicleFilter, setVehicleFilter] = useState("");
   const [driverFilter, setDriverFilter] = useState("");
+  const [creatorFilter, setCreatorFilter] = useState("");
   const [sortBy, setSortBy] = useState<BookingSortKey>("date_newest");
+  const [currentUser, setCurrentUser] = useState<CurrentBookingUser | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -788,6 +853,22 @@ export default function BookingDiaryPage() {
   }, [load]);
 
   useEffect(() => {
+    const syncCurrentUser = () => {
+      void supabase.auth.getUser().then(({ data }) => {
+        const user = data.user;
+        setCurrentUser({
+          id: user?.id ?? null,
+          name: getUserDisplayNameFromMetadata(user ?? null)
+        });
+      });
+    };
+
+    syncCurrentUser();
+    window.addEventListener("fuel-bank:user-updated", syncCurrentUser);
+    return () => window.removeEventListener("fuel-bank:user-updated", syncCurrentUser);
+  }, []);
+
+  useEffect(() => {
     const channel = supabase
       .channel("booking-diary-live")
       .on("postgres_changes", { event: "*", schema: "public", table: "booking_diary" }, () => {
@@ -816,6 +897,10 @@ export default function BookingDiaryPage() {
     () => uniqueSorted([...bookings.map((booking) => booking.driver), ...drivers.map((driver) => driver.name)]),
     [bookings, drivers]
   );
+  const creatorOptions = useMemo(
+    () => uniqueSorted(bookings.map((booking) => getCreatorDisplayName(booking, currentUser))),
+    [bookings, currentUser]
+  );
   const locationOptions = useMemo(
     () => uniqueSorted([...LOCATION_SUGGESTIONS, ...bookings.map(getBookingPickupDisplay), ...bookings.map(getBookingDropoffDisplay)]),
     [bookings]
@@ -840,6 +925,8 @@ export default function BookingDiaryPage() {
           booking.vehicle,
           booking.driver,
           booking.warehouse_no,
+          booking.job_order_number,
+          getCreatorDisplayName(booking, currentUser),
           booking.notes
         ]
           .filter(Boolean)
@@ -854,14 +941,15 @@ export default function BookingDiaryPage() {
         (!pickupFilter || getBookingPickupDisplay(booking) === pickupFilter) &&
         (!dropoffFilter || getBookingDropoffDisplay(booking) === dropoffFilter) &&
         (!vehicleFilter || booking.vehicle === vehicleFilter) &&
-        (!driverFilter || booking.driver === driverFilter)
+        (!driverFilter || booking.driver === driverFilter) &&
+        (!creatorFilter || getCreatorDisplayName(booking, currentUser) === creatorFilter)
       );
     }).sort((a, b) => compareBookings(a, b, sortBy));
-  }, [bookings, dateFilter, driverFilter, dropoffFilter, pickupFilter, quickFilter, searchQuery, sortBy, vehicleFilter]);
+  }, [bookings, creatorFilter, currentUser, dateFilter, driverFilter, dropoffFilter, pickupFilter, quickFilter, searchQuery, sortBy, vehicleFilter]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [dateFilter, driverFilter, dropoffFilter, pickupFilter, quickFilter, searchQuery, sortBy, vehicleFilter]);
+  }, [creatorFilter, dateFilter, driverFilter, dropoffFilter, pickupFilter, quickFilter, searchQuery, sortBy, vehicleFilter]);
 
   const dateCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -878,6 +966,7 @@ export default function BookingDiaryPage() {
       dropoffFilter ||
       vehicleFilter ||
       driverFilter ||
+      creatorFilter ||
       quickFilter !== "today" ||
       sortBy !== "date_newest"
   );
@@ -1040,6 +1129,7 @@ export default function BookingDiaryPage() {
     setDropoffFilter("");
     setVehicleFilter("");
     setDriverFilter("");
+    setCreatorFilter("");
     setQuickFilter("today");
     setSortBy("date_newest");
     setCurrentPage(1);
@@ -1071,7 +1161,7 @@ export default function BookingDiaryPage() {
   };
 
   const openDuplicate = (booking: BookingDiaryEntry) => {
-    setForm({ ...mapBookingToForm(booking), id: "" });
+    setForm({ ...mapBookingToForm(booking), id: "", job_order_number: "" });
     setEditingBookingId(null);
     setDuplicatingBooking(true);
     setError(null);
@@ -1164,6 +1254,7 @@ export default function BookingDiaryPage() {
         route_calculated_at: form.route_calculated_at,
         vehicle: form.vehicle,
         driver: form.driver,
+        job_order_number: form.job_order_number,
         notes: form.notes
       });
       setNotice(duplicatingBooking ? copy.copied : targetId ? copy.updated : copy.saved);
@@ -1410,8 +1501,9 @@ export default function BookingDiaryPage() {
         "Distance Source": booking.distance_source,
         Vehicle: booking.vehicle,
         Driver: booking.driver,
+        "Job Order Number": booking.job_order_number,
         Notes: booking.notes,
-        "Created By": booking.created_by,
+        "Created By": getCreatorDisplayName(booking, currentUser) || copy.creatorUnavailable,
         "Created At": booking.created_at,
         "Modified By": booking.modified_by,
         "Modified Time": booking.updated_at
@@ -1467,6 +1559,10 @@ export default function BookingDiaryPage() {
       <select value={driverFilter} onChange={(event) => setDriverFilter(event.target.value)} className={`${compactInputClass} bg-white`}>
         <option value="">{copy.allDrivers}</option>
         {driverOptions.map((driver) => <option key={driver} value={driver}>{driver}</option>)}
+      </select>
+      <select value={creatorFilter} onChange={(event) => setCreatorFilter(event.target.value)} className={`${compactInputClass} bg-white`} aria-label={copy.addedBy}>
+        <option value="">{copy.allUsers}</option>
+        {creatorOptions.map((creator) => <option key={creator} value={creator}>{creator}</option>)}
       </select>
     </>
   );
@@ -1555,7 +1651,7 @@ export default function BookingDiaryPage() {
               {copy.live}
             </div>
           </div>
-          <div className="booking-filter-grid grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-[minmax(220px,1.4fr)_repeat(6,minmax(140px,1fr))]">
+          <div className="booking-filter-grid grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-[minmax(220px,1.4fr)_repeat(7,minmax(132px,1fr))]">
             {filterControls}
           </div>
           <div className="booking-filter-footer">
@@ -1721,12 +1817,19 @@ export default function BookingDiaryPage() {
                               </span>
                             ) : null;
                           })()}
-                          {(booking.warehouse_no || booking.notes) ? (
+                          {(booking.warehouse_no || booking.job_order_number || booking.notes) ? (
                             <span className="booking-line-support">
                               {booking.warehouse_no ? <span>Warehouse: {booking.warehouse_no}</span> : null}
+                              {booking.job_order_number ? <span>{copy.jobOrderLabel}: {booking.job_order_number}</span> : null}
                               {booking.notes ? <span>Notes: {booking.notes}</span> : null}
                             </span>
                           ) : null}
+                          <span className="booking-line-support">
+                            <span className="inline-flex items-center gap-1">
+                              <UserRound className="h-3 w-3" />
+                              {copy.addedBy} {getCreatorDisplayName(booking, currentUser) || copy.creatorUnavailable}
+                            </span>
+                          </span>
                         </button>
                         <div className="booking-line-actions">
                           <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getBookingTripClass(booking)}`}>
@@ -1793,6 +1896,7 @@ export default function BookingDiaryPage() {
                   </summary>
                   <div className="booking-ledger-extra">
                     <p><span>{copy.date}</span>{formatDate(booking.booking_date, language)}</p>
+                    <p><span>{copy.addedBy}</span>{getCreatorDisplayName(booking, currentUser) || copy.creatorUnavailable}</p>
                     <p><span>{copy.dimensions}</span>{booking.dimensions || "-"}</p>
                     <p><span>{copy.warehouseNo}</span>{booking.warehouse_no || "-"}</p>
                     <p><span>{copy.notes}</span>{booking.notes || "-"}</p>
@@ -1907,6 +2011,7 @@ export default function BookingDiaryPage() {
                   <div className="booking-card-meta">
                     <p><Truck className="booking-card-icon" />{booking.vehicle || "-"}</p>
                     <p><UserRound className="booking-card-icon" />{booking.driver || "-"}</p>
+                    <p className="col-span-2"><UserRound className="booking-card-icon" />{copy.addedBy} {getCreatorDisplayName(booking, currentUser) || copy.creatorUnavailable}</p>
                     {booking.notes ? <p className="col-span-2 truncate">{copy.notes}: {booking.notes}</p> : null}
                     <p className="col-span-2"><Clock3 className="booking-card-icon" />{booking.modified_by || "-"} · {formatTime(booking.updated_at, language)}</p>
                   </div>
@@ -1951,7 +2056,13 @@ export default function BookingDiaryPage() {
                         </tr>
                         {expanded && entries.length ? entries.map((booking) => (
                           <tr key={booking.id} className="enterprise-table-row cursor-pointer" onClick={() => openEdit(booking)}>
-                            <td className="booking-desktop-cell whitespace-nowrap font-semibold text-slate-950">{formatDate(booking.booking_date, language)}</td>
+                            <td className="booking-desktop-cell whitespace-nowrap font-semibold text-slate-950">
+                              <span className="block">{formatDate(booking.booking_date, language)}</span>
+                              <span className="mt-1 inline-flex max-w-[150px] items-center gap-1 truncate text-[10px] font-medium text-slate-500">
+                                <UserRound className="h-3 w-3 flex-shrink-0" />
+                                {copy.addedBy} {getCreatorDisplayName(booking, currentUser) || copy.creatorUnavailable}
+                              </span>
+                            </td>
                             <td className="booking-desktop-cell whitespace-nowrap"><span className="booking-desktop-time">{formatPickupTime(booking.pickup_time) || "-"}</span></td>
                             <td
                               className="booking-desktop-cell max-w-[280px] font-semibold text-slate-900"
@@ -1981,7 +2092,17 @@ export default function BookingDiaryPage() {
                             <td className="booking-desktop-cell whitespace-nowrap"><span className="booking-desktop-driver">{booking.driver || "-"}</span></td>
                             <td className="booking-desktop-cell whitespace-nowrap">{booking.amount_pallets || "-"} PLT / {booking.weight ? `${booking.weight}kg` : "-"}</td>
                             <td className="booking-desktop-cell max-w-[130px]" title={booking.warehouse_no || ""}><span className="block truncate">{booking.warehouse_no || "-"}</span></td>
-                            <td className="booking-desktop-cell max-w-[150px]" title={booking.notes || ""}><span className="block truncate">{booking.notes || "-"}</span></td>
+                            <td
+                              className="booking-desktop-cell max-w-[170px]"
+                              title={[booking.job_order_number ? `${copy.jobOrderLabel}: ${booking.job_order_number}` : "", booking.notes || ""].filter(Boolean).join(" | ")}
+                            >
+                              {booking.job_order_number ? (
+                                <span className="mb-1 block truncate rounded-full border border-brand-100 bg-brand-50 px-2 py-0.5 text-[10px] font-semibold text-brand-700">
+                                  {copy.jobOrderLabel}: {booking.job_order_number}
+                                </span>
+                              ) : null}
+                              <span className="block truncate">{booking.notes || "-"}</span>
+                            </td>
                             <td className="booking-desktop-cell whitespace-nowrap">
                               <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getBookingTripClass(booking)}`}>
                                 {getBookingTripLabel(booking)}
@@ -2263,6 +2384,22 @@ export default function BookingDiaryPage() {
                     <label className="form-field lg:col-span-4">
                       <span className="form-label">{copy.notes}</span>
                       <textarea value={form.notes} onChange={(event) => setField("notes", event.target.value)} className="form-textarea min-h-[86px] rounded-[0.9rem]" placeholder={copy.notes} />
+                    </label>
+                  </div>
+                </fieldset>
+
+                <fieldset className="booking-form-section">
+                  <legend>{copy.jobCompletionInvoicing}</legend>
+                  <div className="booking-form-grid">
+                    <label className="form-field lg:col-span-2">
+                      <span className="form-label">{copy.jobOrderNumber}</span>
+                      <input
+                        value={form.job_order_number}
+                        onChange={(event) => setField("job_order_number", event.target.value)}
+                        className={inputClass}
+                        placeholder={copy.jobOrderNumberPlaceholder}
+                      />
+                      <span className="mt-2 block text-sm leading-5 text-slate-500">{copy.jobOrderNumberHelper}</span>
                     </label>
                   </div>
                 </fieldset>
