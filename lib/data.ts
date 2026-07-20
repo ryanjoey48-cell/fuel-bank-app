@@ -17,6 +17,7 @@ import type {
   BankTransfer,
   BankTransferWithDriver,
   BookingDiaryEntry,
+  Client,
   Driver,
   FuelLogDaySummary,
   FuelLogFilters,
@@ -44,6 +45,7 @@ import type {
   VehicleServiceLog,
   WeeklyMileageEntry
 } from "@/types/database";
+import { normalizeClientName, normalizedClientKey } from "@/lib/clients";
 
 function stripUndefined<T extends Record<string, unknown>>(payload: T) {
   return Object.fromEntries(
@@ -2293,23 +2295,40 @@ export async function fetchShipments() {
 }
 
 export async function fetchBookingDiaryEntries() {
-  const { data, error } = await supabase
-    .from("booking_diary")
-    .select("*")
-    .order("booking_date", { ascending: false })
-    .order("pickup_time", { ascending: true, nullsFirst: false })
-    .order("updated_at", { ascending: false })
-    .order("created_at", { ascending: false });
+  const pageSize = 1000;
+  const rows: BookingDiaryEntry[] = [];
 
-  if (error) {
-    logDataError("fetchBookingDiaryEntries error:", error);
-    throw new Error(
-      error.message || error.details || error.hint || "Unable to load booking diary."
-    );
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from("booking_diary")
+      .select("*, client:clients(id,name,active)")
+      .order("booking_date", { ascending: false })
+      .order("pickup_time", { ascending: true, nullsFirst: false })
+      .order("updated_at", { ascending: false })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (error) {
+      logDataError("fetchBookingDiaryEntries error:", error, { from, pageSize });
+      const message = String(error.message ?? error.details ?? "");
+      if (message.includes("clients") || message.includes("client_id")) {
+        throw new Error("Booking Diary client setup is incomplete. Apply migration 20260720_add_booking_clients.sql before using this version.");
+      }
+      throw new Error(
+        error.message || error.details || error.hint || "Unable to load booking diary."
+      );
+    }
+
+    const page = (data ?? []) as BookingDiaryEntry[];
+    rows.push(...page);
+    if (page.length < pageSize) break;
   }
 
-  return ((data ?? []) as BookingDiaryEntry[]).map((booking) => ({
+  return rows.map((booking) => ({
     ...booking,
+    client_id: booking.client_id ?? null,
+    client: booking.client ?? null,
     pickup_time: booking.pickup_time ?? null,
     amount_pallets: booking.amount_pallets ?? null,
     weight: booking.weight ?? null,
@@ -2338,6 +2357,138 @@ export async function fetchBookingDiaryEntries() {
   }));
 }
 
+export async function fetchClients() {
+  const { data, error } = await supabase
+    .from("clients")
+    .select("id,name,normalized_name,active,created_at,updated_at,created_by")
+    .order("active", { ascending: false })
+    .order("name", { ascending: true });
+
+  if (error) {
+    logDataError("fetchClients error:", error);
+    throw new Error("Client directory is unavailable. Apply migration 20260720_add_booking_clients.sql before using this version.");
+  }
+
+  return (data ?? []) as Client[];
+}
+
+export async function createClient(name: string) {
+  const cleaned = normalizeClientName(name);
+  if (!cleaned) throw new Error("Client name cannot be blank.");
+
+  const normalizedName = normalizedClientKey(cleaned);
+  const existing = await supabase
+    .from("clients")
+    .select("id,name,normalized_name,active,created_at,updated_at,created_by")
+    .eq("normalized_name", normalizedName)
+    .maybeSingle();
+
+  if (existing.error) {
+    logDataError("createClient duplicate check error:", existing.error);
+    throw new Error(existing.error.message || "Unable to check the client directory.");
+  }
+  if (existing.data) return { client: existing.data as Client, created: false };
+
+  const result = await supabase
+    .from("clients")
+    .insert({ name: cleaned, normalized_name: normalizedName })
+    .select("id,name,normalized_name,active,created_at,updated_at,created_by")
+    .single();
+
+  if (result.error) {
+    if (result.error.code === "23505") {
+      const concurrent = await supabase
+        .from("clients")
+        .select("id,name,normalized_name,active,created_at,updated_at,created_by")
+        .eq("normalized_name", normalizedName)
+        .single();
+      if (!concurrent.error && concurrent.data) return { client: concurrent.data as Client, created: false };
+    }
+    logDataError("createClient error:", result.error, { name: cleaned });
+    throw new Error(result.error.message || "Unable to create client.");
+  }
+
+  return { client: result.data as Client, created: true };
+}
+
+async function requireAdminUser() {
+  const { data, error } = await supabase.auth.getUser();
+  if (error) throw new Error(error.message);
+  const user = data.user;
+  const email = String(user?.email ?? "").toLowerCase();
+  const role = String(user?.user_metadata?.role ?? user?.app_metadata?.role ?? "").toLowerCase();
+  if (email !== "joeryan09@outlook.com" && role !== "admin") {
+    throw new Error("Admin permission required to manage clients.");
+  }
+}
+
+export async function updateClient(id: string, payload: { name?: string; active?: boolean }) {
+  await requireAdminUser();
+  const cleaned: Record<string, unknown> = {};
+  if (payload.name !== undefined) {
+    const name = normalizeClientName(payload.name);
+    if (!name) throw new Error("Client name cannot be blank.");
+    cleaned.name = name;
+    cleaned.normalized_name = normalizedClientKey(name);
+  }
+  if (payload.active !== undefined) cleaned.active = payload.active;
+
+  const { data, error } = await supabase
+    .from("clients")
+    .update(cleaned)
+    .eq("id", id)
+    .select("id,name,normalized_name,active,created_at,updated_at,created_by")
+    .single();
+
+  if (error) {
+    logDataError("updateClient error:", error, { id, payload: cleaned });
+    throw new Error(error.code === "23505" ? "A client with this name already exists." : error.message || "Unable to update client.");
+  }
+  return data as Client;
+}
+
+export type ClientDeleteEligibility = {
+  bookingReferences: number;
+  otherReferences: number;
+};
+
+export async function fetchClientDeleteEligibility() {
+  await requireAdminUser();
+  const { data, error } = await supabase.rpc("get_booking_client_delete_eligibility");
+  if (error) {
+    logDataError("fetchClientDeleteEligibility error:", error);
+    throw new Error(error.message || "Unable to check whether clients can be deleted.");
+  }
+
+  return new Map<string, ClientDeleteEligibility>(
+    ((data ?? []) as Array<{
+      client_id: string;
+      booking_references: number | string;
+      other_references: number | string;
+    }>).map((row) => [
+      row.client_id,
+      {
+        bookingReferences: Number(row.booking_references) || 0,
+        otherReferences: Number(row.other_references) || 0
+      }
+    ])
+  );
+}
+
+export async function deleteUnusedClient(id: string) {
+  await requireAdminUser();
+  const { data, error } = await supabase
+    .rpc("delete_unused_booking_client", { target_client_id: id })
+    .single();
+
+  if (error) {
+    logDataError("deleteUnusedClient error:", error, { id });
+    throw new Error(error.message || "Unable to delete client.");
+  }
+
+  return data as { deleted_id: string; deleted_name: string };
+}
+
 export async function saveBookingDiaryEntry(
   payload: Partial<
     Omit<
@@ -2363,10 +2514,14 @@ export async function saveBookingDiaryEntry(
   }
 ) {
   const { id, ...rest } = payload;
+  if (!id && !rest.client_id) {
+    throw new Error("Client name is required for new Booking Diary entries.");
+  }
   const audit = await getCurrentUserAudit();
   const bookingId = id ? rest.booking_id?.trim() : rest.booking_id?.trim() || generateBookingDiaryId();
   const cleaned = stripUndefined({
     ...(!id ? { booking_id: bookingId } : {}),
+    client_id: rest.client_id ?? null,
     booking_date: rest.booking_date,
     pickup_time: rest.pickup_time || null,
     amount_pallets: parseOptionalNumeric(rest.amount_pallets),

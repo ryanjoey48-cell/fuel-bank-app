@@ -267,9 +267,21 @@ export type TripJourneyWithFuel = TripJourney & {
   linkedFuelLogs: FuelLogWithDriver[];
 };
 
+export type Client = {
+  id: string;
+  name: string;
+  normalized_name: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+};
+
 export type BookingDiaryEntry = {
   id: string;
   booking_id: string | null;
+  client_id: string | null;
+  client?: Pick<Client, "id" | "name" | "active"> | null;
   booking_date: string;
   pickup_time: string | null;
   amount_pallets: number | null;

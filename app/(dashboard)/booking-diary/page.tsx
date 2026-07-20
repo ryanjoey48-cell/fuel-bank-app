@@ -21,19 +21,27 @@ import {
   X
 } from "lucide-react";
 import { Fragment, type RefObject, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { BookingBusinessInsights } from "@/components/booking-business-insights";
+import { ClientDirectoryDialog } from "@/components/client-directory-dialog";
+import { ClientSelector } from "@/components/client-selector";
 import { EmptyState } from "@/components/empty-state";
 import { GoogleMapsLoader } from "@/components/google-maps-loader";
 import { Header } from "@/components/header";
 import { LocationAutocomplete, type StructuredLocation } from "@/components/location-autocomplete";
 import type { GoogleMapsHealthStatus } from "@/lib/google-maps";
 import {
+  createClient,
   createTripJourneyFromBooking,
+  deleteUnusedClient,
   deleteBookingDiaryEntry,
   fetchBookingDiaryEntries,
+  fetchClientDeleteEligibility,
+  fetchClients,
   fetchDrivers,
   fetchTripJourneysByBookingIds,
   fetchVehicles,
-  saveBookingDiaryEntry
+  saveBookingDiaryEntry,
+  updateClient
 } from "@/lib/data";
 import { exportToXlsx } from "@/lib/export";
 import { fetchJson } from "@/lib/http";
@@ -41,12 +49,13 @@ import { useLanguage } from "@/lib/language-provider";
 import { supabase } from "@/lib/supabase";
 import { formatDate } from "@/lib/utils";
 import { LOCATION_SUGGESTIONS } from "@/src/data/locations";
-import type { BookingDiaryEntry, Driver, TripJourney, TripJourneyStatus, Vehicle } from "@/types/database";
+import type { BookingDiaryEntry, Client, Driver, TripJourney, TripJourneyStatus, Vehicle } from "@/types/database";
 
 const PAGE_SIZE = 50;
 
 type BookingForm = {
   id: string;
+  client_id: string;
   booking_date: string;
   pickup_time: string;
   amount_pallets: string;
@@ -85,12 +94,14 @@ type BookingSortKey =
 type CurrentBookingUser = {
   id: string | null;
   name: string | null;
+  isAdmin: boolean;
 };
 
-const todayKey = () => new Date().toISOString().slice(0, 10);
+const todayKey = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date());
 
 const emptyForm = (): BookingForm => ({
   id: "",
+  client_id: "",
   booking_date: todayKey(),
   pickup_time: "",
   amount_pallets: "",
@@ -122,6 +133,8 @@ const labels = {
   en: {
     title: "Booking Diary",
     description: "Fast daily booking capture for phone calls, dispatch handover, and live office updates.",
+    dailyDiaryTab: "Daily diary",
+    businessInsightsTab: "Business insights",
     addBooking: "Add booking",
     editBooking: "Edit booking",
     edit: "Edit",
@@ -135,7 +148,18 @@ const labels = {
     week: "This week",
     all: "All",
     search: "Search bookings",
-    searchPlaceholder: "Search pickup, dropoff, vehicle, driver, notes, job order",
+    searchPlaceholder: "Search client, pickup, dropoff, vehicle, driver, notes, job order",
+    clientName: "Client name",
+    clientSection: "Client",
+    clientPlaceholder: "Search or select client",
+    clientRequired: "Client name is required for new bookings.",
+    clientNotRecorded: "Client not recorded",
+    clientLegacyHelp: "This historical booking has no client recorded. Add one if known; other corrections can still be saved.",
+    allClients: "All clients",
+    inactiveClient: "Inactive client",
+    clientCreated: "Client created and selected.",
+    clientDeleted: "Client deleted successfully",
+    clientDeletedReselect: "The selected client was deleted. Please select another client.",
     date: "Date",
     time: "Time",
     pickupTime: "Pickup time",
@@ -362,9 +386,27 @@ const jobOrderLabelExtras = {
   }
 };
 
+const clientLabelExtras = {
+  en: {},
+  th: {
+    clientName: "ชื่อลูกค้า",
+    clientSection: "ลูกค้า",
+    clientPlaceholder: "ค้นหาหรือเลือกลูกค้า",
+    clientRequired: "กรุณาเลือกลูกค้าสำหรับงานจองใหม่",
+    clientNotRecorded: "ไม่ได้บันทึกลูกค้า",
+    clientLegacyHelp: "งานย้อนหลังนี้ไม่มีข้อมูลลูกค้า หากทราบสามารถเพิ่มได้ และยังบันทึกการแก้ไขอื่นได้ตามปกติ",
+    allClients: "ลูกค้าทั้งหมด",
+    inactiveClient: "ลูกค้าที่ไม่ได้ใช้งาน",
+    clientCreated: "สร้างและเลือกลูกค้าแล้ว",
+    clientDeleted: "ลบลูกค้าสำเร็จ",
+    clientDeletedReselect: "ลูกค้าที่เลือกถูกลบแล้ว โปรดเลือกลูกค้ารายอื่น"
+  }
+};
+
 function mapBookingToForm(booking: BookingDiaryEntry): BookingForm {
   return {
     id: booking.id,
+    client_id: booking.client_id ?? "",
     booking_date: booking.booking_date,
     pickup_time: booking.pickup_time ?? "",
     amount_pallets: booking.amount_pallets != null ? String(booking.amount_pallets) : "",
@@ -783,13 +825,15 @@ function LocationCombobox({
 export default function BookingDiaryPage() {
   const { language } = useLanguage();
   const languageKey = language === "th" ? "th" : "en";
-  const copy = { ...labels.en, ...labels[languageKey], ...labelExtras[languageKey], ...locationLabelExtras[languageKey], ...jobOrderLabelExtras[languageKey] };
+  const copy = { ...labels.en, ...labels[languageKey], ...labelExtras[languageKey], ...locationLabelExtras[languageKey], ...jobOrderLabelExtras[languageKey], ...clientLabelExtras[languageKey] };
   const firstInputRef = useRef<HTMLInputElement | null>(null);
   const [bookings, setBookings] = useState<BookingDiaryEntry[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const [tripsByBookingId, setTripsByBookingId] = useState<Map<string, TripJourney>>(() => new Map());
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [form, setForm] = useState<BookingForm>(() => emptyForm());
+  const [activeTab, setActiveTab] = useState<"daily" | "insights">("daily");
   const [modalOpen, setModalOpen] = useState(false);
   const [quickFilter, setQuickFilter] = useState<"today" | "week" | "all">("today");
   const [searchQuery, setSearchQuery] = useState("");
@@ -799,6 +843,7 @@ export default function BookingDiaryPage() {
   const [vehicleFilter, setVehicleFilter] = useState("");
   const [driverFilter, setDriverFilter] = useState("");
   const [creatorFilter, setCreatorFilter] = useState("");
+  const [clientFilter, setClientFilter] = useState("");
   const [sortBy, setSortBy] = useState<BookingSortKey>("date_newest");
   const [currentUser, setCurrentUser] = useState<CurrentBookingUser | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -813,6 +858,9 @@ export default function BookingDiaryPage() {
   const [routeMessage, setRouteMessage] = useState<string | null>(null);
   const [googleMapsStatus, setGoogleMapsStatus] = useState<GoogleMapsHealthStatus | null>(null);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [clientManagerOpen, setClientManagerOpen] = useState(false);
+  const [clientDeleteEligibility, setClientDeleteEligibility] = useState<Awaited<ReturnType<typeof fetchClientDeleteEligibility>>>(() => new Map());
+  const [clientEligibilityLoading, setClientEligibilityLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [expandedDateKeys, setExpandedDateKeys] = useState<Set<string>>(() => new Set([todayKey()]));
@@ -826,8 +874,9 @@ export default function BookingDiaryPage() {
         setRefreshing(true);
       }
       setError(null);
-      const [bookingRows, driverRows, vehicleRows] = await Promise.all([
+      const [bookingRows, clientRows, driverRows, vehicleRows] = await Promise.all([
         fetchBookingDiaryEntries(),
+        fetchClients(),
         fetchDrivers(),
         fetchVehicles()
       ]);
@@ -836,12 +885,13 @@ export default function BookingDiaryPage() {
         return [] as TripJourney[];
       });
       setBookings(bookingRows);
+      setClients(clientRows);
       setTripsByBookingId(new Map(tripRows.filter((trip) => trip.booking_diary_id).map((trip) => [String(trip.booking_diary_id), trip])));
       setDrivers(driverRows);
       setVehicles(vehicleRows);
     } catch (err) {
       console.error("Booking diary load error:", err);
-      setError(copy.loadError);
+      setError(err instanceof Error && err.message ? err.message : copy.loadError);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -858,7 +908,10 @@ export default function BookingDiaryPage() {
         const user = data.user;
         setCurrentUser({
           id: user?.id ?? null,
-          name: getUserDisplayNameFromMetadata(user ?? null)
+          name: getUserDisplayNameFromMetadata(user ?? null),
+          isAdmin:
+            user?.email?.toLowerCase() === "joeryan09@outlook.com" ||
+            String(user?.user_metadata?.role ?? user?.app_metadata?.role ?? "").toLowerCase() === "admin"
         });
       });
     };
@@ -872,6 +925,9 @@ export default function BookingDiaryPage() {
     const channel = supabase
       .channel("booking-diary-live")
       .on("postgres_changes", { event: "*", schema: "public", table: "booking_diary" }, () => {
+        void load(false);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "clients" }, () => {
         void load(false);
       })
       .subscribe();
@@ -901,6 +957,15 @@ export default function BookingDiaryPage() {
     () => uniqueSorted(bookings.map((booking) => getCreatorDisplayName(booking, currentUser))),
     [bookings, currentUser]
   );
+  const clientById = useMemo(() => new Map(clients.map((client) => [client.id, client])), [clients]);
+  const bookingClientName = useCallback(
+    (booking: BookingDiaryEntry) => clientById.get(booking.client_id ?? "")?.name ?? booking.client?.name ?? "",
+    [clientById]
+  );
+  const clientFilterOptions = useMemo(
+    () => [...clients].sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name)),
+    [clients]
+  );
   const locationOptions = useMemo(
     () => uniqueSorted([...LOCATION_SUGGESTIONS, ...bookings.map(getBookingPickupDisplay), ...bookings.map(getBookingDropoffDisplay)]),
     [bookings]
@@ -926,6 +991,7 @@ export default function BookingDiaryPage() {
           booking.driver,
           booking.warehouse_no,
           booking.job_order_number,
+          bookingClientName(booking),
           getCreatorDisplayName(booking, currentUser),
           booking.notes
         ]
@@ -942,14 +1008,16 @@ export default function BookingDiaryPage() {
         (!dropoffFilter || getBookingDropoffDisplay(booking) === dropoffFilter) &&
         (!vehicleFilter || booking.vehicle === vehicleFilter) &&
         (!driverFilter || booking.driver === driverFilter) &&
+        (!clientFilter ||
+          (clientFilter === "__missing__" ? !booking.client_id : booking.client_id === clientFilter)) &&
         (!creatorFilter || getCreatorDisplayName(booking, currentUser) === creatorFilter)
       );
     }).sort((a, b) => compareBookings(a, b, sortBy));
-  }, [bookings, creatorFilter, currentUser, dateFilter, driverFilter, dropoffFilter, pickupFilter, quickFilter, searchQuery, sortBy, vehicleFilter]);
+  }, [bookingClientName, bookings, clientFilter, creatorFilter, currentUser, dateFilter, driverFilter, dropoffFilter, pickupFilter, quickFilter, searchQuery, sortBy, vehicleFilter]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [creatorFilter, dateFilter, driverFilter, dropoffFilter, pickupFilter, quickFilter, searchQuery, sortBy, vehicleFilter]);
+  }, [clientFilter, creatorFilter, dateFilter, driverFilter, dropoffFilter, pickupFilter, quickFilter, searchQuery, sortBy, vehicleFilter]);
 
   const dateCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -966,6 +1034,7 @@ export default function BookingDiaryPage() {
       dropoffFilter ||
       vehicleFilter ||
       driverFilter ||
+      clientFilter ||
       creatorFilter ||
       quickFilter !== "today" ||
       sortBy !== "date_newest"
@@ -1129,6 +1198,7 @@ export default function BookingDiaryPage() {
     setDropoffFilter("");
     setVehicleFilter("");
     setDriverFilter("");
+    setClientFilter("");
     setCreatorFilter("");
     setQuickFilter("today");
     setSortBy("date_newest");
@@ -1225,12 +1295,20 @@ export default function BookingDiaryPage() {
       return;
     }
 
+    const targetId = duplicatingBooking ? undefined : (editingBookingId ?? form.id.trim()) || undefined;
+    const isNewBooking = !targetId;
+    const selectedClient = clientById.get(form.client_id);
+    if (isNewBooking && (!selectedClient || !selectedClient.active)) {
+      setError(copy.clientRequired);
+      return;
+    }
+
     try {
       setSaving(true);
       setError(null);
-      const targetId = duplicatingBooking ? undefined : (editingBookingId ?? form.id.trim()) || undefined;
       await saveBookingDiaryEntry({
         id: targetId,
+        client_id: form.client_id || null,
         booking_date: form.booking_date,
         pickup_time: form.pickup_time,
         amount_pallets: form.amount_pallets,
@@ -1276,6 +1354,79 @@ export default function BookingDiaryPage() {
   const setField = (field: keyof BookingForm, value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
+
+  const handleCreateClient = async (name: string) => {
+    const result = await createClient(name);
+    setClients((current) => {
+      const withoutClient = current.filter((client) => client.id !== result.client.id);
+      return [...withoutClient, result.client].sort((a, b) => a.name.localeCompare(b.name));
+    });
+    if (result.created) setNotice(copy.clientCreated);
+    return result.client;
+  };
+
+  const handleUpdateClient = async (id: string, payload: { name?: string; active?: boolean }) => {
+    const updated = await updateClient(id, payload);
+    setClients((current) => current.map((client) => client.id === id ? updated : client));
+    setBookings((current) => current.map((booking) =>
+      booking.client_id === id ? { ...booking, client: { id: updated.id, name: updated.name, active: updated.active } } : booking
+    ));
+  };
+
+  const refreshClientDeleteEligibility = async () => {
+    setClientEligibilityLoading(true);
+    try {
+      const eligibility = await fetchClientDeleteEligibility();
+      setClientDeleteEligibility(eligibility);
+      return eligibility;
+    } finally {
+      setClientEligibilityLoading(false);
+    }
+  };
+
+  const openClientManager = () => {
+    setClientManagerOpen(true);
+    void refreshClientDeleteEligibility().catch((caught) => {
+      console.error("Client delete eligibility error:", caught);
+    });
+  };
+
+  const handleDeleteClient = async (id: string) => {
+    try {
+      await deleteUnusedClient(id);
+      setClients((current) => current.filter((client) => client.id !== id));
+      setClientDeleteEligibility((current) => {
+        const next = new Map(current);
+        next.delete(id);
+        return next;
+      });
+      if (clientFilter === id) setClientFilter("");
+      if (form.client_id === id) {
+        setForm((current) => ({
+          ...current,
+          client_id: ""
+        }));
+        setError(copy.clientDeletedReselect);
+      }
+      setNotice(copy.clientDeleted);
+    } catch (caught) {
+      const [freshClients, freshEligibility] = await Promise.allSettled([
+        fetchClients(),
+        fetchClientDeleteEligibility()
+      ]);
+      if (freshClients.status === "fulfilled") setClients(freshClients.value);
+      if (freshEligibility.status === "fulfilled") setClientDeleteEligibility(freshEligibility.value);
+      throw caught;
+    }
+  };
+
+  const clientBookingCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    bookings.forEach((booking) => {
+      if (booking.client_id) counts.set(booking.client_id, (counts.get(booking.client_id) ?? 0) + 1);
+    });
+    return counts;
+  }, [bookings]);
 
   const handleGoogleMapsStatusChange = useCallback((status: GoogleMapsHealthStatus) => {
     setGoogleMapsStatus(status);
@@ -1482,6 +1633,7 @@ export default function BookingDiaryPage() {
     exportToXlsx(
       filteredBookings.map((booking) => ({
         Date: booking.booking_date,
+        [copy.clientName]: bookingClientName(booking) || copy.clientNotRecorded,
         "Pickup Time": booking.pickup_time,
         "Amount / Pallets": booking.amount_pallets,
         Weight: booking.weight,
@@ -1560,6 +1712,11 @@ export default function BookingDiaryPage() {
         <option value="">{copy.allDrivers}</option>
         {driverOptions.map((driver) => <option key={driver} value={driver}>{driver}</option>)}
       </select>
+      <select value={clientFilter} onChange={(event) => setClientFilter(event.target.value)} className={`${compactInputClass} bg-white`} aria-label={copy.clientName}>
+        <option value="">{copy.allClients}</option>
+        <option value="__missing__">{copy.clientNotRecorded}</option>
+        {clientFilterOptions.map((client) => <option key={client.id} value={client.id}>{client.name}{client.active ? "" : ` (${copy.inactiveClient})`}</option>)}
+      </select>
       <select value={creatorFilter} onChange={(event) => setCreatorFilter(event.target.value)} className={`${compactInputClass} bg-white`} aria-label={copy.addedBy}>
         <option value="">{copy.allUsers}</option>
         {creatorOptions.map((creator) => <option key={creator} value={creator}>{creator}</option>)}
@@ -1603,6 +1760,12 @@ export default function BookingDiaryPage() {
           destinationPlaceId: form.dropoff_place_id
         })
       : form.google_maps_route_url;
+  const dailyDiaryTabLabel = language === "th" ? "สมุดงานประจำวัน" : copy.dailyDiaryTab;
+  const businessInsightsTabLabel = language === "th" ? "ข้อมูลธุรกิจ" : copy.businessInsightsTab;
+  const pickupShortLabel = language === "th" ? "รับของ" : "Pickup";
+  const timeMissingLabel = language === "th" ? "รอยืนยัน" : "TBC";
+  const tripJourneyColumnLabel = language === "th" ? "Trip Journey" : "Trip";
+  const minutesPlaceholder = language === "th" ? "นาที" : "Minutes";
 
   return (
     <div className="booking-diary-page w-full max-w-full overflow-x-hidden">
@@ -1610,7 +1773,7 @@ export default function BookingDiaryPage() {
       <div className="mb-4 hidden md:block">
         <Header title={copy.title} description={copy.description} />
       </div>
-      <section className="booking-diary-header">
+      {activeTab === "daily" ? <section className="booking-diary-header">
         <div className="booking-diary-title min-w-0 md:hidden">
           <p className="truncate text-[10px] font-bold uppercase tracking-[0.16em] text-brand-700">{copy.company}</p>
           <h1 className="truncate text-[1.2rem] font-semibold leading-7 text-slate-950 sm:text-[1.35rem]">{bookingTitle}</h1>
@@ -1637,8 +1800,29 @@ export default function BookingDiaryPage() {
             <Plus className="h-4 w-4" />
           </button>
         </div>
-      </section>
+      </section> : null}
 
+      <nav className="booking-diary-tabs" aria-label={copy.title}>
+        <button
+          type="button"
+          onClick={() => setActiveTab("daily")}
+          className={clsx("booking-diary-tab", activeTab === "daily" && "booking-diary-tab-active")}
+          aria-current={activeTab === "daily" ? "page" : undefined}
+        >
+          {dailyDiaryTabLabel}
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("insights")}
+          className={clsx("booking-diary-tab", activeTab === "insights" && "booking-diary-tab-active")}
+          aria-current={activeTab === "insights" ? "page" : undefined}
+        >
+          {businessInsightsTabLabel}
+        </button>
+      </nav>
+
+      {activeTab === "daily" ? (
+      <>
       <section className="booking-responsive-controls hidden max-w-full md:block">
         <div className="booking-filter-panel surface-card-soft">
           <div className="booking-filter-panel-header">
@@ -1651,7 +1835,7 @@ export default function BookingDiaryPage() {
               {copy.live}
             </div>
           </div>
-          <div className="booking-filter-grid grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-[minmax(220px,1.4fr)_repeat(7,minmax(132px,1fr))]">
+          <div className="booking-filter-grid grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-[minmax(220px,1.4fr)_repeat(8,minmax(132px,1fr))]">
             {filterControls}
           </div>
           <div className="booking-filter-footer">
@@ -1766,13 +1950,16 @@ export default function BookingDiaryPage() {
                         <button type="button" onClick={() => openEdit(booking)} className="booking-diary-line-main">
                           <span className="booking-line-main">
                             <span className="booking-line-time-block">
-                              <span className="booking-line-time-label">PICKUP</span>
+                              <span className="booking-line-time-label">{pickupShortLabel}</span>
                               <span className={clsx("booking-line-time", !booking.pickup_time && "booking-line-time-empty")}>
-                                {formatPickupTime(booking.pickup_time) || "TBC"}
+                                {formatPickupTime(booking.pickup_time) || timeMissingLabel}
                               </span>
                             </span>
                             <span className="booking-line-route">{getBookingPickupDisplay(booking)} <span>-&gt;</span> {getBookingDropoffDisplay(booking)}</span>
                             <span className="mt-1 flex flex-wrap gap-1.5">
+                              <span className={clsx("booking-client-badge", !booking.client_id && "is-missing")}>
+                                {bookingClientName(booking) || copy.clientNotRecorded}
+                              </span>
                               <span className="inline-flex w-fit rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600">
                                 {formatDistanceKm(booking.estimated_distance_km) ?? copy.noEstimate}
                               </span>
@@ -1819,9 +2006,9 @@ export default function BookingDiaryPage() {
                           })()}
                           {(booking.warehouse_no || booking.job_order_number || booking.notes) ? (
                             <span className="booking-line-support">
-                              {booking.warehouse_no ? <span>Warehouse: {booking.warehouse_no}</span> : null}
+                              {booking.warehouse_no ? <span>{copy.warehouseNo}: {booking.warehouse_no}</span> : null}
                               {booking.job_order_number ? <span>{copy.jobOrderLabel}: {booking.job_order_number}</span> : null}
-                              {booking.notes ? <span>Notes: {booking.notes}</span> : null}
+                              {booking.notes ? <span>{copy.notes}: {booking.notes}</span> : null}
                             </span>
                           ) : null}
                           <span className="booking-line-support">
@@ -2025,7 +2212,7 @@ export default function BookingDiaryPage() {
                 <table className="min-w-[980px]">
                   <thead>
                     <tr>
-                      {[copy.date, copy.pickupTime, copy.route, copy.estimatedDistance, copy.vehicle, copy.driver, copy.load, copy.warehouseNo, copy.notes, "Trip", copy.actions].map((heading) => (
+                      {[copy.date, copy.clientName, copy.pickupTime, copy.route, copy.estimatedDistance, copy.vehicle, copy.driver, copy.load, copy.warehouseNo, copy.notes, tripJourneyColumnLabel, copy.actions].map((heading) => (
                         <th key={heading || "actions"} className="booking-desktop-head-cell">{heading}</th>
                       ))}
                     </tr>
@@ -2037,7 +2224,7 @@ export default function BookingDiaryPage() {
                       return (
                         <Fragment key={date}>
                         <tr className="booking-desktop-date-row">
-                          <td colSpan={11}>
+                          <td colSpan={12}>
                             <button
                               type="button"
                               onClick={() => toggleDateSection(date)}
@@ -2061,6 +2248,11 @@ export default function BookingDiaryPage() {
                               <span className="mt-1 inline-flex max-w-[150px] items-center gap-1 truncate text-[10px] font-medium text-slate-500">
                                 <UserRound className="h-3 w-3 flex-shrink-0" />
                                 {copy.addedBy} {getCreatorDisplayName(booking, currentUser) || copy.creatorUnavailable}
+                              </span>
+                            </td>
+                            <td className="booking-desktop-cell max-w-[170px]">
+                              <span className={clsx("booking-client-badge", !booking.client_id && "is-missing")}>
+                                {bookingClientName(booking) || copy.clientNotRecorded}
                               </span>
                             </td>
                             <td className="booking-desktop-cell whitespace-nowrap"><span className="booking-desktop-time">{formatPickupTime(booking.pickup_time) || "-"}</span></td>
@@ -2200,8 +2392,21 @@ export default function BookingDiaryPage() {
           </>
         )}
       </section>
+      </>
+      ) : (
+        <BookingBusinessInsights
+          bookings={bookings}
+          tripsByBookingId={tripsByBookingId}
+          vehicles={vehicles}
+          drivers={drivers}
+          language={language}
+          loading={loading}
+          refreshing={refreshing}
+          onRefresh={() => void load(false)}
+        />
+      )}
 
-      {!modalOpen && !deleteTarget ? (
+      {activeTab === "daily" && !modalOpen && !deleteTarget ? (
         <button
           type="button"
           onClick={openCreate}
@@ -2228,6 +2433,22 @@ export default function BookingDiaryPage() {
             <form onSubmit={submit} className="booking-sheet-form max-h-[calc(100dvh-88px)] overflow-y-auto px-4 py-4 sm:px-5 sm:py-5 lg:max-h-[calc(96vh-88px)]">
               <div className="booking-form-sections">
                 <fieldset className="booking-form-section">
+                  <legend>{copy.clientSection}</legend>
+                  <ClientSelector
+                    clients={clients}
+                    selectedId={form.client_id}
+                    onSelect={(clientId) => setField("client_id", clientId)}
+                    onCreate={handleCreateClient}
+                    onManage={openClientManager}
+                    canManage={Boolean(currentUser?.isAdmin)}
+                    required={duplicatingBooking || !activeEditingId}
+                    language={languageKey}
+                    inputRef={firstInputRef}
+                    disabled={saving}
+                  />
+                  {activeEditingId && !form.client_id ? <p className="client-legacy-warning">{copy.clientLegacyHelp}</p> : null}
+                </fieldset>
+                <fieldset className="booking-form-section">
                   <legend>{copy.job}</legend>
                   <p className="mb-3 text-sm leading-5 text-slate-500">{copy.locationSplitHelper}</p>
                   <div className="booking-form-grid">
@@ -2240,7 +2461,6 @@ export default function BookingDiaryPage() {
                         options={locationOptions}
                         placeholder={copy.pickup}
                         className={inputClass}
-                        inputRef={firstInputRef}
                       />
                       <p className="mt-2 text-sm text-slate-500">{copy.displayNameHelper}</p>
                     </div>
@@ -2305,7 +2525,7 @@ export default function BookingDiaryPage() {
                             value={form.estimated_duration_minutes}
                             onChange={(event) => setField("estimated_duration_minutes", event.target.value)}
                             className={inputClass}
-                            placeholder="Minutes"
+                            placeholder={minutesPlaceholder}
                           />
                         </label>
                         <div className="flex flex-wrap gap-2 sm:pb-0.5">
@@ -2436,6 +2656,19 @@ export default function BookingDiaryPage() {
             </form>
           </div>
         </div>
+      ) : null}
+
+      {clientManagerOpen ? (
+        <ClientDirectoryDialog
+          clients={clients}
+          bookingCounts={clientBookingCounts}
+          deleteEligibility={clientDeleteEligibility}
+          eligibilityLoading={clientEligibilityLoading}
+          language={languageKey}
+          onClose={() => setClientManagerOpen(false)}
+          onUpdate={handleUpdateClient}
+          onDelete={handleDeleteClient}
+        />
       ) : null}
 
       {deleteTarget ? (

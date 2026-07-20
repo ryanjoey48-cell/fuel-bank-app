@@ -628,9 +628,78 @@ create trigger set_route_distance_estimates_updated_at
 before update on public.route_distance_estimates
 for each row execute function public.set_updated_at();
 
+create or replace function public.normalize_client_name(value text)
+returns text language sql immutable strict as $$
+  select lower(regexp_replace(btrim(value), '\s+', ' ', 'g'));
+$$;
+
+create table if not exists public.clients (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  normalized_name text not null,
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  created_by uuid references auth.users(id) on delete set null,
+  constraint clients_name_not_blank check (length(btrim(name)) > 0),
+  constraint clients_normalized_name_not_blank check (length(btrim(normalized_name)) > 0)
+);
+
+create unique index if not exists clients_normalized_name_key on public.clients (normalized_name);
+create index if not exists clients_active_name_idx on public.clients (active, name);
+
+create or replace function public.set_client_normalized_name()
+returns trigger language plpgsql as $$
+begin
+  if tg_op = 'UPDATE'
+    and old.normalized_name = public.normalize_client_name('Internal / Other')
+    and (
+      public.normalize_client_name(new.name) <> old.normalized_name
+      or new.active is not true
+    )
+  then
+    raise exception 'Internal / Other cannot be renamed or deactivated.' using errcode = '23514';
+  end if;
+  new.name := regexp_replace(btrim(new.name), '\s+', ' ', 'g');
+  new.normalized_name := public.normalize_client_name(new.name);
+  new.updated_at := now();
+  if tg_op = 'INSERT' and new.created_by is null then new.created_by := auth.uid(); end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists set_client_normalized_name on public.clients;
+create trigger set_client_normalized_name before insert or update on public.clients
+for each row execute function public.set_client_normalized_name();
+
+alter table public.clients enable row level security;
+
+drop policy if exists "clients_select_authenticated" on public.clients;
+create policy "clients_select_authenticated" on public.clients for select to authenticated using (true);
+
+drop policy if exists "clients_insert_authenticated" on public.clients;
+create policy "clients_insert_authenticated" on public.clients for insert to authenticated
+with check (created_by is null or created_by = auth.uid());
+
+drop policy if exists "clients_update_admin" on public.clients;
+create policy "clients_update_admin" on public.clients for update to authenticated
+using (
+  lower(coalesce(auth.jwt() ->> 'email', '')) = 'joeryan09@outlook.com'
+  or lower(coalesce(auth.jwt() -> 'user_metadata' ->> 'role', auth.jwt() -> 'app_metadata' ->> 'role', '')) = 'admin'
+)
+with check (
+  lower(coalesce(auth.jwt() ->> 'email', '')) = 'joeryan09@outlook.com'
+  or lower(coalesce(auth.jwt() -> 'user_metadata' ->> 'role', auth.jwt() -> 'app_metadata' ->> 'role', '')) = 'admin'
+);
+
+insert into public.clients (name, normalized_name, active, created_by)
+values ('Internal / Other', public.normalize_client_name('Internal / Other'), true, null)
+on conflict (normalized_name) do update set active = true;
+
 create table if not exists public.booking_diary (
   id uuid primary key default gen_random_uuid(),
   booking_id text,
+  client_id uuid references public.clients(id) on delete restrict,
   booking_date date not null,
   pickup_time time,
   amount_pallets numeric,
@@ -682,7 +751,126 @@ create index if not exists booking_diary_created_by_user_id_idx
 create index if not exists booking_diary_booking_id_idx
   on public.booking_diary (booking_id);
 
+create index if not exists booking_diary_client_id_idx
+  on public.booking_diary (client_id);
+
 alter table public.booking_diary disable row level security;
+
+create or replace function public.require_booking_diary_client()
+returns trigger language plpgsql as $$
+begin
+  if tg_op = 'INSERT' and new.client_id is null then
+    raise exception 'Client name is required for new Booking Diary entries.' using errcode = '23502';
+  end if;
+  if tg_op = 'INSERT' or new.client_id is distinct from old.client_id then
+    if new.client_id is null then
+      raise exception 'Client name cannot be removed from a Booking Diary entry once recorded.' using errcode = '23502';
+    end if;
+    if not exists (select 1 from public.clients where id = new.client_id and active = true) then
+      raise exception 'The selected client is inactive or does not exist.' using errcode = '23503';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists require_booking_diary_client on public.booking_diary;
+create trigger require_booking_diary_client before insert or update of client_id on public.booking_diary
+for each row execute function public.require_booking_diary_client();
+
+create or replace function public.get_booking_client_delete_eligibility()
+returns table (client_id uuid, booking_references bigint, other_references bigint)
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  client_row record;
+  foreign_key_row record;
+  reference_count bigint;
+begin
+  if auth.uid() is null or not (
+    lower(coalesce(auth.jwt() ->> 'email', '')) = 'joeryan09@outlook.com'
+    or lower(coalesce(auth.jwt() -> 'user_metadata' ->> 'role', auth.jwt() -> 'app_metadata' ->> 'role', '')) = 'admin'
+  ) then
+    raise exception 'Admin permission required to manage clients.' using errcode = '42501';
+  end if;
+  for client_row in select id from public.clients loop
+    client_id := client_row.id;
+    booking_references := 0;
+    other_references := 0;
+    for foreign_key_row in
+      select constraint_row.conrelid::regclass as reference_table, source_attribute.attname as reference_column
+      from pg_catalog.pg_constraint constraint_row
+      cross join lateral unnest(constraint_row.conkey) with ordinality source_key(attnum, position)
+      join lateral unnest(constraint_row.confkey) with ordinality target_key(attnum, position) on target_key.position = source_key.position
+      join pg_catalog.pg_attribute source_attribute on source_attribute.attrelid = constraint_row.conrelid and source_attribute.attnum = source_key.attnum
+      join pg_catalog.pg_attribute target_attribute on target_attribute.attrelid = constraint_row.confrelid and target_attribute.attnum = target_key.attnum
+      where constraint_row.contype = 'f' and constraint_row.confrelid = 'public.clients'::regclass and target_attribute.attname = 'id'
+    loop
+      execute format('select count(*) from %s where %I = $1', foreign_key_row.reference_table, foreign_key_row.reference_column)
+      into reference_count using client_row.id;
+      if foreign_key_row.reference_table = 'public.booking_diary'::regclass then
+        booking_references := booking_references + reference_count;
+      else
+        other_references := other_references + reference_count;
+      end if;
+    end loop;
+    return next;
+  end loop;
+end;
+$$;
+
+revoke all on function public.get_booking_client_delete_eligibility() from public;
+grant execute on function public.get_booking_client_delete_eligibility() to authenticated;
+
+create or replace function public.delete_unused_booking_client(target_client_id uuid)
+returns table (deleted_id uuid, deleted_name text)
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  current_name text;
+  current_normalized_name text;
+  foreign_key_row record;
+  has_reference boolean;
+begin
+  if auth.uid() is null or not (
+    lower(coalesce(auth.jwt() ->> 'email', '')) = 'joeryan09@outlook.com'
+    or lower(coalesce(auth.jwt() -> 'user_metadata' ->> 'role', auth.jwt() -> 'app_metadata' ->> 'role', '')) = 'admin'
+  ) then
+    raise exception 'Admin permission required to manage clients.' using errcode = '42501';
+  end if;
+  select client.name, client.normalized_name into current_name, current_normalized_name
+  from public.clients client where client.id = target_client_id for update;
+  if not found then raise exception 'Client no longer exists.' using errcode = 'P0002'; end if;
+  if current_normalized_name = public.normalize_client_name('Internal / Other') then
+    raise exception 'Internal / Other cannot be deleted.' using errcode = '42501';
+  end if;
+  if exists (select 1 from public.booking_diary booking where booking.client_id = target_client_id) then
+    raise exception 'Cannot delete this client because it is used by bookings. Deactivate it instead.' using errcode = '23503';
+  end if;
+  for foreign_key_row in
+    select constraint_row.conrelid::regclass as reference_table, source_attribute.attname as reference_column
+    from pg_catalog.pg_constraint constraint_row
+    cross join lateral unnest(constraint_row.conkey) with ordinality source_key(attnum, position)
+    join lateral unnest(constraint_row.confkey) with ordinality target_key(attnum, position) on target_key.position = source_key.position
+    join pg_catalog.pg_attribute source_attribute on source_attribute.attrelid = constraint_row.conrelid and source_attribute.attnum = source_key.attnum
+    join pg_catalog.pg_attribute target_attribute on target_attribute.attrelid = constraint_row.confrelid and target_attribute.attnum = target_key.attnum
+    where constraint_row.contype = 'f'
+      and constraint_row.confrelid = 'public.clients'::regclass
+      and constraint_row.conrelid <> 'public.booking_diary'::regclass
+      and target_attribute.attname = 'id'
+  loop
+    execute format('select exists(select 1 from %s where %I = $1)', foreign_key_row.reference_table, foreign_key_row.reference_column)
+    into has_reference using target_client_id;
+    if has_reference then
+      raise exception 'Cannot delete this client because it is referenced by other records. Deactivate it instead.' using errcode = '23503';
+    end if;
+  end loop;
+  delete from public.clients client where client.id = target_client_id
+  returning client.id, client.name into deleted_id, deleted_name;
+  return next;
+end;
+$$;
+
+revoke all on function public.delete_unused_booking_client(uuid) from public;
+grant execute on function public.delete_unused_booking_client(uuid) to authenticated;
 
 create or replace function public.set_booking_diary_created_by_user_id()
 returns trigger as $$
