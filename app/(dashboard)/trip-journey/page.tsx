@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { Header } from "@/components/header";
+import { LocationAutocomplete, type StructuredLocation } from "@/components/location-autocomplete";
 import {
   createTripJourneyFromBooking,
   deleteTripJourney,
@@ -27,6 +28,7 @@ import {
   unlinkFuelLogFromTrip
 } from "@/lib/data";
 import { useLanguage } from "@/lib/language-provider";
+import type { TrafficAwareRouteEstimate } from "@/lib/route-planning";
 import type { Driver, FuelLogWithDriver, TripFuelSource, TripJourneyWithFuel, Vehicle, WeeklyMileageEntry } from "@/types/database";
 
 const DEPOT_ADDRESS =
@@ -240,6 +242,26 @@ const tripJourneyCopy = {
     enterStartLocation: "Enter start location",
     pickupLocation: "Pickup location",
     dropoffLocation: "Drop-off location",
+    googleMapsLocation: "Google Maps location",
+    googleMapsUnavailable: "Google Maps is unavailable. Manual entry still works.",
+    googleMapsLocationHelper: "Verified Google Maps data is retained from Booking Diary and used for route calculation.",
+    googleVerified: "Verified by Google",
+    manualUnverified: "manual/unverified",
+    manualEntryStillAllowed: "You can still type the full location manually.",
+    savedLocationApplied: "Saved location applied",
+    previouslyUsedLocation: "Previously used location",
+    changeGoogleMapsLocation: "Change Google Maps location",
+    noSavedLocationFound: "No saved location found",
+    fastestRoute: "Fastest route",
+    refreshRoute: "Refresh route",
+    trafficAwareEstimate: "Traffic-aware estimate",
+    googleRecommendedRoute: "Google recommended route",
+    trafficDataUnavailable: "Traffic data unavailable",
+    currentTrafficEstimate: "Current-traffic estimate",
+    plannedTrafficEstimate: "Planned departure traffic",
+    routeNeedsRefresh: "Route inputs changed. Refresh the traffic-aware estimate.",
+    standardDriveWarning: "Standard driving route; truck restrictions are not checked.",
+    calculated: "Calculated",
     returnToDepot: "Return to depot",
     routePreview: "Route preview",
     googleEstimatedKm: "Google estimated KM",
@@ -742,7 +764,26 @@ const tripJourneyCopyOverrides: Partial<Record<keyof typeof tripJourneyCopy, Par
     displayEstimatePriority: "ระยะทางที่แสดงจะใช้ค่าที่แก้ไขเองก่อน จากนั้นใช้ประมาณการ Trip Journey จาก Google และสุดท้ายใช้ระยะทางจากการจอง",
     openInGoogleMaps: "เปิดใน Google Maps",
     routeDistanceCalculated: "คำนวณระยะทางเส้นทางทริปแล้ว บันทึกทริปเพื่อจัดเก็บ",
-    routeCalculateFailed: "ไม่สามารถคำนวณระยะทางได้ คุณสามารถกรอก กม. ประมาณการเองแทนได้"
+    routeCalculateFailed: "ไม่สามารถคำนวณระยะทางได้ คุณสามารถกรอก กม. ประมาณการเองแทนได้",
+    googleMapsUnavailable: "Google Maps ไม่พร้อมใช้งาน แต่ยังสามารถกรอกสถานที่เองได้",
+    googleMapsLocationHelper: "เก็บข้อมูล Google Maps ที่ยืนยันแล้วจากสมุดจองงานไว้ใช้คำนวณเส้นทาง",
+    googleVerified: "ยืนยันโดย Google",
+    manualUnverified: "กรอกเอง/ยังไม่ยืนยัน",
+    manualEntryStillAllowed: "ยังสามารถกรอกสถานที่เต็มด้วยตนเองได้",
+    savedLocationApplied: "ใช้สถานที่ที่บันทึกไว้แล้ว",
+    previouslyUsedLocation: "สถานที่ที่เคยใช้",
+    changeGoogleMapsLocation: "เปลี่ยนตำแหน่ง Google Maps",
+    noSavedLocationFound: "ไม่พบสถานที่ที่บันทึกไว้",
+    fastestRoute: "เส้นทางที่เร็วที่สุด",
+    refreshRoute: "รีเฟรชเส้นทาง",
+    trafficAwareEstimate: "ประมาณการตามสภาพการจราจร",
+    googleRecommendedRoute: "เส้นทางที่ Google แนะนำ",
+    trafficDataUnavailable: "ไม่มีข้อมูลการจราจร",
+    currentTrafficEstimate: "ประมาณการจากการจราจรปัจจุบัน",
+    plannedTrafficEstimate: "การจราจรตามเวลาออกเดินทาง",
+    routeNeedsRefresh: "ข้อมูลเส้นทางเปลี่ยนแล้ว โปรดรีเฟรชประมาณการการจราจร",
+    standardDriveWarning: "เส้นทางขับรถมาตรฐาน ไม่ได้ตรวจข้อจำกัดรถบรรทุก",
+    calculated: "คำนวณแล้ว"
   }
 };
 
@@ -770,6 +811,14 @@ type TripForm = {
   custom_start_address: string;
   pickup_address: string;
   dropoff_address: string;
+  pickup_display_name: string;
+  dropoff_display_name: string;
+  pickup_place_id: string;
+  dropoff_place_id: string;
+  pickup_lat: string;
+  pickup_lng: string;
+  dropoff_lat: string;
+  dropoff_lng: string;
   pickup_location: string;
   dropoff_location: string;
   route: string;
@@ -789,6 +838,17 @@ type TripForm = {
   google_estimated_km: string;
   google_estimated_minutes: string;
   route_source: string;
+  route_distance_meters: string;
+  route_duration_seconds: string;
+  route_static_duration_seconds: string;
+  route_calculated_at: string;
+  route_departure_time: string;
+  route_preference: string;
+  route_label: string;
+  route_description: string;
+  route_polyline: string;
+  route_traffic_aware: boolean | null;
+  route_fallback_info: Record<string, unknown> | null;
   booking_estimated_km: string;
   booking_estimated_minutes: string;
   booking_google_maps_route_url: string;
@@ -850,11 +910,7 @@ type TripComparisonRow = {
   label: string;
 };
 
-type DistanceEstimateResponse = {
-  distanceKm?: number;
-  durationSeconds?: number | null;
-  provider?: string;
-};
+type DistanceEstimateResponse = TrafficAwareRouteEstimate;
 
 type DeleteTarget = {
   id: string;
@@ -1032,6 +1088,14 @@ function tripToForm(trip: TripJourneyWithFuel): TripForm {
     custom_start_address: trip.custom_start_address ?? (startLocationType === "custom" ? trip.start_location ?? "" : ""),
     pickup_address: trip.pickup_address ?? trip.pickup_location ?? "",
     dropoff_address: trip.dropoff_address ?? trip.dropoff_location ?? "",
+    pickup_display_name: trip.pickup_display_name ?? trip.pickup_location ?? "",
+    dropoff_display_name: trip.dropoff_display_name ?? trip.dropoff_location ?? "",
+    pickup_place_id: trip.pickup_place_id ?? "",
+    dropoff_place_id: trip.dropoff_place_id ?? "",
+    pickup_lat: trip.pickup_lat?.toString() ?? "",
+    pickup_lng: trip.pickup_lng?.toString() ?? "",
+    dropoff_lat: trip.dropoff_lat?.toString() ?? "",
+    dropoff_lng: trip.dropoff_lng?.toString() ?? "",
     pickup_location: trip.pickup_address ?? trip.pickup_location ?? "",
     dropoff_location: trip.dropoff_address ?? trip.dropoff_location ?? "",
     route: trip.route ?? "",
@@ -1051,6 +1115,17 @@ function tripToForm(trip: TripJourneyWithFuel): TripForm {
     google_estimated_km: googleEstimatedKm,
     google_estimated_minutes: googleEstimatedMinutes,
     route_source: trip.route_source ?? trip.estimated_distance_source ?? "",
+    route_distance_meters: trip.route_distance_meters?.toString() ?? "",
+    route_duration_seconds: trip.route_duration_seconds?.toString() ?? "",
+    route_static_duration_seconds: trip.route_static_duration_seconds?.toString() ?? "",
+    route_calculated_at: trip.route_calculated_at ?? "",
+    route_departure_time: trip.route_departure_time ?? "",
+    route_preference: trip.route_preference ?? "",
+    route_label: trip.route_label ?? "",
+    route_description: trip.route_description ?? "",
+    route_polyline: trip.route_polyline ?? "",
+    route_traffic_aware: trip.route_traffic_aware ?? null,
+    route_fallback_info: trip.route_fallback_info ?? null,
     booking_estimated_km: bookingEstimatedKm,
     booking_estimated_minutes: bookingEstimatedMinutes,
     booking_google_maps_route_url: trip.booking_google_maps_route_url ?? "",
@@ -1060,6 +1135,48 @@ function tripToForm(trip: TripJourneyWithFuel): TripForm {
     fuel_source: trip.fuel_source,
     waiting_idle_notes: trip.waiting_idle_notes ?? "",
     extra_route_notes: trip.extra_route_notes ?? ""
+  };
+}
+
+function clearTripRouteSnapshot(form: TripForm): TripForm {
+  return {
+    ...form,
+    estimated_distance_km: "",
+    estimated_duration_minutes: "",
+    google_estimated_km: "",
+    google_estimated_minutes: "",
+    google_maps_route_url: "",
+    route_source: "",
+    route_distance_meters: "",
+    route_duration_seconds: "",
+    route_static_duration_seconds: "",
+    route_calculated_at: "",
+    route_departure_time: "",
+    route_preference: "",
+    route_label: "",
+    route_description: "",
+    route_polyline: "",
+    route_traffic_aware: null,
+    route_fallback_info: null
+  };
+}
+
+function getTripStructuredLocation(form: TripForm, type: "pickup" | "dropoff"): StructuredLocation | null {
+  const label = type === "pickup" ? form.pickup_display_name : form.dropoff_display_name;
+  const formattedAddress = type === "pickup" ? form.pickup_location : form.dropoff_location;
+  const placeId = type === "pickup" ? form.pickup_place_id : form.dropoff_place_id;
+  const lat = toNumber(type === "pickup" ? form.pickup_lat : form.dropoff_lat);
+  const lng = toNumber(type === "pickup" ? form.pickup_lng : form.dropoff_lng);
+  if (!label.trim() && !formattedAddress.trim()) return null;
+
+  return {
+    label: label || formattedAddress,
+    formatted_address: formattedAddress || label,
+    place_id: placeId || null,
+    lat: lat ?? Number.NaN,
+    lng: lng ?? Number.NaN,
+    manual_text: placeId ? undefined : formattedAddress || label,
+    verified: Boolean(placeId)
   };
 }
 
@@ -1632,14 +1749,24 @@ function compactRouteParts(parts: string[]) {
   });
 }
 
-function buildMapsDirectionsUrl(origin: string, destination: string, waypoints: string[] = []) {
+function buildMapsDirectionsUrl(
+  origin: string,
+  destination: string,
+  waypoints: string[] = [],
+  placeIds: { origin?: string; destination?: string; waypoints?: string[] } = {}
+) {
   const url = new URL("https://www.google.com/maps/dir/");
   url.searchParams.set("api", "1");
   url.searchParams.set("origin", origin);
   url.searchParams.set("destination", destination);
   url.searchParams.set("travelmode", "driving");
+  if (placeIds.origin) url.searchParams.set("origin_place_id", placeIds.origin.replace(/^places\//, ""));
+  if (placeIds.destination) url.searchParams.set("destination_place_id", placeIds.destination.replace(/^places\//, ""));
   if (waypoints.length > 0) {
     url.searchParams.set("waypoints", waypoints.join("|"));
+    if (placeIds.waypoints?.length === waypoints.length) {
+      url.searchParams.set("waypoint_place_ids", placeIds.waypoints.map((id) => id.replace(/^places\//, "")).join("|"));
+    }
   }
   return url.toString();
 }
@@ -1650,6 +1777,20 @@ function getTripRoutePlan(form: TripForm) {
   const customStart = form.start_location.trim();
   const pickup = form.pickup_location.trim();
   const dropoff = form.dropoff_location.trim();
+  const pickupPoint = {
+    label: form.pickup_display_name || pickup,
+    formatted_address: pickup,
+    place_id: form.pickup_place_id || null,
+    lat: toNumber(form.pickup_lat),
+    lng: toNumber(form.pickup_lng)
+  };
+  const dropoffPoint = {
+    label: form.dropoff_display_name || dropoff,
+    formatted_address: dropoff,
+    place_id: form.dropoff_place_id || null,
+    lat: toNumber(form.dropoff_lat),
+    lng: toNumber(form.dropoff_lng)
+  };
 
   if (!pickup || !dropoff) return null;
   if (startType === "custom" && !customStart) return null;
@@ -1664,17 +1805,37 @@ function getTripRoutePlan(form: TripForm) {
       : form.return_to_depot
         ? [pickup, dropoff]
         : [pickup];
+  const originPoint = startType === "pickup_only" ? pickupPoint : origin;
+  const destinationPoint = form.return_to_depot ? destination : dropoffPoint;
+  const waypointPoints =
+    startType === "pickup_only"
+      ? form.return_to_depot
+        ? [dropoffPoint]
+        : []
+      : form.return_to_depot
+        ? [pickupPoint, dropoffPoint]
+        : [pickupPoint];
+  const originPlaceId = startType === "pickup_only" ? form.pickup_place_id : "";
+  const destinationPlaceId = form.return_to_depot ? "" : form.dropoff_place_id;
+  const waypointPlaceIds = waypointPoints.map((point) => typeof point === "string" ? "" : point.place_id || "");
 
   return {
     startType,
     origin,
     destination,
     waypoints,
+    originPoint,
+    destinationPoint,
+    waypointPoints,
     depotAddress,
     customStart,
     pickup,
     dropoff,
-    mapsUrl: buildMapsDirectionsUrl(origin, destination, waypoints)
+    mapsUrl: buildMapsDirectionsUrl(origin, destination, waypoints, {
+      origin: originPlaceId,
+      destination: destinationPlaceId,
+      waypoints: waypointPlaceIds.every(Boolean) ? waypointPlaceIds : undefined
+    })
   };
 }
 
@@ -1854,6 +2015,7 @@ export default function TripJourneyPage() {
   );
   const manualActualKmRef = useRef<HTMLInputElement | null>(null);
   const manualEstimatedKmRef = useRef<HTMLInputElement | null>(null);
+  const automaticTripRouteInputRef = useRef<string | null>(null);
   const [trips, setTrips] = useState<TripJourneyWithFuel[]>([]);
   const [fuelLogs, setFuelLogs] = useState<FuelLogWithDriver[]>([]);
   const [weeklyMileage, setWeeklyMileage] = useState<WeeklyMileageEntry[]>([]);
@@ -1950,6 +2112,7 @@ export default function TripJourneyPage() {
             window.history.replaceState(null, "", `/trip-journey?${params.toString()}`);
           }
         }
+        automaticTripRouteInputRef.current = null;
         setForm(nextSelected ? tripToForm(nextSelected) : null);
       }
     } catch (err) {
@@ -2349,6 +2512,7 @@ export default function TripJourneyPage() {
   const tripGoogleEstimateMinutes = form ? toNumber(form.google_estimated_minutes) : null;
 
   const openTrip = (trip: TripJourneyWithFuel) => {
+    automaticTripRouteInputRef.current = null;
     setSelectedTripId(trip.id);
     setForm(tripToForm(trip));
     setHasUnsavedChanges(false);
@@ -2404,7 +2568,46 @@ export default function TripJourneyPage() {
 
   const updateForm = (field: keyof TripForm, value: string | boolean) => {
     setHasUnsavedChanges(true);
-    setForm((current) => (current ? { ...current, [field]: value } : current));
+    const routeInputChanged = ["trip_date", "pickup_time", "start_location", "depot_address", "return_to_depot"].includes(field);
+    if (routeInputChanged) {
+      setDistanceMessage(copy.routeNeedsRefresh);
+      setDistanceDurationText(null);
+    }
+    setForm((current) => current
+      ? { ...(routeInputChanged ? clearTripRouteSnapshot(current) : current), [field]: value }
+      : current);
+  };
+
+  const updateTripLocationText = (type: "pickup" | "dropoff", value: string) => {
+    setHasUnsavedChanges(true);
+    setDistanceMessage(copy.routeNeedsRefresh);
+    setForm((current) => current
+      ? {
+          ...clearTripRouteSnapshot(current),
+          [`${type}_location`]: value,
+          [`${type}_address`]: value,
+          [`${type}_place_id`]: "",
+          [`${type}_lat`]: "",
+          [`${type}_lng`]: ""
+        }
+      : current);
+  };
+
+  const updateTripStructuredLocation = (type: "pickup" | "dropoff", location: StructuredLocation) => {
+    setHasUnsavedChanges(true);
+    setDistanceMessage(copy.routeNeedsRefresh);
+    const address = location.formatted_address || location.label;
+    setForm((current) => current
+      ? {
+          ...clearTripRouteSnapshot(current),
+          [`${type}_display_name`]: current[`${type}_display_name`] || location.label,
+          [`${type}_location`]: address,
+          [`${type}_address`]: address,
+          [`${type}_place_id`]: location.place_id ?? "",
+          [`${type}_lat`]: Number.isFinite(location.lat) ? String(location.lat) : "",
+          [`${type}_lng`]: Number.isFinite(location.lng) ? String(location.lng) : ""
+        }
+      : current);
   };
 
   const handleDriverChange = (value: string) => {
@@ -2439,13 +2642,14 @@ export default function TripJourneyPage() {
 
   const handleStartLocationTypeChange = (value: RouteStartType) => {
     setHasUnsavedChanges(true);
-    setDistanceMessage(null);
+    setDistanceMessage(copy.routeNeedsRefresh);
     setDistanceDurationText(null);
     setForm((current) => {
       if (!current) return current;
+      const cleared = clearTripRouteSnapshot(current);
       if (value === "depot") {
         return {
-          ...current,
+          ...cleared,
           start_location_type: "depot",
           route_start_type: "depot",
           depot_address: current.depot_address || DEPOT_ADDRESS,
@@ -2456,7 +2660,7 @@ export default function TripJourneyPage() {
       }
       if (value === "pickup_only") {
         return {
-          ...current,
+          ...cleared,
           start_location_type: "pickup_only",
           route_start_type: "pickup_only",
           start_location: "",
@@ -2464,7 +2668,7 @@ export default function TripJourneyPage() {
         };
       }
       return {
-        ...current,
+        ...cleared,
         start_location_type: "custom",
         route_start_type: "custom",
         start_location: isDepotLocation(current.start_location) ? current.custom_start_address : current.start_location,
@@ -2511,7 +2715,7 @@ export default function TripJourneyPage() {
     return parts.join(" -> ");
   };
 
-  const handleCalculateRouteDistance = async () => {
+  const handleCalculateRouteDistance = useCallback(async () => {
     if (!form) return;
     const pickup = form.pickup_location.trim();
     const dropoff = form.dropoff_location.trim();
@@ -2535,9 +2739,11 @@ export default function TripJourneyPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          origin: routePlan.origin,
-          destination: routePlan.destination,
-          waypoints: routePlan.waypoints
+          origin: routePlan.originPoint,
+          destination: routePlan.destinationPoint,
+          waypoints: routePlan.waypointPoints,
+          bookingDate: form.trip_date,
+          pickupTime: form.pickup_time
         })
       });
       const result = (await response.json()) as {
@@ -2550,9 +2756,11 @@ export default function TripJourneyPage() {
         throw new Error(result.error || "Google Maps could not calculate this route.");
       }
 
-      const distanceKm = Number(result.data.distanceKm);
-      const durationMinutes = result.data.durationSeconds ? Math.max(1, Math.round(result.data.durationSeconds / 60)) : null;
-      const durationText = result.data.durationSeconds ? formatDuration(result.data.durationSeconds) : null;
+      const estimate = result.data;
+      const distanceMeters = Number(estimate.distanceMeters);
+      const distanceKm = distanceMeters / 1000;
+      const durationMinutes = estimate.durationSeconds ? Math.max(1, Math.round(estimate.durationSeconds / 60)) : null;
+      const durationText = estimate.durationSeconds ? formatDuration(estimate.durationSeconds) : null;
       setHasUnsavedChanges(true);
       setForm((current) =>
         current
@@ -2571,19 +2779,72 @@ export default function TripJourneyPage() {
               google_estimated_km: distanceKm.toFixed(2),
               google_estimated_minutes: durationMinutes?.toString() ?? "",
               google_maps_route_url: routePlan.mapsUrl,
-              route_source: "google_maps_trip_journey"
+              route_source: estimate.provider,
+              route_distance_meters: String(estimate.distanceMeters),
+              route_duration_seconds: estimate.durationSeconds?.toString() ?? "",
+              route_static_duration_seconds: estimate.staticDurationSeconds?.toString() ?? "",
+              route_calculated_at: estimate.calculatedAt,
+              route_departure_time: estimate.departureTime ?? "",
+              route_preference: estimate.routePreference,
+              route_label: estimate.routeLabel,
+              route_description: estimate.routeDescription ?? "",
+              route_polyline: estimate.encodedPolyline ?? "",
+              route_traffic_aware: estimate.trafficAware,
+              route_fallback_info: estimate.fallbackInfo
             }
           : current
       );
-      setDistanceMessage(copy.routeDistanceCalculated);
+      setDistanceMessage(
+        `${copy.calculated}: ${distanceKm.toFixed(1)} km${durationMinutes != null ? ` / ${durationMinutes} min` : ""} · ${
+          estimate.trafficAware ? copy.trafficAwareEstimate : copy.trafficDataUnavailable
+        }`
+      );
       setDistanceDurationText(durationText);
     } catch (err) {
       console.warn("Route distance calculation warning:", err);
-      setDistanceMessage(copy.routeCalculateFailed);
+      setDistanceMessage(`${copy.trafficDataUnavailable}. ${copy.routeCalculateFailed}`);
     } finally {
       setCalculatingDistance(false);
     }
-  };
+  }, [copy, form]);
+
+  const automaticTripRouteInputKey = useMemo(
+    () => form
+      ? JSON.stringify([
+          form.start_location_type,
+          form.start_location,
+          form.depot_address,
+          form.pickup_place_id,
+          form.pickup_location,
+          form.pickup_lat,
+          form.pickup_lng,
+          form.dropoff_place_id,
+          form.dropoff_location,
+          form.dropoff_lat,
+          form.dropoff_lng,
+          form.return_to_depot,
+          form.trip_date,
+          form.pickup_time
+        ])
+      : "",
+    [form]
+  );
+
+  useEffect(() => {
+    if (!form) return;
+    if (automaticTripRouteInputRef.current === null) {
+      automaticTripRouteInputRef.current = automaticTripRouteInputKey;
+      return;
+    }
+    if (automaticTripRouteInputRef.current === automaticTripRouteInputKey) return;
+    automaticTripRouteInputRef.current = automaticTripRouteInputKey;
+    if (!getTripRoutePlan(form)) return;
+
+    const timeoutId = window.setTimeout(() => {
+      void handleCalculateRouteDistance();
+    }, 900);
+    return () => window.clearTimeout(timeoutId);
+  }, [automaticTripRouteInputKey, form, handleCalculateRouteDistance]);
 
   const requestDeleteTrip = (trip: TripJourneyWithFuel) => {
     setDeleteTarget({
@@ -2643,6 +2904,14 @@ export default function TripJourneyPage() {
         custom_start_address: form.start_location_type === "custom" ? form.start_location : null,
         pickup_address: form.pickup_location,
         dropoff_address: form.dropoff_location,
+        pickup_display_name: form.pickup_display_name || form.pickup_location,
+        dropoff_display_name: form.dropoff_display_name || form.dropoff_location,
+        pickup_place_id: form.pickup_place_id || null,
+        dropoff_place_id: form.dropoff_place_id || null,
+        pickup_lat: toNumber(form.pickup_lat),
+        pickup_lng: toNumber(form.pickup_lng),
+        dropoff_lat: toNumber(form.dropoff_lat),
+        dropoff_lng: toNumber(form.dropoff_lng),
         start_mileage: toNumber(form.start_mileage),
         end_mileage: toNumber(form.end_mileage),
         manual_actual_km: toNumber(form.manual_actual_km),
@@ -2651,6 +2920,17 @@ export default function TripJourneyPage() {
         google_estimated_km: toNumber(form.google_estimated_km),
         google_estimated_minutes: toNumber(form.google_estimated_minutes),
         route_source: form.route_source,
+        route_distance_meters: toNumber(form.route_distance_meters),
+        route_duration_seconds: toNumber(form.route_duration_seconds),
+        route_static_duration_seconds: toNumber(form.route_static_duration_seconds),
+        route_calculated_at: form.route_calculated_at || null,
+        route_departure_time: form.route_departure_time || null,
+        route_preference: form.route_preference || null,
+        route_label: form.route_label || null,
+        route_description: form.route_description || null,
+        route_polyline: form.route_polyline || null,
+        route_traffic_aware: form.route_traffic_aware,
+        route_fallback_info: form.route_fallback_info,
         google_maps_route_url: form.google_maps_route_url,
         booking_estimated_km: toNumber(form.booking_estimated_km),
         booking_estimated_minutes: toNumber(form.booking_estimated_minutes),
@@ -3286,7 +3566,7 @@ export default function TripJourneyPage() {
                         <p className="mt-1 text-xs text-slate-500">{copy.routeGoogleMapsHelper}</p>
                       </div>
                       <button type="button" onClick={() => void handleCalculateRouteDistance()} disabled={calculatingDistance} className="btn-secondary min-h-9 px-3 py-1.5 text-sm">
-                        {calculatingDistance ? copy.calculating : copy.calculateRouteDistance}
+                        {calculatingDistance ? copy.calculating : form.route_calculated_at ? copy.refreshRoute : copy.calculateRouteDistance}
                       </button>
                     </div>
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -3313,8 +3593,42 @@ export default function TripJourneyPage() {
                           <input value={form.start_location_type === "depot" ? form.depot_address || DEPOT_ADDRESS : form.start_location} onChange={(event) => updateForm(form.start_location_type === "depot" ? "depot_address" : "start_location", event.target.value)} disabled={form.start_location_type === "depot"} placeholder={form.start_location_type === "custom" ? copy.enterStartLocation : copy.depotAddress} className="form-input bg-white disabled:bg-slate-100 disabled:text-slate-500" />
                         </div>
                       ) : null}
-                      <div className="form-field"><label className="form-label">{copy.pickupLocation}</label><input value={form.pickup_location} onChange={(event) => updateForm("pickup_location", event.target.value)} className="form-input bg-white" /></div>
-                      <div className="form-field"><label className="form-label">{copy.dropoffLocation}</label><input value={form.dropoff_location} onChange={(event) => updateForm("dropoff_location", event.target.value)} className="form-input bg-white" /></div>
+                      <LocationAutocomplete
+                        label={`${copy.pickupLocation}${form.pickup_display_name ? ` - ${form.pickup_display_name}` : ""}`}
+                        value={form.pickup_location}
+                        onChange={(value) => updateTripLocationText("pickup", value)}
+                        onManualInput={(value) => updateTripLocationText("pickup", value)}
+                        onSelectLocation={(location) => updateTripStructuredLocation("pickup", location)}
+                        selectedLocation={getTripStructuredLocation(form, "pickup")}
+                        savedLocationApplied={Boolean(form.booking_diary_id && (form.pickup_place_id || (form.pickup_lat && form.pickup_lng)))}
+                        savedLocationAppliedText={copy.savedLocationApplied}
+                        changeLocationText={copy.changeGoogleMapsLocation}
+                        language={language}
+                        configMissingMessage={copy.googleMapsUnavailable}
+                        helperText={copy.googleMapsLocationHelper}
+                        verifiedText={copy.googleVerified}
+                        manualUnverifiedText={copy.manualUnverified}
+                        manualEntryText={copy.manualEntryStillAllowed}
+                        containerClassName="form-field"
+                      />
+                      <LocationAutocomplete
+                        label={`${copy.dropoffLocation}${form.dropoff_display_name ? ` - ${form.dropoff_display_name}` : ""}`}
+                        value={form.dropoff_location}
+                        onChange={(value) => updateTripLocationText("dropoff", value)}
+                        onManualInput={(value) => updateTripLocationText("dropoff", value)}
+                        onSelectLocation={(location) => updateTripStructuredLocation("dropoff", location)}
+                        selectedLocation={getTripStructuredLocation(form, "dropoff")}
+                        savedLocationApplied={Boolean(form.booking_diary_id && (form.dropoff_place_id || (form.dropoff_lat && form.dropoff_lng)))}
+                        savedLocationAppliedText={copy.savedLocationApplied}
+                        changeLocationText={copy.changeGoogleMapsLocation}
+                        language={language}
+                        configMissingMessage={copy.googleMapsUnavailable}
+                        helperText={copy.googleMapsLocationHelper}
+                        verifiedText={copy.googleVerified}
+                        manualUnverifiedText={copy.manualUnverified}
+                        manualEntryText={copy.manualEntryStillAllowed}
+                        containerClassName="form-field"
+                      />
                       <label className="flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700"><input type="checkbox" checked={form.return_to_depot} onChange={(event) => updateForm("return_to_depot", event.target.checked)} className="h-4 w-4" />{copy.returnToDepot}</label>
                       <div className="rounded-lg border border-brand-100 bg-brand-50 px-3 py-2 text-sm sm:col-span-2">
                         <p className="text-xs font-semibold text-slate-500">{copy.routePreview}</p>
@@ -3359,6 +3673,18 @@ export default function TripJourneyPage() {
                       </div>
                     </div>
                     {distanceMessage ? <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600">{distanceMessage}</p> : null}
+                    {form.route_calculated_at ? (
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold">
+                        <span className="rounded-full bg-emerald-50 px-2 py-1 text-emerald-700">
+                          {form.route_label === "DEFAULT_ROUTE" ? copy.googleRecommendedRoute : copy.fastestRoute}
+                        </span>
+                        <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-600">
+                          {form.route_departure_time ? copy.plannedTrafficEstimate : copy.currentTrafficEstimate}
+                        </span>
+                        {!form.route_traffic_aware ? <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-800">{copy.trafficDataUnavailable}</span> : null}
+                      </div>
+                    ) : null}
+                    <p className="mt-2 text-xs text-slate-500">{copy.standardDriveWarning}</p>
                   </section>
 
                   <section className="rounded-lg border border-amber-100 bg-white p-3 shadow-sm">

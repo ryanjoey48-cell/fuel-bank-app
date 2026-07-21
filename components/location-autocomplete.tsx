@@ -38,6 +38,10 @@ type LocationAutocompleteProps = {
   manualUnverifiedText?: string;
   manualEntryText?: string;
   selectedLocation?: StructuredLocation | null;
+  savedLocationApplied?: boolean;
+  savedLocationAppliedText?: string;
+  changeLocationText?: string;
+  containerClassName?: string;
   onSelectLocation?: (location: StructuredLocation) => void;
   onManualInput?: (value: string) => void;
   onConfigurationChange?: (configured: boolean, message?: string) => void;
@@ -208,6 +212,10 @@ export function LocationAutocomplete({
   manualUnverifiedText = "manual/unverified",
   manualEntryText = "You can still type the full location manually.",
   selectedLocation,
+  savedLocationApplied = false,
+  savedLocationAppliedText = "Saved location applied",
+  changeLocationText = "Change Google Maps location",
+  containerClassName = "form-field md:col-span-2",
   onSelectLocation,
   onManualInput,
   onConfigurationChange
@@ -477,7 +485,7 @@ export function LocationAutocomplete({
   };
 
   return (
-    <div className="form-field md:col-span-2">
+    <div className={containerClassName}>
       <label className={required ? "form-label form-label-required" : "form-label"}>{label}</label>
       <div className="relative">
         <MapPinned className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -586,6 +594,15 @@ export function LocationAutocomplete({
                   : selectedLocation.formatted_address
               : statusMessage ?? helperText ?? "Type at least 2 characters, or paste the full location manually."}
       </p>
+      {savedLocationApplied ? (
+        <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-semibold text-brand-700">
+          <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-1">
+            <MapPinned className="h-3.5 w-3.5" />
+            {savedLocationAppliedText}
+          </span>
+          <span className="text-slate-500">{changeLocationText}</span>
+        </p>
+      ) : null}
     </div>
   );
 }

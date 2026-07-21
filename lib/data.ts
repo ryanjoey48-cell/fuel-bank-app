@@ -31,6 +31,8 @@ import type {
   OilChangeHistory,
   PaginatedFuelLogsResult,
   RouteDistanceEstimate,
+  SavedLocation,
+  SavedLocationType,
   Shipment,
   ShipmentWithDriver,
   SupportTicket,
@@ -92,9 +94,28 @@ const isMissingTripOptionalColumnError = (error: { code?: string; message?: stri
         "custom_start_address",
         "pickup_address",
         "dropoff_address",
+        "pickup_display_name",
+        "dropoff_display_name",
+        "pickup_place_id",
+        "dropoff_place_id",
+        "pickup_lat",
+        "pickup_lng",
+        "dropoff_lat",
+        "dropoff_lng",
         "booking_estimated_km",
         "booking_estimated_minutes",
-        "booking_google_maps_route_url"
+        "booking_google_maps_route_url",
+        "route_distance_meters",
+        "route_duration_seconds",
+        "route_static_duration_seconds",
+        "route_calculated_at",
+        "route_departure_time",
+        "route_preference",
+        "route_label",
+        "route_description",
+        "route_polyline",
+        "route_traffic_aware",
+        "route_fallback_info"
       ].some((column) => error.message?.includes(column))
   );
 
@@ -120,9 +141,28 @@ function omitTripOptionalColumns<T extends Record<string, unknown>>(payload: T) 
           "custom_start_address",
           "pickup_address",
           "dropoff_address",
+          "pickup_display_name",
+          "dropoff_display_name",
+          "pickup_place_id",
+          "dropoff_place_id",
+          "pickup_lat",
+          "pickup_lng",
+          "dropoff_lat",
+          "dropoff_lng",
           "booking_estimated_km",
           "booking_estimated_minutes",
-          "booking_google_maps_route_url"
+          "booking_google_maps_route_url",
+          "route_distance_meters",
+          "route_duration_seconds",
+          "route_static_duration_seconds",
+          "route_calculated_at",
+          "route_departure_time",
+          "route_preference",
+          "route_label",
+          "route_description",
+          "route_polyline",
+          "route_traffic_aware",
+          "route_fallback_info"
         ].includes(key)
     )
   ) as Partial<T>;
@@ -143,7 +183,18 @@ const BOOKING_DIARY_ROUTE_COLUMNS = new Set([
   "estimated_duration_minutes",
   "google_maps_route_url",
   "distance_source",
-  "route_calculated_at"
+  "route_calculated_at",
+  "route_distance_meters",
+  "route_duration_seconds",
+  "route_static_duration_seconds",
+  "route_departure_time",
+  "route_preference",
+  "route_label",
+  "route_description",
+  "route_polyline",
+  "route_traffic_aware",
+  "route_source",
+  "route_fallback_info"
 ]);
 
 async function writeBookingDiaryWithSchemaFallback({
@@ -2357,6 +2408,37 @@ export async function fetchBookingDiaryEntries() {
   }));
 }
 
+export async function fetchSavedLocations(locationType?: SavedLocationType) {
+  let query = supabase
+    .from("saved_locations")
+    .select("id,location_type,display_name,normalized_name,google_place_id,formatted_address,latitude,longitude,use_count,last_used_at,created_at,updated_at,created_by")
+    .order("use_count", { ascending: false })
+    .order("last_used_at", { ascending: false });
+
+  if (locationType) {
+    query = query.eq("location_type", locationType);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    logDataError("fetchSavedLocations error:", error, { locationType });
+    throw new Error(
+      "Saved locations are unavailable. Apply migration 20260721120000_add_saved_booking_locations.sql before using this version."
+    );
+  }
+
+  return ((data ?? []) as Array<Omit<SavedLocation, "use_count" | "latitude" | "longitude"> & {
+    use_count: number | string;
+    latitude: number | string | null;
+    longitude: number | string | null;
+  }>).map((location) => ({
+    ...location,
+    use_count: Number(location.use_count) || 0,
+    latitude: parseOptionalNumeric(location.latitude),
+    longitude: parseOptionalNumeric(location.longitude)
+  })) as SavedLocation[];
+}
+
 export async function fetchClients() {
   const { data, error } = await supabase
     .from("clients")
@@ -2543,6 +2625,17 @@ export async function saveBookingDiaryEntry(
     google_maps_route_url: rest.google_maps_route_url?.trim() || null,
     distance_source: rest.distance_source?.trim() || null,
     route_calculated_at: rest.route_calculated_at || null,
+    route_distance_meters: parseOptionalNumeric(rest.route_distance_meters),
+    route_duration_seconds: parseOptionalNumeric(rest.route_duration_seconds),
+    route_static_duration_seconds: parseOptionalNumeric(rest.route_static_duration_seconds),
+    route_departure_time: rest.route_departure_time || null,
+    route_preference: rest.route_preference?.trim() || null,
+    route_label: rest.route_label?.trim() || null,
+    route_description: rest.route_description?.trim() || null,
+    route_polyline: rest.route_polyline?.trim() || null,
+    route_traffic_aware: rest.route_traffic_aware ?? null,
+    route_source: rest.route_source?.trim() || null,
+    route_fallback_info: rest.route_fallback_info ?? null,
     vehicle: normalizeVehicleRegistration(rest.vehicle) || null,
     driver: normalizeDisplayName(rest.driver) || null,
     job_order_number: rest.job_order_number?.trim() || null,
@@ -2669,6 +2762,14 @@ function normalizeTripJourneyRow(row: TripJourney): TripJourney {
     custom_start_address: row.custom_start_address ?? (row.start_location_type === "custom" ? row.start_location : null),
     pickup_address: row.pickup_address ?? row.pickup_location ?? null,
     dropoff_address: row.dropoff_address ?? row.dropoff_location ?? null,
+    pickup_display_name: row.pickup_display_name ?? row.pickup_location ?? null,
+    dropoff_display_name: row.dropoff_display_name ?? row.dropoff_location ?? null,
+    pickup_place_id: row.pickup_place_id ?? null,
+    dropoff_place_id: row.dropoff_place_id ?? null,
+    pickup_lat: parseOptionalNumeric(row.pickup_lat),
+    pickup_lng: parseOptionalNumeric(row.pickup_lng),
+    dropoff_lat: parseOptionalNumeric(row.dropoff_lat),
+    dropoff_lng: parseOptionalNumeric(row.dropoff_lng),
     pickup_location: row.pickup_location ?? null,
     dropoff_location: row.dropoff_location ?? null,
     route: row.route ?? null,
@@ -2686,6 +2787,17 @@ function normalizeTripJourneyRow(row: TripJourney): TripJourney {
     estimated_distance_km: parseOptionalNumeric(row.estimated_distance_km),
     estimated_duration_minutes: parseOptionalNumeric(row.estimated_duration_minutes),
     google_maps_route_url: row.google_maps_route_url ?? null,
+    route_distance_meters: parseOptionalNumeric(row.route_distance_meters),
+    route_duration_seconds: parseOptionalNumeric(row.route_duration_seconds),
+    route_static_duration_seconds: parseOptionalNumeric(row.route_static_duration_seconds),
+    route_calculated_at: row.route_calculated_at ?? null,
+    route_departure_time: row.route_departure_time ?? null,
+    route_preference: row.route_preference ?? null,
+    route_label: row.route_label ?? null,
+    route_description: row.route_description ?? null,
+    route_polyline: row.route_polyline ?? null,
+    route_traffic_aware: row.route_traffic_aware ?? null,
+    route_fallback_info: row.route_fallback_info ?? null,
     estimated_distance_source: row.estimated_distance_source ?? null,
     google_estimated_km: parseOptionalNumeric(row.google_estimated_km),
     google_estimated_minutes: parseOptionalNumeric(row.google_estimated_minutes),
@@ -2771,6 +2883,14 @@ function mapBookingToTripPayload(booking: BookingDiaryEntry) {
     custom_start_address: null,
     pickup_address: pickupAddress,
     dropoff_address: dropoffAddress,
+    pickup_display_name: pickupDisplay,
+    dropoff_display_name: dropoffDisplay,
+    pickup_place_id: booking.pickup_place_id ?? null,
+    dropoff_place_id: booking.dropoff_place_id ?? null,
+    pickup_lat: parseOptionalNumeric(booking.pickup_lat),
+    pickup_lng: parseOptionalNumeric(booking.pickup_lng),
+    dropoff_lat: parseOptionalNumeric(booking.dropoff_lat),
+    dropoff_lng: parseOptionalNumeric(booking.dropoff_lng),
     date: booking.booking_date,
     pickup_time: booking.pickup_time ?? null,
     pickup_location: pickupDisplay || pickupAddress,
@@ -2790,7 +2910,18 @@ function mapBookingToTripPayload(booking: BookingDiaryEntry) {
     booking_google_maps_route_url: booking.google_maps_route_url ?? null,
     google_estimated_km: null,
     google_estimated_minutes: null,
-    route_source: "booking_diary",
+    route_source: booking.route_source ?? "booking_diary",
+    route_distance_meters: parseOptionalNumeric(booking.route_distance_meters),
+    route_duration_seconds: parseOptionalNumeric(booking.route_duration_seconds),
+    route_static_duration_seconds: parseOptionalNumeric(booking.route_static_duration_seconds),
+    route_calculated_at: booking.route_calculated_at ?? null,
+    route_departure_time: booking.route_departure_time ?? null,
+    route_preference: booking.route_preference ?? null,
+    route_label: booking.route_label ?? null,
+    route_description: booking.route_description ?? null,
+    route_polyline: booking.route_polyline ?? null,
+    route_traffic_aware: booking.route_traffic_aware ?? null,
+    route_fallback_info: booking.route_fallback_info ?? null,
     return_to_depot: false,
     fuel_source: "manual" as TripFuelSource,
     status: "created" as TripJourneyStatus
@@ -2972,6 +3103,14 @@ export async function saveTripJourney(
     custom_start_address: payload.custom_start_address?.trim() || (payload.start_location_type === "custom" ? payload.start_location?.trim() || null : null),
     pickup_address: payload.pickup_address?.trim() || payload.pickup_location?.trim() || null,
     dropoff_address: payload.dropoff_address?.trim() || payload.dropoff_location?.trim() || null,
+    pickup_display_name: payload.pickup_display_name?.trim() || null,
+    dropoff_display_name: payload.dropoff_display_name?.trim() || null,
+    pickup_place_id: payload.pickup_place_id?.trim() || null,
+    dropoff_place_id: payload.dropoff_place_id?.trim() || null,
+    pickup_lat: parseOptionalNumeric(payload.pickup_lat),
+    pickup_lng: parseOptionalNumeric(payload.pickup_lng),
+    dropoff_lat: parseOptionalNumeric(payload.dropoff_lat),
+    dropoff_lng: parseOptionalNumeric(payload.dropoff_lng),
     pickup_time: payload.pickup_time || null,
     pickup_location: payload.pickup_location?.trim() || null,
     dropoff_location: payload.dropoff_location?.trim() || null,
@@ -2997,6 +3136,17 @@ export async function saveTripJourney(
     booking_estimated_km: bookingEstimatedKm,
     booking_estimated_minutes: parseOptionalNumeric(payload.booking_estimated_minutes),
     booking_google_maps_route_url: payload.booking_google_maps_route_url?.trim() || null,
+    route_distance_meters: parseOptionalNumeric(payload.route_distance_meters),
+    route_duration_seconds: parseOptionalNumeric(payload.route_duration_seconds),
+    route_static_duration_seconds: parseOptionalNumeric(payload.route_static_duration_seconds),
+    route_calculated_at: payload.route_calculated_at || null,
+    route_departure_time: payload.route_departure_time || null,
+    route_preference: payload.route_preference?.trim() || null,
+    route_label: payload.route_label?.trim() || null,
+    route_description: payload.route_description?.trim() || null,
+    route_polyline: payload.route_polyline?.trim() || null,
+    route_traffic_aware: payload.route_traffic_aware ?? null,
+    route_fallback_info: payload.route_fallback_info ?? null,
     manual_estimated_distance_km: manualEstimatedDistanceKm,
     distance_difference_km: distanceDifferenceKm,
     distance_difference_percent: distanceDifferencePercent,

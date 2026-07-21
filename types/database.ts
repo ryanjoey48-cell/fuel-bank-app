@@ -211,6 +211,14 @@ export type TripJourney = {
   custom_start_address?: string | null;
   pickup_address?: string | null;
   dropoff_address?: string | null;
+  pickup_display_name?: string | null;
+  dropoff_display_name?: string | null;
+  pickup_place_id?: string | null;
+  dropoff_place_id?: string | null;
+  pickup_lat?: number | null;
+  pickup_lng?: number | null;
+  dropoff_lat?: number | null;
+  dropoff_lng?: number | null;
   pickup_location: string | null;
   dropoff_location: string | null;
   route: string | null;
@@ -232,6 +240,17 @@ export type TripJourney = {
   estimated_distance_km: number | null;
   estimated_duration_minutes?: number | null;
   google_maps_route_url?: string | null;
+  route_distance_meters?: number | null;
+  route_duration_seconds?: number | null;
+  route_static_duration_seconds?: number | null;
+  route_calculated_at?: string | null;
+  route_departure_time?: string | null;
+  route_preference?: string | null;
+  route_label?: string | null;
+  route_description?: string | null;
+  route_polyline?: string | null;
+  route_traffic_aware?: boolean | null;
+  route_fallback_info?: Record<string, unknown> | null;
   estimated_distance_source: string | null;
   google_estimated_km?: number | null;
   google_estimated_minutes?: number | null;
@@ -277,6 +296,24 @@ export type Client = {
   created_by: string | null;
 };
 
+export type SavedLocationType = "pickup" | "dropoff";
+
+export type SavedLocation = {
+  id: string;
+  location_type: SavedLocationType;
+  display_name: string;
+  normalized_name: string;
+  google_place_id: string | null;
+  formatted_address: string;
+  latitude: number | null;
+  longitude: number | null;
+  use_count: number;
+  last_used_at: string;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+};
+
 export type BookingDiaryEntry = {
   id: string;
   booking_id: string | null;
@@ -303,6 +340,17 @@ export type BookingDiaryEntry = {
   google_maps_route_url?: string | null;
   distance_source?: string | null;
   route_calculated_at?: string | null;
+  route_distance_meters?: number | null;
+  route_duration_seconds?: number | null;
+  route_static_duration_seconds?: number | null;
+  route_departure_time?: string | null;
+  route_preference?: string | null;
+  route_label?: string | null;
+  route_description?: string | null;
+  route_polyline?: string | null;
+  route_traffic_aware?: boolean | null;
+  route_source?: string | null;
+  route_fallback_info?: Record<string, unknown> | null;
   job_order_number: string | null;
   vehicle: string | null;
   driver: string | null;

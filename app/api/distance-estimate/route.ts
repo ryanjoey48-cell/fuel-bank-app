@@ -5,177 +5,170 @@ import {
   getServerGoogleMapsApiKey
 } from "@/lib/google-maps";
 import { createApiError, createApiSuccess, parseJsonSafely } from "@/lib/http";
-
-type DirectionsResponse = {
-  routes?: Array<{
-    legs?: Array<{
-      distance?: {
-        value?: number;
-      };
-      duration?: {
-        value?: number;
-      };
-      start_address?: string;
-      end_address?: string;
-    }>;
-  }>;
-  error_message?: string;
-  status?: string;
-};
+import {
+  getBangkokRouteDeparture,
+  parseGoogleDurationSeconds,
+  selectFastestPracticalRoute,
+  type GoogleComputedRoute
+} from "@/lib/route-planning";
 
 type RoutePoint = {
   label?: string;
   formatted_address?: string;
   place_id?: string | null;
-  lat?: number;
-  lng?: number;
+  lat?: number | null;
+  lng?: number | null;
 };
 
-function toDirectionsWaypoint(point: string | RoutePoint | undefined) {
-  if (!point) return "";
+type DistanceEstimateRequest = {
+  origin?: string | RoutePoint;
+  destination?: string | RoutePoint;
+  waypoints?: Array<string | RoutePoint>;
+  bookingDate?: string | null;
+  pickupTime?: string | null;
+};
+
+type RoutesWaypoint =
+  | { placeId: string }
+  | { location: { latLng: { latitude: number; longitude: number } } }
+  | { address: string };
+
+type ComputeRoutesResponse = {
+  routes?: GoogleComputedRoute[];
+  fallbackInfo?: Record<string, unknown>;
+  error?: { code?: number; status?: string; message?: string };
+};
+
+const ROUTES_FIELD_MASK = [
+  "routes.distanceMeters",
+  "routes.duration",
+  "routes.staticDuration",
+  "routes.routeLabels",
+  "routes.description",
+  "routes.polyline.encodedPolyline",
+  "routes.legs.distanceMeters",
+  "routes.legs.duration",
+  "routes.legs.staticDuration",
+  "fallbackInfo"
+].join(",");
+
+function toRoutesWaypoint(point: string | RoutePoint | undefined): RoutesWaypoint | null {
+  if (!point) return null;
   if (typeof point === "string") {
-    return point.trim();
+    const address = point.trim();
+    return address ? { address } : null;
   }
 
-  const lat = point.lat;
-  const lng = point.lng;
-  if (Number.isFinite(lat) && Number.isFinite(lng) && lat != null && lng != null) {
-    return `${lat},${lng}`;
+  const placeId = point.place_id?.replace(/^places\//, "").trim();
+  if (placeId) return { placeId };
+
+  if (Number.isFinite(point.lat) && Number.isFinite(point.lng) && point.lat != null && point.lng != null) {
+    return { location: { latLng: { latitude: point.lat, longitude: point.lng } } };
   }
 
-  if (point.place_id) {
-    return `place_id:${point.place_id.replace(/^places\//, "")}`;
-  }
-
-  return point.formatted_address?.trim() || point.label?.trim() || "";
+  const address = point.formatted_address?.trim() || point.label?.trim() || "";
+  return address ? { address } : null;
 }
 
-async function fetchDirectionsEstimate(
-  apiKey: string,
-  body: { origin?: string | RoutePoint; destination?: string | RoutePoint; waypoints?: Array<string | RoutePoint> }
-) {
-  const origin = toDirectionsWaypoint(body.origin);
-  const destination = toDirectionsWaypoint(body.destination);
-
-  if (!origin || !destination) {
-    return null;
-  }
-
-  const directionsUrl = new URL("https://maps.googleapis.com/maps/api/directions/json");
-  directionsUrl.searchParams.set("origin", origin);
-  directionsUrl.searchParams.set("destination", destination);
-  directionsUrl.searchParams.set("key", apiKey);
-  directionsUrl.searchParams.set("language", "en");
-  directionsUrl.searchParams.set("region", "th");
-  directionsUrl.searchParams.set("mode", "driving");
-
-  const waypointValues = Array.isArray(body.waypoints)
-    ? body.waypoints.map(toDirectionsWaypoint).filter(Boolean)
-    : [];
-
-  if (waypointValues.length) {
-    directionsUrl.searchParams.set("waypoints", waypointValues.join("|"));
-  }
-
-  const directionsResponse = await fetch(directionsUrl, { cache: "no-store" });
-  const directionsData = await parseJsonSafely<DirectionsResponse>(directionsResponse);
-  const directionsLegs = directionsData.routes?.[0]?.legs ?? [];
-  const directionsDistanceMeters = directionsLegs.reduce(
-    (sum, leg) => sum + Number(leg.distance?.value || 0),
-    0
-  );
-  const directionsDurationSeconds = directionsLegs.reduce(
-    (sum, leg) => sum + Number(leg.duration?.value || 0),
-    0
-  );
-
-  if (
-    directionsResponse.ok &&
-    directionsData.status === "OK" &&
-    directionsDistanceMeters > 0
-  ) {
-    return {
-      ok: true as const,
-      data: {
-        distanceKm: Number((directionsDistanceMeters / 1000).toFixed(2)),
-        distanceMeters: directionsDistanceMeters,
-        durationSeconds: directionsDurationSeconds || null,
-        provider: "directions_api",
-        legs: directionsLegs.map((leg) => ({
-          distanceMeters: leg.distance?.value ?? null,
-          durationSeconds: leg.duration?.value ?? null,
-          startAddress: leg.start_address ?? null,
-          endAddress: leg.end_address ?? null
-        }))
-      }
-    };
-  }
-
-  const rawMessage =
-    directionsData.error_message ||
-    (directionsData.status && directionsData.status !== "ZERO_RESULTS"
-      ? `Google Directions returned ${directionsData.status}.`
-      : "Unable to reach Google Maps route service.");
-  const errorCode = extractGoogleMapsErrorCode(rawMessage) ?? directionsData.status ?? null;
-
-  return {
-    ok: false as const,
-    message: getGoogleMapsErrorMessage(errorCode, rawMessage) ?? rawMessage
-  };
-}
-
-function logGoogleMapsDistanceError(error: unknown) {
-  console.warn("[Fuel Bank] Google route estimate failed", {
-    message: error instanceof Error ? error.message : String(error)
+function logGoogleMapsDistanceError(error: unknown, fallbackInfo?: Record<string, unknown> | null) {
+  console.warn("[Fuel Bank] Google traffic-aware route estimate failed", {
+    message: error instanceof Error ? error.message : String(error),
+    fallbackInfo: fallbackInfo ?? null
   });
 }
 
 export async function POST(request: Request) {
   try {
     const apiKey = getServerGoogleMapsApiKey();
-
     if (!apiKey) {
       const missingVariables = getGoogleMapsEnvironmentStatus().missingServerVariables;
-      return Response.json(createApiError(`Missing ${missingVariables.join(" and ") || "GOOGLE_MAPS_API_KEY"}`), {
-        status: 503
-      });
+      return Response.json(createApiError(`Missing ${missingVariables.join(" and ") || "GOOGLE_MAPS_API_KEY"}`), { status: 503 });
     }
 
-    let body: { origin?: string | RoutePoint; destination?: string | RoutePoint; waypoints?: Array<string | RoutePoint> } = {};
-
+    let body: DistanceEstimateRequest;
     try {
-      body = (await request.json()) as typeof body;
+      body = (await request.json()) as DistanceEstimateRequest;
     } catch {
       return Response.json(createApiError("Invalid request body."), { status: 400 });
     }
 
-    const origin = toDirectionsWaypoint(body.origin);
-    const destination = toDirectionsWaypoint(body.destination);
-
+    const origin = toRoutesWaypoint(body.origin);
+    const destination = toRoutesWaypoint(body.destination);
+    const intermediates = (body.waypoints ?? []).map(toRoutesWaypoint).filter((point): point is RoutesWaypoint => point != null);
     if (!origin || !destination) {
-      return Response.json(createApiError("Origin and destination are required."), {
-        status: 400
-      });
+      return Response.json(createApiError("Origin and destination are required."), { status: 400 });
     }
 
-    const directionsEstimate = await fetchDirectionsEstimate(apiKey, body);
+    const departure = getBangkokRouteDeparture(body.bookingDate, body.pickupTime);
+    const computeBody = {
+      origin,
+      destination,
+      intermediates,
+      travelMode: "DRIVE",
+      routingPreference: "TRAFFIC_AWARE_OPTIMAL",
+      trafficModel: "BEST_GUESS",
+      computeAlternativeRoutes: intermediates.length === 0,
+      regionCode: "TH",
+      languageCode: "en",
+      units: "METRIC",
+      ...(departure.departureTime ? { departureTime: departure.departureTime } : {})
+    };
 
-    if (directionsEstimate?.ok) {
-      return Response.json(createApiSuccess(directionsEstimate.data));
-    }
-
-    const rawMessage =
-      directionsEstimate?.message ||
-      "Google Maps could not estimate this route. Please check the locations and try again.";
-    const errorCode = extractGoogleMapsErrorCode(rawMessage);
-
-    return Response.json(createApiError(getGoogleMapsErrorMessage(errorCode, rawMessage) ?? rawMessage), {
-      status: 422
+    const routesResponse = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask": ROUTES_FIELD_MASK
+      },
+      body: JSON.stringify(computeBody)
     });
+    const routesData = await parseJsonSafely<ComputeRoutesResponse>(routesResponse);
+    const selectedRoute = selectFastestPracticalRoute(routesData.routes ?? []);
+
+    if (!routesResponse.ok || !selectedRoute) {
+      const rawMessage = routesData.error?.message || "Traffic-aware route data is unavailable. Please use the manual estimate.";
+      logGoogleMapsDistanceError(rawMessage, routesData.fallbackInfo);
+      const errorCode = extractGoogleMapsErrorCode(rawMessage) ?? routesData.error?.status ?? null;
+      return Response.json(createApiError(getGoogleMapsErrorMessage(errorCode, rawMessage) ?? rawMessage), { status: 422 });
+    }
+
+    const durationSeconds = parseGoogleDurationSeconds(selectedRoute.duration);
+    const staticDurationSeconds = parseGoogleDurationSeconds(selectedRoute.staticDuration);
+    const routeLabels = selectedRoute.routeLabels ?? [];
+    const fallbackInfo = routesData.fallbackInfo ?? null;
+    if (fallbackInfo) {
+      console.warn("[Fuel Bank] Google Routes API used fallback routing", { fallbackInfo });
+    }
+
+    return Response.json(createApiSuccess({
+      distanceKm: Number((Number(selectedRoute.distanceMeters) / 1000).toFixed(3)),
+      distanceMeters: Number(selectedRoute.distanceMeters),
+      durationSeconds,
+      staticDurationSeconds,
+      provider: "google_routes_api",
+      routePreference: "TRAFFIC_AWARE_OPTIMAL",
+      routeLabels,
+      routeLabel: routeLabels.includes("DEFAULT_ROUTE") ? "DEFAULT_ROUTE" : routeLabels[0] ?? "FASTEST_TRAFFIC_AWARE",
+      routeDescription: selectedRoute.description ?? null,
+      encodedPolyline: selectedRoute.polyline?.encodedPolyline ?? null,
+      trafficAware: fallbackInfo == null,
+      trafficDataAvailable: fallbackInfo == null,
+      fallbackInfo,
+      departureTime: departure.departureTime,
+      departureTimeBasis: departure.timeBasis,
+      calculatedAt: new Date().toISOString(),
+      alternativesReturned: routesData.routes?.length ?? 0,
+      selectedRouteIsGoogleDefault: routeLabels.includes("DEFAULT_ROUTE"),
+      legs: (selectedRoute.legs ?? []).map((leg) => ({
+        distanceMeters: leg.distanceMeters ?? null,
+        durationSeconds: parseGoogleDurationSeconds(leg.duration),
+        staticDurationSeconds: parseGoogleDurationSeconds(leg.staticDuration)
+      }))
+    }));
   } catch (error) {
     logGoogleMapsDistanceError(error);
-    return Response.json(createApiError("Google Maps could not calculate this route. You can enter the estimated distance manually."), {
-      status: 503
-    });
+    return Response.json(createApiError("Traffic-aware route data is unavailable. You can enter distance and time manually."), { status: 503 });
   }
 }

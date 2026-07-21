@@ -721,6 +721,17 @@ create table if not exists public.booking_diary (
   google_maps_route_url text,
   distance_source text,
   route_calculated_at timestamptz,
+  route_distance_meters numeric,
+  route_duration_seconds numeric,
+  route_static_duration_seconds numeric,
+  route_departure_time timestamptz,
+  route_preference text,
+  route_label text,
+  route_description text,
+  route_polyline text,
+  route_traffic_aware boolean,
+  route_source text,
+  route_fallback_info jsonb,
   job_order_number text,
   vehicle text,
   driver text,
@@ -891,6 +902,133 @@ drop trigger if exists set_booking_diary_updated_at on public.booking_diary;
 create trigger set_booking_diary_updated_at
 before update on public.booking_diary
 for each row execute function public.set_updated_at();
+
+create or replace function public.normalize_saved_location_name(value text)
+returns text language sql immutable strict as $$
+  select lower(regexp_replace(btrim(value), '\s+', ' ', 'g'));
+$$;
+
+create table if not exists public.saved_locations (
+  id uuid primary key default gen_random_uuid(),
+  location_type text not null check (location_type in ('pickup', 'dropoff')),
+  display_name text not null,
+  normalized_name text not null,
+  google_place_id text,
+  formatted_address text not null,
+  latitude numeric,
+  longitude numeric,
+  use_count bigint not null default 1 check (use_count >= 0),
+  last_used_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  created_by uuid references auth.users(id) on delete set null,
+  constraint saved_locations_verified_location_check check (
+    nullif(btrim(formatted_address), '') is not null
+  ),
+  constraint saved_locations_normalized_name_unique unique (location_type, normalized_name)
+);
+
+create index if not exists saved_locations_rank_idx
+  on public.saved_locations (location_type, use_count desc, last_used_at desc);
+create index if not exists saved_locations_last_used_idx
+  on public.saved_locations (last_used_at desc);
+
+alter table public.saved_locations enable row level security;
+drop policy if exists "saved_locations_select_authenticated" on public.saved_locations;
+create policy "saved_locations_select_authenticated" on public.saved_locations
+for select to authenticated using (true);
+revoke insert, update, delete on public.saved_locations from anon, authenticated;
+grant select on public.saved_locations to authenticated;
+
+create or replace function public.remember_saved_location(
+  target_location_type text,
+  target_display_name text,
+  target_google_place_id text,
+  target_formatted_address text,
+  target_latitude numeric,
+  target_longitude numeric,
+  target_used_at timestamptz default now()
+)
+returns void language plpgsql security definer set search_path = public, pg_temp as $$
+declare normalized_display_name text;
+begin
+  normalized_display_name := public.normalize_saved_location_name(target_display_name);
+  if target_location_type not in ('pickup', 'dropoff')
+    or normalized_display_name = ''
+    or nullif(btrim(target_formatted_address), '') is null
+    or (nullif(btrim(target_google_place_id), '') is null and (target_latitude is null or target_longitude is null)) then
+    return;
+  end if;
+  insert into public.saved_locations (
+    location_type, display_name, normalized_name, google_place_id, formatted_address,
+    latitude, longitude, use_count, last_used_at, created_by
+  ) values (
+    target_location_type, btrim(target_display_name), normalized_display_name,
+    nullif(btrim(target_google_place_id), ''), btrim(target_formatted_address),
+    target_latitude, target_longitude, 1, coalesce(target_used_at, now()), auth.uid()
+  )
+  on conflict (location_type, normalized_name) do update set
+    display_name = excluded.display_name,
+    google_place_id = excluded.google_place_id,
+    formatted_address = excluded.formatted_address,
+    latitude = excluded.latitude,
+    longitude = excluded.longitude,
+    use_count = public.saved_locations.use_count + 1,
+    last_used_at = excluded.last_used_at,
+    updated_at = now();
+end;
+$$;
+revoke all on function public.remember_saved_location(text, text, text, text, numeric, numeric, timestamptz) from public;
+
+create or replace function public.remember_booking_diary_locations()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if tg_op = 'INSERT' then
+    perform public.remember_saved_location('pickup', new.pickup, new.pickup_place_id, new.pickup_address, new.pickup_lat, new.pickup_lng, coalesce(new.updated_at, now()));
+    perform public.remember_saved_location('dropoff', new.dropoff, new.dropoff_place_id, new.dropoff_address, new.dropoff_lat, new.dropoff_lng, coalesce(new.updated_at, now()));
+    return new;
+  end if;
+  if row(new.pickup, new.pickup_place_id, new.pickup_address, new.pickup_lat, new.pickup_lng)
+    is distinct from row(old.pickup, old.pickup_place_id, old.pickup_address, old.pickup_lat, old.pickup_lng) then
+    perform public.remember_saved_location('pickup', new.pickup, new.pickup_place_id, new.pickup_address, new.pickup_lat, new.pickup_lng, coalesce(new.updated_at, now()));
+  end if;
+  if row(new.dropoff, new.dropoff_place_id, new.dropoff_address, new.dropoff_lat, new.dropoff_lng)
+    is distinct from row(old.dropoff, old.dropoff_place_id, old.dropoff_address, old.dropoff_lat, old.dropoff_lng) then
+    perform public.remember_saved_location('dropoff', new.dropoff, new.dropoff_place_id, new.dropoff_address, new.dropoff_lat, new.dropoff_lng, coalesce(new.updated_at, now()));
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists remember_booking_diary_locations on public.booking_diary;
+create trigger remember_booking_diary_locations
+after insert or update of pickup, pickup_place_id, pickup_address, pickup_lat, pickup_lng,
+  dropoff, dropoff_place_id, dropoff_address, dropoff_lat, dropoff_lng
+on public.booking_diary for each row execute function public.remember_booking_diary_locations();
+
+alter table if exists public.trip_journeys
+  add column if not exists pickup_display_name text,
+  add column if not exists dropoff_display_name text,
+  add column if not exists pickup_place_id text,
+  add column if not exists dropoff_place_id text,
+  add column if not exists pickup_lat numeric,
+  add column if not exists pickup_lng numeric,
+  add column if not exists dropoff_lat numeric,
+  add column if not exists dropoff_lng numeric;
+
+alter table if exists public.trip_journeys
+  add column if not exists route_distance_meters numeric,
+  add column if not exists route_duration_seconds numeric,
+  add column if not exists route_static_duration_seconds numeric,
+  add column if not exists route_calculated_at timestamptz,
+  add column if not exists route_departure_time timestamptz,
+  add column if not exists route_preference text,
+  add column if not exists route_label text,
+  add column if not exists route_description text,
+  add column if not exists route_polyline text,
+  add column if not exists route_traffic_aware boolean,
+  add column if not exists route_source text,
+  add column if not exists route_fallback_info jsonb;
 
 do $$
 begin

@@ -38,6 +38,7 @@ import {
   fetchClientDeleteEligibility,
   fetchClients,
   fetchDrivers,
+  fetchSavedLocations,
   fetchTripJourneysByBookingIds,
   fetchVehicles,
   saveBookingDiaryEntry,
@@ -46,10 +47,16 @@ import {
 import { exportToXlsx } from "@/lib/export";
 import { fetchJson } from "@/lib/http";
 import { useLanguage } from "@/lib/language-provider";
+import type { TrafficAwareRouteEstimate } from "@/lib/route-planning";
+import {
+  findExactSavedLocation,
+  normalizeSavedLocationName,
+  rankSavedLocations
+} from "@/lib/saved-locations";
 import { supabase } from "@/lib/supabase";
 import { formatDate } from "@/lib/utils";
 import { LOCATION_SUGGESTIONS } from "@/src/data/locations";
-import type { BookingDiaryEntry, Client, Driver, TripJourney, TripJourneyStatus, Vehicle } from "@/types/database";
+import type { BookingDiaryEntry, Client, Driver, SavedLocation, SavedLocationType, TripJourney, TripJourneyStatus, Vehicle } from "@/types/database";
 
 const PAGE_SIZE = 50;
 
@@ -77,6 +84,17 @@ type BookingForm = {
   google_maps_route_url: string;
   distance_source: string;
   route_calculated_at: string;
+  route_distance_meters: string;
+  route_duration_seconds: string;
+  route_static_duration_seconds: string;
+  route_departure_time: string;
+  route_preference: string;
+  route_label: string;
+  route_description: string;
+  route_polyline: string;
+  route_traffic_aware: boolean | null;
+  route_source: string;
+  route_fallback_info: Record<string, unknown> | null;
   vehicle: string;
   driver: string;
   notes: string;
@@ -123,6 +141,17 @@ const emptyForm = (): BookingForm => ({
   google_maps_route_url: "",
   distance_source: "",
   route_calculated_at: "",
+  route_distance_meters: "",
+  route_duration_seconds: "",
+  route_static_duration_seconds: "",
+  route_departure_time: "",
+  route_preference: "",
+  route_label: "",
+  route_description: "",
+  route_polyline: "",
+  route_traffic_aware: null,
+  route_source: "",
+  route_fallback_info: null,
   vehicle: "",
   driver: "",
   notes: "",
@@ -252,7 +281,17 @@ const labels = {
     estimateHelper: "Booking estimate is pickup to drop-off only. Trip Journey can add depot start later.",
     estimatedDistance: "Estimated distance",
     estimatedTime: "Estimated time",
-    calculateDistance: "Calculate distance",
+    calculateDistance: "Calculate route",
+    refreshRoute: "Refresh route",
+    fastestRoute: "Fastest route",
+    trafficAwareEstimate: "Traffic-aware estimate",
+    googleRecommendedRoute: "Google recommended route",
+    trafficDataUnavailable: "Traffic data unavailable",
+    currentTrafficEstimate: "Current-traffic estimate",
+    plannedTrafficEstimate: "Planned departure traffic",
+    routeNeedsRefresh: "Route inputs changed. Refresh the traffic-aware estimate.",
+    standardDriveWarning: "Standard driving route; truck restrictions are not checked.",
+    calculated: "Calculated",
     calculatingDistance: "Calculating...",
     openGoogleMaps: "Open in Google Maps",
     noEstimate: "No estimate",
@@ -354,8 +393,17 @@ const labelExtras = {
 };
 
 const locationLabelExtras = {
-  en: {},
+  en: {
+    savedLocationApplied: "Saved location applied",
+    previouslyUsedLocation: "Previously used location",
+    changeGoogleMapsLocation: "Change Google Maps location",
+    noSavedLocationFound: "No saved location found"
+  },
   th: {
+    savedLocationApplied: "ใช้สถานที่ที่บันทึกไว้แล้ว",
+    previouslyUsedLocation: "สถานที่ที่เคยใช้",
+    changeGoogleMapsLocation: "เปลี่ยนตำแหน่ง Google Maps",
+    noSavedLocationFound: "ไม่พบสถานที่ที่บันทึกไว้",
     pickupNameShownInDiary: "ชื่อจุดรับที่แสดงในสมุดงาน",
     pickupGoogleMapsLocation: "ตำแหน่ง Google Maps จุดรับ",
     dropoffNameShownInDiary: "ชื่อจุดส่งที่แสดงในสมุดงาน",
@@ -428,10 +476,43 @@ function mapBookingToForm(booking: BookingDiaryEntry): BookingForm {
     google_maps_route_url: booking.google_maps_route_url ?? "",
     distance_source: booking.distance_source ?? "",
     route_calculated_at: booking.route_calculated_at ?? "",
+    route_distance_meters: booking.route_distance_meters?.toString() ?? "",
+    route_duration_seconds: booking.route_duration_seconds?.toString() ?? "",
+    route_static_duration_seconds: booking.route_static_duration_seconds?.toString() ?? "",
+    route_departure_time: booking.route_departure_time ?? "",
+    route_preference: booking.route_preference ?? "",
+    route_label: booking.route_label ?? "",
+    route_description: booking.route_description ?? "",
+    route_polyline: booking.route_polyline ?? "",
+    route_traffic_aware: booking.route_traffic_aware ?? null,
+    route_source: booking.route_source ?? "",
+    route_fallback_info: booking.route_fallback_info ?? null,
     vehicle: booking.vehicle ?? "",
     driver: booking.driver ?? "",
     notes: booking.notes ?? "",
     job_order_number: booking.job_order_number ?? ""
+  };
+}
+
+function clearBookingRouteSnapshot(form: BookingForm): BookingForm {
+  return {
+    ...form,
+    estimated_distance_km: "",
+    estimated_duration_minutes: "",
+    google_maps_route_url: "",
+    distance_source: "",
+    route_calculated_at: "",
+    route_distance_meters: "",
+    route_duration_seconds: "",
+    route_static_duration_seconds: "",
+    route_departure_time: "",
+    route_preference: "",
+    route_label: "",
+    route_description: "",
+    route_polyline: "",
+    route_traffic_aware: null,
+    route_source: "",
+    route_fallback_info: null
   };
 }
 
@@ -713,12 +794,59 @@ function highlightMatch(option: string, query: string) {
   );
 }
 
+type LocationNameOption = {
+  value: string;
+  savedLocation: SavedLocation | null;
+};
+
+const routeLabelExtras = {
+  en: {},
+  th: {
+    calculateDistance: "คำนวณเส้นทาง",
+    refreshRoute: "รีเฟรชเส้นทาง",
+    fastestRoute: "เส้นทางที่เร็วที่สุด",
+    trafficAwareEstimate: "ประมาณการตามสภาพการจราจร",
+    googleRecommendedRoute: "เส้นทางที่ Google แนะนำ",
+    trafficDataUnavailable: "ไม่มีข้อมูลการจราจร",
+    currentTrafficEstimate: "ประมาณการจากการจราจรปัจจุบัน",
+    plannedTrafficEstimate: "การจราจรตามเวลาออกเดินทาง",
+    routeNeedsRefresh: "ข้อมูลเส้นทางเปลี่ยนแล้ว โปรดรีเฟรชประมาณการการจราจร",
+    standardDriveWarning: "เส้นทางขับรถมาตรฐาน ไม่ได้ตรวจข้อจำกัดรถบรรทุก",
+    calculated: "คำนวณแล้ว"
+  }
+};
+
+function buildLocationNameOptions(
+  savedLocations: SavedLocation[],
+  locationType: SavedLocationType,
+  fallbackNames: Array<string | null | undefined>
+) {
+  const seen = new Set<string>();
+  const options: LocationNameOption[] = [];
+
+  rankSavedLocations(savedLocations, locationType).forEach((savedLocation) => {
+    seen.add(savedLocation.normalized_name);
+    options.push({ value: savedLocation.display_name, savedLocation });
+  });
+
+  uniqueSorted(fallbackNames).forEach((value) => {
+    const normalizedName = normalizeSavedLocationName(value);
+    if (!normalizedName || seen.has(normalizedName)) return;
+    seen.add(normalizedName);
+    options.push({ value, savedLocation: null });
+  });
+
+  return options;
+}
+
 type LocationComboboxProps = {
   value: string;
   onChange: (value: string) => void;
-  options: string[];
+  onSelectOption?: (option: LocationNameOption) => void;
+  options: LocationNameOption[];
   placeholder: string;
   className: string;
+  savedLabel: string;
   inputRef?: RefObject<HTMLInputElement | null>;
   required?: boolean;
 };
@@ -726,9 +854,11 @@ type LocationComboboxProps = {
 function LocationCombobox({
   value,
   onChange,
+  onSelectOption,
   options,
   placeholder,
   className,
+  savedLabel,
   inputRef,
   required = false
 }: LocationComboboxProps) {
@@ -740,12 +870,13 @@ function LocationCombobox({
   const matches = useMemo(() => {
     if (!normalizedQuery) return options.slice(0, 8);
     return options
-      .filter((option) => option.toLocaleLowerCase().includes(normalizedQuery))
+      .filter((option) => option.value.toLocaleLowerCase().includes(normalizedQuery))
       .slice(0, 10);
   }, [normalizedQuery, options]);
 
-  const selectOption = (option: string) => {
-    onChange(option);
+  const selectOption = (option: LocationNameOption) => {
+    onChange(option.value);
+    onSelectOption?.(option);
     setOpen(false);
     setActiveIndex(0);
   };
@@ -800,7 +931,7 @@ function LocationCombobox({
         >
           {matches.map((option, index) => (
             <button
-              key={option}
+              key={`${option.savedLocation?.location_type ?? "other"}:${normalizeSavedLocationName(option.value)}`}
               id={`${listboxId}-${index}`}
               type="button"
               role="option"
@@ -809,11 +940,16 @@ function LocationCombobox({
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => selectOption(option)}
               className={clsx(
-                "flex w-full items-center rounded-[0.65rem] px-3 py-2 text-left text-[13px] font-medium text-slate-700 transition",
+                "flex w-full items-center justify-between gap-3 rounded-[0.65rem] px-3 py-2 text-left text-[13px] font-medium text-slate-700 transition",
                 activeIndex === index ? "bg-slate-100 text-slate-950" : "hover:bg-slate-50"
               )}
             >
-              <span className="truncate">{highlightMatch(option, value)}</span>
+              <span className="truncate">{highlightMatch(option.value, value)}</span>
+              {option.savedLocation ? (
+                <span className="shrink-0 rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-bold text-brand-700">
+                  {savedLabel}
+                </span>
+              ) : null}
             </button>
           ))}
         </div>
@@ -825,10 +961,22 @@ function LocationCombobox({
 export default function BookingDiaryPage() {
   const { language } = useLanguage();
   const languageKey = language === "th" ? "th" : "en";
-  const copy = { ...labels.en, ...labels[languageKey], ...labelExtras[languageKey], ...locationLabelExtras[languageKey], ...jobOrderLabelExtras[languageKey], ...clientLabelExtras[languageKey] };
+  const copy = useMemo(
+    () => ({
+      ...labels.en,
+      ...labels[languageKey],
+      ...labelExtras[languageKey],
+      ...locationLabelExtras[languageKey],
+      ...routeLabelExtras[languageKey],
+      ...jobOrderLabelExtras[languageKey],
+      ...clientLabelExtras[languageKey]
+    }),
+    [languageKey]
+  );
   const firstInputRef = useRef<HTMLInputElement | null>(null);
   const [bookings, setBookings] = useState<BookingDiaryEntry[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [savedLocations, setSavedLocations] = useState<SavedLocation[]>([]);
   const [tripsByBookingId, setTripsByBookingId] = useState<Map<string, TripJourney>>(() => new Map());
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -856,6 +1004,7 @@ export default function BookingDiaryPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [routeCalculating, setRouteCalculating] = useState(false);
   const [routeMessage, setRouteMessage] = useState<string | null>(null);
+  const [savedLocationApplied, setSavedLocationApplied] = useState({ pickup: false, dropoff: false });
   const [googleMapsStatus, setGoogleMapsStatus] = useState<GoogleMapsHealthStatus | null>(null);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [clientManagerOpen, setClientManagerOpen] = useState(false);
@@ -865,6 +1014,11 @@ export default function BookingDiaryPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [expandedDateKeys, setExpandedDateKeys] = useState<Set<string>>(() => new Set([todayKey()]));
   const [toggledDateKeys, setToggledDateKeys] = useState<Set<string>>(() => new Set());
+  const autoAppliedLocationRef = useRef<{ pickup: string | null; dropoff: string | null }>({ pickup: null, dropoff: null });
+  const initialLocationNameRef = useRef({ pickup: "", dropoff: "" });
+  const savedLookupRequestRef = useRef({ pickup: 0, dropoff: 0 });
+  const manualLocationEditRef = useRef({ pickup: false, dropoff: false });
+  const automaticRouteInputRef = useRef<string | null>(null);
 
   const load = useCallback(async (blocking = false) => {
     try {
@@ -874,9 +1028,10 @@ export default function BookingDiaryPage() {
         setRefreshing(true);
       }
       setError(null);
-      const [bookingRows, clientRows, driverRows, vehicleRows] = await Promise.all([
+      const [bookingRows, clientRows, savedLocationRows, driverRows, vehicleRows] = await Promise.all([
         fetchBookingDiaryEntries(),
         fetchClients(),
+        fetchSavedLocations(),
         fetchDrivers(),
         fetchVehicles()
       ]);
@@ -886,6 +1041,7 @@ export default function BookingDiaryPage() {
       });
       setBookings(bookingRows);
       setClients(clientRows);
+      setSavedLocations(savedLocationRows);
       setTripsByBookingId(new Map(tripRows.filter((trip) => trip.booking_diary_id).map((trip) => [String(trip.booking_diary_id), trip])));
       setDrivers(driverRows);
       setVehicles(vehicleRows);
@@ -930,6 +1086,9 @@ export default function BookingDiaryPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "clients" }, () => {
         void load(false);
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "saved_locations" }, () => {
+        void load(false);
+      })
       .subscribe();
 
     return () => {
@@ -966,10 +1125,122 @@ export default function BookingDiaryPage() {
     () => [...clients].sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name)),
     [clients]
   );
-  const locationOptions = useMemo(
-    () => uniqueSorted([...LOCATION_SUGGESTIONS, ...bookings.map(getBookingPickupDisplay), ...bookings.map(getBookingDropoffDisplay)]),
-    [bookings]
+  const pickupLocationOptions = useMemo(
+    () => buildLocationNameOptions(
+      savedLocations,
+      "pickup",
+      [...LOCATION_SUGGESTIONS, ...bookings.map(getBookingPickupDisplay)]
+    ),
+    [bookings, savedLocations]
   );
+  const dropoffLocationOptions = useMemo(
+    () => buildLocationNameOptions(
+      savedLocations,
+      "dropoff",
+      [...LOCATION_SUGGESTIONS, ...bookings.map(getBookingDropoffDisplay)]
+    ),
+    [bookings, savedLocations]
+  );
+
+  const applySavedLocation = useCallback((locationType: SavedLocationType, location: SavedLocation) => {
+    savedLookupRequestRef.current[locationType] += 1;
+    autoAppliedLocationRef.current[locationType] = location.normalized_name;
+    manualLocationEditRef.current[locationType] = false;
+    setRouteMessage(copy.routeNeedsRefresh);
+    setSavedLocationApplied((current) => ({ ...current, [locationType]: true }));
+    setForm((current) => {
+      const cleared = clearBookingRouteSnapshot(current);
+      return locationType === "pickup"
+      ? {
+          ...cleared,
+          pickup: location.display_name,
+          pickup_place_id: location.google_place_id ?? "",
+          pickup_address: location.formatted_address,
+          pickup_lat: location.latitude?.toString() ?? "",
+          pickup_lng: location.longitude?.toString() ?? ""
+        }
+      : {
+          ...cleared,
+          dropoff: location.display_name,
+          dropoff_place_id: location.google_place_id ?? "",
+          dropoff_address: location.formatted_address,
+          dropoff_lat: location.latitude?.toString() ?? "",
+          dropoff_lng: location.longitude?.toString() ?? ""
+        };
+    });
+  }, [copy.routeNeedsRefresh]);
+
+  useEffect(() => {
+    if (!modalOpen) return;
+    const requestId = savedLookupRequestRef.current.pickup + 1;
+    savedLookupRequestRef.current.pickup = requestId;
+    const timeoutId = window.setTimeout(() => {
+      if (savedLookupRequestRef.current.pickup !== requestId) return;
+      const match = findExactSavedLocation(savedLocations, "pickup", form.pickup);
+      if (!match) {
+        setSavedLocationApplied((current) => ({ ...current, pickup: false }));
+        return;
+      }
+      if (
+        normalizeSavedLocationName(form.pickup) === initialLocationNameRef.current.pickup &&
+        autoAppliedLocationRef.current.pickup === null
+      ) return;
+      if (manualLocationEditRef.current.pickup) return;
+      if (
+        form.pickup_place_id === (match.google_place_id ?? "") &&
+        form.pickup_address === match.formatted_address &&
+        form.pickup_lat === (match.latitude?.toString() ?? "") &&
+        form.pickup_lng === (match.longitude?.toString() ?? "")
+      ) return;
+      applySavedLocation("pickup", match);
+    }, 160);
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    applySavedLocation,
+    form.pickup,
+    form.pickup_address,
+    form.pickup_lat,
+    form.pickup_lng,
+    form.pickup_place_id,
+    modalOpen,
+    savedLocations
+  ]);
+
+  useEffect(() => {
+    if (!modalOpen) return;
+    const requestId = savedLookupRequestRef.current.dropoff + 1;
+    savedLookupRequestRef.current.dropoff = requestId;
+    const timeoutId = window.setTimeout(() => {
+      if (savedLookupRequestRef.current.dropoff !== requestId) return;
+      const match = findExactSavedLocation(savedLocations, "dropoff", form.dropoff);
+      if (!match) {
+        setSavedLocationApplied((current) => ({ ...current, dropoff: false }));
+        return;
+      }
+      if (
+        normalizeSavedLocationName(form.dropoff) === initialLocationNameRef.current.dropoff &&
+        autoAppliedLocationRef.current.dropoff === null
+      ) return;
+      if (manualLocationEditRef.current.dropoff) return;
+      if (
+        form.dropoff_place_id === (match.google_place_id ?? "") &&
+        form.dropoff_address === match.formatted_address &&
+        form.dropoff_lat === (match.latitude?.toString() ?? "") &&
+        form.dropoff_lng === (match.longitude?.toString() ?? "")
+      ) return;
+      applySavedLocation("dropoff", match);
+    }, 160);
+    return () => window.clearTimeout(timeoutId);
+  }, [
+    applySavedLocation,
+    form.dropoff,
+    form.dropoff_address,
+    form.dropoff_lat,
+    form.dropoff_lng,
+    form.dropoff_place_id,
+    modalOpen,
+    savedLocations
+  ]);
 
   const filteredBookings = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -1205,7 +1476,21 @@ export default function BookingDiaryPage() {
     setCurrentPage(1);
   };
 
+  const resetSavedLocationTracking = (pickup = "", dropoff = "") => {
+    savedLookupRequestRef.current.pickup += 1;
+    savedLookupRequestRef.current.dropoff += 1;
+    autoAppliedLocationRef.current = { pickup: null, dropoff: null };
+    initialLocationNameRef.current = {
+      pickup: normalizeSavedLocationName(pickup),
+      dropoff: normalizeSavedLocationName(dropoff)
+    };
+    manualLocationEditRef.current = { pickup: false, dropoff: false };
+    automaticRouteInputRef.current = null;
+    setSavedLocationApplied({ pickup: false, dropoff: false });
+  };
+
   const openCreate = () => {
+    resetSavedLocationTracking();
     setForm(emptyForm());
     setEditingBookingId(null);
     setDuplicatingBooking(false);
@@ -1221,6 +1506,7 @@ export default function BookingDiaryPage() {
       console.error("Booking diary edit error: missing booking id", booking);
       return;
     }
+    resetSavedLocationTracking(getBookingPickupDisplay(booking), getBookingDropoffDisplay(booking));
     setForm(mapBookingToForm(booking));
     setEditingBookingId(booking.id);
     setDuplicatingBooking(false);
@@ -1231,6 +1517,7 @@ export default function BookingDiaryPage() {
   };
 
   const openDuplicate = (booking: BookingDiaryEntry) => {
+    resetSavedLocationTracking(getBookingPickupDisplay(booking), getBookingDropoffDisplay(booking));
     setForm({ ...mapBookingToForm(booking), id: "", job_order_number: "" });
     setEditingBookingId(null);
     setDuplicatingBooking(true);
@@ -1330,6 +1617,17 @@ export default function BookingDiaryPage() {
         google_maps_route_url: form.google_maps_route_url,
         distance_source: form.distance_source,
         route_calculated_at: form.route_calculated_at,
+        route_distance_meters: parseNumericInput(form.route_distance_meters),
+        route_duration_seconds: parseNumericInput(form.route_duration_seconds),
+        route_static_duration_seconds: parseNumericInput(form.route_static_duration_seconds),
+        route_departure_time: form.route_departure_time,
+        route_preference: form.route_preference,
+        route_label: form.route_label,
+        route_description: form.route_description,
+        route_polyline: form.route_polyline,
+        route_traffic_aware: form.route_traffic_aware,
+        route_source: form.route_source,
+        route_fallback_info: form.route_fallback_info,
         vehicle: form.vehicle,
         driver: form.driver,
         job_order_number: form.job_order_number,
@@ -1352,7 +1650,11 @@ export default function BookingDiaryPage() {
   };
 
   const setField = (field: keyof BookingForm, value: string) => {
-    setForm((current) => ({ ...current, [field]: value }));
+    setForm((current) => {
+      const routeInputChanged = field === "booking_date" || field === "pickup_time";
+      if (routeInputChanged) setRouteMessage(copy.routeNeedsRefresh);
+      return { ...(routeInputChanged ? clearBookingRouteSnapshot(current) : current), [field]: value };
+    });
   };
 
   const handleCreateClient = async (name: string) => {
@@ -1443,6 +1745,10 @@ export default function BookingDiaryPage() {
   }, []);
 
   const setPickupText = (value: string) => {
+    savedLookupRequestRef.current.pickup += 1;
+    if (normalizeSavedLocationName(value) !== autoAppliedLocationRef.current.pickup) {
+      setSavedLocationApplied((current) => ({ ...current, pickup: false }));
+    }
     setRouteMessage(null);
     setForm((current) => ({
       ...current,
@@ -1451,9 +1757,13 @@ export default function BookingDiaryPage() {
   };
 
   const setPickupGoogleText = (value: string) => {
-    setRouteMessage(null);
+    savedLookupRequestRef.current.pickup += 1;
+    autoAppliedLocationRef.current.pickup = null;
+    manualLocationEditRef.current.pickup = true;
+    setSavedLocationApplied((current) => ({ ...current, pickup: false }));
+    setRouteMessage(copy.routeNeedsRefresh);
     setForm((current) => ({
-      ...current,
+      ...clearBookingRouteSnapshot(current),
       pickup_place_id: "",
       pickup_address: value,
       pickup_lat: "",
@@ -1462,6 +1772,10 @@ export default function BookingDiaryPage() {
   };
 
   const setDropoffText = (value: string) => {
+    savedLookupRequestRef.current.dropoff += 1;
+    if (normalizeSavedLocationName(value) !== autoAppliedLocationRef.current.dropoff) {
+      setSavedLocationApplied((current) => ({ ...current, dropoff: false }));
+    }
     setRouteMessage(null);
     setForm((current) => ({
       ...current,
@@ -1470,9 +1784,13 @@ export default function BookingDiaryPage() {
   };
 
   const setDropoffGoogleText = (value: string) => {
-    setRouteMessage(null);
+    savedLookupRequestRef.current.dropoff += 1;
+    autoAppliedLocationRef.current.dropoff = null;
+    manualLocationEditRef.current.dropoff = true;
+    setSavedLocationApplied((current) => ({ ...current, dropoff: false }));
+    setRouteMessage(copy.routeNeedsRefresh);
     setForm((current) => ({
-      ...current,
+      ...clearBookingRouteSnapshot(current),
       dropoff_place_id: "",
       dropoff_address: value,
       dropoff_lat: "",
@@ -1481,9 +1799,13 @@ export default function BookingDiaryPage() {
   };
 
   const setPickupLocation = (location: StructuredLocation) => {
-    setRouteMessage(null);
+    savedLookupRequestRef.current.pickup += 1;
+    autoAppliedLocationRef.current.pickup = null;
+    manualLocationEditRef.current.pickup = true;
+    setSavedLocationApplied((current) => ({ ...current, pickup: false }));
+    setRouteMessage(copy.routeNeedsRefresh);
     setForm((current) => ({
-      ...current,
+      ...clearBookingRouteSnapshot(current),
       pickup: current.pickup.trim() || getShortLocationName(location.label || location.formatted_address),
       pickup_place_id: location.place_id ?? "",
       pickup_address: location.formatted_address || location.label,
@@ -1493,9 +1815,13 @@ export default function BookingDiaryPage() {
   };
 
   const setDropoffLocation = (location: StructuredLocation) => {
-    setRouteMessage(null);
+    savedLookupRequestRef.current.dropoff += 1;
+    autoAppliedLocationRef.current.dropoff = null;
+    manualLocationEditRef.current.dropoff = true;
+    setSavedLocationApplied((current) => ({ ...current, dropoff: false }));
+    setRouteMessage(copy.routeNeedsRefresh);
     setForm((current) => ({
-      ...current,
+      ...clearBookingRouteSnapshot(current),
       dropoff: current.dropoff.trim() || getShortLocationName(location.label || location.formatted_address),
       dropoff_place_id: location.place_id ?? "",
       dropoff_address: location.formatted_address || location.label,
@@ -1520,16 +1846,19 @@ export default function BookingDiaryPage() {
           : "");
 
       return {
-        ...current,
+        ...clearBookingRouteSnapshot(current),
         estimated_distance_km: value,
-        distance_source: numericDistance != null && numericDistance > 0 ? "manual" : current.distance_source,
+        distance_source: numericDistance != null && numericDistance > 0 ? "manual" : "",
         google_maps_route_url: routeUrl,
-        route_calculated_at: numericDistance != null && numericDistance > 0 ? new Date().toISOString() : current.route_calculated_at
+        route_calculated_at: numericDistance != null && numericDistance > 0 ? new Date().toISOString() : "",
+        route_distance_meters: numericDistance != null && numericDistance > 0 ? String(numericDistance * 1000) : "",
+        route_traffic_aware: false,
+        route_source: numericDistance != null && numericDistance > 0 ? "manual" : ""
       };
     });
   };
 
-  const calculateRouteDistance = async () => {
+  const calculateRouteDistance = useCallback(async () => {
     const pickup = getRouteInput(form, "pickup");
     const dropoff = getRouteInput(form, "dropoff");
 
@@ -1541,11 +1870,7 @@ export default function BookingDiaryPage() {
     try {
       setRouteCalculating(true);
       setRouteMessage(null);
-      const result = await fetchJson<{
-        distanceKm?: number;
-        durationSeconds?: number | null;
-        provider?: string;
-      }>("/api/distance-estimate", {
+      const result = await fetchJson<TrafficAwareRouteEstimate>("/api/distance-estimate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1562,17 +1887,21 @@ export default function BookingDiaryPage() {
             place_id: form.dropoff_place_id || null,
             lat: parseNumericInput(form.dropoff_lat),
             lng: parseNumericInput(form.dropoff_lng)
-          }
+          },
+          bookingDate: form.booking_date,
+          pickupTime: form.pickup_time
         })
       });
 
-      const distanceKm = Number(result.data?.distanceKm);
-      if (!Number.isFinite(distanceKm) || distanceKm <= 0) {
+      const estimate = result.data;
+      const distanceMeters = Number(estimate?.distanceMeters);
+      if (!estimate || !Number.isFinite(distanceMeters) || distanceMeters <= 0) {
         throw new Error(copy.googleMapsUnavailable);
       }
 
-      const durationMinutes = result.data?.durationSeconds
-        ? Math.round(result.data.durationSeconds / 60)
+      const distanceKm = distanceMeters / 1000;
+      const durationMinutes = estimate.durationSeconds
+        ? Math.round(estimate.durationSeconds / 60)
         : null;
       const routeUrl = buildGoogleMapsRouteUrl({
         origin: pickup,
@@ -1589,12 +1918,23 @@ export default function BookingDiaryPage() {
         estimated_duration_minutes: durationMinutes != null ? String(durationMinutes) : current.estimated_duration_minutes,
         google_maps_route_url: routeUrl,
         distance_source: "google_maps",
-        route_calculated_at: new Date().toISOString()
+        route_calculated_at: estimate.calculatedAt,
+        route_distance_meters: String(estimate.distanceMeters),
+        route_duration_seconds: estimate.durationSeconds?.toString() ?? "",
+        route_static_duration_seconds: estimate.staticDurationSeconds?.toString() ?? "",
+        route_departure_time: estimate.departureTime ?? "",
+        route_preference: estimate.routePreference,
+        route_label: estimate.routeLabel,
+        route_description: estimate.routeDescription ?? "",
+        route_polyline: estimate.encodedPolyline ?? "",
+        route_traffic_aware: estimate.trafficAware,
+        route_source: estimate.provider,
+        route_fallback_info: estimate.fallbackInfo
       }));
       setRouteMessage(
-        `Distance calculated: ${distanceKm.toFixed(1)} km${
+        `${copy.calculated}: ${distanceKm.toFixed(1)} km${
           durationMinutes != null ? ` / ${formatDurationMinutes(durationMinutes)}` : ""
-        }`
+        } · ${estimate.trafficAware ? copy.trafficAwareEstimate : copy.trafficDataUnavailable}`
       );
     } catch (err) {
       const message = err instanceof Error && err.message ? err.message : copy.googleMapsUnavailable;
@@ -1605,7 +1945,50 @@ export default function BookingDiaryPage() {
     } finally {
       setRouteCalculating(false);
     }
-  };
+  }, [copy, form]);
+
+  const automaticRouteInputKey = useMemo(
+    () => JSON.stringify([
+      form.pickup_place_id,
+      form.pickup_address,
+      form.pickup_lat,
+      form.pickup_lng,
+      form.dropoff_place_id,
+      form.dropoff_address,
+      form.dropoff_lat,
+      form.dropoff_lng,
+      form.booking_date,
+      form.pickup_time
+    ]),
+    [
+      form.booking_date,
+      form.dropoff_address,
+      form.dropoff_lat,
+      form.dropoff_lng,
+      form.dropoff_place_id,
+      form.pickup_address,
+      form.pickup_lat,
+      form.pickup_lng,
+      form.pickup_place_id,
+      form.pickup_time
+    ]
+  );
+
+  useEffect(() => {
+    if (!modalOpen) return;
+    if (automaticRouteInputRef.current === null) {
+      automaticRouteInputRef.current = automaticRouteInputKey;
+      return;
+    }
+    if (automaticRouteInputRef.current === automaticRouteInputKey) return;
+    automaticRouteInputRef.current = automaticRouteInputKey;
+    if (!getRouteInput(form, "pickup") || !getRouteInput(form, "dropoff")) return;
+
+    const timeoutId = window.setTimeout(() => {
+      void calculateRouteDistance();
+    }, 900);
+    return () => window.clearTimeout(timeoutId);
+  }, [automaticRouteInputKey, calculateRouteDistance, form, modalOpen]);
 
   const confirmDelete = async () => {
     if (!deleteTarget) {
@@ -2458,11 +2841,19 @@ export default function BookingDiaryPage() {
                         required
                         value={form.pickup}
                         onChange={setPickupText}
-                        options={locationOptions}
+                        onSelectOption={(option) => {
+                          if (option.savedLocation) applySavedLocation("pickup", option.savedLocation);
+                        }}
+                        options={pickupLocationOptions}
                         placeholder={copy.pickup}
                         className={inputClass}
+                        savedLabel={copy.previouslyUsedLocation}
                       />
-                      <p className="mt-2 text-sm text-slate-500">{copy.displayNameHelper}</p>
+                      <p className="mt-2 text-sm text-slate-500">
+                        {form.pickup.trim() && !findExactSavedLocation(savedLocations, "pickup", form.pickup)
+                          ? copy.noSavedLocationFound
+                          : copy.displayNameHelper}
+                      </p>
                     </div>
                     <LocationAutocomplete
                       label={copy.pickupGoogleMapsLocation}
@@ -2471,6 +2862,9 @@ export default function BookingDiaryPage() {
                       onManualInput={setPickupGoogleText}
                       onSelectLocation={setPickupLocation}
                       selectedLocation={getStructuredLocation(form, "pickup")}
+                      savedLocationApplied={savedLocationApplied.pickup}
+                      savedLocationAppliedText={copy.savedLocationApplied}
+                      changeLocationText={copy.changeGoogleMapsLocation}
                       language={language}
                       configMissingMessage={copy.googleMapsUnavailable}
                       helperText={copy.googleMapsLocationHelper}
@@ -2485,11 +2879,19 @@ export default function BookingDiaryPage() {
                         required
                         value={form.dropoff}
                         onChange={setDropoffText}
-                        options={locationOptions}
+                        onSelectOption={(option) => {
+                          if (option.savedLocation) applySavedLocation("dropoff", option.savedLocation);
+                        }}
+                        options={dropoffLocationOptions}
                         placeholder={copy.dropoff}
                         className={inputClass}
+                        savedLabel={copy.previouslyUsedLocation}
                       />
-                      <p className="mt-2 text-sm text-slate-500">{copy.displayNameHelper}</p>
+                      <p className="mt-2 text-sm text-slate-500">
+                        {form.dropoff.trim() && !findExactSavedLocation(savedLocations, "dropoff", form.dropoff)
+                          ? copy.noSavedLocationFound
+                          : copy.displayNameHelper}
+                      </p>
                     </div>
                     <LocationAutocomplete
                       label={copy.dropoffGoogleMapsLocation}
@@ -2498,6 +2900,9 @@ export default function BookingDiaryPage() {
                       onManualInput={setDropoffGoogleText}
                       onSelectLocation={setDropoffLocation}
                       selectedLocation={getStructuredLocation(form, "dropoff")}
+                      savedLocationApplied={savedLocationApplied.dropoff}
+                      savedLocationAppliedText={copy.savedLocationApplied}
+                      changeLocationText={copy.changeGoogleMapsLocation}
                       language={language}
                       configMissingMessage={copy.googleMapsUnavailable}
                       helperText={copy.googleMapsLocationHelper}
@@ -2509,7 +2914,7 @@ export default function BookingDiaryPage() {
                     <div className="lg:col-span-4 rounded-[1rem] border border-slate-200 bg-slate-50/80 p-3">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                         <label className="form-field flex-1">
-                          <span className="form-label">{copy.estimatedDistance}</span>
+                          <span className="form-label">{copy.fastestRoute}</span>
                           <input
                             inputMode="decimal"
                             value={form.estimated_distance_km}
@@ -2536,7 +2941,7 @@ export default function BookingDiaryPage() {
                             className="btn-secondary min-h-[42px] gap-2 rounded-[0.9rem] px-3 text-xs disabled:opacity-60"
                           >
                             <RefreshCw className={clsx("h-3.5 w-3.5", routeCalculating && "animate-spin")} />
-                            {routeCalculating ? copy.calculatingDistance : copy.calculateDistance}
+                            {routeCalculating ? copy.calculatingDistance : form.route_calculated_at ? copy.refreshRoute : copy.calculateDistance}
                           </button>
                           {currentRouteUrl ? (
                             <a
@@ -2554,6 +2959,20 @@ export default function BookingDiaryPage() {
                       <p className="mt-2 text-xs leading-5 text-slate-500">
                         {routeMessage ?? copy.estimateHelper}
                       </p>
+                      {form.route_calculated_at ? (
+                        <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold">
+                          <span className="rounded-full bg-emerald-50 px-2 py-1 text-emerald-700">
+                            {form.route_label === "DEFAULT_ROUTE" ? copy.googleRecommendedRoute : copy.fastestRoute}
+                          </span>
+                          <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-600">
+                            {form.route_departure_time ? copy.plannedTrafficEstimate : copy.currentTrafficEstimate}
+                          </span>
+                          {!form.route_traffic_aware ? (
+                            <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-800">{copy.trafficDataUnavailable}</span>
+                          ) : null}
+                        </div>
+                      ) : null}
+                      <p className="mt-2 text-xs text-slate-500">{copy.standardDriveWarning}</p>
                     </div>
                     <label className="form-field lg:col-span-1">
                       <span className="form-label">{copy.pickupTime}</span>
