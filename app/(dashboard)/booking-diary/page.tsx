@@ -811,8 +811,9 @@ const routeLabelExtras = {
     trafficDataUnavailable: "ไม่มีข้อมูลการจราจร",
     currentTrafficEstimate: "ประมาณการจากการจราจรปัจจุบัน",
     plannedTrafficEstimate: "การจราจรตามเวลาออกเดินทาง",
+    fallbackRouteUsed: "Google ไม่พบเส้นทางที่ต้องการ ระบบจึงเลือกเส้นทางที่ใช้งานได้ดีที่สุดแทน",
     routeNeedsRefresh: "ข้อมูลเส้นทางเปลี่ยนแล้ว โปรดรีเฟรชประมาณการการจราจร",
-    standardDriveWarning: "เส้นทางขับรถมาตรฐาน ไม่ได้ตรวจข้อจำกัดรถบรรทุก",
+    standardDriveWarning: "เส้นทางขับรถมาตรฐาน ยังไม่ได้ตรวจข้อจำกัดรถบรรทุก",
     calculated: "คำนวณแล้ว"
   }
 };

@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import {
   BarChart3,
   CalendarDays,
+  ClipboardCheck,
   ChevronRight,
   CircleHelp,
   Droplets,
@@ -101,6 +102,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       items: [
         { href: "/dashboard", label: t.nav.dashboard, icon: LayoutDashboard },
         { href: "/booking-diary", label: t.nav.bookingDiary, icon: CalendarDays },
+        { href: "/dispatch", label: t.nav.dispatch, icon: ClipboardCheck },
         { href: "/shipments", label: t.nav.shipments, icon: Package },
         { href: "/trip-journey", label: t.nav.tripJourney, icon: MapPinned }
       ]

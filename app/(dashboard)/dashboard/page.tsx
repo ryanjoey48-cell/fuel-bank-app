@@ -27,6 +27,7 @@ import {
   fetchVehicles,
   fetchWeeklyMileage
 } from "@/lib/data";
+import { buildDispatchRows, summarizeDispatchRows } from "@/lib/dispatch";
 import { useLanguage } from "@/lib/language-provider";
 import { buildOilChangeAlertRows, type OilChangeAlertRow } from "@/lib/operations";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/utils";
@@ -290,6 +291,8 @@ export default function DashboardPage() {
     allIssues: language === "th" ? "ดูรายการทั้งหมด" : "View all issues",
     currentMonth: language === "th" ? "เดือนปัจจุบัน" : "Current month",
     dateRange: language === "th" ? "ช่วงวันที่" : "Date range",
+    dispatchToday: language === "th" ? "งานจัดส่งวันนี้" : "Today's Dispatch",
+    dispatchTodayDescription: language === "th" ? "ภาพรวมความพร้อมงานจองและทริปสำหรับวันนี้" : "Readiness snapshot for today's bookings and trips.",
     dueSoon: language === "th" ? "ใกล้ครบกำหนด" : "Due Soon",
     fuelEntries: language === "th" ? "รายการน้ำมัน" : "fuel entries",
     fuelLogsNotChecked: language === "th" ? "บันทึกน้ำมันยังไม่ได้ตรวจสอบ" : "Fuel logs not checked",
@@ -337,6 +340,7 @@ export default function DashboardPage() {
     tripsWaitingForReviewDetail: language === "th" ? "ทริปที่เสร็จแล้วแต่ยังต้องยืนยัน เช่น คนขับ รถ เส้นทาง หรือการตรวจจากผู้ดูแล" : "Trips have been completed but still need driver, vehicle, route, or admin confirmation.",
     tripsCompletedThisMonth: language === "th" ? "ทริปที่เสร็จเดือนนี้" : "Trips completed this month",
     viewFuelLogs: language === "th" ? "ดูบันทึกน้ำมัน" : "View Fuel Logs",
+    viewDispatch: language === "th" ? "ดูกระดานจัดส่งงาน" : "View Dispatch Board",
     viewLogs: language === "th" ? "ตรวจบันทึก" : "Review Logs",
     viewTripJourney: language === "th" ? "ดู Trip Journey" : "View Trip Journey",
     viewVehicles: language === "th" ? "ดูรถ" : "View Vehicles"
@@ -413,6 +417,23 @@ export default function DashboardPage() {
   const monthlyTrips = useMemo(
     () => tripJourneys.filter((trip) => isInRange(trip.trip_date, monthRange.startDate, monthRange.endDate)),
     [monthRange.endDate, monthRange.startDate, tripJourneys]
+  );
+  const todayKey = getLocalDateKey(new Date());
+  const todaysBookings = useMemo(
+    () => bookings.filter((booking) => booking.booking_date === todayKey),
+    [bookings, todayKey]
+  );
+  const todaysTrips = useMemo(
+    () => tripJourneys.filter((trip) => trip.trip_date === todayKey || trip.date === todayKey),
+    [todayKey, tripJourneys]
+  );
+  const dispatchTodayRows = useMemo(
+    () => buildDispatchRows({ bookings: todaysBookings, trips: todaysTrips, drivers, vehicles }),
+    [drivers, todaysBookings, todaysTrips, vehicles]
+  );
+  const dispatchTodaySummary = useMemo(
+    () => summarizeDispatchRows(dispatchTodayRows),
+    [dispatchTodayRows]
   );
   const vehiclesWithOilBaselines = useMemo(
     () => applyOilBaselinesLikeOilPage(vehicles, oilChangeBaselines),
@@ -711,6 +732,32 @@ export default function DashboardPage() {
                   </a>
                 ))}
               </div>
+            </div>
+          </section>
+
+          <section className="mt-5 surface-card p-4 sm:p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 className="section-title">{copy.dispatchToday}</h3>
+                <p className="section-subtitle">{copy.dispatchTodayDescription}</p>
+              </div>
+              <a href="/dispatch" className="btn-primary min-h-9 px-3 py-1.5 text-xs">
+                {opsCopy.viewDispatch}
+              </a>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              {[
+                [language === "th" ? "งานวันนี้" : "Jobs today", dispatchTodaySummary.totalJobs],
+                [language === "th" ? "พร้อม" : "Ready", dispatchTodaySummary.ready],
+                [language === "th" ? "ยังไม่มอบหมาย" : "Unassigned", dispatchTodaySummary.unassigned],
+                [language === "th" ? "งานชนกัน" : "Potential conflicts", dispatchTodaySummary.potentialConflicts],
+                [language === "th" ? "ขาด Trip Journey" : "Missing Trip Journey", dispatchTodaySummary.missingTrip]
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-lg border border-slate-200 bg-white px-3 py-3">
+                  <p className="text-xs font-semibold text-slate-500">{label}</p>
+                  <p className="mt-1 text-xl font-bold text-slate-950">{formatNumber(Number(value), language)}</p>
+                </div>
+              ))}
             </div>
           </section>
 

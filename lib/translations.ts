@@ -38,6 +38,7 @@ export const translations = {
     nav: {
       dashboard: "Dashboard",
       bookingDiary: "Booking Diary",
+      dispatch: "Dispatch Board",
       shipments: "Shipments",
       tripJourney: "Trip Journey",
       drivers: "Drivers",
@@ -1007,6 +1008,7 @@ export const translations = {
     nav: {
       dashboard: "แดชบอร์ด",
       bookingDiary: "สมุดจองงาน",
+      dispatch: "กระดานจัดส่งงาน",
       shipments: "งานขนส่ง",
       tripJourney: "เส้นทางการเดินทาง",
       drivers: "คนขับ",
