@@ -7,7 +7,7 @@ import { usePathname } from "next/navigation";
 import { AccountMenu } from "@/components/account-menu";
 import { useLanguage } from "@/lib/language-provider";
 
-type PageKey = "dashboard" | "bookingDiary" | "drivers" | "fuelLogs" | "fuelSpendReport" | "shipments" | "transfers" | "tripJourney" | "weeklyMileage";
+type PageKey = "dashboard" | "bookingDiary" | "drivers" | "fuelLogs" | "fuelSpendReport" | "shipments" | "tripJourney" | "weeklyMileage";
 
 const PAGE_KEY_BY_PATH: Record<string, PageKey> = {
   "/booking-diary": "bookingDiary",
@@ -16,7 +16,6 @@ const PAGE_KEY_BY_PATH: Record<string, PageKey> = {
   "/fuel-logs": "fuelLogs",
   "/fuel-spend-report": "fuelSpendReport",
   "/shipments": "shipments",
-  "/transfers": "transfers",
   "/trip-journey": "tripJourney",
   "/weekly-mileage": "weeklyMileage"
 };

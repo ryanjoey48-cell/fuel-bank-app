@@ -259,6 +259,7 @@ const tripJourneyCopy = {
     trafficDataUnavailable: "Traffic data unavailable",
     currentTrafficEstimate: "Current-traffic estimate",
     plannedTrafficEstimate: "Planned departure traffic",
+    fallbackRouteUsed: "Google's available route was used because no preferred practical route was returned.",
     routeNeedsRefresh: "Route inputs changed. Refresh the traffic-aware estimate.",
     standardDriveWarning: "Standard driving route; truck restrictions are not checked.",
     calculated: "Calculated",
@@ -2794,6 +2795,20 @@ export default function TripJourneyPage() {
             }
           : current
       );
+      const routeStatusMessage = estimate.fallbackRouteUsed
+        ? copy.fallbackRouteUsed
+        : estimate.trafficAware
+          ? copy.trafficAwareEstimate
+          : copy.trafficDataUnavailable;
+      if (estimate.fallbackRouteUsed) {
+        setDistanceMessage(
+          `${copy.calculated}: ${distanceKm.toFixed(1)} km${durationMinutes != null ? ` / ${durationMinutes} min` : ""} · ${
+            routeStatusMessage
+          }`
+        );
+        setDistanceDurationText(durationText);
+        return;
+      }
       setDistanceMessage(
         `${copy.calculated}: ${distanceKm.toFixed(1)} km${durationMinutes != null ? ` / ${durationMinutes} min` : ""} · ${
           estimate.trafficAware ? copy.trafficAwareEstimate : copy.trafficDataUnavailable

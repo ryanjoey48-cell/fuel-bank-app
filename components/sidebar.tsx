@@ -3,7 +3,6 @@
 import clsx from "clsx";
 import { useEffect, useState } from "react";
 import {
-  ArrowRightLeft,
   BarChart3,
   CalendarDays,
   ChevronRight,
@@ -110,8 +109,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       label: "FUEL & MONEY",
       items: [
         { href: "/fuel-logs", label: t.nav.fuelLogs, icon: Droplets },
-        { href: "/fuel-spend-report", label: t.nav.fuelSpendReport, icon: BarChart3 },
-        { href: "/transfers", label: t.nav.transfers, icon: ArrowRightLeft }
+        { href: "/fuel-spend-report", label: t.nav.fuelSpendReport, icon: BarChart3 }
       ]
     },
     {

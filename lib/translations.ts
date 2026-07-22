@@ -50,7 +50,7 @@ export const translations = {
     },
     login: {
       eyebrow: "Fleet Finance",
-      title: "Track fuel costs and driver transfers in one operational hub.",
+      title: "Control bookings, trips, fuel, and fleet operations in one logistics hub.",
       description:
         "Built for logistics teams that need clean daily records, accurate spend totals, and a simple workflow across mobile and desktop.",
       loginTab: "Login",
@@ -70,7 +70,7 @@ export const translations = {
     },
     dashboard: {
       title: "Dashboard",
-      description: "Review fuel spend, bank transfers, trips, bookings, and fleet tasks in one clear operations view.",
+      description: "Review fuel spend, trips, bookings, dispatch readiness, and fleet tasks in one clear operations view.",
       driverFilter: "Driver",
       allDrivers: "All drivers",
       startDate: "Start date",
@@ -85,7 +85,7 @@ export const translations = {
       transferSpendHelper: "Total value of bank transfers in the selected view",
       weeklyMileageHelper: "Latest valid odometer change using the two most recent reported readings",
       costPerKmHelper: "Fuel spend divided by reported weekly mileage",
-      activeDriversHelper: "Drivers with fuel, transfer, or mileage activity in the selected view",
+      activeDriversHelper: "Drivers with fuel, trip, booking, or mileage activity in the selected view",
       weeklyReportsEntered: "Weekly Reports Entered",
       weeklyReportsEnteredHelper: "Number of unique reporting weeks included in the selected view",
       latestFuelActivity: "Latest fuel activity",
@@ -168,7 +168,7 @@ export const translations = {
       loadingDrivers: "Loading drivers...",
       noDriversYet: "No drivers yet",
       noDriversDescription:
-        "Create your first driver record to start logging fuel and transfers.",
+        "Create your first driver record to start logging fuel, trips, and fleet activity.",
       unableToLoadDrivers: "Unable to load drivers.",
       unableToSaveDriver: "Unable to save driver.",
       unableToDeleteDriver: "Unable to delete driver.",
@@ -1019,7 +1019,7 @@ export const translations = {
     },
     login: {
       eyebrow: "การเงินรถขนส่ง",
-      title: "ติดตามค่าน้ำมันและการโอนเงินให้คนขับในศูนย์งานเดียว",
+      title: "ควบคุมงานจอง ทริป น้ำมัน และฟลีทรถในศูนย์งานขนส่งเดียว",
       description:
         "ออกแบบสำหรับทีมโลจิสติกส์ที่ต้องการบันทึกประจำวันอย่างเป็นระเบียบ ยอดค่าใช้จ่ายที่แม่นยำ และการใช้งานที่ง่ายทั้งบนมือถือและเดสก์ท็อป",
       loginTab: "เข้าสู่ระบบ",
@@ -1039,7 +1039,7 @@ export const translations = {
     },
     dashboard: {
       title: "แดชบอร์ด",
-      description: "ดูภาพรวมค่าน้ำมัน การโอนเงิน ทริป งานจอง และงานดูแลรถในมุมมองงานปฏิบัติการที่ชัดเจน",
+      description: "ดูภาพรวมค่าน้ำมัน ทริป งานจอง ความพร้อมงานจัดส่ง และงานดูแลรถในมุมมองงานปฏิบัติการที่ชัดเจน",
       driverFilter: "คนขับ",
       allDrivers: "คนขับทั้งหมด",
       startDate: "วันที่เริ่มต้น",
@@ -1054,7 +1054,7 @@ export const translations = {
       transferSpendHelper: "มูลค่ารวมของการโอนเงินในมุมมองที่เลือก",
       weeklyMileageHelper: "ผลรวมเลขไมล์ปลายสัปดาห์ที่บันทึกในมุมมองที่เลือก",
       costPerKmHelper: "คำนวณจากค่าน้ำมันเทียบกับระยะทางรายสัปดาห์ที่รายงาน",
-      activeDriversHelper: "คนขับที่มีรายการน้ำมัน การโอน หรือระยะทางในมุมมองที่เลือก",
+      activeDriversHelper: "คนขับที่มีรายการน้ำมัน ทริป งานจอง หรือระยะทางในมุมมองที่เลือก",
       weeklyReportsEntered: "รายงานรายสัปดาห์ที่บันทึก",
       weeklyReportsEnteredHelper: "จำนวนสัปดาห์รายงานที่ไม่ซ้ำในมุมมองที่เลือก",
       latestFuelActivity: "รายการน้ำมันล่าสุด",

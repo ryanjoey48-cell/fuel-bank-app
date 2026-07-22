@@ -21,6 +21,7 @@ function loadTypeScriptModule(relativePath) {
 const {
   getBangkokRouteDeparture,
   parseGoogleDurationSeconds,
+  selectRouteWithFallback,
   selectFastestPracticalRoute
 } = loadTypeScriptModule("lib/route-planning.ts");
 
@@ -41,6 +42,42 @@ test("route selection ignores SHORTER_DISTANCE and keeps distance and duration f
   assert.equal(selected, recommended);
   assert.equal(selected.distanceMeters, 13600);
   assert.equal(parseGoogleDurationSeconds(selected.duration), 1020);
+});
+
+test("route selection falls back when the only valid route is SHORTER_DISTANCE", () => {
+  const shorterOnly = {
+    distanceMeters: 8200,
+    duration: "1100s",
+    staticDuration: "760s",
+    routeLabels: ["SHORTER_DISTANCE"]
+  };
+  const result = selectRouteWithFallback([shorterOnly]);
+  assert.equal(result.selectedRoute, shorterOnly);
+  assert.equal(result.validRoutes.length, 1);
+  assert.equal(result.fallbackRouteUsed, true);
+  assert.equal(result.fallbackReason, "only_shorter_distance_routes_available");
+  assert.equal(selectFastestPracticalRoute([shorterOnly]), shorterOnly);
+});
+
+test("route selection uses fastest valid route and ignores invalid route payloads", () => {
+  const missingDistance = { duration: "600s", routeLabels: ["DEFAULT_ROUTE"] };
+  const missingDuration = { distanceMeters: 3000, routeLabels: ["DEFAULT_ROUTE"] };
+  const slower = { distanceMeters: 10000, duration: "1200s", routeLabels: ["DEFAULT_ROUTE"] };
+  const fastest = { distanceMeters: 18000, duration: "900s", routeLabels: ["DEFAULT_ROUTE_ALTERNATE"] };
+  const result = selectRouteWithFallback([missingDistance, slower, missingDuration, fastest]);
+  assert.equal(result.selectedRoute, fastest);
+  assert.equal(result.validRoutes.length, 2);
+  assert.equal(result.fallbackRouteUsed, false);
+});
+
+test("route selection returns null when Google returns no usable routes", () => {
+  assert.deepEqual(selectRouteWithFallback([]), {
+    selectedRoute: null,
+    validRoutes: [],
+    fallbackRouteUsed: false,
+    fallbackReason: null
+  });
+  assert.equal(selectRouteWithFallback([{ distanceMeters: 0, duration: "600s" }]).selectedRoute, null);
 });
 
 test("traffic-aware duration is the selection key and DEFAULT_ROUTE wins equal-duration ties", () => {

@@ -289,6 +289,7 @@ const labels = {
     trafficDataUnavailable: "Traffic data unavailable",
     currentTrafficEstimate: "Current-traffic estimate",
     plannedTrafficEstimate: "Planned departure traffic",
+    fallbackRouteUsed: "Google's available route was used because no preferred practical route was returned.",
     routeNeedsRefresh: "Route inputs changed. Refresh the traffic-aware estimate.",
     standardDriveWarning: "Standard driving route; truck restrictions are not checked.",
     calculated: "Calculated",
@@ -1931,6 +1932,19 @@ export default function BookingDiaryPage() {
         route_source: estimate.provider,
         route_fallback_info: estimate.fallbackInfo
       }));
+      const routeStatusMessage = estimate.fallbackRouteUsed
+        ? copy.fallbackRouteUsed
+        : estimate.trafficAware
+          ? copy.trafficAwareEstimate
+          : copy.trafficDataUnavailable;
+      if (estimate.fallbackRouteUsed) {
+        setRouteMessage(
+          `${copy.calculated}: ${distanceKm.toFixed(1)} km${
+            durationMinutes != null ? ` / ${formatDurationMinutes(durationMinutes)}` : ""
+          } · ${routeStatusMessage}`
+        );
+        return;
+      }
       setRouteMessage(
         `${copy.calculated}: ${distanceKm.toFixed(1)} km${
           durationMinutes != null ? ` / ${formatDurationMinutes(durationMinutes)}` : ""
