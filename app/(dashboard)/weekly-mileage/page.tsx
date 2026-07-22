@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Copy, Download, History, Pencil, Plus, Trash2, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleCheck, Copy, Download, History, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { Header } from "@/components/header";
@@ -89,6 +89,8 @@ type WeeklyMileageDebugInfo = {
 type OilServicePdfLanguage = "en" | "th";
 type OilServicePdfLogo = {
   dataUrl: string | null;
+  height?: number;
+  width?: number;
 };
 type OilServicePdfRow = {
   currentOdometer: string;
@@ -112,6 +114,36 @@ type OilServicePdfData = {
   };
   weekEnding: string;
 };
+type LastOilChangesPdfRow = {
+  currentOdometer: string;
+  currentOdometerDate: string;
+  currentOdometerDateTone: "muted" | "stale";
+  currentOdometerWarning: string | null;
+  driverName: string;
+  hasServiceRecord: boolean;
+  kmDrivenSinceOilChange: string;
+  kmRemaining: string;
+  kmRemainingSort: number;
+  lastOilChangeDate: string;
+  lastOilChangeOdometer: string;
+  lastOilChangeTime: number;
+  status: OilChangeStatus;
+  statusLabel: string;
+  vehicleReg: string;
+  vehicleType: string;
+};
+type LastOilChangesPdfData = {
+  generatedAt: string;
+  rows: LastOilChangesPdfRow[];
+  summary: {
+    dueSoon: string;
+    noRecord: string;
+    ok: string;
+    overdue: string;
+    total: string;
+    urgent: string;
+  };
+};
 type OilServicePdfCopy = {
   companyName: string;
   currentOdometer: string;
@@ -134,6 +166,37 @@ type OilServicePdfCopy = {
   vehicleReg: string;
   vehicleType: string;
   weekEnding: string;
+};
+type LastOilChangesPdfCopy = {
+  asOf: (date: string) => string;
+  companyName: string;
+  currentOdometer: string;
+  currentStatus: string;
+  driverName: string;
+  footer: string;
+  generated: string;
+  kmRemaining: string;
+  kmDrivenSinceOilChange: string;
+  lastOilChangeDate: string;
+  lastOilChangeOdometer: string;
+  no: string;
+  noCurrentMileage: string;
+  noMileage: string;
+  noServiceRecord: string;
+  notUpdatedThisWeek: string;
+  notAvailable: string;
+  overdueSuffix: string;
+  reportTitle: string;
+  mileageNote: string;
+  sortingNote: string;
+  summaryDueSoon: string;
+  summaryNoRecord: string;
+  summaryOk: string;
+  summaryOverdue: string;
+  summaryTotal: string;
+  summaryUrgent: string;
+  vehicleReg: string;
+  vehicleType: string;
 };
 
 function describeLoadError(error: unknown) {
@@ -162,14 +225,14 @@ const getOilServicePdfCopy = (language: OilServicePdfLanguage): OilServicePdfCop
         companyName: "Expert Express Sender Co., Ltd.",
         currentOdometer: "เลขไมล์ปัจจุบัน",
         driver: "คนขับ",
-        dueSoon: "ใกล้ครบกำหนด",
-        dueSoonCount: (count) => `ใกล้ครบกำหนด ${count} คัน`,
-        dueSoonEmpty: "ไม่มีรถที่ใกล้ครบกำหนดในขณะนี้",
+        dueSoon: "ใกล้ถึงกำหนด",
+        dueSoonCount: (count) => `ใกล้ถึงกำหนด ${count} คัน`,
+        dueSoonEmpty: "ไม่มีรถที่ใกล้ถึงกำหนดในขณะนี้",
         footer: "สร้างจาก Expert Express Sender Fleet Management",
         generated: "สร้างเมื่อ",
         generating: "กำลังสร้าง PDF...",
         lastOilChange: "เปลี่ยนน้ำมันล่าสุด",
-        nextServiceDue: "ครบกำหนดที่เลขไมล์",
+        nextServiceDue: "กำหนดบริการครั้งถัดไป",
         ok: "ปกติ",
         overdue: "เกินกำหนด",
         overdueBy: "เกินกำหนด",
@@ -207,6 +270,71 @@ const getOilServicePdfCopy = (language: OilServicePdfLanguage): OilServicePdfCop
 
 const getOilServicePdfFontFamily = (language: OilServicePdfLanguage) =>
   language === "th" ? '"OilServicePdfThai", Tahoma, sans-serif' : 'Arial, "Helvetica Neue", Helvetica, sans-serif';
+
+const getLastOilChangesPdfCopy = (language: OilServicePdfLanguage): LastOilChangesPdfCopy =>
+  language === "th"
+    ? {
+        asOf: (date) => `ณ ${date}`,
+        companyName: "Expert Express Sender Co., Ltd.",
+        currentOdometer: "เลขไมล์ปัจจุบัน",
+        currentStatus: "สถานะ",
+        driverName: "คนขับ",
+        footer: "สร้างจาก Expert Express Sender Fleet Management",
+        generated: "สร้างเมื่อ",
+        kmDrivenSinceOilChange: "กม. ใช้แล้ว",
+        kmRemaining: "กม. คงเหลือ",
+        lastOilChangeDate: "เปลี่ยนน้ำมัน",
+        lastOilChangeOdometer: "เลขไมล์ตอนเปลี่ยน",
+        no: "ลำดับ",
+        noCurrentMileage: "ไม่มีเลขไมล์ปัจจุบัน",
+        noServiceRecord: "ไม่มีประวัติบริการ",
+        notAvailable: "ไม่มีข้อมูล",
+        overdueSuffix: "กม. เกินกำหนด",
+        reportTitle: "รายงานการเปลี่ยนน้ำมันล่าสุด",
+        mileageNote: "เลขไมล์ปัจจุบันและกม. คงเหลืออ้างอิงจาก Weekly Mileage ล่าสุดของรถแต่ละคัน",
+        noMileage: "ไม่มีเลขไมล์",
+        notUpdatedThisWeek: "ยังไม่อัปเดตสัปดาห์นี้",
+        sortingNote: "เรียงรถตามความสำคัญของบริการและกม. คงเหลือ",
+        summaryDueSoon: "ใกล้ถึงกำหนด",
+        summaryNoRecord: "ไม่มีประวัติ",
+        summaryOk: "ปกติ",
+        summaryOverdue: "เกินกำหนด",
+        summaryTotal: "รถทั้งหมด",
+        summaryUrgent: "เร่งด่วน",
+        vehicleReg: "ทะเบียนรถ",
+        vehicleType: "ประเภทรถ"
+      }
+    : {
+        asOf: (date) => `As of ${date}`,
+        companyName: "Expert Express Sender Co., Ltd.",
+        currentOdometer: "Current Odo.",
+        currentStatus: "Status",
+        driverName: "Driver",
+        footer: "Generated from Expert Express Sender Fleet Management",
+        generated: "Generated",
+        kmDrivenSinceOilChange: "KM Used",
+        kmRemaining: "KM Remaining",
+        lastOilChangeDate: "Oil Changed",
+        lastOilChangeOdometer: "Oil Change Odo.",
+        mileageNote: "Current odometer values and KM remaining are based on each vehicle's latest Weekly Mileage entry.",
+        no: "No.",
+        noCurrentMileage: "No current mileage",
+        noMileage: "No mileage",
+        noServiceRecord: "No Service Record",
+        notUpdatedThisWeek: "Not updated this week",
+        notAvailable: "Not available",
+        overdueSuffix: "KM OVERDUE",
+        reportTitle: "Last Oil Change Report",
+        sortingNote: "Vehicles are ordered by service priority and KM remaining.",
+        summaryDueSoon: "Due Soon",
+        summaryNoRecord: "No Record",
+        summaryOk: "OK",
+        summaryOverdue: "Overdue",
+        summaryTotal: "Total Vehicles",
+        summaryUrgent: "Urgent",
+        vehicleReg: "Vehicle Registration",
+        vehicleType: "Vehicle Type"
+      };
 
 async function loadOilServicePdfThaiFont() {
   if (typeof document === "undefined" || typeof FontFace === "undefined") return;
@@ -254,28 +382,29 @@ async function loadOilServicePdfLogo(): Promise<OilServicePdfLogo> {
       nextImage.src = imageUrl;
     });
     const canvas = document.createElement("canvas");
-    const targetSize = 96;
-    canvas.width = targetSize;
-    canvas.height = targetSize;
+    const targetHeight = 256;
+    const targetWidth = Math.max(1, Math.round((image.width / image.height) * targetHeight));
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
     const context = canvas.getContext("2d");
     if (!context) return { dataUrl: null };
     context.fillStyle = "#ffffff";
-    context.fillRect(0, 0, targetSize, targetSize);
-    const scale = Math.min(targetSize / image.width, targetSize / image.height);
-    const width = image.width * scale;
-    const height = image.height * scale;
-    context.drawImage(image, (targetSize - width) / 2, (targetSize - height) / 2, width, height);
+    context.fillRect(0, 0, targetWidth, targetHeight);
+    context.drawImage(image, 0, 0, targetWidth, targetHeight);
     URL.revokeObjectURL(imageUrl);
-    return { dataUrl: canvas.toDataURL("image/jpeg", 0.9) };
+    return { dataUrl: canvas.toDataURL("image/png"), height: targetHeight, width: targetWidth };
   } catch (error) {
     console.warn("Oil service PDF logo load failed:", error);
     return { dataUrl: null };
   }
 }
 
-function buildImagePagesPdf(imagePages: Array<{ data: string; height: number; width: number }>) {
-  const pageWidth = 595;
-  const pageHeight = 842;
+function buildImagePagesPdf(
+  imagePages: Array<{ data: string; height: number; width: number }>,
+  pageSize: { height: number; width: number } = { height: 842, width: 595 }
+) {
+  const pageWidth = pageSize.width;
+  const pageHeight = pageSize.height;
   const kids = imagePages.map((_, index) => `${3 + index * 3} 0 R`).join(" ");
   const objects = [
     "<< /Type /Catalog /Pages 2 0 R >>",
@@ -420,7 +549,11 @@ async function buildOilServicePdf(data: OilServicePdfData, logo: OilServicePdfLo
     if (!continuation && logo.dataUrl) {
       try {
         const logoImage = await loadCanvasImage(logo.dataUrl);
-        context.drawImage(logoImage, margin, 16, 34, 34);
+        const logoBox = 34;
+        const logoScale = Math.min(logoBox / logoImage.width, logoBox / logoImage.height);
+        const logoWidth = logoImage.width * logoScale;
+        const logoHeight = logoImage.height * logoScale;
+        context.drawImage(logoImage, margin + (logoBox - logoWidth) / 2, 16 + (logoBox - logoHeight) / 2, logoWidth, logoHeight);
       } catch {
         fillRect(margin, 16, 34, 34, "#ede9fe", "#c4b5fd");
         drawText("EES", margin + 8, 37, { color: color.purple, size: 8, weight: 700 });
@@ -585,6 +718,392 @@ async function buildOilServicePdf(data: OilServicePdfData, logo: OilServicePdfLo
   return buildImagePagesPdf(pageImages);
 }
 
+async function buildLastOilChangesPdf(data: LastOilChangesPdfData, logo: OilServicePdfLogo, language: OilServicePdfLanguage) {
+  if (language === "th") {
+    await loadOilServicePdfThaiFont();
+  }
+
+  const pageWidth = 842;
+  const pageHeight = 595;
+  const scale = 2;
+  const margin = 16;
+  const contentWidth = pageWidth - margin * 2;
+  const tableBottom = 552;
+  const copy = getLastOilChangesPdfCopy(language);
+  const fontFamily = getOilServicePdfFontFamily(language);
+  const isThai = language === "th";
+  const color = {
+    amber: "#92400e",
+    amberBg: "#fffbeb",
+    border: "#dbe3ef",
+    green: "#047857",
+    greenBg: "#ecfdf5",
+    header: "#eef2f7",
+    muted: "#64748b",
+    orange: "#c2410c",
+    orangeBg: "#fff7ed",
+    red: "#b91c1c",
+    redBg: "#fff1f2",
+    sky: "#0369a1",
+    skyBg: "#eff6ff",
+    slateBg: "#f8fafc",
+    text: "#0f172a"
+  };
+  const pageImages: Array<{ data: string; height: number; width: number }> = [];
+  let canvas!: HTMLCanvasElement;
+  let context!: CanvasRenderingContext2D;
+  let pageNumber = 0;
+  let y = 0;
+
+  const columns = [
+    { key: "no", label: copy.no, width: 28 },
+    { key: "vehicleReg", label: copy.vehicleReg, width: 86 },
+    { key: "driverName", label: copy.driverName, width: 94 },
+    { key: "vehicleType", label: copy.vehicleType, width: 86 },
+    { key: "lastOilChangeDate", label: copy.lastOilChangeDate, width: 72 },
+    { key: "lastOilChangeOdometer", label: copy.lastOilChangeOdometer, width: 82 },
+    { key: "currentOdometer", label: copy.currentOdometer, width: 88 },
+    { key: "kmDrivenSinceOilChange", label: copy.kmDrivenSinceOilChange, width: 72 },
+    { key: "kmRemaining", label: copy.kmRemaining, width: 92 },
+    { key: "statusLabel", label: copy.currentStatus, width: 110 }
+  ] as const;
+
+  const setFont = (size: number, weight: 400 | 500 | 600 | 700 = 400) => {
+    context.font = `${weight} ${size}px ${fontFamily}`;
+  };
+  const wrapText = (value: unknown, maxWidth: number, size: number, weight: 400 | 500 | 600 | 700, maxLines: number) => {
+    setFont(size, weight);
+    const text = String(value ?? "-").replace(/\s+/g, " ").trim() || "-";
+    const words = text.split(" ");
+    const lines: string[] = [];
+    let current = "";
+    const pushBrokenWord = (word: string) => {
+      let chunk = "";
+      for (const character of Array.from(word)) {
+        const nextChunk = `${chunk}${character}`;
+        if (chunk && context.measureText(nextChunk).width > maxWidth) {
+          lines.push(chunk);
+          chunk = character;
+        } else {
+          chunk = nextChunk;
+        }
+      }
+      current = chunk;
+    };
+
+    for (const word of words) {
+      if (!current) {
+        if (context.measureText(word).width <= maxWidth) {
+          current = word;
+        } else {
+          pushBrokenWord(word);
+        }
+        continue;
+      }
+      const candidate = `${current} ${word}`;
+      if (context.measureText(candidate).width <= maxWidth) {
+        current = candidate;
+      } else {
+        lines.push(current);
+        if (context.measureText(word).width <= maxWidth) {
+          current = word;
+        } else {
+          pushBrokenWord(word);
+        }
+      }
+    }
+    if (current) lines.push(current);
+    return lines.slice(0, maxLines);
+  };
+  const getCellLines = (
+    value: unknown,
+    maxWidth: number,
+    options: { maxLines?: number; minSize?: number; size: number; weight?: 400 | 500 | 600 | 700 }
+  ) => {
+    const maxLines = options.maxLines ?? 1;
+    const minSize = options.minSize ?? 5.2;
+    const weight = options.weight ?? 400;
+    for (let size = options.size; size >= minSize; size -= 0.2) {
+      const lines = wrapText(value, maxWidth, size, weight, maxLines);
+      if (lines.length <= maxLines && lines.every((lineText) => context.measureText(lineText).width <= maxWidth)) {
+        return { lines, size };
+      }
+    }
+    return { lines: wrapText(value, maxWidth, minSize, weight, maxLines), size: minSize };
+  };
+  const drawText = (
+    value: unknown,
+    x: number,
+    textY: number,
+    options: { align?: CanvasTextAlign; color?: string; size?: number; weight?: 400 | 500 | 600 | 700 } = {}
+  ) => {
+    const size = options.size ?? 7;
+    const weight = options.weight ?? 400;
+    setFont(size, weight);
+    context.textAlign = options.align ?? "left";
+    context.fillStyle = options.color ?? color.text;
+    context.fillText(String(value ?? "-"), x, textY);
+    context.textAlign = "left";
+  };
+  const drawCellText = (
+    value: unknown,
+    x: number,
+    cellY: number,
+    width: number,
+    height: number,
+    options: { align?: CanvasTextAlign; color?: string; maxLines?: number; minSize?: number; padding?: number; size?: number; weight?: 400 | 500 | 600 | 700 } = {}
+  ) => {
+    const padding = options.padding ?? 4;
+    const size = options.size ?? 6.4;
+    const weight = options.weight ?? 400;
+    const maxWidth = width - padding * 2;
+    const { lines, size: fittedSize } = getCellLines(value, maxWidth, {
+      maxLines: options.maxLines ?? 1,
+      minSize: options.minSize,
+      size,
+      weight
+    });
+    const lineHeight = fittedSize + 1.5;
+    const blockHeight = lineHeight * lines.length;
+    let textY = cellY + (height - blockHeight) / 2 + fittedSize;
+    const align = options.align ?? "left";
+    const textX = align === "right" ? x + width - padding : align === "center" ? x + width / 2 : x + padding;
+    setFont(fittedSize, weight);
+    context.textAlign = align;
+    context.fillStyle = options.color ?? color.text;
+    for (const lineText of lines) {
+      context.fillText(lineText, textX, textY);
+      textY += lineHeight;
+    }
+    context.textAlign = "left";
+  };
+  const drawCurrentOdometerCell = (row: LastOilChangesPdfRow, x: number, cellY: number, width: number, height: number) => {
+    const padding = 4;
+    const textX = x + padding;
+    const mainSize = isThai ? 5.7 : 6.2;
+    const subSize = isThai ? 4.8 : 5.1;
+    const warningSize = isThai ? 4.5 : 4.7;
+    const hasWarning = Boolean(row.currentOdometerWarning);
+    const totalHeight = hasWarning ? 16.2 : 12.2;
+    let textY = cellY + (height - totalHeight) / 2 + mainSize;
+
+    setFont(mainSize, 700);
+    context.fillStyle = color.text;
+    context.textAlign = "left";
+    context.fillText(getCellLines(row.currentOdometer, width - padding * 2, { maxLines: 1, minSize: 5.1, size: mainSize, weight: 700 }).lines[0] ?? "-", textX, textY);
+
+    textY += subSize + 1.5;
+    setFont(subSize, 600);
+    context.fillStyle = row.currentOdometerDateTone === "stale" ? color.amber : color.muted;
+    context.fillText(getCellLines(row.currentOdometerDate, width - padding * 2, { maxLines: 1, minSize: 4.4, size: subSize, weight: 600 }).lines[0] ?? "-", textX, textY);
+
+    if (row.currentOdometerWarning) {
+      textY += warningSize + 0.9;
+      setFont(warningSize, 700);
+      context.fillStyle = color.amber;
+      context.fillText(getCellLines(row.currentOdometerWarning, width - padding * 2, { maxLines: 1, minSize: 4.1, size: warningSize, weight: 700 }).lines[0] ?? "", textX, textY);
+    }
+    context.textAlign = "left";
+  };
+  const fillRect = (x: number, rectY: number, width: number, height: number, fill: string, stroke?: string) => {
+    context.fillStyle = fill;
+    context.fillRect(x, rectY, width, height);
+    if (stroke) {
+      context.strokeStyle = stroke;
+      context.lineWidth = 1;
+      context.strokeRect(x + 0.5, rectY + 0.5, width - 1, height - 1);
+    }
+  };
+  const line = (x1: number, lineY: number, x2: number, stroke = color.border) => {
+    context.strokeStyle = stroke;
+    context.lineWidth = 1;
+    context.beginPath();
+    context.moveTo(x1, lineY + 0.5);
+    context.lineTo(x2, lineY + 0.5);
+    context.stroke();
+  };
+  const vLine = (lineX: number, y1: number, y2: number, stroke = color.border) => {
+    context.strokeStyle = stroke;
+    context.lineWidth = 1;
+    context.beginPath();
+    context.moveTo(lineX + 0.5, y1);
+    context.lineTo(lineX + 0.5, y2);
+    context.stroke();
+  };
+  const statusTone = (row: LastOilChangesPdfRow) => {
+    if (!row.hasServiceRecord) return { bg: color.slateBg, text: color.muted };
+    if (row.status === "overdue") return { bg: color.redBg, text: color.red };
+    if (row.status === "urgent") return { bg: color.orangeBg, text: color.orange };
+    if (row.status === "due_soon") return { bg: color.amberBg, text: color.amber };
+    if (row.status === "review_required" || row.status === "no_odometer" || row.status === "not_set") {
+      return { bg: color.skyBg, text: color.sky };
+    }
+    return { bg: color.greenBg, text: color.green };
+  };
+  const drawFooter = () => {
+    line(margin, 570, pageWidth - margin);
+    drawCellText(copy.mileageNote, margin, 571, contentWidth - 70, 8, { color: color.muted, maxLines: 1, size: isThai ? 5.1 : 5.5, weight: 600 });
+    drawCellText(copy.footer, margin, 579, contentWidth - 70, 8, { color: color.muted, maxLines: 1, size: isThai ? 5.1 : 5.5 });
+    drawText(String(pageNumber), pageWidth - margin - 6, 583, { align: "right", color: color.muted, size: 6.8, weight: 700 });
+  };
+  const drawTableHeader = () => {
+    let x = margin;
+    const headerHeight = 24;
+    fillRect(margin, y, contentWidth, headerHeight, color.header, color.border);
+    columns.forEach((column) => {
+      drawCellText(column.label, x, y, column.width, headerHeight, {
+        align: column.key === "no" ? "center" : "left",
+        color: color.text,
+        maxLines: 2,
+        minSize: 5.6,
+        size: isThai ? 6 : 6.8,
+        weight: 700
+      });
+      x += column.width;
+      if (x < pageWidth - margin) vLine(x, y, y + headerHeight, color.border);
+    });
+    y += headerHeight;
+  };
+  const startPage = async (continuation = false) => {
+    pageNumber += 1;
+    canvas = document.createElement("canvas");
+    canvas.width = pageWidth * scale;
+    canvas.height = pageHeight * scale;
+    const nextContext = canvas.getContext("2d");
+    if (!nextContext) throw new Error("Unable to prepare last oil changes PDF canvas.");
+    context = nextContext;
+    context.scale(scale, scale);
+    fillRect(0, 0, pageWidth, pageHeight, "#ffffff");
+    fillRect(0, 0, pageWidth, continuation ? 54 : 82, color.slateBg);
+
+    if (!continuation && logo.dataUrl) {
+      try {
+        const logoImage = await loadCanvasImage(logo.dataUrl);
+        const logoHeight = 58;
+        const logoWidth = Math.min(88, (logoImage.width / logoImage.height) * logoHeight);
+        context.drawImage(logoImage, margin, 10, logoWidth, logoHeight);
+      } catch {
+        fillRect(margin, 10, 58, 58, "#ffffff", color.border);
+        drawText("EES", margin + 15, 44, { color: color.text, size: 11, weight: 700 });
+      }
+    } else if (!continuation) {
+      fillRect(margin, 10, 58, 58, "#ffffff", color.border);
+      drawText("EES", margin + 15, 44, { color: color.text, size: 11, weight: 700 });
+    }
+
+    drawCellText(copy.companyName, continuation ? margin : 116, continuation ? 10 : 12, continuation ? 320 : 330, 16, {
+      maxLines: 1,
+      size: isThai ? 8 : 9,
+      weight: 700
+    });
+    drawCellText(copy.reportTitle, continuation ? margin : 116, continuation ? 27 : 29, continuation ? 360 : 330, 20, {
+      color: color.text,
+      maxLines: 1,
+      size: isThai ? 13 : 16,
+      weight: 700
+    });
+    if (!continuation) {
+      drawCellText(copy.sortingNote, 116, 52, 430, 14, {
+        color: color.muted,
+        maxLines: 1,
+        size: isThai ? 6.3 : 6.8,
+        weight: 600
+      });
+    }
+    drawCellText(`${copy.generated}: ${data.generatedAt}`, pageWidth - margin - 260, continuation ? 20 : 22, 260, 18, {
+      align: "right",
+      color: color.muted,
+      maxLines: 1,
+      size: isThai ? 6.8 : 7.4,
+      weight: 600
+    });
+
+    if (!continuation) {
+      const cards = [
+        [copy.summaryTotal, data.summary.total, color.text],
+        [copy.summaryOverdue, data.summary.overdue, color.red],
+        [copy.summaryUrgent, data.summary.urgent, color.orange],
+        [copy.summaryDueSoon, data.summary.dueSoon, color.amber],
+        [copy.summaryNoRecord, data.summary.noRecord, color.muted],
+        [copy.summaryOk, data.summary.ok, color.green]
+      ];
+      const cardGap = 8;
+      const cardWidth = (contentWidth - cardGap * (cards.length - 1)) / cards.length;
+      cards.forEach(([label, value, tone], index) => {
+        const cardX = margin + index * (cardWidth + cardGap);
+        fillRect(cardX, 82, cardWidth, 28, "#ffffff", color.border);
+        drawCellText(label, cardX + 5, 85, cardWidth - 10, 8, { color: color.muted, maxLines: 1, padding: 0, size: isThai ? 5.5 : 6, weight: 700 });
+        drawCellText(value, cardX + 5, 94, cardWidth - 10, 13, { color: tone, maxLines: 1, padding: 0, size: 12.5, weight: 700 });
+      });
+      y = 118;
+    } else {
+      y = 68;
+    }
+    drawTableHeader();
+  };
+  const finishPage = () => {
+    drawFooter();
+    pageImages.push({
+      data: binaryStringFromDataUrl(canvas.toDataURL("image/jpeg", 0.92)),
+      height: canvas.height,
+      width: canvas.width
+    });
+  };
+  const ensureRowSpace = async () => {
+    if (y + 18 <= tableBottom) return;
+    finishPage();
+    await startPage(true);
+  };
+  const drawRow = async (row: LastOilChangesPdfRow, index: number) => {
+    await ensureRowSpace();
+    const rowHeight = 18;
+    const bg = index % 2 === 0 ? "#ffffff" : "#fbfdff";
+    fillRect(margin, y, contentWidth, rowHeight, bg, color.border);
+    const tone = statusTone(row);
+    const rowValues = [
+      String(index + 1),
+      row.vehicleReg,
+      row.driverName,
+      row.vehicleType,
+      row.lastOilChangeDate,
+      row.lastOilChangeOdometer,
+      row.currentOdometer,
+      row.kmDrivenSinceOilChange,
+      row.kmRemaining,
+      row.statusLabel
+    ];
+    let x = margin;
+    columns.forEach((column, columnIndex) => {
+      if (column.key === "statusLabel") {
+        fillRect(x + 3, y + 3, column.width - 6, rowHeight - 6, tone.bg);
+      }
+      if (column.key === "currentOdometer") {
+        drawCurrentOdometerCell(row, x, y, column.width, rowHeight);
+      } else {
+        drawCellText(rowValues[columnIndex], x, y, column.width, rowHeight, {
+          align: column.key === "no" ? "center" : "left",
+          color: column.key === "statusLabel" || column.key === "kmRemaining" ? tone.text : color.text,
+          maxLines: column.key === "driverName" || column.key === "vehicleType" || column.key === "statusLabel" ? 2 : 1,
+          minSize: 5.1,
+          size: columnIndex === 0 ? 6.2 : isThai ? 5.7 : 6.2,
+          weight: columnIndex === 1 || column.key === "statusLabel" || column.key === "kmRemaining" ? 700 : 500
+        });
+      }
+      x += column.width;
+      if (x < pageWidth - margin) vLine(x, y, y + rowHeight, color.border);
+    });
+    y += rowHeight;
+  };
+
+  await startPage(false);
+  for (let index = 0; index < data.rows.length; index += 1) {
+    await drawRow(data.rows[index], index);
+  }
+  finishPage();
+
+  return buildImagePagesPdf(pageImages, { height: pageHeight, width: pageWidth });
+}
+
 export default function WeeklyMileagePage() {
   const { language, t } = useLanguage();
   const driverSelectRef = useRef<HTMLSelectElement | null>(null);
@@ -601,6 +1120,7 @@ export default function WeeklyMileagePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [generatingOilServicePdf, setGeneratingOilServicePdf] = useState(false);
+  const [generatingLastOilChangesPdf, setGeneratingLastOilChangesPdf] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [savingService, setSavingService] = useState(false);
   const [oilFilter, setOilFilter] = useState<OilFilter>("all");
@@ -1001,7 +1521,7 @@ export default function WeeklyMileagePage() {
       setOilBaselineError(
         t.weeklyMileage.notifications.loadFailed.replace(
           "{items}",
-          language === "th" ? "ข้อมูลฐานเปลี่ยนน้ำมัน" : "oil baselines"
+          language === "th" ? "ข้อมูลพื้นฐานการเปลี่ยนน้ำมัน" : "oil baselines"
         )
       );
     }
@@ -1023,7 +1543,7 @@ export default function WeeklyMileagePage() {
     const criticalFailures = [
       driverResult.status === "rejected" ? t.nav.drivers : "",
       mileageResult.status === "rejected" ? t.weeklyMileage.title : "",
-      serviceLogResult.status === "rejected" ? (language === "th" ? "ประวัติบริการ" : "service history") : ""
+      serviceLogResult.status === "rejected" ? (language === "th" ? "ประวัติการบริการ" : "service history") : ""
     ].filter(Boolean);
 
     if (criticalFailures.length) {
@@ -1258,23 +1778,28 @@ export default function WeeklyMileagePage() {
   };
 
   const oilStatusLabel = (status: string) => {
-    if (status === "ok") return t.weeklyMileage.oil.filters.ok;
-    if (status === "due_soon") return t.weeklyMileage.oil.filters.dueSoon;
-    if (status === "urgent") return t.weeklyMileage.oil.filters.urgent;
-    if (status === "overdue") return t.weeklyMileage.oil.filters.overdue;
-    if (status === "review_required") return t.weeklyMileage.oil.filters.reviewRequired;
-    if (status === "no_odometer") return t.weeklyMileage.oil.filters.noOdometer;
-    return t.weeklyMileage.oil.filters.notSet;
+    if (status === "ok") return oilReportCopy.ok;
+    if (status === "due_soon") return oilReportCopy.dueSoon;
+    if (status === "urgent") return oilReportCopy.urgent;
+    if (status === "overdue") return oilReportCopy.overdue;
+    if (status === "review_required" || status === "no_odometer") return oilReportCopy.reviewRequired;
+    return oilReportCopy.notSet;
   };
 
   const hasMileageDataIssue = (row: OilChangeAlertRow) =>
     row.reviewReasons.includes(CURRENT_ODOMETER_BELOW_SERVICE_REASON);
 
   const oilStatusLabelForRow = (row: OilChangeAlertRow) =>
-    hasMileageDataIssue(row) ? t.weeklyMileage.oil.mileageDataIssue : oilStatusLabel(row.status);
+    hasMileageDataIssue(row) ? oilReportCopy.mileageDataIssue : oilStatusLabel(row.status);
 
-  const oilStatusIcon = (status: string) =>
-    status === "ok" ? "✅" : status === "overdue" || status === "urgent" || status === "due_soon" ? "⚠" : "•";
+  const OilStatusIcon = ({ status, className = "h-3.5 w-3.5" }: { status: string; className?: string }) =>
+    status === "ok" ? (
+      <CircleCheck aria-hidden="true" className={className} />
+    ) : status === "overdue" || status === "urgent" || status === "due_soon" ? (
+      <AlertTriangle aria-hidden="true" className={className} />
+    ) : (
+      <span aria-hidden="true" className={`inline-block rounded-full bg-current ${className}`} />
+    );
 
   const oilStatusClass = (status: string) => {
     if (status === "ok") return "border-emerald-200 bg-emerald-50 text-emerald-700";
@@ -1339,19 +1864,19 @@ export default function WeeklyMileagePage() {
 
   const actionLine = (row: (typeof oilChangeRows)[number]) => {
     if (row.status === "overdue" && row.overdueKm != null) {
-      return t.weeklyMileage.oil.actionOverdueBy.replace("{km}", formatKmValue(row.overdueKm));
+      return `${oilReportCopy.overdueBy} ${formatKmValue(row.overdueKm)}`;
     }
     if (row.kmRemaining === 0) {
       return t.weeklyMileage.oil.actionDueNow;
     }
     if (row.status === "urgent" && row.kmRemaining != null) {
-      return t.weeklyMileage.oil.actionDueIn.replace("{km}", formatKmValue(row.kmRemaining));
+      return oilReportCopy.actionDueIn.replace("{km}", formatKmValue(row.kmRemaining));
     }
     if (row.status === "due_soon" && row.kmRemaining != null) {
-      return t.weeklyMileage.oil.actionDueSoon.replace("{km}", formatKmValue(row.kmRemaining));
+      return oilReportCopy.actionDueIn.replace("{km}", formatKmValue(row.kmRemaining));
     }
     if (row.status === "ok") {
-      return t.weeklyMileage.oil.filters.ok;
+      return oilReportCopy.ok;
     }
     return oilStatusLabelForRow(row);
   };
@@ -1594,12 +2119,12 @@ export default function WeeklyMileagePage() {
     );
 
   const oilReportStatusLabel = (status: OilChangeStatus) => {
-    if (status === "overdue") return "Overdue";
-    if (status === "urgent") return "Urgent";
-    if (status === "due_soon") return "Due Soon";
-    if (status === "review_required" || status === "no_odometer") return "Review Required";
-    if (status === "not_set") return "Not Set";
-    return "OK";
+    if (status === "overdue") return oilReportCopy.overdue;
+    if (status === "urgent") return oilReportCopy.urgent;
+    if (status === "due_soon") return oilReportCopy.dueSoon;
+    if (status === "review_required" || status === "no_odometer") return oilReportCopy.reviewRequired;
+    if (status === "not_set") return oilReportCopy.notSet;
+    return oilReportCopy.ok;
   };
 
   const oilReportPriority = (row: OilChangeAlertRow) => {
@@ -1674,9 +2199,11 @@ export default function WeeklyMileagePage() {
     exportToCsv(buildOilReportExportRows(getOilReportRows(scope)), `oil-change-service-report-${fileSuffix}`);
   };
 
+  const oilReportCopy = t.weeklyMileage.oil.report;
+
   const oilServicePdfButtonCopy = language === "th"
     ? {
-        download: "ดาวน์โหลด PDF บริการน้ำมันเครื่อง",
+        download: "ดาวน์โหลด PDF รายงานบริการน้ำมันเครื่อง",
         error: "ไม่สามารถสร้าง PDF รายงานบริการน้ำมันเครื่องได้",
         generated: "ดาวน์โหลด PDF รายงานบริการน้ำมันเครื่องแล้ว",
         generating: "กำลังสร้าง PDF...",
@@ -1692,8 +2219,23 @@ export default function WeeklyMileagePage() {
         unassigned: "Unassigned"
       };
 
+  const lastOilChangesPdfButtonCopy = language === "th"
+    ? {
+        download: "ดาวน์โหลด PDF รายงานการเปลี่ยนน้ำมันเครื่องล่าสุด",
+        error: "ไม่สามารถสร้าง PDF รายงานการเปลี่ยนน้ำมันล่าสุดได้",
+        generated: "ดาวน์โหลด PDF รายงานการเปลี่ยนน้ำมันล่าสุดแล้ว"
+      }
+    : {
+        download: "Download Last Oil Changes PDF",
+        error: "Unable to generate last oil changes PDF.",
+        generated: "Last oil changes PDF downloaded."
+      };
+
   const formatOilPdfKm = (value: number | null | undefined) =>
     value == null || !Number.isFinite(Number(value)) ? "-" : `${formatNumber(Number(value), language, 0)} KM`;
+
+  const formatLastOilReportKm = (value: number | null | undefined) =>
+    value == null || !Number.isFinite(Number(value)) ? getLastOilChangesPdfCopy(language === "th" ? "th" : "en").notAvailable : `${formatNumber(Number(value), language, 0)} KM`;
 
   const toOilServicePdfRow = (row: OilChangeAlertRow, serviceDelta: number | null | undefined): OilServicePdfRow => ({
     currentOdometer: formatOilPdfKm(row.currentOdometer),
@@ -1746,6 +2288,113 @@ export default function WeeklyMileagePage() {
     };
   };
 
+  const lastOilChangeReportRank = (row: LastOilChangesPdfRow) => {
+    if (!row.hasServiceRecord) return 0;
+    if (row.status === "overdue") return 1;
+    if (row.status === "urgent") return 2;
+    if (row.status === "due_soon") return 3;
+    if (row.status === "review_required" || row.status === "no_odometer") return 4;
+    if (row.status === "not_set") return 5;
+    return 6;
+  };
+
+  const toLastOilChangesPdfRow = (row: OilChangeAlertRow): LastOilChangesPdfRow => {
+    const latestLog = getLatestServiceLog(row.registration);
+    const copy = getLastOilChangesPdfCopy(language === "th" ? "th" : "en");
+    const serviceOdometer = latestLog
+      ? Number(latestLog.oil_change_odometer ?? latestLog.odometer ?? latestLog.service_odometer)
+      : null;
+    const normalizedServiceOdometer =
+      serviceOdometer != null && Number.isFinite(serviceOdometer) ? Math.trunc(serviceOdometer) : null;
+    const kmDriven =
+      row.currentOdometer != null && normalizedServiceOdometer != null
+        ? Math.trunc(row.currentOdometer - normalizedServiceOdometer)
+        : null;
+    const hasServiceRecord = Boolean(latestLog);
+    const hasNegativeKmUsed = kmDriven != null && kmDriven < 0;
+    const kmRemaining =
+      hasServiceRecord && row.nextOilChangeDueOdometer != null && row.currentOdometer != null
+        ? Math.trunc(row.nextOilChangeDueOdometer - row.currentOdometer)
+        : null;
+    const hasCurrentMileage = row.currentOdometer != null && row.lastWeeklyMileageDate != null;
+    const displayStatus: OilChangeStatus = !hasCurrentMileage || hasNegativeKmUsed ? "review_required" : row.status;
+    const statusLabel = !hasCurrentMileage
+      ? oilReportStatusLabel("review_required")
+      : !hasServiceRecord
+        ? copy.noServiceRecord
+        : oilReportStatusLabel(displayStatus);
+    const currentOdometerDate = row.lastWeeklyMileageDate
+      ? copy.asOf(formatDate(row.lastWeeklyMileageDate, language))
+      : copy.notAvailable;
+    const staleMileage = Boolean(row.lastWeeklyMileageDate && !row.weeklyMileageUpdatedThisWeek);
+
+    return {
+      currentOdometer: row.currentOdometer == null ? copy.noMileage : formatOilPdfKm(row.currentOdometer),
+      currentOdometerDate,
+      currentOdometerDateTone: staleMileage ? "stale" : "muted",
+      currentOdometerWarning: staleMileage ? copy.notUpdatedThisWeek : null,
+      driverName: row.driverName?.trim() || oilServicePdfButtonCopy.unassigned,
+      hasServiceRecord,
+      kmDrivenSinceOilChange: !hasCurrentMileage || !hasServiceRecord
+        ? copy.notAvailable
+        : hasNegativeKmUsed
+          ? oilReportStatusLabel("review_required")
+          : formatLastOilReportKm(kmDriven),
+      kmRemaining: !hasCurrentMileage || kmRemaining == null
+        ? copy.notAvailable
+        : kmRemaining < 0
+          ? `${formatNumber(Math.abs(kmRemaining), language, 0)} ${copy.overdueSuffix}`
+          : formatLastOilReportKm(kmRemaining),
+      kmRemainingSort: kmRemaining ?? Number.POSITIVE_INFINITY,
+      lastOilChangeDate: hasServiceRecord && latestLog?.service_date
+        ? formatDate(latestLog.service_date, language)
+        : copy.noServiceRecord,
+      lastOilChangeOdometer: hasServiceRecord ? formatLastOilReportKm(normalizedServiceOdometer) : copy.notAvailable,
+      lastOilChangeTime: latestLog?.service_date ? parseDateValue(latestLog.service_date)?.getTime() ?? Number.POSITIVE_INFINITY : Number.POSITIVE_INFINITY,
+      status: displayStatus,
+      statusLabel,
+      vehicleReg: row.registration || "-",
+      vehicleType: row.vehicleType ? vehicleTypeLabel(row.vehicleType) : row.vehicleTypeLabel || "-"
+    };
+  };
+
+  const buildLastOilChangesPdfData = (): LastOilChangesPdfData => {
+    const pdfLanguage = language === "th" ? "th" : "en";
+    const generatedAt = new Intl.DateTimeFormat(pdfLanguage === "th" ? "th-TH" : "en-GB", {
+      dateStyle: "medium",
+      timeStyle: "short",
+      timeZone: "Asia/Bangkok"
+    }).format(new Date());
+    const rows = oilChangeRows
+      .map(toLastOilChangesPdfRow)
+      .sort((left, right) => {
+        const rankDiff = lastOilChangeReportRank(left) - lastOilChangeReportRank(right);
+        if (rankDiff !== 0) return rankDiff;
+
+        if (left.kmRemainingSort !== right.kmRemainingSort) return left.kmRemainingSort - right.kmRemainingSort;
+
+        if (left.lastOilChangeTime !== right.lastOilChangeTime) return left.lastOilChangeTime - right.lastOilChangeTime;
+
+        return left.vehicleReg.localeCompare(right.vehicleReg);
+      });
+    const noRecord = rows.filter((row) => !row.hasServiceRecord).length;
+    const countStatus = (status: OilChangeStatus) =>
+      rows.filter((row) => row.hasServiceRecord && row.status === status).length;
+
+    return {
+      generatedAt,
+      rows,
+      summary: {
+        dueSoon: formatNumber(countStatus("due_soon"), language, 0),
+        noRecord: formatNumber(noRecord, language, 0),
+        ok: formatNumber(countStatus("ok"), language, 0),
+        overdue: formatNumber(countStatus("overdue"), language, 0),
+        total: formatNumber(rows.length, language, 0),
+        urgent: formatNumber(countStatus("urgent"), language, 0)
+      }
+    };
+  };
+
   const downloadOilServicePdf = async () => {
     if (generatingOilServicePdf) return;
     setGeneratingOilServicePdf(true);
@@ -1768,40 +2417,62 @@ export default function WeeklyMileagePage() {
     }
   };
 
+  const downloadLastOilChangesPdf = async () => {
+    if (generatingLastOilChangesPdf) return;
+    setGeneratingLastOilChangesPdf(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      const pdfLanguage = language === "th" ? "th" : "en";
+      const pdfData = buildLastOilChangesPdfData();
+      const logo = await loadOilServicePdfLogo();
+      const pdf = await buildLastOilChangesPdf(pdfData, logo, pdfLanguage);
+      const datePart = new Date().toISOString().slice(0, 10);
+      downloadBlob(pdf, `Expert-Express-Last-Oil-Changes-${datePart}.pdf`);
+      setSuccessMessage(lastOilChangesPdfButtonCopy.generated);
+    } catch (err) {
+      console.error("Last oil changes PDF generation failed:", err);
+      setError(err instanceof Error && err.message ? err.message : lastOilChangesPdfButtonCopy.error);
+    } finally {
+      setGeneratingLastOilChangesPdf(false);
+    }
+  };
+
   const copyOilReportSummary = async () => {
     const immediateRows = sortOilReportRows(
       oilChangeRows.filter((row) => row.status === "overdue" || row.status === "urgent")
     ).slice(0, 8);
     const message = [
-      "Oil Change Service Report",
+      oilReportCopy.title,
       "",
-      `Overdue: ${oilReportSummary.overdue} vehicles`,
-      `Urgent: ${oilReportSummary.urgent} vehicles`,
-      `Due Soon: ${oilReportSummary.dueSoon} vehicles`,
-      `Review Required: ${oilReportSummary.reviewRequired} vehicles`,
-      `OK: ${oilReportSummary.ok} vehicles`,
+      `${oilReportCopy.overdueVehicles}: ${oilReportSummary.overdue}`,
+      `${oilReportCopy.urgentVehicles}: ${oilReportSummary.urgent}`,
+      `${oilReportCopy.dueSoonVehicles}: ${oilReportSummary.dueSoon}`,
+      `${oilReportCopy.reviewRequired}: ${oilReportSummary.reviewRequired}`,
+      `${oilReportCopy.okVehicles}: ${oilReportSummary.ok}`,
       "",
-      "Immediate attention:",
+      `${oilReportCopy.requiresImmediateService}:`,
       ...(immediateRows.length
         ? immediateRows.map((row) => {
             const detail =
               row.status === "overdue" && row.overdueKm != null
-                ? `Overdue by ${formatNumber(row.overdueKm, language)} KM`
+                ? `${oilReportCopy.overdueBy} ${formatNumber(row.overdueKm, language)} KM`
                 : row.kmRemaining != null
-                  ? `Due in ${formatNumber(row.kmRemaining, language)} KM`
+                  ? oilReportCopy.actionDueIn.replace("{km}", `${formatNumber(row.kmRemaining, language)} KM`)
                   : oilReportStatusLabel(row.status);
             return `- ${row.registration} - ${detail}`;
           })
-        : ["- None"])
+        : [`- ${language === "th" ? "ไม่มี" : "None"}`])
     ].join("\n");
 
     try {
       await navigator.clipboard.writeText(message);
       setError(null);
-      setSuccessMessage("Oil change report summary copied.");
+      setSuccessMessage(oilReportCopy.copiedSummary);
     } catch (err) {
       console.error("Oil change report copy failed:", err);
-      setError("Unable to copy report summary. Please try again.");
+      setError(oilReportCopy.copySummaryError);
     }
   };
 
@@ -1916,8 +2587,8 @@ export default function WeeklyMileagePage() {
       <section className="surface-card mb-4 p-4 sm:p-5">
         <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h3 className="section-title">Oil Change Service Report</h3>
-            <p className="section-subtitle">Export vehicles that are overdue, urgent, due soon, or ready for review.</p>
+            <h3 className="section-title">{oilReportCopy.title}</h3>
+            <p className="section-subtitle">{oilReportCopy.description}</p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <button
@@ -1931,12 +2602,21 @@ export default function WeeklyMileagePage() {
             </button>
             <button
               type="button"
+              onClick={() => void downloadLastOilChangesPdf()}
+              disabled={generatingLastOilChangesPdf || !oilChangeRows.length}
+              className="btn-secondary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            >
+              <Download className="h-4 w-4" />
+              {generatingLastOilChangesPdf ? oilServicePdfButtonCopy.generating : lastOilChangesPdfButtonCopy.download}
+            </button>
+            <button
+              type="button"
               onClick={() => void copyOilReportSummary()}
               disabled={!oilChangeRows.length}
               className="btn-secondary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
             >
               <Copy className="h-4 w-4" />
-              Copy Report Summary
+              {oilReportCopy.copyReportSummary}
             </button>
           </div>
         </div>
@@ -1946,7 +2626,7 @@ export default function WeeklyMileagePage() {
             {oilBaselineError}
             <span className="mt-1 block font-normal text-amber-700">
               {language === "th"
-                ? "ข้อมูลระยะทางรายสัปดาห์ยังโหลดได้ตามปกติ แต่รายงานน้ำมันอาจไม่มีข้อมูลฐานล่าสุดจนกว่าจะซ่อมตารางหรือสิทธิ์ Supabase"
+                ? "ข้อมูลระยะทางรายสัปดาห์ยังโหลดได้ตามปกติ แต่รายงานน้ำมันอาจไม่มีข้อมูลพื้นฐานล่าสุดจนกว่าจะซ่อมตารางหรือสิทธิ์ Supabase"
                 : "Weekly mileage records are still loaded. Oil service reporting may miss saved baselines until the Supabase table or policy is repaired."}
             </span>
           </div>
@@ -1954,11 +2634,11 @@ export default function WeeklyMileagePage() {
 
         <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
           {[
-            { label: "Overdue Vehicles", value: oilReportSummary.overdue, className: "text-rose-700" },
-            { label: "Urgent Vehicles", value: oilReportSummary.urgent, className: "text-orange-700" },
-            { label: "Due Soon Vehicles", value: oilReportSummary.dueSoon, className: "text-amber-700" },
-            { label: "Review Required", value: oilReportSummary.reviewRequired, className: "text-sky-700" },
-            { label: "OK Vehicles", value: oilReportSummary.ok, className: "text-emerald-700" }
+            { label: oilReportCopy.overdueVehicles, value: oilReportSummary.overdue, className: "text-rose-700" },
+            { label: oilReportCopy.urgentVehicles, value: oilReportSummary.urgent, className: "text-orange-700" },
+            { label: oilReportCopy.dueSoonVehicles, value: oilReportSummary.dueSoon, className: "text-amber-700" },
+            { label: oilReportCopy.reviewRequired, value: oilReportSummary.reviewRequired, className: "text-sky-700" },
+            { label: oilReportCopy.okVehicles, value: oilReportSummary.ok, className: "text-emerald-700" }
           ].map((item) => (
             <div key={item.label} className="rounded-[0.85rem] border border-slate-200 bg-white/85 px-3 py-3">
               <p className="metric-label">{item.label}</p>
@@ -1971,11 +2651,11 @@ export default function WeeklyMileagePage() {
 
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
           {[
-            { label: "Export All Service Statuses", scope: "all", suffix: "all" },
-            { label: "Export Overdue Only", scope: "overdue", suffix: "overdue" },
-            { label: "Export Urgent + Overdue", scope: "urgent_overdue", suffix: "urgent-overdue" },
-            { label: "Export Due Soon", scope: "due_soon", suffix: "due-soon" },
-            { label: "Export Review Required / Not Set", scope: "review_required", suffix: "review-required" }
+            { label: oilReportCopy.exportAll, scope: "all", suffix: "all" },
+            { label: oilReportCopy.exportOverdue, scope: "overdue", suffix: "overdue" },
+            { label: oilReportCopy.exportUrgentOverdue, scope: "urgent_overdue", suffix: "urgent-overdue" },
+            { label: oilReportCopy.exportDueSoon, scope: "due_soon", suffix: "due-soon" },
+            { label: oilReportCopy.exportReview, scope: "review_required", suffix: "review-required" }
           ].map((option) => (
             <button
               key={option.scope}
@@ -2009,7 +2689,7 @@ export default function WeeklyMileagePage() {
                     : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
                 }`}
               >
-                {filter === "all" ? t.weeklyMileage.oil.filters.all : oilStatusLabel(filter)}
+                {filter === "all" ? oilReportCopy.all : oilStatusLabel(filter)}
               </button>
             ))}
           </div>
@@ -2027,23 +2707,23 @@ export default function WeeklyMileagePage() {
               {[
                 {
                   key: "overdue",
-                  label: t.weeklyMileage.oil.summary.overdueVehicles,
+                  label: oilReportCopy.overdueVehicles,
                   value: oilSummary.overdue,
-                  helper: t.weeklyMileage.oil.summary.requiresImmediateService,
+                  helper: oilReportCopy.requiresImmediateService,
                   className: "border-rose-300 bg-rose-50 text-rose-800 hover:border-rose-400"
                 },
                 {
                   key: "urgent",
-                  label: t.weeklyMileage.oil.summary.urgentVehicles,
+                  label: oilReportCopy.urgentVehicles,
                   value: oilSummary.urgent,
-                  helper: t.weeklyMileage.oil.summary.dueWithin1000,
+                  helper: oilReportCopy.dueWithin1000,
                   className: "border-orange-300 bg-orange-50 text-orange-800 hover:border-orange-400"
                 },
                 {
                   key: "due_soon",
-                  label: t.weeklyMileage.oil.summary.dueSoonVehicles,
+                  label: oilReportCopy.dueSoonVehicles,
                   value: oilSummary.due_soon,
-                  helper: t.weeklyMileage.oil.summary.dueWithin3000,
+                  helper: oilReportCopy.dueWithin3000,
                   className: "border-amber-300 bg-amber-50 text-amber-800 hover:border-amber-400"
                 }
               ].map((item) => (
@@ -2058,7 +2738,7 @@ export default function WeeklyMileagePage() {
                       <p className="text-xs font-bold uppercase text-current/70">{item.label}</p>
                       <p className="mt-1 text-sm font-medium text-current/75">{item.helper}</p>
                     </div>
-                    <span className="text-xl">⚠</span>
+                    <AlertTriangle aria-hidden="true" className="h-5 w-5 shrink-0 text-current" />
                   </div>
                   <p className="mt-4 text-4xl font-bold tracking-normal text-current">{formatNumber(item.value, language)}</p>
                 </button>
@@ -2069,23 +2749,23 @@ export default function WeeklyMileagePage() {
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <h4 className="text-sm font-bold uppercase tracking-normal text-slate-900">
-                    Weekly Mileage Update Status
+                    {oilReportCopy.weeklyMileageUpdateStatus}
                   </h4>
                   <p className="mt-1 text-sm font-semibold text-slate-500">
-                    Vehicles Checked: {formatNumber(weeklyMileageUpdateSummary.total, language)}
+                    {oilReportCopy.vehiclesChecked}: {formatNumber(weeklyMileageUpdateSummary.total, language)}
                   </p>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[420px]">
                   {[
                     {
                       key: "updated",
-                      label: t.weeklyMileage.oil.thisWeek,
+                      label: oilReportCopy.updatedThisWeek,
                       value: weeklyMileageUpdateSummary.updatedThisWeek,
                       className: "border-emerald-200 bg-emerald-50 text-emerald-800"
                     },
                     {
                       key: "not-updated",
-                      label: t.weeklyMileage.oil.notUpdatedThisWeek,
+                      label: oilReportCopy.notUpdatedThisWeek,
                       value: weeklyMileageUpdateSummary.notUpdatedThisWeek,
                       className: "border-amber-200 bg-amber-50 text-amber-800"
                     }
@@ -2103,15 +2783,15 @@ export default function WeeklyMileagePage() {
                 {[
                   {
                     key: "all",
-                    label: t.weeklyMileage.oil.filters.all
+                    label: oilReportCopy.all
                   },
                   {
                     key: "updated_this_week",
-                    label: t.weeklyMileage.oil.thisWeek
+                    label: oilReportCopy.updatedThisWeek
                   },
                   {
                     key: "not_updated_this_week",
-                    label: t.weeklyMileage.oil.notUpdatedThisWeek
+                    label: oilReportCopy.notUpdatedThisWeek
                   }
                 ].map((filter) => (
                   <button
@@ -2141,8 +2821,8 @@ export default function WeeklyMileagePage() {
                   );
                   const primaryAction =
                     row.status === "not_set"
-                      ? t.weeklyMileage.oil.setBaseline
-                      : t.weeklyMileage.oil.markOilChanged;
+                      ? oilReportCopy.setBaseline
+                      : oilReportCopy.markOilChanged;
                   const progress = getServiceProgress(row);
                   const serviceHistoryCount =
                     vehicleLogs.length ||
@@ -2155,9 +2835,9 @@ export default function WeeklyMileagePage() {
                       className: "border-white/80 bg-white/70",
                       content: (
                         <>
-                          <p className="metric-label">{t.weeklyMileage.oil.currentOdometer}</p>
+                          <p className="metric-label">{oilReportCopy.currentOdometer}</p>
                           <p className="mt-1 text-lg font-bold text-slate-950">
-                            {row.currentOdometer == null ? t.weeklyMileage.oil.noData : formatKmValue(row.currentOdometer)}
+                            {row.currentOdometer == null ? oilReportCopy.noData : formatKmValue(row.currentOdometer)}
                           </p>
                         </>
                       )
@@ -2167,7 +2847,7 @@ export default function WeeklyMileagePage() {
                       className: "border-white/80 bg-white/70",
                       content: (
                         <>
-                          <p className="metric-label">{t.weeklyMileage.nextServiceDue}</p>
+                          <p className="metric-label">{oilReportCopy.nextServiceDue}</p>
                           <p className="mt-1 text-lg font-bold text-slate-950">{formatKmValue(row.nextOilChangeDueOdometer)}</p>
                         </>
                       )
@@ -2177,7 +2857,7 @@ export default function WeeklyMileagePage() {
                       className: "border-white/80 bg-white/70",
                       content: (
                         <>
-                          <p className="metric-label">{t.weeklyMileage.oil.kmRemaining}</p>
+                          <p className="metric-label">{oilReportCopy.kmRemaining}</p>
                           <p className={`mt-1 text-2xl font-bold tracking-normal ${kmRemainingClass(row.kmRemaining)}`}>
                             {row.kmRemaining == null ? "-" : formatKmValue(row.kmRemaining)}
                           </p>
@@ -2193,7 +2873,7 @@ export default function WeeklyMileagePage() {
                       content: (
                         <>
                           <p className="mt-1.5 text-[10px] font-bold uppercase leading-4 tracking-normal text-slate-500">
-                            {t.weeklyMileage.oil.lastWeeklyMileageAdded}
+                            {oilReportCopy.lastWeeklyMileageAdded}
                           </p>
                           {row.lastWeeklyMileageDate ? (
                             <>
@@ -2201,7 +2881,7 @@ export default function WeeklyMileagePage() {
                                 {formatDate(row.lastWeeklyMileageDate, language)}
                               </p>
                               <p className="mt-1 text-xs font-semibold text-slate-600">
-                                {t.weeklyMileage.oil.odometer}: {formatKmValue(row.lastWeeklyMileageOdometer)}
+                                {oilReportCopy.odometer}: {formatKmValue(row.lastWeeklyMileageOdometer)}
                               </p>
                               <div className="mt-2 flex flex-wrap items-center gap-2">
                                 <span
@@ -2212,8 +2892,8 @@ export default function WeeklyMileagePage() {
                                   }`}
                                 >
                                   {weeklyMileageUpdatedThisWeek
-                                    ? t.weeklyMileage.oil.thisWeek
-                                    : t.weeklyMileage.oil.notUpdatedThisWeek}
+                                    ? oilReportCopy.updatedThisWeek
+                                    : oilReportCopy.notUpdatedThisWeek}
                                 </span>
                                 {weeklyMileageAddedAge ? (
                                   <span className="text-xs font-semibold text-slate-500">
@@ -2224,7 +2904,7 @@ export default function WeeklyMileagePage() {
                             </>
                           ) : (
                             <p className="mt-1 text-sm font-semibold text-slate-500">
-                              {t.weeklyMileage.oil.noWeeklyMileageFound}
+                              {oilReportCopy.noWeeklyMileageFound}
                             </p>
                           )}
                         </>
@@ -2241,12 +2921,13 @@ export default function WeeklyMileagePage() {
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <h4 className="text-2xl font-bold tracking-normal text-slate-950">{row.registration}</h4>
-                            <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${oilStatusClass(row.status)}`}>
-                              {oilStatusIcon(row.status)} {oilStatusLabelForRow(row)}
+                            <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold ${oilStatusClass(row.status)}`}>
+                              <OilStatusIcon status={row.status} />
+                              {oilStatusLabelForRow(row)}
                             </span>
                           </div>
                           <p className="mt-2 text-sm font-medium text-slate-600">
-                            {row.driverName || t.weeklyMileage.oil.noDriverAssigned} | {vehicleTypeLabel(row.vehicleType)}
+                            {row.driverName || oilReportCopy.noDriverAssigned} | {vehicleTypeLabel(row.vehicleType)}
                           </p>
                           <p className="mt-3 text-base font-bold uppercase text-slate-900">
                             {actionLine(row)}
@@ -2271,19 +2952,19 @@ export default function WeeklyMileagePage() {
                           </button>
                           <button type="button" onClick={() => openServiceModal(row.status === "not_set" ? "set" : "edit", row)} className="btn-secondary w-full justify-center gap-2">
                             <Pencil className="h-4 w-4" />
-                            {row.status === "not_set" ? t.weeklyMileage.oil.setBaseline : t.common.edit}
+                            {row.status === "not_set" ? oilReportCopy.setBaseline : oilReportCopy.edit}
                           </button>
                           <button type="button" onClick={() => void openServiceHistory(row.registration)} className="btn-secondary w-full justify-center gap-2">
                             <History className="h-4 w-4" />
-                            {t.weeklyMileage.oil.serviceHistory}
+                            {oilReportCopy.serviceHistory}
                           </button>
                         </div>
                       </div>
 
                       <div className="mt-4">
                         <div className="mb-2 flex items-center justify-between gap-3 text-xs font-semibold text-slate-500">
-                          <span>{t.weeklyMileage.oil.oilServiceUsage}</span>
-                          <span>{progress == null ? t.weeklyMileage.oil.waitingForBaseline : t.weeklyMileage.oil.percentUsed.replace("{percent}", progress.displayPercent)}</span>
+                          <span>{oilReportCopy.oilServiceUsage}</span>
+                          <span>{progress == null ? oilReportCopy.waitingForBaseline : oilReportCopy.percentUsed.replace("{percent}", progress.displayPercent)}</span>
                         </div>
                         <div className="h-2.5 overflow-hidden rounded-full bg-white/80 ring-1 ring-slate-200/70">
                           <div
@@ -2295,24 +2976,24 @@ export default function WeeklyMileagePage() {
 
                       <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-5">
                         <div>
-                          <p className="metric-label">{t.weeklyMileage.lastOilChange}</p>
-                          <p className="mt-1 font-semibold text-slate-900">{row.lastOilChangeDate ? formatDate(row.lastOilChangeDate, language) : t.weeklyMileage.oil.filters.notSet}</p>
+                          <p className="metric-label">{oilReportCopy.lastOilChange}</p>
+                          <p className="mt-1 font-semibold text-slate-900">{row.lastOilChangeDate ? formatDate(row.lastOilChangeDate, language) : oilReportCopy.notSet}</p>
                         </div>
                         <div>
-                          <p className="metric-label">{t.weeklyMileage.oil.lastOdometer}</p>
+                          <p className="metric-label">{oilReportCopy.lastOdometer}</p>
                           <p className="mt-1 font-semibold text-slate-900">{formatKmValue(row.lastOilChangeOdometer)}</p>
                         </div>
                         <div>
-                          <p className="metric-label">{t.weeklyMileage.oil.interval}</p>
+                          <p className="metric-label">{oilReportCopy.interval}</p>
                           <p className="mt-1 font-semibold text-slate-900">{formatKmValue(row.oilChangeIntervalKm)} KM</p>
                         </div>
                         <div>
-                          <p className="metric-label">{t.weeklyMileage.oil.overdueBy}</p>
+                          <p className="metric-label">{oilReportCopy.overdueBy}</p>
                           <p className="mt-1 font-semibold text-rose-700">{row.overdueKm == null ? "-" : formatKmValue(row.overdueKm)}</p>
                         </div>
                         <div>
-                          <p className="metric-label">{t.weeklyMileage.oil.history}</p>
-                          <p className="mt-1 font-semibold text-slate-900">{serviceHistoryCount ? `${formatNumber(serviceHistoryCount, language)} ${t.weeklyMileage.oil.records}` : t.weeklyMileage.oil.noRecords}</p>
+                          <p className="metric-label">{oilReportCopy.history}</p>
+                          <p className="mt-1 font-semibold text-slate-900">{serviceHistoryCount ? `${formatNumber(serviceHistoryCount, language)} ${oilReportCopy.records}` : oilReportCopy.noRecords}</p>
                         </div>
                       </div>
                     </article>
