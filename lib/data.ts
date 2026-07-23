@@ -2345,6 +2345,50 @@ export async function fetchShipments() {
   })) as ShipmentWithDriver[];
 }
 
+function normalizeBookingDiaryRow(booking: BookingDiaryEntry) {
+  return {
+    ...booking,
+    client_id: booking.client_id ?? null,
+    client: booking.client ?? null,
+    pickup_time: booking.pickup_time ?? null,
+    amount_pallets: booking.amount_pallets ?? null,
+    weight: booking.weight ?? null,
+    dimensions: booking.dimensions ?? null,
+    warehouse_no: booking.warehouse_no ?? null,
+    job_order_number: booking.job_order_number?.trim() || null,
+    created_by_user_id: booking.created_by_user_id ?? null,
+    vehicle: normalizeVehicleRegistration(booking.vehicle),
+    driver: normalizeDisplayName(booking.driver),
+    notes: booking.notes ?? null,
+    pickup_place_id: booking.pickup_place_id ?? null,
+    dropoff_place_id: booking.dropoff_place_id ?? null,
+    pickup_address: booking.pickup_address ?? null,
+    dropoff_address: booking.dropoff_address ?? null,
+    pickup_lat: parseOptionalNumeric(booking.pickup_lat),
+    pickup_lng: parseOptionalNumeric(booking.pickup_lng),
+    dropoff_lat: parseOptionalNumeric(booking.dropoff_lat),
+    dropoff_lng: parseOptionalNumeric(booking.dropoff_lng),
+    estimated_distance_km: parseOptionalNumeric(booking.estimated_distance_km),
+    estimated_duration_minutes: parseOptionalNumeric(booking.estimated_duration_minutes),
+    google_maps_route_url: booking.google_maps_route_url ?? null,
+    distance_source: booking.distance_source ?? null,
+    route_calculated_at: booking.route_calculated_at ?? null,
+    route_distance_meters: parseOptionalNumeric(booking.route_distance_meters),
+    route_duration_seconds: parseOptionalNumeric(booking.route_duration_seconds),
+    route_static_duration_seconds: parseOptionalNumeric(booking.route_static_duration_seconds),
+    route_departure_time: booking.route_departure_time ?? null,
+    route_preference: booking.route_preference ?? null,
+    route_label: booking.route_label ?? null,
+    route_description: booking.route_description ?? null,
+    route_polyline: booking.route_polyline ?? null,
+    route_traffic_aware: booking.route_traffic_aware ?? null,
+    route_source: booking.route_source ?? null,
+    route_fallback_info: booking.route_fallback_info ?? null,
+    created_by: booking.created_by ?? null,
+    modified_by: booking.modified_by ?? null
+  };
+}
+
 export async function fetchBookingDiaryEntries() {
   const pageSize = 1000;
   const rows: BookingDiaryEntry[] = [];
@@ -2376,36 +2420,25 @@ export async function fetchBookingDiaryEntries() {
     if (page.length < pageSize) break;
   }
 
-  return rows.map((booking) => ({
-    ...booking,
-    client_id: booking.client_id ?? null,
-    client: booking.client ?? null,
-    pickup_time: booking.pickup_time ?? null,
-    amount_pallets: booking.amount_pallets ?? null,
-    weight: booking.weight ?? null,
-    dimensions: booking.dimensions ?? null,
-    warehouse_no: booking.warehouse_no ?? null,
-    job_order_number: booking.job_order_number?.trim() || null,
-    created_by_user_id: booking.created_by_user_id ?? null,
-    vehicle: normalizeVehicleRegistration(booking.vehicle),
-    driver: normalizeDisplayName(booking.driver),
-    notes: booking.notes ?? null,
-    pickup_place_id: booking.pickup_place_id ?? null,
-    dropoff_place_id: booking.dropoff_place_id ?? null,
-    pickup_address: booking.pickup_address ?? null,
-    dropoff_address: booking.dropoff_address ?? null,
-    pickup_lat: parseOptionalNumeric(booking.pickup_lat),
-    pickup_lng: parseOptionalNumeric(booking.pickup_lng),
-    dropoff_lat: parseOptionalNumeric(booking.dropoff_lat),
-    dropoff_lng: parseOptionalNumeric(booking.dropoff_lng),
-    estimated_distance_km: parseOptionalNumeric(booking.estimated_distance_km),
-    estimated_duration_minutes: parseOptionalNumeric(booking.estimated_duration_minutes),
-    google_maps_route_url: booking.google_maps_route_url ?? null,
-    distance_source: booking.distance_source ?? null,
-    route_calculated_at: booking.route_calculated_at ?? null,
-    created_by: booking.created_by ?? null,
-    modified_by: booking.modified_by ?? null
-  }));
+  return rows.map(normalizeBookingDiaryRow);
+}
+
+export async function fetchBookingDiaryEntriesByDate(bookingDate: string) {
+  const { data, error } = await supabase
+    .from("booking_diary")
+    .select("*, client:clients(id,name,active)")
+    .eq("booking_date", bookingDate)
+    .order("pickup_time", { ascending: true, nullsFirst: false })
+    .order("updated_at", { ascending: false })
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: true });
+
+  if (error) {
+    logDataError("fetchBookingDiaryEntriesByDate error:", error, { bookingDate });
+    throw new Error(error.message || error.details || error.hint || "Unable to load booking diary.");
+  }
+
+  return ((data ?? []) as BookingDiaryEntry[]).map(normalizeBookingDiaryRow);
 }
 
 export async function fetchSavedLocations(locationType?: SavedLocationType) {
@@ -2982,6 +3015,28 @@ export async function fetchTripJourneys(): Promise<TripJourneyWithFuel[]> {
       linkedFuelLogs: linksByTrip.get(String(trip.id)) ?? []
     }),
     linkedFuelLogs: linksByTrip.get(String(trip.id)) ?? []
+  }));
+}
+
+export async function fetchTripJourneysByDate(tripDate: string): Promise<TripJourneyWithFuel[]> {
+  const tripResult = await supabase
+    .from("trip_journeys")
+    .select("*")
+    .eq("date", tripDate)
+    .order("pickup_time", { ascending: true, nullsFirst: false })
+    .order("created_at", { ascending: false });
+
+  if (tripResult.error) {
+    if (isMissingTableError(tripResult.error)) {
+      return [];
+    }
+    logDataError("fetchTripJourneysByDate error:", tripResult.error, { tripDate });
+    throw new Error(tripResult.error.message || "Unable to load trip journeys.");
+  }
+
+  return ((tripResult.data ?? []) as TripJourney[]).map((row) => ({
+    ...normalizeTripJourneyRow(row),
+    linkedFuelLogs: []
   }));
 }
 

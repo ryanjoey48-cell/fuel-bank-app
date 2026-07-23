@@ -8,7 +8,7 @@ import { createApiError, createApiSuccess, parseJsonSafely } from "@/lib/http";
 import {
   getBangkokRouteDeparture,
   parseGoogleDurationSeconds,
-  selectFastestPracticalRoute,
+  selectRouteWithFallback,
   type GoogleComputedRoute
 } from "@/lib/route-planning";
 
@@ -70,10 +70,10 @@ function toRoutesWaypoint(point: string | RoutePoint | undefined): RoutesWaypoin
   return address ? { address } : null;
 }
 
-function logGoogleMapsDistanceError(error: unknown, fallbackInfo?: Record<string, unknown> | null) {
+function logGoogleMapsDistanceError(error: unknown, details?: Record<string, unknown> | null) {
   console.warn("[Fuel Bank] Google traffic-aware route estimate failed", {
     message: error instanceof Error ? error.message : String(error),
-    fallbackInfo: fallbackInfo ?? null
+    ...(details ?? {})
   });
 }
 
@@ -125,11 +125,21 @@ export async function POST(request: Request) {
       body: JSON.stringify(computeBody)
     });
     const routesData = await parseJsonSafely<ComputeRoutesResponse>(routesResponse);
-    const selectedRoute = selectFastestPracticalRoute(routesData.routes ?? []);
+    const routeSelection = selectRouteWithFallback(routesData.routes ?? []);
+    const selectedRoute = routeSelection.selectedRoute;
+    const routeLogDetails = {
+      googleStatus: routesResponse.status,
+      routesReturned: routesData.routes?.length ?? 0,
+      validRoutesReturned: routeSelection.validRoutes.length,
+      fallbackRouteUsed: routeSelection.fallbackRouteUsed,
+      googleErrorStatus: routesData.error?.status ?? null,
+      googleErrorMessage: routesData.error?.message ?? null,
+      fallbackInfo: routesData.fallbackInfo ?? null
+    };
 
     if (!routesResponse.ok || !selectedRoute) {
       const rawMessage = routesData.error?.message || "Traffic-aware route data is unavailable. Please use the manual estimate.";
-      logGoogleMapsDistanceError(rawMessage, routesData.fallbackInfo);
+      logGoogleMapsDistanceError(rawMessage, routeLogDetails);
       const errorCode = extractGoogleMapsErrorCode(rawMessage) ?? routesData.error?.status ?? null;
       return Response.json(createApiError(getGoogleMapsErrorMessage(errorCode, rawMessage) ?? rawMessage), { status: 422 });
     }
@@ -138,8 +148,8 @@ export async function POST(request: Request) {
     const staticDurationSeconds = parseGoogleDurationSeconds(selectedRoute.staticDuration);
     const routeLabels = selectedRoute.routeLabels ?? [];
     const fallbackInfo = routesData.fallbackInfo ?? null;
-    if (fallbackInfo) {
-      console.warn("[Fuel Bank] Google Routes API used fallback routing", { fallbackInfo });
+    if (fallbackInfo || routeSelection.fallbackRouteUsed) {
+      console.warn("[Fuel Bank] Google Routes API used fallback routing", routeLogDetails);
     }
 
     return Response.json(createApiSuccess({
@@ -160,6 +170,9 @@ export async function POST(request: Request) {
       departureTimeBasis: departure.timeBasis,
       calculatedAt: new Date().toISOString(),
       alternativesReturned: routesData.routes?.length ?? 0,
+      validRoutesReturned: routeSelection.validRoutes.length,
+      fallbackRouteUsed: routeSelection.fallbackRouteUsed,
+      fallbackReason: routeSelection.fallbackReason,
       selectedRouteIsGoogleDefault: routeLabels.includes("DEFAULT_ROUTE"),
       legs: (selectedRoute.legs ?? []).map((leg) => ({
         distanceMeters: leg.distanceMeters ?? null,

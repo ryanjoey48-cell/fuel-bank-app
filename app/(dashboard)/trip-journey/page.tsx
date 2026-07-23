@@ -259,6 +259,7 @@ const tripJourneyCopy = {
     trafficDataUnavailable: "Traffic data unavailable",
     currentTrafficEstimate: "Current-traffic estimate",
     plannedTrafficEstimate: "Planned departure traffic",
+    fallbackRouteUsed: "Google's available route was used because no preferred practical route was returned.",
     routeNeedsRefresh: "Route inputs changed. Refresh the traffic-aware estimate.",
     standardDriveWarning: "Standard driving route; truck restrictions are not checked.",
     calculated: "Calculated",
@@ -781,8 +782,9 @@ const tripJourneyCopyOverrides: Partial<Record<keyof typeof tripJourneyCopy, Par
     trafficDataUnavailable: "ไม่มีข้อมูลการจราจร",
     currentTrafficEstimate: "ประมาณการจากการจราจรปัจจุบัน",
     plannedTrafficEstimate: "การจราจรตามเวลาออกเดินทาง",
+    fallbackRouteUsed: "Google ไม่พบเส้นทางที่ต้องการ ระบบจึงเลือกเส้นทางที่ใช้งานได้ดีที่สุดแทน",
     routeNeedsRefresh: "ข้อมูลเส้นทางเปลี่ยนแล้ว โปรดรีเฟรชประมาณการการจราจร",
-    standardDriveWarning: "เส้นทางขับรถมาตรฐาน ไม่ได้ตรวจข้อจำกัดรถบรรทุก",
+    standardDriveWarning: "เส้นทางขับรถมาตรฐาน ยังไม่ได้ตรวจข้อจำกัดรถบรรทุก",
     calculated: "คำนวณแล้ว"
   }
 };
@@ -2794,6 +2796,20 @@ export default function TripJourneyPage() {
             }
           : current
       );
+      const routeStatusMessage = estimate.fallbackRouteUsed
+        ? copy.fallbackRouteUsed
+        : estimate.trafficAware
+          ? copy.trafficAwareEstimate
+          : copy.trafficDataUnavailable;
+      if (estimate.fallbackRouteUsed) {
+        setDistanceMessage(
+          `${copy.calculated}: ${distanceKm.toFixed(1)} km${durationMinutes != null ? ` / ${durationMinutes} min` : ""} · ${
+            routeStatusMessage
+          }`
+        );
+        setDistanceDurationText(durationText);
+        return;
+      }
       setDistanceMessage(
         `${copy.calculated}: ${distanceKm.toFixed(1)} km${durationMinutes != null ? ` / ${durationMinutes} min` : ""} · ${
           estimate.trafficAware ? copy.trafficAwareEstimate : copy.trafficDataUnavailable

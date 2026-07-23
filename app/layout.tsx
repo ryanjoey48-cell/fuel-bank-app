@@ -4,9 +4,9 @@ import { LanguageProvider } from "@/lib/language-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  applicationName: "Fuel & Bank App",
-  title: "Fuel & Bank App",
-  description: "Fuel log and bank transfer management for logistics teams.",
+  applicationName: "Expert Express Sender Logistics Control",
+  title: "Expert Express Sender Logistics Control",
+  description: "Logistics operations, dispatch, fuel, fleet, and trip control for Expert Express Sender.",
   manifest: "/manifest.json",
   icons: {
     icon: [
@@ -33,8 +33,6 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   viewportFit: "cover",
   themeColor: "#000000",
   colorScheme: "light"

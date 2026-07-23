@@ -23,6 +23,7 @@ const ACCENTS = {
 
 function getHeaderAccent(pathname: string) {
   if (pathname.startsWith("/booking-diary")) return ACCENTS.blue;
+  if (pathname.startsWith("/dispatch")) return ACCENTS.blue;
   if (pathname.startsWith("/trip-journey")) return ACCENTS.green;
   if (pathname.startsWith("/fuel-logs")) return ACCENTS.orange;
   if (pathname.startsWith("/fuel-spend-report")) return ACCENTS.indigo;

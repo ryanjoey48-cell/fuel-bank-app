@@ -35,12 +35,22 @@ export type TrafficAwareRouteEstimate = {
   departureTimeBasis: RouteDeparture["timeBasis"];
   calculatedAt: string;
   alternativesReturned: number;
+  validRoutesReturned: number;
+  fallbackRouteUsed: boolean;
+  fallbackReason: string | null;
   selectedRouteIsGoogleDefault: boolean;
   legs: Array<{
     distanceMeters: number | null;
     durationSeconds: number | null;
     staticDurationSeconds: number | null;
   }>;
+};
+
+export type RouteSelectionResult = {
+  selectedRoute: GoogleComputedRoute | null;
+  validRoutes: GoogleComputedRoute[];
+  fallbackRouteUsed: boolean;
+  fallbackReason: string | null;
 };
 
 export function parseGoogleDurationSeconds(value: string | null | undefined) {
@@ -95,22 +105,57 @@ function isShorterDistanceReference(route: GoogleComputedRoute) {
   return route.routeLabels?.includes("SHORTER_DISTANCE") ?? false;
 }
 
-export function selectFastestPracticalRoute(routes: GoogleComputedRoute[]) {
+function isValidRoute(route: GoogleComputedRoute) {
+  const durationSeconds = parseGoogleDurationSeconds(route.duration);
+  return Number.isFinite(route.distanceMeters) && Number(route.distanceMeters) > 0 && durationSeconds != null;
+}
+
+function compareFastestRoute(
+  route: GoogleComputedRoute,
+  selected: GoogleComputedRoute | null,
+  selectedDuration: number
+) {
+  const durationSeconds = parseGoogleDurationSeconds(route.duration);
+  if (durationSeconds == null) return false;
+  const faster = durationSeconds < selectedDuration;
+  const preferredTie = durationSeconds === selectedDuration && isDefaultRoute(route) && selected != null && !isDefaultRoute(selected);
+  return !selected || faster || preferredTie;
+}
+
+export function selectRouteWithFallback(routes: GoogleComputedRoute[]): RouteSelectionResult {
+  const validRoutes = routes.filter(isValidRoute);
   let selected: GoogleComputedRoute | null = null;
   let selectedDuration = Number.POSITIVE_INFINITY;
 
-  for (const route of routes) {
+  for (const route of validRoutes) {
     if (isShorterDistanceReference(route)) continue;
     const durationSeconds = parseGoogleDurationSeconds(route.duration);
-    if (!Number.isFinite(route.distanceMeters) || Number(route.distanceMeters) <= 0 || durationSeconds == null) continue;
-
-    const faster = durationSeconds < selectedDuration;
-    const preferredTie = durationSeconds === selectedDuration && isDefaultRoute(route) && selected != null && !isDefaultRoute(selected);
-    if (!selected || faster || preferredTie) {
+    if (compareFastestRoute(route, selected, selectedDuration)) {
       selected = route;
-      selectedDuration = durationSeconds;
+      selectedDuration = durationSeconds ?? selectedDuration;
     }
   }
 
-  return selected;
+  if (selected) {
+    return { selectedRoute: selected, validRoutes, fallbackRouteUsed: false, fallbackReason: null };
+  }
+
+  for (const route of validRoutes) {
+    const durationSeconds = parseGoogleDurationSeconds(route.duration);
+    if (compareFastestRoute(route, selected, selectedDuration)) {
+      selected = route;
+      selectedDuration = durationSeconds ?? selectedDuration;
+    }
+  }
+
+  return {
+    selectedRoute: selected,
+    validRoutes,
+    fallbackRouteUsed: selected != null,
+    fallbackReason: selected ? "only_shorter_distance_routes_available" : null
+  };
+}
+
+export function selectFastestPracticalRoute(routes: GoogleComputedRoute[]) {
+  return selectRouteWithFallback(routes).selectedRoute;
 }

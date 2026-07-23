@@ -7,16 +7,16 @@ import { usePathname } from "next/navigation";
 import { AccountMenu } from "@/components/account-menu";
 import { useLanguage } from "@/lib/language-provider";
 
-type PageKey = "dashboard" | "bookingDiary" | "drivers" | "fuelLogs" | "fuelSpendReport" | "shipments" | "transfers" | "tripJourney" | "weeklyMileage";
+type PageKey = "dashboard" | "bookingDiary" | "dispatch" | "drivers" | "fuelLogs" | "fuelSpendReport" | "shipments" | "tripJourney" | "weeklyMileage";
 
 const PAGE_KEY_BY_PATH: Record<string, PageKey> = {
   "/booking-diary": "bookingDiary",
   "/dashboard": "dashboard",
+  "/dispatch": "dispatch",
   "/drivers": "drivers",
   "/fuel-logs": "fuelLogs",
   "/fuel-spend-report": "fuelSpendReport",
   "/shipments": "shipments",
-  "/transfers": "transfers",
   "/trip-journey": "tripJourney",
   "/weekly-mileage": "weeklyMileage"
 };
@@ -32,6 +32,7 @@ const ACCENTS = {
 
 function getMobileAccent(pathname: string) {
   if (pathname.startsWith("/booking-diary")) return ACCENTS.blue;
+  if (pathname.startsWith("/dispatch")) return ACCENTS.blue;
   if (pathname.startsWith("/trip-journey")) return ACCENTS.green;
   if (pathname.startsWith("/fuel-logs")) return ACCENTS.orange;
   if (pathname.startsWith("/fuel-spend-report")) return ACCENTS.indigo;

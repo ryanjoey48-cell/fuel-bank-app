@@ -1,7 +1,6 @@
 ﻿"use client";
 
 import {
-  ArrowRightLeft,
   CalendarPlus,
   CheckCircle2,
   ClipboardList,
@@ -24,16 +23,15 @@ import {
   fetchFuelLogs,
   fetchOilChangeBaselinesForVehicles,
   fetchSupportTicketNotificationCount,
-  fetchTransfers,
   fetchTripJourneys,
   fetchVehicles,
   fetchWeeklyMileage
 } from "@/lib/data";
+import { buildDispatchRows, summarizeDispatchRows } from "@/lib/dispatch";
 import { useLanguage } from "@/lib/language-provider";
 import { buildOilChangeAlertRows, type OilChangeAlertRow } from "@/lib/operations";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/utils";
 import type {
-  BankTransferWithDriver,
   BookingDiaryEntry,
   Driver,
   FuelLogWithDriver,
@@ -280,7 +278,6 @@ export default function DashboardPage() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [oilChangeBaselines, setOilChangeBaselines] = useState<OilChangeBaseline[]>([]);
   const [fuelLogs, setFuelLogs] = useState<FuelLogWithDriver[]>([]);
-  const [transfers, setTransfers] = useState<BankTransferWithDriver[]>([]);
   const [weeklyMileage, setWeeklyMileage] = useState<WeeklyMileageEntry[]>([]);
   const [bookings, setBookings] = useState<BookingDiaryEntry[]>([]);
   const [tripJourneys, setTripJourneys] = useState<TripJourneyWithFuel[]>([]);
@@ -292,29 +289,25 @@ export default function DashboardPage() {
 
   const copy = {
     allIssues: language === "th" ? "ดูรายการทั้งหมด" : "View all issues",
-    bankTransfersNotChecked: language === "th" ? "รายการโอนเงินยังไม่ได้ตรวจสอบ" : "Bank transfers not checked",
     currentMonth: language === "th" ? "เดือนปัจจุบัน" : "Current month",
     dateRange: language === "th" ? "ช่วงวันที่" : "Date range",
+    dispatchToday: language === "th" ? "งานจัดส่งวันนี้" : "Today's Dispatch",
+    dispatchTodayDescription: language === "th" ? "ภาพรวมความพร้อมงานจองและทริปสำหรับวันนี้" : "Readiness snapshot for today's bookings and trips.",
     dueSoon: language === "th" ? "ใกล้ครบกำหนด" : "Due Soon",
     fuelEntries: language === "th" ? "รายการน้ำมัน" : "fuel entries",
     fuelLogsNotChecked: language === "th" ? "บันทึกน้ำมันยังไม่ได้ตรวจสอบ" : "Fuel logs not checked",
     latestFuel: language === "th" ? "บันทึกน้ำมันล่าสุด 5 รายการ" : "Latest 5 fuel entries",
-    latestTransfers: language === "th" ? "รายการโอนเงินล่าสุด 5 รายการ" : "Latest 5 bank transfers",
     monthFuelSpend: language === "th" ? "ค่าน้ำมันเดือนนี้" : "This month fuel spend",
-    monthTransfers: language === "th" ? "ยอดโอนเงินเดือนนี้" : "This month bank transfers",
     needsAttention: language === "th" ? "ต้องตรวจสอบ" : "Needs Attention",
     needsBaseline: language === "th" ? "ต้องตั้งค่าเริ่มต้น" : "Needs baseline",
     noAttention: language === "th" ? "ไม่พบรายการเร่งด่วนที่ต้องตรวจสอบในเดือนนี้" : "No urgent review items found for this month.",
     noFuel: language === "th" ? "ไม่มีรายการน้ำมันในเดือนนี้" : "No fuel entries for this month.",
-    noTransfers: language === "th" ? "ไม่มีรายการโอนเงินในเดือนนี้" : "No bank transfers for this month.",
     notCheckedThisMonth: language === "th" ? "รายการในเดือนนี้ยังไม่ได้ตรวจสอบ" : "records in this month are still Not Checked.",
     oilDue: language === "th" ? "เปลี่ยนน้ำมันเครื่องครบกำหนดหรือเกินกำหนด" : "Oil changes due or overdue",
     overdue: language === "th" ? "เกินกำหนด" : "Overdue",
     previousMonth: language === "th" ? "เดือนก่อนหน้า" : "Previous month",
     remaining: language === "th" ? "กม. คงเหลือ" : "KM remaining",
     selectedMonth: language === "th" ? "เดือนที่เลือก" : "Selected month",
-    totalOutflow: language === "th" ? "ยอดเงินออกทั้งหมดต่อเดือน" : "Total monthly outflow",
-    transfers: language === "th" ? "รายการโอน" : "transfers",
     unchecked: language === "th" ? "รายการยังไม่ได้ตรวจสอบ" : "Unchecked records"
   };
 
@@ -322,7 +315,6 @@ export default function DashboardPage() {
     actions: language === "th" ? "ทางลัด" : "Quick Actions",
     addBooking: language === "th" ? "+ งานจอง" : "+ Booking",
     addFuelLog: language === "th" ? "+ น้ำมัน" : "+ Fuel Log",
-    addTransfer: language === "th" ? "+ โอนเงิน" : "+ Transfer",
     addTripJourney: language === "th" ? "+ Trip Journey" : "+ Trip Journey",
     addVehicle: language === "th" ? "+ รถ" : "+ Vehicle",
     avgActualKm: language === "th" ? "ระยะทางใช้งานเฉลี่ย" : "Average working KM",
@@ -348,6 +340,7 @@ export default function DashboardPage() {
     tripsWaitingForReviewDetail: language === "th" ? "ทริปที่เสร็จแล้วแต่ยังต้องยืนยัน เช่น คนขับ รถ เส้นทาง หรือการตรวจจากผู้ดูแล" : "Trips have been completed but still need driver, vehicle, route, or admin confirmation.",
     tripsCompletedThisMonth: language === "th" ? "ทริปที่เสร็จเดือนนี้" : "Trips completed this month",
     viewFuelLogs: language === "th" ? "ดูบันทึกน้ำมัน" : "View Fuel Logs",
+    viewDispatch: language === "th" ? "ดูกระดานจัดส่งงาน" : "View Dispatch Board",
     viewLogs: language === "th" ? "ตรวจบันทึก" : "Review Logs",
     viewTripJourney: language === "th" ? "ดู Trip Journey" : "View Trip Journey",
     viewVehicles: language === "th" ? "ดูรถ" : "View Vehicles"
@@ -363,11 +356,10 @@ export default function DashboardPage() {
         }
         setError(null);
 
-        const [driverRows, vehicleRows, fuelRows, transferRows, mileageRows, bookingRows, tripRows, supportTicketsWaiting] = await Promise.all([
+        const [driverRows, vehicleRows, fuelRows, mileageRows, bookingRows, tripRows, supportTicketsWaiting] = await Promise.all([
           fetchDrivers(),
           fetchVehicles(),
           fetchFuelLogs(),
-          fetchTransfers(),
           fetchWeeklyMileage(),
           fetchBookingDiaryEntries(),
           fetchTripJourneys(),
@@ -379,7 +371,6 @@ export default function DashboardPage() {
         setVehicles(vehicleRows);
         setOilChangeBaselines(baselineRows);
         setFuelLogs(fuelRows);
-        setTransfers(transferRows);
         setWeeklyMileage(mileageRows);
         setBookings(bookingRows);
         setTripJourneys(tripRows);
@@ -414,18 +405,10 @@ export default function DashboardPage() {
     () => fuelLogs.filter((log) => isInRange(log.date, monthRange.startDate, monthRange.endDate)),
     [fuelLogs, monthRange.endDate, monthRange.startDate]
   );
-  const monthlyTransfers = useMemo(
-    () => transfers.filter((transfer) => isInRange(transfer.date, monthRange.startDate, monthRange.endDate)),
-    [monthRange.endDate, monthRange.startDate, transfers]
-  );
   const previousMonthRange = useMemo(() => getMonthRange(shiftMonth(monthRange.monthKey, -1)), [monthRange.monthKey]);
   const previousMonthlyFuelLogs = useMemo(
     () => fuelLogs.filter((log) => isInRange(log.date, previousMonthRange.startDate, previousMonthRange.endDate)),
     [fuelLogs, previousMonthRange.endDate, previousMonthRange.startDate]
-  );
-  const previousMonthlyTransfers = useMemo(
-    () => transfers.filter((transfer) => isInRange(transfer.date, previousMonthRange.startDate, previousMonthRange.endDate)),
-    [previousMonthRange.endDate, previousMonthRange.startDate, transfers]
   );
   const monthlyBookings = useMemo(
     () => bookings.filter((booking) => isInRange(booking.booking_date, monthRange.startDate, monthRange.endDate)),
@@ -434,6 +417,23 @@ export default function DashboardPage() {
   const monthlyTrips = useMemo(
     () => tripJourneys.filter((trip) => isInRange(trip.trip_date, monthRange.startDate, monthRange.endDate)),
     [monthRange.endDate, monthRange.startDate, tripJourneys]
+  );
+  const todayKey = getLocalDateKey(new Date());
+  const todaysBookings = useMemo(
+    () => bookings.filter((booking) => booking.booking_date === todayKey),
+    [bookings, todayKey]
+  );
+  const todaysTrips = useMemo(
+    () => tripJourneys.filter((trip) => trip.trip_date === todayKey || trip.date === todayKey),
+    [todayKey, tripJourneys]
+  );
+  const dispatchTodayRows = useMemo(
+    () => buildDispatchRows({ bookings: todaysBookings, trips: todaysTrips, drivers, vehicles }),
+    [drivers, todaysBookings, todaysTrips, vehicles]
+  );
+  const dispatchTodaySummary = useMemo(
+    () => summarizeDispatchRows(dispatchTodayRows),
+    [dispatchTodayRows]
   );
   const vehiclesWithOilBaselines = useMemo(
     () => applyOilBaselinesLikeOilPage(vehicles, oilChangeBaselines),
@@ -451,15 +451,11 @@ export default function DashboardPage() {
   );
 
   const monthlyFuelSpend = monthlyFuelLogs.reduce((sum, log) => sum + getSafeNumber(log.total_cost), 0);
-  const monthlyTransferTotal = monthlyTransfers.reduce((sum, transfer) => sum + getSafeNumber(transfer.amount), 0);
   const previousMonthlyFuelSpend = previousMonthlyFuelLogs.reduce((sum, log) => sum + getSafeNumber(log.total_cost), 0);
-  const previousMonthlyTransferTotal = previousMonthlyTransfers.reduce((sum, transfer) => sum + getSafeNumber(transfer.amount), 0);
   const uncheckedFuelCount = monthlyFuelLogs.filter((log) => !log.receipt_checked).length;
-  const uncheckedTransferCount = monthlyTransfers.filter((transfer) => transfer.receipt_status !== "approved").length;
   const previousUncheckedFuelCount = previousMonthlyFuelLogs.filter((log) => !log.receipt_checked).length;
-  const previousUncheckedTransferCount = previousMonthlyTransfers.filter((transfer) => transfer.receipt_status !== "approved").length;
-  const uncheckedRecords = uncheckedFuelCount + uncheckedTransferCount;
-  const previousUncheckedRecords = previousUncheckedFuelCount + previousUncheckedTransferCount;
+  const uncheckedRecords = uncheckedFuelCount;
+  const previousUncheckedRecords = previousUncheckedFuelCount;
   const tripBookingIds = new Set(
     tripJourneys
       .flatMap((trip) => [trip.booking_diary_id, trip.booking_id])
@@ -565,19 +561,6 @@ export default function DashboardPage() {
       });
     }
 
-    if (uncheckedTransferCount) {
-      items.push({
-        actionHref: "/transfers",
-        actionLabel: opsCopy.viewLogs,
-        count: uncheckedTransferCount,
-        detail: `${copy.transfers} ${copy.notCheckedThisMonth}`,
-        icon: ArrowRightLeft,
-        key: "unchecked-transfers",
-        title: copy.bankTransfersNotChecked,
-        tone: "info"
-      });
-    }
-
     if (monthlyBookingsWithoutTrips.length) {
       items.push({
         actionHref: "/booking-diary",
@@ -592,7 +575,7 @@ export default function DashboardPage() {
     }
 
     return items;
-  }, [copy.bankTransfersNotChecked, copy.dueSoon, copy.fuelEntries, copy.fuelLogsNotChecked, copy.needsBaseline, copy.notCheckedThisMonth, copy.oilDue, copy.overdue, copy.remaining, copy.transfers, language, monthlyBookingsWithoutTrips.length, oilAttentionRows, oilDueRows, opsCopy.missingTripRecords, opsCopy.tripsWaitingForReview, opsCopy.tripsWaitingForReviewDetail, opsCopy.viewLogs, opsCopy.viewTripJourney, opsCopy.viewVehicles, supportTicketAttentionCount, t.support.notifications.supportTicketsWaiting, t.support.notifications.supportTicketsWaitingDetail, t.support.notifications.viewTickets, tripsWaitingForReview.length, uncheckedFuelCount, uncheckedTransferCount]);
+  }, [copy.dueSoon, copy.fuelEntries, copy.fuelLogsNotChecked, copy.needsBaseline, copy.notCheckedThisMonth, copy.oilDue, copy.overdue, copy.remaining, language, monthlyBookingsWithoutTrips.length, oilAttentionRows, oilDueRows, opsCopy.missingTripRecords, opsCopy.tripsWaitingForReview, opsCopy.tripsWaitingForReviewDetail, opsCopy.viewLogs, opsCopy.viewTripJourney, opsCopy.viewVehicles, supportTicketAttentionCount, t.support.notifications.supportTicketsWaiting, t.support.notifications.supportTicketsWaitingDetail, t.support.notifications.viewTickets, tripsWaitingForReview.length, uncheckedFuelCount]);
 
   useEffect(() => {
     if (process.env.NODE_ENV === "production") {
@@ -605,11 +588,7 @@ export default function DashboardPage() {
       fuelLogsLoaded: fuelLogs.length,
       monthlyFuelLogs: monthlyFuelLogs.length,
       fuelSpendCalculated: monthlyFuelSpend,
-      bankTransfersLoaded: transfers.length,
-      monthlyBankTransfers: monthlyTransfers.length,
-      bankTransferTotalCalculated: monthlyTransferTotal,
       uncheckedFuelCount,
-      uncheckedTransferCount,
       tripsWaitingForReview: tripsWaitingForReview.length,
       oilChangeItemsCount: oilDueRows.length,
       oilBaselineCount: oilChangeBaselines.length
@@ -618,16 +597,12 @@ export default function DashboardPage() {
     fuelLogs.length,
     monthlyFuelLogs.length,
     monthlyFuelSpend,
-    monthlyTransferTotal,
-    monthlyTransfers.length,
     monthRange.endDate,
     monthRange.startDate,
     oilChangeBaselines.length,
     oilDueRows.length,
     tripsWaitingForReview.length,
-    transfers.length,
-    uncheckedFuelCount,
-    uncheckedTransferCount
+    uncheckedFuelCount
   ]);
 
   const visibleAttentionItems = attentionItems.slice(0, 5);
@@ -639,18 +614,6 @@ export default function DashboardPage() {
       value: formatCurrency(monthlyFuelSpend, language),
       helper: `${formatTrend(monthlyFuelSpend, previousMonthlyFuelSpend, language)} | ${formatNumber(monthlyFuelLogs.length, language)} ${copy.fuelEntries}`,
       icon: Fuel
-    },
-    {
-      label: copy.monthTransfers,
-      value: formatCurrency(monthlyTransferTotal, language),
-      helper: `${formatTrend(monthlyTransferTotal, previousMonthlyTransferTotal, language)} | ${formatNumber(monthlyTransfers.length, language)} transfers`,
-      icon: ArrowRightLeft
-    },
-    {
-      label: copy.totalOutflow,
-      value: formatCurrency(monthlyFuelSpend + monthlyTransferTotal, language),
-      helper: dateRangeLabel,
-      icon: Wallet
     },
     {
       label: opsCopy.tripsWaitingForReview,
@@ -760,7 +723,6 @@ export default function DashboardPage() {
                 {[
                   { href: "/fuel-logs", label: opsCopy.addFuelLog, icon: Plus },
                   { href: "/trip-journey", label: opsCopy.addTripJourney, icon: Route },
-                  { href: "/transfers", label: opsCopy.addTransfer, icon: ArrowRightLeft },
                   { href: "/booking-diary", label: opsCopy.addBooking, icon: CalendarPlus },
                   { href: "/drivers", label: opsCopy.addVehicle, icon: Truck }
                 ].map((action) => (
@@ -770,6 +732,32 @@ export default function DashboardPage() {
                   </a>
                 ))}
               </div>
+            </div>
+          </section>
+
+          <section className="mt-5 surface-card p-4 sm:p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 className="section-title">{copy.dispatchToday}</h3>
+                <p className="section-subtitle">{copy.dispatchTodayDescription}</p>
+              </div>
+              <a href="/dispatch" className="btn-primary min-h-9 px-3 py-1.5 text-xs">
+                {opsCopy.viewDispatch}
+              </a>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              {[
+                [language === "th" ? "งานวันนี้" : "Jobs today", dispatchTodaySummary.totalJobs],
+                [language === "th" ? "พร้อม" : "Ready", dispatchTodaySummary.ready],
+                [language === "th" ? "ยังไม่มอบหมาย" : "Unassigned", dispatchTodaySummary.unassigned],
+                [language === "th" ? "งานชนกัน" : "Potential conflicts", dispatchTodaySummary.potentialConflicts],
+                [language === "th" ? "ขาด Trip Journey" : "Missing Trip Journey", dispatchTodaySummary.missingTrip]
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-lg border border-slate-200 bg-white px-3 py-3">
+                  <p className="text-xs font-semibold text-slate-500">{label}</p>
+                  <p className="mt-1 text-xl font-bold text-slate-950">{formatNumber(Number(value), language)}</p>
+                </div>
+              ))}
             </div>
           </section>
 
