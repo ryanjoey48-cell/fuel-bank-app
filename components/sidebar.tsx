@@ -13,6 +13,7 @@ import {
   MapPinned,
   Package,
   Route,
+  ShieldCheck,
   Truck,
   X,
   type LucideIcon
@@ -24,6 +25,7 @@ import { LanguageSwitcher } from "@/components/language-switcher";
 import { fetchSupportTicketNotificationCount } from "@/lib/data";
 import { useLanguage } from "@/lib/language-provider";
 import { supabase } from "@/lib/supabase";
+import { useAccountAccess } from "@/lib/use-account-access";
 
 type SidebarProps = {
   open: boolean;
@@ -50,7 +52,8 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   const [desktopExpanded, setDesktopExpanded] = useState(false);
   const [preferenceLoaded, setPreferenceLoaded] = useState(false);
   const [supportTicketCount, setSupportTicketCount] = useState(0);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const { can } = useAccountAccess();
+  const isAdmin = can("admin:support_tickets");
 
   useEffect(() => {
     setDesktopExpanded(window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true");
@@ -59,14 +62,21 @@ export function Sidebar({ open, onClose }: SidebarProps) {
 
   useEffect(() => {
     let active = true;
-    supabase.auth.getUser().then(async ({ data }) => {
-      const email = data.user?.email?.toLowerCase() ?? "";
-      const role = String(data.user?.user_metadata?.role ?? data.user?.app_metadata?.role ?? "").toLowerCase();
-      const admin = email === "joeryan09@outlook.com" || role === "admin";
-      if (!active) return;
-      setIsAdmin(admin);
-      if (admin) {
-        setSupportTicketCount(await fetchSupportTicketNotificationCount(["Open", "In Progress"]));
+    if (isAdmin) {
+      fetchSupportTicketNotificationCount(["Open", "In Progress"]).then((count) => {
+        if (active) setSupportTicketCount(count);
+      });
+    } else {
+      setSupportTicketCount(0);
+    }
+
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange(() => {
+      if (isAdmin) {
+        void fetchSupportTicketNotificationCount(["Open", "In Progress"]).then((count) => {
+          if (active) setSupportTicketCount(count);
+        });
       }
     });
 
@@ -81,6 +91,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
     return () => {
       active = false;
       window.removeEventListener("fuel-bank:data-changed", handleSupportChange);
+      subscription.unsubscribe();
     };
   }, [isAdmin]);
 
@@ -130,6 +141,11 @@ export function Sidebar({ open, onClose }: SidebarProps) {
               label: t.support.menu.adminSupportTickets,
               icon: CircleHelp,
               badgeCount: supportTicketCount
+            },
+            {
+              href: "/admin/users",
+              label: t.adminUsers.title,
+              icon: ShieldCheck
             }
           ]
         }]

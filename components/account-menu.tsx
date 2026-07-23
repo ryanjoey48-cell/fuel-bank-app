@@ -8,6 +8,7 @@ import {
   HelpCircle,
   KeyRound,
   LogOut,
+  ShieldCheck,
   Ticket,
   UserCircle,
   Wrench,
@@ -26,8 +27,8 @@ import {
 import { useLanguage } from "@/lib/language-provider";
 import { buildOilChangeAlertRows } from "@/lib/operations";
 import { supabase } from "@/lib/supabase";
-
-const ADMIN_EMAIL = "joeryan09@outlook.com";
+import { roleDisplayKey } from "@/lib/authorization";
+import { useAccountAccess } from "@/lib/use-account-access";
 
 type AccountUser = {
   id: string;
@@ -86,16 +87,7 @@ function getMetaString(user: AccountUser | null, key: string) {
 
 function getUserRole(user: AccountUser | null) {
   if (!user) return "";
-  if ((user.email ?? "").toLowerCase() === ADMIN_EMAIL) return "Admin";
   return getMetaString(user, "role") || "User";
-}
-
-function isAdminUser(user: AccountUser | null) {
-  return (user?.email ?? "").toLowerCase() === ADMIN_EMAIL || getUserRole(user).toLowerCase() === "admin";
-}
-
-function getAdminDisplayName(email: string) {
-  return email.toLowerCase() === ADMIN_EMAIL ? "Joey Ryan" : "";
 }
 
 function getInitials(displayName: string, email: string) {
@@ -132,6 +124,8 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [supportTicketCount, setSupportTicketCount] = useState(0);
+  const { access, can } = useAccountAccess();
+  const isAdmin = can("admin:support_tickets");
 
   useEffect(() => {
     let active = true;
@@ -158,7 +152,7 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
   }, []);
 
   useEffect(() => {
-    if (!isAdminUser(user)) {
+    if (!isAdmin) {
       setSupportTicketCount(0);
       return;
     }
@@ -177,7 +171,7 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
       active = false;
       window.removeEventListener("fuel-bank:data-changed", loadSupportCount);
     };
-  }, [user]);
+  }, [isAdmin]);
 
   useEffect(() => {
     setPortalReady(true);
@@ -238,11 +232,12 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
   const displayName =
     getMetaString(user, "name") ||
     getMetaString(user, "full_name") ||
-    getAdminDisplayName(email) ||
+    access?.displayName ||
     email ||
     "Account";
   const initials = useMemo(() => getInitials(displayName, email), [displayName, email]);
-  const normalizedRole = role.toUpperCase() === "USER" ? "STAFF" : role.toUpperCase();
+  const accessRole = access?.role ? t.adminUsers.roles[roleDisplayKey(access.role)] : null;
+  const normalizedRole = accessRole ?? (role.toUpperCase() === "USER" ? "STAFF" : role.toUpperCase());
   const unreadNotificationCount = notifications.reduce((total, item) => total + (Number(item.value) || 0), 0);
 
   const routeItems: AccountRouteItem[] = [
@@ -256,7 +251,7 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
     try {
       const [uncheckedFuel, supportTickets, oilAttention] = await Promise.all([
         fetchUncheckedFuelLogCount().catch(() => 0),
-        isAdminUser(user) ? fetchSupportTicketNotificationCount().catch(() => 0) : Promise.resolve(0),
+        isAdmin ? fetchSupportTicketNotificationCount().catch(() => 0) : Promise.resolve(0),
         Promise.all([fetchVehicles(), fetchWeeklyMileage(), fetchDrivers()])
           .then(([vehicles, weeklyMileage, drivers]) =>
             buildOilChangeAlertRows({ vehicles, weeklyMileage, drivers }).filter((row) =>
@@ -267,7 +262,7 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
       ]);
 
       setNotifications([
-        ...(isAdminUser(user) && supportTickets > 0
+        ...(isAdmin && supportTickets > 0
           ? [{ label: t.support.notifications.supportTickets, value: String(supportTickets), href: "/admin/support-tickets", icon: Ticket, tone: "purple" as const }]
           : []),
         ...(oilAttention > 0
@@ -440,7 +435,7 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
                   </button>
                 ))}
 
-                {isAdminUser(user) ? (
+                {isAdmin ? (
                   <button
                     type="button"
                     onClick={() => navigateTo("/admin/support-tickets")}
@@ -450,6 +445,18 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
                       <CircleHelp className="h-4 w-4" />
                     </span>
                     {t.support.menu.adminSupportTickets}
+                  </button>
+                ) : null}
+                {can("admin:user_management") ? (
+                  <button
+                    type="button"
+                    onClick={() => navigateTo("/admin/users")}
+                    className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-semibold text-slate-700 outline-none transition hover:bg-slate-50 hover:text-slate-950 focus-visible:ring-2 focus-visible:ring-brand-200"
+                  >
+                    <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-50 text-brand-700">
+                      <ShieldCheck className="h-4 w-4" />
+                    </span>
+                    {t.adminUsers.title}
                   </button>
                 ) : null}
 

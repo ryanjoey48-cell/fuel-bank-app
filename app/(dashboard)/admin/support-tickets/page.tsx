@@ -4,26 +4,17 @@ import clsx from "clsx";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Header } from "@/components/header";
 import { deleteSupportTicket, fetchSupportTickets, updateSupportTicketAdminFields } from "@/lib/data";
+import { fetchCurrentAccess } from "@/lib/account-management";
+import { hasPermission } from "@/lib/authorization";
 import { useLanguage } from "@/lib/language-provider";
-import { supabase } from "@/lib/supabase";
 import type { SupportTicket, SupportTicketCategory, SupportTicketPriority, SupportTicketStatus } from "@/types/database";
 
-const ADMIN_EMAIL = "joeryan09@outlook.com";
 const BUILD_MARKER = "Build: 57e52f2";
 const STATUSES: Array<"" | SupportTicketStatus> = ["", "Open", "In Progress", "Waiting", "Closed"];
 const STATUS_OPTIONS: SupportTicketStatus[] = ["Open", "In Progress", "Waiting", "Closed"];
 const PRIORITIES: Array<"" | SupportTicketPriority> = ["", "Low", "Medium", "High"];
 const STATUS_RANK: Record<string, number> = { Open: 0, "In Progress": 1, Waiting: 2, Closed: 3 };
 const PRIORITY_RANK: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
-
-function isAdmin(email?: string | null, role?: string | null) {
-  return (email ?? "").toLowerCase() === ADMIN_EMAIL || (role ?? "").toLowerCase() === "admin";
-}
-
-function getRole(metadata: Record<string, unknown> | undefined) {
-  const role = metadata?.role;
-  return typeof role === "string" ? role : "";
-}
 
 function formatDate(value: string, language: "en" | "th") {
   const parsed = new Date(value);
@@ -134,11 +125,9 @@ export default function SupportTicketsAdminPage() {
   }, [priorityFilter, statusFilter, t.support.loadError]);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      const user = data.user;
-      const role = getRole(user?.user_metadata as Record<string, unknown> | undefined) || getRole(user?.app_metadata as Record<string, unknown> | undefined);
-      setAuthorized(isAdmin(user?.email, role));
-    });
+    fetchCurrentAccess()
+      .then(({ access }) => setAuthorized(hasPermission(access, "admin:support_tickets")))
+      .catch(() => setAuthorized(false));
   }, []);
 
   useEffect(() => {

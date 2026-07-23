@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { MobileAppBar } from "@/components/mobile-app-bar";
 import { Sidebar } from "@/components/sidebar";
 import { SetupNotice } from "@/components/setup-notice";
+import { AdminFetchError, fetchCurrentAccess } from "@/lib/account-management";
 import { useLanguage } from "@/lib/language-provider";
 import { supabase } from "@/lib/supabase";
 
@@ -28,6 +29,16 @@ export default function DashboardLayout({
       if (!data.session && active) {
         router.replace("/login");
         return;
+      }
+
+      try {
+        await fetchCurrentAccess();
+      } catch (error) {
+        if (active && error instanceof AdminFetchError && (error.status === 401 || error.status === 403)) {
+          await supabase.auth.signOut();
+          router.replace("/login");
+          return;
+        }
       }
 
       if (active) {

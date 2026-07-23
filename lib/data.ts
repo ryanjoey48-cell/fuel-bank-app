@@ -1,6 +1,8 @@
 "use client";
 
 import { supabase } from "@/lib/supabase";
+import { fetchCurrentAccess } from "@/lib/account-management";
+import { hasPermission } from "@/lib/authorization";
 import {
   normalizeComparableText,
   normalizeDisplayName,
@@ -2527,12 +2529,8 @@ export async function createClient(name: string) {
 }
 
 async function requireAdminUser() {
-  const { data, error } = await supabase.auth.getUser();
-  if (error) throw new Error(error.message);
-  const user = data.user;
-  const email = String(user?.email ?? "").toLowerCase();
-  const role = String(user?.user_metadata?.role ?? user?.app_metadata?.role ?? "").toLowerCase();
-  if (email !== "joeryan09@outlook.com" && role !== "admin") {
+  const { access } = await fetchCurrentAccess();
+  if (!hasPermission(access, "admin:user_management")) {
     throw new Error("Admin permission required to manage clients.");
   }
 }
@@ -4090,17 +4088,8 @@ export async function updateSupportTicketAdminFields(id: string, payload: {
   status?: SupportTicketStatus;
   admin_note?: string | null;
 }) {
-  const { data: authData, error: authError } = await supabase.auth.getUser();
-  const user = authData.user;
-  const role = String(user?.user_metadata?.role ?? user?.app_metadata?.role ?? "").toLowerCase();
-  const email = String(user?.email ?? "").toLowerCase();
-
-  if (authError || !user) {
-    logDataError("updateSupportTicketAdminFields auth error:", authError ?? new Error("No authenticated user."), { id, payload });
-    throw new Error("Authentication required: please sign in again before updating support tickets.");
-  }
-
-  if (email !== "joeryan09@outlook.com" && role !== "admin") {
+  const { access } = await fetchCurrentAccess();
+  if (!hasPermission(access, "admin:support_tickets")) {
     throw new Error("Admin permission required to update support tickets.");
   }
 
@@ -4134,17 +4123,8 @@ export async function updateSupportTicketAdminFields(id: string, payload: {
 }
 
 export async function deleteSupportTicket(id: string) {
-  const { data: authData, error: authError } = await supabase.auth.getUser();
-  const user = authData.user;
-  const role = String(user?.user_metadata?.role ?? user?.app_metadata?.role ?? "").toLowerCase();
-  const email = String(user?.email ?? "").toLowerCase();
-
-  if (authError || !user) {
-    logDataError("deleteSupportTicket auth error:", authError ?? new Error("No authenticated user."), { id });
-    throw new Error("Authentication required: please sign in again before deleting support tickets.");
-  }
-
-  if (email !== "joeryan09@outlook.com" && role !== "admin") {
+  const { access } = await fetchCurrentAccess();
+  if (!hasPermission(access, "admin:support_tickets")) {
     throw new Error("Admin permission required to delete support tickets.");
   }
 

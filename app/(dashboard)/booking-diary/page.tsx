@@ -44,6 +44,8 @@ import {
   saveBookingDiaryEntry,
   updateClient
 } from "@/lib/data";
+import { fetchCurrentAccess } from "@/lib/account-management";
+import { hasPermission } from "@/lib/authorization";
 import { exportToXlsx } from "@/lib/export";
 import { fetchJson } from "@/lib/http";
 import { useLanguage } from "@/lib/language-provider";
@@ -1062,14 +1064,15 @@ export default function BookingDiaryPage() {
 
   useEffect(() => {
     const syncCurrentUser = () => {
-      void supabase.auth.getUser().then(({ data }) => {
+      void Promise.all([
+        supabase.auth.getUser(),
+        fetchCurrentAccess().catch(() => null)
+      ]).then(([{ data }, accessResult]) => {
         const user = data.user;
         setCurrentUser({
           id: user?.id ?? null,
           name: getUserDisplayNameFromMetadata(user ?? null),
-          isAdmin:
-            user?.email?.toLowerCase() === "joeryan09@outlook.com" ||
-            String(user?.user_metadata?.role ?? user?.app_metadata?.role ?? "").toLowerCase() === "admin"
+          isAdmin: hasPermission(accessResult?.access, "admin:user_management")
         });
       });
     };
