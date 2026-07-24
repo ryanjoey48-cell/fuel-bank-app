@@ -38,11 +38,15 @@ export default function ProfilePage() {
   const [nameError, setNameError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [access, setAccess] = useState<AccountAccess | null>(null);
+  const [accessError, setAccessError] = useState<string | null>(null);
 
   useEffect(() => {
     void Promise.all([
       supabase.auth.getUser(),
-      fetchCurrentAccess().catch(() => null)
+      fetchCurrentAccess().catch((caught: Error) => {
+        setAccessError(caught.message);
+        return null;
+      })
     ]).then(([{ data }, accessResult]) => {
       setUser((data.user ?? null) as ProfileUser | null);
       setAccess(accessResult?.access ?? null);
@@ -51,7 +55,7 @@ export default function ProfilePage() {
 
   const email = user?.email ?? "";
   const name = metaString(user, "name") || metaString(user, "full_name") || access?.displayName || email || "-";
-  const role = access?.role ? t.adminUsers.roles[roleDisplayKey(access.role)] : metaString(user, "role") || "Staff";
+  const role = access?.role ? t.adminUsers.roles[roleDisplayKey(access.role)] : accessError ? "User Management setup required" : "Access pending";
   const company = metaString(user, "company") || metaString(user, "company_name") || "Expert Express Sender Co., Ltd.";
 
   const startEditingName = () => {

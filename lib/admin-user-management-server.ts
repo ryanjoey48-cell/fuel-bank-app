@@ -1,9 +1,7 @@
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import {
-  LEGACY_ADMIN_EMAIL,
   ROLE_PERMISSIONS,
   isActiveAdmin,
-  isLegacyAdminEmail,
   normalizeAccountRole,
   normalizeAccountStatus,
   type AccountAccess,
@@ -108,7 +106,6 @@ function getUserDisplayName(user: Pick<User, "email" | "user_metadata"> | null |
   const metaName = metadata?.name ?? metadata?.full_name;
   if (typeof accessName === "string" && accessName.trim()) return accessName.trim();
   if (typeof metaName === "string" && metaName.trim()) return metaName.trim();
-  if (isLegacyAdminEmail(user?.email)) return "Joey Ryan";
   return user?.email ?? "Account";
 }
 
@@ -131,7 +128,7 @@ async function readAccessRow(admin: SupabaseClient, user: User) {
 
   if (error) {
     if (error.code === "42P01" || /account_access/i.test(error.message)) {
-      return null;
+      throw new AdminApiError(503, "User Management setup required. Apply the Admin User Management migration before using administrator features.");
     }
     throw error;
   }
@@ -141,9 +138,7 @@ async function readAccessRow(admin: SupabaseClient, user: User) {
 
 export async function resolveAccountAccess(admin: SupabaseClient, user: User): Promise<AccountAccess> {
   const row = await readAccessRow(admin, user);
-  const metadataRole = (user.user_metadata as Record<string, unknown> | undefined)?.role;
-  const appRole = (user.app_metadata as Record<string, unknown> | undefined)?.role;
-  const role = row ? normalizeAccountRole(row.role) : isLegacyAdminEmail(user.email) ? "admin" : normalizeAccountRole(appRole ?? metadataRole);
+  const role = row ? normalizeAccountRole(row.role) : "office_staff";
   const status = row ? normalizeAccountStatus(row.status) : "active";
 
   return {
@@ -263,7 +258,7 @@ export async function countOtherActiveAdmins(admin: SupabaseClient, targetUserId
     .neq("user_id", targetUserId);
 
   if (error) {
-    if (error.code === "42P01") return isLegacyAdminEmail(LEGACY_ADMIN_EMAIL) ? 1 : 0;
+    if (error.code === "42P01") throw new AdminApiError(500, "Account access migration is required before changing administrator access.");
     throw error;
   }
 

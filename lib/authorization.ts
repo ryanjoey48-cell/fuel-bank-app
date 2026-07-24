@@ -1,5 +1,3 @@
-export const LEGACY_ADMIN_EMAIL = "joeryan09@outlook.com";
-
 export const ACCOUNT_ROLES = ["admin", "office_staff", "read_only"] as const;
 export const ACCOUNT_STATUSES = ["active", "suspended"] as const;
 
@@ -49,10 +47,6 @@ export function normalizeAccountRole(value: unknown): AccountRole {
 export function normalizeAccountStatus(value: unknown): AccountStatus {
   const normalized = String(value ?? "").trim().toLowerCase();
   return normalized === "suspended" ? "suspended" : "active";
-}
-
-export function isLegacyAdminEmail(email: unknown) {
-  return String(email ?? "").trim().toLowerCase() === LEGACY_ADMIN_EMAIL;
 }
 
 export function hasPermission(access: Pick<AccountAccess, "role" | "status"> | null | undefined, permission: Permission) {

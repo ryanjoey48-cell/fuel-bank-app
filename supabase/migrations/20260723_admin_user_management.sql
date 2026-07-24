@@ -1,6 +1,8 @@
 -- Admin User Management access model.
 -- Review and run manually only after preview approval. This file is not applied by the app.
 
+begin;
+
 create extension if not exists "pgcrypto";
 
 create table if not exists public.account_access (
@@ -50,13 +52,40 @@ before update on public.account_access
 for each row
 execute function public.set_account_access_updated_at();
 
+create or replace function public.create_default_account_access_for_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  insert into public.account_access (user_id, display_name, role, status, last_access_changed_at)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'name', new.raw_user_meta_data->>'full_name', new.email),
+    'office_staff',
+    'active',
+    now()
+  )
+  on conflict (user_id) do nothing;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists create_default_account_access_for_new_user on auth.users;
+create trigger create_default_account_access_for_new_user
+after insert on auth.users
+for each row
+execute function public.create_default_account_access_for_new_user();
+
 insert into public.account_access (user_id, display_name, role, status, last_access_changed_at)
 select
   users.id,
   coalesce(users.raw_user_meta_data->>'name', users.raw_user_meta_data->>'full_name', users.email),
   case
     when lower(users.email) = 'joeryan09@outlook.com' then 'admin'
-    when coalesce(users.raw_app_meta_data->>'role', users.raw_user_meta_data->>'role') = 'admin' then 'admin'
+    when lower(coalesce(users.raw_app_meta_data->>'role', users.raw_user_meta_data->>'role', '')) in ('admin', 'administrator') then 'admin'
     when coalesce(users.raw_app_meta_data->>'role', users.raw_user_meta_data->>'role') in ('read_only', 'read-only', 'readonly') then 'read_only'
     else 'office_staff'
   end,
@@ -68,6 +97,7 @@ set
   display_name = coalesce(public.account_access.display_name, excluded.display_name),
   role = case
     when public.account_access.user_id in (select id from auth.users where lower(email) = 'joeryan09@outlook.com') then 'admin'
+    when public.account_access.role = 'admin' then 'admin'
     else public.account_access.role
   end,
   status = case
@@ -75,24 +105,54 @@ set
     else public.account_access.status
   end;
 
+do $$
+declare
+  joey_user_id uuid;
+  active_admin_count integer;
+begin
+  select users.id
+  into joey_user_id
+  from auth.users users
+  where lower(users.email) = 'joeryan09@outlook.com'
+  order by users.created_at
+  limit 1;
+
+  if joey_user_id is null then
+    raise exception 'Cannot bootstrap administrator: auth.users row for joeryan09@outlook.com was not found.';
+  end if;
+
+  insert into public.account_access (user_id, display_name, role, status, last_access_changed_at)
+  values (joey_user_id, 'Joey Ryan', 'admin', 'active', now())
+  on conflict (user_id) do update
+  set
+    display_name = coalesce(nullif(public.account_access.display_name, ''), 'Joey Ryan'),
+    role = 'admin',
+    status = 'active',
+    last_access_changed_at = now();
+
+  select count(*)
+  into active_admin_count
+  from public.account_access
+  where role = 'admin'
+    and status = 'active';
+
+  if active_admin_count < 1 then
+    raise exception 'Administrator bootstrap failed: no active administrator remains.';
+  end if;
+end;
+$$;
+
 create or replace function public.current_account_role()
 returns text
 language sql
 stable
 security definer
-set search_path = public
+set search_path = public, pg_temp
 as $$
-  select coalesce(
-    (select account_access.role
-     from public.account_access
-     where account_access.user_id = auth.uid()
-       and account_access.status = 'active'),
-    case
-      when exists (select 1 from auth.users where users.id = auth.uid() and lower(users.email) = 'joeryan09@outlook.com')
-      then 'admin'
-      else null
-    end
-  );
+  select account_access.role
+  from public.account_access
+  where account_access.user_id = auth.uid()
+    and account_access.status = 'active';
 $$;
 
 create or replace function public.is_account_active()
@@ -100,13 +160,13 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = public, pg_temp
 as $$
   select coalesce(
     (select account_access.status = 'active'
      from public.account_access
      where account_access.user_id = auth.uid()),
-    exists (select 1 from auth.users where users.id = auth.uid() and lower(users.email) = 'joeryan09@outlook.com')
+    false
   );
 $$;
 
@@ -115,7 +175,7 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = public, pg_temp
 as $$
   select public.current_account_role() = 'admin' and public.is_account_active();
 $$;
@@ -125,10 +185,21 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = public, pg_temp
 as $$
   select public.is_account_admin();
 $$;
+
+revoke all on function public.set_account_access_updated_at() from public;
+revoke all on function public.create_default_account_access_for_new_user() from public;
+revoke all on function public.current_account_role() from public;
+revoke all on function public.is_account_active() from public;
+revoke all on function public.is_account_admin() from public;
+revoke all on function public.is_support_ticket_admin() from public;
+grant execute on function public.current_account_role() to authenticated;
+grant execute on function public.is_account_active() to authenticated;
+grant execute on function public.is_account_admin() to authenticated;
+grant execute on function public.is_support_ticket_admin() to authenticated;
 
 alter table public.account_access enable row level security;
 alter table public.account_access_audit enable row level security;
@@ -318,3 +389,5 @@ revoke all on function public.delete_unused_booking_client(uuid) from public;
 grant execute on function public.delete_unused_booking_client(uuid) to authenticated;
 
 notify pgrst, 'reload schema';
+
+commit;

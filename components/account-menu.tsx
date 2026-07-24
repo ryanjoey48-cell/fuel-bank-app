@@ -124,7 +124,7 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [supportTicketCount, setSupportTicketCount] = useState(0);
-  const { access, can } = useAccountAccess();
+  const { access, can, error: accessError } = useAccountAccess();
   const isAdmin = can("admin:support_tickets");
 
   useEffect(() => {
@@ -237,7 +237,7 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
     "Account";
   const initials = useMemo(() => getInitials(displayName, email), [displayName, email]);
   const accessRole = access?.role ? t.adminUsers.roles[roleDisplayKey(access.role)] : null;
-  const normalizedRole = accessRole ?? (role.toUpperCase() === "USER" ? "STAFF" : role.toUpperCase());
+  const normalizedRole = accessRole ?? (accessError ? "USER MANAGEMENT SETUP REQUIRED" : role.toUpperCase() === "USER" ? "ACCESS PENDING" : role.toUpperCase());
   const unreadNotificationCount = notifications.reduce((total, item) => total + (Number(item.value) || 0), 0);
 
   const routeItems: AccountRouteItem[] = [

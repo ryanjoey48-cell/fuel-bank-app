@@ -47,6 +47,13 @@ test("only active administrators receive admin permissions", () => {
   assert.equal(authorization.isActiveAdmin(suspendedAdmin), false);
 });
 
+test("admin and staff access to User Management is decided by authoritative access state", () => {
+  assert.equal(authorization.hasPermission({ role: "admin", status: "active" }, "admin:user_management"), true);
+  assert.equal(authorization.hasPermission({ role: "office_staff", status: "active" }, "admin:user_management"), false);
+  assert.equal(authorization.hasPermission({ role: "read_only", status: "active" }, "admin:user_management"), false);
+  assert.equal(authorization.hasPermission(null, "admin:user_management"), false);
+});
+
 test("admin user APIs verify the signed-in caller server-side before reads or mutations", () => {
   const listRoute = read("app/api/admin/users/route.ts");
   const patchRoute = read("app/api/admin/users/[id]/route.ts");
@@ -77,6 +84,20 @@ test("account mutation routes reject unsafe account-management changes", () => {
   assert.match(patchRoute, /final active administrator cannot be demoted or suspended/i);
   assert.match(server, /\^\[0-9a-f-\]\{36\}\$/i);
   assert.match(server, /Invalid user ID/);
+});
+
+test("runtime authorization reads roles from account_access, not metadata or a hardcoded email", () => {
+  const server = read("lib/admin-user-management-server.ts");
+  const authorizationSource = read("lib/authorization.ts");
+  const accountMenu = read("components/account-menu.tsx");
+  const profile = read("app/(dashboard)/profile/page.tsx");
+
+  assert.match(server, /\.from\(ACCOUNT_ACCESS_TABLE\)/);
+  assert.match(server, /User Management setup required/);
+  assert.doesNotMatch(server, /user_metadata[^;\n]*role|app_metadata[^;\n]*role|joeryan09@outlook\.com|LEGACY_ADMIN_EMAIL/i);
+  assert.doesNotMatch(authorizationSource, /joeryan09@outlook\.com|LEGACY_ADMIN_EMAIL/i);
+  assert.match(accountMenu, /USER MANAGEMENT SETUP REQUIRED/);
+  assert.match(profile, /User Management setup required/);
 });
 
 test("service-role operations stay out of the browser bundle", () => {
@@ -117,11 +138,25 @@ test("admin access migration creates reviewable access tables without touching b
   const migration = read("supabase/migrations/20260723_admin_user_management.sql");
   const verification = read("supabase/verification/20260723_admin_user_management_verification.sql");
   const rollback = read("supabase/rollback/20260723_admin_user_management_rollback.sql");
+  const recovery = read("supabase/recovery/20260723_restore_joey_admin.sql");
 
   assert.match(migration, /create table if not exists public\.account_access/);
   assert.match(migration, /create table if not exists public\.account_access_audit/);
+  assert.match(migration, /begin;\s*create extension/i);
+  assert.match(migration, /commit;\s*$/i);
+  assert.match(migration, /create_default_account_access_for_new_user/);
+  assert.match(migration, /after insert on auth\.users/);
   assert.match(migration, /lower\(users\.email\) = 'joeryan09@outlook\.com'/);
+  assert.match(migration, /'Joey Ryan', 'admin', 'active'/);
+  assert.match(migration, /when public\.account_access\.role = 'admin' then 'admin'/);
+  assert.match(migration, /in \('admin', 'administrator'\)/);
+  assert.match(migration, /Cannot bootstrap administrator: auth\.users row for joeryan09@outlook\.com was not found/);
+  assert.match(migration, /no active administrator remains/);
   assert.match(migration, /public\.is_account_admin\(\)/);
+  assert.match(migration, /select account_access\.role\s+from public\.account_access/i);
+  assert.doesNotMatch(migration, /current_account_role\(\)[\s\S]*then 'admin'[\s\S]*is_account_active\(\)/i);
+  assert.match(migration, /revoke all on function public\.current_account_role\(\) from public/);
+  assert.doesNotMatch(migration, /grant execute on function .* to anon/i);
   assert.match(migration, /enable row level security/);
   assert.match(migration, /is_support_ticket_admin/);
   assert.match(migration, /clients_update_admin/);
@@ -129,4 +164,9 @@ test("admin access migration creates reviewable access tables without touching b
   assert.match(verification, /bank_transfer_rows_preserved/);
   assert.match(rollback, /drop table if exists public\.account_access_audit/);
   assert.match(rollback, /joeryan09@outlook\.com/);
+  assert.match(recovery, /where lower\(users\.email\) = 'joeryan09@outlook\.com'/);
+  assert.match(recovery, /on conflict \(user_id\) do update/);
+  assert.match(recovery, /role = 'admin'/);
+  assert.match(recovery, /status = 'active'/);
+  assert.doesNotMatch(recovery, /raw_user_meta_data|encrypted_password|delete\s+from/i);
 });
