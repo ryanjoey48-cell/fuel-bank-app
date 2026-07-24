@@ -5,10 +5,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { MobileAppBar } from "@/components/mobile-app-bar";
 import { Sidebar } from "@/components/sidebar";
 import { SetupNotice } from "@/components/setup-notice";
+import { AdminFetchError } from "@/lib/account-management";
 import { useLanguage } from "@/lib/language-provider";
 import { supabase } from "@/lib/supabase";
+import { AccountAccessProvider, useAccountAccess } from "@/lib/use-account-access";
 
-export default function DashboardLayout({
+function DashboardShell({
   children
 }: {
   children: React.ReactNode;
@@ -18,6 +20,7 @@ export default function DashboardLayout({
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { t } = useLanguage();
+  const { refresh } = useAccountAccess();
 
   useEffect(() => {
     let active = true;
@@ -28,6 +31,16 @@ export default function DashboardLayout({
       if (!data.session && active) {
         router.replace("/login");
         return;
+      }
+
+      try {
+        await refresh();
+      } catch (error) {
+        if (active && error instanceof AdminFetchError && (error.status === 401 || error.status === 403)) {
+          await supabase.auth.signOut();
+          router.replace("/login");
+          return;
+        }
       }
 
       if (active) {
@@ -51,7 +64,7 @@ export default function DashboardLayout({
       active = false;
       subscription.unsubscribe();
     };
-  }, [pathname, router]);
+  }, [pathname, refresh, router]);
 
   useEffect(() => {
     document.body.style.overflow = "";
@@ -107,5 +120,13 @@ export default function DashboardLayout({
         </main>
       </div>
     </div>
+  );
+}
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <AccountAccessProvider>
+      <DashboardShell>{children}</DashboardShell>
+    </AccountAccessProvider>
   );
 }

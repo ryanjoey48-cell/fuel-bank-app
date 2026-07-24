@@ -4,7 +4,9 @@ import { Pencil } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Header } from "@/components/header";
 import { useLanguage } from "@/lib/language-provider";
+import { roleDisplayKey } from "@/lib/authorization";
 import { supabase } from "@/lib/supabase";
+import { useAccountAccess } from "@/lib/use-account-access";
 
 type ProfileUser = {
   id?: string;
@@ -35,16 +37,17 @@ export default function ProfilePage() {
   const [savingName, setSavingName] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const { access, error: accessError } = useAccountAccess();
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
+    void supabase.auth.getUser().then(({ data }) => {
       setUser((data.user ?? null) as ProfileUser | null);
     });
   }, []);
 
   const email = user?.email ?? "";
-  const name = metaString(user, "name") || metaString(user, "full_name") || (email.toLowerCase() === "joeryan09@outlook.com" ? "Joey Ryan" : email || "-");
-  const role = email.toLowerCase() === "joeryan09@outlook.com" ? "Admin" : metaString(user, "role") || "Staff";
+  const name = metaString(user, "name") || metaString(user, "full_name") || access?.displayName || email || "-";
+  const role = access?.role ? t.adminUsers.roles[roleDisplayKey(access.role)] : accessError ? "User Management setup required" : "Access pending";
   const company = metaString(user, "company") || metaString(user, "company_name") || "Expert Express Sender Co., Ltd.";
 
   const startEditingName = () => {
