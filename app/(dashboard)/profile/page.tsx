@@ -3,10 +3,10 @@
 import { Pencil } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Header } from "@/components/header";
-import { fetchCurrentAccess } from "@/lib/account-management";
 import { useLanguage } from "@/lib/language-provider";
-import { roleDisplayKey, type AccountAccess } from "@/lib/authorization";
+import { roleDisplayKey } from "@/lib/authorization";
 import { supabase } from "@/lib/supabase";
+import { useAccountAccess } from "@/lib/use-account-access";
 
 type ProfileUser = {
   id?: string;
@@ -37,19 +37,11 @@ export default function ProfilePage() {
   const [savingName, setSavingName] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [access, setAccess] = useState<AccountAccess | null>(null);
-  const [accessError, setAccessError] = useState<string | null>(null);
+  const { access, error: accessError } = useAccountAccess();
 
   useEffect(() => {
-    void Promise.all([
-      supabase.auth.getUser(),
-      fetchCurrentAccess().catch((caught: Error) => {
-        setAccessError(caught.message);
-        return null;
-      })
-    ]).then(([{ data }, accessResult]) => {
+    void supabase.auth.getUser().then(({ data }) => {
       setUser((data.user ?? null) as ProfileUser | null);
-      setAccess(accessResult?.access ?? null);
     });
   }, []);
 

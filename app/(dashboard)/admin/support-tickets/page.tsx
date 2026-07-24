@@ -4,9 +4,9 @@ import clsx from "clsx";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Header } from "@/components/header";
 import { deleteSupportTicket, fetchSupportTickets, updateSupportTicketAdminFields } from "@/lib/data";
-import { fetchCurrentAccess } from "@/lib/account-management";
 import { hasPermission } from "@/lib/authorization";
 import { useLanguage } from "@/lib/language-provider";
+import { useAccountAccess } from "@/lib/use-account-access";
 import type { SupportTicket, SupportTicketCategory, SupportTicketPriority, SupportTicketStatus } from "@/types/database";
 
 const BUILD_MARKER = "Build: 57e52f2";
@@ -97,7 +97,7 @@ function PriorityBadge({ labels, priority }: { labels: Record<SupportTicketPrior
 
 export default function SupportTicketsAdminPage() {
   const { language, t } = useLanguage();
-  const [authorized, setAuthorized] = useState<boolean | null>(null);
+  const { access, loading: accessLoading } = useAccountAccess();
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
   const [ticketToDelete, setTicketToDelete] = useState<SupportTicket | null>(null);
@@ -124,11 +124,7 @@ export default function SupportTicketsAdminPage() {
     }
   }, [priorityFilter, statusFilter, t.support.loadError]);
 
-  useEffect(() => {
-    fetchCurrentAccess()
-      .then(({ access }) => setAuthorized(hasPermission(access, "admin:support_tickets")))
-      .catch(() => setAuthorized(false));
-  }, []);
+  const authorized = hasPermission(access, "admin:support_tickets");
 
   useEffect(() => {
     if (authorized) void loadTickets();
@@ -185,7 +181,7 @@ export default function SupportTicketsAdminPage() {
     }
   };
 
-  if (authorized === null) {
+  if (accessLoading) {
     return <section className="surface-card p-5 text-sm text-slate-500">{t.support.checkingAdminAccess}</section>;
   }
 
