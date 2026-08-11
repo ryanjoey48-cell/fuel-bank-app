@@ -28,6 +28,8 @@ import {
   computeWeeklyMileageByVehicle
 } from "@/lib/operations";
 import { formatDate, formatNumber } from "@/lib/utils";
+import { buildWeeklyMileageComparisonReport } from "@/lib/weekly-mileage-report";
+import { buildWeeklyMileageComparisonPdf } from "@/lib/weekly-mileage-pdf";
 import type { Driver, OilChangeBaseline, Vehicle, VehicleServiceLog, WeeklyMileageEntry } from "@/types/database";
 import type { OilChangeAlertRow, OilChangeStatus } from "@/lib/operations";
 
@@ -1121,6 +1123,7 @@ export default function WeeklyMileagePage() {
   const [saving, setSaving] = useState(false);
   const [generatingOilServicePdf, setGeneratingOilServicePdf] = useState(false);
   const [generatingLastOilChangesPdf, setGeneratingLastOilChangesPdf] = useState(false);
+  const [generatingWeeklyMileagePdf, setGeneratingWeeklyMileagePdf] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [savingService, setSavingService] = useState(false);
   const [oilFilter, setOilFilter] = useState<OilFilter>("all");
@@ -2231,6 +2234,22 @@ export default function WeeklyMileagePage() {
         generated: "Last oil changes PDF downloaded."
       };
 
+  const weeklyMileagePdfCopy = language === "th"
+    ? {
+        download: "ดาวน์โหลดรายงานระยะทางประจำสัปดาห์",
+        error: "ไม่สามารถสร้างรายงานระยะทางประจำสัปดาห์ได้",
+        generated: "ดาวน์โหลดรายงานระยะทางประจำสัปดาห์แล้ว",
+        generating: "กำลังสร้าง PDF...",
+        insufficient: "ไม่มีรายการเลขไมล์สำหรับรอบรายงานที่เลือก จึงยังสร้างรายงานเปรียบเทียบไม่ได้"
+      }
+    : {
+        download: "Download Weekly Mileage PDF",
+        error: "Unable to generate the weekly mileage comparison PDF.",
+        generated: "Weekly mileage comparison PDF downloaded.",
+        generating: "Generating PDF...",
+        insufficient: "There are no mileage entries for the selected reporting week, so a comparison report cannot be generated yet."
+      };
+
   const formatOilPdfKm = (value: number | null | undefined) =>
     value == null || !Number.isFinite(Number(value)) ? "-" : `${formatNumber(Number(value), language, 0)} KM`;
 
@@ -2439,6 +2458,45 @@ export default function WeeklyMileagePage() {
     }
   };
 
+  const downloadWeeklyMileagePdf = async () => {
+    if (generatingWeeklyMileagePdf) return;
+    setGeneratingWeeklyMileagePdf(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      if (!selectedWeekValue) {
+        throw new Error(weeklyMileagePdfCopy.insufficient);
+      }
+      clearDataReadCache();
+      const [freshDrivers, freshVehicles, freshEntries] = await Promise.all([
+        fetchDrivers(),
+        fetchVehicles(),
+        fetchWeeklyMileage()
+      ]);
+      if (!freshEntries.some((entry) => entry.week_ending === selectedWeekValue)) {
+        throw new Error(weeklyMileagePdfCopy.insufficient);
+      }
+      const report = buildWeeklyMileageComparisonReport({
+        entries: freshEntries,
+        vehicles: freshVehicles,
+        drivers: freshDrivers,
+        selectedWeek: selectedWeekValue
+      });
+      setDrivers(freshDrivers);
+      setVehicles(freshVehicles);
+      setEntries(freshEntries);
+      const pdf = await buildWeeklyMileageComparisonPdf(report, language === "th" ? "th" : "en");
+      downloadBlob(pdf, `Expert-Express-Weekly-Mileage-Comparison-${selectedWeekValue}.pdf`);
+      setSuccessMessage(weeklyMileagePdfCopy.generated);
+    } catch (err) {
+      console.error("Weekly mileage comparison PDF generation failed:", err);
+      setError(err instanceof Error && err.message ? err.message : weeklyMileagePdfCopy.error);
+    } finally {
+      setGeneratingWeeklyMileagePdf(false);
+    }
+  };
+
   const copyOilReportSummary = async () => {
     const immediateRows = sortOilReportRows(
       oilChangeRows.filter((row) => row.status === "overdue" || row.status === "urgent")
@@ -2537,9 +2595,20 @@ export default function WeeklyMileagePage() {
             <h3 className="section-title">{t.weeklyMileage.reportingWeekSummary}</h3>
             <p className="section-subtitle">{t.weeklyMileage.reportingWeekSummaryDescription}</p>
           </div>
-          {selectedWeekSummary ? (
-            <span className="badge-muted">{formatDate(selectedWeekSummary.weekEnding, language)}</span>
-          ) : null}
+          <div className="flex flex-col gap-2 sm:items-end">
+            {selectedWeekSummary ? (
+              <span className="badge-muted self-start sm:self-auto">{formatDate(selectedWeekSummary.weekEnding, language)}</span>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => void downloadWeeklyMileagePdf()}
+              disabled={generatingWeeklyMileagePdf || loading || !selectedWeekValue}
+              className="btn-primary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            >
+              <Download className="h-4 w-4" />
+              {generatingWeeklyMileagePdf ? weeklyMileagePdfCopy.generating : weeklyMileagePdfCopy.download}
+            </button>
+          </div>
         </div>
 
         {loading ? (
