@@ -41,7 +41,15 @@ const getStoredWeekEnding = () => {
   const stored = window.localStorage.getItem(WEEKLY_MILEAGE_SELECTED_WEEK_KEY) ?? "";
   return isValidDateKey(stored) ? stored : "";
 };
-const createInitialForm = (weekEnding = "") => ({ id: "", week_ending: weekEnding, driver_id: "", vehicle_reg: "", mileage: "" });
+const createInitialForm = (weekEnding = "") => ({
+  id: "",
+  week_ending: weekEnding,
+  driver_id: "",
+  vehicle_reg: "",
+  mileage: "",
+  is_odometer_baseline: false,
+  odometer_note: ""
+});
 const normalizeReg = (value: unknown) =>
   String(value ?? "")
     .trim()
@@ -50,6 +58,22 @@ const normalizeReg = (value: unknown) =>
     .toUpperCase();
 const CURRENT_ODOMETER_BELOW_SERVICE_REASON =
   "Current odometer is lower than the last oil change mileage. Please check mileage data.";
+const odometerBaselineCopy = {
+  en: {
+    action: "Start a new odometer baseline",
+    helper: "Use when a vehicle changes to a different odometer source. This reading will not be compared with the previous week.",
+    badge: "New baseline",
+    note: "Odometer note",
+    legacy: "Legacy reading"
+  },
+  th: {
+    action: "เริ่มค่าเลขไมล์ใหม่",
+    helper: "ใช้เมื่อรถเปลี่ยนแหล่งเลขไมล์ ระบบจะไม่เปรียบเทียบรายการนี้กับสัปดาห์ก่อนหน้า",
+    badge: "ค่าเริ่มใหม่",
+    note: "หมายเหตุเลขไมล์",
+    legacy: "เลขไมล์เดิม"
+  }
+} as const;
 
 const getServiceLogSortTime = (log: VehicleServiceLog) => {
   const serviceDateTime = log.service_date ? new Date(log.service_date).getTime() : Number.NEGATIVE_INFINITY;
@@ -1464,9 +1488,10 @@ export default function WeeklyMileagePage() {
   }, [form.vehicle_reg, form.week_ending, weeklyVehicleRows]);
 
   const weeklyDifference =
-    previousVehicleEntry && form.mileage && Number.isFinite(Number(form.mileage))
+    !form.is_odometer_baseline && previousVehicleEntry && form.mileage && Number.isFinite(Number(form.mileage))
       ? Number(form.mileage) - Number(previousVehicleEntry.mileage || 0)
       : null;
+  const baselineCopy = odometerBaselineCopy[language === "th" ? "th" : "en"];
 
   const loadData = useCallback(async () => {
     clearDataReadCache();
@@ -1706,6 +1731,7 @@ export default function WeeklyMileagePage() {
         throw new Error(t.common.requiredField);
       }
       if (
+        !form.is_odometer_baseline &&
         previousVehicleEntry?.mileage != null &&
         mileage < Number(previousVehicleEntry.mileage) &&
         !window.confirm(t.weeklyMileage.mileageValidationError)
@@ -1735,7 +1761,9 @@ export default function WeeklyMileagePage() {
         week_ending: form.week_ending,
         driver_id: form.driver_id,
         vehicle_reg: form.vehicle_reg,
-        odometer_reading: mileage
+        odometer_reading: mileage,
+        is_odometer_baseline: form.is_odometer_baseline,
+        odometer_note: form.odometer_note
       });
 
       setSelectedWeek(savedEntry.week_ending ?? form.week_ending);
@@ -3219,6 +3247,30 @@ export default function WeeklyMileagePage() {
                   </div>
                 ) : null}
               </div>
+
+              <div className="form-field sm:col-span-2">
+                <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={form.is_odometer_baseline}
+                    onChange={(event) => setForm((current) => ({ ...current, is_odometer_baseline: event.target.checked }))}
+                    className="mt-1 h-4 w-4 rounded border-slate-300 text-violet-700"
+                  />
+                  <span>
+                    <span className="block font-semibold text-slate-950">{baselineCopy.action}</span>
+                    <span className="mt-0.5 block text-xs text-slate-500">{baselineCopy.helper}</span>
+                  </span>
+                </label>
+              </div>
+
+              <div className="form-field sm:col-span-2">
+                <label className="form-label">{baselineCopy.note}</label>
+                <input
+                  value={form.odometer_note}
+                  onChange={(event) => setForm((current) => ({ ...current, odometer_note: event.target.value }))}
+                  className="form-input bg-white"
+                />
+              </div>
             </div>
 
             {error ? <p className="form-error mt-3">{error}</p> : null}
@@ -3305,8 +3357,13 @@ export default function WeeklyMileagePage() {
                   <p className="mt-3 text-base font-semibold text-slate-950">
                     {formatNumber(entry.mileage, language)}
                   </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {entry.is_odometer_baseline ? <span className="badge-muted">{baselineCopy.badge}</span> : null}
+                    {!entry.is_odometer_baseline && entry.week_ending < "2026-06-07" ? <span className="badge-muted">{baselineCopy.legacy}</span> : null}
+                    {entry.odometer_note ? <span className="text-xs text-slate-500">{entry.odometer_note}</span> : null}
+                  </div>
                   <div className="mt-3 flex gap-2">
-                    <button type="button" onClick={() => setForm({ id: String(entry.id), week_ending: entry.week_ending, driver_id: String(entry.driver_id), vehicle_reg: entry.vehicle_reg, mileage: String(entry.mileage) })} className="btn-secondary flex-1">
+                    <button type="button" onClick={() => setForm({ id: String(entry.id), week_ending: entry.week_ending, driver_id: String(entry.driver_id), vehicle_reg: entry.vehicle_reg, mileage: String(entry.mileage), is_odometer_baseline: entry.is_odometer_baseline === true, odometer_note: entry.odometer_note ?? "" })} className="btn-secondary flex-1">
                       {t.common.edit}
                     </button>
                     <button type="button" onClick={() => void handleDelete(String(entry.id))} disabled={deletingId === String(entry.id)} className="btn-danger flex-1 gap-2 disabled:opacity-50">
@@ -3337,10 +3394,17 @@ export default function WeeklyMileagePage() {
                           <td className="table-body-cell supporting-date-strong">{formatDate(entry.week_ending, language)}</td>
                           <td className="table-body-cell table-driver-name">{entry.driver || "-"}</td>
                           <td className="table-body-cell">{entry.vehicle_reg || "-"}</td>
-                          <td className="table-body-cell text-right font-medium text-slate-800">{formatNumber(entry.mileage, language)}</td>
+                          <td className="table-body-cell text-right font-medium text-slate-800">
+                            <div className="flex flex-col items-end gap-1">
+                              <span>{formatNumber(entry.mileage, language)}</span>
+                              {entry.is_odometer_baseline ? <span className="badge-muted">{baselineCopy.badge}</span> : null}
+                              {!entry.is_odometer_baseline && entry.week_ending < "2026-06-07" ? <span className="badge-muted">{baselineCopy.legacy}</span> : null}
+                              {entry.odometer_note ? <span className="max-w-[220px] truncate text-xs font-normal text-slate-500">{entry.odometer_note}</span> : null}
+                            </div>
+                          </td>
                           <td className="table-body-cell">
                             <div className="flex items-center gap-1.5 whitespace-nowrap">
-                              <button type="button" onClick={() => setForm({ id: String(entry.id), week_ending: entry.week_ending, driver_id: String(entry.driver_id), vehicle_reg: entry.vehicle_reg, mileage: String(entry.mileage) })} className="table-action-secondary">
+                              <button type="button" onClick={() => setForm({ id: String(entry.id), week_ending: entry.week_ending, driver_id: String(entry.driver_id), vehicle_reg: entry.vehicle_reg, mileage: String(entry.mileage), is_odometer_baseline: entry.is_odometer_baseline === true, odometer_note: entry.odometer_note ?? "" })} className="table-action-secondary">
                                 {t.common.edit}
                               </button>
                               <button type="button" onClick={() => void handleDelete(String(entry.id))} disabled={deletingId === String(entry.id)} className="table-action-danger disabled:opacity-50">

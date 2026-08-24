@@ -1,6 +1,10 @@
 .next
 .vercel
 node_modules
+.env
+.env.*
+!.env.example
 .env.local
 dist
 *.log
+_weekly_mileage_deploy_source/

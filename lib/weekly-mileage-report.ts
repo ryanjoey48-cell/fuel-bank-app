@@ -24,6 +24,10 @@ export type WeeklyMileageComparisonRow = {
   currentDistance: number | null;
   previousDistance: number | null;
   differenceKm: number | null;
+  isCurrentBaseline: boolean;
+  isPreviousBaseline: boolean;
+  currentNote: string | null;
+  previousNote: string | null;
   status: WeeklyMileageComparisonStatus;
 };
 
@@ -109,6 +113,10 @@ function normalizedOdometer(entry: WeeklyMileageEntry | null | undefined) {
   return Number.isFinite(value) ? value : null;
 }
 
+function isOdometerBaseline(entry: WeeklyMileageEntry | null | undefined) {
+  return entry?.is_odometer_baseline === true;
+}
+
 function entrySortKey(entry: WeeklyMileageEntry) {
   return `${entry.created_at || ""}::${String(entry.id || "")}`;
 }
@@ -150,19 +158,24 @@ function comparisonStatus({
   hasCurrent,
   hasPreviousWeek,
   hasEarlierWeek,
+  isCurrentBaseline,
+  isPreviousBaseline,
   currentDistance,
   previousDistance
 }: {
   hasCurrent: boolean;
   hasPreviousWeek: boolean;
   hasEarlierWeek: boolean;
+  isCurrentBaseline: boolean;
+  isPreviousBaseline: boolean;
   currentDistance: number | null;
   previousDistance: number | null;
 }): WeeklyMileageComparisonStatus {
   if (!hasCurrent) return "missing_this_week";
+  if (isCurrentBaseline) return "missing_comparison_data";
   if (!hasPreviousWeek) return "missing_previous_week";
   if (currentDistance != null && currentDistance < 0) return "odometer_error";
-  if (!hasEarlierWeek) return "missing_comparison_data";
+  if (!hasEarlierWeek || isPreviousBaseline) return "missing_comparison_data";
   if (previousDistance != null && previousDistance < 0) return "odometer_error";
   if (currentDistance == null || previousDistance == null) return "missing_comparison_data";
   const differenceKm = currentDistance - previousDistance;
@@ -220,8 +233,10 @@ export function buildWeeklyMileageComparisonReport({
     const currentOdometer = normalizedOdometer(current);
     const previousOdometer = normalizedOdometer(previous);
     const earlierOdometer = normalizedOdometer(earlier);
-    const currentDistance = currentOdometer != null && previousOdometer != null ? currentOdometer - previousOdometer : null;
-    const previousDistance = previousOdometer != null && earlierOdometer != null ? previousOdometer - earlierOdometer : null;
+    const isCurrentBaseline = isOdometerBaseline(current);
+    const isPreviousBaseline = isOdometerBaseline(previous);
+    const currentDistance = !isCurrentBaseline && currentOdometer != null && previousOdometer != null ? currentOdometer - previousOdometer : null;
+    const previousDistance = !isPreviousBaseline && previousOdometer != null && earlierOdometer != null ? previousOdometer - earlierOdometer : null;
     const comparable = currentDistance != null && currentDistance >= 0 && previousDistance != null && previousDistance >= 0;
     const differenceKm = comparable ? currentDistance - previousDistance : null;
     return {
@@ -236,10 +251,16 @@ export function buildWeeklyMileageComparisonReport({
       currentDistance: currentDistance != null && currentDistance >= 0 ? currentDistance : currentDistance,
       previousDistance: previousDistance != null && previousDistance >= 0 ? previousDistance : previousDistance,
       differenceKm,
+      isCurrentBaseline,
+      isPreviousBaseline,
+      currentNote: current?.odometer_note ?? null,
+      previousNote: previous?.odometer_note ?? null,
       status: comparisonStatus({
         hasCurrent: Boolean(current),
         hasPreviousWeek: Boolean(previous),
         hasEarlierWeek: Boolean(earlier),
+        isCurrentBaseline,
+        isPreviousBaseline,
         currentDistance,
         previousDistance
       })

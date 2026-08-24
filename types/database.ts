@@ -17,6 +17,8 @@ export type WeeklyMileageEntry = {
   vehicle_reg: string;
   odometer_reading: number;
   mileage: number;
+  is_odometer_baseline?: boolean | null;
+  odometer_note?: string | null;
   created_at: string;
   user_id?: string;
 };
