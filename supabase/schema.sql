@@ -49,6 +49,8 @@ create table if not exists public.weekly_mileage (
   week_ending date not null,
   vehicle_reg text not null,
   odometer_reading bigint not null,
+  is_odometer_baseline boolean not null default false,
+  odometer_note text,
   created_at timestamptz not null default now()
 );
 

@@ -2206,11 +2206,19 @@ export async function fetchTransfers() {
 export async function fetchWeeklyMileage() {
   const modernQuery = await supabase
     .from("weekly_mileage")
-    .select("id, week_ending, driver_id, vehicle_reg, odometer_reading, created_at, user_id")
+    .select("id, week_ending, driver_id, vehicle_reg, odometer_reading, is_odometer_baseline, odometer_note, created_at, user_id")
     .order("week_ending", { ascending: false })
     .order("id", { ascending: false });
 
-  if (!modernQuery.error) {
+  const compatibleModernQuery = modernQuery.error && isMissingColumnError(modernQuery.error)
+    ? await supabase
+        .from("weekly_mileage")
+        .select("id, week_ending, driver_id, vehicle_reg, odometer_reading, created_at, user_id")
+        .order("week_ending", { ascending: false })
+        .order("id", { ascending: false })
+    : modernQuery;
+
+  if (!compatibleModernQuery.error) {
     let driverLookup = new Map<string, string>();
 
     try {
@@ -2219,25 +2227,29 @@ export async function fetchWeeklyMileage() {
       logDataError("fetchWeeklyMileage driver lookup warning:", lookupError);
     }
 
-    return ((modernQuery.data ?? []) as Array<{
+    return ((compatibleModernQuery.data ?? []) as Array<{
       id: string;
       week_ending: string;
       driver_id: string;
       vehicle_reg: string;
       odometer_reading: number;
+      is_odometer_baseline?: boolean | null;
+      odometer_note?: string | null;
       created_at: string;
       user_id?: string;
     }>).map((entry) => ({
       ...entry,
       driver: driverLookup.get(String(entry.driver_id)) ?? "",
       vehicle_reg: normalizeVehicleRegistration(entry.vehicle_reg),
-      mileage: Number(entry.odometer_reading || 0)
+      mileage: Number(entry.odometer_reading || 0),
+      is_odometer_baseline: entry.is_odometer_baseline ?? false,
+      odometer_note: entry.odometer_note ?? null
     })) as WeeklyMileageEntry[];
   }
 
-  if (!isMissingColumnError(modernQuery.error)) {
-    logDataError("fetchWeeklyMileage error:", modernQuery.error);
-    throw modernQuery.error;
+  if (!isMissingColumnError(compatibleModernQuery.error)) {
+    logDataError("fetchWeeklyMileage error:", compatibleModernQuery.error);
+    throw compatibleModernQuery.error;
   }
 
   const [driverRows, legacyQuery] = await Promise.all([
@@ -2277,6 +2289,8 @@ export async function fetchWeeklyMileage() {
       driver_id: matchedDriver ? String(matchedDriver.id) : "",
       vehicle_reg: normalizeVehicleRegistration(entry.vehicle_reg),
       odometer_reading: Number(entry.mileage || 0),
+      is_odometer_baseline: false,
+      odometer_note: null,
       user_id: ""
     };
   }) as WeeklyMileageEntry[];
@@ -3630,7 +3644,9 @@ export async function saveWeeklyMileage(payload: Partial<WeeklyMileageEntry>) {
     driver_id: rest.driver_id,
     vehicle_reg: normalizedVehicleReg,
     odometer_reading: normalizedOdometerReading,
-    mileage: normalizedOdometerReading
+    mileage: normalizedOdometerReading,
+    is_odometer_baseline: rest.is_odometer_baseline ?? false,
+    odometer_note: rest.odometer_note?.trim() || null
   });
 
   if (modernPayload.odometer_reading == null) {
@@ -3640,7 +3656,7 @@ export async function saveWeeklyMileage(payload: Partial<WeeklyMileageEntry>) {
     throw new Error("Vehicle registration is required.");
   }
 
-  const modernResult = id
+  let modernResult = id
     ? await supabase
         .from("weekly_mileage")
         .update(modernPayload)
@@ -3648,6 +3664,24 @@ export async function saveWeeklyMileage(payload: Partial<WeeklyMileageEntry>) {
         .select()
         .single()
     : await supabase.from("weekly_mileage").insert(modernPayload).select().single();
+
+  if (modernResult.error && isMissingColumnError(modernResult.error)) {
+    const compatiblePayload = stripUndefined({
+      week_ending: rest.week_ending,
+      driver_id: rest.driver_id,
+      vehicle_reg: normalizedVehicleReg,
+      odometer_reading: normalizedOdometerReading,
+      mileage: normalizedOdometerReading
+    });
+    modernResult = id
+      ? await supabase
+          .from("weekly_mileage")
+          .update(compatiblePayload)
+          .eq("id", id)
+          .select()
+          .single()
+      : await supabase.from("weekly_mileage").insert(compatiblePayload).select().single();
+  }
 
   if (!modernResult.error) {
     await ensureVehicleForWeeklyMileage({

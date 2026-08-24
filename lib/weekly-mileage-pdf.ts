@@ -185,6 +185,8 @@ function formatReportingPeriod(startValue: string, endValue: string, language: R
 }
 
 function rowStatusLabel(row: WeeklyMileageComparisonRow, language: ReportLanguage) {
+  if (row.isCurrentBaseline) return language === "th" ? "เริ่มค่าเลขไมล์ใหม่" : "New odometer baseline";
+  if (row.isPreviousBaseline && row.previousDistance == null) return language === "th" ? "เปรียบเทียบจากค่าเริ่มใหม่" : "Compared from new baseline";
   if (row.status === "missing_this_week") return language === "th" ? "ยังไม่ได้บันทึกเลขไมล์ปัจจุบัน" : "Current reading not entered";
   if (row.status === "missing_previous_week" || row.status === "missing_comparison_data") return language === "th" ? "เปรียบเทียบไม่ได้" : "Cannot compare";
   if (row.status === "odometer_error") return language === "th" ? "เลขไมล์ผิดพลาด" : "Odometer reading error";
@@ -195,6 +197,7 @@ function rowStatusLabel(row: WeeklyMileageComparisonRow, language: ReportLanguag
 }
 
 function statusColors(row: WeeklyMileageComparisonRow) {
+  if (row.isCurrentBaseline || row.isPreviousBaseline) return { bg: "#DBEAFE", text: "#1D4ED8" };
   if (row.status === "missing_this_week" || row.status === "missing_previous_week" || row.status === "missing_comparison_data") return { bg: "#FEF3C7", text: "#92400E" };
   if (row.status === "odometer_error") return { bg: "#FEE2E2", text: "#B91C1C" };
   if (row.differenceKm == null || row.differenceKm === 0) return { bg: "#EEF0F3", text: "#475569" };

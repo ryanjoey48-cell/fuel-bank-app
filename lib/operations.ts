@@ -497,8 +497,9 @@ export function computeWeeklyMileageByVehicle(entries: WeeklyMileageEntry[]) {
       previousEntry != null
         ? Number(previousEntry.odometer_reading ?? previousEntry.mileage)
         : null;
+    const latestIsBaseline = latestEntry.is_odometer_baseline === true;
     const rawDistance =
-      previousOdometer != null && Number.isFinite(latestOdometer)
+      !latestIsBaseline && previousOdometer != null && Number.isFinite(latestOdometer)
         ? latestOdometer - previousOdometer
         : null;
     const distance = rawDistance != null ? Math.max(0, rawDistance) : 0;
@@ -617,7 +618,7 @@ export function buildDriverWeeklyComparisons(entries: WeeklyMileageEntry[]) {
       const latestOdometer = getNormalizedOdometer(latestEntry)!;
       const previousOdometer = previousEntry ? getNormalizedOdometer(previousEntry) : null;
       const weeklyDistance =
-        previousOdometer != null ? latestOdometer - previousOdometer : null;
+        latestEntry.is_odometer_baseline === true ? null : previousOdometer != null ? latestOdometer - previousOdometer : null;
 
       return {
         driverId: String(latestEntry.driver_id ?? driverKey),

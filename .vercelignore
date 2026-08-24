@@ -1,0 +1,13 @@
+.env
+.env.*
+!.env.example
+node_modules
+.next
+out
+output
+eng.traineddata
+tsconfig.tsbuildinfo
+_weekly_mileage_deploy_source
+tests
+import-reports
+supabase

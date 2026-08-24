@@ -115,6 +115,33 @@ test("requires the exact earlier reporting week for previous-week comparison", (
   assert.equal(result.vehiclesCompared, 0);
 });
 
+test("starts a new odometer baseline without comparing against legacy readings", () => {
+  const baseline = {
+    ...entry("baseline", "2026-06-07", "79-5318", 8017, "Sayan"),
+    is_odometer_baseline: true,
+    odometer_note: "Correct odometer series begins here."
+  };
+  const result = buildWeeklyMileageComparisonReport({
+    entries: [
+      entry("legacy", "2026-05-31", "79-5318", 939900, "Sayan"),
+      baseline,
+      entry("next", "2026-06-14", "79-5318", 9749, "Sayan"),
+      entry("current", "2026-06-21", "79-5318", 12035, "Sayan")
+    ],
+    vehicles: [vehicle("v795318", "79-5318")],
+    drivers: [],
+    selectedWeek: "2026-06-14"
+  });
+  const row = result.rows[0];
+  assert.equal(row.previousReadingDate, "2026-06-07");
+  assert.equal(row.previousOdometer, 8017);
+  assert.equal(row.isPreviousBaseline, true);
+  assert.equal(row.currentDistance, 1732);
+  assert.equal(row.previousDistance, null);
+  assert.equal(row.status, "missing_comparison_data");
+  assert.equal(result.vehiclesCompared, 0);
+});
+
 test("reports missing, no change, comparison gaps, and either negative interval as errors", () => {
   const result = report([
     entry("s1", "2026-07-26", "STOP", 1000), entry("s2", "2026-08-02", "STOP", 1200), entry("s3", "2026-08-09", "STOP", 1400),
