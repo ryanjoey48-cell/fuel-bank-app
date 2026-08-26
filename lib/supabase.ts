@@ -26,7 +26,7 @@ const resolveStorage = () => {
   }
 
   try {
-    const storage = window.sessionStorage;
+    const storage = window.localStorage;
     const probeKey = "__supabase_session_probe__";
 
     storage.setItem(probeKey, "1");
@@ -43,8 +43,7 @@ if (missingSupabaseEnv) {
     [
       "Supabase environment variables are missing.",
       "Live data will not sync with production until NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are configured.",
-      "For Vercel, set these in Project Settings > Environment Variables, then redeploy.",
-      "If the project currently uses VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY, next.config.ts maps them as compatibility aliases at build time."
+      "For Vercel, set these in Project Settings > Environment Variables, then redeploy."
     ].join(" ")
   );
 }
@@ -54,7 +53,10 @@ export const supabase = createClient(
   supabaseAnonKey ?? "placeholder-anon-key",
   {
     auth: {
-      storage: resolveStorage()
+      storage: resolveStorage(),
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true
     }
   }
 );

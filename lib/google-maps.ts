@@ -1,7 +1,5 @@
-export const GOOGLE_MAPS_SERVER_ENV = "GOOGLE_MAPS_API_KEY";
+export const GOOGLE_MAPS_SERVER_ENV = "GOOGLE_MAPS_SERVER_API_KEY";
 export const GOOGLE_MAPS_PUBLIC_ENV = "NEXT_PUBLIC_GOOGLE_MAPS_API_KEY";
-const GOOGLE_MAPS_SERVER_ALIASES = ["GOOGLE_MAPS_KEY"] as const;
-const GOOGLE_MAPS_PUBLIC_ALIASES = ["NEXT_PUBLIC_GOOGLE_MAPS_KEY", "VITE_GOOGLE_MAPS_API_KEY"] as const;
 
 export type GoogleMapsHealthStatus = {
   hasPublicKey: boolean;
@@ -34,20 +32,18 @@ function firstEnvValue(names: readonly string[]) {
 export function getGoogleMapsEnvironmentStatus() {
   const server = firstEnvValue([GOOGLE_MAPS_SERVER_ENV]);
   const publicKey = firstEnvValue([GOOGLE_MAPS_PUBLIC_ENV]);
-  const legacyServer = firstEnvValue(GOOGLE_MAPS_SERVER_ALIASES);
-  const legacyPublic = firstEnvValue(GOOGLE_MAPS_PUBLIC_ALIASES);
 
   return {
     hasServerKey: Boolean(server.value),
     hasPublicKey: Boolean(publicKey.value),
     serverSource: server.name,
     publicSource: publicKey.name,
-    legacyServerSource: legacyServer.name,
-    legacyPublicSource: legacyPublic.name,
+    legacyServerSource: null,
+    legacyPublicSource: null,
     missingServerVariables: server.value ? [] : [GOOGLE_MAPS_SERVER_ENV],
     missingPublicVariables: publicKey.value ? [] : [GOOGLE_MAPS_PUBLIC_ENV],
     requiredVariables: [GOOGLE_MAPS_PUBLIC_ENV, GOOGLE_MAPS_SERVER_ENV],
-    acceptedAliases: [...GOOGLE_MAPS_SERVER_ALIASES, ...GOOGLE_MAPS_PUBLIC_ALIASES]
+    acceptedAliases: []
   };
 }
 
@@ -64,13 +60,11 @@ export function getClientGoogleMapsConfig() {
     name: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ? GOOGLE_MAPS_PUBLIC_ENV : null,
     value: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? ""
   };
-  const legacyPublic = firstEnvValue(GOOGLE_MAPS_PUBLIC_ALIASES);
-
   return {
     hasKey: Boolean(publicKey.value),
     key: publicKey.value,
     source: publicKey.name,
-    legacySource: legacyPublic.name,
+    legacySource: null,
     missingVariable: publicKey.value ? null : GOOGLE_MAPS_PUBLIC_ENV
   };
 }

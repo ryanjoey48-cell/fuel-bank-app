@@ -5,6 +5,7 @@ import {
   getServerGoogleMapsApiKey
 } from "@/lib/google-maps";
 import { createApiError, createApiSuccess, parseJsonSafely } from "@/lib/http";
+import { rememberVerifiedGooglePlace } from "@/lib/google-place-verification";
 
 type PlaceDetailsResponse = {
   id?: string;
@@ -16,25 +17,10 @@ type PlaceDetailsResponse = {
     latitude?: number;
     longitude?: number;
   };
+  addressComponents?: Array<{ shortText?: string; types?: string[] }>;
   error?: {
     message?: string;
   };
-};
-
-type LegacyPlaceDetailsResponse = {
-  result?: {
-    place_id?: string;
-    name?: string;
-    formatted_address?: string;
-    geometry?: {
-      location?: {
-        lat?: number;
-        lng?: number;
-      };
-    };
-  };
-  error_message?: string;
-  status?: string;
 };
 
 function logGoogleMapsDetailsError(error: unknown) {
@@ -49,11 +35,12 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const rawPlaceId = searchParams.get("placeId")?.trim() ?? "";
     const language = searchParams.get("language")?.trim() ?? "en";
+    const sessionToken = searchParams.get("sessionToken")?.trim() ?? "";
 
     if (!apiKey) {
       const missingVariables = getGoogleMapsEnvironmentStatus().missingServerVariables;
       return Response.json(
-        createApiError(`Missing ${missingVariables.join(" and ") || "GOOGLE_MAPS_API_KEY"}`),
+        createApiError(`Missing ${missingVariables.join(" and ") || "GOOGLE_MAPS_SERVER_API_KEY"}`),
         { status: 503 }
       );
     }
@@ -63,12 +50,18 @@ export async function GET(request: Request) {
     }
 
     const placeName = rawPlaceId.startsWith("places/") ? rawPlaceId : `places/${rawPlaceId}`;
+    const detailsUrl = new URL(
+      `https://places.googleapis.com/v1/${encodeURIComponent(placeName).replaceAll("%2F", "/")}`
+    );
+    detailsUrl.searchParams.set("languageCode", language === "th" ? "th" : "en");
+    detailsUrl.searchParams.set("regionCode", "TH");
+    if (sessionToken) detailsUrl.searchParams.set("sessionToken", sessionToken);
     const response = await fetch(
-      `https://places.googleapis.com/v1/${encodeURIComponent(placeName).replaceAll("%2F", "/")}?languageCode=${language === "th" ? "th" : "en"}`,
+      detailsUrl,
       {
         headers: {
           "X-Goog-Api-Key": apiKey,
-          "X-Goog-FieldMask": "id,formattedAddress,displayName,location"
+          "X-Goog-FieldMask": "id,formattedAddress,displayName,location,addressComponents"
         },
         cache: "no-store"
       }
@@ -76,50 +69,13 @@ export async function GET(request: Request) {
 
     if (!response.ok) {
       const errorBody = await parseJsonSafely<PlaceDetailsResponse | null>(response).catch(() => null);
-
-      const legacyUrl = new URL("https://maps.googleapis.com/maps/api/place/details/json");
-      legacyUrl.searchParams.set("place_id", rawPlaceId.replace(/^places\//, ""));
-      legacyUrl.searchParams.set("key", apiKey);
-      legacyUrl.searchParams.set("language", language === "th" ? "th" : "en");
-      legacyUrl.searchParams.set("fields", "place_id,name,formatted_address,geometry");
-
-      const legacyResponse = await fetch(legacyUrl, { cache: "no-store" });
-      const legacyResult = await parseJsonSafely<LegacyPlaceDetailsResponse>(legacyResponse);
-      const legacyLat = legacyResult.result?.geometry?.location?.lat;
-      const legacyLng = legacyResult.result?.geometry?.location?.lng;
-
-      if (
-        legacyResponse.ok &&
-        legacyResult.status === "OK" &&
-        Number.isFinite(legacyLat) &&
-        Number.isFinite(legacyLng)
-      ) {
-        return Response.json(
-          createApiSuccess({
-            label:
-              legacyResult.result?.name ||
-              legacyResult.result?.formatted_address ||
-              rawPlaceId,
-            formatted_address:
-              legacyResult.result?.formatted_address ||
-              legacyResult.result?.name ||
-              rawPlaceId,
-            place_id: legacyResult.result?.place_id || rawPlaceId,
-            lat: legacyLat,
-            lng: legacyLng
-          })
-        );
-      }
-
       const rawMessage =
-        legacyResult.error_message ||
-        legacyResult.status ||
         errorBody?.error?.message ||
-        "Unable to load Google Maps place details.";
-      const errorCode = extractGoogleMapsErrorCode(rawMessage) ?? legacyResult.status ?? null;
+        "Places API (New) place details request failed.";
+      const errorCode = extractGoogleMapsErrorCode(rawMessage);
 
       return Response.json(createApiError(getGoogleMapsErrorMessage(errorCode, rawMessage) ?? rawMessage), {
-        status: 502
+        status: response.status
       });
     }
 
@@ -133,19 +89,28 @@ export async function GET(request: Request) {
       });
     }
 
-    return Response.json(
-      createApiSuccess({
-        label: result.displayName?.text || result.formattedAddress || rawPlaceId,
-        formatted_address: result.formattedAddress || result.displayName?.text || rawPlaceId,
-        place_id: result.id || rawPlaceId,
-        lat,
-        lng
-      })
-    );
+    const place = {
+      placeId: result.id || rawPlaceId.replace(/^places\//, ""),
+      displayName: result.displayName?.text || result.formattedAddress || rawPlaceId,
+      fullGoogleAddress: result.formattedAddress || result.displayName?.text || rawPlaceId,
+      latitude: lat,
+      longitude: lng,
+      countryCode: result.addressComponents?.find((component) => component.types?.includes("country"))?.shortText?.toUpperCase() ?? null
+    };
+    rememberVerifiedGooglePlace(place);
+
+    return Response.json(createApiSuccess({
+      label: place.displayName,
+      formatted_address: place.fullGoogleAddress,
+      place_id: place.placeId,
+      lat: place.latitude,
+      lng: place.longitude,
+      country_code: place.countryCode
+    }));
   } catch (error) {
     logGoogleMapsDetailsError(error);
     return Response.json(
-      createApiError("Google Maps place details failed. Manual entry still allowed."),
+      createApiError(error instanceof Error ? error.message : "Google Maps place details failed."),
       { status: 503 }
     );
   }

@@ -7,16 +7,22 @@ export function normalizeSavedLocationName(value: string | null | undefined) {
 export function findExactSavedLocation(
   locations: SavedLocation[],
   locationType: SavedLocationType,
-  displayName: string
+  displayName: string,
+  clientId?: string | null
 ) {
   const normalizedName = normalizeSavedLocationName(displayName);
   if (!normalizedName) return null;
 
-  return locations.find(
+  const matches = locations.filter(
     (location) =>
       location.location_type === locationType &&
       location.normalized_name === normalizedName
-  ) ?? null;
+  );
+  return (
+    matches.find((location) => Boolean(clientId) && location.client_id === clientId) ??
+    matches.find((location) => !location.client_id) ??
+    null
+  );
 }
 
 export function rankSavedLocations(

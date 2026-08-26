@@ -69,7 +69,7 @@ test("verified saved data requires an address plus a place id or complete coordi
   assert.equal(savedLocationHasVerifiedMapsData(savedLocation({ formatted_address: "" })), false);
 });
 
-test("migration backfills safely, deduplicates by exact normalized alias, and never mutates bookings", () => {
+test("legacy migration documents the previously used location memory", () => {
   const migration = fs.readFileSync(path.resolve("supabase/migrations/20260721120000_add_saved_booking_locations.sql"), "utf8");
   const bookingColumns = migration.indexOf("alter table if exists public.booking_diary");
   const savedTable = migration.indexOf("create table if not exists public.saved_locations");
@@ -109,8 +109,8 @@ test("migration backfills safely, deduplicates by exact normalized alias, and ne
 test("Booking Diary lookup is local, race guarded, and respects manual Maps edits", () => {
   const page = fs.readFileSync(path.resolve("app/(dashboard)/booking-diary/page.tsx"), "utf8");
   const data = fs.readFileSync(path.resolve("lib/data.ts"), "utf8");
-  assert.match(data, /from\("saved_locations"\)/);
-  assert.match(page, /findExactSavedLocation\(savedLocations, "pickup", form\.pickup\)/);
+  assert.match(data, /from\("canonical_location_aliases"\)/);
+  assert.match(page, /findExactSavedLocation\(savedLocations, "pickup", form\.pickup, form\.client_id\)/);
   assert.match(page, /savedLookupRequestRef\.current\.pickup !== requestId/);
   assert.match(page, /initialLocationNameRef\.current\.pickup/);
   assert.match(page, /manualLocationEditRef\.current\.pickup/);

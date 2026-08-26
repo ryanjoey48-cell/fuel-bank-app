@@ -26,6 +26,7 @@ type DistanceEstimateRequest = {
   waypoints?: Array<string | RoutePoint>;
   bookingDate?: string | null;
   pickupTime?: string | null;
+  requireVerifiedPoints?: boolean;
 };
 
 type RoutesWaypoint =
@@ -52,9 +53,13 @@ const ROUTES_FIELD_MASK = [
   "fallbackInfo"
 ].join(",");
 
-function toRoutesWaypoint(point: string | RoutePoint | undefined): RoutesWaypoint | null {
+function toRoutesWaypoint(
+  point: string | RoutePoint | undefined,
+  requireVerifiedPoints = false
+): RoutesWaypoint | null {
   if (!point) return null;
   if (typeof point === "string") {
+    if (requireVerifiedPoints) return null;
     const address = point.trim();
     return address ? { address } : null;
   }
@@ -66,6 +71,7 @@ function toRoutesWaypoint(point: string | RoutePoint | undefined): RoutesWaypoin
     return { location: { latLng: { latitude: point.lat, longitude: point.lng } } };
   }
 
+  if (requireVerifiedPoints) return null;
   const address = point.formatted_address?.trim() || point.label?.trim() || "";
   return address ? { address } : null;
 }
@@ -82,7 +88,7 @@ export async function POST(request: Request) {
     const apiKey = getServerGoogleMapsApiKey();
     if (!apiKey) {
       const missingVariables = getGoogleMapsEnvironmentStatus().missingServerVariables;
-      return Response.json(createApiError(`Missing ${missingVariables.join(" and ") || "GOOGLE_MAPS_API_KEY"}`), { status: 503 });
+      return Response.json(createApiError(`Missing ${missingVariables.join(" and ") || "GOOGLE_MAPS_SERVER_API_KEY"}`), { status: 503 });
     }
 
     let body: DistanceEstimateRequest;
@@ -92,9 +98,11 @@ export async function POST(request: Request) {
       return Response.json(createApiError("Invalid request body."), { status: 400 });
     }
 
-    const origin = toRoutesWaypoint(body.origin);
-    const destination = toRoutesWaypoint(body.destination);
-    const intermediates = (body.waypoints ?? []).map(toRoutesWaypoint).filter((point): point is RoutesWaypoint => point != null);
+    const origin = toRoutesWaypoint(body.origin, body.requireVerifiedPoints);
+    const destination = toRoutesWaypoint(body.destination, body.requireVerifiedPoints);
+    const intermediates = (body.waypoints ?? [])
+      .map((point) => toRoutesWaypoint(point, body.requireVerifiedPoints))
+      .filter((point): point is RoutesWaypoint => point != null);
     if (!origin || !destination) {
       return Response.json(createApiError("Origin and destination are required."), { status: 400 });
     }

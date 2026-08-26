@@ -29,31 +29,6 @@ type PlacesAutocompleteNewResponse = {
   };
 };
 
-type PlacesAutocompleteLegacyResponse = {
-  predictions?: Array<{
-    place_id?: string;
-    description?: string;
-    structured_formatting?: {
-      main_text?: string;
-      secondary_text?: string;
-    };
-  }>;
-  error_message?: string;
-  status?: string;
-};
-
-function mapLegacyPredictions(result: PlacesAutocompleteLegacyResponse) {
-  return (result.predictions ?? []).slice(0, 5).map((prediction) => ({
-    placeId: prediction.place_id ?? prediction.description ?? "",
-    description: prediction.description ?? "",
-    mainText:
-      prediction.structured_formatting?.main_text ??
-      prediction.description ??
-      "",
-    secondaryText: prediction.structured_formatting?.secondary_text ?? ""
-  }));
-}
-
 function createMapsConfigPayload() {
   const status = getGoogleMapsEnvironmentStatus();
   const missingVariables = [
@@ -62,8 +37,6 @@ function createMapsConfigPayload() {
   ];
   const message = missingVariables.length
     ? `Missing ${missingVariables.join(" and ")}`
-    : status.legacyServerSource
-      ? `Missing GOOGLE_MAPS_API_KEY. Legacy ${status.legacyServerSource} is present but not used for stable deployments.`
     : null;
 
   return {
@@ -110,7 +83,7 @@ export async function GET(request: Request) {
     if (!apiKey) {
       const config = createMapsConfigPayload();
       return Response.json(
-        createApiError(config.message || "Missing GOOGLE_MAPS_API_KEY"),
+        createApiError(config.message || "Missing GOOGLE_MAPS_SERVER_API_KEY"),
         { status: 503 }
       );
     }
@@ -146,41 +119,13 @@ export async function GET(request: Request) {
       const errorBody = await parseJsonSafely<PlacesAutocompleteNewResponse | null>(
         response
       ).catch(() => null);
-
-      const legacyUrl = new URL("https://maps.googleapis.com/maps/api/place/autocomplete/json");
-      legacyUrl.searchParams.set("input", input);
-      legacyUrl.searchParams.set("key", apiKey);
-      legacyUrl.searchParams.set("language", language === "th" ? "th" : "en");
-      legacyUrl.searchParams.set("components", "country:th");
-      if (sessionToken) {
-        legacyUrl.searchParams.set("sessiontoken", sessionToken);
-      }
-
-      const legacyResponse = await fetch(legacyUrl, { cache: "no-store" });
-      const legacyResult = await parseJsonSafely<PlacesAutocompleteLegacyResponse>(legacyResponse);
-
-      if (
-        legacyResponse.ok &&
-        (legacyResult.status === "OK" || legacyResult.status === "ZERO_RESULTS")
-      ) {
-        return Response.json(
-          createApiSuccess({
-            configured: true,
-            browserConfigured: getGoogleMapsEnvironmentStatus().hasPublicKey,
-            suggestions: mapLegacyPredictions(legacyResult)
-          })
-        );
-      }
-
       const rawMessage =
-        legacyResult.error_message ||
-        legacyResult.status ||
         errorBody?.error?.message ||
-        "Unable to reach Google Maps autocomplete service.";
-      const errorCode = extractGoogleMapsErrorCode(rawMessage) ?? legacyResult.status ?? null;
+        "Places API (New) autocomplete request failed.";
+      const errorCode = extractGoogleMapsErrorCode(rawMessage);
 
       return Response.json(createApiError(getGoogleMapsErrorMessage(errorCode, rawMessage) ?? rawMessage), {
-        status: 502
+        status: response.status
       });
     }
 
@@ -213,7 +158,7 @@ export async function GET(request: Request) {
   } catch (error) {
     logGoogleMapsRouteError("[Fuel Bank] Google location autocomplete failed", error);
     return Response.json(
-      createApiError("Google Maps API request failed. Manual entry still allowed."),
+      createApiError(error instanceof Error ? error.message : "Google Places request failed."),
       { status: 503 }
     );
   }
