@@ -3,6 +3,7 @@
 import clsx from "clsx";
 import {
   CalendarDays,
+  CheckCircle2,
   ChevronRight,
   Clock3,
   Copy,
@@ -15,6 +16,7 @@ import {
   RefreshCw,
   Save,
   Search,
+  ShieldAlert,
   Trash2,
   Truck,
   UserRound,
@@ -22,6 +24,8 @@ import {
 } from "lucide-react";
 import { Fragment, type RefObject, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { BookingBusinessInsights } from "@/components/booking-business-insights";
+import { BookingLocationReview } from "@/components/booking-location-review";
+import { BookingMapCheck } from "@/components/booking-map-check";
 import { ClientDirectoryDialog } from "@/components/client-directory-dialog";
 import { ClientSelector } from "@/components/client-selector";
 import { EmptyState } from "@/components/empty-state";
@@ -46,6 +50,7 @@ import {
 } from "@/lib/data";
 import { fetchCurrentAccess } from "@/lib/account-management";
 import { hasPermission } from "@/lib/authorization";
+import { bookingLocationReviewEnabled, shouldShowLocationReviewTab } from "@/lib/booking-location-review";
 import { exportToXlsx } from "@/lib/export";
 import { fetchJson } from "@/lib/http";
 import { useLanguage } from "@/lib/language-provider";
@@ -61,6 +66,9 @@ import { LOCATION_SUGGESTIONS } from "@/src/data/locations";
 import type { BookingDiaryEntry, Client, Driver, SavedLocation, SavedLocationType, TripJourney, TripJourneyStatus, Vehicle } from "@/types/database";
 
 const PAGE_SIZE = 50;
+const LOCATION_REVIEW_FEATURE_ENABLED = bookingLocationReviewEnabled(
+  process.env.NEXT_PUBLIC_BOOKING_LOCATION_REVIEW_ENABLED
+);
 
 type BookingForm = {
   id: string;
@@ -71,12 +79,14 @@ type BookingForm = {
   weight: string;
   dimensions: string;
   pickup: string;
+  pickup_location_id: string;
   pickup_place_id: string;
   pickup_address: string;
   pickup_lat: string;
   pickup_lng: string;
   warehouse_no: string;
   dropoff: string;
+  dropoff_location_id: string;
   dropoff_place_id: string;
   dropoff_address: string;
   dropoff_lat: string;
@@ -97,7 +107,10 @@ type BookingForm = {
   route_traffic_aware: boolean | null;
   route_source: string;
   route_fallback_info: Record<string, unknown> | null;
+  map_resolution_status: "legacy_unresolved" | "unresolved_draft" | "resolved";
   vehicle: string;
+  vehicle_registration: string;
+  trailer_registration: string;
   driver: string;
   notes: string;
   job_order_number: string;
@@ -128,12 +141,14 @@ const emptyForm = (): BookingForm => ({
   weight: "",
   dimensions: "",
   pickup: "",
+  pickup_location_id: "",
   pickup_place_id: "",
   pickup_address: "",
   pickup_lat: "",
   pickup_lng: "",
   warehouse_no: "",
   dropoff: "",
+  dropoff_location_id: "",
   dropoff_place_id: "",
   dropoff_address: "",
   dropoff_lat: "",
@@ -154,7 +169,10 @@ const emptyForm = (): BookingForm => ({
   route_traffic_aware: null,
   route_source: "",
   route_fallback_info: null,
+  map_resolution_status: "unresolved_draft",
   vehicle: "",
+  vehicle_registration: "",
+  trailer_registration: "",
   driver: "",
   notes: "",
   job_order_number: ""
@@ -207,8 +225,20 @@ const labels = {
     locationSplitHelper: "Display name is shown in Booking Diary. Google Maps location is used for distance and route calculation.",
     googleVerified: "Google verified",
     manualUnverified: "Manual/unverified",
-    manualEntryStillAllowed: "Manual entry still allowed.",
+    mapsNotConfirmed: "Maps location not confirmed",
+    dataQuality: "Data quality",
+    dataQualityComplete: "Complete",
+    dataQualityNeedsAttention: "Needs attention",
+    pickupMapsUnresolved: "Pickup Maps unresolved",
+    dropoffMapsUnresolved: "Drop-off Maps unresolved",
+    driverMissing: "Missing driver",
+    vehicleRegMissing: "Missing vehicle reg",
+    distanceMissing: "Missing distance",
+    manualEntryStillAllowed: "Unverified text can only be saved as an unresolved draft.",
     vehicle: "Vehicle",
+    vehicleRegistration: "Vehicle Registration / ทะเบียนรถ",
+    trailerRegistration: "Trailer Registration / ทะเบียนหาง",
+    overwriteVehicleRegistration: "Replace the current vehicle registration with this driver's assigned registration?",
     driver: "Driver",
     allDates: "All dates",
     allPickups: "All pickups",
@@ -299,6 +329,7 @@ const labels = {
     openGoogleMaps: "Open in Google Maps",
     noEstimate: "No estimate",
     googleMapsUnavailable: "Google Maps is unavailable. Manual entry still works.",
+    googleMapsDistanceFailure: "Unable to calculate Google Maps distance. Please confirm both Maps locations.",
     distanceRequired: "Enter pickup and drop-off before calculating distance."
   },
   th: {
@@ -418,6 +449,15 @@ const locationLabelExtras = {
     locationSplitHelper: "ชื่อที่แสดงใช้ใน Booking Diary ส่วนตำแหน่ง Google Maps ใช้คำนวณระยะทางและเส้นทาง",
     googleVerified: "ยืนยันด้วย Google",
     manualUnverified: "กรอกเอง / ยังไม่ยืนยัน",
+    mapsNotConfirmed: "ยังไม่ได้ยืนยันตำแหน่ง Maps",
+    dataQuality: "คุณภาพข้อมูล",
+    dataQualityComplete: "ครบถ้วน",
+    dataQualityNeedsAttention: "ต้องตรวจสอบ",
+    pickupMapsUnresolved: "จุดรับยังไม่ยืนยัน Maps",
+    dropoffMapsUnresolved: "จุดส่งยังไม่ยืนยัน Maps",
+    driverMissing: "ยังไม่มีคนขับ",
+    vehicleRegMissing: "ยังไม่มีทะเบียนรถ",
+    distanceMissing: "ยังไม่มีระยะทาง",
     manualEntryStillAllowed: "ยังสามารถกรอกเองได้"
   }
 };
@@ -454,6 +494,15 @@ const clientLabelExtras = {
   }
 };
 
+const registrationLabelExtras = {
+  en: {},
+  th: {
+    vehicleRegistration: "Vehicle Registration / ทะเบียนรถ",
+    trailerRegistration: "Trailer Registration / ทะเบียนหาง",
+    overwriteVehicleRegistration: "เปลี่ยนทะเบียนรถเป็นทะเบียนที่ผูกกับคนขับรายนี้หรือไม่?"
+  }
+};
+
 function mapBookingToForm(booking: BookingDiaryEntry): BookingForm {
   return {
     id: booking.id,
@@ -464,12 +513,14 @@ function mapBookingToForm(booking: BookingDiaryEntry): BookingForm {
     weight: booking.weight != null ? String(booking.weight) : "",
     dimensions: booking.dimensions ?? "",
     pickup: getDiaryDisplayName(booking.pickup, booking.pickup_address),
+    pickup_location_id: booking.pickup_location_id ?? "",
     pickup_place_id: booking.pickup_place_id ?? "",
     pickup_address: getGoogleAddressValue(booking.pickup_address, booking.pickup),
     pickup_lat: formatCoordinate(booking.pickup_lat),
     pickup_lng: formatCoordinate(booking.pickup_lng),
     warehouse_no: booking.warehouse_no ?? "",
     dropoff: getDiaryDisplayName(booking.dropoff, booking.dropoff_address),
+    dropoff_location_id: booking.dropoff_location_id ?? "",
     dropoff_place_id: booking.dropoff_place_id ?? "",
     dropoff_address: getGoogleAddressValue(booking.dropoff_address, booking.dropoff),
     dropoff_lat: formatCoordinate(booking.dropoff_lat),
@@ -490,7 +541,10 @@ function mapBookingToForm(booking: BookingDiaryEntry): BookingForm {
     route_traffic_aware: booking.route_traffic_aware ?? null,
     route_source: booking.route_source ?? "",
     route_fallback_info: booking.route_fallback_info ?? null,
+    map_resolution_status: booking.map_resolution_status ?? "legacy_unresolved",
     vehicle: booking.vehicle ?? "",
+    vehicle_registration: booking.vehicle_registration ?? booking.vehicle ?? "",
+    trailer_registration: booking.trailer_registration ?? "",
     driver: booking.driver ?? "",
     notes: booking.notes ?? "",
     job_order_number: booking.job_order_number ?? ""
@@ -639,6 +693,44 @@ function hasVerifiedGoogleLocation(booking: Pick<BookingDiaryEntry, "pickup_plac
     (booking.pickup_place_id || hasPickupCoordinates) &&
       (booking.dropoff_place_id || hasDropoffCoordinates)
   );
+}
+
+function hasPickupMapsLocation(booking: Pick<BookingDiaryEntry, "pickup_place_id" | "pickup_lat" | "pickup_lng"> | BookingForm) {
+  const hasCoordinates = booking.pickup_lat != null && booking.pickup_lng != null && String(booking.pickup_lat) !== "" && String(booking.pickup_lng) !== "";
+  return Boolean(booking.pickup_place_id || hasCoordinates);
+}
+
+function hasDropoffMapsLocation(booking: Pick<BookingDiaryEntry, "dropoff_place_id" | "dropoff_lat" | "dropoff_lng"> | BookingForm) {
+  const hasCoordinates = booking.dropoff_lat != null && booking.dropoff_lng != null && String(booking.dropoff_lat) !== "" && String(booking.dropoff_lng) !== "";
+  return Boolean(booking.dropoff_place_id || hasCoordinates);
+}
+
+function getBookingDataQuality(
+  booking: Pick<BookingDiaryEntry, "pickup_place_id" | "pickup_lat" | "pickup_lng" | "dropoff_place_id" | "dropoff_lat" | "dropoff_lng" | "driver" | "vehicle" | "vehicle_registration" | "estimated_distance_km">,
+  copy: Pick<
+    typeof labels.en,
+    | "pickupMapsUnresolved"
+    | "dropoffMapsUnresolved"
+    | "driverMissing"
+    | "vehicleRegMissing"
+    | "distanceMissing"
+    | "dataQualityComplete"
+    | "dataQualityNeedsAttention"
+  >
+) {
+  const issues = [
+    !hasPickupMapsLocation(booking) ? copy.pickupMapsUnresolved : "",
+    !hasDropoffMapsLocation(booking) ? copy.dropoffMapsUnresolved : "",
+    !booking.driver?.trim() ? copy.driverMissing : "",
+    !(booking.vehicle_registration?.trim() || booking.vehicle?.trim()) ? copy.vehicleRegMissing : "",
+    !formatDistanceKm(booking.estimated_distance_km) ? copy.distanceMissing : ""
+  ].filter(Boolean);
+
+  return {
+    complete: issues.length === 0,
+    label: issues.length === 0 ? copy.dataQualityComplete : copy.dataQualityNeedsAttention,
+    issues
+  };
 }
 
 function formatDistanceKm(value: number | string | null | undefined) {
@@ -803,7 +895,9 @@ type LocationNameOption = {
 };
 
 const routeLabelExtras = {
-  en: {},
+  en: {
+    googleMapsDistanceFailure: "Unable to calculate Google Maps distance. Please confirm both Maps locations."
+  },
   th: {
     calculateDistance: "คำนวณเส้นทาง",
     refreshRoute: "รีเฟรชเส้นทาง",
@@ -816,7 +910,13 @@ const routeLabelExtras = {
     fallbackRouteUsed: "Google ไม่พบเส้นทางที่ต้องการ ระบบจึงเลือกเส้นทางที่ใช้งานได้ดีที่สุดแทน",
     routeNeedsRefresh: "ข้อมูลเส้นทางเปลี่ยนแล้ว โปรดรีเฟรชประมาณการการจราจร",
     standardDriveWarning: "เส้นทางขับรถมาตรฐาน ยังไม่ได้ตรวจข้อจำกัดรถบรรทุก",
-    calculated: "คำนวณแล้ว"
+    calculated: "คำนวณแล้ว",
+    calculatingDistance: "กำลังคำนวณ...",
+    openGoogleMaps: "เปิดใน Google Maps",
+    noEstimate: "ยังไม่มีระยะทาง",
+    googleMapsUnavailable: "Google Maps ยังใช้งานไม่ได้ แต่ยังบันทึกข้อมูลเองได้",
+    googleMapsDistanceFailure: "ไม่สามารถคำนวณระยะทาง Google Maps ได้ กรุณายืนยันตำแหน่ง Maps ทั้งจุดรับและจุดส่ง",
+    distanceRequired: "กรุณากรอกจุดรับและจุดส่งก่อนคำนวณระยะทาง"
   }
 };
 
@@ -973,7 +1073,8 @@ export default function BookingDiaryPage() {
       ...locationLabelExtras[languageKey],
       ...routeLabelExtras[languageKey],
       ...jobOrderLabelExtras[languageKey],
-      ...clientLabelExtras[languageKey]
+      ...clientLabelExtras[languageKey],
+      ...registrationLabelExtras[languageKey]
     }),
     [languageKey]
   );
@@ -985,7 +1086,11 @@ export default function BookingDiaryPage() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [form, setForm] = useState<BookingForm>(() => emptyForm());
-  const [activeTab, setActiveTab] = useState<"daily" | "insights">("daily");
+  const [activeTab, setActiveTab] = useState<"daily" | "insights" | "locationReview" | "bookingCheck">("daily");
+  const [locationReviewCount, setLocationReviewCount] = useState(0);
+  const [bookingCheckCount, setBookingCheckCount] = useState(0);
+  const [bookingCheckFocus, setBookingCheckFocus] = useState<{ label: string; side: "pickup" | "dropoff" | "pickup_dropoff" } | null>(null);
+  const locationReviewDeepLinkHandled = useRef(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [quickFilter, setQuickFilter] = useState<"today" | "week" | "all">("today");
   const [searchQuery, setSearchQuery] = useState("");
@@ -1082,6 +1187,34 @@ export default function BookingDiaryPage() {
     return () => window.removeEventListener("fuel-bank:user-updated", syncCurrentUser);
   }, []);
 
+  const showLocationReviewTab = shouldShowLocationReviewTab({
+    enabled: LOCATION_REVIEW_FEATURE_ENABLED,
+    authorized: Boolean(currentUser?.isAdmin),
+    awaitingReview: locationReviewCount
+  });
+
+  useEffect(() => {
+    if (activeTab === "locationReview" && !showLocationReviewTab) setActiveTab("daily");
+  }, [activeTab, showLocationReviewTab]);
+
+  useEffect(() => {
+    if (locationReviewDeepLinkHandled.current || !currentUser?.isAdmin) return;
+    const requestedTab = new URLSearchParams(window.location.search).get("tab");
+    if (requestedTab === "location-review" && showLocationReviewTab) {
+      locationReviewDeepLinkHandled.current = true;
+      setActiveTab("locationReview");
+    }
+    if (requestedTab === "booking-check") {
+      locationReviewDeepLinkHandled.current = true;
+      const label = new URLSearchParams(window.location.search).get("location");
+      const side = new URLSearchParams(window.location.search).get("side");
+      if (label && (side === "pickup" || side === "dropoff" || side === "pickup_dropoff")) {
+        setBookingCheckFocus({ label, side });
+      }
+      setActiveTab("bookingCheck");
+    }
+  }, [currentUser?.isAdmin, showLocationReviewTab]);
+
   useEffect(() => {
     const channel = supabase
       .channel("booking-diary-live")
@@ -1113,10 +1246,36 @@ export default function BookingDiaryPage() {
     () => uniqueSorted([...bookings.map((booking) => booking.vehicle), ...vehicles.map((vehicle) => vehicle.vehicle_reg)]),
     [bookings, vehicles]
   );
+  const vehicleRegistrationOptions = useMemo(
+    () => uniqueSorted([
+      ...bookings.map((booking) => booking.vehicle_registration),
+      ...bookings.map((booking) => booking.vehicle),
+      ...drivers.map((driver) => driver.vehicle_reg),
+      ...vehicles.map((vehicle) => vehicle.vehicle_reg)
+    ]),
+    [bookings, drivers, vehicles]
+  );
+  const vehicleTypeByRegistration = useMemo(() => {
+    const lookup = new Map<string, string>();
+    for (const vehicle of vehicles) {
+      const key = vehicle.vehicle_reg?.trim().toLocaleLowerCase();
+      const type = vehicle.vehicle_type?.trim() || vehicle.vehicle_category?.trim() || "";
+      if (key && type) lookup.set(key, type);
+    }
+    return lookup;
+  }, [vehicles]);
   const driverOptions = useMemo(
     () => uniqueSorted([...bookings.map((booking) => booking.driver), ...drivers.map((driver) => driver.name)]),
     [bookings, drivers]
   );
+  const driverRegistrationByName = useMemo(() => {
+    const lookup = new Map<string, string>();
+    for (const driver of drivers) {
+      const key = driver.name.trim().toLocaleLowerCase();
+      if (key && driver.vehicle_reg?.trim()) lookup.set(key, driver.vehicle_reg.trim());
+    }
+    return lookup;
+  }, [drivers]);
   const creatorOptions = useMemo(
     () => uniqueSorted(bookings.map((booking) => getCreatorDisplayName(booking, currentUser))),
     [bookings, currentUser]
@@ -1132,19 +1291,19 @@ export default function BookingDiaryPage() {
   );
   const pickupLocationOptions = useMemo(
     () => buildLocationNameOptions(
-      savedLocations,
+      savedLocations.filter((location) => !location.client_id || location.client_id === form.client_id),
       "pickup",
       [...LOCATION_SUGGESTIONS, ...bookings.map(getBookingPickupDisplay)]
     ),
-    [bookings, savedLocations]
+    [bookings, form.client_id, savedLocations]
   );
   const dropoffLocationOptions = useMemo(
     () => buildLocationNameOptions(
-      savedLocations,
+      savedLocations.filter((location) => !location.client_id || location.client_id === form.client_id),
       "dropoff",
       [...LOCATION_SUGGESTIONS, ...bookings.map(getBookingDropoffDisplay)]
     ),
-    [bookings, savedLocations]
+    [bookings, form.client_id, savedLocations]
   );
 
   const applySavedLocation = useCallback((locationType: SavedLocationType, location: SavedLocation) => {
@@ -1159,6 +1318,7 @@ export default function BookingDiaryPage() {
       ? {
           ...cleared,
           pickup: location.display_name,
+          pickup_location_id: location.canonical_location_id ?? "",
           pickup_place_id: location.google_place_id ?? "",
           pickup_address: location.formatted_address,
           pickup_lat: location.latitude?.toString() ?? "",
@@ -1167,6 +1327,7 @@ export default function BookingDiaryPage() {
       : {
           ...cleared,
           dropoff: location.display_name,
+          dropoff_location_id: location.canonical_location_id ?? "",
           dropoff_place_id: location.google_place_id ?? "",
           dropoff_address: location.formatted_address,
           dropoff_lat: location.latitude?.toString() ?? "",
@@ -1181,7 +1342,7 @@ export default function BookingDiaryPage() {
     savedLookupRequestRef.current.pickup = requestId;
     const timeoutId = window.setTimeout(() => {
       if (savedLookupRequestRef.current.pickup !== requestId) return;
-      const match = findExactSavedLocation(savedLocations, "pickup", form.pickup);
+      const match = findExactSavedLocation(savedLocations, "pickup", form.pickup, form.client_id);
       if (!match) {
         setSavedLocationApplied((current) => ({ ...current, pickup: false }));
         return;
@@ -1207,6 +1368,7 @@ export default function BookingDiaryPage() {
     form.pickup_lat,
     form.pickup_lng,
     form.pickup_place_id,
+    form.client_id,
     modalOpen,
     savedLocations
   ]);
@@ -1217,7 +1379,7 @@ export default function BookingDiaryPage() {
     savedLookupRequestRef.current.dropoff = requestId;
     const timeoutId = window.setTimeout(() => {
       if (savedLookupRequestRef.current.dropoff !== requestId) return;
-      const match = findExactSavedLocation(savedLocations, "dropoff", form.dropoff);
+      const match = findExactSavedLocation(savedLocations, "dropoff", form.dropoff, form.client_id);
       if (!match) {
         setSavedLocationApplied((current) => ({ ...current, dropoff: false }));
         return;
@@ -1243,6 +1405,7 @@ export default function BookingDiaryPage() {
     form.dropoff_lat,
     form.dropoff_lng,
     form.dropoff_place_id,
+    form.client_id,
     modalOpen,
     savedLocations
   ]);
@@ -1264,6 +1427,8 @@ export default function BookingDiaryPage() {
           booking.pickup_address,
           booking.dropoff_address,
           booking.vehicle,
+          booking.vehicle_registration,
+          booking.trailer_registration,
           booking.driver,
           booking.warehouse_no,
           booking.job_order_number,
@@ -1607,12 +1772,14 @@ export default function BookingDiaryPage() {
         weight: form.weight,
         dimensions: form.dimensions,
         pickup: form.pickup,
+        pickup_location_id: form.pickup_location_id || null,
         pickup_place_id: form.pickup_place_id,
         pickup_address: form.pickup_address,
         pickup_lat: form.pickup_lat,
         pickup_lng: form.pickup_lng,
         warehouse_no: form.warehouse_no,
         dropoff: form.dropoff,
+        dropoff_location_id: form.dropoff_location_id || null,
         dropoff_place_id: form.dropoff_place_id,
         dropoff_address: form.dropoff_address,
         dropoff_lat: form.dropoff_lat,
@@ -1633,7 +1800,17 @@ export default function BookingDiaryPage() {
         route_traffic_aware: form.route_traffic_aware,
         route_source: form.route_source,
         route_fallback_info: form.route_fallback_info,
+        map_resolution_status:
+          form.pickup_location_id &&
+          form.dropoff_location_id &&
+          Number(form.route_distance_meters) > 0 &&
+          Number(form.route_duration_seconds) > 0 &&
+          form.google_maps_route_url
+            ? "resolved"
+            : "unresolved_draft",
         vehicle: form.vehicle,
+        vehicle_registration: form.vehicle_registration,
+        trailer_registration: form.trailer_registration,
         driver: form.driver,
         job_order_number: form.job_order_number,
         notes: form.notes
@@ -1660,6 +1837,42 @@ export default function BookingDiaryPage() {
       if (routeInputChanged) setRouteMessage(copy.routeNeedsRefresh);
       return { ...(routeInputChanged ? clearBookingRouteSnapshot(current) : current), [field]: value };
     });
+  };
+
+  const handleDriverChange = (value: string) => {
+    const assignedRegistration = driverRegistrationByName.get(value.trim().toLocaleLowerCase()) ?? "";
+    setForm((current) => {
+      if (!assignedRegistration) return { ...current, driver: value };
+      const currentRegistration = current.vehicle_registration.trim();
+      const assignedVehicleType = vehicleTypeByRegistration.get(assignedRegistration.toLocaleLowerCase()) ?? "";
+      if (!currentRegistration) {
+        return {
+          ...current,
+          driver: value,
+          vehicle: current.vehicle.trim() || assignedVehicleType || current.vehicle,
+          vehicle_registration: assignedRegistration
+        };
+      }
+      if (currentRegistration.toLocaleLowerCase() === assignedRegistration.toLocaleLowerCase()) {
+        return { ...current, driver: value };
+      }
+      const confirmed = window.confirm(copy.overwriteVehicleRegistration);
+      return {
+        ...current,
+        driver: value,
+        vehicle: confirmed && !current.vehicle.trim() && assignedVehicleType ? assignedVehicleType : current.vehicle,
+        vehicle_registration: confirmed ? assignedRegistration : current.vehicle_registration
+      };
+    });
+  };
+
+  const handleVehicleRegistrationChange = (value: string) => {
+    const vehicleType = vehicleTypeByRegistration.get(value.trim().toLocaleLowerCase()) ?? "";
+    setForm((current) => ({
+      ...current,
+      vehicle_registration: value,
+      vehicle: current.vehicle.trim() || vehicleType || current.vehicle
+    }));
   };
 
   const handleCreateClient = async (name: string) => {
@@ -1756,8 +1969,9 @@ export default function BookingDiaryPage() {
     }
     setRouteMessage(null);
     setForm((current) => ({
-      ...current,
-      pickup: value
+      ...clearBookingRouteSnapshot(current),
+      pickup: value,
+      pickup_location_id: ""
     }));
   };
 
@@ -1769,6 +1983,7 @@ export default function BookingDiaryPage() {
     setRouteMessage(copy.routeNeedsRefresh);
     setForm((current) => ({
       ...clearBookingRouteSnapshot(current),
+      pickup_location_id: "",
       pickup_place_id: "",
       pickup_address: value,
       pickup_lat: "",
@@ -1783,8 +1998,9 @@ export default function BookingDiaryPage() {
     }
     setRouteMessage(null);
     setForm((current) => ({
-      ...current,
-      dropoff: value
+      ...clearBookingRouteSnapshot(current),
+      dropoff: value,
+      dropoff_location_id: ""
     }));
   };
 
@@ -1796,6 +2012,7 @@ export default function BookingDiaryPage() {
     setRouteMessage(copy.routeNeedsRefresh);
     setForm((current) => ({
       ...clearBookingRouteSnapshot(current),
+      dropoff_location_id: "",
       dropoff_place_id: "",
       dropoff_address: value,
       dropoff_lat: "",
@@ -1811,6 +2028,7 @@ export default function BookingDiaryPage() {
     setRouteMessage(copy.routeNeedsRefresh);
     setForm((current) => ({
       ...clearBookingRouteSnapshot(current),
+      pickup_location_id: "",
       pickup: current.pickup.trim() || getShortLocationName(location.label || location.formatted_address),
       pickup_place_id: location.place_id ?? "",
       pickup_address: location.formatted_address || location.label,
@@ -1827,6 +2045,7 @@ export default function BookingDiaryPage() {
     setRouteMessage(copy.routeNeedsRefresh);
     setForm((current) => ({
       ...clearBookingRouteSnapshot(current),
+      dropoff_location_id: "",
       dropoff: current.dropoff.trim() || getShortLocationName(location.label || location.formatted_address),
       dropoff_place_id: location.place_id ?? "",
       dropoff_address: location.formatted_address || location.label,
@@ -1872,6 +2091,11 @@ export default function BookingDiaryPage() {
       return;
     }
 
+    if (!hasPickupMapsLocation(form) || !hasDropoffMapsLocation(form)) {
+      setRouteMessage(copy.googleMapsDistanceFailure);
+      return;
+    }
+
     try {
       setRouteCalculating(true);
       setRouteMessage(null);
@@ -1893,6 +2117,7 @@ export default function BookingDiaryPage() {
             lat: parseNumericInput(form.dropoff_lat),
             lng: parseNumericInput(form.dropoff_lng)
           },
+          requireVerifiedPoints: true,
           bookingDate: form.booking_date,
           pickupTime: form.pickup_time
         })
@@ -1955,10 +2180,14 @@ export default function BookingDiaryPage() {
         } · ${estimate.trafficAware ? copy.trafficAwareEstimate : copy.trafficDataUnavailable}`
       );
     } catch (err) {
-      const message = err instanceof Error && err.message ? err.message : copy.googleMapsUnavailable;
+      const rawMessage = err instanceof Error && err.message ? err.message : "";
+      const message =
+        /origin|destination|verified|place|location/i.test(rawMessage)
+          ? copy.googleMapsDistanceFailure
+          : rawMessage || copy.googleMapsUnavailable;
       console.warn("[Fuel Bank] Booking Diary route estimate failed:", message);
       setRouteMessage(
-        `${message}. You can enter the estimated distance manually.`
+        message === copy.googleMapsDistanceFailure ? message : `${message}. You can enter the estimated distance manually.`
       );
     } finally {
       setRouteCalculating(false);
@@ -2053,6 +2282,8 @@ export default function BookingDiaryPage() {
         "Google Maps Route": booking.google_maps_route_url,
         "Distance Source": booking.distance_source,
         Vehicle: booking.vehicle,
+        "Vehicle Registration": booking.vehicle_registration,
+        "Trailer Registration": booking.trailer_registration,
         Driver: booking.driver,
         "Job Order Number": booking.job_order_number,
         Notes: booking.notes,
@@ -2220,6 +2451,22 @@ export default function BookingDiaryPage() {
         >
           {businessInsightsTabLabel}
         </button>
+        {showLocationReviewTab ? <button
+          type="button"
+          onClick={() => setActiveTab("locationReview")}
+          className={clsx("booking-diary-tab", activeTab === "locationReview" && "booking-diary-tab-active")}
+          aria-current={activeTab === "locationReview" ? "page" : undefined}
+        >
+          {language === "th" ? "ตรวจสอบสถานที่" : "Location review"} ({locationReviewCount.toLocaleString()})
+        </button> : null}
+        {LOCATION_REVIEW_FEATURE_ENABLED && currentUser?.isAdmin ? <button
+          type="button"
+          onClick={() => setActiveTab("bookingCheck")}
+          className={clsx("booking-diary-tab", activeTab === "bookingCheck" && "booking-diary-tab-active")}
+          aria-current={activeTab === "bookingCheck" ? "page" : undefined}
+        >
+          {language === "th" ? "ตรวจสอบงานจอง" : "Booking check"} ({bookingCheckCount.toLocaleString()})
+        </button> : null}
       </nav>
 
       {activeTab === "daily" ? (
@@ -2369,6 +2616,23 @@ export default function BookingDiaryPage() {
                                   {formatDurationMinutes(booking.estimated_duration_minutes)}
                                 </span>
                               ) : null}
+                              {(() => {
+                                const quality = getBookingDataQuality(booking, copy);
+                                return (
+                                  <span
+                                    className={clsx(
+                                      "inline-flex w-fit items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                                      quality.complete
+                                        ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+                                        : "border-amber-100 bg-amber-50 text-amber-700"
+                                    )}
+                                    title={quality.issues.join(" | ") || quality.label}
+                                  >
+                                    {quality.complete ? <CheckCircle2 className="h-3 w-3" /> : <ShieldAlert className="h-3 w-3" />}
+                                    {quality.label}
+                                  </span>
+                                );
+                              })()}
                               <span
                                 className={clsx(
                                   "inline-flex w-fit rounded-full border px-2 py-0.5 text-[10px] font-semibold",
@@ -2384,22 +2648,21 @@ export default function BookingDiaryPage() {
                           </span>
                           {(() => {
                             const meta = [
-                              booking.vehicle,
-                              booking.driver,
-                              booking.amount_pallets ? `${booking.amount_pallets} PLT` : "",
-                              booking.weight ? `${booking.weight}kg` : ""
-                            ].filter(Boolean);
+                              { value: booking.vehicle, className: "booking-line-vehicle" },
+                              { value: booking.vehicle_registration, className: "booking-line-vehicle" },
+                              { value: booking.trailer_registration ? `${copy.trailerRegistration}: ${booking.trailer_registration}` : "", className: "" },
+                              { value: booking.driver, className: "booking-line-driver" },
+                              { value: booking.amount_pallets ? `${booking.amount_pallets} PLT` : "", className: "" },
+                              { value: booking.weight ? `${booking.weight}kg` : "", className: "" }
+                            ].filter((item) => Boolean(item.value));
                             return meta.length ? (
                               <span className="booking-line-meta">
                                 {meta.map((item, index) => (
                                   <span
-                                    key={`${item}-${index}`}
-                                    className={clsx(
-                                      index === 0 && "booking-line-vehicle",
-                                      index === 1 && "booking-line-driver"
-                                    )}
+                                    key={`${item.value}-${index}`}
+                                    className={item.className}
                                   >
-                                    {item}
+                                    {item.value}
                                   </span>
                                 ))}
                               </span>
@@ -2583,7 +2846,8 @@ export default function BookingDiaryPage() {
                     <span>{getBookingDropoffDisplay(booking)}</span>
                   </div>
                   <div className="booking-entry-assignment">
-                    <span><Truck className="booking-card-icon" />{booking.vehicle || "-"}</span>
+                    <span><Truck className="booking-card-icon" />{booking.vehicle_registration || booking.vehicle || "-"}</span>
+                    {booking.trailer_registration ? <span>{copy.trailerRegistration}: {booking.trailer_registration}</span> : null}
                     <span><UserRound className="booking-card-icon" />{booking.driver || "-"}</span>
                   </div>
                   <div className="booking-card-measurements booking-entry-load">
@@ -2598,6 +2862,8 @@ export default function BookingDiaryPage() {
                   </div>
                   <div className="booking-card-meta">
                     <p><Truck className="booking-card-icon" />{booking.vehicle || "-"}</p>
+                    <p><Truck className="booking-card-icon" />{booking.vehicle_registration || "-"}</p>
+                    {booking.trailer_registration ? <p>{copy.trailerRegistration}: {booking.trailer_registration}</p> : null}
                     <p><UserRound className="booking-card-icon" />{booking.driver || "-"}</p>
                     <p className="col-span-2"><UserRound className="booking-card-icon" />{copy.addedBy} {getCreatorDisplayName(booking, currentUser) || copy.creatorUnavailable}</p>
                     {booking.notes ? <p className="col-span-2 truncate">{copy.notes}: {booking.notes}</p> : null}
@@ -2613,7 +2879,7 @@ export default function BookingDiaryPage() {
                 <table className="min-w-[980px]">
                   <thead>
                     <tr>
-                      {[copy.date, copy.clientName, copy.pickupTime, copy.route, copy.estimatedDistance, copy.vehicle, copy.driver, copy.load, copy.warehouseNo, copy.notes, tripJourneyColumnLabel, copy.actions].map((heading) => (
+                      {[copy.date, copy.clientName, copy.pickupTime, copy.route, copy.estimatedDistance, copy.vehicle, copy.driver, copy.load, copy.warehouseNo, copy.notes, copy.dataQuality, tripJourneyColumnLabel, copy.actions].map((heading) => (
                         <th key={heading || "actions"} className="booking-desktop-head-cell">{heading}</th>
                       ))}
                     </tr>
@@ -2625,7 +2891,7 @@ export default function BookingDiaryPage() {
                       return (
                         <Fragment key={date}>
                         <tr className="booking-desktop-date-row">
-                          <td colSpan={12}>
+                          <td colSpan={13}>
                             <button
                               type="button"
                               onClick={() => toggleDateSection(date)}
@@ -2681,7 +2947,11 @@ export default function BookingDiaryPage() {
                                 {formatDistanceKm(booking.estimated_distance_km) ?? copy.noEstimate}
                               </span>
                             </td>
-                            <td className="booking-desktop-cell whitespace-nowrap"><span className="booking-desktop-vehicle">{booking.vehicle || "-"}</span></td>
+                            <td className="booking-desktop-cell whitespace-nowrap">
+                              <span className="booking-desktop-vehicle">{booking.vehicle || "-"}</span>
+                              <span className="mt-1 block text-[11px] font-bold text-slate-700">{booking.vehicle_registration || "-"}</span>
+                              {booking.trailer_registration ? <span className="mt-0.5 block text-[10px] font-semibold text-slate-500">{copy.trailerRegistration}: {booking.trailer_registration}</span> : null}
+                            </td>
                             <td className="booking-desktop-cell whitespace-nowrap"><span className="booking-desktop-driver">{booking.driver || "-"}</span></td>
                             <td className="booking-desktop-cell whitespace-nowrap">{booking.amount_pallets || "-"} PLT / {booking.weight ? `${booking.weight}kg` : "-"}</td>
                             <td className="booking-desktop-cell max-w-[130px]" title={booking.warehouse_no || ""}><span className="block truncate">{booking.warehouse_no || "-"}</span></td>
@@ -2695,6 +2965,25 @@ export default function BookingDiaryPage() {
                                 </span>
                               ) : null}
                               <span className="block truncate">{booking.notes || "-"}</span>
+                            </td>
+                            <td className="booking-desktop-cell whitespace-nowrap">
+                              {(() => {
+                                const quality = getBookingDataQuality(booking, copy);
+                                return (
+                                  <span
+                                    className={clsx(
+                                      "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold",
+                                      quality.complete
+                                        ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+                                        : "border-amber-100 bg-amber-50 text-amber-700"
+                                    )}
+                                    title={quality.issues.join(" | ") || quality.label}
+                                  >
+                                    {quality.complete ? <CheckCircle2 className="h-3.5 w-3.5" /> : <ShieldAlert className="h-3.5 w-3.5" />}
+                                    {quality.label}
+                                  </span>
+                                );
+                              })()}
                             </td>
                             <td className="booking-desktop-cell whitespace-nowrap">
                               <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getBookingTripClass(booking)}`}>
@@ -2794,7 +3083,7 @@ export default function BookingDiaryPage() {
         )}
       </section>
       </>
-      ) : (
+      ) : activeTab === "insights" ? (
         <BookingBusinessInsights
           bookings={bookings}
           tripsByBookingId={tripsByBookingId}
@@ -2805,7 +3094,28 @@ export default function BookingDiaryPage() {
           refreshing={refreshing}
           onRefresh={() => void load(false)}
         />
-      )}
+      ) : null}
+
+      {LOCATION_REVIEW_FEATURE_ENABLED && currentUser?.isAdmin && currentUser.id ? <BookingLocationReview
+        active={activeTab === "locationReview"}
+        language={language}
+        userId={currentUser.id}
+        onAvailabilityChange={setLocationReviewCount}
+          onOpenBooking={(bookingId) => {
+          const booking = bookings.find((item) => item.id === bookingId);
+          if (!booking) return;
+            setActiveTab("daily");
+            openEdit(booking);
+          }}
+        /> : null}
+
+      {LOCATION_REVIEW_FEATURE_ENABLED && currentUser?.isAdmin && currentUser.id ? <BookingMapCheck
+        active={activeTab === "bookingCheck"}
+        language={language}
+        focus={bookingCheckFocus}
+        onClearFocus={() => setBookingCheckFocus(null)}
+        onAvailabilityChange={setBookingCheckCount}
+      /> : null}
 
       {activeTab === "daily" && !modalOpen && !deleteTarget ? (
         <button
@@ -2868,7 +3178,7 @@ export default function BookingDiaryPage() {
                         savedLabel={copy.previouslyUsedLocation}
                       />
                       <p className="mt-2 text-sm text-slate-500">
-                        {form.pickup.trim() && !findExactSavedLocation(savedLocations, "pickup", form.pickup)
+                        {form.pickup.trim() && !findExactSavedLocation(savedLocations, "pickup", form.pickup, form.client_id)
                           ? copy.noSavedLocationFound
                           : copy.displayNameHelper}
                       </p>
@@ -2906,7 +3216,7 @@ export default function BookingDiaryPage() {
                         savedLabel={copy.previouslyUsedLocation}
                       />
                       <p className="mt-2 text-sm text-slate-500">
-                        {form.dropoff.trim() && !findExactSavedLocation(savedLocations, "dropoff", form.dropoff)
+                        {form.dropoff.trim() && !findExactSavedLocation(savedLocations, "dropoff", form.dropoff, form.client_id)
                           ? copy.noSavedLocationFound
                           : copy.displayNameHelper}
                       </p>
@@ -3013,8 +3323,17 @@ export default function BookingDiaryPage() {
                     </label>
                     <label className="form-field lg:col-span-2">
                       <span className="form-label">{copy.driver}</span>
-                      <input list="booking-drivers" value={form.driver} onChange={(event) => setField("driver", event.target.value)} className={inputClass} placeholder={copy.driver} />
+                      <input list="booking-drivers" value={form.driver} onChange={(event) => handleDriverChange(event.target.value)} className={inputClass} placeholder={copy.driver} />
                       <datalist id="booking-drivers">{driverOptions.map((driver) => <option key={driver} value={driver} />)}</datalist>
+                    </label>
+                    <label className="form-field lg:col-span-2">
+                      <span className="form-label">{copy.vehicleRegistration}</span>
+                      <input list="booking-vehicle-registrations" value={form.vehicle_registration} onChange={(event) => handleVehicleRegistrationChange(event.target.value)} className={inputClass} placeholder="701-5145" />
+                      <datalist id="booking-vehicle-registrations">{vehicleRegistrationOptions.map((vehicle) => <option key={vehicle} value={vehicle} />)}</datalist>
+                    </label>
+                    <label className="form-field lg:col-span-2">
+                      <span className="form-label">{copy.trailerRegistration}</span>
+                      <input value={form.trailer_registration} onChange={(event) => setField("trailer_registration", event.target.value)} className={inputClass} placeholder="65-6919" />
                     </label>
                     <label className="form-field lg:col-span-1">
                       <span className="form-label">{copy.amountPallets}</span>

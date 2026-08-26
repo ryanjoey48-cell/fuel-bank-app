@@ -53,12 +53,12 @@ async function runGoogleMapsProbe(apiKey: string | null) {
       places: {
         ok: false,
         status: "MISSING_KEY",
-        message: "Missing GOOGLE_MAPS_API_KEY."
+        message: "Missing GOOGLE_MAPS_SERVER_API_KEY."
       },
       directions: {
         ok: false,
         status: "MISSING_KEY",
-        message: "Missing GOOGLE_MAPS_API_KEY."
+        message: "Missing GOOGLE_MAPS_SERVER_API_KEY."
       }
     };
   }
@@ -106,7 +106,7 @@ export async function GET(request: Request) {
           source: env.publicSource,
           missing: env.missingPublicVariables
         },
-        GOOGLE_MAPS_API_KEY: {
+        GOOGLE_MAPS_SERVER_API_KEY: {
           detected: env.hasServerKey,
           source: env.serverSource,
           missing: env.missingServerVariables

@@ -302,6 +302,8 @@ export type SavedLocationType = "pickup" | "dropoff";
 
 export type SavedLocation = {
   id: string;
+  canonical_location_id?: string | null;
+  client_id?: string | null;
   location_type: SavedLocationType;
   display_name: string;
   normalized_name: string;
@@ -327,8 +329,10 @@ export type BookingDiaryEntry = {
   weight: number | null;
   dimensions: string | null;
   pickup: string;
+  pickup_location_id?: string | null;
   warehouse_no: string | null;
   dropoff: string;
+  dropoff_location_id?: string | null;
   pickup_place_id?: string | null;
   dropoff_place_id?: string | null;
   pickup_address?: string | null;
@@ -353,8 +357,14 @@ export type BookingDiaryEntry = {
   route_traffic_aware?: boolean | null;
   route_source?: string | null;
   route_fallback_info?: Record<string, unknown> | null;
+  map_resolution_status?: "legacy_unresolved" | "unresolved_draft" | "resolved" | null;
+  map_backfill_batch_id?: string | null;
+  map_values_manually_corrected?: boolean | null;
+  map_original_values?: Record<string, unknown> | null;
   job_order_number: string | null;
   vehicle: string | null;
+  vehicle_registration?: string | null;
+  trailer_registration?: string | null;
   driver: string | null;
   notes: string | null;
   status: string | null;

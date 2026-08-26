@@ -736,6 +736,8 @@ create table if not exists public.booking_diary (
   route_fallback_info jsonb,
   job_order_number text,
   vehicle text,
+  vehicle_registration text,
+  trailer_registration text,
   driver text,
   notes text,
   status text,

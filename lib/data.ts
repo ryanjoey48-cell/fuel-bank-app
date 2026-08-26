@@ -174,7 +174,9 @@ const BOOKING_DIARY_ROUTE_COLUMNS = new Set([
   "job_order_number",
   "created_by_user_id",
   "pickup_place_id",
+  "pickup_location_id",
   "dropoff_place_id",
+  "dropoff_location_id",
   "pickup_address",
   "dropoff_address",
   "pickup_lat",
@@ -197,6 +199,12 @@ const BOOKING_DIARY_ROUTE_COLUMNS = new Set([
   "route_traffic_aware",
   "route_source",
   "route_fallback_info"
+  ,"vehicle_registration"
+  ,"trailer_registration"
+  ,"map_resolution_status"
+  ,"map_backfill_batch_id"
+  ,"map_values_manually_corrected"
+  ,"map_original_values"
 ]);
 
 async function writeBookingDiaryWithSchemaFallback({
@@ -2374,6 +2382,8 @@ function normalizeBookingDiaryRow(booking: BookingDiaryEntry) {
     job_order_number: booking.job_order_number?.trim() || null,
     created_by_user_id: booking.created_by_user_id ?? null,
     vehicle: normalizeVehicleRegistration(booking.vehicle),
+    vehicle_registration: normalizeVehicleRegistration(booking.vehicle_registration ?? booking.vehicle) || null,
+    trailer_registration: normalizeVehicleRegistration(booking.trailer_registration) || null,
     driver: normalizeDisplayName(booking.driver),
     notes: booking.notes ?? null,
     pickup_place_id: booking.pickup_place_id ?? null,
@@ -2458,34 +2468,60 @@ export async function fetchBookingDiaryEntriesByDate(bookingDate: string) {
 }
 
 export async function fetchSavedLocations(locationType?: SavedLocationType) {
-  let query = supabase
-    .from("saved_locations")
-    .select("id,location_type,display_name,normalized_name,google_place_id,formatted_address,latitude,longitude,use_count,last_used_at,created_at,updated_at,created_by")
-    .order("use_count", { ascending: false })
-    .order("last_used_at", { ascending: false });
-
-  if (locationType) {
-    query = query.eq("location_type", locationType);
-  }
-
-  const { data, error } = await query;
+  const { data, error } = await supabase
+    .from("canonical_location_aliases")
+    .select("id,canonical_location_id,client_id,alias,normalized_alias,created_at,updated_at,canonical_location:canonical_locations(id,display_name,google_place_id,full_google_address,latitude,longitude,created_at,updated_at,created_by)")
+    .eq("approval_status", "approved")
+    .order("alias", { ascending: true });
   if (error) {
+    if (isMissingTableError(error) || isMissingColumnError(error)) {
+      console.warn("Approved Booking Maps directory is not installed; new locations will be saved as unresolved drafts.");
+      return [];
+    }
     logDataError("fetchSavedLocations error:", error, { locationType });
-    throw new Error(
-      "Saved locations are unavailable. Apply migration 20260721120000_add_saved_booking_locations.sql before using this version."
-    );
+    throw new Error("Approved Booking Maps locations are unavailable.");
   }
 
-  return ((data ?? []) as Array<Omit<SavedLocation, "use_count" | "latitude" | "longitude"> & {
-    use_count: number | string;
-    latitude: number | string | null;
-    longitude: number | string | null;
-  }>).map((location) => ({
-    ...location,
-    use_count: Number(location.use_count) || 0,
-    latitude: parseOptionalNumeric(location.latitude),
-    longitude: parseOptionalNumeric(location.longitude)
-  })) as SavedLocation[];
+  const rows = (data ?? []) as unknown as Array<{
+    id: string;
+    canonical_location_id: string;
+    client_id: string | null;
+    alias: string;
+    normalized_alias: string;
+    created_at: string;
+    updated_at: string;
+    canonical_location: {
+      id: string;
+      google_place_id: string;
+      full_google_address: string;
+      latitude: number | string;
+      longitude: number | string;
+      created_at: string;
+      updated_at: string;
+      created_by: string | null;
+    } | null;
+  }>;
+  return rows.flatMap((row) => {
+    if (!row.canonical_location) return [];
+    const sides: SavedLocationType[] = locationType ? [locationType] : ["pickup", "dropoff"];
+    return sides.map((side) => ({
+      id: `${row.id}:${side}`,
+      canonical_location_id: row.canonical_location_id,
+      client_id: row.client_id,
+      location_type: side,
+      display_name: row.alias,
+      normalized_name: row.normalized_alias,
+      google_place_id: row.canonical_location?.google_place_id ?? null,
+      formatted_address: row.canonical_location?.full_google_address ?? row.alias,
+      latitude: parseOptionalNumeric(row.canonical_location?.latitude),
+      longitude: parseOptionalNumeric(row.canonical_location?.longitude),
+      use_count: 0,
+      last_used_at: row.updated_at,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      created_by: row.canonical_location?.created_by ?? null
+    }));
+  });
 }
 
 export async function fetchClients() {
@@ -2655,8 +2691,10 @@ export async function saveBookingDiaryEntry(
     weight: parseOptionalNumeric(rest.weight),
     dimensions: rest.dimensions?.trim() || null,
     pickup: rest.pickup?.trim(),
+    pickup_location_id: rest.pickup_location_id ?? null,
     warehouse_no: rest.warehouse_no?.trim() || null,
     dropoff: rest.dropoff?.trim(),
+    dropoff_location_id: rest.dropoff_location_id ?? null,
     pickup_place_id: rest.pickup_place_id?.trim() || null,
     dropoff_place_id: rest.dropoff_place_id?.trim() || null,
     pickup_address: rest.pickup_address?.trim() || null,
@@ -2681,7 +2719,10 @@ export async function saveBookingDiaryEntry(
     route_traffic_aware: rest.route_traffic_aware ?? null,
     route_source: rest.route_source?.trim() || null,
     route_fallback_info: rest.route_fallback_info ?? null,
+    map_resolution_status: rest.map_resolution_status ?? (!id ? "unresolved_draft" : undefined),
     vehicle: normalizeVehicleRegistration(rest.vehicle) || null,
+    vehicle_registration: normalizeVehicleRegistration(rest.vehicle_registration) || null,
+    trailer_registration: normalizeVehicleRegistration(rest.trailer_registration) || null,
     driver: normalizeDisplayName(rest.driver) || null,
     job_order_number: rest.job_order_number?.trim() || null,
     notes: rest.notes?.trim() || null,
@@ -2941,7 +2982,8 @@ function mapBookingToTripPayload(booking: BookingDiaryEntry) {
     pickup_location: pickupDisplay || pickupAddress,
     dropoff_location: dropoffDisplay || dropoffAddress,
     route: [pickupDisplay, dropoffDisplay].filter(Boolean).join(" -> "),
-    vehicle_reg: normalizeVehicleRegistration(booking.vehicle) || null,
+    vehicle_type: normalizeDisplayName(booking.vehicle) || null,
+    vehicle_reg: normalizeVehicleRegistration(booking.vehicle_registration || booking.vehicle) || null,
     driver: normalizeDisplayName(booking.driver) || null,
     load_text: loadParts.join(" | ") || null,
     warehouse_no: booking.warehouse_no ?? null,

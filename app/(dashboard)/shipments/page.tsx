@@ -1918,7 +1918,7 @@ export default function ShipmentsPage() {
           errorCode: serverConfigured ? current?.errorCode ?? null : "MissingServerKey",
           errorMessage: serverConfigured
             ? current?.errorMessage ?? null
-            : result.data?.message ?? "Missing GOOGLE_MAPS_API_KEY"
+            : result.data?.message ?? "Missing GOOGLE_MAPS_SERVER_API_KEY"
         }));
       } catch (mapsError) {
         if (!cancelled) {
@@ -2598,7 +2598,7 @@ export default function ShipmentsPage() {
         : `Public key detected: no - Missing NEXT_PUBLIC_GOOGLE_MAPS_API_KEY${googleMapsStatus.legacyPublicSource ? ` (legacy ${googleMapsStatus.legacyPublicSource} present but not used)` : ""}`,
       googleMapsStatus.hasServerKey
         ? `Server key detected: yes (${googleMapsStatus.serverSource ?? "configured"})`
-        : `Server key detected: no - Missing GOOGLE_MAPS_API_KEY${googleMapsStatus.legacyServerSource ? ` (legacy ${googleMapsStatus.legacyServerSource} present but not used)` : ""}`,
+        : `Server key detected: no - Missing GOOGLE_MAPS_SERVER_API_KEY${googleMapsStatus.legacyServerSource ? ` (legacy ${googleMapsStatus.legacyServerSource} present but not used)` : ""}`,
       `Script loaded: ${googleMapsStatus.scriptLoaded ? "yes" : "no"}`,
       `Places library loaded: ${googleMapsStatus.placesAvailable ? "yes" : "no"}`,
       `Directions service available: ${googleMapsStatus.directionsAvailable ? "yes" : "no"}`,
