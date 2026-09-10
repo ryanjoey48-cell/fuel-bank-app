@@ -47,6 +47,7 @@ import { applyRequiredValidationMessage, clearValidationMessage } from "@/lib/fo
 import { normalizeFuelLogLocation, shouldShowFuelLogLocationOption } from "@/lib/fuel-log-location";
 import { useLanguage } from "@/lib/language-provider";
 import { calculateFuelFields } from "@/lib/operations";
+import { safeLocalStorage, safeSessionStorage } from "@/lib/safe-browser-storage";
 import { formatCurrency, formatDate, formatNumber, normalizeVehicleRegistration, today } from "@/lib/utils";
 import type {
   Driver,
@@ -87,6 +88,7 @@ type FuelLogForm = {
   fuel_type: string;
   payment_method: string;
   entry_source: FuelLogEntrySource;
+  full_tank_confirmed: boolean;
   notes: string;
 };
 
@@ -103,6 +105,7 @@ const initialForm: FuelLogForm = {
   fuel_type: DEFAULT_FUEL_TYPE,
   payment_method: DEFAULT_PAYMENT_METHOD,
   entry_source: DEFAULT_ENTRY_SOURCE,
+  full_tank_confirmed: false,
   notes: ""
 };
 
@@ -133,6 +136,7 @@ type FuelDraft = {
   fuel_type: string | null;
   payment_method: string | null;
   entry_source: FuelLogEntrySource;
+  full_tank_confirmed?: boolean;
   notes: string | null;
 };
 
@@ -700,7 +704,7 @@ async function loadBossPdfThaiFont() {
 
 function getCurrentPdfLanguage(fallback: "en" | "th") {
   if (typeof window === "undefined") return fallback;
-  const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+  const stored = safeLocalStorage.getItem(LANGUAGE_STORAGE_KEY);
   return stored === "en" || stored === "th" ? stored : fallback;
 }
 
@@ -1199,7 +1203,7 @@ function formatPricePerLitre(value: number | null | undefined, language: "en" | 
 function getStoredFilters(): FuelLogFilters {
   if (typeof window === "undefined") return initialFilters;
   try {
-    const stored = window.sessionStorage.getItem(FILTER_STORAGE_KEY);
+    const stored = safeSessionStorage.getItem(FILTER_STORAGE_KEY);
     const parsed = stored ? JSON.parse(stored) : {};
     return {
       ...initialFilters,
@@ -1949,7 +1953,7 @@ export default function FuelLogsPage() {
 
   useEffect(() => {
     try {
-      window.sessionStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filters));
+      safeSessionStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filters));
     } catch {
       // Filter persistence is helpful, but it should never block daily entry work.
     }
@@ -2051,6 +2055,7 @@ export default function FuelLogsPage() {
       fuel_type: normalizeFuelTypeKey(log.fuel_type) ?? DEFAULT_FUEL_TYPE,
       payment_method: normalizePaymentMethodKey(log.payment_method) ?? DEFAULT_PAYMENT_METHOD,
       entry_source: normalizeEntrySource(log.entry_source),
+      full_tank_confirmed: Boolean(log.full_tank_confirmed),
       notes: log.notes || ""
     });
     setLastEditedFuelField("total_cost");
@@ -2198,6 +2203,7 @@ export default function FuelLogsPage() {
       fuel_type: form.fuel_type || null,
       payment_method: form.payment_method || null,
       entry_source: normalizeEntrySource(form.entry_source),
+      full_tank_confirmed: form.full_tank_confirmed,
       notes: form.notes.trim() || null
     }),
     [form, selectedDriver]
@@ -2331,8 +2337,11 @@ export default function FuelLogsPage() {
           [sourceCopy.label]: sourceCopy.options[normalizeEntrySource(log.entry_source)],
           entry_source: normalizeEntrySource(log.entry_source),
           [receiptCopy.filterLabel]: getReceiptCheckLabel(log.receipt_checked, language),
+          [language === "th" ? "ยืนยันเติมเต็มถัง" : "Full tank confirmed"]: log.full_tank_confirmed ? "true" : "false",
           receipt_checked: log.receipt_checked ? "true" : "false",
           receipt_checked_at: log.receipt_checked_at ?? "",
+          full_tank_confirmed: log.full_tank_confirmed ? "true" : "false",
+          full_tank_confirmed_at: log.full_tank_confirmed_at ?? "",
           [t.fuelLogs.notes]: log.notes ?? ""
         })),
         "fuel-logs-report"
@@ -3064,6 +3073,24 @@ export default function FuelLogsPage() {
                 </div>
                 {form.entry_source === "direct_from_receipt" ? <p className="form-helper text-emerald-700">{sourceCopy.auditHint}</p> : null}
                 {form.entry_source === "statement_manual" ? <p className="mt-1 text-xs text-sky-700">{statementEntryCopy.statementModeHelper}</p> : null}
+              </div>
+              <div className="form-field sm:col-span-2">
+                <label className="flex min-h-10 cursor-pointer items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 px-3 py-2 text-sm font-semibold text-emerald-900">
+                  <input
+                    type="checkbox"
+                    checked={form.full_tank_confirmed}
+                    onChange={(event) => setForm((current) => ({ ...current, full_tank_confirmed: event.target.checked }))}
+                    className="mt-1 h-4 w-4 rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <span>
+                    {language === "th" ? "ยืนยันเติมเต็มถัง" : "Full tank confirmed"}
+                    <small className="mt-0.5 block font-medium text-emerald-700">
+                      {language === "th"
+                        ? "ใช้เป็นขอบเขตรอบน้ำมันที่ตรวจสอบแล้ว แยกจากการตรวจใบเสร็จ"
+                        : "Marks this fill as a verified full-tank cycle boundary. This is separate from receipt checked."}
+                    </small>
+                  </span>
+                </label>
               </div>
               <div className="form-field"><label className="form-label form-label-required">{t.fuelLogs.vehicleReg}</label><input required list="fuel-log-vehicle-options" value={form.vehicle_reg} onInvalid={handleInvalid} onInput={clearValidationMessage} onChange={(event) => setForm((current) => ({ ...current, vehicle_reg: event.target.value }))} placeholder={t.fuelLogs.vehiclePlaceholder} className="form-input bg-white" /><p className="form-helper">{selectedDriver?.vehicle_reg?.trim() ? copy.autoFillLabel : copy.noVehicleAssignedLabel}</p></div>
               <div className="form-field"><label className="form-label">{t.fuelLogs.mileage}</label><input type="number" min="0" step="1" value={form.mileage} onChange={(event) => setForm((current) => ({ ...current, mileage: event.target.value }))} placeholder={t.fuelLogs.currentMileage} className="form-input bg-white" /><p className="form-helper">{comparisonEntry ? `${comparisonEntry.vehicle_reg} | ${formatDate(comparisonEntry.date, language)} | ${comparisonEntry.mileage ?? "-"}` : copy.previousEntryHelper}</p>{form.mileage && comparisonEntry?.mileage != null && Number(form.mileage) < Number(comparisonEntry.mileage) ? <div className="mt-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{t.fuelLogs.mileageValidationError}</div> : null}</div>

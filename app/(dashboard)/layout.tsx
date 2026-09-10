@@ -10,6 +10,72 @@ import { useLanguage } from "@/lib/language-provider";
 import { supabase } from "@/lib/supabase";
 import { AccountAccessProvider, useAccountAccess } from "@/lib/use-account-access";
 
+const AUTH_CHECK_TIMEOUT_MS = 8_000;
+
+type ServiceUnavailableState = {
+  message: string;
+};
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string) {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      reject(new Error(`${label} timed out.`));
+    }, timeoutMs);
+
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
+}
+
+function isServiceAvailabilityError(error: unknown) {
+  if (error instanceof AdminFetchError) {
+    return error.status === 0 || error.status >= 500;
+  }
+
+  if (error instanceof TypeError) {
+    return true;
+  }
+
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /timed out|failed to fetch|network|supabase client configuration|load failed|fetch/i.test(message);
+}
+
+function ServiceUnavailable({
+  message,
+  onRetry
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
+  return (
+    <main className="flex min-h-[100dvh] items-center justify-center px-4">
+      <section className="surface-card w-full max-w-lg p-6 text-center sm:p-8">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-brand-600">
+          Data service unavailable
+        </p>
+        <h1 className="mt-3 text-2xl font-semibold text-slate-950">
+          Fuel Bank cannot connect right now
+        </h1>
+        <p className="mt-3 text-sm leading-6 text-slate-600">
+          Fuel Bank is temporarily unable to connect to its data service. Your existing data has not been changed.
+        </p>
+        <p className="mt-2 text-xs leading-5 text-slate-500">{message}</p>
+        <button type="button" className="btn-primary mt-6" onClick={onRetry}>
+          Retry connection
+        </button>
+      </section>
+    </main>
+  );
+}
+
 function DashboardShell({
   children
 }: {
@@ -18,29 +84,77 @@ function DashboardShell({
   const router = useRouter();
   const pathname = usePathname();
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [serviceUnavailable, setServiceUnavailable] = useState<ServiceUnavailableState | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { t } = useLanguage();
   const { refresh } = useAccountAccess();
 
   useEffect(() => {
     let active = true;
+    const loginPath = () => {
+      const currentPath = typeof window === "undefined"
+        ? pathname
+        : `${window.location.pathname}${window.location.search}`;
+      return `/login?next=${encodeURIComponent(currentPath || "/dashboard")}`;
+    };
 
     const checkSession = async () => {
-      const { data } = await supabase.auth.getSession();
+      setCheckingAuth(true);
+      setServiceUnavailable(null);
+
+      let sessionResult: Awaited<ReturnType<typeof supabase.auth.getSession>>;
+      try {
+        sessionResult = await withTimeout(
+          supabase.auth.getSession(),
+          AUTH_CHECK_TIMEOUT_MS,
+          "Supabase session check"
+        );
+      } catch (error) {
+        if (active && isServiceAvailabilityError(error)) {
+          setServiceUnavailable({ message: error instanceof Error ? error.message : "Connection failed." });
+          setCheckingAuth(false);
+          return;
+        }
+        throw error;
+      }
+
+      if (sessionResult.error) {
+        if (active && isServiceAvailabilityError(sessionResult.error)) {
+          setServiceUnavailable({ message: sessionResult.error.message });
+          setCheckingAuth(false);
+          return;
+        }
+      }
+
+      const { data } = sessionResult;
 
       if (!data.session && active) {
-        router.replace("/login");
+        router.replace(loginPath());
         return;
       }
 
       try {
-        await refresh();
+        await withTimeout(refresh(), AUTH_CHECK_TIMEOUT_MS, "Account access check");
       } catch (error) {
-        if (active && error instanceof AdminFetchError && (error.status === 401 || error.status === 403)) {
+        if (active && error instanceof AdminFetchError && error.status === 401) {
           await supabase.auth.signOut();
-          router.replace("/login");
+          router.replace(loginPath());
           return;
         }
+
+        if (active && error instanceof AdminFetchError && error.status === 403) {
+          setCheckingAuth(false);
+          return;
+        }
+
+        if (active && isServiceAvailabilityError(error)) {
+          setServiceUnavailable({ message: error instanceof Error ? error.message : "Connection failed." });
+          setCheckingAuth(false);
+          return;
+        }
+
+        throw error;
       }
 
       if (active) {
@@ -50,11 +164,10 @@ function DashboardShell({
 
     void checkSession();
 
-    const {
-      data: { subscription }
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) return;
       if (!session) {
-        router.replace("/login");
+        router.replace(loginPath());
       } else if (pathname === "/login") {
         router.replace("/dashboard");
       }
@@ -62,9 +175,9 @@ function DashboardShell({
 
     return () => {
       active = false;
-      subscription.unsubscribe();
+      data.subscription.unsubscribe();
     };
-  }, [pathname, refresh, router]);
+  }, [pathname, refresh, retryCount, router]);
 
   useEffect(() => {
     document.body.style.overflow = "";
@@ -103,6 +216,15 @@ function DashboardShell({
           {t.common.sessionCheck}
         </div>
       </main>
+    );
+  }
+
+  if (serviceUnavailable) {
+    return (
+      <ServiceUnavailable
+        message={serviceUnavailable.message}
+        onRetry={() => setRetryCount((current) => current + 1)}
+      />
     );
   }
 

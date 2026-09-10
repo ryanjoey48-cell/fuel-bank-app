@@ -158,6 +158,11 @@ export type BookingInsightsResult = {
     previousTotalBookings: number | null;
     bookingChangePercent: number | null;
     repeatRoutePercent: number;
+    repeatRouteCount: number;
+    confirmedRepeatRouteCount: number;
+    repeatRouteBookingCount: number;
+    confirmedRepeatRouteBookingCount: number;
+    needsReviewRepeatRouteCount: number;
     newRecurringRouteOpportunityCount: number;
     oneOffNewRouteCount: number;
     initialRecordRouteCount: number;
@@ -857,6 +862,17 @@ export function buildBookingBusinessInsights(
   const topFiveRouteSharePercent = percent(commonRoutes.slice(0, 5).reduce((sum, route) => sum + route.bookings, 0), selectedBookings.length);
   const topFiveClientSharePercent = percent(customerActivity.slice(0, 5).reduce((sum, customer) => sum + customer.bookings, 0), selectedBookings.length);
   const topSixWheelClient = [...customerActivity].sort((a, b) => b.sixWheelBookings - a.sixWheelBookings || b.bookings - a.bookings)[0];
+  const confirmedRepeatRouteCount = commonRoutes.filter((route) =>
+    (routeGroups.get(route.routeKey) ?? []).some((booking) => booking.route_confirmation_status === "confirmed" && booking.approved_route_id)
+  ).length;
+  const confirmedRepeatRouteBookingCount = commonRoutes.reduce((sum, route) => {
+    const entries = routeGroups.get(route.routeKey) ?? [];
+    return sum + entries.filter((booking) => booking.route_confirmation_status === "confirmed" && booking.approved_route_id).length;
+  }, 0);
+  const needsReviewRepeatRouteCount = commonRoutes.filter((route) => {
+    const entries = routeGroups.get(route.routeKey) ?? [];
+    return !entries.some((booking) => booking.route_confirmation_status === "confirmed" && booking.approved_route_id) && route.multipleMappedLocations;
+  }).length;
 
   return {
     selectedBookings,
@@ -872,6 +888,11 @@ export function buildBookingBusinessInsights(
         ? Math.round(((selectedBookings.length - previousBookings.length) / previousBookings.length) * 1000) / 10
         : null,
       repeatRoutePercent: percent(repeatBookings, selectedBookings.length),
+      repeatRouteCount: commonRoutes.length,
+      confirmedRepeatRouteCount,
+      repeatRouteBookingCount: repeatBookings,
+      confirmedRepeatRouteBookingCount,
+      needsReviewRepeatRouteCount,
       newRecurringRouteOpportunityCount: newRecurringRouteOpportunities.length,
       oneOffNewRouteCount: oneOffNewRoutes.length,
       initialRecordRouteCount: initialRecordRoutes.length,

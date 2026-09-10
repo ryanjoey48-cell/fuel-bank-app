@@ -33,6 +33,7 @@ import {
 } from "@/lib/data";
 import { fetchJson } from "@/lib/http";
 import { useLanguage } from "@/lib/language-provider";
+import { safeLocalStorage } from "@/lib/safe-browser-storage";
 import { shipmentTranslations, type ShipmentTranslations } from "@/lib/shipment-translations";
 import type { GoogleMapsHealthStatus } from "@/lib/google-maps";
 import { filterShipments } from "@/lib/shipment-estimation";
@@ -1610,7 +1611,7 @@ function getStoredValue(key: string) {
     return null;
   }
 
-  const value = window.localStorage.getItem(key);
+  const value = safeLocalStorage.getItem(key);
   return value && value.trim() ? value : null;
 }
 
@@ -1983,7 +1984,7 @@ export default function ShipmentsPage() {
     }
 
     if (form.standard_km_per_litre.trim()) {
-      window.localStorage.setItem(STORAGE_KEYS.kmPerLitre, form.standard_km_per_litre.trim());
+      safeLocalStorage.setItem(STORAGE_KEYS.kmPerLitre, form.standard_km_per_litre.trim());
     }
   }, [form.standard_km_per_litre]);
 
@@ -1993,7 +1994,7 @@ export default function ShipmentsPage() {
     }
 
     if (form.fuel_price_per_litre.trim()) {
-      window.localStorage.setItem(STORAGE_KEYS.fuelPrice, form.fuel_price_per_litre.trim());
+      safeLocalStorage.setItem(STORAGE_KEYS.fuelPrice, form.fuel_price_per_litre.trim());
     }
   }, [form.fuel_price_per_litre]);
 

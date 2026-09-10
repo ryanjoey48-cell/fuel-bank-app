@@ -118,6 +118,38 @@ test("repeat-route percentage counts bookings belonging to a repeated directiona
   assert.equal(result.summary.repeatRoutePercent, 66.7);
 });
 
+test("route confirmation totals use stored approval status instead of Maps data alone", () => {
+  const result = report([
+    {
+      ...booking({ id: "a", date: "2026-01-01" }),
+      approved_route_id: "route-1",
+      route_confirmation_status: "confirmed"
+    },
+    {
+      ...booking({ id: "b", date: "2026-01-02", pickup: "Warehouse  A", dropoff: "Port B." }),
+      approved_route_id: "route-1",
+      route_confirmation_status: "confirmed"
+    },
+    {
+      ...booking({ id: "c", date: "2026-01-03", pickup: "Maps Only", dropoff: "Depot" }),
+      pickup_place_id: "pickup-place",
+      dropoff_place_id: "dropoff-place",
+      estimated_distance_km: 12
+    },
+    {
+      ...booking({ id: "d", date: "2026-01-04", pickup: "Maps Only", dropoff: "Depot" }),
+      pickup_place_id: "pickup-place",
+      dropoff_place_id: "dropoff-place",
+      estimated_distance_km: 12
+    }
+  ]);
+
+  assert.equal(result.summary.repeatRouteCount, 2);
+  assert.equal(result.summary.confirmedRepeatRouteCount, 1);
+  assert.equal(result.summary.repeatRouteBookingCount, 4);
+  assert.equal(result.summary.confirmedRepeatRouteBookingCount, 2);
+});
+
 test("same-day duplicates do not establish repeat-route work", () => {
   const result = report([
     booking({ id: "a", date: "2026-07-01" }),

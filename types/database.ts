@@ -13,7 +13,9 @@ export type WeeklyMileageEntry = {
   id: string;
   week_ending: string;
   driver_id: string;
+  vehicle_id?: string | null;
   driver: string;
+  driver_name_snapshot?: string | null;
   vehicle_reg: string;
   odometer_reading: number;
   mileage: number;
@@ -83,6 +85,7 @@ export type FuelLog = {
   id: string;
   date: string;
   driver_id: string;
+  vehicle_id?: string | null;
   driver: string;
   vehicle_reg: string;
   odometer: number | null;
@@ -97,6 +100,8 @@ export type FuelLog = {
   entry_source: FuelLogEntrySource;
   receipt_checked: boolean;
   receipt_checked_at: string | null;
+  full_tank_confirmed?: boolean | null;
+  full_tank_confirmed_at?: string | null;
   notes: string | null;
   created_at: string;
   user_id: string;
@@ -113,6 +118,7 @@ export type BankTransfer = {
   id: string;
   date: string;
   driver_id: string;
+  vehicle_id?: string | null;
   driver: string;
   vehicle_reg: string;
   amount: number;
@@ -124,6 +130,66 @@ export type BankTransfer = {
 };
 
 export type FuelLogWithDriver = FuelLog;
+
+export type VehicleMonthlyPerformance = {
+  id: string;
+  user_id: string | null;
+  vehicle_id?: string | null;
+  year: number;
+  month: number;
+  vehicle_registration: string;
+  salary_cost: number;
+  trip_income: number;
+  other_expenses: number;
+  gross_revenue: number;
+  lpg_cost: number;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+};
+
+export type VehiclePerformanceImportReviewStatus = "approved" | "correction_required";
+
+export type VehiclePerformanceImportReview = {
+  id: string;
+  user_id: string;
+  vehicle_id?: string | null;
+  canonical_vehicle_registration: string;
+  canonical_vehicle_registration_key: string;
+  imported_vehicle_reference: string | null;
+  source_sheet: string | null;
+  source_row_number: number | null;
+  source_row_key: string | null;
+  year: number;
+  month: number;
+  review_status: VehiclePerformanceImportReviewStatus;
+  excel_fuel: number | null;
+  app_fuel_at_review: number;
+  fuel_difference_at_review: number | null;
+  review_note: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type VehiclePerformanceCorrectionAudit = {
+  id: string;
+  user_id: string;
+  vehicle_monthly_performance_id: string | null;
+  year: number;
+  month: number;
+  vehicle_registration: string;
+  field_name: string;
+  old_value: number | null;
+  new_value: number | null;
+  reason: string | null;
+  corrected_by: string | null;
+  corrected_at: string;
+  created_at: string;
+};
 
 export type FuelLogSortKey = "date" | "total_cost" | "litres" | "price_per_litre";
 export type FuelLogSortDirection = "asc" | "desc";
@@ -225,6 +291,7 @@ export type TripJourney = {
   dropoff_location: string | null;
   route: string | null;
   vehicle_type: string | null;
+  vehicle_id?: string | null;
   vehicle_reg: string | null;
   driver: string | null;
   load_details: string | null;
@@ -357,12 +424,15 @@ export type BookingDiaryEntry = {
   route_traffic_aware?: boolean | null;
   route_source?: string | null;
   route_fallback_info?: Record<string, unknown> | null;
+  approved_route_id?: string | null;
+  route_confirmation_status?: "pending" | "confirmed" | "needs_review" | "reopened" | null;
   map_resolution_status?: "legacy_unresolved" | "unresolved_draft" | "resolved" | null;
   map_backfill_batch_id?: string | null;
   map_values_manually_corrected?: boolean | null;
   map_original_values?: Record<string, unknown> | null;
   job_order_number: string | null;
   vehicle: string | null;
+  vehicle_id?: string | null;
   vehicle_registration?: string | null;
   trailer_registration?: string | null;
   driver: string | null;
@@ -373,6 +443,38 @@ export type BookingDiaryEntry = {
   created_by_user_id: string | null;
   created_by: string | null;
   modified_by: string | null;
+};
+
+export type BookingRouteApprovalStatus = "pending" | "needs_review" | "confirmed" | "reopened";
+
+export type BookingRouteApproval = {
+  id: string;
+  normalized_pickup: string;
+  normalized_dropoff: string;
+  display_pickup: string;
+  display_dropoff: string;
+  pickup_canonical_name: string | null;
+  pickup_formatted_address: string | null;
+  pickup_place_id: string | null;
+  pickup_lat: number | null;
+  pickup_lng: number | null;
+  dropoff_canonical_name: string | null;
+  dropoff_formatted_address: string | null;
+  dropoff_place_id: string | null;
+  dropoff_lat: number | null;
+  dropoff_lng: number | null;
+  google_distance_km: number | null;
+  route_distance_meters: number | null;
+  google_maps_route_url: string | null;
+  status: BookingRouteApprovalStatus;
+  approved_at: string | null;
+  approved_by: string | null;
+  reopened_at: string | null;
+  reopened_by: string | null;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
 };
 
 export type DriverVehicleType =

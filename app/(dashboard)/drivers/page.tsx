@@ -9,7 +9,7 @@ import {
   DRIVER_VEHICLE_TYPE_OPTIONS,
   getDriverVehicleTypeLabel
 } from "@/lib/driver-vehicle-types";
-import { deleteDriver, fetchDrivers, saveDriver } from "@/lib/data";
+import { deleteDriver, fetchDriverDirectory, saveDriver } from "@/lib/data";
 import { exportToXlsx } from "@/lib/export";
 import { applyRequiredValidationMessage, clearValidationMessage } from "@/lib/form-validation";
 import { useLanguage } from "@/lib/language-provider";
@@ -82,7 +82,7 @@ export default function DriversPage() {
     [drivers]
   );
   const uniqueVehiclesAssigned = useMemo(
-    () => new Set(drivers.map((driver) => driver.vehicle_reg.trim()).filter(Boolean)).size,
+    () => new Set(drivers.filter((driver) => driver.active !== false).map((driver) => driver.vehicle_reg.trim()).filter(Boolean)).size,
     [drivers]
   );
   const driversMissingVehicleType = useMemo(
@@ -112,7 +112,7 @@ export default function DriversPage() {
       setLoading(true);
       setError(null);
       setPageNotice(null);
-      setDrivers(await fetchDrivers());
+      setDrivers(await fetchDriverDirectory({ includeInactive: true }));
     } catch (err) {
       console.error("Drivers load error:", err);
       setPageNotice("Drivers could not fully load. Showing available data.");
@@ -215,7 +215,8 @@ export default function DriversPage() {
       drivers.map((driver) => ({
         [t.drivers.name]: driver.name,
         [t.drivers.vehicle]: driver.vehicle_reg,
-        "Vehicle Type": driver.vehicle_type ? getDriverVehicleTypeLabel(driver.vehicle_type) : ""
+        "Vehicle Type": driver.vehicle_type ? getDriverVehicleTypeLabel(driver.vehicle_type) : "",
+        Status: driver.active === false ? "Inactive" : "Active"
       })),
       "drivers-report",
       "Drivers"
@@ -277,15 +278,13 @@ export default function DriversPage() {
             </div>
 
             <div className="form-field">
-              <label className="form-label form-label-required">{t.drivers.vehicle}</label>
+              <label className="form-label">{t.drivers.vehicle}</label>
               <input
-                required
-                placeholder="Vehicle registration"
+                placeholder="Vehicle registration or leave unassigned"
                 value={form.vehicle_reg}
                 onChange={(event) =>
                   setForm((current) => ({ ...current, vehicle_reg: event.target.value }))
                 }
-                onInvalid={handleInvalid}
                 onInput={clearValidationMessage}
                 className="form-input w-full"
               />
@@ -314,6 +313,21 @@ export default function DriversPage() {
                 ))}
               </select>
             </div>
+
+            <label className="flex items-start gap-3 rounded-md border border-slate-200 bg-white px-3 py-3 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={form.active}
+                onChange={(event) => setForm((current) => ({ ...current, active: event.target.checked }))}
+                className="mt-1 h-4 w-4 rounded border-slate-300"
+              />
+              <span>
+                <span className="block font-semibold text-slate-900">Active driver</span>
+                <span className="block text-xs text-slate-500">
+                  Turn off when a driver leaves; historical rows keep their saved driver names.
+                </span>
+              </span>
+            </label>
 
             {error ? <p className="form-error">{error}</p> : null}
             {successMessage ? <p className="mt-2 text-sm text-emerald-600">{successMessage}</p> : null}
@@ -435,7 +449,7 @@ export default function DriversPage() {
                       className={`subtle-panel p-4 ${missingVehicleType ? "border-amber-200 bg-amber-50/70" : ""}`}
                     >
                       <p className="text-sm font-semibold text-slate-900">{driver.name}</p>
-                      <p className="mt-1 text-sm text-slate-500">{driver.vehicle_reg || "Not assigned"}</p>
+                      <p className="mt-1 text-sm text-slate-500">{driver.vehicle_reg || "Unassigned"}</p>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
                           {driver.vehicle_type ? getDriverVehicleTypeLabel(driver.vehicle_type) : "Missing vehicle type"}
@@ -443,6 +457,11 @@ export default function DriversPage() {
                         {missingVehicleType ? (
                           <span className="rounded-full border border-amber-300 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-700">
                             Missing vehicle type
+                          </span>
+                        ) : null}
+                        {driver.active === false ? (
+                          <span className="rounded-full border border-slate-300 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-600">
+                            Inactive
                           </span>
                         ) : null}
                       </div>
@@ -486,12 +505,13 @@ export default function DriversPage() {
               <div className="hidden md:block">
                 <div className="table-shell rounded-2xl">
                   <div className="table-scroll">
-                    <table className="w-full min-w-[920px] text-sm">
+                    <table className="w-full min-w-[980px] text-sm">
                       <thead>
                         <tr className="bg-slate-50/80 text-slate-600">
                           <th className="table-head-cell text-left">{t.drivers.name}</th>
                           <th className="table-head-cell text-left">{t.drivers.vehicle}</th>
                           <th className="table-head-cell text-left">Vehicle Type</th>
+                          <th className="table-head-cell text-left">Status</th>
                           <th className="table-head-cell text-left">{t.common.action}</th>
                         </tr>
                       </thead>
@@ -505,7 +525,7 @@ export default function DriversPage() {
                               className={`enterprise-table-row ${missingVehicleType ? "bg-amber-50/60" : ""}`}
                             >
                               <td className="table-body-cell table-driver-name">{driver.name}</td>
-                              <td className="table-body-cell text-slate-700">{driver.vehicle_reg || "Not assigned"}</td>
+                              <td className="table-body-cell text-slate-700">{driver.vehicle_reg || "Unassigned"}</td>
                               <td className="table-body-cell text-slate-700">
                                 {driver.vehicle_type ? (
                                   <p>{getDriverVehicleTypeLabel(driver.vehicle_type)}</p>
@@ -519,6 +539,17 @@ export default function DriversPage() {
                                     Update this legacy record to unlock quotation defaults.
                                   </p>
                                 ) : null}
+                              </td>
+                              <td className="table-body-cell text-slate-700">
+                                {driver.active === false ? (
+                                  <span className="inline-flex rounded-full border border-slate-300 bg-slate-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-600">
+                                    Inactive
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-700">
+                                    Active
+                                  </span>
+                                )}
                               </td>
                               <td className="table-body-cell">
                                 <div className="flex h-9 flex-row items-center gap-1.5 whitespace-nowrap">

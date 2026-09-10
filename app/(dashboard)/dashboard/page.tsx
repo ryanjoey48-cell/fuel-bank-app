@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   ClipboardList,
   Droplet,
+  FileText,
   Fuel,
   Gauge,
   Plus,
@@ -340,6 +341,7 @@ export default function DashboardPage() {
     tripsWaitingForReviewDetail: language === "th" ? "ทริปที่เสร็จแล้วแต่ยังต้องยืนยัน เช่น คนขับ รถ เส้นทาง หรือการตรวจจากผู้ดูแล" : "Trips have been completed but still need driver, vehicle, route, or admin confirmation.",
     tripsCompletedThisMonth: language === "th" ? "ทริปที่เสร็จเดือนนี้" : "Trips completed this month",
     viewFuelLogs: language === "th" ? "ดูบันทึกน้ำมัน" : "View Fuel Logs",
+    viewReports: language === "th" ? "ดูรายงาน" : "View Reports",
     viewDispatch: language === "th" ? "ดูกระดานจัดส่งงาน" : "View Dispatch Board",
     viewLogs: language === "th" ? "ตรวจบันทึก" : "Review Logs",
     viewTripJourney: language === "th" ? "ดู Trip Journey" : "View Trip Journey",
@@ -724,7 +726,8 @@ export default function DashboardPage() {
                   { href: "/fuel-logs", label: opsCopy.addFuelLog, icon: Plus },
                   { href: "/trip-journey", label: opsCopy.addTripJourney, icon: Route },
                   { href: "/booking-diary", label: opsCopy.addBooking, icon: CalendarPlus },
-                  { href: "/drivers", label: opsCopy.addVehicle, icon: Truck }
+                  { href: "/drivers", label: opsCopy.addVehicle, icon: Truck },
+                  { href: "/reports", label: opsCopy.viewReports, icon: FileText }
                 ].map((action) => (
                   <a key={action.href} href={action.href} className="btn-secondary min-h-9 gap-1.5 px-3 py-1.5 text-xs">
                     <action.icon className="h-3.5 w-3.5" />
@@ -734,6 +737,16 @@ export default function DashboardPage() {
               </div>
             </div>
           </section>
+
+          <a href="/reports" className="mt-4 flex items-center justify-between gap-4 rounded-xl border border-brand-100 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-md">
+            <span>
+              <span className="block text-base font-bold text-slate-950">Reports</span>
+              <span className="mt-1 block text-sm text-slate-500">View and download management reports</span>
+            </span>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-700">
+              <FileText className="h-5 w-5" />
+            </span>
+          </a>
 
           <section className="mt-5 surface-card p-4 sm:p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

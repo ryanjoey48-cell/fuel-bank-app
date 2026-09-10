@@ -1242,9 +1242,9 @@ function getTripMetrics(trip: TripJourneyWithFuel) {
       ? (differenceKm / estimatedDistance) * 100
       : null;
   const kmPerLitre =
-    workingDistance != null && fuel.litres != null && fuel.litres > 0 ? workingDistance / fuel.litres : null;
+    trip.fuel_source === "manual" && workingDistance != null && fuel.litres != null && fuel.litres > 0 ? workingDistance / fuel.litres : null;
   const costPerKm =
-    fuel.cost != null && workingDistance != null && workingDistance > 0 ? fuel.cost / workingDistance : null;
+    trip.fuel_source === "manual" && fuel.cost != null && workingDistance != null && workingDistance > 0 ? fuel.cost / workingDistance : null;
 
   return { actualDistance, manualDistance, odometerActualDistance, estimatedDistance, workingDistance, distanceSource: getDistanceSourceLabel(trip), fuel, differenceKm, differencePercent, kmPerLitre, costPerKm };
 }
@@ -1490,8 +1490,7 @@ function buildFuelCycles(fuelLogs: FuelLogWithDriver[]): FuelCycle[] {
   fuelLogs.forEach((log) => {
     const vehicle = normalizeVehicleKey(log.vehicle_reg);
     if (!vehicle || log.mileage == null || Number(log.mileage) <= 0 || Number(log.litres || 0) <= 0) return;
-    const driver = normalizeVehicleKey(log.driver);
-    const key = `${vehicle}|${driver}`;
+    const key = vehicle;
     groups.set(key, [...(groups.get(key) ?? []), log]);
   });
 
@@ -1538,10 +1537,8 @@ function buildFuelCycles(fuelLogs: FuelLogWithDriver[]): FuelCycle[] {
 
 function getFuelCycleForTrip(trip: TripJourneyWithFuel, cycles: FuelCycle[]) {
   const vehicle = normalizeVehicleKey(trip.vehicle_reg || trip.vehicle_type || "");
-  const driver = normalizeVehicleKey(trip.driver || "");
   return cycles.find((cycle) => {
     if (normalizeVehicleKey(cycle.vehicleReg) !== vehicle) return false;
-    if (driver && normalizeVehicleKey(cycle.driver) && normalizeVehicleKey(cycle.driver) !== driver) return false;
     return trip.trip_date >= cycle.startDate && trip.trip_date <= cycle.endDate;
   }) ?? null;
 }
@@ -1576,10 +1573,8 @@ function getFuelCycleCoverage(cycle: FuelCycle | null, trips: TripJourneyWithFue
 function getIncompleteLinkedFuelLog(trip: TripJourneyWithFuel, fuelLogs: FuelLogWithDriver[], cycle: FuelCycle | null) {
   if (cycle || trip.linkedFuelLogs.length === 0) return null;
   const vehicle = normalizeVehicleKey(trip.vehicle_reg || trip.vehicle_type || "");
-  const driver = normalizeVehicleKey(trip.driver || "");
   const sortedLogs = [...fuelLogs]
     .filter((log) => normalizeVehicleKey(log.vehicle_reg) === vehicle && Number(log.mileage || 0) > 0)
-    .filter((log) => !driver || !normalizeVehicleKey(log.driver) || normalizeVehicleKey(log.driver) === driver)
     .sort((left, right) => {
       const dateCompare = left.date.localeCompare(right.date);
       if (dateCompare !== 0) return dateCompare;
@@ -2259,23 +2254,27 @@ export default function TripJourneyPage() {
     const completedActual = completed.reduce((sum, trip) => sum + (getTripMetrics(trip).workingDistance ?? 0), 0);
     const verifiedWorkingKm = readyTrips.reduce((sum, trip) => sum + (getTripMetrics(trip).workingDistance ?? 0), 0);
     const averageCostPerKm = null;
+    const routeAccuracyTrips = completed.filter((trip) => {
+      const metrics = getTripMetrics(trip);
+      return (metrics.estimatedDistance ?? 0) > 0 && metrics.actualDistance != null;
+    });
     const averageDifference =
-      completed.length > 0
-        ? completed.reduce((sum, trip) => sum + (getTripMetrics(trip).differenceKm ?? 0), 0) / completed.length
+      routeAccuracyTrips.length > 0
+        ? routeAccuracyTrips.reduce((sum, trip) => sum + (getTripMetrics(trip).differenceKm ?? 0), 0) / routeAccuracyTrips.length
         : null;
     const completionPercentage = baseFilteredTrips.length > 0
       ? Math.round((completed.length / baseFilteredTrips.length) * 100)
       : 0;
     const routeAccuracyScore =
-      completed.length > 0
+      routeAccuracyTrips.length > 0
         ? Math.max(
             0,
             100 -
-              completed.reduce((sum, trip) => {
+              routeAccuracyTrips.reduce((sum, trip) => {
                 const percent = Math.abs(getTripMetrics(trip).differencePercent ?? 0);
                 return sum + Math.min(percent, 100);
               }, 0) /
-                completed.length
+                routeAccuracyTrips.length
           )
         : 0;
 

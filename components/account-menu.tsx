@@ -132,7 +132,7 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
     const loadUser = () => {
       void supabase.auth.getUser().then(({ data }) => {
         if (active) setUser((data.user ?? null) as AccountUser | null);
-      });
+      }).catch(() => undefined);
     };
 
     loadUser();
@@ -161,7 +161,7 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
     const loadSupportCount = () => {
       void fetchSupportTicketNotificationCount(["Open", "In Progress"]).then((count) => {
         if (active) setSupportTicketCount(count);
-      });
+      }).catch(() => undefined);
     };
 
     loadSupportCount();

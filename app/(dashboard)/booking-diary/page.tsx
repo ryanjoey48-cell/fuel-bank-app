@@ -26,6 +26,7 @@ import { Fragment, type RefObject, useCallback, useEffect, useId, useMemo, useRe
 import { BookingBusinessInsights } from "@/components/booking-business-insights";
 import { BookingLocationReview } from "@/components/booking-location-review";
 import { BookingMapCheck } from "@/components/booking-map-check";
+import { BookingRouteApproval } from "@/components/booking-route-approval";
 import { ClientDirectoryDialog } from "@/components/client-directory-dialog";
 import { ClientSelector } from "@/components/client-selector";
 import { EmptyState } from "@/components/empty-state";
@@ -229,6 +230,8 @@ const labels = {
     dataQuality: "Data quality",
     dataQualityComplete: "Complete",
     dataQualityNeedsAttention: "Needs attention",
+    routeConfirmed: "Confirmed route",
+    routePendingApproval: "Route not confirmed",
     pickupMapsUnresolved: "Pickup Maps unresolved",
     dropoffMapsUnresolved: "Drop-off Maps unresolved",
     driverMissing: "Missing driver",
@@ -453,6 +456,8 @@ const locationLabelExtras = {
     dataQuality: "คุณภาพข้อมูล",
     dataQualityComplete: "ครบถ้วน",
     dataQualityNeedsAttention: "ต้องตรวจสอบ",
+    routeConfirmed: "ยืนยันเส้นทางแล้ว",
+    routePendingApproval: "ยังไม่ยืนยันเส้นทาง",
     pickupMapsUnresolved: "จุดรับยังไม่ยืนยัน Maps",
     dropoffMapsUnresolved: "จุดส่งยังไม่ยืนยัน Maps",
     driverMissing: "ยังไม่มีคนขับ",
@@ -731,6 +736,10 @@ function getBookingDataQuality(
     label: issues.length === 0 ? copy.dataQualityComplete : copy.dataQualityNeedsAttention,
     issues
   };
+}
+
+function hasConfirmedRoute(booking: Pick<BookingDiaryEntry, "approved_route_id" | "route_confirmation_status">) {
+  return Boolean(booking.approved_route_id && booking.route_confirmation_status === "confirmed");
 }
 
 function formatDistanceKm(value: number | string | null | undefined) {
@@ -1086,9 +1095,10 @@ export default function BookingDiaryPage() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [form, setForm] = useState<BookingForm>(() => emptyForm());
-  const [activeTab, setActiveTab] = useState<"daily" | "insights" | "locationReview" | "bookingCheck">("daily");
+  const [activeTab, setActiveTab] = useState<"daily" | "insights" | "locationReview" | "bookingCheck" | "routeApproval">("daily");
   const [locationReviewCount, setLocationReviewCount] = useState(0);
   const [bookingCheckCount, setBookingCheckCount] = useState(0);
+  const [routeApprovalCount, setRouteApprovalCount] = useState(0);
   const [bookingCheckFocus, setBookingCheckFocus] = useState<{ label: string; side: "pickup" | "dropoff" | "pickup_dropoff" } | null>(null);
   const locationReviewDeepLinkHandled = useRef(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -1213,6 +1223,10 @@ export default function BookingDiaryPage() {
       }
       setActiveTab("bookingCheck");
     }
+    if (requestedTab === "route-approval") {
+      locationReviewDeepLinkHandled.current = true;
+      setActiveTab("routeApproval");
+    }
   }, [currentUser?.isAdmin, showLocationReviewTab]);
 
   useEffect(() => {
@@ -1225,6 +1239,9 @@ export default function BookingDiaryPage() {
         void load(false);
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "saved_locations" }, () => {
+        void load(false);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "booking_route_approvals" }, () => {
         void load(false);
       })
       .subscribe();
@@ -2281,6 +2298,8 @@ export default function BookingDiaryPage() {
         "Estimated Duration Minutes": booking.estimated_duration_minutes,
         "Google Maps Route": booking.google_maps_route_url,
         "Distance Source": booking.distance_source,
+        "Route Confirmation": booking.route_confirmation_status,
+        "Approved Route ID": booking.approved_route_id,
         Vehicle: booking.vehicle,
         "Vehicle Registration": booking.vehicle_registration,
         "Trailer Registration": booking.trailer_registration,
@@ -2467,6 +2486,14 @@ export default function BookingDiaryPage() {
         >
           {language === "th" ? "ตรวจสอบงานจอง" : "Booking check"} ({bookingCheckCount.toLocaleString()})
         </button> : null}
+        {LOCATION_REVIEW_FEATURE_ENABLED && currentUser?.isAdmin ? <button
+          type="button"
+          onClick={() => setActiveTab("routeApproval")}
+          className={clsx("booking-diary-tab", activeTab === "routeApproval" && "booking-diary-tab-active")}
+          aria-current={activeTab === "routeApproval" ? "page" : undefined}
+        >
+          {language === "th" ? "อนุมัติเส้นทาง" : "Route Approval"} ({routeApprovalCount.toLocaleString()})
+        </button> : null}
       </nav>
 
       {activeTab === "daily" ? (
@@ -2643,6 +2670,16 @@ export default function BookingDiaryPage() {
                                 title={[booking.pickup_address, booking.dropoff_address].filter(Boolean).join(" -> ")}
                               >
                                 {hasVerifiedGoogleLocation(booking) ? copy.googleVerified : copy.manualUnverified}
+                              </span>
+                              <span
+                                className={clsx(
+                                  "inline-flex w-fit rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                                  hasConfirmedRoute(booking)
+                                    ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+                                    : "border-slate-200 bg-slate-50 text-slate-600"
+                                )}
+                              >
+                                {hasConfirmedRoute(booking) ? copy.routeConfirmed : copy.routePendingApproval}
                               </span>
                             </span>
                           </span>
@@ -2938,6 +2975,16 @@ export default function BookingDiaryPage() {
                               >
                                 {hasVerifiedGoogleLocation(booking) ? copy.googleVerified : copy.manualUnverified}
                               </span>
+                              <span
+                                className={clsx(
+                                  "ml-1 mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                                  hasConfirmedRoute(booking)
+                                    ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+                                    : "border-slate-200 bg-slate-50 text-slate-600"
+                                )}
+                              >
+                                {hasConfirmedRoute(booking) ? copy.routeConfirmed : copy.routePendingApproval}
+                              </span>
                             </td>
                             <td className="booking-desktop-cell whitespace-nowrap">
                               <span className={clsx(
@@ -3093,6 +3140,7 @@ export default function BookingDiaryPage() {
           loading={loading}
           refreshing={refreshing}
           onRefresh={() => void load(false)}
+          onOpenRouteApproval={currentUser?.isAdmin ? () => setActiveTab("routeApproval") : undefined}
         />
       ) : null}
 
@@ -3115,6 +3163,12 @@ export default function BookingDiaryPage() {
         focus={bookingCheckFocus}
         onClearFocus={() => setBookingCheckFocus(null)}
         onAvailabilityChange={setBookingCheckCount}
+      /> : null}
+
+      {LOCATION_REVIEW_FEATURE_ENABLED && currentUser?.isAdmin ? <BookingRouteApproval
+        active={activeTab === "routeApproval"}
+        language={language}
+        onAvailabilityChange={setRouteApprovalCount}
       /> : null}
 
       {activeTab === "daily" && !modalOpen && !deleteTarget ? (
