@@ -18,7 +18,36 @@ function loadTypeScriptModule(relativePath) {
   return loaded.exports;
 }
 
+const originalResolveFilename = Module._resolveFilename;
+Module._resolveFilename = function resolveAlias(request, parent, isMain, options) {
+  if (request.startsWith("@/")) {
+    const resolved = path.resolve(request.slice(2));
+    return originalResolveFilename.call(
+      this,
+      fs.existsSync(`${resolved}.ts`) ? `${resolved}.ts` : resolved,
+      parent,
+      isMain,
+      options
+    );
+  }
+  return originalResolveFilename.call(this, request, parent, isMain, options);
+};
+
+Module._extensions[".ts"] = function transpileTypeScriptDependency(loadedModule, filename) {
+  const source = fs.readFileSync(filename, "utf8");
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+  }).outputText;
+  loadedModule._compile(compiled, filename);
+};
+
 const { buildWeeklyMileageComparisonReport, WEEKLY_MILEAGE_REVIEW_THRESHOLD_KM, weeklyMileageComparisonGroup } = loadTypeScriptModule("lib/weekly-mileage-report.ts");
+const {
+  buildOilChangeAlertRows,
+  buildWeeklyDistanceHistoryRows,
+  buildWeeklyDistanceHistorySummary,
+  buildWeeklyMileageSummary
+} = loadTypeScriptModule("lib/operations.ts");
 
 function entry(id, date, registration, odometer, driver = "Driver A", createdAt = `${date}T08:00:00Z`) {
   return { id, week_ending: date, driver_id: `driver-${id}`, driver, vehicle_reg: registration, odometer_reading: odometer, mileage: odometer, created_at: createdAt };
@@ -26,6 +55,20 @@ function entry(id, date, registration, odometer, driver = "Driver A", createdAt 
 
 function vehicle(id, registration, active = true) {
   return { id, vehicle_reg: registration, registration, active };
+}
+
+function serviceVehicle(overrides = {}) {
+  return {
+    id: overrides.id ?? "vehicle-1",
+    vehicle_reg: overrides.vehicle_reg ?? "3ฒน-9565",
+    registration: overrides.registration ?? overrides.vehicle_reg ?? "3ฒน-9565",
+    vehicle_name: overrides.vehicle_name ?? overrides.vehicle_reg ?? "3ฒน-9565",
+    vehicle_type: overrides.vehicle_type ?? "FOUR_WHEEL_TRUCK",
+    active: overrides.active ?? true,
+    last_oil_change_date: overrides.last_oil_change_date ?? null,
+    last_oil_change_odometer: overrides.last_oil_change_odometer ?? null,
+    oil_change_interval_km: overrides.oil_change_interval_km ?? null
+  };
 }
 
 function report(entries, vehicles, selectedWeek = "2026-08-09") {
@@ -84,6 +127,228 @@ test("uses like-for-like totals and never counts missing readings as zero", () =
   assert.equal(result.comparableDistanceDifference, 500);
   assert.equal(result.vehiclesMissingThisWeek, 1);
   assert.equal(result.rows.find((row) => row.vehicleReg === "B").currentDistance, null);
+});
+
+test("weekly distance history reuses the existing weekly summary distance calculation", () => {
+  const entries = [
+    entry("a1", "2026-08-02", "A-100", 1000),
+    entry("b1", "2026-08-02", "B-200", 5000),
+    entry("a2", "2026-08-09", "A 100", 1800),
+    entry("b2", "2026-08-09", "B-200", 5700),
+    entry("a3-old", "2026-08-16", "A-100", 2200, "Old A", "2026-08-16T08:00:00Z"),
+    entry("a3-new", "2026-08-16", "A-100", 2600, "Latest A", "2026-08-16T09:00:00Z"),
+    entry("b3", "2026-08-16", "B-200", 6100)
+  ];
+  const summaryRows = buildWeeklyMileageSummary(entries);
+  const historyRows = buildWeeklyDistanceHistoryRows(entries);
+
+  assert.deepEqual(historyRows.map((row) => row.weekEnding), ["2026-08-16", "2026-08-09", "2026-08-02"]);
+  for (const historyRow of historyRows) {
+    const summaryRow = summaryRows.find((row) => row.weekEnding === historyRow.weekEnding);
+    assert.ok(summaryRow);
+    assert.equal(historyRow.weeklyDistance, summaryRow.weeklyDistance);
+    assert.equal(historyRow.vehicleEntries, summaryRow.comparableVehicles);
+  }
+  assert.equal(historyRows[0].weeklyDistance, 1200);
+  assert.equal(historyRows[0].vehicleEntries, 2);
+});
+
+test("weekly distance history summary cards calculate from the displayed rows", () => {
+  const rows = [
+    { weekEnding: "2026-08-16", vehicleEntries: 2, weeklyDistance: 1200 },
+    { weekEnding: "2026-08-09", vehicleEntries: 2, weeklyDistance: 1500 },
+    { weekEnding: "2026-08-02", vehicleEntries: 0, weeklyDistance: 0 }
+  ];
+  const summary = buildWeeklyDistanceHistorySummary(rows);
+
+  assert.equal(summary.totalDistance, 2700);
+  assert.equal(summary.averageWeeklyDistance, 900);
+  assert.deepEqual(summary.highestWeek, rows[1]);
+  assert.deepEqual(summary.lowestWeek, rows[2]);
+});
+
+test("weekly distance history reports expected, valid, missing, and highest/lowest distance vehicles", () => {
+  const entries = [
+    entry("a1", "2026-08-02", "A-100", 1000, "Ann"),
+    entry("b1", "2026-08-02", "B-200", 5000, "Ben"),
+    entry("a2", "2026-08-09", "A-100", 1800, "Ann"),
+    entry("b2", "2026-08-09", "B-200", 5000, "Ben")
+  ];
+  const rows = buildWeeklyDistanceHistoryRows(entries, [
+    { ...vehicle("a", "A-100"), created_at: "2026-01-01T00:00:00Z" },
+    { ...vehicle("b", "B-200"), created_at: "2026-01-01T00:00:00Z" },
+    { ...vehicle("c", "C-300"), created_at: "2026-08-01T00:00:00Z" },
+    { ...vehicle("d", "D-400"), created_at: "2026-08-15T00:00:00Z" }
+  ], []);
+  const current = rows.find((row) => row.weekEnding === "2026-08-09");
+
+  assert.ok(current);
+  assert.equal(current.weeklyDistance, 800);
+  assert.equal(current.validVehicleEntries, 2);
+  assert.equal(current.expectedVehicleEntries, 3);
+  assert.equal(current.missingVehicleCount, 1);
+  assert.equal(current.highestDistanceVehicle.vehicleReg, "A-100");
+  assert.equal(current.highestDistanceVehicle.distance, 800);
+  assert.equal(current.lowestDistanceVehicle.vehicleReg, "B-200");
+  assert.equal(current.lowestDistanceVehicle.distance, 0);
+  assert.equal(current.vehicleBreakdown.find((row) => row.vehicleReg === "C-300").status, "missing_current");
+  assert.equal(current.vehicleBreakdown.some((row) => row.vehicleReg === "D-400"), false);
+});
+
+test("weekly distance totals exclude decreased odometers but continue from the new reading", () => {
+  const rows = buildWeeklyDistanceHistoryRows([
+    entry("a1", "2026-08-02", "A-100", 1000),
+    entry("a2", "2026-08-09", "A-100", 900),
+    entry("a3", "2026-08-16", "A-100", 1200)
+  ]);
+  const decreased = rows.find((row) => row.weekEnding === "2026-08-09");
+  const afterReset = rows.find((row) => row.weekEnding === "2026-08-16");
+
+  assert.equal(decreased.weeklyDistance, 0);
+  assert.equal(decreased.reviewVehicleCount, 1);
+  assert.equal(decreased.vehicleBreakdown[0].status, "odometer_decreased");
+  assert.equal(afterReset.weeklyDistance, 300);
+  assert.equal(afterReset.validVehicleEntries, 1);
+});
+
+test("oil change and weekly mileage stay separate for the 05 Sep / 06 Sep regression", () => {
+  const [row] = buildOilChangeAlertRows({
+    vehicles: [
+      serviceVehicle({
+        last_oil_change_date: "2026-09-05",
+        last_oil_change_odometer: 354500,
+        oil_change_interval_km: 10000
+      })
+    ],
+    weeklyMileage: [
+      entry("weekly-1", "2026-09-06", "3ฒน-9565", 354781)
+    ],
+    drivers: []
+  });
+
+  assert.equal(row.registration, "3ฒน-9565");
+  assert.equal(row.currentOdometer, 354781);
+  assert.equal(row.lastWeeklyMileageDate, "2026-09-06");
+  assert.equal(row.lastOilChangeDate, "2026-09-05");
+  assert.equal(row.lastOilChangeOdometer, 354500);
+  assert.equal(row.oilChangeIntervalKm, 10000);
+  assert.equal(row.nextOilChangeDueOdometer, 364500);
+  assert.equal(row.kmUsedSinceOilChange, 281);
+  assert.equal(row.kmRemaining, 9719);
+  assert.equal(row.status, "ok");
+  assert.deepEqual(row.reviewReasons, []);
+});
+
+test("future oil change records do not create a clean service state for older mileage", () => {
+  const [row] = buildOilChangeAlertRows({
+    vehicles: [
+      serviceVehicle({
+        last_oil_change_date: "2026-09-07",
+        last_oil_change_odometer: 354784,
+        oil_change_interval_km: 10000
+      })
+    ],
+    weeklyMileage: [
+      entry("weekly-1", "2026-09-06", "3ฒน-9565", 354781)
+    ],
+    drivers: []
+  });
+
+  assert.equal(row.status, "review_required");
+  assert.equal(row.nextOilChangeDueOdometer, 364784);
+  assert.equal(row.kmUsedSinceOilChange, -3);
+  assert.equal(row.kmRemaining, 10003);
+  assert.match(row.reviewReasons.join(" "), /latest mileage is older than the oil-change record/i);
+});
+
+test("corrected 05 Sep oil change drives the 06 Sep card after duplicate future service is removed", () => {
+  const [row] = buildOilChangeAlertRows({
+    vehicles: [
+      serviceVehicle({
+        last_oil_change_date: "2026-09-05",
+        last_oil_change_odometer: 354500,
+        oil_change_interval_km: 10000
+      })
+    ],
+    weeklyMileage: [
+      entry("weekly-1", "2026-09-06", "3ฒน-9565", 354784)
+    ],
+    drivers: []
+  });
+
+  assert.equal(row.lastOilChangeDate, "2026-09-05");
+  assert.equal(row.currentOdometer, 354784);
+  assert.equal(row.lastWeeklyMileageDate, "2026-09-06");
+  assert.equal(row.nextOilChangeDueOdometer, 364500);
+  assert.equal(row.kmUsedSinceOilChange, 284);
+  assert.equal(row.kmRemaining, 9716);
+  assert.equal(row.status, "ok");
+  assert.deepEqual(row.reviewReasons, []);
+});
+
+test("new oil change resets the service baseline without changing weekly mileage logic", () => {
+  const [atService] = buildOilChangeAlertRows({
+    vehicles: [
+      serviceVehicle({
+        last_oil_change_date: "2026-09-07",
+        last_oil_change_odometer: 364600,
+        oil_change_interval_km: 10000
+      })
+    ],
+    weeklyMileage: [
+      entry("weekly-1", "2026-09-07", "3ฒน-9565", 364600)
+    ],
+    drivers: []
+  });
+  const [afterDriving] = buildOilChangeAlertRows({
+    vehicles: [
+      serviceVehicle({
+        last_oil_change_date: "2026-09-07",
+        last_oil_change_odometer: 364600,
+        oil_change_interval_km: 10000
+      })
+    ],
+    weeklyMileage: [
+      entry("weekly-1", "2026-09-07", "3ฒน-9565", 364600),
+      entry("weekly-2", "2026-09-13", "3ฒน-9565", 365100)
+    ],
+    drivers: []
+  });
+
+  assert.equal(atService.nextOilChangeDueOdometer, 374600);
+  assert.equal(atService.kmUsedSinceOilChange, 0);
+  assert.equal(atService.kmRemaining, 10000);
+  assert.equal(afterDriving.kmUsedSinceOilChange, 500);
+  assert.equal(afterDriving.kmRemaining, 9500);
+});
+
+test("oil change save path no longer writes service odometers into weekly mileage", () => {
+  const source = fs.readFileSync(path.resolve("lib/data.ts"), "utf8");
+  const saveStart = source.indexOf("export async function saveOilChangeService");
+  const saveEnd = source.indexOf("export async function deleteOilChangeService");
+  const saveSource = source.slice(saveStart, saveEnd);
+
+  assert.equal(source.includes("syncOilChangeOdometerToWeeklyMileage"), false);
+  assert.doesNotMatch(saveSource, /saveWeeklyMileage/);
+  assert.doesNotMatch(saveSource, /\.from\("weekly_mileage"\)/);
+  assert.match(saveSource, /insertVehicleServiceLogWithSchemaFallback|updateVehicleServiceLogWithSchemaFallback/);
+});
+
+test("oil change service selection orders by service date, not created_at", () => {
+  const dataSource = fs.readFileSync(path.resolve("lib/data.ts"), "utf8");
+  const pageSource = fs.readFileSync(path.resolve("app/(dashboard)/weekly-mileage/page.tsx"), "utf8");
+  const dataSortStart = dataSource.indexOf("function sortServiceLogsByLatest");
+  const dataSortEnd = dataSource.indexOf("function normalizeOilChangeVehicleRegKey");
+  const pageSortStart = pageSource.indexOf("const compareServiceLogsByLatest");
+  const pageSortEnd = pageSource.indexOf("type OilActionMode");
+  const dataSortSource = dataSource.slice(dataSortStart, dataSortEnd);
+  const pageSortSource = pageSource.slice(pageSortStart, pageSortEnd);
+
+  assert.match(dataSortSource, /serviceDateDiff/);
+  assert.doesNotMatch(dataSortSource, /createdAtDiff|createdAtTime/);
+  assert.match(pageSortSource, /serviceDateDiff/);
+  assert.doesNotMatch(pageSortSource, /createdAtDiff|createdAtTime/);
+  assert.doesNotMatch(dataSource, /\.order\("service_date", \{ ascending: false \}\)\s*\.order\("created_at"/);
 });
 
 test("requires the immediately previous reporting week for this-week distance", () => {

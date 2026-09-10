@@ -72,6 +72,12 @@ test("admin user APIs verify the signed-in caller server-side before reads or mu
   assert.match(resetRoute, /send_password_reset/);
   assert.match(meRoute, /access\.status === "suspended"/);
   assert.match(meRoute, /status:\s*403/);
+  assert.match(meRoute, /logAdminAuthDiagnostics\(request/);
+  assert.match(server, /"authorization-header"/);
+  assert.match(server, /"cookie-header"/);
+  assert.match(server, /"bearer-token"/);
+  assert.match(server, /authVerificationStatus/);
+  assert.match(server, /status === 503/);
 });
 
 test("account mutation routes reject unsafe account-management changes", () => {
@@ -98,6 +104,14 @@ test("runtime authorization reads roles from account_access, not metadata or a h
   assert.doesNotMatch(authorizationSource, /joeryan09@outlook\.com|LEGACY_ADMIN_EMAIL/i);
   assert.match(accountMenu, /USER MANAGEMENT SETUP REQUIRED/);
   assert.match(profile, /User Management setup required/);
+});
+
+test("dashboard auth guard separates authentication from account access", () => {
+  const layout = read("app/(dashboard)/layout.tsx");
+
+  assert.match(layout, /error\.status === 401/);
+  assert.doesNotMatch(layout, /error\.status === 401 \|\| error\.status === 403/);
+  assert.match(layout, /error\.status === 403/);
 });
 
 test("service-role operations stay out of the browser bundle", () => {

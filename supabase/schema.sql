@@ -26,6 +26,10 @@ create table if not exists public.fuel_logs (
   fuel_type text,
   payment_method text,
   entry_source text not null default 'line_message' check (entry_source in ('line_message', 'direct_from_receipt', 'statement_manual', 'statement_import', 'other')),
+  receipt_checked boolean not null default false,
+  receipt_checked_at timestamptz,
+  full_tank_confirmed boolean not null default false,
+  full_tank_confirmed_at timestamptz,
   notes text,
   created_at timestamptz not null default now()
 );
@@ -114,6 +118,63 @@ create table if not exists public.vehicle_service_logs (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.vehicle_monthly_performance (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
+  year integer not null check (year between 2000 and 2100),
+  month integer not null check (month between 1 and 12),
+  vehicle_registration text not null check (length(btrim(vehicle_registration)) > 0),
+  salary_cost numeric(12, 2) not null default 0 check (salary_cost >= 0),
+  trip_income numeric(12, 2) not null default 0 check (trip_income >= 0),
+  other_expenses numeric(12, 2) not null default 0 check (other_expenses >= 0),
+  gross_revenue numeric(12, 2) not null default 0 check (gross_revenue >= 0),
+  lpg_cost numeric(12, 2) not null default 0 check (lpg_cost >= 0),
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  created_by uuid references auth.users(id) on delete set null,
+  updated_by uuid references auth.users(id) on delete set null
+);
+
+create table if not exists public.vehicle_performance_import_reviews (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  vehicle_id uuid references public.vehicles(id) on delete set null,
+  canonical_vehicle_registration text not null check (length(btrim(canonical_vehicle_registration)) > 0),
+  canonical_vehicle_registration_key text not null check (length(btrim(canonical_vehicle_registration_key)) > 0),
+  imported_vehicle_reference text,
+  source_sheet text,
+  source_row_number integer,
+  source_row_key text,
+  year integer not null check (year between 2000 and 2100),
+  month integer not null check (month between 1 and 12),
+  review_status text not null check (review_status in ('approved', 'correction_required')),
+  excel_fuel numeric(12, 2),
+  app_fuel_at_review numeric(12, 2) not null default 0,
+  fuel_difference_at_review numeric(12, 2),
+  review_note text,
+  reviewed_by text,
+  reviewed_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.vehicle_performance_correction_audit (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  vehicle_monthly_performance_id uuid references public.vehicle_monthly_performance(id) on delete set null,
+  year integer not null check (year between 2000 and 2100),
+  month integer not null check (month between 1 and 12),
+  vehicle_registration text not null check (length(btrim(vehicle_registration)) > 0),
+  field_name text not null check (field_name in ('gross_revenue', 'salary_cost', 'trip_income', 'other_expenses', 'lpg_cost')),
+  old_value numeric(12, 2),
+  new_value numeric(12, 2),
+  reason text,
+  corrected_by text,
+  corrected_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.oil_change_baselines (
   id uuid primary key default gen_random_uuid(),
   vehicle_reg text not null,
@@ -182,6 +243,9 @@ create table if not exists public.vehicle_type_standards (
 alter table public.drivers enable row level security;
 alter table public.vehicles enable row level security;
 alter table public.vehicle_service_logs enable row level security;
+alter table public.vehicle_monthly_performance enable row level security;
+alter table public.vehicle_performance_import_reviews enable row level security;
+alter table public.vehicle_performance_correction_audit enable row level security;
 alter table public.oil_change_baselines enable row level security;
 alter table public.oil_change_history enable row level security;
 alter table public.vehicle_category_defaults enable row level security;
@@ -284,6 +348,52 @@ drop policy if exists "vehicle_service_logs_update_own" on public.vehicle_servic
 create policy "vehicle_service_logs_update_own" on public.vehicle_service_logs
 for update using (user_id is null or auth.uid() = user_id)
 with check (user_id is null or auth.uid() = user_id);
+
+drop policy if exists "vehicle_service_logs_delete_own" on public.vehicle_service_logs;
+create policy "vehicle_service_logs_delete_own" on public.vehicle_service_logs
+for delete using (user_id is null or auth.uid() = user_id);
+
+drop policy if exists "vehicle_monthly_performance_select_own" on public.vehicle_monthly_performance;
+create policy "vehicle_monthly_performance_select_own" on public.vehicle_monthly_performance
+for select to authenticated using (user_id is null or user_id = auth.uid());
+
+drop policy if exists "vehicle_monthly_performance_insert_own" on public.vehicle_monthly_performance;
+create policy "vehicle_monthly_performance_insert_own" on public.vehicle_monthly_performance
+for insert to authenticated with check (user_id is null or user_id = auth.uid());
+
+drop policy if exists "vehicle_monthly_performance_update_own" on public.vehicle_monthly_performance;
+create policy "vehicle_monthly_performance_update_own" on public.vehicle_monthly_performance
+for update to authenticated using (user_id is null or user_id = auth.uid())
+with check (user_id is null or user_id = auth.uid());
+
+drop policy if exists "vehicle_monthly_performance_delete_own" on public.vehicle_monthly_performance;
+create policy "vehicle_monthly_performance_delete_own" on public.vehicle_monthly_performance
+for delete to authenticated using (user_id is null or user_id = auth.uid());
+
+drop policy if exists "vehicle_performance_import_reviews_select_own" on public.vehicle_performance_import_reviews;
+create policy "vehicle_performance_import_reviews_select_own" on public.vehicle_performance_import_reviews
+for select to authenticated using (user_id = auth.uid());
+
+drop policy if exists "vehicle_performance_import_reviews_insert_own" on public.vehicle_performance_import_reviews;
+create policy "vehicle_performance_import_reviews_insert_own" on public.vehicle_performance_import_reviews
+for insert to authenticated with check (user_id = auth.uid());
+
+drop policy if exists "vehicle_performance_import_reviews_update_own" on public.vehicle_performance_import_reviews;
+create policy "vehicle_performance_import_reviews_update_own" on public.vehicle_performance_import_reviews
+for update to authenticated using (user_id = auth.uid())
+with check (user_id = auth.uid());
+
+drop policy if exists "vehicle_performance_import_reviews_delete_own" on public.vehicle_performance_import_reviews;
+create policy "vehicle_performance_import_reviews_delete_own" on public.vehicle_performance_import_reviews
+for delete to authenticated using (user_id = auth.uid());
+
+drop policy if exists "vehicle_performance_correction_audit_select_own" on public.vehicle_performance_correction_audit;
+create policy "vehicle_performance_correction_audit_select_own" on public.vehicle_performance_correction_audit
+for select to authenticated using (user_id = auth.uid());
+
+drop policy if exists "vehicle_performance_correction_audit_insert_own" on public.vehicle_performance_correction_audit;
+create policy "vehicle_performance_correction_audit_insert_own" on public.vehicle_performance_correction_audit
+for insert to authenticated with check (user_id = auth.uid());
 
 drop policy if exists "Allow authenticated read oil baselines" on public.oil_change_baselines;
 create policy "Allow authenticated read oil baselines" on public.oil_change_baselines
@@ -531,6 +641,49 @@ create unique index if not exists vehicle_service_logs_unique_service_idx
     odometer
   );
 
+create unique index if not exists vehicle_monthly_performance_period_vehicle_key
+  on public.vehicle_monthly_performance (
+    coalesce(user_id, '00000000-0000-0000-0000-000000000000'::uuid),
+    year,
+    month,
+    lower(btrim(vehicle_registration))
+  );
+
+create index if not exists vehicle_monthly_performance_period_idx
+  on public.vehicle_monthly_performance (year, month);
+
+create index if not exists vehicle_monthly_performance_vehicle_idx
+  on public.vehicle_monthly_performance (lower(btrim(vehicle_registration)));
+
+create unique index if not exists vehicle_performance_import_reviews_vehicle_period_key
+  on public.vehicle_performance_import_reviews (
+    user_id,
+    year,
+    month,
+    canonical_vehicle_registration_key
+  );
+
+create index if not exists vehicle_performance_import_reviews_vehicle_id_idx
+  on public.vehicle_performance_import_reviews (vehicle_id);
+
+create index if not exists vehicle_performance_import_reviews_source_row_idx
+  on public.vehicle_performance_import_reviews (
+    user_id,
+    source_row_key
+  )
+  where source_row_key is not null;
+
+create index if not exists vehicle_performance_correction_audit_period_idx
+  on public.vehicle_performance_correction_audit (
+    user_id,
+    year,
+    month,
+    lower(btrim(vehicle_registration))
+  );
+
+create index if not exists vehicle_performance_correction_audit_record_idx
+  on public.vehicle_performance_correction_audit (vehicle_monthly_performance_id);
+
 create unique index if not exists oil_change_baselines_vehicle_reg_unique_idx
   on public.oil_change_baselines (vehicle_reg);
 
@@ -609,6 +762,56 @@ drop trigger if exists set_vehicles_updated_at on public.vehicles;
 create trigger set_vehicles_updated_at
 before update on public.vehicles
 for each row execute function public.set_updated_at();
+
+create or replace function public.set_vehicle_monthly_performance_audit_fields()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  new.vehicle_registration := regexp_replace(btrim(new.vehicle_registration), '\s+', ' ', 'g');
+
+  if tg_op = 'INSERT' then
+    if new.user_id is null then
+      new.user_id := auth.uid();
+    end if;
+    if new.created_by is null then
+      new.created_by := auth.uid();
+    end if;
+  end if;
+
+  new.updated_at := now();
+  if new.updated_by is null then
+    new.updated_by := auth.uid();
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists set_vehicle_monthly_performance_audit_fields
+  on public.vehicle_monthly_performance;
+create trigger set_vehicle_monthly_performance_audit_fields
+before insert or update on public.vehicle_monthly_performance
+for each row execute function public.set_vehicle_monthly_performance_audit_fields();
+
+create or replace function public.set_vehicle_performance_import_reviews_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  new.reviewed_at = coalesce(new.reviewed_at, now());
+  return new;
+end;
+$$;
+
+drop trigger if exists set_vehicle_performance_import_reviews_updated_at
+  on public.vehicle_performance_import_reviews;
+create trigger set_vehicle_performance_import_reviews_updated_at
+before update on public.vehicle_performance_import_reviews
+for each row execute function public.set_vehicle_performance_import_reviews_updated_at();
 
 drop trigger if exists set_vehicle_category_defaults_updated_at on public.vehicle_category_defaults;
 create trigger set_vehicle_category_defaults_updated_at
@@ -734,6 +937,8 @@ create table if not exists public.booking_diary (
   route_traffic_aware boolean,
   route_source text,
   route_fallback_info jsonb,
+  approved_route_id uuid,
+  route_confirmation_status text not null default 'pending',
   job_order_number text,
   vehicle text,
   vehicle_registration text,

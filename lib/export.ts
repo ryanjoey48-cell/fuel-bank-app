@@ -2,11 +2,14 @@
 
 import * as XLSX from "xlsx";
 
-export function exportToXlsx(
-  rows: Record<string, string | number | null | undefined>[],
-  fileName: string,
-  sheetName = "Sheet1"
-) {
+type ExportCellValue = string | number | null | undefined;
+type ExportRow = Record<string, ExportCellValue>;
+type ExportSheet = {
+  name: string;
+  rows: ExportRow[];
+};
+
+function buildWorksheet(rows: ExportRow[]) {
   const worksheet = XLSX.utils.json_to_sheet(rows);
   const headers = rows[0] ? Object.keys(rows[0]) : [];
   worksheet["!cols"] = headers.map((header) => {
@@ -27,13 +30,29 @@ export function exportToXlsx(
     };
   }
 
+  return worksheet;
+}
+
+export function exportToXlsx(
+  rows: ExportRow[],
+  fileName: string,
+  sheetName = "Sheet1"
+) {
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+  XLSX.utils.book_append_sheet(workbook, buildWorksheet(rows), sheetName);
+  XLSX.writeFileXLSX(workbook, `${fileName}.xlsx`);
+}
+
+export function exportWorkbookToXlsx(sheets: ExportSheet[], fileName: string) {
+  const workbook = XLSX.utils.book_new();
+  for (const sheet of sheets) {
+    XLSX.utils.book_append_sheet(workbook, buildWorksheet(sheet.rows), sheet.name.slice(0, 31));
+  }
   XLSX.writeFileXLSX(workbook, `${fileName}.xlsx`);
 }
 
 export function exportToCsv(
-  rows: Record<string, string | number | null | undefined>[],
+  rows: ExportRow[],
   fileName: string
 ) {
   const worksheet = XLSX.utils.json_to_sheet(rows);

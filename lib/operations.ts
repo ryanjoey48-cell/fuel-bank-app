@@ -13,6 +13,7 @@ import {
   getVehicleTypeLabel,
   type OilChangeIntervalSource
 } from "@/lib/oil-change-service";
+import { normalizeDisplayName } from "@/lib/utils";
 
 export type FuelCalculationField = "litres" | "total_cost" | "price_per_litre";
 
@@ -42,16 +43,70 @@ export type VehicleWeeklyDistanceRow = {
   unusual: boolean;
 };
 
+export type WeeklyVehicleDistanceStatus =
+  | "valid"
+  | "missing_previous"
+  | "missing_current"
+  | "odometer_decreased"
+  | "needs_review";
+
+export type WeeklyVehicleDistanceBreakdownRow = {
+  weekEnding: string;
+  vehicleReg: string;
+  driverName: string | null;
+  previousOdometer: number | null;
+  currentOdometer: number | null;
+  distance: number | null;
+  valid: boolean;
+  status: WeeklyVehicleDistanceStatus;
+  statusLabel: string;
+  statusDetail: string;
+  currentEntry: WeeklyMileageEntry | null;
+  previousEntry: WeeklyMileageEntry | null;
+};
+
 export type WeeklyMileageSummaryRow = {
   weekEnding: string;
   vehiclesSubmitted: number;
   driversSubmitted: number;
   highestOdometer: number | null;
   lowestOdometer: number | null;
+  highestDistanceVehicle: WeeklyVehicleDistanceBreakdownRow | null;
+  lowestDistanceVehicle: WeeklyVehicleDistanceBreakdownRow | null;
   weeklyDistance: number;
   totalRecordedOdometer: number;
   comparableVehicles: number;
+  expectedVehicleEntries: number;
+  validVehicleEntries: number;
   missingVehicleCount: number;
+  reviewVehicleCount: number;
+  previousWeekEnding: string | null;
+  weekOnWeekChangeKm: number | null;
+  weekOnWeekChangePercent: number | null;
+  vehicleBreakdown: WeeklyVehicleDistanceBreakdownRow[];
+};
+
+export type WeeklyDistanceHistoryRow = {
+  weekEnding: string;
+  vehicleEntries: number;
+  validVehicleEntries: number;
+  expectedVehicleEntries: number;
+  missingVehicleCount: number;
+  reviewVehicleCount: number;
+  weeklyDistance: number;
+  previousWeekEnding: string | null;
+  weekOnWeekChangeKm: number | null;
+  weekOnWeekChangePercent: number | null;
+  highestDistanceVehicle: WeeklyVehicleDistanceBreakdownRow | null;
+  lowestDistanceVehicle: WeeklyVehicleDistanceBreakdownRow | null;
+  vehicleBreakdown: WeeklyVehicleDistanceBreakdownRow[];
+};
+
+export type WeeklyDistanceHistorySummary = {
+  totalDistance: number;
+  averageWeeklyDistance: number;
+  highestWeek: WeeklyDistanceHistoryRow | null;
+  lowestWeek: WeeklyDistanceHistoryRow | null;
 };
 
 export type DriverWeeklyComparisonRow = {
@@ -89,6 +144,7 @@ export type OilChangeAlertRow = {
   lastWeeklyMileageAddedAt: string | null;
   daysSinceWeeklyMileage: number | null;
   weeklyMileageUpdatedThisWeek: boolean;
+  kmUsedSinceOilChange: number | null;
   nextOilChangeDueOdometer: number | null;
   kmRemaining: number | null;
   overdueKm: number | null;
@@ -300,13 +356,21 @@ function buildOilChangeRow({
   const currentLowerThanLastService =
     currentOdometer != null && lastOdometer != null && currentOdometer < lastOdometer;
   if (currentLowerThanLastService) {
-    reviewReasons.push("Current odometer is lower than the last oil change mileage. Please check mileage data.");
+    reviewReasons.push(
+      latestWeeklyMileageDate && lastOilChangeDate && lastOilChangeDate > latestWeeklyMileageDate
+        ? `Latest mileage: ${currentOdometer.toLocaleString("en-GB")} km on ${latestWeeklyMileageDate}. Oil-change mileage: ${lastOdometer.toLocaleString("en-GB")} km on ${lastOilChangeDate}. The latest mileage is older than the oil-change record. Add a newer mileage reading or edit the service record.`
+        : "Current odometer is lower than the last oil change mileage. Please check mileage data."
+    );
+  } else if (latestWeeklyMileageDate && lastOilChangeDate && lastOilChangeDate > latestWeeklyMileageDate) {
+    reviewReasons.push("Oil change recorded after latest mileage reading. Add a newer mileage reading or correct the service record.");
   }
   const nextDue =
     lastOdometer != null && interval != null ? Math.trunc(lastOdometer + interval) : null;
+  const kmUsedSinceOilChange =
+    lastOdometer != null && currentOdometer != null ? Math.trunc(currentOdometer - lastOdometer) : null;
   const kmRemaining =
     nextDue != null && currentOdometer != null
-      ? Math.trunc(currentLowerThanLastService && interval != null ? interval : nextDue - currentOdometer)
+      ? Math.trunc(nextDue - currentOdometer)
       : null;
   const overdueKm = kmRemaining != null && kmRemaining < 0 ? Math.abs(kmRemaining) : null;
   const status: OilChangeStatus =
@@ -355,6 +419,7 @@ function buildOilChangeRow({
       latestWeeklyMileageDate,
       currentReportingWeekEnding
     ),
+    kmUsedSinceOilChange,
     nextOilChangeDueOdometer: nextDue,
     kmRemaining,
     overdueKm,
@@ -542,31 +607,233 @@ export function computeWeeklyMileageByVehicle(entries: WeeklyMileageEntry[]) {
   });
 }
 
-export function buildWeeklyMileageSummary(entries: WeeklyMileageEntry[]) {
-  const weeklyVehicleRows = computeWeeklyMileageByVehicle(entries);
+function getEntryOdometer(entry: WeeklyMileageEntry | null | undefined) {
+  if (!entry) return null;
+  const value = Number(entry.odometer_reading ?? entry.mileage);
+  return Number.isFinite(value) ? Math.trunc(value) : null;
+}
+
+function getVehicleCreatedDate(vehicle: Vehicle) {
+  const created = vehicle.created_at ? String(vehicle.created_at).slice(0, 10) : "";
+  return /^\d{4}-\d{2}-\d{2}$/.test(created) ? created : null;
+}
+
+function isVehicleExpectedForWeek(vehicle: Vehicle, weekEnding: string) {
+  if (vehicle.active === false) return false;
+  const createdDate = getVehicleCreatedDate(vehicle);
+  return !createdDate || createdDate <= weekEnding;
+}
+
+function getVehicleDisplayDriver(
+  vehicleKey: string,
+  entry: WeeklyMileageEntry | null | undefined,
+  drivers: Driver[]
+) {
+  const entryDriver = normalizeDisplayName(entry?.driver_name_snapshot ?? entry?.driver);
+  if (entryDriver) return entryDriver;
+  const matchedDriver = drivers.find((driver) => getVehicleKey(driver.vehicle_reg) === vehicleKey);
+  return normalizeDisplayName(matchedDriver?.name) || null;
+}
+
+function buildWeeklyVehicleDistanceRows({
+  entries,
+  vehicles = [],
+  drivers = []
+}: {
+  entries: WeeklyMileageEntry[];
+  vehicles?: Vehicle[];
+  drivers?: Driver[];
+}) {
+  const weeks = Array.from(new Set(entries.map((entry) => entry.week_ending).filter(Boolean))).sort();
+  const vehicleDirectory = new Map<string, Vehicle>();
+  const entryBuckets = new Map<string, WeeklyMileageEntry[]>();
+  const submittedByWeek = new Map<string, Set<string>>();
+
+  for (const vehicle of vehicles) {
+    const key = getVehicleKey(vehicle.vehicle_reg || vehicle.registration || "");
+    if (key) vehicleDirectory.set(key, vehicle);
+  }
+
+  for (const entry of entries) {
+    const vehicleKey = getVehicleKey(entry.vehicle_reg);
+    if (!vehicleKey || !entry.week_ending) continue;
+    const bucketKey = `${entry.week_ending}::${vehicleKey}`;
+    entryBuckets.set(bucketKey, [...(entryBuckets.get(bucketKey) ?? []), entry]);
+    const submittedVehicles = submittedByWeek.get(entry.week_ending) ?? new Set<string>();
+    submittedVehicles.add(vehicleKey);
+    submittedByWeek.set(entry.week_ending, submittedVehicles);
+  }
+
+  const latestValidByVehicle = new Map<string, WeeklyMileageEntry>();
+  const rowsByWeek = new Map<string, WeeklyVehicleDistanceBreakdownRow[]>();
+
+  for (const weekEnding of weeks) {
+    const expectedKeys =
+      vehicles.length > 0
+        ? new Set(
+            vehicles
+              .filter((vehicle) => isVehicleExpectedForWeek(vehicle, weekEnding))
+              .map((vehicle) => getVehicleKey(vehicle.vehicle_reg || vehicle.registration || ""))
+              .filter(Boolean)
+          )
+        : new Set<string>();
+    for (const submittedKey of submittedByWeek.get(weekEnding) ?? []) {
+      expectedKeys.add(submittedKey);
+    }
+
+    const rows: WeeklyVehicleDistanceBreakdownRow[] = [];
+    for (const vehicleKey of Array.from(expectedKeys).sort()) {
+      const bucket = entryBuckets.get(`${weekEnding}::${vehicleKey}`) ?? [];
+      const sortedBucket = [...bucket].sort((left, right) => getWeekEntrySortValue(left).localeCompare(getWeekEntrySortValue(right)));
+      const currentEntry = sortedBucket[sortedBucket.length - 1] ?? null;
+      const previousEntry = latestValidByVehicle.get(vehicleKey) ?? null;
+      const currentOdometer = getEntryOdometer(currentEntry);
+      const previousOdometer = getEntryOdometer(previousEntry);
+      const vehicleReg =
+        currentEntry?.vehicle_reg ||
+        vehicleDirectory.get(vehicleKey)?.vehicle_reg ||
+        vehicleDirectory.get(vehicleKey)?.registration ||
+        vehicleKey;
+      let distance: number | null = null;
+      let status: WeeklyVehicleDistanceStatus = "valid";
+      let statusLabel = "Valid";
+      let statusDetail = "Included in weekly distance total.";
+      let valid = false;
+
+      if (!currentEntry || currentOdometer == null) {
+        status = "missing_current";
+        statusLabel = "Missing current reading";
+        statusDetail = "Excluded from weekly distance total.";
+      } else if (!previousEntry || previousOdometer == null || currentEntry.is_odometer_baseline === true) {
+        status = "missing_previous";
+        statusLabel = "Missing previous reading";
+        statusDetail = "Excluded from weekly distance total.";
+      } else if (currentOdometer < previousOdometer) {
+        const diff = previousOdometer - currentOdometer;
+        status = "odometer_decreased";
+        statusLabel = "Needs review";
+        statusDetail = `Odometer decreased by ${diff.toLocaleString("en-GB")} km.`;
+      } else {
+        distance = currentOdometer - previousOdometer;
+        valid = true;
+      }
+
+      if (currentEntry && currentOdometer != null) {
+        latestValidByVehicle.set(vehicleKey, currentEntry);
+      }
+
+      rows.push({
+        weekEnding,
+        vehicleReg,
+        driverName: getVehicleDisplayDriver(vehicleKey, currentEntry, drivers),
+        previousOdometer,
+        currentOdometer,
+        distance,
+        valid,
+        status,
+        statusLabel,
+        statusDetail,
+        currentEntry,
+        previousEntry
+      });
+    }
+
+    rowsByWeek.set(weekEnding, rows);
+  }
+
+  return rowsByWeek;
+}
+
+export function buildWeeklyMileageSummary(entries: WeeklyMileageEntry[], vehicles: Vehicle[] = [], drivers: Driver[] = []) {
+  const weeklyRowsByWeek = buildWeeklyVehicleDistanceRows({ entries, vehicles, drivers });
   const weeks = Array.from(new Set(entries.map((entry) => entry.week_ending))).sort((left, right) =>
     right.localeCompare(left)
   );
 
-  return weeks.map((weekEnding) => {
+  const summaries = weeks.map((weekEnding) => {
     const weekEntries = entries.filter((entry) => entry.week_ending === weekEnding);
-    const weekVehicleRows = weeklyVehicleRows.filter((row) => row.weekEnding === weekEnding);
+    const weekVehicleRows = weeklyRowsByWeek.get(weekEnding) ?? [];
+    const validRows = weekVehicleRows.filter((row) => row.valid && row.distance != null);
+    const sortedValidRows = [...validRows].sort((left, right) => {
+      const distanceDiff = (right.distance ?? 0) - (left.distance ?? 0);
+      return distanceDiff !== 0 ? distanceDiff : left.vehicleReg.localeCompare(right.vehicleReg);
+    });
     const odometers = weekEntries
       .map((entry) => Number(entry.odometer_reading ?? entry.mileage))
       .filter((value) => Number.isFinite(value));
+    const submittedVehicleCount = new Set(weekEntries.map((entry) => getVehicleKey(entry.vehicle_reg)).filter(Boolean)).size;
 
     return {
       weekEnding,
-      vehiclesSubmitted: new Set(weekEntries.map((entry) => getVehicleKey(entry.vehicle_reg)).filter(Boolean)).size,
+      vehiclesSubmitted: submittedVehicleCount,
       driversSubmitted: new Set(weekEntries.map(getDriverKey).filter(Boolean)).size,
       highestOdometer: odometers.length ? Math.max(...odometers) : null,
       lowestOdometer: odometers.length ? Math.min(...odometers) : null,
-      weeklyDistance: weekVehicleRows.reduce((sum, row) => sum + row.distance, 0),
+      highestDistanceVehicle: sortedValidRows[0] ?? null,
+      lowestDistanceVehicle: sortedValidRows.length ? sortedValidRows[sortedValidRows.length - 1] : null,
+      weeklyDistance: validRows.reduce((sum, row) => sum + (row.distance ?? 0), 0),
       totalRecordedOdometer: odometers.reduce((sum, value) => sum + value, 0),
-      comparableVehicles: weekVehicleRows.filter((row) => row.previousEntry != null).length,
-      missingVehicleCount: weekVehicleRows.filter((row) => row.distance === 0 && row.entryCount === 1).length
+      comparableVehicles: validRows.length,
+      expectedVehicleEntries: weekVehicleRows.length || submittedVehicleCount,
+      validVehicleEntries: validRows.length,
+      missingVehicleCount: weekVehicleRows.filter((row) => row.status === "missing_current").length,
+      reviewVehicleCount: weekVehicleRows.filter((row) => !row.valid && row.status !== "missing_current").length,
+      previousWeekEnding: null,
+      weekOnWeekChangeKm: null,
+      weekOnWeekChangePercent: null,
+      vehicleBreakdown: weekVehicleRows
     } satisfies WeeklyMileageSummaryRow;
   });
+
+  return summaries.map((row, index) => {
+    const previous = summaries[index + 1] ?? null;
+    const changeKm = previous ? row.weeklyDistance - previous.weeklyDistance : null;
+    const changePercent =
+      previous && previous.weeklyDistance > 0 ? (changeKm! / previous.weeklyDistance) * 100 : null;
+    return {
+      ...row,
+      previousWeekEnding: previous?.weekEnding ?? null,
+      weekOnWeekChangeKm: changeKm,
+      weekOnWeekChangePercent: changePercent
+    };
+  });
+}
+
+export function buildWeeklyDistanceHistoryRows(
+  entries: WeeklyMileageEntry[],
+  vehicles: Vehicle[] = [],
+  drivers: Driver[] = []
+): WeeklyDistanceHistoryRow[] {
+  return buildWeeklyMileageSummary(entries, vehicles, drivers).map((row) => ({
+    weekEnding: row.weekEnding,
+    vehicleEntries: row.validVehicleEntries,
+    validVehicleEntries: row.validVehicleEntries,
+    expectedVehicleEntries: row.expectedVehicleEntries,
+    missingVehicleCount: row.missingVehicleCount,
+    reviewVehicleCount: row.reviewVehicleCount,
+    weeklyDistance: row.weeklyDistance,
+    previousWeekEnding: row.previousWeekEnding,
+    weekOnWeekChangeKm: row.weekOnWeekChangeKm,
+    weekOnWeekChangePercent: row.weekOnWeekChangePercent,
+    highestDistanceVehicle: row.highestDistanceVehicle,
+    lowestDistanceVehicle: row.lowestDistanceVehicle,
+    vehicleBreakdown: row.vehicleBreakdown
+  }));
+}
+
+export function buildWeeklyDistanceHistorySummary(rows: WeeklyDistanceHistoryRow[]): WeeklyDistanceHistorySummary {
+  const totalDistance = rows.reduce((sum, row) => sum + row.weeklyDistance, 0);
+  const sortedByDistance = [...rows].sort((left, right) => {
+    const distanceDiff = right.weeklyDistance - left.weeklyDistance;
+    return distanceDiff !== 0 ? distanceDiff : right.weekEnding.localeCompare(left.weekEnding);
+  });
+
+  return {
+    totalDistance,
+    averageWeeklyDistance: rows.length ? totalDistance / rows.length : 0,
+    highestWeek: sortedByDistance[0] ?? null,
+    lowestWeek: sortedByDistance.length ? sortedByDistance[sortedByDistance.length - 1] : null
+  };
 }
 
 export function buildDriverWeeklyComparisons(entries: WeeklyMileageEntry[]) {

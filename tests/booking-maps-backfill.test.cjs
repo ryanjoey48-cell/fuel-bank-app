@@ -329,7 +329,7 @@ test("location review approval stays server-authoritative while dispositions nev
   const review = fs.readFileSync(path.resolve("components/booking-location-review.tsx"), "utf8");
   const approvalRoute = fs.readFileSync(path.resolve("app/api/admin/booking-maps/locations/route.ts"), "utf8");
   assert.match(approvalRoute, /requireAdminAccess\(request\)/);
-  assert.match(review, /window\.localStorage\.setItem/);
+  assert.match(review, /safeLocalStorage\.setItem/);
   assert.doesNotMatch(review, /\.from\(["']booking_diary["']\)\.(?:update|upsert|insert)/);
 });
 

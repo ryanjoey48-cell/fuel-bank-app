@@ -1,17 +1,25 @@
-﻿"use client";
+"use client";
 
-import { BarChart3, ChevronDown, Download, Filter } from "lucide-react";
+import { BarChart3, ChevronDown, Download, FileText, Filter } from "lucide-react";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { Header } from "@/components/header";
 import { fetchFuelLogsForExport } from "@/lib/data";
-import { exportToCsv } from "@/lib/export";
+import { exportWorkbookToXlsx } from "@/lib/export";
 import { normalizeFuelLogLocation, shouldShowFuelLogLocationOption } from "@/lib/fuel-log-location";
+import { buildFuelSpendPdf, downloadReportBlob } from "@/lib/fuel-spend-pdf";
+import {
+  buildFuelSpendManagementReport,
+  getFuelSpendReportLogCost,
+  groupFuelSpendStation,
+  normalizeFuelSpendReportVehicleRegistration,
+  type FuelSpendManagementReport
+} from "@/lib/fuel-spend-report";
 import { useLanguage } from "@/lib/language-provider";
-import { formatDate, formatNumber, normalizeDisplayName, normalizeVehicleRegistration, today } from "@/lib/utils";
+import { formatDate, formatNumber, normalizeDisplayName, today } from "@/lib/utils";
 import type { FuelLogEntrySource, FuelLogWithDriver } from "@/types/database";
 
-type DatePreset = "this_week" | "this_month" | "last_month" | "custom";
+type DatePreset = "today" | "this_week" | "this_month" | "last_month" | "custom";
 type SortKey = "totalSpend" | "totalLitres" | "entryCount" | "lastUsedDate";
 
 type ReportFilters = {
@@ -19,6 +27,7 @@ type ReportFilters = {
   fromDate: string;
   toDate: string;
   driver: string;
+  fuelType: string;
   location: string;
   vehicleReg: string;
   checkedStatus: "" | "checked" | "not_checked";
@@ -26,7 +35,9 @@ type ReportFilters = {
 
 type GroupedFuelSpendRow = {
   id: string;
+  vehicleReg: string;
   driver: string;
+  drivers: string[];
   location: string;
   totalSpend: number;
   totalLitres: number;
@@ -50,6 +61,10 @@ function getPresetRange(preset: DatePreset) {
   const mondayOffset = day === 0 ? -6 : 1 - day;
   const startOfWeek = new Date(now);
   startOfWeek.setDate(now.getDate() + mondayOffset);
+
+  if (preset === "today") {
+    return { fromDate: today(), toDate: today() };
+  }
 
   if (preset === "this_week") {
     return { fromDate: toDateKey(startOfWeek), toDate: today() };
@@ -75,7 +90,7 @@ function getPricePerLitre(log: FuelLogWithDriver) {
   if (Number.isFinite(storedPrice) && storedPrice > 0) return storedPrice;
 
   const litres = getSafeNumber(log.litres);
-  const totalCost = getSafeNumber(log.total_cost);
+  const totalCost = getFuelSpendReportLogCost(log);
   return litres > 0 ? totalCost / litres : null;
 }
 
@@ -92,6 +107,15 @@ function formatLitres(value: number, language: "en" | "th") {
 
 function formatPrice(value: number | null) {
   return value == null || !Number.isFinite(value) ? "-" : `${formatBaht(value)}/L`;
+}
+
+function formatPercent(value: number | null, language: "en" | "th") {
+  return value == null || !Number.isFinite(value) ? "-" : `${formatNumber(value, language, 1)}%`;
+}
+
+function formatSignedChange(value: number | null, language: "en" | "th") {
+  if (value == null || !Number.isFinite(value)) return "-";
+  return `${value > 0 ? "+" : ""}${formatBaht(value)}`;
 }
 
 function getEntrySourceLabel(source: FuelLogEntrySource, labels: ReturnType<typeof useLanguage>["t"]["fuelSpendReport"]) {
@@ -123,11 +147,14 @@ export default function FuelSpendReportPage() {
   const [error, setError] = useState<string | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey>("totalSpend");
+  const [exportingManagerPdf, setExportingManagerPdf] = useState(false);
+  const [exportingFullPdf, setExportingFullPdf] = useState(false);
   const [filters, setFilters] = useState<ReportFilters>({
     preset: "this_month",
     fromDate: defaultRange.fromDate,
     toDate: defaultRange.toDate,
     driver: "",
+    fuelType: "",
     location: "",
     vehicleReg: "",
     checkedStatus: ""
@@ -165,7 +192,7 @@ export default function FuelSpendReportPage() {
 
   const clearFilters = () => {
     const range = getPresetRange("this_month");
-    setFilters({ preset: "this_month", fromDate: range.fromDate, toDate: range.toDate, driver: "", location: "", vehicleReg: "", checkedStatus: "" });
+    setFilters({ preset: "this_month", fromDate: range.fromDate, toDate: range.toDate, driver: "", fuelType: "", location: "", vehicleReg: "", checkedStatus: "" });
     setExpandedRows(new Set());
   };
 
@@ -184,7 +211,7 @@ export default function FuelSpendReportPage() {
         ...log,
         driver: normalizeDisplayName(log.driver) || labels.unknownDriver,
         location: normalizeFuelLogLocation(log.location) || labels.unknownLocation,
-        vehicle_reg: normalizeVehicleRegistration(log.vehicle_reg) || "-"
+        vehicle_reg: normalizeFuelSpendReportVehicleRegistration(log.vehicle_reg)
       })),
     [fuelLogs, labels.unknownDriver, labels.unknownLocation]
   );
@@ -196,7 +223,9 @@ export default function FuelSpendReportPage() {
 
   const locationOptions = useMemo(
     () =>
-      Array.from(new Set(normalizedLogs.map((log) => log.location).filter(shouldShowFuelLogLocationOption))).sort((a, b) =>
+      Array.from(new Set(normalizedLogs.map((log) => log.location).filter(shouldShowFuelLogLocationOption)))
+        .filter((location) => !["Bangchak", "Shell", "Best LPG", "Other"].includes(location))
+        .sort((a, b) =>
         a.localeCompare(b)
       ),
     [normalizedLogs]
@@ -207,28 +236,43 @@ export default function FuelSpendReportPage() {
     [normalizedLogs]
   );
 
-  const filteredLogs = useMemo(
+  const fuelTypeOptions = useMemo(
+    () => Array.from(new Set(normalizedLogs.map((log) => String(log.fuel_type || "").trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b)),
+    [normalizedLogs]
+  );
+
+  const reportSourceLogs = useMemo(
     () =>
       normalizedLogs.filter((log) => {
-        if (filters.fromDate && log.date < filters.fromDate) return false;
-        if (filters.toDate && log.date > filters.toDate) return false;
-        if (filters.driver && log.driver !== filters.driver) return false;
-        if (filters.location && log.location !== filters.location) return false;
-        if (filters.vehicleReg && log.vehicle_reg !== filters.vehicleReg) return false;
         if (filters.checkedStatus === "checked" && !log.receipt_checked) return false;
         if (filters.checkedStatus === "not_checked" && log.receipt_checked) return false;
         return true;
       }),
-    [filters, normalizedLogs]
+    [filters.checkedStatus, normalizedLogs]
   );
+
+  const managementReport = useMemo(
+    () =>
+      buildFuelSpendManagementReport(reportSourceLogs, {
+        fromDate: filters.fromDate,
+        toDate: filters.toDate,
+        driver: filters.driver,
+        fuelType: filters.fuelType,
+        location: filters.location,
+        vehicleReg: filters.vehicleReg
+      }),
+    [filters.driver, filters.fromDate, filters.fuelType, filters.location, filters.toDate, filters.vehicleReg, reportSourceLogs]
+  );
+
+  const filteredLogs = managementReport.logs;
 
   const groupedRows = useMemo(() => {
     const groups = new Map<string, GroupedFuelSpendRow>();
 
     for (const log of filteredLogs) {
-      const key = `${log.driver}::${log.location}`;
+      const key = `${log.vehicle_reg}::${log.location}`;
       const existing = groups.get(key);
-      const totalCost = getSafeNumber(log.total_cost);
+      const totalCost = getFuelSpendReportLogCost(log);
       const litres = getSafeNumber(log.litres);
       const checkedEntries = log.receipt_checked ? 1 : 0;
       const uncheckedEntries = log.receipt_checked ? 0 : 1;
@@ -237,7 +281,9 @@ export default function FuelSpendReportPage() {
       if (!existing) {
         groups.set(key, {
           id: key,
+          vehicleReg: log.vehicle_reg,
           driver: log.driver,
+          drivers: [log.driver].filter(Boolean),
           location: log.location,
           totalSpend: totalCost,
           totalLitres: litres,
@@ -255,6 +301,7 @@ export default function FuelSpendReportPage() {
       existing.totalSpend += totalCost;
       existing.totalLitres += litres;
       existing.entryCount += 1;
+      if (log.driver && !existing.drivers.includes(log.driver)) existing.drivers.push(log.driver);
       existing.checkedEntries += checkedEntries;
       existing.uncheckedEntries += uncheckedEntries;
       existing.uncheckedSpend += uncheckedSpend;
@@ -275,32 +322,26 @@ export default function FuelSpendReportPage() {
   }, [filteredLogs, sortKey]);
 
   const summary = useMemo(() => {
-    const totalSpend = filteredLogs.reduce((sum, log) => sum + getSafeNumber(log.total_cost), 0);
-    const totalLitres = filteredLogs.reduce((sum, log) => sum + getSafeNumber(log.litres), 0);
-    const checkedEntries = filteredLogs.filter((log) => log.receipt_checked).length;
-    const uncheckedEntries = filteredLogs.length - checkedEntries;
-    const uncheckedSpend = filteredLogs.reduce((sum, log) => (log.receipt_checked ? sum : sum + getSafeNumber(log.total_cost)), 0);
-    const locationCounts = new Map<string, number>();
+    const checkedEntries = managementReport.logs.filter((log) => log.receipt_checked).length;
+    const uncheckedEntries = managementReport.logs.length - checkedEntries;
+    const uncheckedSpend = managementReport.logs.reduce((sum, log) => (log.receipt_checked ? sum : sum + log.costAmount), 0);
     const driverSpend = new Map<string, number>();
-    filteredLogs.forEach((log) => locationCounts.set(log.location, (locationCounts.get(log.location) ?? 0) + 1));
-    filteredLogs.forEach((log) => driverSpend.set(log.driver, (driverSpend.get(log.driver) ?? 0) + getSafeNumber(log.total_cost)));
-    const mostUsedStation =
-      Array.from(locationCounts.entries()).sort((left, right) => right[1] - left[1])[0]?.[0] ?? "-";
+    managementReport.logs.forEach((log) => driverSpend.set(log.driver, (driverSpend.get(log.driver) ?? 0) + log.costAmount));
     const topSpendingDriver = Array.from(driverSpend.entries()).sort((left, right) => right[1] - left[1])[0];
 
     return {
-      totalSpend,
-      totalLitres,
-      averagePricePerLitre: totalLitres > 0 ? totalSpend / totalLitres : null,
-      entryCount: filteredLogs.length,
+      totalSpend: managementReport.totalSpend,
+      totalLitres: managementReport.totalLitres,
+      averagePricePerLitre: managementReport.weightedAveragePrice,
+      entryCount: managementReport.totalFillUps,
       checkedEntries,
       uncheckedEntries,
       uncheckedSpend,
-      mostUsedStation,
+      mostUsedStation: managementReport.mostUsedStation?.station ?? "-",
       topSpendingDriverName: topSpendingDriver?.[0] ?? "-",
       topSpendingDriverSpend: topSpendingDriver?.[1] ?? 0
     };
-  }, [filteredLogs]);
+  }, [managementReport]);
 
   const spendByDriver = useMemo(
     () => buildChartRows(filteredLogs, "driver").slice(0, 5),
@@ -314,52 +355,104 @@ export default function FuelSpendReportPage() {
 
   const dateRangeLabel = `${filters.fromDate ? formatDate(filters.fromDate, language) : "-"} - ${filters.toDate ? formatDate(filters.toDate, language) : "-"}`;
 
-  const exportReport = () => {
-    const rows: Record<string, string | number | null>[] = [
-      { Section: labels.title, Field: labels.generatedDate, Value: formatDate(today(), language) },
-      { Section: labels.title, Field: labels.selectedDateRange, Value: dateRangeLabel },
-      { Section: labels.appliedFilters, Field: labels.driver, Value: filters.driver || labels.all },
-      { Section: labels.appliedFilters, Field: labels.location, Value: filters.location || labels.all },
-      { Section: labels.appliedFilters, Field: labels.vehicleRegistration, Value: filters.vehicleReg || labels.all },
-      { Section: labels.appliedFilters, Field: labels.checkedStatus, Value: filters.checkedStatus === "checked" ? labels.checked : filters.checkedStatus === "not_checked" ? labels.notChecked : labels.all },
-      { Section: labels.summaryTotals, Field: labels.totalFuelSpend, Value: summary.totalSpend.toFixed(2) },
-      { Section: labels.summaryTotals, Field: labels.totalLitres, Value: summary.totalLitres.toFixed(2) },
-      { Section: labels.summaryTotals, Field: labels.averagePricePerLitre, Value: summary.averagePricePerLitre?.toFixed(2) ?? "" },
-      { Section: labels.summaryTotals, Field: labels.fuelEntries, Value: summary.entryCount },
-      { Section: labels.summaryTotals, Field: labels.checkedEntries, Value: summary.checkedEntries },
-      { Section: labels.summaryTotals, Field: labels.uncheckedEntries, Value: summary.uncheckedEntries },
-      { Section: labels.summaryTotals, Field: labels.uncheckedSpend, Value: summary.uncheckedSpend.toFixed(2) },
-      { Section: labels.summaryTotals, Field: labels.topSpendingDriver, Value: summary.topSpendingDriverName },
-      { Section: labels.summaryTotals, Field: labels.topSpendingDriverSpend, Value: summary.topSpendingDriverSpend.toFixed(2) },
-      ...groupedRows.map((row) => ({
-        Section: labels.groupedTable,
-        [labels.driver]: row.driver,
-        [labels.location]: row.location,
-        [labels.totalSpend]: row.totalSpend.toFixed(2),
-        [labels.totalLitres]: row.totalLitres.toFixed(2),
-        [labels.entries]: row.entryCount,
-        [labels.checkedEntries]: row.checkedEntries,
-        [labels.uncheckedEntries]: row.uncheckedEntries,
-        [labels.uncheckedSpend]: row.uncheckedSpend.toFixed(2),
-        [labels.receiptCompliance]: `${Math.round(row.receiptCompliance)}%`,
-        [labels.lastUsedDate]: row.lastUsedDate
-      })),
-      ...filteredLogs.map((log) => ({
-        Section: labels.individualDetails,
-        [labels.date]: log.date,
-        [labels.driver]: log.driver,
-        [labels.vehicleRegistration]: log.vehicle_reg,
-        [labels.location]: log.location,
-        [labels.litres]: getSafeNumber(log.litres).toFixed(2),
-        [labels.totalCost]: getSafeNumber(log.total_cost).toFixed(2),
-        [labels.pricePerLitre]: getPricePerLitre(log)?.toFixed(2) ?? "",
-        [labels.notes]: log.notes ?? "",
-        [labels.checkedStatus]: log.receipt_checked ? labels.checked : labels.notChecked,
-        [labels.source]: getEntrySourceLabel(log.entry_source, labels)
-      }))
-    ];
+  const handleDownloadFuelSpendPdf = async (full: boolean) => {
+    if (full) setExportingFullPdf(true);
+    else setExportingManagerPdf(true);
 
-    exportToCsv(rows, "fuel-spend-report");
+    try {
+      const blob = await buildFuelSpendPdf(managementReport, { full, language, periodLabel: dateRangeLabel });
+      downloadReportBlob(blob, full ? "fuel-spend-management-report.pdf" : "fuel-spend-manager-summary.pdf");
+    } finally {
+      if (full) setExportingFullPdf(false);
+      else setExportingManagerPdf(false);
+    }
+  };
+
+  const exportReport = () => {
+    exportWorkbookToXlsx(
+      [
+        {
+          name: "Executive Summary",
+          rows: [
+            { Field: "Generated date", Value: new Date().toLocaleString("en-GB") },
+            { Field: "Selected period", Value: dateRangeLabel },
+            { Field: "Latest fuel-log date", Value: managementReport.latestFuelLogDate ?? "-" },
+            { Field: "Fuel logs analysed", Value: managementReport.totalFillUps },
+            { Field: "Total fuel spend", Value: managementReport.totalSpend },
+            { Field: "Total litres", Value: managementReport.totalLitres },
+            { Field: "Weighted average baht per litre", Value: managementReport.weightedAveragePrice },
+            { Field: "Previous period spend change", Value: managementReport.spendChangeAmount },
+            { Field: "Previous period spend change percent", Value: managementReport.spendChangePercent },
+            { Field: "Highest spend vehicle", Value: managementReport.highestSpendVehicle?.vehicleReg ?? "-" },
+            { Field: "Most-used station", Value: managementReport.mostUsedStation?.station ?? "-" },
+            { Field: "Bangchak regular-fuel usage percent", Value: managementReport.bangchakRegularFuelUsagePercent },
+            { Field: "Reconciliation status", Value: managementReport.reconciliationStatus }
+          ]
+        },
+        {
+          name: "Vehicle Fuel Performance",
+          rows: managementReport.vehicleRows.map((row) => ({
+            Vehicle: row.vehicleReg,
+            Driver: row.driver,
+            "Fuel Logs": row.fuelLogs,
+            Litres: row.litres,
+            "Fuel Spend": row.spend,
+            "Weighted Avg Baht/L": row.weightedAveragePrice,
+            "Distance Travelled": row.distanceTravelled,
+            "km/L": row.kmPerLitre,
+            "Fuel Cost/km": row.fuelCostPerKm
+          }))
+        },
+        {
+          name: "Station Performance",
+          rows: managementReport.stationRows.map((row) => ({
+            Station: row.station,
+            "Fill-ups": row.fillUps,
+            Litres: row.litres,
+            Spend: row.spend,
+            "Weighted Avg Baht/L": row.weightedAveragePrice,
+            "% of Fill-ups": row.fillUpPercent,
+            "% of Spend": row.spendPercent
+          }))
+        },
+        {
+          name: "Needs Attention",
+          rows: managementReport.needsAttention.map((log) => ({
+            Date: log.date,
+            Vehicle: log.canonicalVehicleReg,
+            Driver: log.driver || "-",
+            Station: log.location || log.canonicalLocationGroup,
+            Litres: log.litresAmount,
+            Spend: log.costAmount,
+            "Price Baht/L": log.calculatedPricePerLitre,
+            "Receipt Checked": log.receipt_checked ? "Yes" : "No",
+            Status: log.qualityStatus,
+            Issues: log.issues.join(", ")
+          }))
+        },
+        {
+          name: "Detailed Fuel Logs",
+          rows: managementReport.logs.map((log) => ({
+            Date: log.date,
+            Driver: log.driver,
+            Vehicle: log.canonicalVehicleReg,
+            Station: log.location,
+            "Station Group": log.canonicalLocationGroup,
+            "Fuel Type": log.fuel_type ?? "",
+            Mileage: Number(log.mileage ?? log.odometer) || null,
+            Litres: log.litresAmount,
+            "Total Cost": log.costAmount,
+            "Stored Price/L": Number(log.price_per_litre) || null,
+            "Calculated Price/L": log.calculatedPricePerLitre,
+            "Receipt Checked": log.receipt_checked ? "Yes" : "No",
+            Source: getEntrySourceLabel(log.entry_source, labels),
+            Notes: log.notes ?? "",
+            Issues: log.issues.join(", ")
+          }))
+        }
+      ],
+      "fuel-spend-management-report"
+    );
   };
 
   return (
@@ -382,9 +475,17 @@ export default function FuelSpendReportPage() {
             <button type="button" onClick={() => setFilters((current) => ({ ...current, checkedStatus: "not_checked" }))} className="btn-secondary w-full sm:w-auto">
               {labels.showUncheckedOnly}
             </button>
+            <button type="button" onClick={() => handleDownloadFuelSpendPdf(false)} disabled={!filteredLogs.length || exportingManagerPdf} className="btn-secondary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">
+              <FileText className="h-4 w-4" />
+              {exportingManagerPdf ? "Preparing..." : "Download Manager Summary PDF"}
+            </button>
+            <button type="button" onClick={() => handleDownloadFuelSpendPdf(true)} disabled={!filteredLogs.length || exportingFullPdf} className="btn-secondary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">
+              <FileText className="h-4 w-4" />
+              {exportingFullPdf ? "Preparing..." : "Download Full Fuel Report PDF"}
+            </button>
             <button type="button" onClick={exportReport} disabled={!filteredLogs.length} className="btn-secondary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">
               <Download className="h-4 w-4" />
-              {labels.export}
+              Export Excel
             </button>
           </div>
         </div>
@@ -398,6 +499,7 @@ export default function FuelSpendReportPage() {
             <div className="md:col-span-3">
               <label className="form-label">{labels.dateRangePreset}</label>
               <select value={filters.preset} onChange={(event) => updatePreset(event.target.value as DatePreset)} className="form-input bg-white">
+                <option value="today">Today</option>
                 <option value="this_week">{labels.thisWeek}</option>
                 <option value="this_month">{labels.thisMonth}</option>
                 <option value="last_month">{labels.lastMonth}</option>
@@ -423,6 +525,10 @@ export default function FuelSpendReportPage() {
               <label className="form-label">{labels.location}</label>
               <select value={filters.location} onChange={(event) => setFilters((current) => ({ ...current, location: event.target.value }))} className="form-input bg-white">
                 <option value="">{labels.allLocations}</option>
+                <option value="Bangchak">Bangchak</option>
+                <option value="Shell">Shell</option>
+                <option value="Best LPG">Best LPG</option>
+                <option value="Other">Other</option>
                 {locationOptions.map((location) => <option key={location} value={location}>{location}</option>)}
               </select>
             </div>
@@ -431,6 +537,13 @@ export default function FuelSpendReportPage() {
               <select value={filters.vehicleReg} onChange={(event) => setFilters((current) => ({ ...current, vehicleReg: event.target.value }))} className="form-input bg-white">
                 <option value="">{labels.allVehicles}</option>
                 {vehicleOptions.map((vehicle) => <option key={vehicle} value={vehicle}>{vehicle}</option>)}
+              </select>
+            </div>
+            <div className="md:col-span-3">
+              <label className="form-label">Fuel type</label>
+              <select value={filters.fuelType} onChange={(event) => setFilters((current) => ({ ...current, fuelType: event.target.value }))} className="form-input bg-white">
+                <option value="">{labels.all}</option>
+                {fuelTypeOptions.map((fuelType) => <option key={fuelType} value={fuelType}>{fuelType}</option>)}
               </select>
             </div>
             <div className="md:col-span-3">
@@ -447,20 +560,122 @@ export default function FuelSpendReportPage() {
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <SummaryCard label={labels.totalFuelSpend} value={formatBaht(summary.totalSpend)} />
-        <SummaryCard label={labels.topSpendingDriver} value={summary.topSpendingDriverName} secondaryValue={summary.entryCount > 0 ? formatBaht(summary.topSpendingDriverSpend) : "-"} />
+        <SummaryCard label="Highest spend vehicle" value={managementReport.highestSpendVehicle?.vehicleReg ?? "-"} secondaryValue={managementReport.highestSpendVehicle ? formatBaht(managementReport.highestSpendVehicle.spend) : "-"} />
         <SummaryCard label={labels.totalLitres} value={formatLitres(summary.totalLitres, language)} />
         <SummaryCard label={labels.averagePricePerLitre} value={formatPrice(summary.averagePricePerLitre)} />
         <SummaryCard label={labels.fuelEntries} value={formatNumber(summary.entryCount, language)} />
-        <SummaryCard label={labels.checkedEntries} value={formatNumber(summary.checkedEntries, language)} />
-        <SummaryCard label={labels.uncheckedEntries} value={formatNumber(summary.uncheckedEntries, language)} />
-        <SummaryCard label={labels.uncheckedSpend} value={formatBaht(summary.uncheckedSpend)} />
+        <SummaryCard label="Previous period change" value={formatSignedChange(managementReport.spendChangeAmount, language)} secondaryValue={formatPercent(managementReport.spendChangePercent, language)} />
+        <SummaryCard label="Bangchak regular fuel" value={formatPercent(managementReport.bangchakRegularFuelUsagePercent, language)} />
+        <SummaryCard label={labels.uncheckedSpend} value={formatBaht(summary.uncheckedSpend)} secondaryValue={`${formatNumber(summary.uncheckedEntries, language)} unchecked`} />
         <SummaryCard label={labels.mostUsedStation} value={summary.mostUsedStation} />
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="surface-card p-4 sm:p-5">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div>
+              <h3 className="section-title">What We Should Know</h3>
+              <div className="mt-3 space-y-2">
+                {managementReport.whatWeShouldKnow.map((item) => (
+                  <p key={item} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-sm text-slate-700">{item}</p>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h3 className="section-title">What We Should Review</h3>
+              <div className="mt-3 space-y-2">
+                {managementReport.whatWeShouldReview.map((item) => (
+                  <p key={item} className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">{item}</p>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="surface-card p-4 sm:p-5">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h3 className="section-title">Fuel Health</h3>
+            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${managementReport.reconciliationStatus === "Passed" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"}`}>
+              {managementReport.reconciliationStatus}
+            </span>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <StatusCard label="Clean Records" value={managementReport.statusCounts.normal} className="border-emerald-100 bg-emerald-50 text-emerald-800" />
+            <StatusCard label="Needs Checking" value={managementReport.statusCounts.monitor} className="border-amber-100 bg-amber-50 text-amber-800" />
+            <StatusCard label="Needs Correction" value={managementReport.statusCounts.attention} className="border-rose-100 bg-rose-50 text-rose-800" />
+          </div>
+          <p className="mt-3 text-xs text-slate-500">Statuses are based on fuel-record completeness, receipt checks, mileage validity, duplicate risk, price anomalies, and cost/litre reconciliation.</p>
+        </div>
       </section>
 
       <section className="grid gap-4 xl:grid-cols-2">
         <ChartPanel title={labels.spendByDriver} rows={spendByDriver} language={language} />
         <ChartPanel title={labels.spendByLocation} rows={spendByLocation} language={language} />
       </section>
+
+      <section className="grid gap-4 xl:grid-cols-2">
+        <ManagementTable
+          title="Station Performance"
+          emptyLabel={labels.noReportDataFound}
+          headers={["Station", "Fill-ups", "Litres", "Spend", "Avg ฿/L", "% Spend"]}
+          rows={managementReport.stationRows.map((row) => [
+            row.station,
+            formatNumber(row.fillUps, language),
+            formatLitres(row.litres, language),
+            formatBaht(row.spend),
+            formatPrice(row.weightedAveragePrice),
+            formatPercent(row.spendPercent, language)
+          ])}
+        />
+        <ManagementTable
+          title="Vehicle Fuel Performance"
+          emptyLabel={labels.noReportDataFound}
+          headers={["Vehicle", "Driver", "Logs", "Spend", "Distance", "km/L", "Cost/km"]}
+          rows={managementReport.vehicleRows.map((row) => [
+            row.vehicleReg,
+            row.driver,
+            formatNumber(row.fuelLogs, language),
+            formatBaht(row.spend),
+            row.distanceTravelled == null ? "Insufficient mileage data" : `${formatNumber(row.distanceTravelled, language, 0)} km`,
+            row.kmPerLitre == null ? "-" : formatNumber(row.kmPerLitre, language, 2),
+            row.fuelCostPerKm == null ? "-" : formatBaht(row.fuelCostPerKm)
+          ])}
+        />
+      </section>
+
+      <section className="surface-card p-4 sm:p-5">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h3 className="section-title">Data Quality</h3>
+            <p className="section-subtitle">Fuel log checks for the selected report filters.</p>
+          </div>
+          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${managementReport.reconciliationStatus === "Passed" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"}`}>
+            {managementReport.reconciliationStatus}
+          </span>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            ["Eligible fuel logs", managementReport.totalFillUps],
+            ["Included fuel logs", managementReport.totalFillUps],
+            ["Missing mileage", managementReport.qualityCounts.missing_mileage],
+            ["Unchecked receipts", managementReport.qualityCounts.unchecked_receipt],
+            ["Missing registration", managementReport.qualityCounts.missing_registration],
+            ["Missing driver", managementReport.qualityCounts.missing_driver],
+            ["Missing litres", managementReport.qualityCounts.missing_litres],
+            ["Missing total cost", managementReport.qualityCounts.missing_total_cost],
+            ["Missing price/litre", managementReport.qualityCounts.missing_price_per_litre],
+            ["Cost/litre mismatches", managementReport.qualityCounts.cost_litre_mismatch],
+            ["Possible duplicates", managementReport.qualityCounts.possible_duplicate],
+            ["Unusual price entries", managementReport.qualityCounts.unusual_price],
+            ["Non-Bangchak exceptions", managementReport.qualityCounts.non_bangchak_regular_fuel]
+          ].map(([label, value]) => (
+            <div key={label} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+              <p className="text-xs font-semibold uppercase text-slate-500">{label}</p>
+              <p className="mt-1 text-lg font-bold text-slate-950">{formatNumber(Number(value), language, 0)}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
 
       <section className="surface-card p-4 sm:p-5">
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -483,6 +698,7 @@ export default function FuelSpendReportPage() {
               <table className="min-w-[1360px] w-full text-sm">
                 <thead className="bg-slate-50/95 text-slate-600">
                   <tr>
+                    <th className="table-head-cell text-left">{labels.vehicleRegistration}</th>
                     <th className="table-head-cell text-left">{labels.driver}</th>
                     <th className="table-head-cell text-left">{labels.location}</th>
                     <SortableHeader label={labels.totalSpend} active={sortKey === "totalSpend"} onClick={() => setSortKey("totalSpend")} />
@@ -513,7 +729,8 @@ export default function FuelSpendReportPage() {
                             }
                           }}
                         >
-                          <td className="table-body-cell table-driver-name">{row.driver}</td>
+                          <td className="table-body-cell table-driver-name">{row.vehicleReg}</td>
+                          <td className="table-body-cell text-slate-700">{row.drivers.join(", ") || row.driver}</td>
                           <td className="table-body-cell text-slate-700">{row.location}</td>
                           <td className="table-body-cell text-right text-base font-bold text-slate-950">{formatBaht(row.totalSpend)}</td>
                           <td className="table-body-cell text-right font-medium text-slate-800">{formatLitres(row.totalLitres, language)}</td>
@@ -535,7 +752,7 @@ export default function FuelSpendReportPage() {
                         </tr>
                         {expanded ? (
                           <tr className="bg-slate-50/60">
-                            <td colSpan={10} className="px-4 py-4">
+                            <td colSpan={11} className="px-4 py-4">
                               <div className="rounded-2xl border border-slate-200 bg-white">
                                 <table className="min-w-full text-xs">
                                   <thead className="bg-slate-50 text-slate-500">
@@ -560,7 +777,7 @@ export default function FuelSpendReportPage() {
                                         <td className="px-3 py-2">{log.vehicle_reg}</td>
                                         <td className="px-3 py-2">{log.location}</td>
                                         <td className="px-3 py-2 text-right">{formatLitres(getSafeNumber(log.litres), language)}</td>
-                                        <td className="px-3 py-2 text-right font-semibold text-slate-900">{formatBaht(getSafeNumber(log.total_cost))}</td>
+                                        <td className="px-3 py-2 text-right font-semibold text-slate-900">{formatBaht(getFuelSpendReportLogCost(log))}</td>
                                         <td className="px-3 py-2 text-right">{formatPrice(getPricePerLitre(log))}</td>
                                         <td className="px-3 py-2">
                                           <span className={`inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getCheckedStatusBadgeClass(log.receipt_checked)}`}>
@@ -594,7 +811,7 @@ function buildChartRows(logs: FuelLogWithDriver[], key: "driver" | "location") {
   const totals = new Map<string, number>();
   logs.forEach((log) => {
     const label = String(log[key] || "-");
-    totals.set(label, (totals.get(label) ?? 0) + getSafeNumber(log.total_cost));
+    totals.set(label, (totals.get(label) ?? 0) + getFuelSpendReportLogCost(log));
   });
   return Array.from(totals.entries())
     .map(([label, value]) => ({ label, value }))
@@ -607,6 +824,47 @@ function SummaryCard({ label, value, secondaryValue }: { label: string; value: s
       <p className="metric-label">{label}</p>
       <p className="mt-2 truncate text-xl font-bold text-slate-950">{value}</p>
       {secondaryValue ? <p className="mt-1 text-sm font-semibold text-brand-700">{secondaryValue}</p> : null}
+    </div>
+  );
+}
+
+function StatusCard({ className, label, value }: { className: string; label: string; value: number }) {
+  return (
+    <div className={`rounded-xl border px-3 py-3 ${className}`}>
+      <p className="text-xs font-semibold uppercase">{label}</p>
+      <p className="mt-1 text-2xl font-bold">{value}</p>
+    </div>
+  );
+}
+
+function ManagementTable({ emptyLabel, headers, rows, title }: { emptyLabel: string; headers: string[]; rows: string[][]; title: string }) {
+  return (
+    <div className="surface-card p-4 sm:p-5">
+      <h3 className="section-title">{title}</h3>
+      {rows.length === 0 ? (
+        <div className="mt-4 flex min-h-[160px] items-center justify-center rounded-2xl border border-slate-100 bg-slate-50 text-sm text-slate-500">{emptyLabel}</div>
+      ) : (
+        <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
+          <table className="min-w-[720px] w-full text-sm">
+            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+              <tr>
+                {headers.map((header, index) => (
+                  <th key={header} className={`px-3 py-2 font-semibold ${index < 2 ? "text-left" : "text-right"}`}>{header}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.join("|")} className="border-t border-slate-100 text-slate-700">
+                  {row.map((cell, index) => (
+                    <td key={`${cell}-${index}`} className={`px-3 py-2 ${index === 0 ? "font-semibold text-slate-950" : ""} ${index < 2 ? "text-left" : "text-right"}`}>{cell}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,7 +1,19 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, CircleCheck, Copy, Download, History, Pencil, Plus, Trash2, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  CircleCheck,
+  Copy,
+  Download,
+  FileSpreadsheet,
+  History,
+  Pencil,
+  Plus,
+  Trash2,
+  X
+} from "lucide-react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { Header } from "@/components/header";
 import {
@@ -9,6 +21,7 @@ import {
   fetchDrivers,
   fetchOilChangeBaselinesForVehicles,
   fetchOilChangeHistory,
+  deleteOilChangeService,
   clearDataReadCache,
   fetchVehicles,
   fetchWeeklyMileage,
@@ -16,14 +29,17 @@ import {
   saveOilChangeService,
   saveWeeklyMileage
 } from "@/lib/data";
-import { exportToCsv } from "@/lib/export";
+import { exportToCsv, exportToXlsx, exportWorkbookToXlsx } from "@/lib/export";
 import { applyRequiredValidationMessage, clearValidationMessage } from "@/lib/form-validation";
 import { useLanguage } from "@/lib/language-provider";
 import { getEffectiveOilChangeIntervalForVehicleType, getOilChangeIntervalForVehicleType } from "@/lib/oil-change-service";
+import { safeLocalStorage } from "@/lib/safe-browser-storage";
 import { supabase } from "@/lib/supabase";
 import {
   buildDriverWeeklyComparisons,
   buildOilChangeAlertRows,
+  buildWeeklyDistanceHistoryRows,
+  buildWeeklyDistanceHistorySummary,
   buildWeeklyMileageSummary,
   computeWeeklyMileageByVehicle
 } from "@/lib/operations";
@@ -31,14 +47,15 @@ import { formatDate, formatNumber } from "@/lib/utils";
 import { buildWeeklyMileageComparisonReport } from "@/lib/weekly-mileage-report";
 import { buildWeeklyMileageComparisonPdf } from "@/lib/weekly-mileage-pdf";
 import type { Driver, OilChangeBaseline, Vehicle, VehicleServiceLog, WeeklyMileageEntry } from "@/types/database";
-import type { OilChangeAlertRow, OilChangeStatus } from "@/lib/operations";
+import type { OilChangeAlertRow, OilChangeStatus, WeeklyDistanceHistoryRow } from "@/lib/operations";
+import type { Language } from "@/lib/translations";
 
 const PAGE_SIZE = 25;
 const WEEKLY_MILEAGE_SELECTED_WEEK_KEY = "weekly-mileage-selected-week";
 const isValidDateKey = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
 const getStoredWeekEnding = () => {
   if (typeof window === "undefined") return "";
-  const stored = window.localStorage.getItem(WEEKLY_MILEAGE_SELECTED_WEEK_KEY) ?? "";
+  const stored = safeLocalStorage.getItem(WEEKLY_MILEAGE_SELECTED_WEEK_KEY) ?? "";
   return isValidDateKey(stored) ? stored : "";
 };
 const createInitialForm = (weekEnding = "") => ({
@@ -77,10 +94,8 @@ const odometerBaselineCopy = {
 
 const getServiceLogSortTime = (log: VehicleServiceLog) => {
   const serviceDateTime = log.service_date ? new Date(log.service_date).getTime() : Number.NEGATIVE_INFINITY;
-  const createdAtTime = log.created_at ? new Date(log.created_at).getTime() : Number.NEGATIVE_INFINITY;
   return {
-    serviceDateTime: Number.isNaN(serviceDateTime) ? Number.NEGATIVE_INFINITY : serviceDateTime,
-    createdAtTime: Number.isNaN(createdAtTime) ? Number.NEGATIVE_INFINITY : createdAtTime
+    serviceDateTime: Number.isNaN(serviceDateTime) ? Number.NEGATIVE_INFINITY : serviceDateTime
   };
 };
 
@@ -89,8 +104,6 @@ const compareServiceLogsByLatest = (left: VehicleServiceLog, right: VehicleServi
   const rightTime = getServiceLogSortTime(right);
   const serviceDateDiff = rightTime.serviceDateTime - leftTime.serviceDateTime;
   if (serviceDateDiff !== 0) return serviceDateDiff;
-  const createdAtDiff = rightTime.createdAtTime - leftTime.createdAtTime;
-  if (createdAtDiff !== 0) return createdAtDiff;
   return String(right.id).localeCompare(String(left.id));
 };
 
@@ -98,6 +111,7 @@ type OilActionMode = "set" | "edit" | "mark";
 type OilFilter = "all" | "overdue" | "urgent" | "due_soon" | "review_required" | "not_set" | "ok";
 type WeeklyMileageUpdateFilter = "all" | "updated_this_week" | "not_updated_this_week";
 type OilReportScope = "all" | "overdue" | "urgent_overdue" | "due_soon" | "review_required";
+type WeeklyDistanceHistoryFilter = "all" | "last4" | "last8" | "last12" | "year" | "custom";
 type WeeklyMileageDebugInfo = {
   userEmail: string | null;
   userId: string | null;
@@ -117,6 +131,26 @@ type OilServicePdfLogo = {
   dataUrl: string | null;
   height?: number;
   width?: number;
+};
+type WeeklyDistanceHistoryPdfRow = {
+  changePercent: string;
+  distance: string;
+  missing: string;
+  rawDistance: number;
+  vehicleEntries: string;
+  weekEnding: string;
+};
+type WeeklyDistanceHistoryPdfData = {
+  generatedAt: string;
+  rangeLabel: string;
+  rows: WeeklyDistanceHistoryPdfRow[];
+  summary: {
+    averageWeeklyDistance: string;
+    highestWeek: string;
+    lowestWeek: string;
+    totalDistance: string;
+  };
+  title: string;
 };
 type OilServicePdfRow = {
   currentOdometer: string;
@@ -478,6 +512,202 @@ function downloadBlob(blob: Blob, fileName: string) {
   anchor.click();
   anchor.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function buildWeeklyDistanceHistoryPdf(
+  data: WeeklyDistanceHistoryPdfData,
+  logo: OilServicePdfLogo,
+  language: OilServicePdfLanguage
+) {
+  if (language === "th") {
+    await loadOilServicePdfThaiFont();
+  }
+
+  const pageWidth = 595;
+  const pageHeight = 842;
+  const scale = 2;
+  const margin = 38;
+  const contentWidth = pageWidth - margin * 2;
+  const fontFamily = getOilServicePdfFontFamily(language);
+  const isThai = language === "th";
+  const color = {
+    border: "#cbd5e1",
+    header: "#0f172a",
+    muted: "#64748b",
+    primary: "#2563eb",
+    primaryLight: "#dbeafe",
+    tableStripe: "#f8fafc",
+    text: "#1e293b"
+  };
+  const pageImages: Array<{ data: string; height: number; width: number }> = [];
+  const logoImage = logo.dataUrl ? await loadCanvasImage(logo.dataUrl) : null;
+  let canvas = document.createElement("canvas");
+  let context = canvas.getContext("2d")!;
+  let y = margin;
+
+  const setFont = (size: number, weight = 500) => {
+    context.font = `${weight} ${size * scale}px ${fontFamily}`;
+  };
+  const fillText = (text: string, x: number, lineY: number, options?: { color?: string; size?: number; weight?: number }) => {
+    context.fillStyle = options?.color ?? color.text;
+    setFont(options?.size ?? 8.5, options?.weight ?? 500);
+    context.fillText(text, x * scale, lineY * scale);
+  };
+  const rect = (x: number, rectY: number, width: number, height: number, fill: string, stroke = color.border) => {
+    context.fillStyle = fill;
+    context.strokeStyle = stroke;
+    context.lineWidth = 1 * scale;
+    context.fillRect(x * scale, rectY * scale, width * scale, height * scale);
+    context.strokeRect(x * scale, rectY * scale, width * scale, height * scale);
+  };
+  const finishPage = () => {
+    pageImages.push({
+      data: binaryStringFromDataUrl(canvas.toDataURL("image/jpeg", 0.92)),
+      height: canvas.height,
+      width: canvas.width
+    });
+  };
+  const startPage = () => {
+    canvas = document.createElement("canvas");
+    canvas.width = pageWidth * scale;
+    canvas.height = pageHeight * scale;
+    context = canvas.getContext("2d")!;
+    context.scale(scale, scale);
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, pageWidth, pageHeight);
+    context.scale(1 / scale, 1 / scale);
+    y = margin;
+
+    if (logoImage) {
+      const logoWidth = Math.min(110, logo.width ?? 110);
+      const logoHeight = logo.height && logo.width ? logoWidth * (logo.height / logo.width) : 32;
+      context.drawImage(logoImage, margin * scale, y * scale, logoWidth * scale, logoHeight * scale);
+    }
+
+    fillText("EXPERT EXPRESS", pageWidth - margin - 142, y + 11, { color: color.header, size: 12, weight: 800 });
+    fillText(data.title, margin, y + 54, { color: color.header, size: isThai ? 15 : 17, weight: 800 });
+    fillText(data.rangeLabel, margin, y + 73, { color: color.muted, size: 8.5, weight: 600 });
+    fillText(data.generatedAt, pageWidth - margin - 150, y + 73, { color: color.muted, size: 7.5, weight: 500 });
+    y += 92;
+  };
+
+  startPage();
+
+  const summaryCards = [
+    ["Total Distance", data.summary.totalDistance],
+    ["Average Weekly Distance", data.summary.averageWeeklyDistance],
+    ["Highest Week", data.summary.highestWeek],
+    ["Lowest Week", data.summary.lowestWeek]
+  ];
+  const cardWidth = (contentWidth - 18) / 4;
+  summaryCards.forEach(([label, value], index) => {
+    const x = margin + index * (cardWidth + 6);
+    rect(x, y, cardWidth, 54, index === 0 ? color.primaryLight : "#ffffff");
+    fillText(label, x + 8, y + 17, { color: color.muted, size: 6.7, weight: 700 });
+    fillText(value, x + 8, y + 38, { color: color.header, size: index === 0 ? 10.5 : 8.2, weight: 800 });
+  });
+  y += 76;
+
+  if (data.rows.length > 1) {
+    const chartHeight = 144;
+    const chartX = margin;
+    const chartY = y;
+    const chartW = contentWidth;
+    const chartH = chartHeight;
+    const chartRows = [...data.rows].reverse();
+    const maxDistance = Math.max(...chartRows.map((row) => row.rawDistance), 1);
+    rect(chartX, chartY, chartW, chartH, "#ffffff");
+    context.strokeStyle = "#e2e8f0";
+    context.lineWidth = 1 * scale;
+    for (let step = 1; step < 4; step += 1) {
+      const gridY = chartY + (chartH / 4) * step;
+      context.beginPath();
+      context.moveTo((chartX + 12) * scale, gridY * scale);
+      context.lineTo((chartX + chartW - 12) * scale, gridY * scale);
+      context.stroke();
+    }
+    const points = chartRows.map((row, index) => {
+      const x = chartRows.length === 1 ? chartX + chartW / 2 : chartX + 18 + (index / (chartRows.length - 1)) * (chartW - 36);
+      const yPoint = chartY + chartH - 22 - (row.rawDistance / maxDistance) * (chartH - 44);
+      return { x, y: yPoint };
+    });
+    const averageDistance = chartRows.reduce((sum, row) => sum + row.rawDistance, 0) / chartRows.length;
+    const averageY = chartY + chartH - 22 - (averageDistance / maxDistance) * (chartH - 44);
+    context.setLineDash([4 * scale, 4 * scale]);
+    context.strokeStyle = "#94a3b8";
+    context.lineWidth = 1 * scale;
+    context.beginPath();
+    context.moveTo((chartX + 12) * scale, averageY * scale);
+    context.lineTo((chartX + chartW - 12) * scale, averageY * scale);
+    context.stroke();
+    context.setLineDash([]);
+    fillText(`Average ${Math.round(averageDistance).toLocaleString("en-GB")} km`, chartX + chartW - 130, averageY - 5, {
+      color: color.muted,
+      size: 6.5,
+      weight: 700
+    });
+    context.strokeStyle = color.primary;
+    context.lineWidth = 2.4 * scale;
+    context.beginPath();
+    points.forEach((point, index) => {
+      if (index === 0) context.moveTo(point.x * scale, point.y * scale);
+      else context.lineTo(point.x * scale, point.y * scale);
+    });
+    context.stroke();
+    points.forEach((point) => {
+      context.fillStyle = color.primary;
+      context.beginPath();
+      context.arc(point.x * scale, point.y * scale, 3.2 * scale, 0, Math.PI * 2);
+      context.fill();
+    });
+    fillText(chartRows[0]?.weekEnding ?? "", chartX + 10, chartY + chartH - 7, { color: color.muted, size: 6.5 });
+    fillText(chartRows[chartRows.length - 1]?.weekEnding ?? "", chartX + chartW - 78, chartY + chartH - 7, { color: color.muted, size: 6.5 });
+    y += chartHeight + 24;
+  }
+
+  const columns = [
+    { label: "Week", width: 118 },
+    { label: "Entries", width: 104 },
+    { label: "Missing", width: 78 },
+    { label: "Distance", width: 116 },
+    { label: "Change %", width: contentWidth - 416 }
+  ];
+  const drawTableHeader = () => {
+    rect(margin, y, contentWidth, 24, color.header, color.header);
+    let x = margin;
+    columns.forEach((column) => {
+      fillText(column.label, x + 8, y + 16, { color: "#ffffff", size: 6.8, weight: 800 });
+      x += column.width;
+    });
+    y += 24;
+  };
+  const ensureTableSpace = () => {
+    if (y <= pageHeight - margin - 28) return;
+    finishPage();
+    startPage();
+    drawTableHeader();
+  };
+
+  drawTableHeader();
+  data.rows.forEach((row, index) => {
+    ensureTableSpace();
+    const incomplete = row.missing !== "-";
+    rect(margin, y, contentWidth, 24, incomplete ? "#fff7ed" : index % 2 === 0 ? "#ffffff" : color.tableStripe);
+    const values = [row.weekEnding, row.vehicleEntries, row.missing, row.distance, row.changePercent];
+    let x = margin;
+    values.forEach((value, columnIndex) => {
+      fillText(value, x + 8, y + 16, {
+        color: columnIndex === 2 ? color.header : color.text,
+        size: 7.2,
+        weight: columnIndex === 2 ? 800 : 600
+      });
+      x += columns[columnIndex].width;
+    });
+    y += 24;
+  });
+
+  finishPage();
+  return buildImagePagesPdf(pageImages, { height: pageHeight, width: pageWidth });
 }
 
 async function buildOilServicePdf(data: OilServicePdfData, logo: OilServicePdfLogo, language: OilServicePdfLanguage) {
@@ -1148,6 +1378,12 @@ export default function WeeklyMileagePage() {
   const [generatingOilServicePdf, setGeneratingOilServicePdf] = useState(false);
   const [generatingLastOilChangesPdf, setGeneratingLastOilChangesPdf] = useState(false);
   const [generatingWeeklyMileagePdf, setGeneratingWeeklyMileagePdf] = useState(false);
+  const [generatingWeeklyDistanceHistoryPdf, setGeneratingWeeklyDistanceHistoryPdf] = useState(false);
+  const [weeklyDistanceHistoryOpen, setWeeklyDistanceHistoryOpen] = useState(true);
+  const [weeklyDistanceHistoryFilter, setWeeklyDistanceHistoryFilter] = useState<WeeklyDistanceHistoryFilter>("last12");
+  const [weeklyDistanceHistoryFrom, setWeeklyDistanceHistoryFrom] = useState("");
+  const [weeklyDistanceHistoryTo, setWeeklyDistanceHistoryTo] = useState("");
+  const [expandedWeeklyDistanceWeek, setExpandedWeeklyDistanceWeek] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [savingService, setSavingService] = useState(false);
   const [oilFilter, setOilFilter] = useState<OilFilter>("all");
@@ -1159,14 +1395,18 @@ export default function WeeklyMileagePage() {
     vehicleName: string;
     vehicleType: string | null;
     currentOdometer: number | null;
+    currentOdometerDate?: string | null;
     serviceLogId?: string | null;
   } | null>(null);
   const [serviceForm, setServiceForm] = useState({
+    vehicleReg: "",
+    serviceType: "oil_change",
     serviceDate: "",
     serviceOdometer: "",
     intervalKm: "",
     notes: ""
   });
+  const [deletingServiceLogId, setDeletingServiceLogId] = useState<string | null>(null);
   const [historyVehicleReg, setHistoryVehicleReg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -1311,7 +1551,50 @@ export default function WeeklyMileagePage() {
   );
 
   const weeklyVehicleRows = useMemo(() => computeWeeklyMileageByVehicle(sortedEntries), [sortedEntries]);
-  const weeklySummaryRows = useMemo(() => buildWeeklyMileageSummary(sortedEntries), [sortedEntries]);
+  const weeklySummaryRows = useMemo(
+    () => buildWeeklyMileageSummary(sortedEntries, vehicles, drivers),
+    [drivers, sortedEntries, vehicles]
+  );
+  const weeklyDistanceHistoryRows = useMemo(
+    () => buildWeeklyDistanceHistoryRows(sortedEntries, vehicles, drivers),
+    [drivers, sortedEntries, vehicles]
+  );
+  const activeWeeklyDistanceHistoryFilter =
+    weeklyDistanceHistoryRows.length <= 12 && weeklyDistanceHistoryFilter === "last12"
+      ? "all"
+      : weeklyDistanceHistoryFilter;
+  const filteredWeeklyDistanceHistoryRows = useMemo(() => {
+    if (activeWeeklyDistanceHistoryFilter === "last4") {
+      return weeklyDistanceHistoryRows.slice(0, 4);
+    }
+    if (activeWeeklyDistanceHistoryFilter === "last8") {
+      return weeklyDistanceHistoryRows.slice(0, 8);
+    }
+    if (activeWeeklyDistanceHistoryFilter === "last12") {
+      return weeklyDistanceHistoryRows.slice(0, 12);
+    }
+    if (activeWeeklyDistanceHistoryFilter === "year") {
+      const currentYear = String(new Date().getFullYear());
+      return weeklyDistanceHistoryRows.filter((row) => row.weekEnding.slice(0, 4) === currentYear);
+    }
+    if (activeWeeklyDistanceHistoryFilter === "custom") {
+      return weeklyDistanceHistoryRows.filter((row) => {
+        const afterStart = weeklyDistanceHistoryFrom ? row.weekEnding >= weeklyDistanceHistoryFrom : true;
+        const beforeEnd = weeklyDistanceHistoryTo ? row.weekEnding <= weeklyDistanceHistoryTo : true;
+        return afterStart && beforeEnd;
+      });
+    }
+    return weeklyDistanceHistoryRows;
+  }, [
+    activeWeeklyDistanceHistoryFilter,
+    weeklyDistanceHistoryFrom,
+    weeklyDistanceHistoryRows,
+    weeklyDistanceHistoryTo
+  ]);
+  const weeklyDistanceHistorySummary = useMemo(
+    () => buildWeeklyDistanceHistorySummary(filteredWeeklyDistanceHistoryRows),
+    [filteredWeeklyDistanceHistoryRows]
+  );
   const driverComparisonRows = useMemo(
     () => buildDriverWeeklyComparisons(sortedEntries),
     [sortedEntries]
@@ -1439,6 +1722,11 @@ export default function WeeklyMileagePage() {
   );
   const selectedWeekSummary =
     weeklySummaryRows.find((row) => row.weekEnding === selectedWeekValue) ?? weeklySummaryRows[0] ?? null;
+  const selectedWeekHistoryRow = weeklyDistanceHistoryRows.find((row) => row.weekEnding === selectedWeekValue) ?? null;
+  const selectedWeekHistoryMatchesSummary =
+    !selectedWeekSummary ||
+    !selectedWeekHistoryRow ||
+    selectedWeekHistoryRow.weeklyDistance === selectedWeekSummary.weeklyDistance;
   const selectedWeekTotalPages = Math.max(1, Math.ceil(selectedWeekEntries.length / PAGE_SIZE));
   const pagedEntries = useMemo(() => {
     const safePage = Math.min(tablePage, selectedWeekTotalPages);
@@ -1638,7 +1926,7 @@ export default function WeeklyMileagePage() {
   const rememberWeekEnding = (weekEnding: string) => {
     if (typeof window === "undefined") return;
     if (isValidDateKey(weekEnding)) {
-      window.localStorage.setItem(WEEKLY_MILEAGE_SELECTED_WEEK_KEY, weekEnding);
+      safeLocalStorage.setItem(WEEKLY_MILEAGE_SELECTED_WEEK_KEY, weekEnding);
     }
   };
 
@@ -1875,7 +2163,7 @@ export default function WeeklyMileagePage() {
       return null;
     }
 
-    const usedKm = row.currentOdometer - row.lastOilChangeOdometer;
+    const usedKm = row.kmUsedSinceOilChange ?? row.currentOdometer - row.lastOilChangeOdometer;
     const safeUsedKm = Math.max(0, usedKm);
     const realPercent = (safeUsedKm / row.oilChangeIntervalKm) * 100;
     const displayPercent =
@@ -1889,7 +2177,8 @@ export default function WeeklyMileagePage() {
     return {
       realPercent,
       displayPercent,
-      barPercent
+      barPercent,
+      usedKm: safeUsedKm
     };
   };
 
@@ -1933,6 +2222,35 @@ export default function WeeklyMileagePage() {
   const formatKmValue = (value: number | null) =>
     value != null && Number.isFinite(value) ? formatNumber(value, language) : "-";
 
+  const formatSignedKm = (value: number | null) =>
+    value == null || !Number.isFinite(value)
+      ? "-"
+      : `${value > 0 ? "+" : ""}${formatNumber(value, language, 0)} KM`;
+
+  const formatPercentValue = (value: number | null) =>
+    value == null || !Number.isFinite(value)
+      ? "-"
+      : `${value > 0 ? "+" : ""}${formatNumber(value, language, 1)}%`;
+
+  const formatWeekChangeLabel = (row: { previousWeekEnding: string | null; weekOnWeekChangePercent: number | null }) => {
+    if (!row.previousWeekEnding || row.weekOnWeekChangePercent == null) {
+      return weeklyDistanceHistoryCopy.noPreviousWeek;
+    }
+    const direction = row.weekOnWeekChangePercent > 0 ? "up" : row.weekOnWeekChangePercent < 0 ? "down" : "flat";
+    const arrow = direction === "up" ? "↑" : direction === "down" ? "↓" : "→";
+    return `${arrow} ${formatNumber(Math.abs(row.weekOnWeekChangePercent), language, 1)}% vs ${formatDate(row.previousWeekEnding, language)}`;
+  };
+
+  const changeToneClass = (value: number | null) =>
+    value == null || value === 0
+      ? "text-slate-500"
+      : value > 0
+        ? "text-emerald-700"
+        : "text-rose-700";
+
+  const formatCompleteness = (valid: number, expected: number) =>
+    `${formatNumber(valid, language, 0)} / ${formatNumber(expected, language, 0)}`;
+
   const parseDateValue = (value: string | null | undefined) => {
     if (!value) return null;
     const isoDateMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -1958,7 +2276,13 @@ export default function WeeklyMileagePage() {
     return t.weeklyMileage.oil.addedDaysAgo.replace("{days}", formatNumber(days, language));
   };
 
-  const todayKey = () => new Date().toISOString().slice(0, 10);
+  const todayKey = () =>
+    new Intl.DateTimeFormat("en-CA", {
+      day: "2-digit",
+      month: "2-digit",
+      timeZone: "Asia/Bangkok",
+      year: "numeric"
+    }).format(new Date());
   const getLatestServiceLog = (registration: string) =>
     serviceLogsByVehicle.get(normalizeReg(registration))?.[0] ?? null;
   const getVehicleBaselineHistoryLog = (registration: string): VehicleServiceLog | null => {
@@ -2016,7 +2340,9 @@ export default function WeeklyMileagePage() {
         row.oilChangeIntervalKm ?? latestLog?.interval_km ?? getOilChangeIntervalForVehicleType(row.vehicleType)
       );
     const defaultDate =
-      mode === "mark" ? todayKey() : row.lastOilChangeDate ?? latestLog?.service_date ?? todayKey();
+      mode === "edit"
+        ? row.lastOilChangeDate ?? latestLog?.service_date ?? row.lastWeeklyMileageDate ?? todayKey()
+        : row.lastWeeklyMileageDate ?? todayKey();
     const defaultOdometer =
       mode === "mark"
         ? row.currentOdometer ?? row.lastOilChangeOdometer ?? ""
@@ -2025,10 +2351,12 @@ export default function WeeklyMileagePage() {
     setError(null);
     setSuccessMessage(null);
     setServiceForm({
+      vehicleReg: row.registration,
+      serviceType: latestLog?.service_type ?? "oil_change",
       serviceDate: defaultDate,
       serviceOdometer: defaultOdometer === "" ? "" : String(defaultOdometer),
       intervalKm: defaultInterval != null ? String(defaultInterval) : "",
-      notes: ""
+      notes: mode === "edit" ? latestLog?.notes ?? "" : ""
     });
     setServiceModal({
       mode,
@@ -2037,14 +2365,45 @@ export default function WeeklyMileagePage() {
       vehicleName: row.vehicleName,
       vehicleType: row.vehicleType,
       currentOdometer: row.currentOdometer,
+      currentOdometerDate: row.currentOdometerDate,
       serviceLogId: mode === "edit" ? latestLog?.id ?? null : null
+    });
+  };
+
+  const openServiceLogModal = (log: VehicleServiceLog) => {
+    const matchingRow = oilChangeRows.find((row) => normalizeReg(row.registration) === normalizeReg(log.vehicle_reg)) ?? null;
+    const odometer = Number(log.oil_change_odometer ?? log.odometer ?? log.service_odometer);
+    const intervalKm =
+      log.interval_km ??
+      matchingRow?.oilChangeIntervalKm ??
+      getOilChangeIntervalForVehicleType(log.vehicle_type_snapshot ?? matchingRow?.vehicleType);
+
+    setError(null);
+    setSuccessMessage(null);
+    setServiceForm({
+      vehicleReg: log.vehicle_reg,
+      serviceType: log.service_type || "oil_change",
+      serviceDate: log.service_date,
+      serviceOdometer: Number.isFinite(odometer) ? String(Math.trunc(odometer)) : "",
+      intervalKm: intervalKm != null ? String(Math.trunc(Number(intervalKm))) : "",
+      notes: log.notes ?? ""
+    });
+    setServiceModal({
+      mode: "edit",
+      vehicleId: log.vehicle_id ?? matchingRow?.vehicleId ?? null,
+      registration: log.vehicle_reg,
+      vehicleName: matchingRow?.vehicleName ?? log.vehicle_reg,
+      vehicleType: log.vehicle_type_snapshot ?? matchingRow?.vehicleType ?? null,
+      currentOdometer: matchingRow?.currentOdometer ?? null,
+      currentOdometerDate: matchingRow?.currentOdometerDate ?? null,
+      serviceLogId: log.id
     });
   };
 
   const closeServiceModal = () => {
     if (savingService) return;
     setServiceModal(null);
-    setServiceForm({ serviceDate: "", serviceOdometer: "", intervalKm: "", notes: "" });
+    setServiceForm({ vehicleReg: "", serviceType: "oil_change", serviceDate: "", serviceOdometer: "", intervalKm: "", notes: "" });
   };
 
   const handleSaveService = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -2056,24 +2415,94 @@ export default function WeeklyMileagePage() {
       setError(null);
       setSuccessMessage(null);
       const serviceOdometer = Number(serviceForm.serviceOdometer);
-      const isLowerThanCurrent =
-        serviceModal.currentOdometer != null &&
+      const targetRegistration = serviceForm.vehicleReg.trim() || serviceModal.registration;
+      const matchingOilRow = oilChangeRows.find((row) => normalizeReg(row.registration) === normalizeReg(targetRegistration)) ?? null;
+      const latestKnownOdometer = matchingOilRow?.currentOdometer ?? serviceModal.currentOdometer;
+      const latestKnownDate = matchingOilRow?.currentOdometerDate ?? serviceModal.currentOdometerDate ?? null;
+      const isHigherThanCurrent =
+        latestKnownOdometer != null &&
         Number.isFinite(serviceOdometer) &&
-        serviceOdometer < serviceModal.currentOdometer;
-      if (isLowerThanCurrent) {
-        const confirmed = window.confirm(t.weeklyMileage.oil.confirmLowerOilChangeOdometer);
+        serviceOdometer > latestKnownOdometer;
+      if (isHigherThanCurrent) {
+        const diff = Math.trunc(serviceOdometer - Number(latestKnownOdometer));
+        const confirmed = window.confirm(
+          `Oil change mileage is ${formatNumber(diff, language)} km higher than the latest recorded odometer of ${formatKmValue(latestKnownOdometer)}${latestKnownDate ? ` on ${formatDate(latestKnownDate, language)}` : ""}. Please confirm this is correct.`
+        );
+        if (!confirmed) {
+          return;
+        }
+      }
+      const previousOilChangeLog = (serviceLogsByVehicle.get(normalizeReg(targetRegistration)) ?? [])
+        .filter((log) => log.id !== serviceModal.serviceLogId)
+        .filter((log) => log.service_type === "oil_change" || !log.service_type)
+        .filter((log) => !serviceForm.serviceDate || log.service_date <= serviceForm.serviceDate)
+        .sort(compareServiceLogsByLatest)[0] ?? null;
+      const previousOilChangeOdometer = previousOilChangeLog
+        ? Number(previousOilChangeLog.oil_change_odometer ?? previousOilChangeLog.odometer ?? previousOilChangeLog.service_odometer)
+        : null;
+      if (
+        previousOilChangeOdometer != null &&
+        Number.isFinite(previousOilChangeOdometer) &&
+        Number.isFinite(serviceOdometer) &&
+        serviceOdometer < previousOilChangeOdometer
+      ) {
+        const confirmed = window.confirm(
+          `Oil change mileage is lower than the previous oil-change odometer of ${formatKmValue(previousOilChangeOdometer)} on ${formatDate(previousOilChangeLog!.service_date, language)}. Please confirm this is correct.`
+        );
+        if (!confirmed) {
+          return;
+        }
+      }
+      const serviceDateAfterLatestMileage =
+        latestKnownOdometer != null &&
+        latestKnownDate &&
+        serviceForm.serviceDate &&
+        serviceForm.serviceDate > latestKnownDate;
+      const newerOilChangeLog =
+        serviceModal.mode === "edit"
+          ? (serviceLogsByVehicle.get(normalizeReg(targetRegistration)) ?? []).find(
+              (log) =>
+                log.id !== serviceModal.serviceLogId &&
+                (!log.service_type || log.service_type === "oil_change") &&
+                log.service_date > serviceForm.serviceDate
+            ) ?? null
+          : null;
+      if (serviceDateAfterLatestMileage) {
+        const confirmed = window.confirm(
+          `Oil change date ${formatDate(serviceForm.serviceDate, language)} is after the latest weekly mileage date ${formatDate(latestKnownDate, language)}. Add a newer mileage reading or confirm this service record is correct.`
+        );
+        if (!confirmed) {
+          return;
+        }
+      }
+      if (newerOilChangeLog) {
+        const newerOdometer = Number(newerOilChangeLog.oil_change_odometer ?? newerOilChangeLog.odometer ?? newerOilChangeLog.service_odometer);
+        const confirmed = window.confirm(
+          `A newer oil-change record still exists for ${targetRegistration}: ${formatDate(newerOilChangeLog.service_date, language)} at ${Number.isFinite(newerOdometer) ? formatKmValue(newerOdometer) : "-"} km. The summary card uses the most recent service date, so that newer row will still control the card until it is edited or deleted. Continue saving this older record?`
+        );
         if (!confirmed) {
           return;
         }
       }
       const notes = [
         serviceForm.notes.trim(),
-        isLowerThanCurrent ? t.weeklyMileage.oil.lowerThanCurrentConfirmed : ""
+        isHigherThanCurrent ? "Admin confirmed oil-change mileage is above the latest weekly mileage." : "",
+        previousOilChangeOdometer != null && serviceOdometer < previousOilChangeOdometer
+          ? "Admin confirmed oil-change mileage is lower than the previous service record."
+          : "",
+        serviceDateAfterLatestMileage ? "Admin confirmed service date is after the latest weekly mileage date." : "",
+        newerOilChangeLog
+          ? "Admin confirmed a newer oil-change service record still exists and will continue to control the summary card."
+          : ""
       ].filter(Boolean).join(" | ");
       const servicePayload = {
-        vehicleId: serviceModal.vehicleId,
-        vehicleReg: serviceModal.registration,
+        vehicleId:
+          normalizeReg(targetRegistration) === normalizeReg(serviceModal.registration)
+            ? serviceModal.vehicleId
+            : null,
+        vehicleReg: targetRegistration,
         vehicleName: serviceModal.vehicleName,
+        serviceType: serviceForm.serviceType,
         vehicleType: serviceModal.vehicleType,
         serviceDate: serviceForm.serviceDate,
         serviceOdometer,
@@ -2094,7 +2523,7 @@ export default function WeeklyMileagePage() {
             : t.weeklyMileage.notifications.oilBaselineSaved
       );
       setServiceModal(null);
-      setServiceForm({ serviceDate: "", serviceOdometer: "", intervalKm: "", notes: "" });
+      setServiceForm({ vehicleReg: "", serviceType: "oil_change", serviceDate: "", serviceOdometer: "", intervalKm: "", notes: "" });
     } catch (err) {
       console.error("Oil service save error:", err);
       setError(err instanceof Error && err.message ? err.message : t.weeklyMileage.notifications.serviceSaveFailed);
@@ -2106,6 +2535,36 @@ export default function WeeklyMileagePage() {
   const openServiceHistory = async (registration: string) => {
     setHistoryVehicleReg(registration);
     await loadData();
+  };
+
+  const handleDeleteServiceLog = async (log: VehicleServiceLog) => {
+    if (log.id.startsWith("vehicle-baseline-") || log.id.startsWith("baseline-")) {
+      setError("This baseline comes from the vehicle record. Edit or add an oil-change service record instead.");
+      return;
+    }
+    const confirmed = window.confirm("Delete this oil change record?");
+    if (!confirmed) return;
+
+    try {
+      setDeletingServiceLogId(log.id);
+      setError(null);
+      setSuccessMessage(null);
+      const matchingRow = oilChangeRows.find((row) => normalizeReg(row.registration) === normalizeReg(log.vehicle_reg)) ?? null;
+      await deleteOilChangeService({
+        serviceLogId: log.id,
+        vehicleId: log.vehicle_id ?? matchingRow?.vehicleId ?? null,
+        vehicleReg: log.vehicle_reg,
+        vehicleName: matchingRow?.vehicleName ?? log.vehicle_reg,
+        vehicleType: log.vehicle_type_snapshot ?? matchingRow?.vehicleType ?? null
+      });
+      await loadData();
+      setSuccessMessage("Oil change deleted successfully.");
+    } catch (err) {
+      console.error("Oil service delete error:", err);
+      setError(err instanceof Error && err.message ? err.message : "Unable to delete oil change service record.");
+    } finally {
+      setDeletingServiceLogId(null);
+    }
   };
 
   const selectedHistoryRow = historyVehicleReg
@@ -2277,6 +2736,207 @@ export default function WeeklyMileagePage() {
         generating: "Generating PDF...",
         insufficient: "There are no mileage entries for the selected reporting week, so a comparison report cannot be generated yet."
       };
+
+  const weeklyDistanceHistoryCopy = language === "th"
+    ? {
+        all: "ทั้งหมด",
+        averageWeeklyDistance: "ระยะทางเฉลี่ยต่อสัปดาห์",
+        averageLine: "ค่าเฉลี่ยช่วงที่เลือก",
+        changeKm: "เปลี่ยนแปลง (กม.)",
+        changePercent: "เปลี่ยนแปลง %",
+        complete: "ครบ",
+        custom: "กำหนดช่วงเอง",
+        customRange: "ช่วงวันที่กำหนด",
+        description: "ประวัติ Weekly Distance Covered จากข้อมูล Weekly Mileage ทุกสัปดาห์",
+        distance: "ระยะทาง",
+        downloadPdf: "ดาวน์โหลด PDF ประวัติระยะทาง",
+        error: "ไม่สามารถสร้างรายงานประวัติระยะทางได้",
+        excluded: "รายการที่ไม่รวม",
+        excelGenerated: "ส่งออก Excel ประวัติระยะทางแล้ว",
+        exportExcel: "ส่งออก Excel",
+        fromDate: "จากวันที่",
+        generated: "ดาวน์โหลด PDF ประวัติระยะทางแล้ว",
+        generating: "กำลังสร้าง PDF...",
+        highestWeek: "สัปดาห์สูงสุด",
+        last12: "12 สัปดาห์ล่าสุด",
+        last4: "4 สัปดาห์ล่าสุด",
+        last8: "8 สัปดาห์ล่าสุด",
+        lowestWeek: "สัปดาห์ต่ำสุด",
+        missing: "ขาด",
+        missingEntries: "รายการที่ขาด",
+        noPreviousWeek: "ไม่มีสัปดาห์ก่อนหน้าให้เปรียบเทียบ",
+        noHistory: "ยังไม่มีประวัติระยะทางรายสัปดาห์",
+        open: "ประวัติระยะทางรายสัปดาห์",
+        previousOdometer: "เลขไมล์ก่อนหน้า",
+        currentOdometer: "เลขไมล์ปัจจุบัน",
+        range: "ช่วงรายงาน",
+        reportingWeek: "สัปดาห์รายงาน",
+        reviewVehicles: "ต้องตรวจสอบ",
+        status: "สถานะ",
+        tableTitle: "ตารางประวัติระยะทาง",
+        thisYear: "ปีนี้",
+        title: "Weekly Distance History Report",
+        toDate: "ถึงวันที่",
+        totalDistance: "ระยะทางรวม",
+        trendTitle: "แนวโน้ม Weekly Distance Covered",
+        validVehicleDistanceTotal: "ระยะทางรถที่ใช้คำนวณได้",
+        validVehicleEntries: "Vehicle Entries",
+        vehicleBreakdown: "รายละเอียดรายคัน",
+        validationMatch: "ตัวเลขสัปดาห์ที่เลือกตรงกับการ์ด Weekly Distance Covered",
+        weeklyDistanceCovered: "Weekly Distance Covered (KM)"
+      }
+    : {
+        all: "All History",
+        averageWeeklyDistance: "Average Weekly Distance",
+        averageLine: "Range average",
+        changeKm: "Change KM",
+        changePercent: "Change %",
+        complete: "Complete",
+        custom: "Custom Range",
+        customRange: "Custom date range",
+        description: "Weekly Distance Covered history from every reporting week entered in Weekly Mileage.",
+        distance: "Distance",
+        downloadPdf: "Download Distance History PDF",
+        error: "Unable to generate the weekly distance history report.",
+        excluded: "Excluded",
+        excelGenerated: "Weekly distance history Excel exported.",
+        exportExcel: "Export Excel",
+        fromDate: "From",
+        generated: "Weekly distance history PDF downloaded.",
+        generating: "Generating PDF...",
+        highestWeek: "Highest Week",
+        last12: "Last 12 Weeks",
+        last4: "Last 4 Weeks",
+        last8: "Last 8 Weeks",
+        lowestWeek: "Lowest Week",
+        missing: "Missing",
+        missingEntries: "Missing Entries",
+        noPreviousWeek: "No previous week to compare",
+        noHistory: "No weekly distance history is available yet.",
+        open: "Weekly Distance History",
+        previousOdometer: "Previous Odometer",
+        currentOdometer: "Current Odometer",
+        range: "Report Range",
+        reportingWeek: "Reporting Week",
+        reviewVehicles: "Review Vehicles",
+        status: "Status",
+        tableTitle: "Distance History Table",
+        thisYear: "This Year",
+        title: "Weekly Distance History Report",
+        toDate: "To",
+        totalDistance: "Total Distance",
+        trendTitle: "Weekly Distance Covered Trend",
+        validVehicleDistanceTotal: "Valid vehicle distance total",
+        validVehicleEntries: "Vehicle Entries",
+        vehicleBreakdown: "Vehicle Breakdown",
+        validationMatch: "Selected week matches the Weekly Distance Covered summary card.",
+        weeklyDistanceCovered: "Weekly Distance Covered (KM)"
+      };
+
+  const getWeeklyDistanceHistoryRangeLabel = () => {
+    if (activeWeeklyDistanceHistoryFilter === "last4") return weeklyDistanceHistoryCopy.last4;
+    if (activeWeeklyDistanceHistoryFilter === "last8") return weeklyDistanceHistoryCopy.last8;
+    if (activeWeeklyDistanceHistoryFilter === "last12") return weeklyDistanceHistoryCopy.last12;
+    if (activeWeeklyDistanceHistoryFilter === "year") return `${weeklyDistanceHistoryCopy.thisYear} ${new Date().getFullYear()}`;
+    if (activeWeeklyDistanceHistoryFilter === "custom") {
+      const start = weeklyDistanceHistoryFrom ? formatDate(weeklyDistanceHistoryFrom, language) : weeklyDistanceHistoryCopy.fromDate;
+      const end = weeklyDistanceHistoryTo ? formatDate(weeklyDistanceHistoryTo, language) : weeklyDistanceHistoryCopy.toDate;
+      return `${weeklyDistanceHistoryCopy.customRange}: ${start} - ${end}`;
+    }
+    return weeklyDistanceHistoryCopy.all;
+  };
+
+  const exportWeeklyDistanceHistoryExcel = () => {
+    const rangeLabel = getWeeklyDistanceHistoryRangeLabel();
+    exportWorkbookToXlsx(
+      [
+        {
+          name: "Summary",
+          rows: [
+            { Metric: "Selected report range", Value: rangeLabel },
+            { Metric: "Total distance", Value: weeklyDistanceHistorySummary.totalDistance },
+            { Metric: "Average weekly distance", Value: Math.round(weeklyDistanceHistorySummary.averageWeeklyDistance) },
+            {
+              Metric: "Highest week",
+              Value: weeklyDistanceHistorySummary.highestWeek
+                ? `${weeklyDistanceHistorySummary.highestWeek.weekEnding} - ${weeklyDistanceHistorySummary.highestWeek.weeklyDistance} KM`
+                : "-"
+            },
+            {
+              Metric: "Lowest week",
+              Value: weeklyDistanceHistorySummary.lowestWeek
+                ? `${weeklyDistanceHistorySummary.lowestWeek.weekEnding} - ${weeklyDistanceHistorySummary.lowestWeek.weeklyDistance} KM`
+                : "-"
+            },
+            { Metric: "Reporting weeks", Value: filteredWeeklyDistanceHistoryRows.length }
+          ]
+        },
+        {
+          name: "Weekly History",
+          rows: filteredWeeklyDistanceHistoryRows.map((row) => ({
+            "Reporting week": row.weekEnding,
+            "Valid vehicle entries": row.validVehicleEntries,
+            "Expected vehicle entries": row.expectedVehicleEntries,
+            "Missing entries": row.missingVehicleCount,
+            "Weekly distance covered": row.weeklyDistance,
+            "Week-on-week change KM": row.weekOnWeekChangeKm,
+            "Week-on-week change %": row.weekOnWeekChangePercent == null ? null : Number(row.weekOnWeekChangePercent.toFixed(1))
+          }))
+        },
+        {
+          name: "Vehicle Breakdown",
+          rows: filteredWeeklyDistanceHistoryRows.flatMap((row) =>
+            row.vehicleBreakdown.map((vehicleRow) => ({
+              "Reporting week": row.weekEnding,
+              "Vehicle reg": vehicleRow.vehicleReg,
+              Driver: vehicleRow.driverName ?? "",
+              "Previous odometer": vehicleRow.previousOdometer,
+              "Current odometer": vehicleRow.currentOdometer,
+              "Distance covered": vehicleRow.distance,
+              Status: vehicleRow.statusLabel,
+              Detail: vehicleRow.statusDetail
+            }))
+          )
+        }
+      ],
+      "weekly-distance-history-report"
+    );
+    setError(null);
+    setSuccessMessage(weeklyDistanceHistoryCopy.excelGenerated);
+  };
+
+  const buildWeeklyDistanceHistoryPdfData = (): WeeklyDistanceHistoryPdfData => {
+    const generatedAt = new Intl.DateTimeFormat(language === "th" ? "th-TH" : "en-GB", {
+      dateStyle: "medium",
+      timeStyle: "short",
+      timeZone: "Asia/Bangkok"
+    }).format(new Date());
+    const formatHistoryKm = (value: number) => `${formatNumber(value, language, 0)} KM`;
+
+    return {
+      generatedAt,
+      rangeLabel: getWeeklyDistanceHistoryRangeLabel(),
+      rows: filteredWeeklyDistanceHistoryRows.map((row) => ({
+        changePercent: row.weekOnWeekChangePercent == null ? "-" : formatPercentValue(row.weekOnWeekChangePercent),
+        distance: formatHistoryKm(row.weeklyDistance),
+        missing: row.missingVehicleCount ? String(row.missingVehicleCount) : "-",
+        rawDistance: row.weeklyDistance,
+        vehicleEntries: `${formatNumber(row.validVehicleEntries, language, 0)} / ${formatNumber(row.expectedVehicleEntries, language, 0)}`,
+        weekEnding: formatDate(row.weekEnding, language)
+      })),
+      summary: {
+        averageWeeklyDistance: formatHistoryKm(weeklyDistanceHistorySummary.averageWeeklyDistance),
+        highestWeek: weeklyDistanceHistorySummary.highestWeek
+          ? `${formatDate(weeklyDistanceHistorySummary.highestWeek.weekEnding, language)} (${formatHistoryKm(weeklyDistanceHistorySummary.highestWeek.weeklyDistance)})`
+          : "-",
+        lowestWeek: weeklyDistanceHistorySummary.lowestWeek
+          ? `${formatDate(weeklyDistanceHistorySummary.lowestWeek.weekEnding, language)} (${formatHistoryKm(weeklyDistanceHistorySummary.lowestWeek.weeklyDistance)})`
+          : "-",
+        totalDistance: formatHistoryKm(weeklyDistanceHistorySummary.totalDistance)
+      },
+      title: weeklyDistanceHistoryCopy.title
+    };
+  };
 
   const formatOilPdfKm = (value: number | null | undefined) =>
     value == null || !Number.isFinite(Number(value)) ? "-" : `${formatNumber(Number(value), language, 0)} KM`;
@@ -2525,6 +3185,30 @@ export default function WeeklyMileagePage() {
     }
   };
 
+  const downloadWeeklyDistanceHistoryPdf = async () => {
+    if (generatingWeeklyDistanceHistoryPdf) return;
+    setGeneratingWeeklyDistanceHistoryPdf(true);
+    setError(null);
+    setSuccessMessage(null);
+
+    try {
+      if (!filteredWeeklyDistanceHistoryRows.length) {
+        throw new Error(weeklyDistanceHistoryCopy.noHistory);
+      }
+      const pdfLanguage = language === "th" ? "th" : "en";
+      const logo = await loadOilServicePdfLogo();
+      const pdf = await buildWeeklyDistanceHistoryPdf(buildWeeklyDistanceHistoryPdfData(), logo, pdfLanguage);
+      const datePart = new Date().toISOString().slice(0, 10);
+      downloadBlob(pdf, `Expert-Express-Weekly-Distance-History-${datePart}.pdf`);
+      setSuccessMessage(weeklyDistanceHistoryCopy.generated);
+    } catch (err) {
+      console.error("Weekly distance history PDF generation failed:", err);
+      setError(err instanceof Error && err.message ? err.message : weeklyDistanceHistoryCopy.error);
+    } finally {
+      setGeneratingWeeklyDistanceHistoryPdf(false);
+    }
+  };
+
   const copyOilReportSummary = async () => {
     const immediateRows = sortOilReportRows(
       oilChangeRows.filter((row) => row.status === "overdue" || row.status === "urgent")
@@ -2627,15 +3311,26 @@ export default function WeeklyMileagePage() {
             {selectedWeekSummary ? (
               <span className="badge-muted self-start sm:self-auto">{formatDate(selectedWeekSummary.weekEnding, language)}</span>
             ) : null}
-            <button
-              type="button"
-              onClick={() => void downloadWeeklyMileagePdf()}
-              disabled={generatingWeeklyMileagePdf || loading || !selectedWeekValue}
-              className="btn-primary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-            >
-              <Download className="h-4 w-4" />
-              {generatingWeeklyMileagePdf ? weeklyMileagePdfCopy.generating : weeklyMileagePdfCopy.download}
-            </button>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => setWeeklyDistanceHistoryOpen((current) => !current)}
+                disabled={loading || !weeklyDistanceHistoryRows.length}
+                className="btn-secondary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+              >
+                <History className="h-4 w-4" />
+                {weeklyDistanceHistoryCopy.open}
+              </button>
+              <button
+                type="button"
+                onClick={() => void downloadWeeklyMileagePdf()}
+                disabled={generatingWeeklyMileagePdf || loading || !selectedWeekValue}
+                className="btn-primary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+              >
+                <Download className="h-4 w-4" />
+                {generatingWeeklyMileagePdf ? weeklyMileagePdfCopy.generating : weeklyMileagePdfCopy.download}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -2651,35 +3346,334 @@ export default function WeeklyMileagePage() {
               <p className="metric-label">{t.weeklyMileage.weeklyDistanceCovered}</p>
               <p className="mt-2 text-[2rem] font-semibold tracking-[-0.05em] text-slate-950">
                 {selectedWeekSummary.comparableVehicles > 0
-                  ? formatNumber(selectedWeekSummary.weeklyDistance, language)
+                  ? `${formatNumber(selectedWeekSummary.weeklyDistance, language)} KM`
                   : t.weeklyMileage.weeklyDistanceCoveredUnavailable}
               </p>
+              <p className={`mt-1 text-sm font-semibold ${changeToneClass(selectedWeekSummary.weekOnWeekChangeKm)}`}>
+                {formatWeekChangeLabel(selectedWeekSummary)}
+              </p>
+              {selectedWeekSummary.weekOnWeekChangeKm != null ? (
+                <p className="mt-0.5 text-xs font-semibold text-slate-500">{formatSignedKm(selectedWeekSummary.weekOnWeekChangeKm)}</p>
+              ) : null}
             </div>
             <div className="subtle-panel p-4">
-              <p className="metric-label">{t.weeklyMileage.highestOdometerThisWeek}</p>
-              <p className="mt-2 text-[1.45rem] font-semibold tracking-[-0.04em] text-slate-950">
-                {selectedWeekSummary.highestOdometer != null
-                  ? formatNumber(selectedWeekSummary.highestOdometer, language)
-                  : "-"}
-              </p>
+              <p className="metric-label">{t.weeklyMileage.highestDistanceVehicleThisWeek}</p>
+              {selectedWeekSummary.highestDistanceVehicle ? (
+                <>
+                  <p className="mt-2 text-[1.35rem] font-semibold tracking-normal text-slate-950">
+                    {selectedWeekSummary.highestDistanceVehicle.vehicleReg}
+                  </p>
+                  <p className="text-sm font-bold text-sky-700">{formatKmValue(selectedWeekSummary.highestDistanceVehicle.distance)} KM</p>
+                  {selectedWeekSummary.highestDistanceVehicle.driverName ? (
+                    <p className="mt-1 text-xs font-semibold text-slate-500">{selectedWeekSummary.highestDistanceVehicle.driverName}</p>
+                  ) : null}
+                </>
+              ) : (
+                <p className="mt-2 text-lg font-semibold text-slate-500">-</p>
+              )}
             </div>
             <div className="subtle-panel p-4">
-              <p className="metric-label">{t.weeklyMileage.lowestOdometerThisWeek}</p>
-              <p className="mt-2 text-[1.45rem] font-semibold tracking-[-0.04em] text-slate-950">
-                {selectedWeekSummary.lowestOdometer != null
-                  ? formatNumber(selectedWeekSummary.lowestOdometer, language)
-                  : "-"}
-              </p>
+              <p className="metric-label">{t.weeklyMileage.lowestDistanceVehicleThisWeek}</p>
+              {selectedWeekSummary.lowestDistanceVehicle ? (
+                <>
+                  <p className="mt-2 text-[1.35rem] font-semibold tracking-normal text-slate-950">
+                    {selectedWeekSummary.lowestDistanceVehicle.vehicleReg}
+                  </p>
+                  <p className="text-sm font-bold text-sky-700">{formatKmValue(selectedWeekSummary.lowestDistanceVehicle.distance)} KM</p>
+                  {selectedWeekSummary.lowestDistanceVehicle.distance === 0 ? (
+                    <p className="mt-1 text-xs font-semibold text-amber-700">0 KM</p>
+                  ) : null}
+                  {selectedWeekSummary.lowestDistanceVehicle.driverName ? (
+                    <p className="mt-1 text-xs font-semibold text-slate-500">{selectedWeekSummary.lowestDistanceVehicle.driverName}</p>
+                  ) : null}
+                </>
+              ) : (
+                <p className="mt-2 text-lg font-semibold text-slate-500">-</p>
+              )}
             </div>
             <div className="subtle-panel p-4">
-              <p className="metric-label">{t.common.entries}</p>
-              <p className="mt-2 text-[1.45rem] font-semibold tracking-[-0.04em] text-slate-950">
-                {formatNumber(selectedWeekEntries.length, language)}
+              <p className="metric-label">{weeklyDistanceHistoryCopy.validVehicleEntries}</p>
+              <p className="mt-2 text-[1.45rem] font-semibold tracking-normal text-slate-950">
+                {formatCompleteness(selectedWeekSummary.validVehicleEntries, selectedWeekSummary.expectedVehicleEntries)}
               </p>
+              <p className={`mt-1 text-sm font-semibold ${selectedWeekSummary.missingVehicleCount ? "text-amber-700" : "text-emerald-700"}`}>
+                {selectedWeekSummary.missingVehicleCount
+                  ? `${formatNumber(selectedWeekSummary.missingVehicleCount, language, 0)} ${weeklyDistanceHistoryCopy.missing}`
+                  : weeklyDistanceHistoryCopy.complete}
+              </p>
+              {selectedWeekSummary.reviewVehicleCount ? (
+                <p className="mt-0.5 text-xs font-semibold text-rose-700">
+                  {formatNumber(selectedWeekSummary.reviewVehicleCount, language, 0)} {weeklyDistanceHistoryCopy.excluded}
+                </p>
+              ) : null}
             </div>
           </div>
         )}
       </section>
+
+      {weeklyDistanceHistoryOpen ? (
+        <section id="weekly-distance-history" className="surface-card mb-4 p-4 sm:p-5">
+          <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="section-title">{weeklyDistanceHistoryCopy.title}</h3>
+                {selectedWeekHistoryMatchesSummary ? (
+                  <span className="badge-muted border-emerald-200 bg-emerald-50 text-emerald-700">
+                    <CircleCheck className="h-3.5 w-3.5" />
+                    {weeklyDistanceHistoryCopy.validationMatch}
+                  </span>
+                ) : null}
+              </div>
+              <p className="section-subtitle">{weeklyDistanceHistoryCopy.description}</p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <button
+                type="button"
+                onClick={() => exportWeeklyDistanceHistoryExcel()}
+                disabled={!filteredWeeklyDistanceHistoryRows.length}
+                className="btn-secondary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                {weeklyDistanceHistoryCopy.exportExcel}
+              </button>
+              <button
+                type="button"
+                onClick={() => void downloadWeeklyDistanceHistoryPdf()}
+                disabled={generatingWeeklyDistanceHistoryPdf || !filteredWeeklyDistanceHistoryRows.length}
+                className="btn-primary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+              >
+                <Download className="h-4 w-4" />
+                {generatingWeeklyDistanceHistoryPdf ? weeklyDistanceHistoryCopy.generating : weeklyDistanceHistoryCopy.downloadPdf}
+              </button>
+            </div>
+          </div>
+
+          <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <p className="metric-label">{weeklyDistanceHistoryCopy.range}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {([
+                  ["all", weeklyDistanceHistoryCopy.all],
+                  ["last4", weeklyDistanceHistoryCopy.last4],
+                  ["last8", weeklyDistanceHistoryCopy.last8],
+                  ["last12", weeklyDistanceHistoryCopy.last12],
+                  ["year", weeklyDistanceHistoryCopy.thisYear],
+                  ["custom", weeklyDistanceHistoryCopy.custom]
+                ] as Array<[WeeklyDistanceHistoryFilter, string]>).map(([filter, label]) => (
+                  <button
+                    key={filter}
+                    type="button"
+                    onClick={() => setWeeklyDistanceHistoryFilter(filter)}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                      activeWeeklyDistanceHistoryFilter === filter
+                        ? "border-slate-900 bg-slate-900 text-white"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {activeWeeklyDistanceHistoryFilter === "custom" ? (
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div>
+                  <label className="form-label">{weeklyDistanceHistoryCopy.fromDate}</label>
+                  <input
+                    type="date"
+                    value={weeklyDistanceHistoryFrom}
+                    onChange={(event) => setWeeklyDistanceHistoryFrom(event.target.value)}
+                    className="form-input bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="form-label">{weeklyDistanceHistoryCopy.toDate}</label>
+                  <input
+                    type="date"
+                    value={weeklyDistanceHistoryTo}
+                    onChange={(event) => setWeeklyDistanceHistoryTo(event.target.value)}
+                    className="form-input bg-white"
+                  />
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          {filteredWeeklyDistanceHistoryRows.length ? (
+            <>
+              <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <WeeklyDistanceHistoryMetric
+                  label={weeklyDistanceHistoryCopy.totalDistance}
+                  value={`${formatNumber(weeklyDistanceHistorySummary.totalDistance, language, 0)} KM`}
+                  emphasis
+                />
+                <WeeklyDistanceHistoryMetric
+                  label={weeklyDistanceHistoryCopy.averageWeeklyDistance}
+                  value={`${formatNumber(weeklyDistanceHistorySummary.averageWeeklyDistance, language, 0)} KM`}
+                />
+                <WeeklyDistanceHistoryMetric
+                  label={weeklyDistanceHistoryCopy.highestWeek}
+                  value={
+                    weeklyDistanceHistorySummary.highestWeek
+                      ? `${formatDate(weeklyDistanceHistorySummary.highestWeek.weekEnding, language)} · ${formatNumber(weeklyDistanceHistorySummary.highestWeek.weeklyDistance, language, 0)} KM`
+                      : "-"
+                  }
+                  detail={
+                    weeklyDistanceHistorySummary.highestWeek
+                      ? `${formatCompleteness(weeklyDistanceHistorySummary.highestWeek.validVehicleEntries, weeklyDistanceHistorySummary.highestWeek.expectedVehicleEntries)}${
+                          weeklyDistanceHistorySummary.highestWeek.missingVehicleCount
+                            ? ` · ${formatNumber(weeklyDistanceHistorySummary.highestWeek.missingVehicleCount, language, 0)} ${weeklyDistanceHistoryCopy.missing}`
+                            : ""
+                        }`
+                      : undefined
+                  }
+                />
+                <WeeklyDistanceHistoryMetric
+                  label={weeklyDistanceHistoryCopy.lowestWeek}
+                  value={
+                    weeklyDistanceHistorySummary.lowestWeek
+                      ? `${formatDate(weeklyDistanceHistorySummary.lowestWeek.weekEnding, language)} · ${formatNumber(weeklyDistanceHistorySummary.lowestWeek.weeklyDistance, language, 0)} KM`
+                      : "-"
+                  }
+                  detail={
+                    weeklyDistanceHistorySummary.lowestWeek
+                      ? `${formatCompleteness(weeklyDistanceHistorySummary.lowestWeek.validVehicleEntries, weeklyDistanceHistorySummary.lowestWeek.expectedVehicleEntries)}${
+                          weeklyDistanceHistorySummary.lowestWeek.missingVehicleCount
+                            ? ` · ${formatNumber(weeklyDistanceHistorySummary.lowestWeek.missingVehicleCount, language, 0)} ${weeklyDistanceHistoryCopy.missing}`
+                            : ""
+                        }`
+                      : undefined
+                  }
+                />
+              </div>
+
+              <div className="mb-4 rounded-lg border border-slate-200 bg-white p-4">
+                <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <h4 className="text-sm font-bold text-slate-950">{weeklyDistanceHistoryCopy.trendTitle}</h4>
+                    <p className="text-xs font-medium text-slate-500">{getWeeklyDistanceHistoryRangeLabel()}</p>
+                  </div>
+                  <span className="badge-muted self-start sm:self-auto">
+                    {formatNumber(filteredWeeklyDistanceHistoryRows.length, language, 0)} {weeklyDistanceHistoryCopy.reportingWeek}
+                  </span>
+                </div>
+                <WeeklyDistanceHistoryChart rows={filteredWeeklyDistanceHistoryRows} language={language} />
+              </div>
+
+              <div>
+                <h4 className="mb-3 text-sm font-bold text-slate-950">{weeklyDistanceHistoryCopy.tableTitle}</h4>
+                <div className="table-shell">
+                  <div className="table-scroll">
+                    <table className="enterprise-table">
+                      <thead>
+                        <tr>
+                          <th className="table-head-cell">{weeklyDistanceHistoryCopy.reportingWeek}</th>
+                          <th className="table-head-cell">{weeklyDistanceHistoryCopy.validVehicleEntries}</th>
+                          <th className="table-head-cell">{weeklyDistanceHistoryCopy.missingEntries}</th>
+                          <th className="table-head-cell">{weeklyDistanceHistoryCopy.changePercent}</th>
+                          <th className="table-head-cell text-right">{weeklyDistanceHistoryCopy.weeklyDistanceCovered}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredWeeklyDistanceHistoryRows.map((row) => {
+                          const expanded = expandedWeeklyDistanceWeek === row.weekEnding;
+                          const excludedCount = row.vehicleBreakdown.filter((vehicleRow) => !vehicleRow.valid).length;
+                          return (
+                            <Fragment key={row.weekEnding}>
+                              <tr
+                                className="enterprise-table-row cursor-pointer"
+                                onClick={() => setExpandedWeeklyDistanceWeek(expanded ? null : row.weekEnding)}
+                              >
+                                <td className="table-body-cell font-semibold text-slate-950">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span>{formatDate(row.weekEnding, language)}</span>
+                                    {row.missingVehicleCount ? (
+                                      <span className="badge-muted border-amber-200 bg-amber-50 text-amber-700">
+                                        {formatNumber(row.missingVehicleCount, language, 0)} {weeklyDistanceHistoryCopy.missing}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                </td>
+                                <td className="table-body-cell">
+                                  <div className="font-semibold text-slate-900">
+                                    {formatCompleteness(row.validVehicleEntries, row.expectedVehicleEntries)}
+                                  </div>
+                                  <div className={`text-xs font-semibold ${row.missingVehicleCount ? "text-amber-700" : "text-emerald-700"}`}>
+                                    {row.missingVehicleCount
+                                      ? `${formatNumber(row.missingVehicleCount, language, 0)} ${weeklyDistanceHistoryCopy.missing}`
+                                      : weeklyDistanceHistoryCopy.complete}
+                                  </div>
+                                </td>
+                                <td className="table-body-cell">{formatNumber(row.missingVehicleCount, language, 0)}</td>
+                                <td className={`table-body-cell font-semibold ${changeToneClass(row.weekOnWeekChangeKm)}`}>
+                                  {row.weekOnWeekChangePercent == null ? "-" : formatPercentValue(row.weekOnWeekChangePercent)}
+                                </td>
+                                <td className="table-body-cell text-right font-bold text-slate-950">
+                                  {formatNumber(row.weeklyDistance, language, 0)}
+                                </td>
+                              </tr>
+                              {expanded ? (
+                                <tr key={`${row.weekEnding}-breakdown`}>
+                                  <td className="table-body-cell bg-slate-50" colSpan={5}>
+                                    <div className="rounded-lg border border-slate-200 bg-white p-3">
+                                      <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                                        <h5 className="text-sm font-bold text-slate-950">{weeklyDistanceHistoryCopy.vehicleBreakdown}</h5>
+                                        <div className="text-xs font-semibold text-slate-500">
+                                          {weeklyDistanceHistoryCopy.validVehicleDistanceTotal}: {formatNumber(row.weeklyDistance, language, 0)} KM · {weeklyDistanceHistoryCopy.excluded}: {formatNumber(excludedCount, language, 0)}
+                                        </div>
+                                      </div>
+                                      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                                        {row.vehicleBreakdown.map((vehicleRow) => (
+                                          <div key={`${row.weekEnding}-${vehicleRow.vehicleReg}`} className="rounded-lg border border-slate-100 bg-slate-50/70 p-3">
+                                            <div className="flex items-start justify-between gap-2">
+                                              <div>
+                                                <p className="font-bold text-slate-950">{vehicleRow.vehicleReg}</p>
+                                                {vehicleRow.driverName ? (
+                                                  <p className="text-xs font-semibold text-slate-500">{vehicleRow.driverName}</p>
+                                                ) : null}
+                                              </div>
+                                              <span className={`badge-muted ${vehicleRow.valid ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
+                                                {vehicleRow.statusLabel}
+                                              </span>
+                                            </div>
+                                            <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                                              <div>
+                                                <p className="metric-label">{weeklyDistanceHistoryCopy.previousOdometer}</p>
+                                                <p className="font-semibold text-slate-900">{formatKmValue(vehicleRow.previousOdometer)}</p>
+                                              </div>
+                                              <div>
+                                                <p className="metric-label">{weeklyDistanceHistoryCopy.currentOdometer}</p>
+                                                <p className="font-semibold text-slate-900">{formatKmValue(vehicleRow.currentOdometer)}</p>
+                                              </div>
+                                              <div>
+                                                <p className="metric-label">{weeklyDistanceHistoryCopy.distance}</p>
+                                                <p className="font-semibold text-slate-900">{vehicleRow.distance == null ? "-" : `${formatKmValue(vehicleRow.distance)} KM`}</p>
+                                              </div>
+                                            </div>
+                                            {!vehicleRow.valid ? (
+                                              <p className="mt-2 text-xs font-semibold text-amber-700">{vehicleRow.statusDetail}</p>
+                                            ) : null}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ) : null}
+                            </Fragment>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <EmptyState title={weeklyDistanceHistoryCopy.title} description={weeklyDistanceHistoryCopy.noHistory} />
+          )}
+        </section>
+      ) : null}
 
       <section className="surface-card mb-4 p-4 sm:p-5">
         <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -2940,6 +3934,18 @@ export default function WeeklyMileagePage() {
                       )
                     },
                     {
+                      key: "km-used-since-oil-change",
+                      className: "border-white/80 bg-white/70",
+                      content: (
+                        <>
+                          <p className="metric-label">{t.weeklyMileage.oil.kmUsedSinceOilChange}</p>
+                          <p className={`mt-1 text-lg font-bold ${row.kmUsedSinceOilChange != null && row.kmUsedSinceOilChange < 0 ? "text-rose-700" : "text-slate-950"}`}>
+                            {row.kmUsedSinceOilChange == null ? "-" : formatKmValue(row.kmUsedSinceOilChange)}
+                          </p>
+                        </>
+                      )
+                    },
+                    {
                       key: "next-service-due",
                       className: "border-white/80 bg-white/70",
                       content: (
@@ -3034,7 +4040,7 @@ export default function WeeklyMileagePage() {
                           ) : null}
                         </div>
 
-                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                           {oilCardMetricBoxes.map((box) => (
                             <div key={box.key} className={`min-h-[116px] rounded-lg border p-3 ${box.className}`}>
                               {box.content}
@@ -3061,7 +4067,11 @@ export default function WeeklyMileagePage() {
                       <div className="mt-4">
                         <div className="mb-2 flex items-center justify-between gap-3 text-xs font-semibold text-slate-500">
                           <span>{oilReportCopy.oilServiceUsage}</span>
-                          <span>{progress == null ? oilReportCopy.waitingForBaseline : oilReportCopy.percentUsed.replace("{percent}", progress.displayPercent)}</span>
+                          <span>
+                            {progress == null
+                              ? oilReportCopy.waitingForBaseline
+                              : `${formatKmValue(progress.usedKm)} / ${formatKmValue(row.oilChangeIntervalKm)} KM (${oilReportCopy.percentUsed.replace("{percent}", progress.displayPercent)})`}
+                          </span>
                         </div>
                         <div className="h-2.5 overflow-hidden rounded-full bg-white/80 ring-1 ring-slate-200/70">
                           <div
@@ -3570,6 +4580,26 @@ export default function WeeklyMileagePage() {
             <form onSubmit={handleSaveService} className="p-5">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="form-field">
+                  <label className="form-label form-label-required">{t.weeklyMileage.oil.vehicleRegistration}</label>
+                  <input
+                    required
+                    value={serviceForm.vehicleReg}
+                    onChange={(event) => setServiceForm((current) => ({ ...current, vehicleReg: event.target.value }))}
+                    className="form-input bg-white"
+                  />
+                </div>
+                <div className="form-field">
+                  <label className="form-label form-label-required">{t.weeklyMileage.oil.serviceType}</label>
+                  <select
+                    required
+                    value={serviceForm.serviceType}
+                    onChange={(event) => setServiceForm((current) => ({ ...current, serviceType: event.target.value }))}
+                    className="form-input bg-white"
+                  >
+                    <option value="oil_change">{t.weeklyMileage.oil.oilChange}</option>
+                  </select>
+                </div>
+                <div className="form-field">
                   <label className="form-label form-label-required">{t.weeklyMileage.oil.lastOilChangeDate}</label>
                   <input
                     type="date"
@@ -3647,16 +4677,50 @@ export default function WeeklyMileagePage() {
                 <EmptyState title={t.weeklyMileage.oil.noServiceHistoryTitle} description={t.weeklyMileage.oil.noServiceHistoryDescription} />
               ) : (
                 <div className="space-y-3">
-                  {selectedHistoryLogs.map((log) => (
+                  {selectedHistoryLogs.map((log, index) => {
+                    const previousLog = selectedHistoryLogs[index + 1] ?? null;
+                    const logOdometer = Number(log.oil_change_odometer ?? log.odometer ?? log.service_odometer);
+                    const previousOdometer = previousLog
+                      ? Number(previousLog.oil_change_odometer ?? previousLog.odometer ?? previousLog.service_odometer)
+                      : null;
+                    const kmSincePrevious =
+                      previousOdometer != null &&
+                      Number.isFinite(logOdometer) &&
+                      Number.isFinite(previousOdometer)
+                        ? Math.trunc(logOdometer - previousOdometer)
+                        : null;
+                    const isSyntheticBaseline = log.id.startsWith("vehicle-baseline-") || log.id.startsWith("baseline-");
+
+                    return (
                     <div key={log.id} className="subtle-panel p-4">
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                           <p className="font-semibold text-slate-950">{formatDate(log.service_date, language)}</p>
                           <p className="mt-1 text-sm text-slate-500">{log.notes || t.weeklyMileage.oil.oilChangedNote}</p>
                         </div>
-                        <span className="badge-muted">{log.service_type === "oil_change" ? t.weeklyMileage.oil.oilChange : log.service_type}</span>
+                        <div className="flex flex-wrap gap-2">
+                          <span className="badge-muted">{log.service_type === "oil_change" ? t.weeklyMileage.oil.oilChange : log.service_type}</span>
+                          <button
+                            type="button"
+                            onClick={() => openServiceLogModal(log)}
+                            disabled={isSyntheticBaseline || savingService}
+                            className="table-action-secondary gap-1.5 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                            {t.weeklyMileage.oil.editOilChange}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteServiceLog(log)}
+                            disabled={isSyntheticBaseline || deletingServiceLogId === log.id}
+                            className="table-action-danger gap-1.5 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            {deletingServiceLogId === log.id ? t.common.deleting : t.weeklyMileage.oil.deleteOilChange}
+                          </button>
+                        </div>
                       </div>
-                      <div className="mt-3 grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
+                      <div className="mt-3 grid grid-cols-2 gap-3 text-sm md:grid-cols-5">
                         <div>
                           <p className="metric-label">{t.weeklyMileage.oil.serviceOdometer}</p>
                           <p className="mt-1 font-semibold text-slate-900">{formatKmValue(log.odometer)}</p>
@@ -3670,12 +4734,19 @@ export default function WeeklyMileagePage() {
                           <p className="mt-1 font-semibold text-slate-900">{formatKmValue(log.next_service_due_odometer ?? (log.interval_km != null ? log.odometer + log.interval_km : null))}</p>
                         </div>
                         <div>
+                          <p className="metric-label">{t.weeklyMileage.oil.kmUsedSinceOilChange}</p>
+                          <p className={`mt-1 font-semibold ${kmSincePrevious != null && kmSincePrevious < 0 ? "text-rose-700" : "text-slate-900"}`}>
+                            {kmSincePrevious == null ? "-" : formatKmValue(kmSincePrevious)}
+                          </p>
+                        </div>
+                        <div>
                           <p className="metric-label">{t.weeklyMileage.oil.recordedAt}</p>
                           <p className="mt-1 font-semibold text-slate-900">{log.created_at ? formatDate(log.created_at.slice(0, 10), language) : "-"}</p>
                         </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -3683,5 +4754,109 @@ export default function WeeklyMileagePage() {
         </div>
       ) : null}
     </>
+  );
+}
+
+function WeeklyDistanceHistoryMetric({
+  detail,
+  emphasis = false,
+  label,
+  value
+}: {
+  detail?: string;
+  emphasis?: boolean;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className={`subtle-panel p-4 ${emphasis ? "border-sky-200 bg-sky-50/70" : ""}`}>
+      <p className="metric-label">{label}</p>
+      <p className={`mt-2 text-lg font-bold tracking-normal ${emphasis ? "text-sky-900" : "text-slate-950"}`}>
+        {value}
+      </p>
+      {detail ? <p className="mt-1 text-xs font-semibold text-slate-500">{detail}</p> : null}
+    </div>
+  );
+}
+
+function WeeklyDistanceHistoryChart({ language, rows }: { language: Language; rows: WeeklyDistanceHistoryRow[] }) {
+  const chartRows = [...rows].reverse();
+  const width = 720;
+  const height = 240;
+  const padding = { bottom: 42, left: 54, right: 24, top: 18 };
+  const plotWidth = width - padding.left - padding.right;
+  const plotHeight = height - padding.top - padding.bottom;
+  const averageDistance = chartRows.length
+    ? chartRows.reduce((sum, row) => sum + row.weeklyDistance, 0) / chartRows.length
+    : 0;
+  const maxDistance = Math.max(...chartRows.map((row) => row.weeklyDistance), averageDistance, 1);
+  const averageY = padding.top + plotHeight - (averageDistance / maxDistance) * plotHeight;
+  const points = chartRows.map((row, index) => {
+    const x = chartRows.length === 1 ? padding.left + plotWidth / 2 : padding.left + (index / (chartRows.length - 1)) * plotWidth;
+    const y = padding.top + plotHeight - (row.weeklyDistance / maxDistance) * plotHeight;
+    return { ...row, x, y };
+  });
+  const pathData = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
+  const yTicks = [0, 0.5, 1].map((ratio) => Math.round(maxDistance * ratio));
+  const visibleLabels = points.filter((_, index) => {
+    if (points.length <= 6) return true;
+    return index === 0 || index === points.length - 1 || index % Math.ceil(points.length / 5) === 0;
+  });
+
+  return (
+    <div className="w-full overflow-hidden rounded-lg border border-slate-100 bg-slate-50/70">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Weekly Distance Covered trend" className="h-[240px] w-full">
+        <rect x="0" y="0" width={width} height={height} fill="#f8fafc" />
+        {yTicks.map((tick) => {
+          const y = padding.top + plotHeight - (tick / maxDistance) * plotHeight;
+          return (
+            <g key={tick}>
+              <line x1={padding.left} x2={width - padding.right} y1={y} y2={y} stroke="#e2e8f0" strokeWidth="1" />
+              <text x={padding.left - 10} y={y + 4} textAnchor="end" className="fill-slate-500 text-[11px] font-semibold">
+                {formatNumber(tick, language, 0)}
+              </text>
+            </g>
+          );
+        })}
+        <line x1={padding.left} x2={padding.left} y1={padding.top} y2={height - padding.bottom} stroke="#cbd5e1" strokeWidth="1" />
+        <line x1={padding.left} x2={width - padding.right} y1={height - padding.bottom} y2={height - padding.bottom} stroke="#cbd5e1" strokeWidth="1" />
+        <line
+          x1={padding.left}
+          x2={width - padding.right}
+          y1={averageY}
+          y2={averageY}
+          stroke="#94a3b8"
+          strokeDasharray="5 5"
+          strokeWidth="1.2"
+        />
+        <text x={width - padding.right - 6} y={averageY - 7} textAnchor="end" className="fill-slate-500 text-[11px] font-semibold">
+          12-week average {formatNumber(averageDistance, language, 0)}
+        </text>
+        <path d={pathData} fill="none" stroke="#2563eb" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" />
+        {points.map((point) => (
+          <g key={point.weekEnding}>
+            <title>
+              {`${formatDate(point.weekEnding, language)}
+${formatNumber(point.weeklyDistance, language, 0)} km
+${formatNumber(point.validVehicleEntries, language, 0)} / ${formatNumber(point.expectedVehicleEntries, language, 0)} vehicles
+${point.weekOnWeekChangePercent == null ? "No previous week to compare" : `${point.weekOnWeekChangePercent > 0 ? "+" : ""}${formatNumber(point.weekOnWeekChangePercent, language, 1)}% vs previous week`}${point.missingVehicleCount ? `\n${formatNumber(point.missingVehicleCount, language, 0)} missing` : ""}`}
+            </title>
+            <circle cx={point.x} cy={point.y} r={point.missingVehicleCount ? "5.5" : "4.5"} fill={point.missingVehicleCount ? "#f59e0b" : "#2563eb"} />
+            <circle cx={point.x} cy={point.y} r="8" fill={point.missingVehicleCount ? "#f59e0b" : "#2563eb"} opacity="0.12" />
+          </g>
+        ))}
+        {visibleLabels.map((point) => (
+          <text
+            key={`label-${point.weekEnding}`}
+            x={point.x}
+            y={height - 17}
+            textAnchor="middle"
+            className="fill-slate-500 text-[11px] font-semibold"
+          >
+            {formatDate(point.weekEnding, language)}
+          </text>
+        ))}
+      </svg>
+    </div>
   );
 }
