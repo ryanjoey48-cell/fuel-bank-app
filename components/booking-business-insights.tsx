@@ -10,6 +10,7 @@ import {
   Clock3,
   FileText,
   Info,
+  MapPinned,
   Printer,
   RefreshCw,
   Route,
@@ -27,9 +28,12 @@ import {
   type CanonicalVehicleType,
   type ReadinessKey
 } from "@/lib/booking-insights";
+import { fetchFuelLogsForExport, fetchWeeklyMileage } from "@/lib/data";
+import { safeSessionStorage } from "@/lib/safe-browser-storage";
 import type { Language } from "@/lib/translations";
 import { formatDate } from "@/lib/utils";
-import type { BookingDiaryEntry, Driver, TripJourney, Vehicle } from "@/types/database";
+import type { BookingDiaryEntry, Driver, FuelLogWithDriver, TripJourney, TripJourneyWithFuel, Vehicle, WeeklyMileageEntry } from "@/types/database";
+import { WeeklyBossReportPanel } from "@/components/weekly-boss-report";
 
 type BookingBusinessInsightsProps = {
   bookings: BookingDiaryEntry[];
@@ -40,6 +44,7 @@ type BookingBusinessInsightsProps = {
   loading: boolean;
   refreshing: boolean;
   onRefresh: () => void;
+  onOpenRouteApproval?: () => void;
 };
 
 const copyByLanguage = {
@@ -48,6 +53,7 @@ const copyByLanguage = {
     subtitle: "A read-only management view of planned work in Booking Diary.",
     managerView: "Manager Overview",
     detailView: "Detailed Analysis",
+    bossView: "Weekly Boss Summary",
     refresh: "Refresh",
     refreshing: "Refreshing...",
     print: "Print",
@@ -69,7 +75,11 @@ const copyByLanguage = {
     plannedHelper: (count: number) => `${count.toLocaleString()} planned jobs are recorded in this period.`,
     periodChange: "Change from previous period",
     repeatWork: "Repeat-route work",
-    repeatHelper: (percent: number) => `${percent}% of bookings use routes active on multiple dates.`,
+    repeatHelper: (percent: number) => `${percent}% of bookings belong to routes used on multiple dates.`,
+    routeConfirmation: "Google Maps route confirmation",
+    routeConfirmationHelper: (confirmedRoutes: number, routes: number, confirmedBookings: number, bookings: number) =>
+      `${confirmedRoutes} / ${routes} repeat routes confirmed · ${confirmedBookings} / ${bookings} bookings covered`,
+    openRouteApproval: "Open Route Approval",
     busiestDay: "Busiest operational day",
     busiestDayHelper: (day: string, average: number) => `${day} averages ${average} bookings per occurrence.`,
     requestedVehicle: "Most requested vehicle",
@@ -210,6 +220,7 @@ const copyByLanguage = {
     subtitle: "มุมมองผู้บริหารแบบอ่านอย่างเดียวจากงานที่วางแผนไว้ในสมุดจองงาน",
     managerView: "ภาพรวมผู้บริหาร",
     detailView: "การวิเคราะห์โดยละเอียด",
+    bossView: "สรุปประจำสัปดาห์สำหรับผู้บริหาร",
     refresh: "รีเฟรช",
     refreshing: "กำลังรีเฟรช...",
     print: "พิมพ์",
@@ -231,7 +242,11 @@ const copyByLanguage = {
     plannedHelper: (count: number) => `มีงานที่วางแผนไว้ ${count.toLocaleString()} งานในช่วงนี้`,
     periodChange: "เปลี่ยนแปลงจากช่วงก่อนหน้า",
     repeatWork: "งานเส้นทางที่เกิดซ้ำ",
-    repeatHelper: (percent: number) => `${percent}% ของงานใช้เส้นทางที่เกิดขึ้นมากกว่าหนึ่งวัน`,
+    repeatHelper: (percent: number) => `${percent}% ของงานอยู่ในเส้นทางที่ใช้มากกว่าหนึ่งวัน`,
+    routeConfirmation: "การยืนยันเส้นทาง Google Maps",
+    routeConfirmationHelper: (confirmedRoutes: number, routes: number, confirmedBookings: number, bookings: number) =>
+      `ยืนยันแล้ว ${confirmedRoutes} / ${routes} เส้นทางซ้ำ · ครอบคลุม ${confirmedBookings} / ${bookings} งานจอง`,
+    openRouteApproval: "เปิดอนุมัติเส้นทาง",
     busiestDay: "วันปฏิบัติงานที่ยุ่งที่สุด",
     busiestDayHelper: (day: string, average: number) => `${day} มีงานเฉลี่ย ${average} งานต่อครั้ง`,
     requestedVehicle: "รถที่มีความต้องการสูงสุด",
@@ -377,7 +392,7 @@ const periodOptions: Array<{ key: BookingInsightsPeriodKey; labelKey: "last7" | 
   { key: "custom", labelKey: "custom" }
 ];
 
-type InsightView = "manager" | "detail";
+type InsightView = "manager" | "detail" | "boss";
 type PrintMode = "manager" | "full";
 type DetailSection = "clients" | "routes" | "opportunities" | "readiness" | "methodology";
 
@@ -448,7 +463,8 @@ export function BookingBusinessInsights({
   language,
   loading,
   refreshing,
-  onRefresh
+  onRefresh,
+  onOpenRouteApproval
 }: BookingBusinessInsightsProps) {
   const languageKey = language === "th" ? "th" : "en";
   const copy = copyByLanguage[languageKey];
@@ -458,6 +474,8 @@ export function BookingBusinessInsights({
   const [customEndDate, setCustomEndDate] = useState("");
   const [printMode, setPrintMode] = useState<PrintMode>("manager");
   const [generatedAt, setGeneratedAt] = useState("");
+  const [bossFuelLogs, setBossFuelLogs] = useState<FuelLogWithDriver[]>([]);
+  const [bossWeeklyMileage, setBossWeeklyMileage] = useState<WeeklyMileageEntry[]>([]);
   const [detailSections, setDetailSections] = useState<Record<DetailSection, boolean>>({
     clients: true,
     routes: true,
@@ -467,14 +485,14 @@ export function BookingBusinessInsights({
   });
 
   useEffect(() => {
-    const savedView = window.sessionStorage.getItem("booking-insights:view");
-    if (savedView === "manager" || savedView === "detail") setView(savedView);
-    const savedSections = window.sessionStorage.getItem("booking-insights:detail-sections");
+    const savedView = safeSessionStorage.getItem("booking-insights:view");
+    if (savedView === "manager" || savedView === "detail" || savedView === "boss") setView(savedView);
+    const savedSections = safeSessionStorage.getItem("booking-insights:detail-sections");
     if (savedSections) {
       try {
         setDetailSections((current) => ({ ...current, ...JSON.parse(savedSections) }));
       } catch {
-        window.sessionStorage.removeItem("booking-insights:detail-sections");
+        safeSessionStorage.removeItem("booking-insights:detail-sections");
       }
     }
     setGeneratedAt(new Intl.DateTimeFormat(languageKey === "th" ? "th-TH" : "en-GB", {
@@ -484,15 +502,36 @@ export function BookingBusinessInsights({
     }).format(new Date()));
   }, [languageKey]);
 
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      fetchFuelLogsForExport({}).catch((error) => {
+        console.warn("Weekly Boss Summary fuel log load warning:", error);
+        return [] as FuelLogWithDriver[];
+      }),
+      fetchWeeklyMileage().catch((error) => {
+        console.warn("Weekly Boss Summary weekly mileage load warning:", error);
+        return [] as WeeklyMileageEntry[];
+      })
+    ]).then(([fuelRows, weeklyRows]) => {
+      if (!active) return;
+      setBossFuelLogs(fuelRows);
+      setBossWeeklyMileage(weeklyRows);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const selectView = (next: InsightView) => {
     setView(next);
-    window.sessionStorage.setItem("booking-insights:view", next);
+    safeSessionStorage.setItem("booking-insights:view", next);
   };
 
   const toggleDetail = (key: DetailSection) => {
     setDetailSections((current) => {
       const next = { ...current, [key]: !current[key] };
-      window.sessionStorage.setItem("booking-insights:detail-sections", JSON.stringify(next));
+      safeSessionStorage.setItem("booking-insights:detail-sections", JSON.stringify(next));
       return next;
     });
   };
@@ -526,6 +565,7 @@ export function BookingBusinessInsights({
           <div className="booking-insights-view-switch" role="tablist" aria-label={copy.title}>
             <button type="button" role="tab" aria-selected={view === "manager"} onClick={() => selectView("manager")}>{copy.managerView}</button>
             <button type="button" role="tab" aria-selected={view === "detail"} onClick={() => selectView("detail")}>{copy.detailView}</button>
+            <button type="button" role="tab" aria-selected={view === "boss"} onClick={() => selectView("boss")}>{copy.bossView}</button>
           </div>
           <div className="booking-insights-toolbar-period">
             <label className="form-field">
@@ -540,6 +580,10 @@ export function BookingBusinessInsights({
             </> : null}
           </div>
           <div className="booking-insights-actions">
+            {onOpenRouteApproval ? <button type="button" onClick={onOpenRouteApproval} className="btn-secondary gap-2">
+              <MapPinned className="h-4 w-4" />
+              <span>{copy.openRouteApproval}</span>
+            </button> : null}
             <button type="button" onClick={onRefresh} disabled={refreshing} className="btn-secondary gap-2">
               <RefreshCw className={clsx("h-4 w-4", refreshing && "animate-spin")} />
               <span>{refreshing ? copy.refreshing : copy.refresh}</span>
@@ -562,6 +606,16 @@ export function BookingBusinessInsights({
 
           {view === "manager" ? (
             <ManagerOverview insights={insights} language={languageKey} actions={actions} />
+          ) : view === "boss" ? (
+            <WeeklyBossReportPanel
+              bookings={bookings}
+              trips={Array.from(tripsByBookingId.values()) as TripJourneyWithFuel[]}
+              fuelLogs={bossFuelLogs}
+              weeklyMileage={bossWeeklyMileage}
+              vehicles={vehicles}
+              drivers={drivers}
+              language={languageKey}
+            />
           ) : (
             <DetailedAnalysis insights={insights} language={languageKey} sections={detailSections} onToggle={toggleDetail} />
           )}
@@ -586,6 +640,17 @@ function ManagerOverview({ insights, language, actions }: { insights: BookingIns
         <OverviewMetric label={copy.plannedBookings} value={insights.summary.totalBookings.toLocaleString()} helper={copy.plannedHelper(insights.summary.totalBookings)} />
         <OverviewMetric label={copy.periodChange} value={comparisonText(insights, language)} helper={insights.previousPeriod ? rangeText(insights.previousPeriod.startDate, insights.previousPeriod.endDate, language, "") : copy.comparisonUnavailable} tone={(insights.summary.bookingChangePercent ?? 0) >= 0 ? "green" : "amber"} />
         <OverviewMetric label={copy.repeatWork} value={percentText(insights.summary.repeatRoutePercent)} helper={copy.repeatHelper(insights.summary.repeatRoutePercent)} />
+        <OverviewMetric
+          label={copy.routeConfirmation}
+          value={`${insights.summary.confirmedRepeatRouteCount.toLocaleString()} / ${insights.summary.repeatRouteCount.toLocaleString()}`}
+          helper={copy.routeConfirmationHelper(
+            insights.summary.confirmedRepeatRouteCount,
+            insights.summary.repeatRouteCount,
+            insights.summary.confirmedRepeatRouteBookingCount,
+            insights.summary.repeatRouteBookingCount
+          )}
+          tone={insights.summary.repeatRouteCount === insights.summary.confirmedRepeatRouteCount ? "green" : "amber"}
+        />
         <OverviewMetric label={copy.busiestDay} value={weekdayLabel(insights.summary.busiestWeekday, language)} helper={copy.busiestDayHelper(weekdayLabel(insights.summary.busiestWeekday, language), insights.summary.busiestWeekdayAverage ?? 0)} />
         <OverviewMetric label={copy.requestedVehicle} value={vehicleLabel(insights.summary.mostRequestedVehicleType, language)} helper={copy.vehicleHelper(vehicleLabel(insights.summary.mostRequestedVehicleType, language), topVehicle?.percent ?? 0)} />
         <OverviewMetric label={copy.peakPickup} value={peakPickup?.label ?? copy.unavailable} helper={peakPickup ? copy.pickupHelper(peakPickup.label, peakPickup.percent) : copy.pickupSample(0)} />

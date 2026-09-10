@@ -1,0 +1,59 @@
+
+> fuel-bank-app@0.1.0 build
+> next build
+
+   ▲ Next.js 15.5.14
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 54s
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/30) ...
+   Generating static pages (7/30) 
+   Generating static pages (14/30) 
+   Generating static pages (22/30) 
+ ✓ Generating static pages (30/30)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                  Size  First Load JS
+┌ ○ /                                       156 B         102 kB
+├ ○ /_not-found                             996 B         103 kB
+├ ○ /admin/support-tickets                4.66 kB         236 kB
+├ ○ /admin/users                          5.04 kB         237 kB
+├ ƒ /api/admin/me                           156 B         102 kB
+├ ƒ /api/admin/users                        156 B         102 kB
+├ ƒ /api/admin/users/[id]                   156 B         102 kB
+├ ƒ /api/admin/users/[id]/password-reset    156 B         102 kB
+├ ƒ /api/distance-estimate                  156 B         102 kB
+├ ƒ /api/google-maps-status                 156 B         102 kB
+├ ƒ /api/location-autocomplete              156 B         102 kB
+├ ƒ /api/location-details                   156 B         102 kB
+├ ƒ /api/support-ticket-email               156 B         102 kB
+├ ○ /apple-icon.png                           0 B            0 B
+├ ○ /booking-diary                        46.9 kB         403 kB
+├ ○ /change-password                      1.72 kB         233 kB
+├ ○ /dashboard                            11.4 kB         243 kB
+├ ○ /dispatch                             8.88 kB         240 kB
+├ ○ /drivers                              6.42 kB         358 kB
+├ ○ /fuel-logs                            37.9 kB         389 kB
+├ ○ /fuel-spend-report                    7.26 kB         359 kB
+├ ○ /icon.png                                 0 B            0 B
+├ ○ /login                                1.96 kB         196 kB
+├ ○ /profile                              2.88 kB         234 kB
+├ ○ /shipments                            29.5 kB         266 kB
+├ ○ /support                              2.27 kB         234 kB
+├ ○ /transfers                            6.08 kB         358 kB
+├ ○ /trip-journey                         36.6 kB         273 kB
+├ ○ /vehicle-performance                  39.8 kB         391 kB
+└ ○ /weekly-mileage                       32.2 kB         384 kB
++ First Load JS shared by all              102 kB
+  ├ chunks/3131-a1fb12bff6c5a499.js       45.1 kB
+  ├ chunks/c7879cf7-ce6cc72fe8fad416.js   54.2 kB
+  └ other shared chunks (total)           2.18 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

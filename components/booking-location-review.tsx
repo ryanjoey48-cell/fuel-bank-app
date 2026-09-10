@@ -3,6 +3,7 @@
 import { Check, CheckCircle2, ExternalLink, Flag, MapPin, Pencil, RotateCcw, Search, ShieldAlert, SkipForward, Undo2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LocationApprovalDialog } from "@/components/location-approval-dialog";
+import { safeLocalStorage } from "@/lib/safe-browser-storage";
 import { supabase } from "@/lib/supabase";
 
 type Confidence = "high" | "medium" | "low";
@@ -208,7 +209,7 @@ export function BookingLocationReview({
 
   useEffect(() => {
     try {
-      const saved = window.localStorage.getItem(storageKey);
+      const saved = safeLocalStorage.getItem(storageKey);
       setDispositions(saved ? JSON.parse(saved) as Record<string, ReviewDisposition> : {});
     } catch {
       setDispositions({});
@@ -217,7 +218,7 @@ export function BookingLocationReview({
 
   const saveDispositions = useCallback((next: Record<string, ReviewDisposition>) => {
     setDispositions(next);
-    window.localStorage.setItem(storageKey, JSON.stringify(next));
+    safeLocalStorage.setItem(storageKey, JSON.stringify(next));
     requestAnimationFrame(() => reviewTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }, [storageKey]);
 

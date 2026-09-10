@@ -14,6 +14,7 @@ import {
   normalizeTransferTypeKey
 } from "@/lib/localized-values";
 import { normalizeFuelLogLocation } from "@/lib/fuel-log-location";
+import { buildFuelSpendReportVehicleMonthlyFuelRows, monthDateRange } from "@/lib/fuel-spend-report";
 import { getEffectiveOilChangeIntervalForVehicleType, getOilChangeIntervalForVehicleType } from "@/lib/oil-change-service";
 import type {
   BankTransfer,
@@ -46,6 +47,10 @@ import type {
   TripJourneyStatus,
   TripJourneyWithFuel,
   Vehicle,
+  VehicleMonthlyPerformance,
+  VehiclePerformanceCorrectionAudit,
+  VehiclePerformanceImportReview,
+  VehiclePerformanceImportReviewStatus,
   VehicleServiceLog,
   WeeklyMileageEntry
 } from "@/types/database";
@@ -79,7 +84,8 @@ const isMissingTripOptionalColumnError = (error: { code?: string; message?: stri
     error &&
       (error.code === "42703" || error.code === "PGRST204") &&
       [
-        "booking_reference",
+          "vehicle_id",
+          "booking_reference",
         "start_location_type",
         "start_location",
         "depot_address",
@@ -117,7 +123,8 @@ const isMissingTripOptionalColumnError = (error: { code?: string; message?: stri
         "route_description",
         "route_polyline",
         "route_traffic_aware",
-        "route_fallback_info"
+        "route_fallback_info",
+        "vehicle_id"
       ].some((column) => error.message?.includes(column))
   );
 
@@ -130,6 +137,7 @@ function omitTripOptionalColumns<T extends Record<string, unknown>>(payload: T) 
           "start_location_type",
           "start_location",
           "depot_address",
+          "vehicle_id",
           "manual_actual_km",
           "manual_estimated_distance_km",
           "estimated_distance_source",
@@ -200,7 +208,10 @@ const BOOKING_DIARY_ROUTE_COLUMNS = new Set([
   "route_source",
   "route_fallback_info"
   ,"vehicle_registration"
+  ,"vehicle_id"
   ,"trailer_registration"
+  ,"approved_route_id"
+  ,"route_confirmation_status"
   ,"map_resolution_status"
   ,"map_backfill_batch_id"
   ,"map_values_manually_corrected"
@@ -562,6 +573,20 @@ async function updateOilChangeHistoryWithSchemaFallback(id: string, payload: Rec
     .single();
 }
 
+async function deleteVehicleServiceLogWithSchemaFallback(id: string) {
+  return supabase
+    .from("vehicle_service_logs")
+    .delete()
+    .eq("id", id);
+}
+
+async function deleteOilChangeHistoryWithSchemaFallback(id: string) {
+  return supabase
+    .from("oil_change_history")
+    .delete()
+    .eq("id", id);
+}
+
 function normalizeTransferReceiptStatus(value: unknown) {
   if (value === "pending" || value === "submitted" || value === "approved") {
     return value;
@@ -893,10 +918,8 @@ function normalizeOilChangeHistoryRow(row: OilChangeHistory): VehicleServiceLog 
 
 function getServiceLogSortTime(log: VehicleServiceLog) {
   const serviceDateTime = log.service_date ? new Date(log.service_date).getTime() : Number.NEGATIVE_INFINITY;
-  const createdAtTime = log.created_at ? new Date(log.created_at).getTime() : Number.NEGATIVE_INFINITY;
   return {
-    serviceDateTime: Number.isNaN(serviceDateTime) ? Number.NEGATIVE_INFINITY : serviceDateTime,
-    createdAtTime: Number.isNaN(createdAtTime) ? Number.NEGATIVE_INFINITY : createdAtTime
+    serviceDateTime: Number.isNaN(serviceDateTime) ? Number.NEGATIVE_INFINITY : serviceDateTime
   };
 }
 
@@ -906,8 +929,6 @@ function sortServiceLogsByLatest(logs: VehicleServiceLog[]) {
     const rightTime = getServiceLogSortTime(right);
     const serviceDateDiff = rightTime.serviceDateTime - leftTime.serviceDateTime;
     if (serviceDateDiff !== 0) return serviceDateDiff;
-    const createdAtDiff = rightTime.createdAtTime - leftTime.createdAtTime;
-    if (createdAtDiff !== 0) return createdAtDiff;
     return String(right.id).localeCompare(String(left.id));
   });
 }
@@ -919,67 +940,195 @@ function normalizeOilChangeVehicleRegKey(value: unknown) {
     .toLowerCase();
 }
 
-async function syncOilChangeOdometerToWeeklyMileage({
-  vehicleReg,
-  serviceDate,
-  serviceOdometer
-}: {
-  vehicleReg: string;
-  serviceDate: string;
-  serviceOdometer: number;
-}) {
-  const normalizedVehicleReg = normalizeVehicleRegistration(vehicleReg);
-  const latestResult = await supabase
-    .from("weekly_mileage")
-    .select("id, week_ending, driver_id, vehicle_reg, odometer_reading, mileage, created_at")
-    .ilike("vehicle_reg", normalizedVehicleReg)
-    .order("week_ending", { ascending: false })
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (latestResult.error && !isMissingColumnError(latestResult.error)) {
-    logDataError("syncOilChangeOdometerToWeeklyMileage latest lookup warning:", latestResult.error, {
-      vehicleReg: normalizedVehicleReg
-    });
-    return;
+async function fetchOilChangeLogsForVehicle(vehicleReg: string) {
+  const vehicleKey = normalizeOilChangeVehicleRegKey(vehicleReg);
+  if (!vehicleKey) {
+    return [];
   }
 
-  const latestRow = latestResult.data as Partial<WeeklyMileageEntry> | null;
-  const latestOdometer = parseOptionalNumeric(latestRow?.odometer_reading ?? latestRow?.mileage);
-  const latestWeekEnding = latestRow?.week_ending ?? null;
+  const serviceLogResult = await supabase
+    .from("vehicle_service_logs")
+    .select("*")
+    .order("service_date", { ascending: false });
+  const serviceLogs =
+    serviceLogResult.error && !isMissingTableError(serviceLogResult.error) && !isMissingColumnError(serviceLogResult.error)
+      ? (() => {
+          logDataError("fetchOilChangeLogsForVehicle service log error:", serviceLogResult.error, { vehicleReg });
+          return [] as VehicleServiceLog[];
+        })()
+      : ((serviceLogResult.data ?? []) as VehicleServiceLog[])
+          .filter((log) => !log.service_type || log.service_type === "oil_change")
+          .map(normalizeServiceLogRow);
 
-  if (latestOdometer != null && latestOdometer >= serviceOdometer) {
-    return;
-  }
+  const legacyResult = await supabase
+    .from("oil_change_history")
+    .select("*")
+    .order("oil_change_date", { ascending: false });
+  const legacyLogs =
+    legacyResult.error && !isMissingTableError(legacyResult.error) && !isMissingColumnError(legacyResult.error)
+      ? (() => {
+          logDataError("fetchOilChangeLogsForVehicle legacy log warning:", legacyResult.error, { vehicleReg });
+          return [] as VehicleServiceLog[];
+        })()
+      : ((legacyResult.data ?? []) as OilChangeHistory[]).map(normalizeOilChangeHistoryRow);
 
-  const syncWeekEnding = latestWeekEnding && latestWeekEnding > serviceDate ? latestWeekEnding : serviceDate;
-
-  const drivers = await fetchDrivers().catch((error) => {
-    logDataError("syncOilChangeOdometerToWeeklyMileage driver lookup warning:", error, {
-      vehicleReg: normalizedVehicleReg
-    });
-    return [] as Driver[];
-  });
-  const matchedDriver = drivers.find(
-    (driver) => normalizeComparableText(driver.vehicle_reg) === normalizeComparableText(normalizedVehicleReg)
+  return sortServiceLogsByLatest([...serviceLogs, ...legacyLogs]).filter(
+    (log) => normalizeOilChangeVehicleRegKey(log.vehicle_reg) === vehicleKey
   );
+}
 
-  if (!matchedDriver) {
-    logDataError("syncOilChangeOdometerToWeeklyMileage skipped: no driver matched vehicle registration.", null, {
-      vehicleReg: normalizedVehicleReg
-    });
-    return;
+async function fetchOilChangeLogById(serviceLogId?: string | null) {
+  const normalizedId = serviceLogId?.trim();
+  if (!normalizedId) {
+    return null;
   }
 
-  await saveWeeklyMileage({
-    week_ending: syncWeekEnding,
-    driver_id: String(matchedDriver.id),
-    driver: matchedDriver.name,
-    vehicle_reg: normalizedVehicleReg,
-    odometer_reading: serviceOdometer,
-    mileage: serviceOdometer
-  });
+  if (normalizedId.startsWith("oil-change-history-")) {
+    const legacyId = normalizedId.replace(/^oil-change-history-/, "");
+    const result = await supabase
+      .from("oil_change_history")
+      .select("*")
+      .eq("id", legacyId)
+      .maybeSingle();
+    if (result.error) {
+      if (!isMissingTableError(result.error) && !isMissingColumnError(result.error)) {
+        logDataError("fetchOilChangeLogById legacy warning:", result.error, { serviceLogId });
+      }
+      return null;
+    }
+    return result.data ? normalizeOilChangeHistoryRow(result.data as OilChangeHistory) : null;
+  }
+
+  const result = await supabase
+    .from("vehicle_service_logs")
+    .select("*")
+    .eq("id", normalizedId)
+    .maybeSingle();
+  if (result.error) {
+    if (!isMissingTableError(result.error) && !isMissingColumnError(result.error)) {
+      logDataError("fetchOilChangeLogById service log warning:", result.error, { serviceLogId });
+    }
+    return null;
+  }
+  return result.data ? normalizeServiceLogRow(result.data as VehicleServiceLog) : null;
+}
+
+async function fetchVehicleForOilChangeRegistration(registration?: string | null) {
+  const registrationKey = normalizeOilChangeVehicleRegKey(registration);
+  if (!registrationKey) {
+    return null;
+  }
+
+  const result = await supabase.from("vehicles").select("*");
+  if (result.error) {
+    logDataError("fetchVehicleForOilChangeRegistration warning:", result.error, { registration });
+    return null;
+  }
+
+  const vehicle = ((result.data ?? []) as Vehicle[]).find(
+    (candidate) => normalizeOilChangeVehicleRegKey(candidate.vehicle_reg ?? candidate.registration) === registrationKey
+  );
+  return vehicle ? normalizeVehicleRow(vehicle) : null;
+}
+
+async function recomputeOilChangeBaselineFromHistory({
+  vehicle,
+  vehicleType
+}: {
+  vehicle: Vehicle;
+  vehicleType?: string | null;
+}) {
+  const vehicleReg = normalizeVehicleRegistration(vehicle.vehicle_reg ?? vehicle.registration);
+  const logs = await fetchOilChangeLogsForVehicle(vehicleReg);
+  const latest = logs.find((log) => Number.isFinite(Number(log.oil_change_odometer ?? log.odometer ?? log.service_odometer))) ?? null;
+
+  if (!latest) {
+    const baselineDelete = await supabase
+      .from("oil_change_baselines")
+      .delete()
+      .eq("vehicle_reg", vehicleReg);
+    if (baselineDelete.error && !isMissingTableError(baselineDelete.error)) {
+      logDataError("recomputeOilChangeBaselineFromHistory baseline delete error:", baselineDelete.error, { vehicleReg });
+      throw new Error(baselineDelete.error.message ?? "Unable to clear oil change baseline.");
+    }
+
+    if (isUuid(vehicle.id)) {
+      const vehicleUpdate = await supabase
+        .from("vehicles")
+        .update({
+          last_oil_change_date: null,
+          last_oil_change_odometer: null,
+          oil_change_interval_km: getOilChangeIntervalForVehicleType(vehicleType ?? vehicle.vehicle_type)
+        })
+        .eq("id", vehicle.id)
+        .select()
+        .single();
+      if (!vehicleUpdate.error && vehicleUpdate.data) {
+        return { vehicle: normalizeVehicleRow(vehicleUpdate.data as Vehicle), serviceLog: null };
+      }
+    }
+
+    return {
+      vehicle: normalizeVehicleRow({
+        ...vehicle,
+        last_oil_change_date: null,
+        last_oil_change_odometer: null,
+        oil_change_interval_km: getOilChangeIntervalForVehicleType(vehicleType ?? vehicle.vehicle_type)
+      }),
+      serviceLog: null
+    };
+  }
+
+  const serviceOdometer = Math.trunc(Number(latest.oil_change_odometer ?? latest.odometer ?? latest.service_odometer));
+  const intervalKm = Math.trunc(
+    Number(getEffectiveOilChangeIntervalForVehicleType(
+      latest.vehicle_type_snapshot ?? vehicleType ?? vehicle.vehicle_type,
+      latest.interval_km ?? vehicle.oil_change_interval_km
+    ) || 30000)
+  );
+  const baselinePayload = {
+    vehicle_reg: vehicleReg,
+    last_oil_change_date: latest.service_date,
+    last_odometer: serviceOdometer,
+    interval_km: intervalKm
+  };
+  const baselineUpsert = await supabase
+    .from("oil_change_baselines")
+    .upsert(baselinePayload, { onConflict: "vehicle_reg" });
+  if (baselineUpsert.error) {
+    logDataError("recomputeOilChangeBaselineFromHistory baseline upsert error:", baselineUpsert.error, baselinePayload);
+    throw new Error(baselineUpsert.error.message ?? "Unable to update oil change baseline.");
+  }
+
+  const vehiclePayload = {
+    last_oil_change_date: latest.service_date,
+    last_oil_change_odometer: serviceOdometer,
+    oil_change_interval_km: intervalKm
+  };
+  if (isUuid(vehicle.id)) {
+    const vehicleUpdate = await supabase
+      .from("vehicles")
+      .update(vehiclePayload)
+      .eq("id", vehicle.id)
+      .select()
+      .single();
+    if (vehicleUpdate.error) {
+      logDataError("recomputeOilChangeBaselineFromHistory vehicle update warning:", vehicleUpdate.error, {
+        vehicleId: vehicle.id,
+        vehiclePayload
+      });
+    } else if (vehicleUpdate.data) {
+      return { vehicle: normalizeVehicleRow(vehicleUpdate.data as Vehicle), serviceLog: latest };
+    }
+  }
+
+  return {
+    vehicle: normalizeVehicleRow({
+      ...vehicle,
+      ...vehiclePayload
+    }),
+    serviceLog: latest
+  };
 }
 
 export function applyOilChangeBaselinesToVehicles(
@@ -1079,7 +1228,8 @@ function resolveShipmentDriverName(
 const FUEL_LOG_BASE_SELECT_COLUMNS =
   "id, date, driver_id, driver, vehicle_reg, odometer, litres, total_cost, price_per_litre, mileage, location, fuel_type, payment_method, notes, created_at";
 const FUEL_LOG_RECEIPT_SELECT_COLUMNS = `${FUEL_LOG_BASE_SELECT_COLUMNS}, receipt_checked, receipt_checked_at`;
-const FUEL_LOG_ENTRY_SOURCE_SELECT_COLUMNS = `${FUEL_LOG_RECEIPT_SELECT_COLUMNS}, entry_source`;
+const FUEL_LOG_FULL_TANK_SELECT_COLUMNS = `${FUEL_LOG_RECEIPT_SELECT_COLUMNS}, full_tank_confirmed, full_tank_confirmed_at`;
+const FUEL_LOG_ENTRY_SOURCE_SELECT_COLUMNS = `${FUEL_LOG_FULL_TANK_SELECT_COLUMNS}, entry_source`;
 
 function normalizeFuelLogEntrySource(value: unknown): FuelLogEntrySource {
   if (
@@ -1117,6 +1267,8 @@ function mapFuelLogRows(
     entry_source?: string | null;
     receipt_checked?: boolean | null;
     receipt_checked_at?: string | null;
+    full_tank_confirmed?: boolean | null;
+    full_tank_confirmed_at?: string | null;
     notes: string | null;
     created_at?: string;
   }>
@@ -1142,7 +1294,9 @@ function mapFuelLogRows(
     payment_method: normalizePaymentMethodKey(log.payment_method) ?? log.payment_method,
     entry_source: normalizeFuelLogEntrySource(log.entry_source),
     receipt_checked: Boolean(log.receipt_checked),
-    receipt_checked_at: log.receipt_checked_at ?? null
+    receipt_checked_at: log.receipt_checked_at ?? null,
+    full_tank_confirmed: Boolean(log.full_tank_confirmed),
+    full_tank_confirmed_at: log.full_tank_confirmed_at ?? null
   })) as FuelLogWithDriver[];
 }
 
@@ -1295,7 +1449,15 @@ async function fetchDriverLookup() {
 }
 
 export async function fetchDrivers() {
-  return readThroughCache("drivers:all", async () => {
+  return fetchDriverDirectory();
+}
+
+export async function fetchDriverDirectory({
+  includeInactive = false
+}: {
+  includeInactive?: boolean;
+} = {}) {
+  return readThroughCache(`drivers:directory:${includeInactive ? "all" : "active"}`, async () => {
     const { data, error } = await supabase
       .from("drivers")
       .select("*")
@@ -1309,7 +1471,7 @@ export async function fetchDrivers() {
     console.log("fetchDrivers success", { rowCount: (data ?? []).length });
 
     return ((data ?? []) as Driver[])
-      .filter((driver) => driver.active !== false)
+      .filter((driver) => includeInactive || driver.active !== false)
       .map(normalizeDriverRow);
   });
 }
@@ -1349,8 +1511,7 @@ export async function fetchVehicleServiceLogs() {
     const { data, error } = await supabase
       .from("vehicle_service_logs")
       .select("*")
-      .order("service_date", { ascending: false })
-      .order("created_at", { ascending: false });
+      .order("service_date", { ascending: false });
 
     if (error) {
       if (isMissingTableError(error)) {
@@ -1398,8 +1559,7 @@ export async function fetchOilChangeHistory() {
   const serviceLogResult = await supabase
     .from("vehicle_service_logs")
     .select("*")
-    .order("service_date", { ascending: false })
-    .order("created_at", { ascending: false });
+    .order("service_date", { ascending: false });
 
   const serviceLogs: VehicleServiceLog[] = [];
   let canReadServiceLogs = false;
@@ -1422,8 +1582,7 @@ export async function fetchOilChangeHistory() {
   const legacyResult = await supabase
     .from("oil_change_history")
     .select("*")
-    .order("oil_change_date", { ascending: false })
-    .order("created_at", { ascending: false });
+    .order("oil_change_date", { ascending: false });
 
   if (legacyResult.error) {
     if (!canReadServiceLogs && !isMissingTableError(legacyResult.error) && !isMissingColumnError(legacyResult.error)) {
@@ -1622,6 +1781,7 @@ export async function saveOilChangeService(payload: {
   vehicleId?: string | null;
   vehicleReg: string;
   vehicleName?: string | null;
+  serviceType?: string | null;
   serviceDate: string;
   serviceOdometer: number;
   intervalKm: number;
@@ -1648,24 +1808,18 @@ export async function saveOilChangeService(payload: {
       throw new Error("Interval KM must be greater than zero.");
     }
 
+    const previousLog = payload.updateExistingLog ? await fetchOilChangeLogById(payload.serviceLogId) : null;
     const vehicle = await ensureVehicleForService({
       vehicleId: payload.vehicleId,
       registration: payload.vehicleReg,
       vehicleName: payload.vehicleName,
       vehicleType: payload.vehicleType
     });
-    const oilChangeBaselinePayload = {
-      vehicle_reg: vehicle.vehicle_reg,
-      last_oil_change_date: serviceDate,
-      last_odometer: serviceOdometer,
-      interval_km: intervalKm
-    };
-
     let historyRow: VehicleServiceLog | null = null;
     const historyPayload = stripUndefined({
       vehicle_id: isUuid(vehicle.id) ? vehicle.id : undefined,
       vehicle_reg: vehicle.vehicle_reg,
-      service_type: "oil_change",
+      service_type: payload.serviceType?.trim() || "oil_change",
       service_date: serviceDate,
       odometer: serviceOdometer,
       oil_change_odometer: serviceOdometer,
@@ -1714,7 +1868,7 @@ export async function saveOilChangeService(payload: {
       }
 
       historyRow = normalizeOilChangeHistoryRow(legacyResult.data as OilChangeHistory);
-    } else if (payload.recordHistory) {
+    } else {
       const historyResult = await insertVehicleServiceLogWithSchemaFallback(historyPayload);
 
       if (historyResult.error || !historyResult.data) {
@@ -1729,65 +1883,83 @@ export async function saveOilChangeService(payload: {
       historyRow = normalizeServiceLogRow(historyResult.data as VehicleServiceLog);
     }
 
-    const baselineUpsertResult = await supabase
-      .from("oil_change_baselines")
-      .upsert(oilChangeBaselinePayload, { onConflict: "vehicle_reg" });
-
-    if (baselineUpsertResult.error) {
-      logDataError("saveOilChangeService baseline error:", baselineUpsertResult.error, oilChangeBaselinePayload);
-      throw new Error(
-        getServiceSchemaSetupMessage(baselineUpsertResult.error) ??
-          baselineUpsertResult.error?.message ??
-          "Failed to save oil change baseline - try again."
-      );
-    }
-
-    const baselineResult = await supabase
-      .from("oil_change_baselines")
-      .select("*")
-      .eq("vehicle_reg", oilChangeBaselinePayload.vehicle_reg)
-      .single();
-
-    if (baselineResult.error || !baselineResult.data) {
-      logDataError("saveOilChangeService baseline refetch error:", baselineResult.error, oilChangeBaselinePayload);
-      throw new Error(
-        getServiceSchemaSetupMessage(baselineResult.error) ??
-          baselineResult.error?.message ??
-          "Baseline saved, but Supabase did not return the saved baseline."
-      );
-    }
-
-    const baseline = normalizeOilChangeBaselineRow(baselineResult.data as OilChangeBaseline);
-    await syncOilChangeOdometerToWeeklyMileage({
-      vehicleReg: baseline.vehicle_reg,
-      serviceDate: baseline.last_oil_change_date,
-      serviceOdometer: baseline.last_odometer
+    const recomputed = await recomputeOilChangeBaselineFromHistory({
+      vehicle,
+      vehicleType: payload.vehicleType
     });
-    const updatedVehicle = normalizeVehicleRow({
-      ...vehicle,
-      last_oil_change_date: baseline.last_oil_change_date,
-      last_oil_change_odometer: baseline.last_odometer,
-      oil_change_interval_km: baseline.interval_km
-    });
-    const baselineServiceLog =
-      historyRow ??
-      normalizeOilChangeHistoryRow({
-        id: baseline.id,
-        vehicle_reg: baseline.vehicle_reg,
-        oil_change_date: baseline.last_oil_change_date,
-        odometer: baseline.last_odometer,
-        created_at: baseline.updated_at ?? baseline.created_at
-      });
+    const previousVehicleReg = normalizeOilChangeVehicleRegKey(previousLog?.vehicle_reg);
+    const nextVehicleReg = normalizeOilChangeVehicleRegKey(vehicle.vehicle_reg ?? vehicle.registration);
+    if (previousVehicleReg && previousVehicleReg !== nextVehicleReg) {
+      const previousVehicle = await fetchVehicleForOilChangeRegistration(previousLog?.vehicle_reg);
+      if (previousVehicle) {
+        await recomputeOilChangeBaselineFromHistory({
+          vehicle: previousVehicle,
+          vehicleType: previousLog?.vehicle_type_snapshot ?? previousVehicle.vehicle_type
+        });
+      }
+    }
 
     dispatchDataChange("oil_change_baselines");
     dispatchDataChange("oil_change_history");
     dispatchDataChange("vehicle_service_logs");
+    dispatchDataChange("vehicles");
     return {
-      vehicle: updatedVehicle,
-      serviceLog: baselineServiceLog
+      vehicle: recomputed.vehicle,
+      serviceLog: recomputed.serviceLog ?? historyRow
     };
   } catch (error) {
     console.error("Oil change service save failed", serializeError(error));
+    throw error;
+  }
+}
+
+export async function deleteOilChangeService(payload: {
+  serviceLogId: string;
+  vehicleId?: string | null;
+  vehicleReg: string;
+  vehicleName?: string | null;
+  vehicleType?: string | null;
+}) {
+  const serviceLogId = payload.serviceLogId?.trim();
+  if (!serviceLogId) {
+    throw new Error("Oil change service record is required.");
+  }
+
+  try {
+    const vehicle = await ensureVehicleForService({
+      vehicleId: payload.vehicleId,
+      registration: payload.vehicleReg,
+      vehicleName: payload.vehicleName,
+      vehicleType: payload.vehicleType
+    });
+
+    if (serviceLogId.startsWith("oil-change-history-")) {
+      const legacyId = serviceLogId.replace(/^oil-change-history-/, "");
+      const result = await deleteOilChangeHistoryWithSchemaFallback(legacyId);
+      if (result.error) {
+        logDataError("deleteOilChangeService legacy history error:", result.error, { legacyId });
+        throw new Error(result.error.message ?? "Failed to delete oil change history.");
+      }
+    } else {
+      const result = await deleteVehicleServiceLogWithSchemaFallback(serviceLogId);
+      if (result.error) {
+        logDataError("deleteOilChangeService service log error:", result.error, { serviceLogId });
+        throw new Error(result.error.message ?? "Failed to delete oil change service record.");
+      }
+    }
+
+    const recomputed = await recomputeOilChangeBaselineFromHistory({
+      vehicle,
+      vehicleType: payload.vehicleType
+    });
+
+    dispatchDataChange("oil_change_baselines");
+    dispatchDataChange("oil_change_history");
+    dispatchDataChange("vehicle_service_logs");
+    dispatchDataChange("vehicles");
+    return recomputed;
+  } catch (error) {
+    console.error("Oil change service delete failed", serializeError(error));
     throw error;
   }
 }
@@ -1961,6 +2133,307 @@ export async function fetchFuelLogsForExport(filters: FuelLogFilters = {}) {
   }
 
   return mapFuelLogRows(allRows);
+}
+
+export async function fetchVehicleMonthlyPerformance(filters: {
+  year?: number;
+  month?: number | "";
+  vehicleRegistration?: string;
+} = {}) {
+  let query = supabase
+    .from("vehicle_monthly_performance")
+    .select("*")
+    .order("year", { ascending: false })
+    .order("month", { ascending: false })
+    .order("vehicle_registration", { ascending: true });
+
+  if (filters.year) {
+    query = query.eq("year", filters.year);
+  }
+
+  if (filters.month) {
+    query = query.eq("month", filters.month);
+  }
+
+  const vehicleRegistration = filters.vehicleRegistration?.trim();
+  if (vehicleRegistration) {
+    query = query.ilike("vehicle_registration", `%${vehicleRegistration}%`);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    logDataError("fetchVehicleMonthlyPerformance error:", error, filters);
+    throw error;
+  }
+
+  return ((data ?? []) as VehicleMonthlyPerformance[]).map((row) => ({
+    ...row,
+    vehicle_registration: normalizeVehicleRegistration(row.vehicle_registration),
+    salary_cost: Number(row.salary_cost || 0),
+    trip_income: Number(row.trip_income || 0),
+    other_expenses: Number(row.other_expenses || 0),
+    gross_revenue: Number(row.gross_revenue || 0),
+    lpg_cost: Number(row.lpg_cost || 0)
+  }));
+}
+
+export async function fetchVehicleMonthlyFuelSpend(filters: {
+  year: number;
+  month?: number | "";
+}) {
+  const range = monthDateRange(filters.year, filters.month);
+  const logs = await fetchFuelLogsForExport({
+    fromDate: range.fromDate,
+    toDate: range.toDate
+  });
+  return buildFuelSpendReportVehicleMonthlyFuelRows(logs, filters);
+}
+
+export async function saveVehicleMonthlyPerformance(payload: Partial<VehicleMonthlyPerformance>) {
+  const { id, ...rest } = payload;
+  const vehicleRegistration = normalizeVehicleRegistration(rest.vehicle_registration);
+
+  if (!rest.year || !Number.isInteger(Number(rest.year))) {
+    throw new Error("Year is required.");
+  }
+
+  if (!rest.month || !Number.isInteger(Number(rest.month))) {
+    throw new Error("Month is required.");
+  }
+
+  if (!vehicleRegistration) {
+    throw new Error("Vehicle registration is required.");
+  }
+
+  const { data: authData } = await supabase.auth.getUser();
+  const userId = authData.user?.id ?? null;
+  const cleaned = stripUndefined({
+    year: Number(rest.year),
+    month: Number(rest.month),
+    vehicle_id: rest.vehicle_id ?? undefined,
+    vehicle_registration: vehicleRegistration,
+    salary_cost: Number(rest.salary_cost || 0),
+    trip_income: Number(rest.trip_income || 0),
+    other_expenses: Number(rest.other_expenses || 0),
+    gross_revenue: Number(rest.gross_revenue || 0),
+    lpg_cost: Number(rest.lpg_cost || 0),
+    notes: rest.notes?.trim() || null,
+    updated_by: userId
+  });
+  const insertPayload = id ? cleaned : { ...cleaned, created_by: userId };
+
+  const result = id
+    ? await supabase.from("vehicle_monthly_performance").update(cleaned).eq("id", id).select().single()
+    : await supabase.from("vehicle_monthly_performance").insert(insertPayload).select().single();
+
+  if (result.error) {
+    logDataError("saveVehicleMonthlyPerformance error:", result.error, { id, payload: cleaned });
+    throw new Error(
+      result.error.message ||
+        result.error.details ||
+        result.error.hint ||
+        "Unable to save vehicle performance."
+    );
+  }
+
+  dispatchDataChange("vehicle_monthly_performance");
+  return result.data as VehicleMonthlyPerformance;
+}
+
+export async function deleteVehicleMonthlyPerformance(id: string) {
+  const { error } = await supabase.from("vehicle_monthly_performance").delete().eq("id", id);
+
+  if (error) {
+    logDataError("deleteVehicleMonthlyPerformance error:", error, { id });
+    throw error;
+  }
+
+  dispatchDataChange("vehicle_monthly_performance");
+}
+
+function vehiclePerformanceImportReviewKeyValue(value: string | null | undefined) {
+  return normalizeComparableText(normalizeVehicleRegistration(value));
+}
+
+export async function fetchVehiclePerformanceImportReviews(filters: {
+  year?: number;
+  month?: number | "";
+} = {}) {
+  let query = supabase
+    .from("vehicle_performance_import_reviews")
+    .select("*")
+    .order("year", { ascending: false })
+    .order("month", { ascending: false })
+    .order("canonical_vehicle_registration", { ascending: true });
+
+  if (filters.year) query = query.eq("year", filters.year);
+  if (filters.month) query = query.eq("month", filters.month);
+
+  const { data, error } = await query;
+  if (error) {
+    if (isMissingTableError(error)) {
+      return [] as VehiclePerformanceImportReview[];
+    }
+    logDataError("fetchVehiclePerformanceImportReviews error:", error, filters);
+    throw error;
+  }
+
+  return ((data ?? []) as VehiclePerformanceImportReview[]).map((review) => ({
+    ...review,
+    canonical_vehicle_registration: normalizeVehicleRegistration(review.canonical_vehicle_registration),
+    canonical_vehicle_registration_key: vehiclePerformanceImportReviewKeyValue(review.canonical_vehicle_registration),
+    excel_fuel: review.excel_fuel == null ? null : Number(review.excel_fuel),
+    app_fuel_at_review: Number(review.app_fuel_at_review || 0),
+    fuel_difference_at_review:
+      review.fuel_difference_at_review == null ? null : Number(review.fuel_difference_at_review)
+  }));
+}
+
+export async function saveVehiclePerformanceImportReview(payload: {
+  vehicle_id?: string | null;
+  canonical_vehicle_registration: string;
+  imported_vehicle_reference?: string | null;
+  source_sheet?: string | null;
+  source_row_number?: number | null;
+  source_row_key?: string | null;
+  year: number;
+  month: number;
+  review_status: VehiclePerformanceImportReviewStatus;
+  excel_fuel?: number | null;
+  app_fuel_at_review: number;
+  fuel_difference_at_review?: number | null;
+  review_note?: string | null;
+}) {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError) {
+    logDataError("saveVehiclePerformanceImportReview auth error:", authError);
+    throw authError;
+  }
+  const userId = authData.user?.id;
+  if (!userId) {
+    throw new Error("You must be signed in to review import exceptions.");
+  }
+
+  const canonicalRegistration = normalizeVehicleRegistration(payload.canonical_vehicle_registration);
+  if (!canonicalRegistration) {
+    throw new Error("Vehicle registration is required to save an import review.");
+  }
+
+  const reviewPayload = {
+    user_id: userId,
+    vehicle_id: payload.vehicle_id ?? null,
+    canonical_vehicle_registration: canonicalRegistration,
+    canonical_vehicle_registration_key: vehiclePerformanceImportReviewKeyValue(canonicalRegistration),
+    imported_vehicle_reference: normalizeVehicleRegistration(payload.imported_vehicle_reference) || null,
+    source_sheet: payload.source_sheet?.trim() || null,
+    source_row_number: payload.source_row_number ?? null,
+    source_row_key: payload.source_row_key?.trim() || null,
+    year: Number(payload.year),
+    month: Number(payload.month),
+    review_status: payload.review_status,
+    excel_fuel: payload.excel_fuel ?? null,
+    app_fuel_at_review: Number(payload.app_fuel_at_review || 0),
+    fuel_difference_at_review: payload.fuel_difference_at_review ?? null,
+    review_note: payload.review_note?.trim() || null,
+    reviewed_by: authData.user?.email ?? userId,
+    reviewed_at: new Date().toISOString()
+  };
+
+  const result = await supabase
+    .from("vehicle_performance_import_reviews")
+    .upsert(reviewPayload, {
+      onConflict: "user_id,year,month,canonical_vehicle_registration_key"
+    })
+    .select()
+    .single();
+
+  if (result.error) {
+    logDataError("saveVehiclePerformanceImportReview error:", result.error, reviewPayload);
+    throw new Error(result.error.message || "Unable to save import review.");
+  }
+
+  dispatchDataChange("vehicle_performance_import_reviews");
+  return result.data as VehiclePerformanceImportReview;
+}
+
+export async function deleteVehiclePerformanceImportReview(filters: {
+  year: number;
+  month: number;
+  canonical_vehicle_registration: string;
+}) {
+  const key = vehiclePerformanceImportReviewKeyValue(filters.canonical_vehicle_registration);
+  const { error } = await supabase
+    .from("vehicle_performance_import_reviews")
+    .delete()
+    .eq("year", filters.year)
+    .eq("month", filters.month)
+    .eq("canonical_vehicle_registration_key", key);
+
+  if (error) {
+    if (isMissingTableError(error)) return;
+    logDataError("deleteVehiclePerformanceImportReview error:", error, filters);
+    throw error;
+  }
+
+  dispatchDataChange("vehicle_performance_import_reviews");
+}
+
+export async function saveVehiclePerformanceCorrectionAudit(payload: {
+  vehicle_monthly_performance_id?: string | null;
+  year: number;
+  month: number;
+  vehicle_registration: string;
+  changes: Array<{
+    field_name: "gross_revenue" | "salary_cost" | "trip_income" | "other_expenses" | "lpg_cost";
+    old_value: number | null;
+    new_value: number | null;
+  }>;
+  reason?: string | null;
+}) {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError) {
+    logDataError("saveVehiclePerformanceCorrectionAudit auth error:", authError);
+    throw authError;
+  }
+  const userId = authData.user?.id;
+  if (!userId) {
+    throw new Error("You must be signed in to save correction audit entries.");
+  }
+
+  const registration = normalizeVehicleRegistration(payload.vehicle_registration);
+  const rows = payload.changes
+    .filter((change) => Math.abs(Number(change.old_value || 0) - Number(change.new_value || 0)) > 0.01)
+    .map((change) => ({
+      user_id: userId,
+      vehicle_monthly_performance_id: payload.vehicle_monthly_performance_id ?? null,
+      year: Number(payload.year),
+      month: Number(payload.month),
+      vehicle_registration: registration,
+      field_name: change.field_name,
+      old_value: change.old_value,
+      new_value: change.new_value,
+      reason: payload.reason?.trim() || null,
+      corrected_by: authData.user?.email ?? userId,
+      corrected_at: new Date().toISOString()
+    }));
+
+  if (!rows.length) {
+    return [] as VehiclePerformanceCorrectionAudit[];
+  }
+
+  const { data, error } = await supabase
+    .from("vehicle_performance_correction_audit")
+    .insert(rows)
+    .select();
+
+  if (error) {
+    logDataError("saveVehiclePerformanceCorrectionAudit error:", error, rows);
+    throw new Error(error.message || "Unable to save correction audit.");
+  }
+
+  dispatchDataChange("vehicle_performance_correction_audit");
+  return (data ?? []) as VehiclePerformanceCorrectionAudit[];
 }
 
 export async function fetchFuelLogReceiptSummary(filters: FuelLogFilters = {}) {
@@ -2214,7 +2687,7 @@ export async function fetchTransfers() {
 export async function fetchWeeklyMileage() {
   const modernQuery = await supabase
     .from("weekly_mileage")
-    .select("id, week_ending, driver_id, vehicle_reg, odometer_reading, is_odometer_baseline, odometer_note, created_at, user_id")
+    .select("id, week_ending, driver_id, vehicle_id, driver_name_snapshot, vehicle_reg, odometer_reading, is_odometer_baseline, odometer_note, created_at, user_id")
     .order("week_ending", { ascending: false })
     .order("id", { ascending: false });
 
@@ -2239,6 +2712,8 @@ export async function fetchWeeklyMileage() {
       id: string;
       week_ending: string;
       driver_id: string;
+      vehicle_id?: string | null;
+      driver_name_snapshot?: string | null;
       vehicle_reg: string;
       odometer_reading: number;
       is_odometer_baseline?: boolean | null;
@@ -2247,7 +2722,9 @@ export async function fetchWeeklyMileage() {
       user_id?: string;
     }>).map((entry) => ({
       ...entry,
-      driver: driverLookup.get(String(entry.driver_id)) ?? "",
+      driver: normalizeDisplayName(entry.driver_name_snapshot) || driverLookup.get(String(entry.driver_id)) || "",
+      vehicle_id: entry.vehicle_id ?? null,
+      driver_name_snapshot: entry.driver_name_snapshot ?? null,
       vehicle_reg: normalizeVehicleRegistration(entry.vehicle_reg),
       mileage: Number(entry.odometer_reading || 0),
       is_odometer_baseline: entry.is_odometer_baseline ?? false,
@@ -2410,9 +2887,73 @@ function normalizeBookingDiaryRow(booking: BookingDiaryEntry) {
     route_traffic_aware: booking.route_traffic_aware ?? null,
     route_source: booking.route_source ?? null,
     route_fallback_info: booking.route_fallback_info ?? null,
+    approved_route_id: booking.approved_route_id ?? null,
+    route_confirmation_status: booking.route_confirmation_status ?? null,
     created_by: booking.created_by ?? null,
     modified_by: booking.modified_by ?? null
   };
+}
+
+function normalizeBookingRouteName(value: string | null | undefined) {
+  return normalizeComparableText(value)
+    .replace(/[^\p{Letter}\p{Number}]+/gu, " ")
+    .trim();
+}
+
+function buildApprovedRouteUrl(approval: {
+  pickup_formatted_address: string | null;
+  pickup_place_id: string | null;
+  dropoff_formatted_address: string | null;
+  dropoff_place_id: string | null;
+}) {
+  const origin = approval.pickup_formatted_address?.trim();
+  const destination = approval.dropoff_formatted_address?.trim();
+  if (!origin || !destination) return null;
+  const url = new URL("https://www.google.com/maps/dir/");
+  url.searchParams.set("api", "1");
+  url.searchParams.set("origin", origin);
+  url.searchParams.set("destination", destination);
+  if (approval.pickup_place_id) url.searchParams.set("origin_place_id", approval.pickup_place_id.replace(/^places\//, ""));
+  if (approval.dropoff_place_id) url.searchParams.set("destination_place_id", approval.dropoff_place_id.replace(/^places\//, ""));
+  return url.toString();
+}
+
+async function findApprovedRouteForBooking(pickup: string | null | undefined, dropoff: string | null | undefined) {
+  const normalizedPickup = normalizeBookingRouteName(pickup);
+  const normalizedDropoff = normalizeBookingRouteName(dropoff);
+  if (!normalizedPickup || !normalizedDropoff) return null;
+
+  const { data, error } = await supabase
+    .from("booking_route_approvals")
+    .select("id,pickup_canonical_name,pickup_formatted_address,pickup_place_id,pickup_lat,pickup_lng,dropoff_canonical_name,dropoff_formatted_address,dropoff_place_id,dropoff_lat,dropoff_lng,google_distance_km,route_distance_meters,google_maps_route_url,status")
+    .eq("normalized_pickup", normalizedPickup)
+    .eq("normalized_dropoff", normalizedDropoff)
+    .eq("status", "confirmed")
+    .maybeSingle();
+
+  if (error) {
+    if (isMissingTableError(error) || isMissingColumnError(error)) return null;
+    logDataError("findApprovedRouteForBooking error:", error, { pickup, dropoff });
+    return null;
+  }
+
+  return data as {
+    id: string;
+    pickup_canonical_name: string | null;
+    pickup_formatted_address: string | null;
+    pickup_place_id: string | null;
+    pickup_lat: number | string | null;
+    pickup_lng: number | string | null;
+    dropoff_canonical_name: string | null;
+    dropoff_formatted_address: string | null;
+    dropoff_place_id: string | null;
+    dropoff_lat: number | string | null;
+    dropoff_lng: number | string | null;
+    google_distance_km: number | string | null;
+    route_distance_meters: number | string | null;
+    google_maps_route_url: string | null;
+    status: string;
+  } | null;
 }
 
 export async function fetchBookingDiaryEntries() {
@@ -2685,6 +3226,7 @@ export async function saveBookingDiaryEntry(
   const cleaned = stripUndefined({
     ...(!id ? { booking_id: bookingId } : {}),
     client_id: rest.client_id ?? null,
+    vehicle_id: rest.vehicle_id ?? null,
     booking_date: rest.booking_date,
     pickup_time: rest.pickup_time || null,
     amount_pallets: parseOptionalNumeric(rest.amount_pallets),
@@ -2728,7 +3270,32 @@ export async function saveBookingDiaryEntry(
     notes: rest.notes?.trim() || null,
     modified_by: audit.name,
     ...(!id ? { created_by: audit.name, created_by_user_id: audit.id } : {})
-  });
+  }) as Partial<BookingDiaryEntry> & Record<string, unknown>;
+
+  const approvedRoute = await findApprovedRouteForBooking(cleaned.pickup as string | null, cleaned.dropoff as string | null);
+  if (approvedRoute) {
+    const routeMeters = parseOptionalNumeric(approvedRoute.route_distance_meters);
+    const routeKm = parseOptionalNumeric(approvedRoute.google_distance_km) ?? (routeMeters != null ? routeMeters / 1000 : null);
+    Object.assign(cleaned, stripUndefined({
+      approved_route_id: approvedRoute.id,
+      route_confirmation_status: "confirmed",
+      pickup_place_id: approvedRoute.pickup_place_id,
+      pickup_address: approvedRoute.pickup_formatted_address,
+      pickup_lat: parseOptionalNumeric(approvedRoute.pickup_lat),
+      pickup_lng: parseOptionalNumeric(approvedRoute.pickup_lng),
+      dropoff_place_id: approvedRoute.dropoff_place_id,
+      dropoff_address: approvedRoute.dropoff_formatted_address,
+      dropoff_lat: parseOptionalNumeric(approvedRoute.dropoff_lat),
+      dropoff_lng: parseOptionalNumeric(approvedRoute.dropoff_lng),
+      estimated_distance_km: routeKm ?? cleaned.estimated_distance_km,
+      route_distance_meters: routeMeters ?? (routeKm != null ? routeKm * 1000 : cleaned.route_distance_meters),
+      google_maps_route_url: approvedRoute.google_maps_route_url || buildApprovedRouteUrl(approvedRoute) || cleaned.google_maps_route_url,
+      distance_source: routeKm != null ? "approved_route" : cleaned.distance_source,
+      map_resolution_status: "resolved"
+    }));
+  } else if (!cleaned.approved_route_id && !cleaned.route_confirmation_status) {
+    Object.assign(cleaned, { route_confirmation_status: "pending" });
+  }
 
   const result = await writeBookingDiaryWithSchemaFallback({ id, payload: cleaned });
 
@@ -3225,6 +3792,7 @@ export async function saveTripJourney(
     dropoff_location: payload.dropoff_location?.trim() || null,
     route: payload.route?.trim() || null,
     vehicle_type: payload.vehicle_type?.trim() || null,
+    vehicle_id: payload.vehicle_id ?? null,
     vehicle_reg: normalizeVehicleRegistration(payload.vehicle_reg) || null,
     driver: normalizeDisplayName(payload.driver) || null,
     load_text: payload.load_details?.trim() || null,
@@ -3410,25 +3978,40 @@ export async function fetchRouteDistanceEstimate(
 
 export async function saveDriver(payload: Partial<Driver>) {
   const { id, ...rest } = payload;
-  const cleaned = stripUndefined(rest);
+  const cleaned = stripUndefined({
+    ...rest,
+    name: normalizeDisplayName(rest.name),
+    vehicle_reg: normalizeVehicleRegistration(rest.vehicle_reg) || "",
+    active: rest.active ?? true
+  });
   const driverName = normalizeComparableText(String(cleaned.name ?? ""));
   const vehicleReg = normalizeComparableText(String(cleaned.vehicle_reg ?? ""));
+  const nextDriverIsActive = cleaned.active !== false;
 
   const { data: existingDrivers, error: existingDriversError } = await supabase
     .from("drivers")
-    .select("id, name, vehicle_reg");
+    .select("id, name, vehicle_reg, active");
 
   if (existingDriversError) {
     logDataError("saveDriver existingDrivers error:", existingDriversError);
     throw existingDriversError;
   }
 
-  const conflict = ((existingDrivers ?? []) as Array<Pick<Driver, "id" | "name" | "vehicle_reg">>)
+  const previousDriver = id
+    ? ((existingDrivers ?? []) as Driver[]).find((driver) => String(driver.id) === String(id)) ?? null
+    : null;
+  const conflict = ((existingDrivers ?? []) as Array<Pick<Driver, "id" | "name" | "vehicle_reg" | "active">>)
     .filter((driver) => String(driver.id) !== String(id ?? ""))
     .find(
       (driver) =>
-        normalizeComparableText(driver.name) === driverName ||
-        normalizeComparableText(driver.vehicle_reg) === vehicleReg
+        (nextDriverIsActive &&
+          driver.active !== false &&
+          driverName &&
+          normalizeComparableText(driver.name) === driverName) ||
+        (nextDriverIsActive &&
+          driver.active !== false &&
+          vehicleReg &&
+          normalizeComparableText(driver.vehicle_reg) === vehicleReg)
     );
 
   if (conflict) {
@@ -3445,8 +4028,94 @@ export async function saveDriver(payload: Partial<Driver>) {
     throw error;
   }
 
+  await syncVehicleMasterForDriver(data as Driver, previousDriver);
   dispatchDataChange("drivers");
   return data as Driver;
+}
+
+async function syncVehicleMasterForDriver(driver: Driver, previousDriver: Driver | null) {
+  const nextRegistration = normalizeVehicleRegistration(driver.vehicle_reg);
+  if (!nextRegistration) {
+    return;
+  }
+
+  const previousRegistration = normalizeVehicleRegistration(previousDriver?.vehicle_reg);
+  const candidateKeys = new Set([
+    normalizeComparableText(nextRegistration),
+    normalizeComparableText(previousRegistration)
+  ].filter(Boolean));
+
+  const { data: vehicles, error } = await supabase
+    .from("vehicles")
+    .select("*");
+
+  if (error) {
+    if (!isMissingTableError(error)) {
+      logDataError("syncVehicleMasterForDriver vehicle lookup warning:", error, {
+        driverId: driver.id,
+        nextRegistration,
+        previousRegistration
+      });
+    }
+    return;
+  }
+
+  const assignedVehicle = driver.assigned_vehicle_id
+    ? ((vehicles ?? []) as Vehicle[]).find((vehicle) => String(vehicle.id) === String(driver.assigned_vehicle_id))
+    : null;
+  const registrationVehicle = ((vehicles ?? []) as Vehicle[]).find((vehicle) =>
+    candidateKeys.has(normalizeComparableText(normalizeVehicleRegistration(vehicle.vehicle_reg ?? vehicle.registration)))
+  );
+  const vehicle = assignedVehicle ?? registrationVehicle ?? null;
+
+  if (!vehicle) {
+    return;
+  }
+
+  const normalizedVehicle = normalizeVehicleRow(vehicle);
+  const updatePayload = stripUndefined({
+    vehicle_reg: nextRegistration,
+    vehicle_name:
+      normalizeComparableText(normalizedVehicle.vehicle_name) === normalizeComparableText(previousRegistration)
+        ? nextRegistration
+        : undefined,
+    vehicle_type: normalizedVehicle.vehicle_type || driver.vehicle_type || undefined,
+    active: true
+  });
+
+  const updateResult = await supabase
+    .from("vehicles")
+    .update(updatePayload)
+    .eq("id", normalizedVehicle.id)
+    .select("id")
+    .single();
+
+  if (updateResult.error) {
+    logDataError("syncVehicleMasterForDriver vehicle update warning:", updateResult.error, {
+      driverId: driver.id,
+      vehicleId: normalizedVehicle.id,
+      updatePayload
+    });
+    return;
+  }
+
+  if (!driver.assigned_vehicle_id) {
+    const assignedResult = await supabase
+      .from("drivers")
+      .update({ assigned_vehicle_id: normalizedVehicle.id })
+      .eq("id", driver.id)
+      .select("id")
+      .single();
+
+    if (assignedResult.error) {
+      logDataError("syncVehicleMasterForDriver driver assignment warning:", assignedResult.error, {
+        driverId: driver.id,
+        vehicleId: normalizedVehicle.id
+      });
+    }
+  }
+
+  dispatchDataChange("vehicles");
 }
 
 export async function deleteDriver(id: string) {
@@ -3473,6 +4142,7 @@ export async function saveFuelLog(payload: Partial<FuelLog>) {
   const schemaPayload = stripUndefined({
     date: rest.date,
     driver_id: rest.driver_id,
+    vehicle_id: rest.vehicle_id ?? undefined,
     driver: driverName || undefined,
     vehicle_reg: rest.vehicle_reg,
     odometer: rest.odometer ?? rest.mileage ?? null,
@@ -3486,12 +4156,28 @@ export async function saveFuelLog(payload: Partial<FuelLog>) {
     entry_source: normalizeFuelLogEntrySource(rest.entry_source),
     receipt_checked: rest.receipt_checked,
     receipt_checked_at: rest.receipt_checked_at ?? null,
+    full_tank_confirmed: rest.full_tank_confirmed ?? false,
+    full_tank_confirmed_at: rest.full_tank_confirmed ? rest.full_tank_confirmed_at ?? new Date().toISOString() : null,
     notes: rest.notes ?? null
   });
 
-  const result = id
+  let result = id
     ? await supabase.from("fuel_logs").update(schemaPayload).eq("id", id).select().single()
     : await supabase.from("fuel_logs").insert(schemaPayload).select().single();
+
+  if (result.error && isMissingColumnError(result.error) && (rest.full_tank_confirmed || rest.full_tank_confirmed_at)) {
+    logDataError("saveFuelLog full tank migration missing:", result.error, { id });
+    throw new Error("Fuel Log setup required: apply migration 20260824_add_fuel_full_tank_confirmation.sql before saving Full tank confirmed.");
+  }
+
+  if (result.error && isMissingColumnError(result.error)) {
+    const compatiblePayload = { ...schemaPayload };
+    delete (compatiblePayload as { full_tank_confirmed?: unknown }).full_tank_confirmed;
+    delete (compatiblePayload as { full_tank_confirmed_at?: unknown }).full_tank_confirmed_at;
+    result = id
+      ? await supabase.from("fuel_logs").update(compatiblePayload).eq("id", id).select().single()
+      : await supabase.from("fuel_logs").insert(compatiblePayload).select().single();
+  }
 
   if (result.error) {
     logDataError("saveFuelLog error:", result.error, schemaPayload);
@@ -3515,7 +4201,9 @@ export async function saveFuelLog(payload: Partial<FuelLog>) {
     price_per_litre: (result.data as { price_per_litre?: number | null }).price_per_litre ?? null,
     entry_source: normalizeFuelLogEntrySource((result.data as { entry_source?: string | null }).entry_source),
     receipt_checked: Boolean((result.data as { receipt_checked?: boolean | null }).receipt_checked),
-    receipt_checked_at: (result.data as { receipt_checked_at?: string | null }).receipt_checked_at ?? null
+    receipt_checked_at: (result.data as { receipt_checked_at?: string | null }).receipt_checked_at ?? null,
+    full_tank_confirmed: Boolean((result.data as { full_tank_confirmed?: boolean | null }).full_tank_confirmed),
+    full_tank_confirmed_at: (result.data as { full_tank_confirmed_at?: string | null }).full_tank_confirmed_at ?? null
   } as FuelLog;
 }
 
@@ -3593,6 +4281,7 @@ export async function saveTransfer(
   const modernPayload = stripUndefined({
     date: rest.transfer_date ?? rest.date,
     driver_id: rest.driver_id,
+    vehicle_id: rest.vehicle_id ?? undefined,
     vehicle_reg: rest.vehicle_reg,
     amount: rest.amount,
     transfer_type: normalizeTransferTypeKey(rest.transfer_type) ?? rest.transfer_type,
@@ -3697,15 +4386,25 @@ export async function saveWeeklyMileage(payload: Partial<WeeklyMileageEntry>) {
   if (!modernPayload.vehicle_reg) {
     throw new Error("Vehicle registration is required.");
   }
+  const driverNameSnapshot =
+    normalizeDisplayName(rest.driver_name_snapshot) ||
+    (rest.driver_id
+      ? (await fetchDrivers()).find((driver) => String(driver.id) === String(rest.driver_id))?.name ?? ""
+      : normalizeDisplayName(rest.driver));
+  const modernPayloadWithSnapshots = stripUndefined({
+    ...modernPayload,
+    vehicle_id: rest.vehicle_id ?? undefined,
+    driver_name_snapshot: driverNameSnapshot || undefined
+  });
 
   let modernResult = id
     ? await supabase
         .from("weekly_mileage")
-        .update(modernPayload)
+        .update(modernPayloadWithSnapshots)
         .eq("id", id)
         .select()
         .single()
-    : await supabase.from("weekly_mileage").insert(modernPayload).select().single();
+    : await supabase.from("weekly_mileage").insert(modernPayloadWithSnapshots).select().single();
 
   if (modernResult.error && isMissingColumnError(modernResult.error)) {
     const compatiblePayload = stripUndefined({

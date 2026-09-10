@@ -101,6 +101,42 @@ export function getBearerToken(request: Request) {
   return match?.[1] ?? "";
 }
 
+function isAdminMeRequest(request: Request) {
+  try {
+    return new URL(request.url).pathname === "/api/admin/me";
+  } catch {
+    return false;
+  }
+}
+
+export function logAdminAuthDiagnostics(request: Request, details: {
+  bearerToken?: boolean;
+  status: number;
+  userResolved: boolean;
+}) {
+  if (process.env.NODE_ENV === "production" || !isAdminMeRequest(request)) return;
+
+  const authorizationHeader = request.headers.get("authorization");
+  const cookieHeader = request.headers.get("cookie");
+  const bearerToken = details.bearerToken ?? Boolean(getBearerToken(request));
+  console.info("[fuel-bank-admin]", {
+    "authorization-header": authorizationHeader ? "yes" : "no",
+    "cookie-header": cookieHeader ? "yes" : "no",
+    "bearer-token": bearerToken ? "yes" : "no",
+    "user-resolved": details.userResolved ? "yes" : "no",
+    status: details.status
+  });
+}
+
+function authVerificationStatus(error: unknown) {
+  const status = typeof (error as { status?: unknown } | null)?.status === "number"
+    ? (error as { status: number }).status
+    : null;
+
+  if (status === 429 || (status !== null && status >= 500)) return 503;
+  return 401;
+}
+
 function getUserDisplayName(user: Pick<User, "email" | "user_metadata"> | null | undefined, accessName?: string | null) {
   const metadata = user?.user_metadata as Record<string, unknown> | undefined;
   const metaName = metadata?.name ?? metadata?.full_name;
@@ -111,11 +147,32 @@ function getUserDisplayName(user: Pick<User, "email" | "user_metadata"> | null |
 
 export async function requireVerifiedUser(request: Request) {
   const token = getBearerToken(request);
-  if (!token) throw new AdminApiError(401, "Authentication required.");
+  if (!token) {
+    logAdminAuthDiagnostics(request, {
+      bearerToken: false,
+      status: 401,
+      userResolved: false
+    });
+    throw new AdminApiError(401, "Authentication required.");
+  }
 
   const supabase = createServerSupabasePublic();
   const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data.user) throw new AdminApiError(401, "Authentication required.");
+  if (error || !data.user) {
+    const status = error ? authVerificationStatus(error) : 401;
+    logAdminAuthDiagnostics(request, {
+      bearerToken: true,
+      status,
+      userResolved: false
+    });
+    throw new AdminApiError(
+      status,
+      status === 503
+        ? "Unable to verify account while the data service is unavailable."
+        : "Authentication required."
+    );
+  }
+
   return data.user;
 }
 

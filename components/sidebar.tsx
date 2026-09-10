@@ -8,7 +8,9 @@ import {
   ClipboardCheck,
   ChevronRight,
   CircleHelp,
+  Activity,
   Droplets,
+  FileSpreadsheet,
   LayoutDashboard,
   MapPinned,
   Package,
@@ -24,6 +26,7 @@ import { usePathname } from "next/navigation";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { fetchSupportTicketNotificationCount } from "@/lib/data";
 import { useLanguage } from "@/lib/language-provider";
+import { safeLocalStorage } from "@/lib/safe-browser-storage";
 import { supabase } from "@/lib/supabase";
 import { useAccountAccess } from "@/lib/use-account-access";
 
@@ -56,7 +59,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   const isAdmin = can("admin:support_tickets");
 
   useEffect(() => {
-    setDesktopExpanded(window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === "true");
+    setDesktopExpanded(safeLocalStorage.getItem(SIDEBAR_STORAGE_KEY) === "true");
     setPreferenceLoaded(true);
   }, []);
 
@@ -65,7 +68,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
     if (isAdmin) {
       fetchSupportTicketNotificationCount(["Open", "In Progress"]).then((count) => {
         if (active) setSupportTicketCount(count);
-      });
+      }).catch(() => undefined);
     } else {
       setSupportTicketCount(0);
     }
@@ -76,7 +79,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       if (isAdmin) {
         void fetchSupportTicketNotificationCount(["Open", "In Progress"]).then((count) => {
           if (active) setSupportTicketCount(count);
-        });
+        }).catch(() => undefined);
       }
     });
 
@@ -84,7 +87,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       if (!active || !isAdmin) return;
       void fetchSupportTicketNotificationCount(["Open", "In Progress"]).then((count) => {
         if (active) setSupportTicketCount(count);
-      });
+      }).catch(() => undefined);
     };
 
     window.addEventListener("fuel-bank:data-changed", handleSupportChange);
@@ -100,7 +103,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       return;
     }
 
-    window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(desktopExpanded));
+    safeLocalStorage.setItem(SIDEBAR_STORAGE_KEY, String(desktopExpanded));
     document.documentElement.style.setProperty(
       "--dashboard-sidebar-width",
       desktopExpanded ? "17.5rem" : "5.25rem"
@@ -112,6 +115,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       label: "MAIN",
       items: [
         { href: "/dashboard", label: t.nav.dashboard, icon: LayoutDashboard },
+        { href: "/reports", label: t.nav.reports, icon: FileSpreadsheet },
         { href: "/booking-diary", label: t.nav.bookingDiary, icon: CalendarDays },
         { href: "/dispatch", label: t.nav.dispatch, icon: ClipboardCheck },
         { href: "/shipments", label: t.nav.shipments, icon: Package },
@@ -122,7 +126,8 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       label: "FUEL & MONEY",
       items: [
         { href: "/fuel-logs", label: t.nav.fuelLogs, icon: Droplets },
-        { href: "/fuel-spend-report", label: t.nav.fuelSpendReport, icon: BarChart3 }
+        { href: "/fuel-spend-report", label: t.nav.fuelSpendReport, icon: BarChart3 },
+        { href: "/vehicle-performance", label: t.nav.vehiclePerformance, icon: Activity }
       ]
     },
     {
@@ -146,6 +151,16 @@ export function Sidebar({ open, onClose }: SidebarProps) {
               href: "/admin/users",
               label: t.adminUsers.title,
               icon: ShieldCheck
+            },
+            {
+              href: "/admin/booking-maps",
+              label: t.nav.bookingMapsAudit,
+              icon: MapPinned
+            },
+            {
+              href: "/admin/august-job-reconciliation",
+              label: "August reconciliation",
+              icon: FileSpreadsheet
             }
           ]
         }]

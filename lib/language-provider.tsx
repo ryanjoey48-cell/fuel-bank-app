@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode
 } from "react";
+import { safeLocalStorage } from "@/lib/safe-browser-storage";
 import { translations, type Language } from "@/lib/translations";
 
 type LanguageContextValue = {
@@ -24,14 +25,14 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguage] = useState<Language>("en");
 
   useEffect(() => {
-    const saved = window.localStorage.getItem(STORAGE_KEY) as Language | null;
+    const saved = safeLocalStorage.getItem(STORAGE_KEY) as Language | null;
     if (saved === "en" || saved === "th") {
       setLanguage(saved);
     }
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, language);
+    safeLocalStorage.setItem(STORAGE_KEY, language);
     document.documentElement.lang = language;
   }, [language]);
 
