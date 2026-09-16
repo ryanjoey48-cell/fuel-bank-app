@@ -1239,6 +1239,10 @@ alter table if exists public.trip_journeys
   add column if not exists route_source text,
   add column if not exists route_fallback_info jsonb;
 
+alter table if exists public.trip_journeys
+  add column if not exists include_in_financials boolean not null default true,
+  add column if not exists original_trip_price numeric(12, 2);
+
 do $$
 begin
   alter publication supabase_realtime add table public.booking_diary;

@@ -1,7 +1,11 @@
 import { shipmentTranslations } from "./shipment-translations";
+import { greaseTranslations } from "./grease-translations";
+import { maintenanceTranslations } from "./maintenance-translations";
 
 export const translations = {
   en: {
+    grease: greaseTranslations.en,
+    maintenance: maintenanceTranslations.en,
     common: {
       appName: "EXPERT EXPRESS SENDER CO., LTD",
       appSubtitle: "Logistics Control",
@@ -52,6 +56,7 @@ export const translations = {
       vehiclePerformance: "Vehicle Performance",
       transfers: "Transfers",
       weeklyMileage: "Weekly Mileage",
+      greaseMaintenance: "Grease Maintenance",
       openMenu: "Open menu",
       closeSidebar: "Close sidebar"
     },
@@ -1150,6 +1155,8 @@ export const translations = {
     }
   },
   th: {
+    grease: greaseTranslations.th,
+    maintenance: maintenanceTranslations.th,
     common: {
       navigation: "เมนูนำทาง",
       requiredField: "กรุณากรอกข้อมูลในช่องนี้",
@@ -1198,6 +1205,7 @@ export const translations = {
       vehiclePerformance: "ผลประกอบการรถ",
       transfers: "โอนเงิน",
       weeklyMileage: "ระยะทางรายสัปดาห์",
+      greaseMaintenance: "บำรุงรักษาจาระบี",
       openMenu: "เปิดเมนู",
       closeSidebar: "ปิดแถบด้านข้าง"
     },

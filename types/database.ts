@@ -1,3 +1,26 @@
+export type GreaseMaintenanceItem = {
+  description: string;
+  quantity: number | null;
+  unit_cost: number | null;
+};
+
+export type GreaseMaintenanceRecord = {
+  id: string;
+  vehicle_id: string;
+  service_date: string;
+  next_due_date: string;
+  odometer: number | null;
+  items: GreaseMaintenanceItem[];
+  total_cost: number;
+  garage: string | null;
+  notes: string | null;
+  is_void: boolean;
+  created_by: string;
+  created_at: string;
+  updated_by: string;
+  updated_at: string;
+};
+
 export type Driver = {
   id: string;
   name: string;
@@ -130,6 +153,45 @@ export type BankTransfer = {
 };
 
 export type FuelLogWithDriver = FuelLog;
+
+export type FuelEfficiencyTripAllocationStatus = "included" | "excluded";
+export type FuelEfficiencyTripExclusionReason = "different_job" | "before_trip" | "after_trip" | "incorrect_for_calculation" | "other";
+
+export type FuelEfficiencyTripCalculation = {
+  id: string;
+  user_id: string;
+  driver_id: string | null;
+  driver: string | null;
+  vehicle_reg: string;
+  calculation_start_date: string;
+  calculation_end_date: string;
+  start_mileage_fuel_log_id: string;
+  end_mileage_fuel_log_id: string;
+  start_mileage: number;
+  end_mileage: number;
+  calculated_distance: number;
+  selected_total_litres: number;
+  selected_total_fuel_cost: number;
+  calculated_km_per_litre: number;
+  notes: string | null;
+  status: "active" | "archived";
+  created_by: string;
+  updated_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type FuelEfficiencyTripCalculationLog = {
+  calculation_id: string;
+  fuel_log_id: string;
+  allocation_status: FuelEfficiencyTripAllocationStatus;
+  exclusion_reason: FuelEfficiencyTripExclusionReason | null;
+  created_at: string;
+};
+
+export type FuelEfficiencyTripCalculationWithLogs = FuelEfficiencyTripCalculation & {
+  allocations: FuelEfficiencyTripCalculationLog[];
+};
 
 export type VehicleMonthlyPerformance = {
   id: string;
@@ -334,6 +396,8 @@ export type TripJourney = {
   fuel_source: TripFuelSource;
   waiting_idle_notes: string | null;
   extra_route_notes: string | null;
+  include_in_financials: boolean;
+  original_trip_price: number | null;
   status: TripJourneyStatus;
   created_at: string;
   updated_at: string;

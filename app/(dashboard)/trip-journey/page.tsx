@@ -414,6 +414,12 @@ const tripJourneyCopy = {
     routeCalculateFailed: "Could not calculate route distance. You can enter manual estimated KM instead.",
     uuidReferenceError: "A numeric booking or fuel-log reference was sent to a UUID database field. Apply the Trip Journey reference migration, then try again.",
     unableToCompleteAction: "Unable to complete this Trip Journey action."
+    ,financialTreatment: "Financial"
+    ,includeInFinancials: "Include financial amount"
+    ,financialExclusionHelp: "When turned off, mileage and operational data will still be counted, but the financial amount for this trip will be excluded."
+    ,financialAmount: "Financial amount"
+    ,financialAmountExcluded: "Financial amount excluded"
+    ,financiallyExcluded: "Financial excluded"
   },
   th: {
     tripJourney: "เส้นทางการเดินทาง",
@@ -708,6 +714,12 @@ const tripJourneyCopy = {
     routePickupDropoffRequired: "กรุณากรอกสถานที่รับและส่งสินค้าก่อนคำนวณระยะทาง",
     uuidReferenceError: "มีการส่งเลขอ้างอิงการจองหรือบันทึกน้ำมันไปยังช่องฐานข้อมูล UUID โปรดใช้ migration ของ Trip Journey แล้วลองอีกครั้ง",
     unableToCompleteAction: "ไม่สามารถดำเนินการ Trip Journey นี้ได้"
+    ,financialTreatment: "การเงิน"
+    ,includeInFinancials: "รวมยอดเงินในการคำนวณทางการเงิน"
+    ,financialExclusionHelp: "เมื่อปิด ระยะทางและข้อมูลการปฏิบัติงานจะยังคงถูกนับ แต่ยอดเงินของทริปนี้จะไม่รวมในการคำนวณทางการเงิน"
+    ,financialAmount: "ยอดเงิน"
+    ,financialAmountExcluded: "ไม่รวมยอดเงิน"
+    ,financiallyExcluded: "ไม่รวมยอดเงิน"
   }
 } as const;
 
@@ -860,7 +872,44 @@ type TripForm = {
   fuel_source: TripFuelSource;
   waiting_idle_notes: string;
   extra_route_notes: string;
+  include_in_financials: boolean;
+  original_trip_price: string;
 };
+
+function FinancialTreatmentFields({
+  copy,
+  form,
+  onChange,
+  onSave,
+  saving
+}: {
+  copy: TripJourneyCopy;
+  form: TripForm;
+  onChange: (field: keyof TripForm, value: string | boolean) => void;
+  onSave?: () => void;
+  saving?: boolean;
+}) {
+  return (
+    <section className="rounded-lg border border-slate-300 bg-white p-4 shadow-sm" aria-labelledby="trip-financial-treatment-title">
+      <h4 id="trip-financial-treatment-title" className="text-sm font-extrabold uppercase tracking-[0.12em] text-slate-950">{copy.financialTreatment}</h4>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <div className="form-field">
+          <label className="form-label" htmlFor="trip-original-price">{copy.financialAmount}</label>
+          <input id="trip-original-price" type="number" min="0" step="0.01" inputMode="decimal" value={form.original_trip_price} onChange={(event) => onChange("original_trip_price", event.target.value)} className="form-input bg-white" />
+        </div>
+        <div>
+          <label className="flex min-h-11 items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-800">
+            <input type="checkbox" checked={form.include_in_financials} onChange={(event) => onChange("include_in_financials", event.target.checked)} className="h-4 w-4" />
+            {copy.includeInFinancials}
+          </label>
+          {!form.include_in_financials ? <p className="mt-2 text-sm font-semibold text-slate-700">{copy.financialAmountExcluded}</p> : null}
+        </div>
+        <p className="text-sm text-slate-600 sm:col-span-2">{copy.financialExclusionHelp}</p>
+      </div>
+      {onSave ? <button type="button" onClick={onSave} disabled={saving} className="btn-primary mt-3 gap-2"><Save className="h-4 w-4" />{saving ? copy.saving : copy.saveTrip}</button> : null}
+    </section>
+  );
+}
 
 type SelectedTripTab = "overview" | "journey" | "fuel" | "notes";
 type AttentionFilter = "all" | "missing_mileage" | "missing_estimate" | "missing_fuel" | "missing_weekly_mileage";
@@ -1137,6 +1186,8 @@ function tripToForm(trip: TripJourneyWithFuel): TripForm {
     fuel_source: trip.fuel_source,
     waiting_idle_notes: trip.waiting_idle_notes ?? "",
     extra_route_notes: trip.extra_route_notes ?? ""
+    ,include_in_financials: trip.include_in_financials !== false
+    ,original_trip_price: trip.original_trip_price?.toString() ?? ""
   };
 }
 
@@ -2954,6 +3005,8 @@ export default function TripJourneyPage() {
         manual_estimated_distance_km: toNumber(form.manual_estimated_distance_km),
         manual_litres_used: toNumber(form.manual_litres_used),
         manual_fuel_cost: toNumber(form.manual_fuel_cost),
+        include_in_financials: form.include_in_financials,
+        original_trip_price: toNumber(form.original_trip_price),
         linkedFuelLogs
       });
       setSelectedTripId(saved.id);
@@ -3294,7 +3347,6 @@ export default function TripJourneyPage() {
             </div>
             <p className="section-subtitle">{copy.tripRecordsDescription}</p>
           </div>
-          <p className="text-xs font-semibold text-slate-500">{copy.newestTripsFirst}</p>
         </div>
         {loading ? (
           <p className="mt-4 text-sm text-slate-500">{copy.loadingTripJourneys}</p>
@@ -3328,6 +3380,7 @@ export default function TripJourneyPage() {
                         <p className="text-sm font-bold text-slate-950">{formatDate(trip.trip_date)}</p>
                         <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${tripJobStatusClass(jobStatus)}`}>{copy.tripStatus}: {tripJobStatusLabel(jobStatus, copy)}</span>
                         <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${dataStatusClass(dataReadiness.status)}`}>{copy.dataStatus}: {dataReadiness.label}</span>
+                        {trip.include_in_financials === false ? <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">{copy.financiallyExcluded}</span> : null}
                       </div>
                       <p className="mt-2 truncate text-lg font-bold leading-6 text-slate-950" title={getRoutePreview(trip)}>{getShortRoutePreview(trip, copy)}</p>
                       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold text-slate-600">
@@ -3337,6 +3390,7 @@ export default function TripJourneyPage() {
                         <span>{copy.workingDistance}: {metrics.workingDistance == null ? "-" : `${formatNumber(metrics.workingDistance)} km`}</span>
                         <span>{copy.difference}: {metrics.differenceKm == null ? "-" : `${formatNumber(metrics.differenceKm)} km`}</span>
                         <span>{copy.distanceSource}: {metrics.distanceSource}</span>
+                        <span>{copy.financialAmount}: {trip.original_trip_price == null ? "-" : formatCurrency(trip.original_trip_price)}{trip.include_in_financials === false ? ` · ${copy.financiallyExcluded}` : ""}</span>
                       </div>
                       <div className="mt-3 flex flex-wrap gap-1.5">
                         <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${bookingLinked ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>{bookingLinked ? copy.bookingLinked : copy.bookingNotLinked}</span>
@@ -3504,6 +3558,7 @@ export default function TripJourneyPage() {
           <div className="p-4">
             {selectedTripTab === "overview" ? (
               <div className="space-y-4">
+                <FinancialTreatmentFields copy={copy} form={form} onChange={updateForm} onSave={() => void handleSaveTrip()} saving={saving} />
                 <div className="rounded-lg border border-brand-100 bg-brand-50/45 p-4">
                   <h4 className="font-bold text-slate-950">{copy.route}</h4>
                   <p className="mt-2 text-sm font-semibold leading-6 text-slate-700" title={getRoutePreview(selectedTrip)}>{getShortRoutePreview(selectedTrip, copy)}</p>
@@ -3549,6 +3604,8 @@ export default function TripJourneyPage() {
                       <div className="form-field"><label className="form-label">{copy.pickupTime}</label><input value={form.pickup_time} onChange={(event) => updateForm("pickup_time", event.target.value)} className="form-input bg-white" /></div>
                     </div>
                   </section>
+
+                  <FinancialTreatmentFields copy={copy} form={form} onChange={updateForm} />
 
                   <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
                     <h4 className="rounded-md bg-slate-50 px-3 py-2 font-bold text-slate-950">{copy.driverVehicle}</h4>

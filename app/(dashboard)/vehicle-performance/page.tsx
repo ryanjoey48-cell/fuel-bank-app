@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 
 import { AlertTriangle, Calculator, CheckCircle2, ChevronDown, Download, FileUp, Info, Pencil, Search, Trash2, TrendingUp, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -11,6 +12,7 @@ import {
   deleteVehicleMonthlyPerformance,
   deleteVehiclePerformanceImportReview,
   fetchFuelLogsForExport,
+  fetchTripJourneys,
   fetchVehicleMonthlyFuelSpend,
   fetchVehicleMonthlyPerformance,
   fetchVehiclePerformanceImportReviews,
@@ -25,6 +27,7 @@ import { useAccountAccess } from "@/lib/use-account-access";
 import { supabase } from "@/lib/supabase";
 import { formatNumber, normalizeComparableText, normalizeVehicleRegistration } from "@/lib/utils";
 import { knownVehicleRegistrationAliases } from "@/lib/vehicle-identity";
+import { summarizeTripFinancials } from "@/lib/trip-financials";
 import {
   addAppFuelToImportRows,
   applySavedVehiclePerformanceImportReviews,
@@ -42,7 +45,7 @@ import {
   type VehiclePerformanceRow,
   type VehiclePerformanceSummary
 } from "@/lib/vehicle-performance";
-import type { Vehicle, VehicleMonthlyPerformance } from "@/types/database";
+import type { TripJourneyWithFuel, Vehicle, VehicleMonthlyPerformance } from "@/types/database";
 import type { FuelLogWithDriver } from "@/types/database";
 
 type MonthFilter = "" | number;
@@ -660,6 +663,7 @@ export default function VehiclePerformancePage() {
   const [records, setRecords] = useState<VehicleMonthlyPerformance[]>([]);
   const [fuelRows, setFuelRows] = useState<Awaited<ReturnType<typeof fetchVehicleMonthlyFuelSpend>>>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [tripJourneys, setTripJourneys] = useState<TripJourneyWithFuel[]>([]);
   const [detailVehicle, setDetailVehicle] = useState<string | null>(null);
   const [movementFilter, setMovementFilter] = useState<Direction | null>(null);
   const [rankingKey, setRankingKey] = useState<RankingKey>("recordedBalance");
@@ -713,13 +717,15 @@ export default function VehiclePerformancePage() {
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
       if (sessionError) throw sessionError;
       if (!sessionData.session) throw new Error("Sign in to load vehicle performance records.");
-      const [performanceRows, fuelSpendRows] = await Promise.all([
+      const [performanceRows, fuelSpendRows, tripRows] = await Promise.all([
         fetchVehicleMonthlyPerformance({ year }),
-        fetchVehicleMonthlyFuelSpend({ year })
+        fetchVehicleMonthlyFuelSpend({ year }),
+        fetchTripJourneys()
       ]);
       if (sequence !== loadSequence.current) return;
       setRecords(performanceRows);
       setFuelRows(fuelSpendRows);
+      setTripJourneys(tripRows);
 
       try {
         const vehicleRows = await fetchVehicles();
@@ -740,6 +746,7 @@ export default function VehiclePerformancePage() {
       setLoadError(err && typeof err === "object" && "message" in err ? String(err.message) : labels.unableToLoad);
       setRecords([]);
       setFuelRows([]);
+      setTripJourneys([]);
     } finally {
       if (sequence === loadSequence.current) setLoading(false);
     }
@@ -765,6 +772,15 @@ export default function VehiclePerformancePage() {
     () => records.filter((record) => selectedMonthSet.has(record.month) && normalizeComparableText(record.vehicle_registration).includes(normalizeComparableText(searchQuery))),
     [records, selectedMonthSet, searchQuery]
   );
+  const selectedTripFinancials = useMemo(() => {
+    const normalizedSearch = normalizeComparableText(searchQuery);
+    return summarizeTripFinancials(tripJourneys.filter((trip) => {
+      const tripDate = new Date(`${trip.trip_date || trip.date}T00:00:00`);
+      return tripDate.getFullYear() === year &&
+        selectedMonthSet.has(tripDate.getMonth() + 1) &&
+        normalizeComparableText(trip.vehicle_reg).includes(normalizedSearch);
+    }));
+  }, [searchQuery, selectedMonthSet, tripJourneys, year]);
   const management = useMemo(() => buildPerformanceManagement({ records, fuelRows, months: selectedMonths }), [records, fuelRows, selectedMonths]);
   const rows = useMemo(() => management.rows.filter(row => normalizeComparableText(row.vehicleRegistration).includes(normalizeComparableText(searchQuery))), [management, searchQuery]);
   const queueManagement = useMemo(() => {
@@ -2031,6 +2047,7 @@ export default function VehiclePerformancePage() {
             <p className="mt-1 max-w-3xl text-sm text-slate-500">Revenue, recorded direct costs and vehicle performance</p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Link className="btn-secondary" href="/maintenance/analytics">{t.maintenance.analytics}</Link>
             <span className="badge-muted self-start sm:self-auto">Period: {periodLabel}</span>
             <button
               type="button"
@@ -2125,6 +2142,20 @@ export default function VehiclePerformancePage() {
         <KpiCard label={labels.salary} value={formatCompactBaht(summary.salaryCost)} detail={`${formatBaht(summary.salaryCost)} - Across ${loadedMonthCount} loaded ${loadedMonthCount === 1 ? "month" : "months"}`} tooltip="Recorded driver salary allocated to these vehicles." />
         <KpiCard label={labels.tripPayments} value={formatCompactBaht(summary.tripIncome)} detail={`${formatBaht(summary.tripIncome)} - Across ${loadedMonthCount} loaded ${loadedMonthCount === 1 ? "month" : "months"}`} tooltip="Recorded trip-related driver payments." />
         <KpiCard label={labels.otherExpenses} value={formatCompactBaht(summary.otherExpenses)} detail={`${formatBaht(summary.otherExpenses)} - Across ${loadedMonthCount} loaded ${loadedMonthCount === 1 ? "month" : "months"}`} tooltip="Other direct costs recorded against these vehicles." />
+      </section>
+
+      <section className="surface-card p-4 sm:p-5">
+        <div className="mb-4">
+          <h3 className="section-title">{language === "th" ? "ประสิทธิภาพทริป: ปฏิบัติงานและการเงิน" : "Trip Performance: Operational vs Financial"}</h3>
+          <p className="section-subtitle">{language === "th" ? "ระยะทางปฏิบัติงานนับทุกทริป ส่วนรายได้และระยะทางรายได้นับเฉพาะทริปที่รวมในการเงิน" : "Operational distance counts every trip; revenue and revenue distance count financially included trips only."}</p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <KpiCard label={language === "th" ? "ระยะทางรวม" : "Total Distance"} value={`${formatNumber(selectedTripFinancials.operationalDistanceKm, language, 1)} km`} detail={`${selectedTripFinancials.operationalTrips} ${language === "th" ? "ทริปปฏิบัติงาน" : "operational trips"}`} />
+          <KpiCard label={language === "th" ? "ระยะทางรายได้" : "Revenue Distance"} value={`${formatNumber(selectedTripFinancials.revenueDistanceKm, language, 1)} km`} detail={`${selectedTripFinancials.revenueGeneratingTrips} ${language === "th" ? "ทริปสร้างรายได้" : "revenue-generating trips"}`} />
+          <KpiCard label={language === "th" ? "ระยะทางไม่คิดค่าบริการ" : "Non-chargeable Distance"} value={`${formatNumber(selectedTripFinancials.nonChargeableDistanceKm, language, 1)} km`} detail={`${selectedTripFinancials.excludedTrips} ${language === "th" ? "ทริปไม่รวมการเงิน" : "financially excluded trips"}`} />
+          <KpiCard label={language === "th" ? "รายได้จากทริป" : "Trip Revenue"} value={formatBaht(selectedTripFinancials.includedRevenue)} detail={language === "th" ? "ไม่รวมราคาทริปที่ถูกยกเว้น" : "Excluded trip prices are not counted"} />
+          <KpiCard label={language === "th" ? "รายได้ / กม." : "Revenue / KM"} value={selectedTripFinancials.revenuePerKm == null ? "-" : formatBaht(selectedTripFinancials.revenuePerKm)} detail={language === "th" ? "รายได้ / ระยะทางรายได้" : "Included revenue / revenue distance"} />
+        </div>
       </section>
 
       <BusinessImpact model={management} actual={summary} onMovement={(direction) => { setMovementFilter(direction); requestAnimationFrame(() => document.getElementById("vehicle-performance-table")?.scrollIntoView({ behavior: "smooth" })); }} />
