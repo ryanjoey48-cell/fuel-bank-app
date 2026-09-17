@@ -7,9 +7,11 @@ import { usePathname } from "next/navigation";
 import { AccountMenu } from "@/components/account-menu";
 import { useLanguage } from "@/lib/language-provider";
 
-type PageKey = "dashboard" | "bookingDiary" | "dispatch" | "drivers" | "fuelLogs" | "fuelSpendReport" | "shipments" | "tripJourney" | "weeklyMileage";
+type PageKey = "dashboard" | "bookingDiary" | "dispatch" | "drivers" | "fuelLogs" | "fuelSpendReport" | "shipments" | "tripJourney" | "weeklyMileage" | "greaseMaintenance" | "inventory";
 
 const PAGE_KEY_BY_PATH: Record<string, PageKey> = {
+  "/inventory": "inventory",
+  "/grease-maintenance": "greaseMaintenance",
   "/booking-diary": "bookingDiary",
   "/dashboard": "dashboard",
   "/dispatch": "dispatch",
@@ -49,7 +51,11 @@ export function MobileAppBar({ open, onToggle }: MobileAppBarProps) {
   const pathname = usePathname();
   const { t } = useLanguage();
   const pageKey = PAGE_KEY_BY_PATH[pathname] ?? "dashboard";
-  const pageLabel = pathname.startsWith("/admin/support-tickets")
+  const pageLabel = pathname === "/maintenance/analytics"
+    ? t.maintenance.analytics
+    : pathname.startsWith("/maintenance")
+      ? t.maintenance.title
+      : pathname.startsWith("/admin/support-tickets")
     ? t.support.adminTitle
     : pathname.startsWith("/support")
       ? t.support.title

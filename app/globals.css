@@ -488,6 +488,26 @@ td {
     transform: translateY(-1px);
   }
 
+  .maintenance-shell {
+    background: #f7f6fc;
+  }
+
+  .maintenance-panel,
+  .maintenance-history-panel {
+    position: relative;
+    width: 100%;
+    max-width: 100%;
+    border: 1px solid rgba(124, 58, 237, 0.11);
+    border-radius: 0.95rem;
+    background: rgba(250, 249, 254, 0.96);
+    box-shadow: 0 8px 24px rgba(49, 46, 129, 0.055);
+  }
+
+  .maintenance-history-panel {
+    background: #f5f3fc;
+    box-shadow: 0 12px 30px rgba(49, 46, 129, 0.07);
+  }
+
   .surface-card-soft {
     background: var(--app-surface);
     border: 1px solid var(--app-border);

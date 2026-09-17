@@ -14,9 +14,11 @@ import {
   LayoutDashboard,
   MapPinned,
   Package,
+  PackageSearch,
   Route,
   ShieldCheck,
   Truck,
+  Wrench,
   X,
   type LucideIcon
 } from "lucide-react";
@@ -134,6 +136,8 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       label: "FLEET CONTROL",
       items: [
         { href: "/weekly-mileage", label: t.nav.weeklyMileage, icon: Route },
+        { href: "/maintenance", label: t.maintenance.title, icon: Wrench },
+        { href: "/inventory", label: t.nav.inventory, icon: PackageSearch },
         { href: "/drivers", label: t.nav.drivers, icon: Truck }
       ]
     },

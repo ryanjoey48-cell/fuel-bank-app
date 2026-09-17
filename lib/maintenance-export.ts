@@ -1,0 +1,10 @@
+import type {MaintenanceData,MaintenanceRecord} from "./maintenance-types";
+import {maintenanceDowntime,maintenanceDriver,maintenanceDue,maintenanceLineTotal,receiptDifference} from "./maintenance";
+import {maintenanceTranslations,maintenanceCategoryLabels} from "./maintenance-translations";
+export function maintenanceExportRows(data:MaintenanceData,records:MaintenanceRecord[],language:"en"|"th") {
+ const c=maintenanceTranslations[language];
+ // CSV spreadsheet formula prefixes are escaped without changing stored descriptions.
+ const safe=(s:string|null|undefined)=>s&&/^[\s]*[=+@-]/.test(s)?`'${s}`:s??"";
+ const base=(r:MaintenanceRecord)=>({[c.vehicle]:safe(data.vehicles.find(v=>v.id===r.vehicle_id)?.vehicle_reg),[c.driver]:safe(maintenanceDriver(data,r.vehicle_id)),[c.vehicleType]:safe(data.vehicles.find(v=>v.id===r.vehicle_id)?.vehicle_type),[c.serviceDate]:r.service_date,[c.mileage]:r.odometer,[c.garage]:safe(r.garage),[c.receiptReference]:safe(r.receipt_reference),[c.receiptTotal]:r.receipt_total,[c.calculatedTotal]:r.calculated_total,[c.difference]:receiptDifference(Number(r.calculated_total),r.receipt_total===null?null:Number(r.receipt_total)),[c.downtime]:maintenanceDowntime(r),[c.offRoad]:r.off_road_at,[c.returned]:r.returned_at,[c.notes]:safe(r.notes),[c.createdBy]:r.created_by,[c.updatedBy]:r.updated_by});
+ return {records:records.map(base),items:records.flatMap(r=>data.items.filter(i=>i.record_id===r.id).map(i=>{const due=maintenanceDue(i,r);return {...base(r),[c.descriptionLabel]:safe(i.description),[c.thaiDescription]:safe(i.description_th),[c.category]:maintenanceCategoryLabels[language][i.category],[c.quantity]:i.quantity,[c.unitPrice]:i.unit_price,[c.lineTotal]:maintenanceLineTotal(i),[c.requirement]:safe(data.requirements.find(q=>q.id===i.requirement_id)?.name),[c.months]:i.reminder_months,[c.mileageInterval]:i.reminder_km,[c.nextDate]:due.date,[c.nextMileage]:due.km,[c.overrideDate]:i.override_date,[c.overrideMileage]:i.override_km,[`${c.items} — ${c.notes}`]:safe(i.notes)};}))};
+}
