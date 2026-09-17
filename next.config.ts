@@ -36,6 +36,8 @@ if (!publicGoogleMapsApiKey) {
 }
 
 const nextConfig: NextConfig = {
+  // Keep local verification builds separate from a running development server.
+  distDir: process.env.FUEL_BANK_ISOLATED_BUILD === "1" ? ".next-maintenance-qa" : ".next",
   reactStrictMode: true,
   eslint: {
     ignoreDuringBuilds: true

@@ -11,7 +11,12 @@ export type Permission =
   | "business:read"
   | "business:write"
   | "business:delete"
-  | "business:import";
+  | "business:import"
+  | "inventory.view"
+  | "inventory.manage"
+  | "inventory.receive"
+  | "inventory.issue"
+  | "inventory.adjust";
 
 export type AccountAccess = {
   userId: string;
@@ -30,10 +35,15 @@ export const ROLE_PERMISSIONS: Record<AccountRole, Permission[]> = {
     "business:read",
     "business:write",
     "business:delete",
-    "business:import"
+    "business:import",
+    "inventory.view",
+    "inventory.manage",
+    "inventory.receive",
+    "inventory.issue",
+    "inventory.adjust"
   ],
-  office_staff: ["business:read", "business:write", "business:delete", "business:import"],
-  read_only: ["business:read"]
+  office_staff: ["business:read", "business:write", "business:delete", "business:import", "inventory.view", "inventory.receive", "inventory.issue", "inventory.adjust"],
+  read_only: ["business:read", "inventory.view"]
 };
 
 export function normalizeAccountRole(value: unknown): AccountRole {

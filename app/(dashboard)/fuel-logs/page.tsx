@@ -17,6 +17,7 @@ import {
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { EmptyState } from "@/components/empty-state";
+import { CustomTripCalculation } from "@/components/custom-trip-calculation";
 import { FuelStatementImporter } from "@/components/fuel-statement-importer";
 import { Header } from "@/components/header";
 import { StatCard } from "@/components/stat-card";
@@ -37,12 +38,14 @@ import {
   fetchFuelLogsForExport,
   fetchFuelLogRecentDaySummaries,
   fetchFuelLogTodayRows,
+  fetchFuelEfficiencyTripCalculations,
   fetchFuelLogsPage,
   fetchTripFuelLogLinks,
   saveFuelLog,
   updateFuelLogReceiptCheck
 } from "@/lib/data";
 import { exportToCsv } from "@/lib/export";
+import type { CustomTripCalculationSnapshot } from "@/lib/custom-trip-calculations";
 import { applyRequiredValidationMessage, clearValidationMessage } from "@/lib/form-validation";
 import { normalizeFuelLogLocation, shouldShowFuelLogLocationOption } from "@/lib/fuel-log-location";
 import { useLanguage } from "@/lib/language-provider";
@@ -58,6 +61,7 @@ import type {
   FuelLogSortDirection,
   FuelLogSortKey,
   FuelLogWithDriver,
+  FuelEfficiencyTripCalculationWithLogs,
   TripFuelLogLink
 } from "@/types/database";
 
@@ -151,6 +155,7 @@ type EfficiencyFilters = {
 };
 
 type EfficiencyCalculationMode = "per_fill" | "trip_summary";
+type TripSummaryMethod = "automatic" | "custom";
 
 type EfficiencyStatus =
   | "missing_mileage"
@@ -333,6 +338,7 @@ function getInclusiveDaysBetweenDates(startDate: string | null | undefined, endD
 
 type BossPdfReportData = {
   actualCalculation: string;
+  calculationMethod: string;
   dataStatus: "ready" | "warning";
   dataStatusDetail: string;
   dataStatusTitle: string;
@@ -910,7 +916,7 @@ async function buildBossFuelEfficiencyCanvasPdf(data: BossPdfReportData, logo: P
     [copy.driver, data.driver],
     [copy.vehicleReg, data.vehicleReg],
     [copy.dateRange, data.dateRange],
-    [copy.reportType, copy.periodFuelEfficiency]
+    [copy.reportType, data.calculationMethod]
   ];
   const filterWidths = [118, 100, 152, 120];
   let x = margin;
@@ -1432,6 +1438,9 @@ export default function FuelLogsPage() {
   const [filters, setFilters] = useState<FuelLogFilters>(() => getStoredFilters());
   const [efficiencyFilters, setEfficiencyFilters] = useState<EfficiencyFilters>(initialEfficiencyFilters);
   const [efficiencyCalculationMode, setEfficiencyCalculationMode] = useState<EfficiencyCalculationMode>("per_fill");
+  const [tripSummaryMethod, setTripSummaryMethod] = useState<TripSummaryMethod>("automatic");
+  const [customTripCalculations, setCustomTripCalculations] = useState<FuelEfficiencyTripCalculationWithLogs[]>([]);
+  const [customTripSnapshot, setCustomTripSnapshot] = useState<CustomTripCalculationSnapshot | null>(null);
   const [efficiencyAnalysisOpen, setEfficiencyAnalysisOpen] = useState(false);
   const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
   const [missingMileageExpanded, setMissingMileageExpanded] = useState(false);
@@ -1657,7 +1666,7 @@ export default function FuelLogsPage() {
     ]
   );
 
-  const tripSummary = useMemo<TripSummary>(() => {
+  const automaticTripSummary = useMemo<TripSummary>(() => {
     const logs = tripSummaryLogs;
     const mileageLogs = logs.filter((log) => getMileageValue(log.mileage) != null);
     const vehicleKeys = new Set(
@@ -1732,6 +1741,41 @@ export default function FuelLogsPage() {
       reason
     };
   }, [t.fuelLogs.efficiency, tripSummaryLogs]);
+
+  const tripSummary = useMemo<TripSummary>(() => {
+    if (tripSummaryMethod !== "custom") return automaticTripSummary;
+    if (!customTripSnapshot) return {
+      logs: [], startMileage: null, endMileage: null, tripKm: null, totalLitres: 0, totalFuelCost: 0,
+      tripKmPerLitre: null, averagePricePerLitre: null, fuelLogCount: 0, receiptCheckedCount: 0,
+      receiptUncheckedCount: 0, missingMileageCount: 0, mileageRecordCount: 0, vehicleCount: 0,
+      status: "not_enough_data", reason: t.fuelLogs.efficiency.tripNotEnoughLitres
+    };
+    const logs = customTripSnapshot.selectedLogs;
+    const receiptCheckedCount = logs.filter((log) => log.receipt_checked).length;
+    const receiptUncheckedCount = logs.length - receiptCheckedCount;
+    return {
+      logs,
+      startMileage: customTripSnapshot.startMileage,
+      endMileage: customTripSnapshot.endMileage,
+      tripKm: customTripSnapshot.distanceKm,
+      totalLitres: customTripSnapshot.totalLitres,
+      totalFuelCost: customTripSnapshot.totalFuelCost,
+      tripKmPerLitre: customTripSnapshot.kmPerLitre,
+      averagePricePerLitre: customTripSnapshot.totalLitres > 0 ? customTripSnapshot.totalFuelCost / customTripSnapshot.totalLitres : null,
+      fuelLogCount: logs.length,
+      receiptCheckedCount,
+      receiptUncheckedCount,
+      missingMileageCount: 0,
+      mileageRecordCount: 2,
+      vehicleCount: 1,
+      status: receiptUncheckedCount > 0 ? "check_receipts" : "calculated",
+      reason: receiptUncheckedCount > 0 ? t.fuelLogs.efficiency.tripReceiptsTooltip : t.fuelLogs.efficiency.tripCalculatedTooltip
+    };
+  }, [automaticTripSummary, customTripSnapshot, t.fuelLogs.efficiency, tripSummaryMethod]);
+
+  const reloadCustomTripCalculations = useCallback(async () => {
+    setCustomTripCalculations(await fetchFuelEfficiencyTripCalculations());
+  }, []);
 
   const statusLabels: Record<EfficiencyStatus, string> = {
     missing_mileage: t.fuelLogs.efficiency.statusMissingMileage,
@@ -1891,7 +1935,7 @@ export default function FuelLogsPage() {
   }, [t.fuelLogs.unableToLoadFuelData]);
 
   const loadSummaryData = useCallback(async () => {
-    const [todayRows, recentDayRows, receiptSummaryRows, efficiencyRowsForAnalysis, tripLinks] = await Promise.all([
+    const [todayRows, recentDayRows, receiptSummaryRows, efficiencyRowsForAnalysis, tripLinks, customCalculations] = await Promise.all([
       fetchFuelLogTodayRows(todayValue),
       fetchFuelLogRecentDaySummaries(7),
       fetchFuelLogReceiptSummary(filters),
@@ -1899,6 +1943,10 @@ export default function FuelLogsPage() {
       fetchTripFuelLogLinks().catch((tripLinkError) => {
         console.warn("Fuel logs trip links unavailable:", tripLinkError);
         return [] as TripFuelLogLink[];
+      }),
+      fetchFuelEfficiencyTripCalculations().catch((customError) => {
+        console.warn("Custom trip calculations unavailable:", customError);
+        return [] as FuelEfficiencyTripCalculationWithLogs[];
       })
     ]);
     setTodayLogs(todayRows);
@@ -1906,6 +1954,7 @@ export default function FuelLogsPage() {
     setReceiptSummary(receiptSummaryRows);
     setEfficiencySourceLogs(efficiencyRowsForAnalysis);
     setTripFuelLinks(tripLinks);
+    setCustomTripCalculations(customCalculations);
   }, [filters, todayValue]);
 
   const loadFuelLogPage = useCallback(
@@ -2369,6 +2418,11 @@ export default function FuelLogsPage() {
           },
           {
             [t.fuelLogs.efficiency.reportSection]: t.fuelLogs.efficiency.summary,
+            [t.fuelLogs.efficiency.field]: language === "th" ? "วิธีคำนวณ" : "Calculation method",
+            [t.fuelLogs.efficiency.value]: tripSummaryMethod === "custom" ? (language === "th" ? "กำหนดเอง" : "Custom calculation") : (language === "th" ? "อัตโนมัติ" : "Automatic")
+          },
+          {
+            [t.fuelLogs.efficiency.reportSection]: t.fuelLogs.efficiency.summary,
             [t.fuelLogs.efficiency.field]: t.fuelLogs.efficiency.driver,
             [t.fuelLogs.efficiency.value]: selectedEfficiencyDriverLabel
           },
@@ -2493,8 +2547,8 @@ export default function FuelLogsPage() {
       const sortedLogs = [...tripSummary.logs].sort(compareFuelLogsByMileageOrder);
       const firstLogDate = sortedLogs[0]?.date ?? "";
       const lastLogDate = sortedLogs[sortedLogs.length - 1]?.date ?? firstLogDate;
-      const reportStartDate = efficiencyFilters.fromDate || firstLogDate;
-      const reportEndDate = efficiencyFilters.toDate || lastLogDate;
+      const reportStartDate = tripSummaryMethod === "custom" && customTripSnapshot ? customTripSnapshot.startLog.date : efficiencyFilters.fromDate || firstLogDate;
+      const reportEndDate = tripSummaryMethod === "custom" && customTripSnapshot ? customTripSnapshot.endLog.date : efficiencyFilters.toDate || lastLogDate;
       const reportDateRange =
         reportStartDate || reportEndDate
           ? `${formatDate(reportStartDate, pdfLanguage)} - ${formatDate(reportEndDate, pdfLanguage)}`
@@ -2535,6 +2589,7 @@ export default function FuelLogsPage() {
       const pdf = await buildBossFuelEfficiencyPdf(
         {
           actualCalculation: normalizeFormulaSpacing(`${distanceForCalculation} ${String.fromCharCode(247)} ${litresForCalculation} = ${fuelEfficiency}`),
+          calculationMethod: tripSummaryMethod === "custom" ? (pdfLanguage === "th" ? "การคำนวณแบบกำหนดเอง" : "Custom calculation") : bossPdfCopy.periodFuelEfficiency,
           dataStatus: needsDataReview ? "warning" : "ready",
           dataStatusDetail: needsVehicleSelection
             ? vehicleSelectionWarning
@@ -2881,6 +2936,27 @@ export default function FuelLogsPage() {
           </>
         ) : (
           <>
+            <div className="mt-5 rounded-2xl border border-brand-100 bg-brand-50/50 p-3">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">{language === "th" ? "วิธีคำนวณทริป" : "Trip calculation method"}</p>
+              <div className="grid grid-cols-2 gap-2 rounded-xl bg-white p-1 sm:inline-grid sm:min-w-[300px]">
+                {(["automatic", "custom"] as TripSummaryMethod[]).map((method) => <button key={method} type="button" onClick={() => setTripSummaryMethod(method)} className={`rounded-lg px-4 py-2 text-sm font-semibold ${tripSummaryMethod === method ? "bg-brand-700 text-white" : "text-slate-600 hover:bg-slate-50"}`}>{method === "automatic" ? (language === "th" ? "อัตโนมัติ" : "Automatic") : (language === "th" ? "กำหนดเอง" : "Custom")}</button>)}
+              </div>
+              <p className="mt-2 text-sm text-slate-600">{tripSummaryMethod === "automatic" ? (language === "th" ? "ใช้เลขไมล์แรก เลขไมล์สุดท้าย และน้ำมันทั้งหมดในช่วงที่เลือก" : "Uses the first mileage, last mileage, and all fuel in the selected period.") : (language === "th" ? "เลือกเลขไมล์และบันทึกน้ำมันที่เป็นของทริปนี้โดยอิสระ" : "Select the mileage readings and fuel logs that belong to this calculation independently.")}</p>
+            </div>
+
+            {tripSummaryMethod === "custom" ? (
+              efficiencyFilters.driverId && efficiencyFilters.vehicleReg ? <CustomTripCalculation
+                calculations={customTripCalculations}
+                driverId={efficiencyFilters.driverId}
+                driverName={selectedEfficiencyDriverLabel}
+                language={language}
+                logs={tripSummaryLogs}
+                onSaved={reloadCustomTripCalculations}
+                onSnapshotChange={setCustomTripSnapshot}
+                vehicleReg={efficiencyFilters.vehicleReg}
+              /> : <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">{language === "th" ? "เลือกพนักงานขับรถและรถหนึ่งคันเพื่อกำหนดการคำนวณ" : "Select one driver and one vehicle to configure a custom calculation."}</div>
+            ) : null}
+
             <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
               <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{distanceTravelledLabel}</p><p className="mt-2 text-xl font-bold text-slate-950">{tripSummary.tripKm != null ? formatNumber(tripSummary.tripKm, language, 0) : "-"}</p></div>
               <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.totalLitres}</p><p className="mt-2 text-xl font-bold text-slate-950">{formatNumber(tripSummary.totalLitres, language, 2)}</p></div>

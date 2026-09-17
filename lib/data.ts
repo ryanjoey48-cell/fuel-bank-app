@@ -30,6 +30,9 @@ import type {
   FuelLogSortDirection,
   FuelLogSortKey,
   FuelLogWithDriver,
+  FuelEfficiencyTripCalculation,
+  FuelEfficiencyTripCalculationLog,
+  FuelEfficiencyTripCalculationWithLogs,
   OilChangeBaseline,
   OilChangeHistory,
   PaginatedFuelLogsResult,
@@ -123,8 +126,8 @@ const isMissingTripOptionalColumnError = (error: { code?: string; message?: stri
         "route_description",
         "route_polyline",
         "route_traffic_aware",
-        "route_fallback_info",
-        "vehicle_id"
+          "route_fallback_info",
+          "vehicle_id"
       ].some((column) => error.message?.includes(column))
   );
 
@@ -1964,6 +1967,55 @@ export async function deleteOilChangeService(payload: {
   }
 }
 
+export async function fetchFuelEfficiencyTripCalculations(): Promise<FuelEfficiencyTripCalculationWithLogs[]> {
+  const [calculationResult, allocationResult] = await Promise.all([
+    supabase.from("fuel_efficiency_trip_calculations").select("*").order("updated_at", { ascending: false }),
+    supabase.from("fuel_efficiency_trip_calculation_logs").select("*")
+  ]);
+  if (calculationResult.error) throw new Error(calculationResult.error.message || "Unable to load custom trip calculations.");
+  if (allocationResult.error) throw new Error(allocationResult.error.message || "Unable to load custom trip fuel allocations.");
+  const allocations = (allocationResult.data ?? []) as FuelEfficiencyTripCalculationLog[];
+  return ((calculationResult.data ?? []) as FuelEfficiencyTripCalculation[]).map((calculation) => ({
+    ...calculation,
+    start_mileage: Number(calculation.start_mileage),
+    end_mileage: Number(calculation.end_mileage),
+    calculated_distance: Number(calculation.calculated_distance),
+    selected_total_litres: Number(calculation.selected_total_litres),
+    selected_total_fuel_cost: Number(calculation.selected_total_fuel_cost),
+    calculated_km_per_litre: Number(calculation.calculated_km_per_litre),
+    allocations: allocations.filter((allocation) => allocation.calculation_id === calculation.id)
+  }));
+}
+
+export async function saveFuelEfficiencyTripCalculation(payload: {
+  id?: string | null;
+  driverId?: string | null;
+  driver?: string | null;
+  vehicleReg: string;
+  startMileageFuelLogId: string;
+  endMileageFuelLogId: string;
+  notes?: string | null;
+  allocations: Array<{ fuelLogId: string; allocationStatus: "included" | "excluded"; exclusionReason?: string | null }>;
+}) {
+  const result = await supabase.rpc("save_fuel_efficiency_trip_calculation", {
+    p_id: payload.id ?? null,
+    p_driver_id: payload.driverId ?? null,
+    p_driver: payload.driver ?? null,
+    p_vehicle_reg: payload.vehicleReg,
+    p_start_mileage_fuel_log_id: payload.startMileageFuelLogId,
+    p_end_mileage_fuel_log_id: payload.endMileageFuelLogId,
+    p_notes: payload.notes ?? null,
+    p_allocations: payload.allocations.map((allocation) => ({
+      fuel_log_id: allocation.fuelLogId,
+      allocation_status: allocation.allocationStatus,
+      exclusion_reason: allocation.allocationStatus === "excluded" ? allocation.exclusionReason ?? null : null
+    }))
+  });
+  if (result.error) throw new Error(result.error.message || "Unable to save custom trip calculation.");
+  dispatchDataChange("fuel_efficiency_trip_calculations");
+  return result.data as FuelEfficiencyTripCalculation;
+}
+
 export async function fetchFuelLogs() {
   return readThroughCache("fuel_logs:all", async () => {
     const fuelLogQuery = await runFuelLogQueryWithOptionalColumnFallback((columns) =>
@@ -3464,6 +3516,8 @@ function normalizeTripJourneyRow(row: TripJourney): TripJourney {
     fuel_source: normalizeTripFuelSource(row.fuel_source),
     waiting_idle_notes: row.waiting_idle_notes ?? null,
     extra_route_notes: row.extra_route_notes ?? null,
+    include_in_financials: row.include_in_financials !== false,
+    original_trip_price: parseOptionalNumeric(row.original_trip_price),
     status: normalizeTripStatus(row.status)
   };
 }
@@ -3832,6 +3886,8 @@ export async function saveTripJourney(
     fuel_source: fuelSource,
     waiting_idle_notes: payload.waiting_idle_notes?.trim() || null,
     extra_route_notes: payload.extra_route_notes?.trim() || null,
+    include_in_financials: payload.include_in_financials !== false,
+    original_trip_price: parseOptionalNumeric(payload.original_trip_price),
     status
   });
 
@@ -3851,6 +3907,12 @@ export async function saveTripJourney(
 
   if (result.error) {
     logDataError("saveTripJourney error:", result.error, cleaned);
+    if (
+      (result.error.code === "42703" || result.error.code === "PGRST204") &&
+      ["include_in_financials", "original_trip_price"].some((column) => result.error.message?.includes(column))
+    ) {
+      throw new Error("Trip financial treatment is not available in this database yet. Apply migration 20260916090000_trip_journey_financial_treatment.sql, then try again.");
+    }
     throw new Error(result.error.message || "Unable to save trip journey.");
   }
 

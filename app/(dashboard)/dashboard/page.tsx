@@ -30,8 +30,12 @@ import {
 } from "@/lib/data";
 import { buildDispatchRows, summarizeDispatchRows } from "@/lib/dispatch";
 import { useLanguage } from "@/lib/language-provider";
+import { buildMaintenanceReminders, maintenanceToday } from "@/lib/maintenance";
+import type { MaintenanceData } from "@/lib/maintenance-types";
+import { fetchMaintenanceData } from "@/lib/maintenance-data";
 import { buildOilChangeAlertRows, type OilChangeAlertRow } from "@/lib/operations";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/utils";
+import { summarizeTripFinancials } from "@/lib/trip-financials";
 import type {
   BookingDiaryEntry,
   Driver,
@@ -278,6 +282,24 @@ export default function DashboardPage() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [oilChangeBaselines, setOilChangeBaselines] = useState<OilChangeBaseline[]>([]);
+  const [maintenanceData, setMaintenanceData] = useState<MaintenanceData | null>(null);
+  const [maintenanceFailed, setMaintenanceFailed] = useState(false);
+  const [maintenanceDate, setMaintenanceDate] = useState(maintenanceToday);
+
+  useEffect(() => {
+    let active = true;
+    const reload = () => {
+      setMaintenanceDate(maintenanceToday());
+      void fetchMaintenanceData().then((data) => {
+        if (active) { setMaintenanceData(data); setMaintenanceFailed(false); }
+      }).catch(() => { if (active) { setMaintenanceData(null); setMaintenanceFailed(true); } });
+    };
+    reload();
+    window.addEventListener("fuel-bank:data-changed", reload);
+    window.addEventListener("focus", reload);
+    const timer = window.setInterval(() => setMaintenanceDate(maintenanceToday()), 60000);
+    return () => { active = false; window.removeEventListener("fuel-bank:data-changed", reload); window.removeEventListener("focus", reload); window.clearInterval(timer); };
+  }, []);
   const [fuelLogs, setFuelLogs] = useState<FuelLogWithDriver[]>([]);
   const [weeklyMileage, setWeeklyMileage] = useState<WeeklyMileageEntry[]>([]);
   const [bookings, setBookings] = useState<BookingDiaryEntry[]>([]);
@@ -346,6 +368,11 @@ export default function DashboardPage() {
     viewLogs: language === "th" ? "ตรวจบันทึก" : "Review Logs",
     viewTripJourney: language === "th" ? "ดู Trip Journey" : "View Trip Journey",
     viewVehicles: language === "th" ? "ดูรถ" : "View Vehicles"
+    ,operationalDistance: language === "th" ? "ระยะทางปฏิบัติงาน" : "Operational Distance"
+    ,revenueDistance: language === "th" ? "ระยะทางที่สร้างรายได้" : "Revenue Distance"
+    ,nonChargeableDistance: language === "th" ? "ระยะทางที่ไม่คิดค่าบริการ" : "Non-chargeable Distance"
+    ,tripRevenue: language === "th" ? "รายได้จากทริป" : "Trip Revenue"
+    ,revenuePerKm: language === "th" ? "รายได้ / กม." : "Revenue / KM"
   };
 
   const loadData = useCallback(
@@ -420,6 +447,7 @@ export default function DashboardPage() {
     () => tripJourneys.filter((trip) => isInRange(trip.trip_date, monthRange.startDate, monthRange.endDate)),
     [monthRange.endDate, monthRange.startDate, tripJourneys]
   );
+  const monthlyTripFinancials = useMemo(() => summarizeTripFinancials(monthlyTrips), [monthlyTrips]);
   const todayKey = getLocalDateKey(new Date());
   const todaysBookings = useMemo(
     () => bookings.filter((booking) => booking.booking_date === todayKey),
@@ -494,6 +522,20 @@ export default function DashboardPage() {
   );
   const attentionItems = useMemo(() => {
     const items: AttentionItem[] = [];
+    const maintenanceRows = maintenanceData ? buildMaintenanceReminders(maintenanceData, maintenanceDate) : [];
+    const maintenanceNeedsAttention = maintenanceRows.filter(row => row.status !== "ok");
+    if (maintenanceFailed || maintenanceNeedsAttention.length) {
+      items.push({
+        actionHref: "/maintenance", actionLabel: t.maintenance.title,
+        count: maintenanceNeedsAttention.length, icon: Droplet, key: "maintenance",
+        title: t.maintenance.title,
+        detail: maintenanceFailed ? t.maintenance.loadError : (["overdue", "mileageDue", "dueSoon", "noHistory"] as const).map(status => {
+          const count = maintenanceNeedsAttention.filter(row => row.status === status).length;
+          return count ? `${formatNumber(count, language)} ${t.maintenance[status]}` : "";
+        }).filter(Boolean).join(" | "),
+        tone: maintenanceNeedsAttention.some(row => row.status === "overdue") ? "danger" : "warning"
+      });
+    }
     const oilOverdueCount = oilDueRows.filter((row) => row.status === "overdue").length;
     const oilDueSoonCount = oilDueRows.length - oilOverdueCount;
     const needsBaselineCount = oilAttentionRows.filter((row) => row.status === "not_set" || !hasReliableOilBaseline(row)).length;
@@ -577,7 +619,7 @@ export default function DashboardPage() {
     }
 
     return items;
-  }, [copy.dueSoon, copy.fuelEntries, copy.fuelLogsNotChecked, copy.needsBaseline, copy.notCheckedThisMonth, copy.oilDue, copy.overdue, copy.remaining, language, monthlyBookingsWithoutTrips.length, oilAttentionRows, oilDueRows, opsCopy.missingTripRecords, opsCopy.tripsWaitingForReview, opsCopy.tripsWaitingForReviewDetail, opsCopy.viewLogs, opsCopy.viewTripJourney, opsCopy.viewVehicles, supportTicketAttentionCount, t.support.notifications.supportTicketsWaiting, t.support.notifications.supportTicketsWaitingDetail, t.support.notifications.viewTickets, tripsWaitingForReview.length, uncheckedFuelCount]);
+  }, [maintenanceData, maintenanceDate, maintenanceFailed, t.maintenance, copy.dueSoon, copy.fuelEntries, copy.fuelLogsNotChecked, copy.needsBaseline, copy.notCheckedThisMonth, copy.oilDue, copy.overdue, copy.remaining, language, monthlyBookingsWithoutTrips.length, oilAttentionRows, oilDueRows, opsCopy.missingTripRecords, opsCopy.tripsWaitingForReview, opsCopy.tripsWaitingForReviewDetail, opsCopy.viewLogs, opsCopy.viewTripJourney, opsCopy.viewVehicles, supportTicketAttentionCount, t.support.notifications.supportTicketsWaiting, t.support.notifications.supportTicketsWaitingDetail, t.support.notifications.viewTickets, tripsWaitingForReview.length, uncheckedFuelCount]);
 
   useEffect(() => {
     if (process.env.NODE_ENV === "production") {
@@ -842,6 +884,11 @@ export default function DashboardPage() {
                       [opsCopy.missingTripRecords, formatNumber(monthlyBookingsWithoutTrips.length, language)],
                       [opsCopy.avgEstimatedKm, averageEstimatedTripKm != null ? `${formatNumber(averageEstimatedTripKm, language, 1)} km` : "-"],
                       [opsCopy.avgActualKm, averageWorkingTripKm != null ? `${formatNumber(averageWorkingTripKm, language, 1)} km` : "-"],
+                      [opsCopy.operationalDistance, `${formatNumber(monthlyTripFinancials.operationalDistanceKm, language, 1)} km`],
+                      [opsCopy.revenueDistance, `${formatNumber(monthlyTripFinancials.revenueDistanceKm, language, 1)} km`],
+                      [opsCopy.nonChargeableDistance, `${formatNumber(monthlyTripFinancials.nonChargeableDistanceKm, language, 1)} km`],
+                      [opsCopy.tripRevenue, formatCurrency(monthlyTripFinancials.includedRevenue, language)],
+                      [opsCopy.revenuePerKm, monthlyTripFinancials.revenuePerKm == null ? "-" : formatCurrency(monthlyTripFinancials.revenuePerKm, language)],
                       [opsCopy.tripsWaitingForReview, formatNumber(tripsWaitingForReview.length, language)],
                       [opsCopy.totalActualFuelLogged, `${formatNumber(totalFuelLoggedThisMonth, language, 1)} L`],
                       [opsCopy.tripCompletion, tripCompletionPercentage != null ? `${formatNumber(tripCompletionPercentage, language, 0)}%` : "-"]
