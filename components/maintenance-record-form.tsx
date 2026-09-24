@@ -21,7 +21,7 @@ export function MaintenanceRecordForm({data,record,vehicleId,onClose,onSaved}:{d
  const [uploadState,setUploadState]=useState({busy:false,pending:0}),[justSaved,setJustSaved]=useState(false);
  const [busy,setBusy]=useState(false),[error,setError]=useState<"saveError"|"invalid"|"conflict"|null>(null);const lock=useRef(false);
  const set=(patch:Partial<MaintenanceRecordInput>)=>setForm(old=>({...old,...patch,mismatch_confirmed:patch.mismatch_confirmed??false}));
- const update=(id:string,patch:Partial<ItemForm>)=>{setItems(old=>old.map(i=>i.id===id?{...i,...patch}:i));setForm(old=>({...old,mismatch_confirmed:false}));};
+ const update=(id:string,patch:Partial<ItemForm>)=>{const adjusted=("quantity" in patch||"unit_price" in patch)?{...patch,line_total:null}:patch;setItems(old=>old.map(i=>i.id===id?{...i,...adjusted}:i));setForm(old=>({...old,mismatch_confirmed:false}));};
  const total=maintenanceTotal(items),difference=receiptDifference(total,form.receipt_total),vehicle=data.vehicles.find(v=>v.id===form.vehicle_id);
  const sourceMileage=reliableMaintenanceMileage(data.mileage,form.vehicle_id,form.service_date);
  const suggestions=Array.from(new Set(data.items.map(i=>i.description))).sort();

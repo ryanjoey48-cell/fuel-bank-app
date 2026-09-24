@@ -115,12 +115,12 @@ export default function DriversPage() {
       setDrivers(await fetchDriverDirectory({ includeInactive: true }));
     } catch (err) {
       console.error("Drivers load error:", err);
-      setPageNotice("Drivers could not fully load. Showing available data.");
+      setPageNotice(t.drivers.loadPartial);
       setDrivers([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t.drivers.loadPartial]);
 
   useEffect(() => {
     void load();
@@ -168,7 +168,7 @@ export default function DriversPage() {
       } else if (err instanceof Error && err.message === "DUPLICATE_DRIVER_VEHICLE") {
         setError(t.drivers.duplicateVehicleAssignment);
       } else if (err instanceof Error && err.message === "VALIDATION_DRIVER_VEHICLE_TYPE_REQUIRED") {
-        setError("Vehicle type is required before saving a driver.");
+        setError(t.drivers.vehicleTypeRequired);
       } else if (err instanceof Error && err.message) {
         setError(err.message);
       } else {
@@ -215,8 +215,8 @@ export default function DriversPage() {
       drivers.map((driver) => ({
         [t.drivers.name]: driver.name,
         [t.drivers.vehicle]: driver.vehicle_reg,
-        "Vehicle Type": driver.vehicle_type ? getDriverVehicleTypeLabel(driver.vehicle_type) : "",
-        Status: driver.active === false ? "Inactive" : "Active"
+        [t.drivers.vehicleType]: driver.vehicle_type ? getDriverVehicleTypeLabel(driver.vehicle_type) : "",
+        [t.drivers.status]: driver.active === false ? t.drivers.inactive : t.drivers.active
       })),
       "drivers-report",
       "Drivers"
@@ -280,7 +280,7 @@ export default function DriversPage() {
             <div className="form-field">
               <label className="form-label">{t.drivers.vehicle}</label>
               <input
-                placeholder="Vehicle registration or leave unassigned"
+                placeholder={t.drivers.vehiclePlaceholder}
                 value={form.vehicle_reg}
                 onChange={(event) =>
                   setForm((current) => ({ ...current, vehicle_reg: event.target.value }))
@@ -291,7 +291,7 @@ export default function DriversPage() {
             </div>
 
             <div className="form-field">
-              <label className="form-label form-label-required">Vehicle type</label>
+              <label className="form-label form-label-required">{t.drivers.vehicleType}</label>
               <select
                 required
                 value={form.vehicle_type}
@@ -305,7 +305,7 @@ export default function DriversPage() {
                 onInput={clearValidationMessage}
                 className="form-input w-full bg-white"
               >
-                <option value="">Select vehicle type</option>
+                <option value="">{t.drivers.selectVehicleType}</option>
                 {DRIVER_VEHICLE_TYPE_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
@@ -322,7 +322,7 @@ export default function DriversPage() {
                 className="mt-1 h-4 w-4 rounded border-slate-300"
               />
               <span>
-                <span className="block font-semibold text-slate-900">Active driver</span>
+                <span className="block font-semibold text-slate-900">{t.drivers.activeDriver}</span>
                 <span className="block text-xs text-slate-500">
                   Turn off when a driver leaves; historical rows keep their saved driver names.
                 </span>
@@ -401,7 +401,7 @@ export default function DriversPage() {
                     <input
                       value={searchQuery}
                       onChange={(event) => setSearchQuery(event.target.value)}
-                      placeholder="Search by driver, registration, or vehicle type"
+                      placeholder={t.drivers.searchDetailedPlaceholder}
                       className="form-input w-full bg-white pl-9"
                     />
                   </div>
@@ -434,7 +434,7 @@ export default function DriversPage() {
               description={
                 drivers.length === 0
                   ? t.drivers.noDriversDescription
-                  : "Try a different driver, registration, or vehicle type."
+                  : t.drivers.noSearchResults
               }
             />
           ) : (
@@ -452,7 +452,7 @@ export default function DriversPage() {
                       <p className="mt-1 text-sm text-slate-500">{driver.vehicle_reg || "Unassigned"}</p>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                          {driver.vehicle_type ? getDriverVehicleTypeLabel(driver.vehicle_type) : "Missing vehicle type"}
+                          {driver.vehicle_type ? getDriverVehicleTypeLabel(driver.vehicle_type) : t.drivers.missingVehicleType}
                         </p>
                         {missingVehicleType ? (
                           <span className="rounded-full border border-amber-300 bg-white px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-700">
@@ -510,8 +510,8 @@ export default function DriversPage() {
                         <tr className="bg-slate-50/80 text-slate-600">
                           <th className="table-head-cell text-left">{t.drivers.name}</th>
                           <th className="table-head-cell text-left">{t.drivers.vehicle}</th>
-                          <th className="table-head-cell text-left">Vehicle Type</th>
-                          <th className="table-head-cell text-left">Status</th>
+                          <th className="table-head-cell text-left">{t.drivers.vehicleType}</th>
+                          <th className="table-head-cell text-left">{t.drivers.status}</th>
                           <th className="table-head-cell text-left">{t.common.action}</th>
                         </tr>
                       </thead>

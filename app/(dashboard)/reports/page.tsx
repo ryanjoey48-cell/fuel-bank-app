@@ -9,6 +9,7 @@ import { normalizeFuelLogLocation, shouldShowFuelLogLocationOption } from "@/lib
 import { buildFuelSpendPdf, downloadReportBlob } from "@/lib/fuel-spend-pdf";
 import { buildFuelSpendManagementReport, groupFuelSpendStation, normalizeFuelSpendReportVehicleRegistration } from "@/lib/fuel-spend-report";
 import { useLanguage } from "@/lib/language-provider";
+import { translations } from "@/lib/translations";
 import { buildWeeklyMileageComparisonReport } from "@/lib/weekly-mileage-report";
 import { buildWeeklyMileageComparisonPdf } from "@/lib/weekly-mileage-pdf";
 import { formatDate, normalizeDisplayName, today } from "@/lib/utils";
@@ -67,6 +68,8 @@ type ReportGroup = {
   title: string;
 };
 
+type ReportsCopy = (typeof translations)[keyof typeof translations]["reports"];
+
 function toDateKey(date: Date) {
   const timezoneOffsetMs = date.getTimezoneOffset() * 60 * 1000;
   return new Date(date.getTime() - timezoneOffsetMs).toISOString().slice(0, 10);
@@ -123,102 +126,97 @@ function fuelLogMileage(log: FuelLogWithDriver) {
   return Number.isFinite(value) ? value : null;
 }
 
-const reportGroups: ReportGroup[] = [
+function buildReportGroups(c: ReportsCopy): ReportGroup[] {
+  return [
   {
-    title: "Fuel & Vehicle",
+    title: c.groups.fuelVehicle,
     icon: Droplets,
     reports: [
       {
         reportId: "fuel-spend-summary",
-        name: "Fuel Spend Manager Summary",
-        description: "Quick management view of fuel spend, litres, pricing, station usage and issues requiring review.",
-        moduleName: "Fuel Spend Report",
+        ...c.cards.fuelSpendSummary,
+        moduleName: c.cards.fuelSpendSummary.module,
         moduleHref: "/fuel-spend-report",
         direct: "fuel-spend-summary"
       },
       {
         reportId: "fuel-spend-full",
-        name: "Full Fuel Spend Management Report",
-        description: "Detailed fuel spend, vehicle performance, station usage and data-quality report.",
-        moduleName: "Fuel Spend Report",
+        ...c.cards.fuelSpendFull,
+        moduleName: c.cards.fuelSpendFull.module,
         moduleHref: "/fuel-spend-report",
         direct: "fuel-spend-full"
       },
       {
         reportId: "fuel-efficiency",
-        name: "Fuel Efficiency Analysis",
-        description: "Driver, vehicle and date-range fuel efficiency drill-down using the existing Fuel Logs workflow.",
-        moduleName: "Fuel Logs / Fuel Spend",
+        ...c.cards.fuelEfficiency,
+        moduleName: c.cards.fuelEfficiency.module,
         moduleHref: "/fuel-logs",
         direct: null
       },
       {
         reportId: "vehicle-performance",
-        name: "Vehicle Performance Management Report",
-        description: "Fleet revenue, fuel spend, balance, rankings, highlights and data-quality management report.",
-        moduleName: "Vehicle Performance",
+        ...c.cards.vehiclePerformance,
+        moduleName: c.cards.vehiclePerformance.module,
         moduleHref: "/vehicle-performance",
         direct: null
       }
     ]
   },
   {
-    title: "Mileage & Maintenance",
+    title: c.groups.mileageMaintenance,
     icon: Route,
     reports: [
       {
         reportId: "weekly-mileage",
-        name: "Weekly Fleet Mileage Overview",
-        description: "Current week versus previous week mileage comparison across the fleet.",
-        moduleName: "Weekly Mileage",
+        ...c.cards.weeklyMileage,
+        moduleName: c.cards.weeklyMileage.module,
         moduleHref: "/weekly-mileage",
         direct: "weekly-mileage"
       },
       {
         reportId: "weekly-distance",
-        name: "Weekly Distance History Report",
-        description: "Historical weekly distance trend and current versus history comparison.",
-        moduleName: "Weekly Mileage",
+        ...c.cards.weeklyDistance,
+        moduleName: c.cards.weeklyDistance.module,
         moduleHref: "/weekly-mileage",
         direct: null
       },
       {
         reportId: "oil-service",
-        name: "Oil Change Service Report",
-        description: "Action-first oil service status covering overdue, due soon and OK vehicles.",
-        moduleName: "Weekly Mileage / Maintenance",
+        ...c.cards.oilService,
+        moduleName: c.cards.oilService.module,
         moduleHref: "/weekly-mileage",
         direct: null
       }
     ]
   },
   {
-    title: "Booking & Operations",
+    title: c.groups.bookingOperations,
     icon: CalendarDays,
     reports: [
       {
         reportId: "booking-summary",
-        name: "Booking Diary Manager Summary",
-        description: "Concise operational summary, KPI cards, period movement and management actions.",
-        moduleName: "Booking Diary",
+        ...c.cards.bookingSummary,
+        moduleName: c.cards.bookingSummary.module,
         moduleHref: "/booking-diary",
         direct: null
       },
       {
         reportId: "booking-full",
-        name: "Booking Diary Full Business Insights Report",
-        description: "Detailed booking trends, repeat work, route quality, workload and data-quality insights.",
-        moduleName: "Booking Diary",
+        ...c.cards.bookingFull,
+        moduleName: c.cards.bookingFull.module,
         moduleHref: "/booking-diary",
         direct: null
       }
     ]
   }
-];
+  ];
+}
 
 export default function ReportsPage() {
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
   const languageKey = language === "th" ? "th" : "en";
+  const c = t.reports;
+  const reportGroups = useMemo(() => buildReportGroups(c), [c]);
   const [expandedReport, setExpandedReport] = useState<ReportId | null>(null);
   const [fuelLogs, setFuelLogs] = useState<FuelLogWithDriver[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -254,7 +252,7 @@ export default function ReportsPage() {
       })
       .catch((error) => {
         console.error("Reports Centre data load failed:", error);
-        if (active) setCardErrors((current) => ({ ...current, page: "Unable to load report data. Please try again." }));
+        if (active) setCardErrors((current) => ({ ...current, page: c.loadError }));
       })
       .finally(() => {
         if (active) setLoadingData(false);
@@ -263,17 +261,17 @@ export default function ReportsPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [c.loadError]);
 
   const normalizedFuelLogs = useMemo(
     () =>
       fuelLogs.map((log) => ({
         ...log,
-        driver: normalizeDisplayName(log.driver) || "Unknown driver",
-        location: normalizeFuelLogLocation(log.location) || "Unknown station",
+        driver: normalizeDisplayName(log.driver) || c.unknownDriver,
+        location: normalizeFuelLogLocation(log.location) || c.unknownStation,
         vehicle_reg: normalizeFuelSpendReportVehicleRegistration(log.vehicle_reg)
       })),
-    [fuelLogs]
+    [c.unknownDriver, c.unknownStation, fuelLogs]
   );
 
   const driverOptions = useMemo(
@@ -307,7 +305,7 @@ export default function ReportsPage() {
   const generateFuelSpend = async (report: ReportCard) => {
     const filters = fuelSpendFiltersByReport[report.reportId];
     const reportData = buildFuelSpendManagementReport(normalizedFuelLogs, filters);
-    if (!reportData.logs.length) throw new Error("No fuel logs are available for the selected period.");
+    if (!reportData.logs.length) throw new Error(c.noFuelLogs);
     const pdf = await buildFuelSpendPdf(reportData, {
       full: report.direct === "fuel-spend-full",
       language: languageKey,
@@ -317,9 +315,9 @@ export default function ReportsPage() {
   };
 
   const generateWeeklyMileage = async () => {
-    if (!weeklyMileageWeek) throw new Error("No weekly mileage reports are available.");
+    if (!weeklyMileageWeek) throw new Error(c.noMileageReports);
     const report = buildWeeklyMileageComparisonReport({ entries: weeklyMileage, vehicles, drivers, selectedWeek: weeklyMileageWeek });
-    if (!report.rows.length) throw new Error("No weekly mileage data is available for the selected week.");
+    if (!report.rows.length) throw new Error(c.noMileageData);
     const pdf = await buildWeeklyMileageComparisonPdf(report, languageKey);
     downloadReportBlob(pdf, `weekly-fleet-mileage-overview-${weeklyMileageWeek}.pdf`);
   };
@@ -330,11 +328,11 @@ export default function ReportsPage() {
     try {
       if (report.direct === "fuel-spend-summary" || report.direct === "fuel-spend-full") await generateFuelSpend(report);
       else if (report.direct === "weekly-mileage") await generateWeeklyMileage();
-      else throw new Error(directUnavailableReason(report.reportId));
+      else throw new Error(directUnavailableReason(report.reportId, c));
     } catch (error) {
       setCardErrors((current) => ({
         ...current,
-        [report.reportId]: error instanceof Error && error.message ? error.message : "Unable to generate report. Please try again."
+        [report.reportId]: error instanceof Error && error.message ? error.message : c.generateError
       }));
     } finally {
       setGeneratingReport(null);
@@ -344,7 +342,7 @@ export default function ReportsPage() {
   return (
     <>
       <div className="mb-6 hidden md:block">
-        <Header title="Reports Centre" description="Configure and download management reports without leaving this page." />
+        <Header title={c.title} description={c.description} />
       </div>
 
       <section className="surface-card p-4 sm:p-5">
@@ -352,11 +350,11 @@ export default function ReportsPage() {
           <div>
             <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm font-semibold text-brand-700 hover:text-brand-900">
               <ArrowLeft className="h-4 w-4" />
-              Back to Dashboard
+              {c.backToDashboard}
             </Link>
-            <h2 className="mt-3 text-xl font-semibold text-slate-950">Reports Centre</h2>
+            <h2 className="mt-3 text-xl font-semibold text-slate-950">{c.title}</h2>
             <p className="mt-1 max-w-3xl text-sm text-slate-500">
-              Choose a report, adjust its filters, then download directly. Open Module remains available for full record review.
+              {c.intro}
             </p>
             {cardErrors.page ? <p className="mt-3 text-sm font-semibold text-rose-600">{cardErrors.page}</p> : null}
           </div>
@@ -388,16 +386,16 @@ export default function ReportsPage() {
                       </div>
                       <ReportIcon reportName={report.name} />
                     </div>
-                    <p className="mt-4 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Source module</p>
+                    <p className="mt-4 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{c.sourceModule}</p>
                     <p className="mt-1 text-sm font-semibold text-slate-800">{report.moduleName}</p>
                     <div className="mt-4 flex flex-wrap gap-2">
                       <button type="button" onClick={() => setExpandedReport(expanded ? null : report.reportId)} className="btn-primary min-h-9 gap-2 px-3 py-1.5 text-xs">
                         <FileText className="h-3.5 w-3.5" />
-                        Generate Report
+                        {c.generateReport}
                       </button>
                       <Link href={report.moduleHref} className="btn-secondary min-h-9 gap-2 px-3 py-1.5 text-xs">
                         <ExternalLink className="h-3.5 w-3.5" />
-                        Open Module
+                        {c.openModule}
                       </Link>
                     </div>
 
@@ -419,7 +417,8 @@ export default function ReportsPage() {
                           vehicleOptions,
                           weekOptions,
                           weeklyDistancePeriod,
-                          weeklyMileageWeek
+                          weeklyMileageWeek,
+                          c
                         })}
                         {cardErrors[report.reportId] ? (
                           <p className="mt-3 rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">{cardErrors[report.reportId]}</p>
@@ -432,9 +431,9 @@ export default function ReportsPage() {
                             className="btn-primary min-h-9 gap-2 px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
-                            {generating ? "Generating report..." : downloadLabel(report.reportId)}
+                            {generating ? c.generating : downloadLabel(report.reportId, c)}
                           </button>
-                          <button type="button" onClick={() => setExpandedReport(null)} className="btn-secondary min-h-9 px-3 py-1.5 text-xs">Cancel</button>
+                          <button type="button" onClick={() => setExpandedReport(null)} className="btn-secondary min-h-9 px-3 py-1.5 text-xs">{c.cancel}</button>
                         </div>
                       </div>
                     ) : null}
@@ -466,16 +465,17 @@ function renderFilters(reportId: ReportId, context: {
   weekOptions: string[];
   weeklyDistancePeriod: string;
   weeklyMileageWeek: string;
+  c: ReportsCopy;
 }) {
   if (reportId === "fuel-spend-summary" || reportId === "fuel-spend-full") {
     const filters = context.fuelSpendFilters!;
     return (
       <div className="grid gap-3 lg:grid-cols-5">
-        <DateRangeFields filters={filters} onChange={context.setFuelSpendFilters} />
-        <SelectField label="Vehicle" value={filters.vehicleReg} onChange={(vehicleReg) => context.setFuelSpendFilters({ ...filters, vehicleReg })} options={context.vehicleOptions} allLabel="All Vehicles" />
-        <SelectField label="Driver" value={filters.driver} onChange={(driver) => context.setFuelSpendFilters({ ...filters, driver })} options={context.driverOptions} allLabel="All Drivers" />
-        <SelectField label="Fuel Type" value={filters.fuelType} onChange={(fuelType) => context.setFuelSpendFilters({ ...filters, fuelType })} options={context.fuelTypeOptions} allLabel="All Fuel Types" />
-        <SelectField label="Station" value={filters.location} onChange={(location) => context.setFuelSpendFilters({ ...filters, location })} options={["Bangchak", "Shell", "Best LPG", "Other", ...context.stationOptions]} allLabel="All Stations" />
+        <DateRangeFields filters={filters} onChange={context.setFuelSpendFilters} c={context.c} />
+        <SelectField label={context.c.vehicle} value={filters.vehicleReg} onChange={(vehicleReg) => context.setFuelSpendFilters({ ...filters, vehicleReg })} options={context.vehicleOptions} allLabel={context.c.allVehicles} />
+        <SelectField label={context.c.driver} value={filters.driver} onChange={(driver) => context.setFuelSpendFilters({ ...filters, driver })} options={context.driverOptions} allLabel={context.c.allDrivers} />
+        <SelectField label={context.c.fuelType} value={filters.fuelType} onChange={(fuelType) => context.setFuelSpendFilters({ ...filters, fuelType })} options={context.fuelTypeOptions} allLabel={context.c.allFuelTypes} />
+        <SelectField label={context.c.station} value={filters.location} onChange={(location) => context.setFuelSpendFilters({ ...filters, location })} options={["Bangchak", "Shell", "Best LPG", "Other", ...context.stationOptions]} allLabel={context.c.allStations} />
       </div>
     );
   }
@@ -484,7 +484,7 @@ function renderFilters(reportId: ReportId, context: {
     return (
       <div className="grid gap-3 sm:grid-cols-2">
         <label>
-          <span className="form-label">Week ending</span>
+          <span className="form-label">{context.c.weekEnding}</span>
           <select value={context.weeklyMileageWeek} onChange={(event) => context.setWeeklyMileageWeek(event.target.value)} className="form-input bg-white">
             {context.weekOptions.map((week) => <option key={week} value={week}>{week}</option>)}
           </select>
@@ -498,11 +498,11 @@ function renderFilters(reportId: ReportId, context: {
     return (
       <div className="space-y-3">
         <div className="grid gap-3 lg:grid-cols-4">
-          <DateRangeFields filters={filters} onChange={context.setFuelEfficiencyFilters} />
-          <SelectField label="Driver" value={filters.driver} onChange={(driver) => context.setFuelEfficiencyFilters({ ...filters, driver })} options={context.driverOptions} allLabel="All Drivers" />
-          <SelectField label="Vehicle" value={filters.vehicleReg} onChange={(vehicleReg) => context.setFuelEfficiencyFilters({ ...filters, vehicleReg })} options={context.vehicleOptions} allLabel="All Vehicles" />
+          <DateRangeFields filters={filters} onChange={context.setFuelEfficiencyFilters} c={context.c} />
+          <SelectField label={context.c.driver} value={filters.driver} onChange={(driver) => context.setFuelEfficiencyFilters({ ...filters, driver })} options={context.driverOptions} allLabel={context.c.allDrivers} />
+          <SelectField label={context.c.vehicle} value={filters.vehicleReg} onChange={(vehicleReg) => context.setFuelEfficiencyFilters({ ...filters, vehicleReg })} options={context.vehicleOptions} allLabel={context.c.allVehicles} />
         </div>
-        <UnavailableNotice reason={directUnavailableReason(reportId)} />
+        <UnavailableNotice reason={directUnavailableReason(reportId, context.c)} />
       </div>
     );
   }
@@ -511,8 +511,8 @@ function renderFilters(reportId: ReportId, context: {
     const filters = context.bookingFilters!;
     return (
       <div className="space-y-3">
-        <BookingDateRangeFields filters={filters} onChange={context.setBookingFilters} />
-        <UnavailableNotice reason={directUnavailableReason(reportId)} />
+        <BookingDateRangeFields filters={filters} onChange={context.setBookingFilters} c={context.c} />
+        <UnavailableNotice reason={directUnavailableReason(reportId, context.c)} />
       </div>
     );
   }
@@ -521,14 +521,14 @@ function renderFilters(reportId: ReportId, context: {
     return (
       <div className="space-y-3">
         <label className="block max-w-xs">
-          <span className="form-label">Period</span>
+          <span className="form-label">{context.c.period}</span>
           <select value={context.weeklyDistancePeriod} onChange={(event) => context.setWeeklyDistancePeriod(event.target.value)} className="form-input bg-white">
-            <option value="4">Last 4 weeks</option>
-            <option value="8">Last 8 weeks</option>
-            <option value="12">Last 12 weeks</option>
+            <option value="4">{context.c.last4Weeks}</option>
+            <option value="8">{context.c.last8Weeks}</option>
+            <option value="12">{context.c.last12Weeks}</option>
           </select>
         </label>
-        <UnavailableNotice reason={directUnavailableReason(reportId)} />
+        <UnavailableNotice reason={directUnavailableReason(reportId, context.c)} />
       </div>
     );
   }
@@ -536,21 +536,21 @@ function renderFilters(reportId: ReportId, context: {
   if (reportId === "oil-service") {
     return (
       <div className="space-y-3">
-        <p className="text-sm font-medium text-slate-700">Report as of: latest available mileage and current oil-service baseline.</p>
-        <UnavailableNotice reason={directUnavailableReason(reportId)} />
+        <p className="text-sm font-medium text-slate-700">{context.c.reportAsOf}</p>
+        <UnavailableNotice reason={directUnavailableReason(reportId, context.c)} />
       </div>
     );
   }
 
   return (
     <div className="space-y-3">
-      <p className="text-sm font-medium text-slate-700">Use the source module filters currently supported by this report.</p>
-      <UnavailableNotice reason={directUnavailableReason(reportId)} />
+      <p className="text-sm font-medium text-slate-700">{context.c.useModuleFilters}</p>
+      <UnavailableNotice reason={directUnavailableReason(reportId, context.c)} />
     </div>
   );
 }
 
-function DateRangeFields<T extends DateRange>({ filters, onChange }: { filters: T; onChange: (filters: T) => void }) {
+function DateRangeFields<T extends DateRange>({ filters, onChange, c }: { filters: T; onChange: (filters: T) => void; c: ReportsCopy }) {
   const updatePreset = (preset: DatePreset) => {
     if (preset === "custom") onChange({ ...filters, preset });
     else onChange({ ...filters, ...getDateRange(preset) });
@@ -558,24 +558,24 @@ function DateRangeFields<T extends DateRange>({ filters, onChange }: { filters: 
   return (
     <>
       <label>
-        <span className="form-label">Date Range</span>
+        <span className="form-label">{c.dateRange}</span>
         <select value={filters.preset} onChange={(event) => updatePreset(event.target.value as DatePreset)} className="form-input bg-white">
-          <option value="today">Today</option>
-          <option value="this_week">This Week</option>
-          <option value="last_week">Last Week</option>
-          <option value="this_month">This Month</option>
-          <option value="last_month">Last Month</option>
-          <option value="custom">Custom</option>
+          <option value="today">{c.today}</option>
+          <option value="this_week">{c.thisWeek}</option>
+          <option value="last_week">{c.lastWeek}</option>
+          <option value="this_month">{c.thisMonth}</option>
+          <option value="last_month">{c.lastMonth}</option>
+          <option value="custom">{c.custom}</option>
         </select>
       </label>
       {filters.preset === "custom" ? (
         <>
           <label>
-            <span className="form-label">From</span>
+            <span className="form-label">{c.from}</span>
             <input type="date" value={filters.fromDate} onChange={(event) => onChange({ ...filters, fromDate: event.target.value })} className="form-input bg-white" />
           </label>
           <label>
-            <span className="form-label">To</span>
+            <span className="form-label">{c.to}</span>
             <input type="date" value={filters.toDate} onChange={(event) => onChange({ ...filters, toDate: event.target.value })} className="form-input bg-white" />
           </label>
         </>
@@ -584,7 +584,7 @@ function DateRangeFields<T extends DateRange>({ filters, onChange }: { filters: 
   );
 }
 
-function BookingDateRangeFields({ filters, onChange }: { filters: BookingFilters; onChange: (filters: BookingFilters) => void }) {
+function BookingDateRangeFields({ filters, onChange, c }: { filters: BookingFilters; onChange: (filters: BookingFilters) => void; c: ReportsCopy }) {
   const updatePreset = (preset: BookingDatePreset) => {
     if (preset === "custom") onChange({ ...filters, preset });
     else onChange(getBookingDateRange(preset));
@@ -592,23 +592,23 @@ function BookingDateRangeFields({ filters, onChange }: { filters: BookingFilters
   return (
     <div className="grid gap-3 lg:grid-cols-3">
       <label>
-        <span className="form-label">Date Range</span>
+        <span className="form-label">{c.dateRange}</span>
         <select value={filters.preset} onChange={(event) => updatePreset(event.target.value as BookingDatePreset)} className="form-input bg-white">
-          <option value="last_7_days">Last 7 Days</option>
-          <option value="last_30_days">Last 30 Days</option>
-          <option value="this_month">This Month</option>
-          <option value="last_month">Last Month</option>
-          <option value="custom">Custom</option>
+          <option value="last_7_days">{c.last7Days}</option>
+          <option value="last_30_days">{c.last30Days}</option>
+          <option value="this_month">{c.thisMonth}</option>
+          <option value="last_month">{c.lastMonth}</option>
+          <option value="custom">{c.custom}</option>
         </select>
       </label>
       {filters.preset === "custom" ? (
         <>
           <label>
-            <span className="form-label">From</span>
+            <span className="form-label">{c.from}</span>
             <input type="date" value={filters.fromDate} onChange={(event) => onChange({ ...filters, fromDate: event.target.value })} className="form-input bg-white" />
           </label>
           <label>
-            <span className="form-label">To</span>
+            <span className="form-label">{c.to}</span>
             <input type="date" value={filters.toDate} onChange={(event) => onChange({ ...filters, toDate: event.target.value })} className="form-input bg-white" />
           </label>
         </>
@@ -633,24 +633,24 @@ function UnavailableNotice({ reason }: { reason: string }) {
   return <p className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">{reason}</p>;
 }
 
-function directUnavailableReason(reportId: ReportId) {
-  if (reportId === "fuel-efficiency") return "Direct generation is not available yet because the Fuel Efficiency PDF generator and its dependency rules are still page-local inside Fuel Logs.";
-  if (reportId === "vehicle-performance") return "Direct generation is not available yet because the Vehicle Performance PDF data builder and renderer are still page-local inside Vehicle Performance.";
-  if (reportId === "weekly-distance") return "Direct generation is not available yet because the Weekly Distance PDF builder is still page-local inside Weekly Mileage.";
-  if (reportId === "oil-service") return "Direct generation is not available yet because the Oil Service PDF builder depends on page-local maintenance summary state inside Weekly Mileage.";
-  if (reportId === "booking-summary" || reportId === "booking-full") return "Direct generation is not available yet because Booking Diary reports use the existing page-local print component rather than an exported PDF generator.";
-  return "Unable to generate report. Please try again.";
+function directUnavailableReason(reportId: ReportId, c: ReportsCopy) {
+  if (reportId === "fuel-efficiency") return c.unavailable.fuelEfficiency;
+  if (reportId === "vehicle-performance") return c.unavailable.vehiclePerformance;
+  if (reportId === "weekly-distance") return c.unavailable.weeklyDistance;
+  if (reportId === "oil-service") return c.unavailable.oilService;
+  if (reportId === "booking-summary" || reportId === "booking-full") return c.unavailable.booking;
+  return c.unavailable.generic;
 }
 
-function downloadLabel(reportId: ReportId) {
-  if (reportId === "fuel-spend-summary") return "Download Manager Summary PDF";
-  if (reportId === "fuel-spend-full") return "Download Full Fuel Report PDF";
-  if (reportId === "fuel-efficiency") return "Download Fuel Efficiency PDF";
-  if (reportId === "vehicle-performance") return "Download Vehicle Performance PDF";
-  if (reportId === "weekly-mileage") return "Download Weekly Mileage PDF";
-  if (reportId === "weekly-distance") return "Download Distance History PDF";
-  if (reportId === "oil-service") return "Download Oil Service PDF";
-  return "Download PDF";
+function downloadLabel(reportId: ReportId, c: ReportsCopy) {
+  if (reportId === "fuel-spend-summary") return c.downloads.fuelSpendSummary;
+  if (reportId === "fuel-spend-full") return c.downloads.fuelSpendFull;
+  if (reportId === "fuel-efficiency") return c.downloads.fuelEfficiency;
+  if (reportId === "vehicle-performance") return c.downloads.vehiclePerformance;
+  if (reportId === "weekly-mileage") return c.downloads.weeklyMileage;
+  if (reportId === "weekly-distance") return c.downloads.weeklyDistance;
+  if (reportId === "oil-service") return c.downloads.oilService;
+  return c.downloads.pdf;
 }
 
 function ReportIcon({ reportName }: { reportName: string }) {

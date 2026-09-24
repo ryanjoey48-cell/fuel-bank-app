@@ -1,0 +1,1352 @@
+{
+  "captured_at": "2026-09-21T17:42:26.7880998+07:00",
+  "capture_method": "Read-only Supabase PostgREST OpenAPI plus Storage bucket API",
+  "limitations": [
+    "PostgREST does not expose live pg_indexes, pg_policy, pg_trigger, pg_proc definitions or view SQL.",
+    "A privileged database catalog export is still required before Stage 2."
+  ],
+  "definitions": {
+    "vehicle_insurance_compliance": {
+      "required": [
+        "id",
+        "vehicle_registration",
+        "record_status",
+        "verification_status",
+        "source",
+        "created_at",
+        "updated_at"
+      ],
+      "properties": {
+        "id": {
+          "default": "gen_random_uuid()",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "vehicle_registration": {
+          "format": "text",
+          "type": "string"
+        },
+        "ownership_holder": {
+          "format": "text",
+          "type": "string"
+        },
+        "insurer_th": {
+          "format": "text",
+          "type": "string"
+        },
+        "insurer_en": {
+          "format": "text",
+          "type": "string"
+        },
+        "policy_number": {
+          "format": "text",
+          "type": "string"
+        },
+        "insurance_start_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "insurance_expiry_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "registration_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "registration_expiry_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "laos_expiry_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "insurance_premium": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "compulsory_insurance_premium": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "vehicle_tax": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "additional_premium": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "total_recorded_cost": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "record_status": {
+          "default": "current",
+          "format": "text",
+          "type": "string"
+        },
+        "verification_status": {
+          "default": "needs_review",
+          "format": "text",
+          "type": "string"
+        },
+        "verified_at": {
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "verified_by": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "source": {
+          "default": "manual",
+          "format": "text",
+          "type": "string"
+        },
+        "source_row": {
+          "format": "integer",
+          "type": "integer"
+        },
+        "original_insurance_expiry": {
+          "format": "text",
+          "type": "string"
+        },
+        "import_review_notes": {
+          "format": "text",
+          "type": "string"
+        },
+        "notes": {
+          "format": "text",
+          "type": "string"
+        },
+        "created_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "updated_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "compulsory_policy_number": {
+          "format": "text",
+          "type": "string"
+        },
+        "compulsory_policy_issue_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "compulsory_start_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "compulsory_expiry_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "insurance_class": {
+          "format": "text",
+          "type": "string"
+        },
+        "policy_issue_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "insured_value": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "repair_type": {
+          "format": "text",
+          "type": "string"
+        },
+        "vehicle_make": {
+          "format": "text",
+          "type": "string"
+        },
+        "vehicle_year": {
+          "format": "integer",
+          "type": "integer"
+        },
+        "chassis_number": {
+          "format": "text",
+          "type": "string"
+        },
+        "compulsory_included": {
+          "format": "boolean",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "vehicle_insurance_compliance_view": {
+      "properties": {
+        "id": {
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "vehicle_registration": {
+          "format": "text",
+          "type": "string"
+        },
+        "ownership_holder": {
+          "format": "text",
+          "type": "string"
+        },
+        "insurer_th": {
+          "format": "text",
+          "type": "string"
+        },
+        "insurer_en": {
+          "format": "text",
+          "type": "string"
+        },
+        "policy_number": {
+          "format": "text",
+          "type": "string"
+        },
+        "insurance_start_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "insurance_expiry_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "registration_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "registration_expiry_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "laos_expiry_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "insurance_premium": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "compulsory_insurance_premium": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "vehicle_tax": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "additional_premium": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "total_recorded_cost": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "record_status": {
+          "format": "text",
+          "type": "string"
+        },
+        "verification_status": {
+          "format": "text",
+          "type": "string"
+        },
+        "verified_at": {
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "verified_by": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "source": {
+          "format": "text",
+          "type": "string"
+        },
+        "source_row": {
+          "format": "integer",
+          "type": "integer"
+        },
+        "original_insurance_expiry": {
+          "format": "text",
+          "type": "string"
+        },
+        "import_review_notes": {
+          "format": "text",
+          "type": "string"
+        },
+        "notes": {
+          "format": "text",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "compulsory_policy_number": {
+          "format": "text",
+          "type": "string"
+        },
+        "compulsory_policy_issue_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "compulsory_start_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "compulsory_expiry_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "insurance_class": {
+          "format": "text",
+          "type": "string"
+        },
+        "policy_issue_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "insured_value": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "repair_type": {
+          "format": "text",
+          "type": "string"
+        },
+        "vehicle_make": {
+          "format": "text",
+          "type": "string"
+        },
+        "vehicle_year": {
+          "format": "integer",
+          "type": "integer"
+        },
+        "chassis_number": {
+          "format": "text",
+          "type": "string"
+        },
+        "compulsory_included": {
+          "format": "boolean",
+          "type": "boolean"
+        },
+        "insurance_status": {
+          "format": "text",
+          "type": "string"
+        },
+        "days_to_insurance_expiry": {
+          "format": "integer",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "vehicle_insurance_documents": {
+      "required": [
+        "id",
+        "insurance_record_id",
+        "document_type",
+        "file_path",
+        "file_name",
+        "created_at",
+        "updated_at"
+      ],
+      "properties": {
+        "id": {
+          "default": "gen_random_uuid()",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "insurance_record_id": {
+          "description": "Note:\nThis is a Foreign Key to `vehicle_insurance_compliance.id`.<fk table='vehicle_insurance_compliance' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "document_type": {
+          "default": "insurance",
+          "format": "text",
+          "type": "string"
+        },
+        "file_path": {
+          "format": "text",
+          "type": "string"
+        },
+        "file_name": {
+          "format": "text",
+          "type": "string"
+        },
+        "mime_type": {
+          "format": "text",
+          "type": "string"
+        },
+        "file_size": {
+          "format": "bigint",
+          "type": "integer"
+        },
+        "uploaded_by": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "created_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "updated_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "vehicles": {
+      "required": [
+        "id",
+        "vehicle_reg",
+        "vehicle_name",
+        "active",
+        "created_at",
+        "updated_at"
+      ],
+      "properties": {
+        "id": {
+          "default": "gen_random_uuid()",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "user_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "vehicle_reg": {
+          "format": "text",
+          "type": "string"
+        },
+        "vehicle_type": {
+          "format": "text",
+          "type": "string"
+        },
+        "vehicle_name": {
+          "format": "text",
+          "type": "string"
+        },
+        "last_oil_change_odometer": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "last_oil_change_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "oil_change_interval_km": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "active": {
+          "default": true,
+          "format": "boolean",
+          "type": "boolean"
+        },
+        "company_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "vehicle_category": {
+          "format": "text",
+          "type": "string"
+        },
+        "fuel_type": {
+          "default": "DIESEL",
+          "format": "text",
+          "type": "string"
+        },
+        "standard_km_per_litre": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "default_driver_cost": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "created_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "updated_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "vehicle_registration_aliases": {
+      "required": [
+        "id",
+        "source_registration",
+        "canonical_registration",
+        "source_registration_key",
+        "canonical_registration_key",
+        "reason",
+        "created_at",
+        "updated_at"
+      ],
+      "properties": {
+        "id": {
+          "default": "gen_random_uuid()",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "source_registration": {
+          "format": "text",
+          "type": "string"
+        },
+        "canonical_registration": {
+          "format": "text",
+          "type": "string"
+        },
+        "source_registration_key": {
+          "format": "text",
+          "type": "string"
+        },
+        "canonical_registration_key": {
+          "format": "text",
+          "type": "string"
+        },
+        "reason": {
+          "format": "text",
+          "type": "string"
+        },
+        "created_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "updated_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "drivers": {
+      "required": [
+        "id",
+        "name",
+        "active"
+      ],
+      "properties": {
+        "id": {
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "bigint",
+          "type": "integer"
+        },
+        "name": {
+          "format": "text",
+          "type": "string"
+        },
+        "vehicle": {
+          "format": "text",
+          "type": "string"
+        },
+        "fuel_type": {
+          "format": "text",
+          "type": "string"
+        },
+        "payment_method": {
+          "format": "text",
+          "type": "string"
+        },
+        "common_location": {
+          "format": "text",
+          "type": "string"
+        },
+        "created_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "vehicle_reg": {
+          "format": "text",
+          "type": "string"
+        },
+        "vehicle_type": {
+          "format": "text",
+          "type": "string"
+        },
+        "assigned_vehicle_id": {
+          "description": "Note:\nThis is a Foreign Key to `vehicles.id`.<fk table='vehicles' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "active": {
+          "default": true,
+          "format": "boolean",
+          "type": "boolean"
+        },
+        "user_id": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "fuel_logs": {
+      "required": [
+        "id",
+        "receipt_checked"
+      ],
+      "properties": {
+        "id": {
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "bigint",
+          "type": "integer"
+        },
+        "date": {
+          "format": "date",
+          "type": "string"
+        },
+        "driver": {
+          "format": "text",
+          "type": "string"
+        },
+        "vehicle_reg": {
+          "format": "text",
+          "type": "string"
+        },
+        "litres": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "total_cost": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "price_per_litre": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "mileage": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "location": {
+          "format": "text",
+          "type": "string"
+        },
+        "fuel_type": {
+          "format": "text",
+          "type": "string"
+        },
+        "payment_method": {
+          "format": "text",
+          "type": "string"
+        },
+        "notes": {
+          "format": "text",
+          "type": "string"
+        },
+        "created_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "odometer": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "driver_id": {
+          "format": "bigint",
+          "type": "integer"
+        },
+        "receipt_checked": {
+          "default": false,
+          "format": "boolean",
+          "type": "boolean"
+        },
+        "receipt_checked_at": {
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "entry_source": {
+          "default": "line_message",
+          "format": "text",
+          "type": "string"
+        },
+        "vehicle_id": {
+          "description": "Note:\nThis is a Foreign Key to `vehicles.id`.<fk table='vehicles' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "weekly_mileage": {
+      "required": [
+        "id",
+        "week_ending",
+        "driver",
+        "vehicle_reg",
+        "mileage",
+        "is_odometer_baseline"
+      ],
+      "properties": {
+        "id": {
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "bigint",
+          "type": "integer"
+        },
+        "week_ending": {
+          "format": "date",
+          "type": "string"
+        },
+        "driver": {
+          "format": "text",
+          "type": "string"
+        },
+        "vehicle_reg": {
+          "format": "text",
+          "type": "string"
+        },
+        "mileage": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "created_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "driver_id": {
+          "description": "Note:\nThis is a Foreign Key to `drivers.id`.<fk table='drivers' column='id'/>",
+          "format": "bigint",
+          "type": "integer"
+        },
+        "odometer_reading": {
+          "format": "bigint",
+          "type": "integer"
+        },
+        "user_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "is_odometer_baseline": {
+          "default": false,
+          "description": "True when this reading starts a new odometer series and must not be compared with the preceding reading.",
+          "format": "boolean",
+          "type": "boolean"
+        },
+        "odometer_note": {
+          "description": "Audit note explaining an odometer baseline or legacy reading.",
+          "format": "text",
+          "type": "string"
+        },
+        "vehicle_id": {
+          "description": "Note:\nThis is a Foreign Key to `vehicles.id`.<fk table='vehicles' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "driver_name_snapshot": {
+          "format": "text",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "maintenance_records": {
+      "required": [
+        "id",
+        "vehicle_id",
+        "service_date",
+        "calculated_total",
+        "mismatch_confirmed",
+        "is_deleted",
+        "created_by",
+        "created_at",
+        "updated_by",
+        "updated_at"
+      ],
+      "properties": {
+        "id": {
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "vehicle_id": {
+          "description": "Note:\nThis is a Foreign Key to `vehicles.id`.<fk table='vehicles' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "service_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "odometer": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "garage": {
+          "format": "text",
+          "type": "string"
+        },
+        "receipt_reference": {
+          "format": "text",
+          "type": "string"
+        },
+        "receipt_total": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "calculated_total": {
+          "default": 0,
+          "format": "numeric",
+          "type": "number"
+        },
+        "mismatch_confirmed": {
+          "default": false,
+          "format": "boolean",
+          "type": "boolean"
+        },
+        "notes": {
+          "format": "text",
+          "type": "string"
+        },
+        "off_road_at": {
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "returned_at": {
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "is_deleted": {
+          "default": false,
+          "format": "boolean",
+          "type": "boolean"
+        },
+        "created_by": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "created_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "updated_by": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "updated_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "trip_journeys": {
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "default": "gen_random_uuid()",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "booking_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "date": {
+          "format": "date",
+          "type": "string"
+        },
+        "pickup_time": {
+          "format": "text",
+          "type": "string"
+        },
+        "pickup_location": {
+          "format": "text",
+          "type": "string"
+        },
+        "dropoff_location": {
+          "format": "text",
+          "type": "string"
+        },
+        "route": {
+          "format": "text",
+          "type": "string"
+        },
+        "vehicle_type": {
+          "format": "text",
+          "type": "string"
+        },
+        "vehicle_reg": {
+          "format": "text",
+          "type": "string"
+        },
+        "driver": {
+          "format": "text",
+          "type": "string"
+        },
+        "load_text": {
+          "format": "text",
+          "type": "string"
+        },
+        "warehouse_no": {
+          "format": "text",
+          "type": "string"
+        },
+        "notes": {
+          "format": "text",
+          "type": "string"
+        },
+        "start_mileage": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "end_mileage": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "actual_distance_km": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "estimated_distance_km": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "distance_difference_km": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "distance_difference_percent": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "manual_litres": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "manual_fuel_cost": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "fuel_source": {
+          "default": "manual",
+          "format": "text",
+          "type": "string"
+        },
+        "return_to_depot": {
+          "default": false,
+          "format": "boolean",
+          "type": "boolean"
+        },
+        "waiting_idle_notes": {
+          "format": "text",
+          "type": "string"
+        },
+        "extra_route_notes": {
+          "format": "text",
+          "type": "string"
+        },
+        "status": {
+          "default": "created",
+          "format": "text",
+          "type": "string"
+        },
+        "created_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "updated_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "booking_reference": {
+          "format": "text",
+          "type": "string"
+        },
+        "estimated_duration_minutes": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "google_maps_route_url": {
+          "format": "text",
+          "type": "string"
+        },
+        "pickup_display_name": {
+          "format": "text",
+          "type": "string"
+        },
+        "dropoff_display_name": {
+          "format": "text",
+          "type": "string"
+        },
+        "pickup_place_id": {
+          "format": "text",
+          "type": "string"
+        },
+        "dropoff_place_id": {
+          "format": "text",
+          "type": "string"
+        },
+        "pickup_lat": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "pickup_lng": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "dropoff_lat": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "dropoff_lng": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "route_distance_meters": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "route_duration_seconds": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "route_static_duration_seconds": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "route_calculated_at": {
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "route_departure_time": {
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "route_preference": {
+          "format": "text",
+          "type": "string"
+        },
+        "route_label": {
+          "format": "text",
+          "type": "string"
+        },
+        "route_description": {
+          "format": "text",
+          "type": "string"
+        },
+        "route_polyline": {
+          "format": "text",
+          "type": "string"
+        },
+        "route_traffic_aware": {
+          "format": "boolean",
+          "type": "boolean"
+        },
+        "route_source": {
+          "format": "text",
+          "type": "string"
+        },
+        "route_fallback_info": {
+          "format": "jsonb"
+        },
+        "vehicle_id": {
+          "description": "Note:\nThis is a Foreign Key to `vehicles.id`.<fk table='vehicles' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "booking_diary": {
+      "required": [
+        "id",
+        "booking_id",
+        "booking_date",
+        "pickup",
+        "dropoff",
+        "map_resolution_status",
+        "map_values_manually_corrected"
+      ],
+      "properties": {
+        "id": {
+          "default": "gen_random_uuid()",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "booking_id": {
+          "format": "text",
+          "type": "string"
+        },
+        "booking_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "amount_pallets": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "weight": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "dimensions": {
+          "format": "text",
+          "type": "string"
+        },
+        "pickup": {
+          "format": "text",
+          "type": "string"
+        },
+        "warehouse_no": {
+          "format": "text",
+          "type": "string"
+        },
+        "dropoff": {
+          "format": "text",
+          "type": "string"
+        },
+        "vehicle": {
+          "format": "text",
+          "type": "string"
+        },
+        "driver": {
+          "format": "text",
+          "type": "string"
+        },
+        "notes": {
+          "format": "text",
+          "type": "string"
+        },
+        "created_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "updated_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "created_by": {
+          "format": "text",
+          "type": "string"
+        },
+        "modified_by": {
+          "format": "text",
+          "type": "string"
+        },
+        "pickup_time": {
+          "format": "time without time zone",
+          "type": "string"
+        },
+        "status": {
+          "format": "text",
+          "type": "string"
+        },
+        "pickup_place_id": {
+          "format": "text",
+          "type": "string"
+        },
+        "dropoff_place_id": {
+          "format": "text",
+          "type": "string"
+        },
+        "pickup_address": {
+          "format": "text",
+          "type": "string"
+        },
+        "dropoff_address": {
+          "format": "text",
+          "type": "string"
+        },
+        "estimated_distance_km": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "estimated_duration_minutes": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "google_maps_route_url": {
+          "format": "text",
+          "type": "string"
+        },
+        "distance_source": {
+          "format": "text",
+          "type": "string"
+        },
+        "route_calculated_at": {
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "job_order_number": {
+          "description": "Optional job order number added after completion for invoicing support.",
+          "format": "text",
+          "type": "string"
+        },
+        "created_by_user_id": {
+          "description": "Authenticated user who originally created the booking. Nullable for historical bookings.",
+          "format": "uuid",
+          "type": "string"
+        },
+        "client_id": {
+          "description": "Optional for historical rows; required for new rows after the client feature launch.\n\nNote:\nThis is a Foreign Key to `clients.id`.<fk table='clients' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "pickup_lat": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "pickup_lng": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "dropoff_lat": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "dropoff_lng": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "route_distance_meters": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "route_duration_seconds": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "route_static_duration_seconds": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "route_departure_time": {
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "route_preference": {
+          "format": "text",
+          "type": "string"
+        },
+        "route_label": {
+          "format": "text",
+          "type": "string"
+        },
+        "route_description": {
+          "format": "text",
+          "type": "string"
+        },
+        "route_polyline": {
+          "format": "text",
+          "type": "string"
+        },
+        "route_traffic_aware": {
+          "format": "boolean",
+          "type": "boolean"
+        },
+        "route_source": {
+          "format": "text",
+          "type": "string"
+        },
+        "route_fallback_info": {
+          "format": "jsonb"
+        },
+        "pickup_location_id": {
+          "description": "Note:\nThis is a Foreign Key to `canonical_locations.id`.<fk table='canonical_locations' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "dropoff_location_id": {
+          "description": "Note:\nThis is a Foreign Key to `canonical_locations.id`.<fk table='canonical_locations' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "map_resolution_status": {
+          "default": "legacy_unresolved",
+          "enum": [
+            "legacy_unresolved",
+            "unresolved_draft",
+            "resolved"
+          ],
+          "format": "public.booking_map_resolution_status",
+          "type": "string"
+        },
+        "map_backfill_batch_id": {
+          "description": "Note:\nThis is a Foreign Key to `booking_map_backfill_batches.id`.<fk table='booking_map_backfill_batches' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "map_values_manually_corrected": {
+          "default": false,
+          "format": "boolean",
+          "type": "boolean"
+        },
+        "map_original_values": {
+          "format": "jsonb"
+        },
+        "vehicle_registration": {
+          "description": "Historical main vehicle registration snapshot used for this specific Booking Diary job. Fuel Log matching must use this main registration only.",
+          "format": "text",
+          "type": "string"
+        },
+        "trailer_registration": {
+          "description": "Optional historical trailer registration snapshot used for this specific Booking Diary job. Do not use for Fuel Log matching.",
+          "format": "text",
+          "type": "string"
+        },
+        "vehicle_id": {
+          "description": "Note:\nThis is a Foreign Key to `vehicles.id`.<fk table='vehicles' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "insurance_storage_bucket": {
+    "id": "insurance-documents",
+    "name": "insurance-documents",
+    "public": false,
+    "file_size_limit": 10485760,
+    "allowed_mime_types": [
+      "application/pdf",
+      "image/jpeg",
+      "image/png",
+      "image/webp"
+    ],
+    "created_at": "2026-09-18T05:36:19.19Z",
+    "updated_at": "2026-09-18T05:36:19.19Z"
+  }
+}

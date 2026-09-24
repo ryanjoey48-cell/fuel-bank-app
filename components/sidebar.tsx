@@ -67,10 +67,13 @@ export function Sidebar({ open, onClose }: SidebarProps) {
 
   useEffect(() => {
     let active = true;
+
     if (isAdmin) {
-      fetchSupportTicketNotificationCount(["Open", "In Progress"]).then((count) => {
-        if (active) setSupportTicketCount(count);
-      }).catch(() => undefined);
+      fetchSupportTicketNotificationCount(["Open", "In Progress"])
+        .then((count) => {
+          if (active) setSupportTicketCount(count);
+        })
+        .catch(() => undefined);
     } else {
       setSupportTicketCount(0);
     }
@@ -79,20 +82,26 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       data: { subscription }
     } = supabase.auth.onAuthStateChange(() => {
       if (isAdmin) {
-        void fetchSupportTicketNotificationCount(["Open", "In Progress"]).then((count) => {
-          if (active) setSupportTicketCount(count);
-        }).catch(() => undefined);
+        void fetchSupportTicketNotificationCount(["Open", "In Progress"])
+          .then((count) => {
+            if (active) setSupportTicketCount(count);
+          })
+          .catch(() => undefined);
       }
     });
 
     const handleSupportChange = () => {
       if (!active || !isAdmin) return;
-      void fetchSupportTicketNotificationCount(["Open", "In Progress"]).then((count) => {
-        if (active) setSupportTicketCount(count);
-      }).catch(() => undefined);
+
+      void fetchSupportTicketNotificationCount(["Open", "In Progress"])
+        .then((count) => {
+          if (active) setSupportTicketCount(count);
+        })
+        .catch(() => undefined);
     };
 
     window.addEventListener("fuel-bank:data-changed", handleSupportChange);
+
     return () => {
       active = false;
       window.removeEventListener("fuel-bank:data-changed", handleSupportChange);
@@ -105,7 +114,11 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       return;
     }
 
-    safeLocalStorage.setItem(SIDEBAR_STORAGE_KEY, String(desktopExpanded));
+    safeLocalStorage.setItem(
+      SIDEBAR_STORAGE_KEY,
+      String(desktopExpanded)
+    );
+
     document.documentElement.style.setProperty(
       "--dashboard-sidebar-width",
       desktopExpanded ? "17.5rem" : "5.25rem"
@@ -116,58 +129,117 @@ export function Sidebar({ open, onClose }: SidebarProps) {
     {
       label: "MAIN",
       items: [
-        { href: "/dashboard", label: t.nav.dashboard, icon: LayoutDashboard },
-        { href: "/reports", label: t.nav.reports, icon: FileSpreadsheet },
-        { href: "/booking-diary", label: t.nav.bookingDiary, icon: CalendarDays },
-        { href: "/dispatch", label: t.nav.dispatch, icon: ClipboardCheck },
-        { href: "/shipments", label: t.nav.shipments, icon: Package },
-        { href: "/trip-journey", label: t.nav.tripJourney, icon: MapPinned }
+        {
+          href: "/dashboard",
+          label: t.nav.dashboard,
+          icon: LayoutDashboard
+        },
+        {
+          href: "/reports",
+          label: t.nav.reports,
+          icon: FileSpreadsheet
+        },
+        {
+          href: "/booking-diary",
+          label: t.nav.bookingDiary,
+          icon: CalendarDays
+        },
+        {
+          href: "/dispatch",
+          label: t.nav.dispatch,
+          icon: ClipboardCheck
+        },
+        {
+          href: "/shipments",
+          label: t.nav.shipments,
+          icon: Package
+        },
+        {
+          href: "/trip-journey",
+          label: t.nav.tripJourney,
+          icon: MapPinned
+        }
       ]
     },
     {
       label: "FUEL & MONEY",
       items: [
-        { href: "/fuel-logs", label: t.nav.fuelLogs, icon: Droplets },
-        { href: "/fuel-spend-report", label: t.nav.fuelSpendReport, icon: BarChart3 },
-        { href: "/vehicle-performance", label: t.nav.vehiclePerformance, icon: Activity }
+        {
+          href: "/fuel-logs",
+          label: t.nav.fuelLogs,
+          icon: Droplets
+        },
+        {
+          href: "/fuel-spend-report",
+          label: t.nav.fuelSpendReport,
+          icon: BarChart3
+        },
+        {
+          href: "/vehicle-performance",
+          label: t.nav.vehiclePerformance,
+          icon: Activity
+        }
       ]
     },
     {
       label: "FLEET CONTROL",
       items: [
-        { href: "/weekly-mileage", label: t.nav.weeklyMileage, icon: Route },
-        { href: "/maintenance", label: t.maintenance.title, icon: Wrench },
-        { href: "/inventory", label: t.nav.inventory, icon: PackageSearch },
-        { href: "/drivers", label: t.nav.drivers, icon: Truck }
+        {
+          href: "/weekly-mileage",
+          label: t.nav.weeklyMileage,
+          icon: Route
+        },
+        {
+          href: "/maintenance",
+          label: t.maintenance.title,
+          icon: Wrench
+        },
+        {
+          href: "/insurance",
+          label: t.dashboard.management.insurance.title,
+          icon: ShieldCheck
+        },
+        {
+          href: "/inventory",
+          label: t.nav.inventory,
+          icon: PackageSearch
+        },
+        {
+          href: "/drivers",
+          label: t.nav.drivers,
+          icon: Truck
+        }
       ]
     },
     ...(isAdmin
-      ? [{
-          label: t.support.adminSectionTitle,
-          items: [
-            {
-              href: "/admin/support-tickets",
-              label: t.support.menu.adminSupportTickets,
-              icon: CircleHelp,
-              badgeCount: supportTicketCount
-            },
-            {
-              href: "/admin/users",
-              label: t.adminUsers.title,
-              icon: ShieldCheck
-            },
-            {
-              href: "/admin/booking-maps",
-              label: t.nav.bookingMapsAudit,
-              icon: MapPinned
-            },
-            {
-              href: "/admin/august-job-reconciliation",
-              label: "August reconciliation",
-              icon: FileSpreadsheet
-            }
-          ]
-        }]
+      ? [
+          {
+            label: t.support.adminSectionTitle,
+            items: [
+              {
+                href: "/admin/support-tickets",
+                label: t.dashboard.management.supportTickets,
+                icon: CircleHelp,
+                badgeCount: supportTicketCount
+              },
+              {
+                href: "/admin/users",
+                label: t.adminUsers.title,
+                icon: ShieldCheck
+              },
+              {
+                href: "/admin/booking-maps",
+                label: t.nav.bookingMapsAudit,
+                icon: MapPinned
+              },
+              {
+                href: "/admin/august-job-reconciliation",
+                label: "August reconciliation",
+                icon: FileSpreadsheet
+              }
+            ]
+          }
+        ]
       : [])
   ];
 
@@ -186,8 +258,12 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         id="mobile-nav-panel"
         className={clsx(
           "fixed inset-y-0 left-0 z-50 flex h-[100vh] max-h-[100vh] w-[85vw] max-w-[340px] max-w-[calc(100vw-env(safe-area-inset-left,0px)-1rem)] flex-col overflow-hidden border-r border-white/10 bg-[#1F1B3D] bg-[linear-gradient(180deg,#17152E_0%,#211A44_54%,#2A1E55_100%)] px-3.5 py-4 text-slate-50 shadow-[0_30px_70px_rgba(15,12,38,0.34)] backdrop-blur-xl transition-[width,transform,padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] [padding-top:max(1rem,calc(env(safe-area-inset-top,0px)+0.75rem))] [padding-bottom:max(1rem,calc(env(safe-area-inset-bottom,0px)+0.75rem))] [padding-left:max(0.875rem,calc(env(safe-area-inset-left,0px)+0.5rem))] [padding-right:0.875rem] sm:px-4 sm:py-5 min-[1367px]:z-40 min-[1367px]:max-w-none min-[1367px]:translate-x-0 min-[1367px]:overflow-hidden min-[1367px]:border-r min-[1367px]:border-white/10 min-[1367px]:bg-[#1F1B3D] min-[1367px]:bg-[linear-gradient(180deg,#17152E_0%,#211A44_54%,#2A1E55_100%)] min-[1367px]:py-5 min-[1367px]:text-slate-50 min-[1367px]:shadow-[0_20px_44px_rgba(15,12,38,0.22)]",
-          desktopExpanded ? "min-[1367px]:w-[17.5rem] min-[1367px]:px-5" : "min-[1367px]:w-[5.25rem] min-[1367px]:px-3",
-          open ? "translate-x-0" : "pointer-events-none -translate-x-full min-[1367px]:pointer-events-auto"
+          desktopExpanded
+            ? "min-[1367px]:w-[17.5rem] min-[1367px]:px-5"
+            : "min-[1367px]:w-[5.25rem] min-[1367px]:px-3",
+          open
+            ? "translate-x-0"
+            : "pointer-events-none -translate-x-full min-[1367px]:pointer-events-auto"
         )}
       >
         <div className="tablet-sidebar-header mb-5 flex w-full shrink-0 items-start justify-between gap-3 min-[1367px]:hidden">
@@ -195,8 +271,12 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             <p className="truncate text-[10px] font-semibold uppercase tracking-[0.22em] text-violet-200">
               {t.common.appName}
             </p>
-            <p className="mt-1 truncate text-sm font-semibold text-slate-50">{t.common.operations}</p>
+
+            <p className="mt-1 truncate text-sm font-semibold text-slate-50">
+              {t.common.operations}
+            </p>
           </div>
+
           <button
             type="button"
             onClick={onClose}
@@ -210,14 +290,16 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         <div
           className={clsx(
             "mb-4 w-full min-w-0 shrink-0 rounded-[1.25rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.105),rgba(255,255,255,0.045))] px-3 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_14px_28px_rgba(8,7,24,0.2)] ring-1 ring-white/[0.035] transition-all duration-300 md:px-3.5",
-            !desktopExpanded && "min-[1367px]:mb-4 min-[1367px]:rounded-2xl min-[1367px]:px-1 min-[1367px]:py-2"
+            !desktopExpanded &&
+              "min-[1367px]:mb-4 min-[1367px]:rounded-2xl min-[1367px]:px-1 min-[1367px]:py-2"
           )}
         >
           <div className="flex min-w-0 flex-col items-center justify-center text-center">
             <div
               className={clsx(
                 "flex h-[82px] w-full min-w-0 items-center justify-center rounded-[1rem] border border-white/[0.08] bg-[radial-gradient(circle_at_50%_35%,rgba(255,255,255,0.13),rgba(255,255,255,0.035)_58%,rgba(255,255,255,0.02)_100%)] transition-all duration-300 sm:h-[90px]",
-                !desktopExpanded && "min-[1367px]:h-12 min-[1367px]:rounded-[0.9rem]"
+                !desktopExpanded &&
+                  "min-[1367px]:h-12 min-[1367px]:rounded-[0.9rem]"
               )}
             >
               <Image
@@ -227,20 +309,24 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                 height={90}
                 className={clsx(
                   "h-full w-auto max-w-[min(100%,188px)] object-contain brightness-110 drop-shadow-[0_8px_18px_rgba(8,7,24,0.28)] transition-all duration-300 md:max-w-[198px]",
-                  !desktopExpanded && "min-[1367px]:max-w-[52px]"
+                  !desktopExpanded &&
+                    "min-[1367px]:max-w-[52px]"
                 )}
                 priority
               />
             </div>
+
             <div
               className={clsx(
                 "mt-3 flex w-full max-w-[218px] min-w-0 flex-col items-center transition-opacity duration-200",
-                !desktopExpanded && "min-[1367px]:pointer-events-none min-[1367px]:hidden min-[1367px]:opacity-0"
+                !desktopExpanded &&
+                  "min-[1367px]:pointer-events-none min-[1367px]:hidden min-[1367px]:opacity-0"
               )}
             >
               <p className="w-full text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-violet-200 md:text-violet-200">
                 {t.common.appSubtitle}
               </p>
+
               <h1 className="mt-1.5 w-full text-center text-[13px] font-semibold uppercase leading-[1.3] tracking-[0.035em] text-slate-50 md:text-slate-50">
                 {t.common.appName}
               </h1>
@@ -250,85 +336,147 @@ export function Sidebar({ open, onClose }: SidebarProps) {
 
         <button
           type="button"
-          onClick={() => setDesktopExpanded((current) => !current)}
+          onClick={() =>
+            setDesktopExpanded((current) => !current)
+          }
           className={clsx(
             "mb-4 hidden min-h-10 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.07] text-violet-100 shadow-[0_10px_20px_rgba(8,7,24,0.16)] transition hover:bg-white/[0.1] hover:text-white min-[1367px]:flex",
-            desktopExpanded ? "w-full gap-2 px-3 text-sm font-semibold" : "mx-auto h-11 w-11"
+            desktopExpanded
+              ? "w-full gap-2 px-3 text-sm font-semibold"
+              : "mx-auto h-11 w-11"
           )}
-          aria-label={desktopExpanded ? "Collapse sidebar" : "Expand sidebar"}
-          title={desktopExpanded ? "Collapse sidebar" : "Expand sidebar"}
+          aria-label={
+            desktopExpanded
+              ? t.nav.collapseSidebar
+              : t.nav.expandSidebar
+          }
+          title={
+            desktopExpanded
+              ? t.nav.collapseSidebar
+              : t.nav.expandSidebar
+          }
         >
-          <ChevronRight className={clsx("h-4 w-4 transition-transform", desktopExpanded && "rotate-180")} />
-          {desktopExpanded ? <span>Collapse</span> : null}
+          <ChevronRight
+            className={clsx(
+              "h-4 w-4 transition-transform",
+              desktopExpanded && "rotate-180"
+            )}
+          />
+
+          {desktopExpanded ? <span>{t.nav.collapse}</span> : null}
         </button>
 
         <nav className="sidebar-scroll-area w-full min-w-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto pb-3 pr-1 [-webkit-overflow-scrolling:touch] [scrollbar-width:none] min-h-0 min-[1367px]:space-y-3">
           {navigationGroups.map((group) => (
-            <div key={group.label} className="w-full min-w-0">
-              <div className={clsx("mb-1.5 px-1", !desktopExpanded && "min-[1367px]:sr-only")}>
+            <div
+              key={group.label}
+              className="w-full min-w-0"
+            >
+              <div
+                className={clsx(
+                  "mb-1.5 px-1",
+                  !desktopExpanded &&
+                    "min-[1367px]:sr-only"
+                )}
+              >
                 <p className="text-[10px] font-semibold uppercase tracking-[0.19em] text-violet-200/75">
                   {group.label}
                 </p>
               </div>
-              <div className="space-y-1.5">
-                {group.items.map(({ href, label, icon: Icon, badgeCount }) => {
-                  const active = pathname === href;
 
-                  return (
-                    <Link
-                      key={href}
-                      href={href}
-                      title={!desktopExpanded ? label : undefined}
-                      aria-label={label}
-                      className={clsx(
-                        "group relative flex w-full min-w-0 items-center gap-3 rounded-[1.2rem] px-3.5 py-3 text-[14px] font-medium transition duration-200",
-                        !desktopExpanded && "min-[1367px]:justify-center min-[1367px]:gap-0 min-[1367px]:px-2 min-[1367px]:py-2",
-                        active
-                          ? "border border-[#A78BFA]/70 bg-[rgba(124,58,237,0.28)] text-slate-50 shadow-[0_16px_34px_rgba(20,16,52,0.24),0_0_22px_rgba(139,124,246,0.18),inset_0_1px_0_rgba(255,255,255,0.08)]"
-                          : "border border-transparent text-slate-200 hover:border-white/10 hover:bg-white/[0.08] hover:text-white hover:shadow-[0_12px_24px_rgba(8,7,24,0.18)]"
-                      )}
-                      onClick={() => {
-                        if (window.matchMedia("(max-width: 1366px)").matches) {
-                          onClose();
+              <div className="space-y-1.5">
+                {group.items.map(
+                  ({
+                    href,
+                    label,
+                    icon: Icon,
+                    badgeCount
+                  }) => {
+                    const active = pathname === href;
+
+                    return (
+                      <Link
+                        key={href}
+                        href={href}
+                        title={
+                          !desktopExpanded
+                            ? label
+                            : undefined
                         }
-                      }}
-                    >
-                      {active ? (
-                        <span className="absolute left-0 top-1/2 hidden h-7 w-1 -translate-y-1/2 rounded-r-full bg-[#A78BFA] shadow-[0_0_18px_rgba(167,139,250,0.72)] min-[1367px]:block" />
-                      ) : null}
-                      <div
+                        aria-label={label}
                         className={clsx(
-                          "relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[1rem] border transition",
+                          "group relative flex w-full min-w-0 items-center gap-3 rounded-[1.2rem] px-3.5 py-3 text-[14px] font-medium transition duration-200",
+                          !desktopExpanded &&
+                            "min-[1367px]:justify-center min-[1367px]:gap-0 min-[1367px]:px-2 min-[1367px]:py-2",
                           active
-                            ? "border-[#A78BFA]/70 bg-[#7C3AED]/32 text-violet-50 shadow-[0_0_18px_rgba(139,92,246,0.22)]"
-                            : "border-white/10 bg-white/[0.055] text-violet-100 group-hover:border-white/16 group-hover:bg-white/[0.09] group-hover:text-white"
+                            ? "border border-[#A78BFA]/70 bg-[rgba(124,58,237,0.28)] text-slate-50 shadow-[0_16px_34px_rgba(20,16,52,0.24),0_0_22px_rgba(139,124,246,0.18),inset_0_1px_0_rgba(255,255,255,0.08)]"
+                            : "border border-transparent text-slate-200 hover:border-white/10 hover:bg-white/[0.08] hover:text-white hover:shadow-[0_12px_24px_rgba(8,7,24,0.18)]"
                         )}
+                        onClick={() => {
+                          if (
+                            window.matchMedia(
+                              "(max-width: 1366px)"
+                            ).matches
+                          ) {
+                            onClose();
+                          }
+                        }}
                       >
-                        <Icon className="h-[18px] w-[18px]" />
-                        {badgeCount ? (
-                          <span className="absolute -right-1 -top-1 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-black leading-none text-white shadow-[0_0_0_2px_rgba(31,27,61,0.95)]">
-                            {badgeCount > 99 ? "99+" : badgeCount}
+                        {active ? (
+                          <span className="absolute left-0 top-1/2 hidden h-7 w-1 -translate-y-1/2 rounded-r-full bg-[#A78BFA] shadow-[0_0_18px_rgba(167,139,250,0.72)] min-[1367px]:block" />
+                        ) : null}
+
+                        <div
+                          className={clsx(
+                            "relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[1rem] border transition",
+                            active
+                              ? "border-[#A78BFA]/70 bg-[#7C3AED]/32 text-violet-50 shadow-[0_0_18px_rgba(139,92,246,0.22)]"
+                              : "border-white/10 bg-white/[0.055] text-violet-100 group-hover:border-white/16 group-hover:bg-white/[0.09] group-hover:text-white"
+                          )}
+                        >
+                          <Icon className="h-[18px] w-[18px]" />
+
+                          {badgeCount ? (
+                            <span className="absolute -right-1 -top-1 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-black leading-none text-white shadow-[0_0_0_2px_rgba(31,27,61,0.95)]">
+                              {badgeCount > 99
+                                ? "99+"
+                                : badgeCount}
+                            </span>
+                          ) : null}
+                        </div>
+
+                        <div
+                          className={clsx(
+                            "min-w-0 flex-1 overflow-hidden",
+                            !desktopExpanded &&
+                              "min-[1367px]:hidden"
+                          )}
+                        >
+                          <p className="truncate font-semibold">
+                            {label}
+                          </p>
+                        </div>
+
+                        <ChevronRight
+                          className={clsx(
+                            "h-4 w-4 shrink-0 transition",
+                            !desktopExpanded &&
+                              "min-[1367px]:hidden",
+                            active
+                              ? "text-violet-200"
+                              : "text-indigo-200/70 group-hover:text-violet-100"
+                          )}
+                        />
+
+                        {!desktopExpanded ? (
+                          <span className="pointer-events-none absolute left-[calc(100%+0.7rem)] top-1/2 z-50 hidden -translate-y-1/2 whitespace-nowrap rounded-xl border border-white/10 bg-[#211A44] px-3 py-2 text-xs font-semibold text-slate-50 opacity-0 shadow-[0_14px_30px_rgba(8,7,24,0.28)] transition group-hover:opacity-100 min-[1367px]:block">
+                            {label}
                           </span>
                         ) : null}
-                      </div>
-                      <div className={clsx("min-w-0 flex-1 overflow-hidden", !desktopExpanded && "min-[1367px]:hidden")}>
-                        <p className="truncate font-semibold">{label}</p>
-                      </div>
-                      <ChevronRight
-                        className={clsx(
-                          "h-4 w-4 shrink-0 transition",
-                          !desktopExpanded && "min-[1367px]:hidden",
-                          active ? "text-violet-200" : "text-indigo-200/70 group-hover:text-violet-100"
-                        )}
-                      />
-                      {!desktopExpanded ? (
-                        <span className="pointer-events-none absolute left-[calc(100%+0.7rem)] top-1/2 z-50 hidden -translate-y-1/2 whitespace-nowrap rounded-xl border border-white/10 bg-[#211A44] px-3 py-2 text-xs font-semibold text-slate-50 opacity-0 shadow-[0_14px_30px_rgba(8,7,24,0.28)] transition group-hover:opacity-100 min-[1367px]:block">
-                          {label}
-                        </span>
-                      ) : null}
-                    </Link>
-                  );
-                })}
+                      </Link>
+                    );
+                  }
+                )}
               </div>
             </div>
           ))}
@@ -338,17 +486,20 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           <div
             className={clsx(
               "w-full min-w-0 rounded-[1rem] border border-white/10 bg-white/[0.045] p-1.5 shadow-[0_8px_18px_rgba(8,7,24,0.14)]",
-              !desktopExpanded && "min-[1367px]:rounded-2xl min-[1367px]:p-1"
+              !desktopExpanded &&
+                "min-[1367px]:rounded-2xl min-[1367px]:p-1"
             )}
           >
             <p
               className={clsx(
                 "mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-violet-200",
-                !desktopExpanded && "min-[1367px]:sr-only"
+                !desktopExpanded &&
+                  "min-[1367px]:sr-only"
               )}
             >
               {t.common.language}
             </p>
+
             <LanguageSwitcher compact tone="sidebar" />
           </div>
         </div>

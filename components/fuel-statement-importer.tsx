@@ -56,13 +56,20 @@ function getStatusClass(status: FuelStatementImportRow["status"]) {
   return "border-amber-200 bg-amber-50 text-amber-800";
 }
 
-function getReviewStatusLabel(row: FuelStatementImportRow) {
+function getReviewStatusLabel(row: FuelStatementImportRow, language: "en" | "th") {
+  if (language === "th") {
+    if (row.status === "Duplicate") return "รายการซ้ำ";
+    if (!row.vehicleReg.trim()) return "ไม่พบรถ";
+    if (!toNumber(row.litres) || !toNumber(row.totalCost)) return "ขาดจำนวนลิตร/ค่าใช้จ่าย";
+    if (!row.driverId) return "ไม่พบพนักงานขับรถ";
+    if (row.status === "Ready") return "จับคู่แล้ว";
+    return "ต้องตรวจสอบ";
+  }
   if (row.status === "Duplicate") return "Duplicate";
   if (!row.vehicleReg.trim()) return "Missing vehicle";
   if (!toNumber(row.litres) || !toNumber(row.totalCost)) return "Missing litres/cost";
   if (!row.driverId) return "Missing driver";
   if (row.status === "Ready") return "Matched";
-  if (row.status === "Invalid") return "Needs Review";
   return "Needs Review";
 }
 
@@ -123,7 +130,17 @@ export function FuelStatementImporter({
     pdfNote:
       language === "th"
         ? "PDF ทุกหน้าจะถูกประมวลผลอัตโนมัติ และหน้าแบบสแกนจะใช้ OCR"
-        : "Every PDF page is processed automatically. Scanned/image pages use OCR."
+        : "Every PDF page is processed automatically. Scanned/image pages use OCR.",
+    driverMatch: language === "th" ? "จับคู่พนักงานขับรถ" : "Driver Match",
+    noDriver: language === "th" ? "ไม่ระบุพนักงานขับรถ" : "No driver",
+    fuelType: language === "th" ? "ประเภทน้ำมัน" : "Fuel Type",
+    paymentMethod: language === "th" ? "วิธีชำระเงิน" : "Payment Method",
+    entrySource: language === "th" ? "แหล่งที่มา" : "Entry Source",
+    notes: language === "th" ? "หมายเหตุ" : "Notes",
+    statementImport: language === "th" ? "นำเข้าจาก Statement" : "Statement import",
+    lineMessage: language === "th" ? "ข้อความ LINE" : "Line message",
+    directReceipt: language === "th" ? "จากใบเสร็จโดยตรง" : "Direct from receipt",
+    other: language === "th" ? "อื่น ๆ" : "Other"
   };
 
   const duplicateKeys = useMemo(() => getExistingFuelLogDuplicateKeys(existingLogs), [existingLogs]);
@@ -356,24 +373,24 @@ export function FuelStatementImporter({
                       <p className="text-sm font-semibold text-slate-950">{row.vehicleReg || "-"}</p>
                       <p className="mt-1 text-xs text-slate-500">{row.date || "-"} | {row.fuelStation || "-"}</p>
                     </div>
-                    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getStatusClass(row.status)}`}>{getReviewStatusLabel(row)}</span>
+                    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getStatusClass(row.status)}`}>{getReviewStatusLabel(row, language)}</span>
                   </div>
                   <div className="mt-3 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
                     <MobileInput label="Log Date" type="date" value={row.date} onChange={(value) => updateRow(row.id, "date", value)} />
                     <MobileInput label="Time" value={row.time} onChange={(value) => updateRow(row.id, "time", value)} />
                     <MobileInput label="Vehicle Reg" value={row.vehicleReg} onChange={(value) => updateRow(row.id, "vehicleReg", value)} />
-                    <label><span className="form-label">Driver Match</span><select value={row.driverId} onChange={(event) => updateRow(row.id, "driverId", event.target.value)} className="form-input bg-white"><option value="">No driver</option>{drivers.map((driver) => <option key={driver.id} value={String(driver.id)}>{driver.name}</option>)}</select></label>
+                    <label><span className="form-label">{copy.driverMatch}</span><select value={row.driverId} onChange={(event) => updateRow(row.id, "driverId", event.target.value)} className="form-input bg-white"><option value="">{copy.noDriver}</option>{drivers.map((driver) => <option key={driver.id} value={String(driver.id)}>{driver.name}</option>)}</select></label>
                     <MobileInput label="Fuel Station / Location" value={row.fuelStation} onChange={(value) => updateRow(row.id, "fuelStation", value)} />
                     <MobileInput label="Original Location" value={row.originalLocation} onChange={(value) => updateRow(row.id, "originalLocation", value)} />
                     <MobileInput label="Receipt No" value={row.receiptNo} onChange={(value) => updateRow(row.id, "receiptNo", value)} />
                     <MobileInput label="Mileage" type="number" value={row.mileage} onChange={(value) => updateRow(row.id, "mileage", value)} />
-                    <label><span className="form-label">Fuel Type</span><select value={row.fuelType} onChange={(event) => updateRow(row.id, "fuelType", event.target.value)} className="form-input bg-white"><option value="diesel">{t.fuel.type.diesel}</option><option value="gasohol_91">{t.fuel.type.gasohol_91}</option><option value="gasohol_95">{t.fuel.type.gasohol_95}</option><option value="premium_diesel">{t.fuel.type.premium_diesel}</option><option value="other">{t.fuel.type.other}</option></select></label>
+                    <label><span className="form-label">{copy.fuelType}</span><select value={row.fuelType} onChange={(event) => updateRow(row.id, "fuelType", event.target.value)} className="form-input bg-white"><option value="diesel">{t.fuel.type.diesel}</option><option value="gasohol_91">{t.fuel.type.gasohol_91}</option><option value="gasohol_95">{t.fuel.type.gasohol_95}</option><option value="premium_diesel">{t.fuel.type.premium_diesel}</option><option value="other">{t.fuel.type.other}</option></select></label>
                     <MobileInput label="Litres" type="number" value={row.litres} onChange={(value) => updateRow(row.id, "litres", value)} />
                     <MobileInput label="Price Per Litre" type="number" value={row.pricePerLitre} onChange={(value) => updateRow(row.id, "pricePerLitre", value)} />
                     <MobileInput label="Total Cost" type="number" value={row.totalCost} onChange={(value) => updateRow(row.id, "totalCost", value)} />
-                    <label><span className="form-label">Payment Method</span><select value={row.paymentMethod} onChange={(event) => updateRow(row.id, "paymentMethod", event.target.value)} className="form-input bg-white"><option value="company_card">{t.payment.method.company_card}</option><option value="cash">{t.payment.method.cash}</option><option value="bank_transfer">{t.payment.method.bank_transfer}</option><option value="other">{t.payment.method.other}</option></select></label>
-                    <label><span className="form-label">Entry Source</span><select value={row.entrySource} onChange={(event) => updateRow(row.id, "entrySource", event.target.value)} className="form-input bg-white"><option value="statement_import">Statement import</option><option value="line_message">Line message</option><option value="direct_from_receipt">Direct from receipt</option><option value="other">Other</option></select></label>
-                    <label className="sm:col-span-2"><span className="form-label">Notes</span><textarea rows={3} value={row.notes} onChange={(event) => updateRow(row.id, "notes", event.target.value)} className="form-textarea bg-white" /></label>
+                    <label><span className="form-label">{copy.paymentMethod}</span><select value={row.paymentMethod} onChange={(event) => updateRow(row.id, "paymentMethod", event.target.value)} className="form-input bg-white"><option value="company_card">{t.payment.method.company_card}</option><option value="cash">{t.payment.method.cash}</option><option value="bank_transfer">{t.payment.method.bank_transfer}</option><option value="other">{t.payment.method.other}</option></select></label>
+                    <label><span className="form-label">{copy.entrySource}</span><select value={row.entrySource} onChange={(event) => updateRow(row.id, "entrySource", event.target.value)} className="form-input bg-white"><option value="statement_import">{copy.statementImport}</option><option value="line_message">{copy.lineMessage}</option><option value="direct_from_receipt">{copy.directReceipt}</option><option value="other">{copy.other}</option></select></label>
+                    <label className="sm:col-span-2"><span className="form-label">{copy.notes}</span><textarea rows={3} value={row.notes} onChange={(event) => updateRow(row.id, "notes", event.target.value)} className="form-textarea bg-white" /></label>
                   </div>
                   {row.issues.length || row.reviewReasons.length ? <p className="mt-2 text-xs font-medium text-amber-800">{[...row.issues, ...row.reviewReasons].join(", ")}</p> : null}
                   <button type="button" onClick={() => revalidateRows(rows.filter((item) => item.id !== row.id))} className="btn-secondary mt-3 w-full gap-2"><Trash2 className="h-4 w-4" />{copy.delete}</button>
@@ -398,7 +415,7 @@ export function FuelStatementImporter({
                           <PreviewInput type="date" value={row.date} onChange={(value) => updateRow(row.id, "date", value)} />
                           <PreviewInput value={row.time} onChange={(value) => updateRow(row.id, "time", value)} />
                           <PreviewInput value={row.vehicleReg} onChange={(value) => updateRow(row.id, "vehicleReg", value)} />
-                          <td className="table-body-cell min-w-[180px]"><select value={row.driverId} onChange={(event) => updateRow(row.id, "driverId", event.target.value)} className="form-input h-9 bg-white text-xs"><option value="">No driver</option>{drivers.map((driver) => <option key={driver.id} value={String(driver.id)}>{driver.name}</option>)}</select></td>
+                          <td className="table-body-cell min-w-[180px]"><select value={row.driverId} onChange={(event) => updateRow(row.id, "driverId", event.target.value)} className="form-input h-9 bg-white text-xs"><option value="">{copy.noDriver}</option>{drivers.map((driver) => <option key={driver.id} value={String(driver.id)}>{driver.name}</option>)}</select></td>
                           <PreviewInput value={row.fuelStation} onChange={(value) => updateRow(row.id, "fuelStation", value)} />
                           <PreviewInput value={row.originalLocation} onChange={(value) => updateRow(row.id, "originalLocation", value)} wide />
                           <PreviewInput value={row.receiptNo} onChange={(value) => updateRow(row.id, "receiptNo", value)} />
@@ -408,9 +425,9 @@ export function FuelStatementImporter({
                           <PreviewInput type="number" value={row.pricePerLitre} onChange={(value) => updateRow(row.id, "pricePerLitre", value)} />
                           <PreviewInput type="number" value={row.totalCost} onChange={(value) => updateRow(row.id, "totalCost", value)} />
                           <td className="table-body-cell min-w-[150px]"><select value={row.paymentMethod} onChange={(event) => updateRow(row.id, "paymentMethod", event.target.value)} className="form-input h-9 bg-white text-xs"><option value="company_card">{t.payment.method.company_card}</option><option value="cash">{t.payment.method.cash}</option><option value="bank_transfer">{t.payment.method.bank_transfer}</option><option value="other">{t.payment.method.other}</option></select></td>
-                          <td className="table-body-cell min-w-[150px]"><select value={row.entrySource} onChange={(event) => updateRow(row.id, "entrySource", event.target.value)} className="form-input h-9 bg-white text-xs"><option value="statement_import">Statement import</option><option value="line_message">Line message</option><option value="direct_from_receipt">Direct from receipt</option><option value="other">Other</option></select></td>
+                          <td className="table-body-cell min-w-[150px]"><select value={row.entrySource} onChange={(event) => updateRow(row.id, "entrySource", event.target.value)} className="form-input h-9 bg-white text-xs"><option value="statement_import">{copy.statementImport}</option><option value="line_message">{copy.lineMessage}</option><option value="direct_from_receipt">{copy.directReceipt}</option><option value="other">{copy.other}</option></select></td>
                           <PreviewInput value={row.notes} onChange={(value) => updateRow(row.id, "notes", value)} wide />
-                          <td className="table-body-cell min-w-[190px]"><span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getStatusClass(row.status)}`}>{getReviewStatusLabel(row)}</span>{row.issues.length || row.reviewReasons.length ? <p className="mt-1 text-[11px] text-slate-500">{[...row.issues, ...row.reviewReasons].join(", ")}</p> : null}</td>
+                          <td className="table-body-cell min-w-[190px]"><span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getStatusClass(row.status)}`}>{getReviewStatusLabel(row, language)}</span>{row.issues.length || row.reviewReasons.length ? <p className="mt-1 text-[11px] text-slate-500">{[...row.issues, ...row.reviewReasons].join(", ")}</p> : null}</td>
                           <td className="table-body-cell"><button type="button" onClick={() => revalidateRows(rows.filter((item) => item.id !== row.id))} className="table-action-danger"><Trash2 className="h-3.5 w-3.5" /></button></td>
                         </tr>
                       ))}

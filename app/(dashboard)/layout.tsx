@@ -50,26 +50,28 @@ function isServiceAvailabilityError(error: unknown) {
 
 function ServiceUnavailable({
   message,
-  onRetry
+  onRetry,
+  copy
 }: {
   message: string;
   onRetry: () => void;
+  copy: ReturnType<typeof useLanguage>["t"]["serviceUnavailable"];
 }) {
   return (
     <main className="flex min-h-[100dvh] items-center justify-center px-4">
       <section className="surface-card w-full max-w-lg p-6 text-center sm:p-8">
         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-brand-600">
-          Data service unavailable
+          {copy.eyebrow}
         </p>
         <h1 className="mt-3 text-2xl font-semibold text-slate-950">
-          Fuel Bank cannot connect right now
+          {copy.title}
         </h1>
         <p className="mt-3 text-sm leading-6 text-slate-600">
-          Fuel Bank is temporarily unable to connect to its data service. Your existing data has not been changed.
+          {copy.description}
         </p>
         <p className="mt-2 text-xs leading-5 text-slate-500">{message}</p>
         <button type="button" className="btn-primary mt-6" onClick={onRetry}>
-          Retry connection
+          {copy.retry}
         </button>
       </section>
     </main>
@@ -112,7 +114,7 @@ function DashboardShell({
         );
       } catch (error) {
         if (active && isServiceAvailabilityError(error)) {
-          setServiceUnavailable({ message: error instanceof Error ? error.message : "Connection failed." });
+          setServiceUnavailable({ message: error instanceof Error ? error.message : t.serviceUnavailable.connectionFailed });
           setCheckingAuth(false);
           return;
         }
@@ -149,7 +151,7 @@ function DashboardShell({
         }
 
         if (active && isServiceAvailabilityError(error)) {
-          setServiceUnavailable({ message: error instanceof Error ? error.message : "Connection failed." });
+          setServiceUnavailable({ message: error instanceof Error ? error.message : t.serviceUnavailable.connectionFailed });
           setCheckingAuth(false);
           return;
         }
@@ -177,7 +179,7 @@ function DashboardShell({
       active = false;
       data.subscription.unsubscribe();
     };
-  }, [pathname, refresh, retryCount, router]);
+  }, [pathname, refresh, retryCount, router, t.serviceUnavailable.connectionFailed]);
 
   useEffect(() => {
     document.body.style.overflow = "";
@@ -224,6 +226,7 @@ function DashboardShell({
       <ServiceUnavailable
         message={serviceUnavailable.message}
         onRetry={() => setRetryCount((current) => current + 1)}
+        copy={t.serviceUnavailable}
       />
     );
   }

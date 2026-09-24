@@ -2,6 +2,33 @@ import { shipmentTranslations } from "./shipment-translations";
 import { greaseTranslations } from "./grease-translations";
 import { maintenanceTranslations } from "./maintenance-translations";
 
+const dashboardManagement = {
+  en: {
+    title: "Management Dashboard", description: "A factual control centre for today's logistics, fleet risk, fuel spend, and work requiring review.", controlCentre: "Logistics control centre", selectedMonth: "Selected reporting month", month: "Month", refresh: "Refresh", refreshing: "Refreshing…", comparisonUnavailable: "Previous-month comparison unavailable", unavailable: "Data is currently unavailable",
+    fuelSpend: "Fuel spend", bookings: "Bookings", operationalDistance: "Operational distance", maintenanceDue: "Maintenance due", reviewCount: "Items to review", overdue: "Overdue", dueSoon: "Due soon",
+    quickActions: "Quick actions", quickActionsDescription: "Create operational records or open management reports.", addBooking: "Add booking", addFuel: "Add fuel log", addTrip: "Add trip", addVehicle: "Add vehicle", reports: "Reports",
+    liveOperations: "Live operations", todayOperations: "Today's operations", todayOperationsDescription: "Dispatch readiness and the next five scheduled jobs for today.", openDispatch: "Open dispatch board", jobs: "Jobs", ready: "Ready", unassigned: "Unassigned", conflicts: "Conflicts", time: "Time", customerJob: "Customer / job", driver: "Driver", vehicle: "Vehicle", route: "Route", status: "Status", needsAttention: "Needs attention", noJobsToday: "No jobs scheduled today", noJobsTodayDescription: "Today's bookings will appear here when they are added.",
+    priorityWork: "Priority work", actionCentre: "Action Centre", actionCentreDescription: "One consolidated queue of operational records that need attention.", noActions: "No urgent actions are currently identified.", review: "Review", tripReview: "Trips awaiting review", tripReviewDetail: "Completed trips with missing assignments or a material distance variance.", uncheckedFuel: "Unchecked fuel logs", uncheckedFuelDetail: "Fuel receipts still require administrative review.", missingTrips: "Bookings without trip records", missingTripsDetail: "Bookings in the selected month are not yet linked to a Trip Journey.", supportTickets: "Support tickets", supportTicketsDetail: "Open or waiting support tickets require follow-up.",
+    fleetAttention: "Fleet status", fleetAttentionDescription: "Factual fleet coverage from vehicle, driver, oil-baseline, and mileage records.", activeVehicles: "Active vehicles", oilDue: "Oil service due", missingBaseline: "Missing baseline", oilAttention: "Oil-change attention", baselineReady: "Oil baselines ready", assignedDrivers: "Assigned drivers", mileageReported: "Vehicles with mileage", dispatchAttention: "Dispatch review", reviewFleet: "Review fleet records",
+    insurance: { title: "Insurance", description: "Current policy coverage and renewal exceptions from compliance records." }, current: "Current", due30: "Due in 30 days", expired: "Expired", missingExpiry: "Missing expiry", notRequired: "Not required", reviewInsurance: "Review insurance",
+    maintenance: { title: "Maintenance", description: "Overdue and upcoming service requirements, prioritised by urgency." }, noMaintenanceDue: "No dated or mileage-based service is currently due.", reviewMaintenance: "Review maintenance", unknownVehicle: "Unknown vehicle", daysOverdue: "days overdue", daysRemaining: "days remaining", kmOverdue: "km overdue", kmRemaining: "km remaining", scheduleReview: "Schedule requires review",
+    tripSummary: "Trip Journey summary", tripSummaryDescription: "Compact progress and distance view for the selected month.", completedTrips: "Completed trips", actualDistance: "Actual distance", estimatedDistance: "Estimated distance", missingJourneyRecords: "Missing journeys", tripRevenue: "Trip revenue", averageDistance: "Average distance", distanceMethodNote: "Operational distance uses actual distance when available, otherwise the best saved estimate. Revenue uses the existing financial-inclusion rule.", reviewTrips: "Review Trip Journey",
+    fuelSummary: "Fuel summary", fuelSummaryDescription: "Recorded fuel volume, spend, and receipt-review status for the selected month.", spend: "Spend", litres: "Litres", entries: "Entries", unchecked: "Unchecked", reviewFuel: "Review fuel logs", latestFuel: "Latest Fuel Activity", latestFuelDescription: "The five most recent fuel records in the selected month.", viewAll: "View all", date: "Date", cost: "Cost", checked: "Checked", notChecked: "Not checked", noFuel: "No fuel entries for this month", noFuelDescription: "Fuel records will appear here when they are added."
+  },
+  th: {
+    title: "แดชบอร์ดฝ่ายบริหาร", description: "ศูนย์ควบคุมข้อมูลจริงสำหรับงานขนส่งวันนี้ ความเสี่ยงของรถ ค่าเชื้อเพลิง และงานที่ต้องตรวจสอบ", controlCentre: "ศูนย์ควบคุมงานขนส่ง", selectedMonth: "เดือนรายงานที่เลือก", month: "เดือน", refresh: "รีเฟรช", refreshing: "กำลังรีเฟรช…", comparisonUnavailable: "ยังเปรียบเทียบกับเดือนก่อนไม่ได้", unavailable: "ไม่สามารถโหลดข้อมูลได้ในขณะนี้",
+    fuelSpend: "ค่าเชื้อเพลิง", bookings: "งานจอง", operationalDistance: "ระยะทางปฏิบัติงาน", maintenanceDue: "งานซ่อมบำรุงถึงกำหนด", reviewCount: "รายการที่ต้องตรวจ", overdue: "เกินกำหนด", dueSoon: "ใกล้ครบกำหนด",
+    quickActions: "ทางลัด", quickActionsDescription: "สร้างรายการปฏิบัติงานหรือเปิดรายงานสำหรับฝ่ายบริหาร", addBooking: "เพิ่มงานจอง", addFuel: "เพิ่มรายการน้ำมัน", addTrip: "เพิ่มเที่ยววิ่ง", addVehicle: "เพิ่มรถ", reports: "รายงาน",
+    liveOperations: "งานปัจจุบัน", todayOperations: "การปฏิบัติงานวันนี้", todayOperationsDescription: "ความพร้อมจัดส่งและงาน 5 รายการถัดไปของวันนี้", openDispatch: "เปิดกระดานจัดส่ง", jobs: "งาน", ready: "พร้อม", unassigned: "ยังไม่มอบหมาย", conflicts: "งานซ้อน", time: "เวลา", customerJob: "ลูกค้า / งาน", driver: "คนขับ", vehicle: "รถ", route: "เส้นทาง", status: "สถานะ", needsAttention: "ต้องตรวจสอบ", noJobsToday: "วันนี้ยังไม่มีงานตามกำหนด", noJobsTodayDescription: "งานจองของวันนี้จะแสดงที่นี่เมื่อมีการเพิ่มข้อมูล",
+    priorityWork: "งานสำคัญ", actionCentre: "ศูนย์รายการที่ต้องดำเนินการ", actionCentreDescription: "คิวรวมเพียงจุดเดียวสำหรับรายการปฏิบัติงานที่ต้องตรวจสอบ", noActions: "ขณะนี้ไม่พบงานเร่งด่วนที่ต้องดำเนินการ", review: "ตรวจสอบ", tripReview: "เที่ยววิ่งที่รอตรวจสอบ", tripReviewDetail: "เที่ยวที่เสร็จแล้วแต่ขาดข้อมูลมอบหมายหรือระยะทางต่างจากประมาณการอย่างมีนัยสำคัญ", uncheckedFuel: "รายการน้ำมันที่ยังไม่ตรวจ", uncheckedFuelDetail: "ใบเสร็จน้ำมันยังรอการตรวจสอบจากผู้ดูแล", missingTrips: "งานจองที่ยังไม่มีเที่ยววิ่ง", missingTripsDetail: "งานจองในเดือนที่เลือกยังไม่ได้เชื่อมกับ Trip Journey", supportTickets: "คำร้องขอความช่วยเหลือ", supportTicketsDetail: "คำร้องที่เปิดอยู่หรือกำลังรอต้องได้รับการติดตาม",
+    fleetAttention: "สถานะกองรถ", fleetAttentionDescription: "ข้อมูลจริงจากทะเบียนรถ คนขับ ค่าเริ่มต้นน้ำมันเครื่อง และเลขไมล์", activeVehicles: "รถที่ใช้งาน", oilDue: "ถึงกำหนดน้ำมันเครื่อง", missingBaseline: "ขาดค่าเริ่มต้น", oilAttention: "งานน้ำมันเครื่องที่ต้องติดตาม", baselineReady: "มีค่าเริ่มต้นน้ำมันเครื่อง", assignedDrivers: "คนขับที่มีรถประจำ", mileageReported: "รถที่มีข้อมูลเลขไมล์", dispatchAttention: "งานจัดส่งที่ต้องตรวจ", reviewFleet: "ตรวจสอบข้อมูลรถ",
+    insurance: { title: "ประกันภัย", description: "สถานะความคุ้มครองและข้อยกเว้นการต่ออายุจากข้อมูลกำกับดูแล" }, current: "คุ้มครองอยู่", due30: "ครบกำหนดใน 30 วัน", expired: "หมดอายุ", missingExpiry: "ไม่มีวันหมดอายุ", notRequired: "ไม่ต้องทำประกัน", reviewInsurance: "ตรวจสอบประกันภัย",
+    maintenance: { title: "ซ่อมบำรุง", description: "รายการบำรุงรักษาที่เกินกำหนดและใกล้ครบกำหนด เรียงตามความเร่งด่วน" }, noMaintenanceDue: "ขณะนี้ไม่มีงานบริการตามวันหรือระยะทางที่ถึงกำหนด", reviewMaintenance: "ตรวจสอบงานซ่อมบำรุง", unknownVehicle: "ไม่ทราบรถ", daysOverdue: "วันที่เกินกำหนด", daysRemaining: "วันที่เหลือ", kmOverdue: "กม. เกินกำหนด", kmRemaining: "กม. คงเหลือ", scheduleReview: "ต้องตรวจสอบกำหนดการ",
+    tripSummary: "สรุป Trip Journey", tripSummaryDescription: "ภาพรวมความคืบหน้าและระยะทางแบบกระชับสำหรับเดือนที่เลือก", completedTrips: "เที่ยวที่เสร็จแล้ว", actualDistance: "ระยะทางจริง", estimatedDistance: "ระยะทางประมาณการ", missingJourneyRecords: "เที่ยววิ่งที่ขาด", tripRevenue: "รายได้จากเที่ยววิ่ง", averageDistance: "ระยะทางเฉลี่ย", distanceMethodNote: "ระยะทางปฏิบัติงานใช้ระยะทางจริงเมื่อมีข้อมูล มิฉะนั้นใช้ค่าประมาณที่ดีที่สุด ส่วนรายได้ใช้กฎการรวมข้อมูลทางการเงินเดิม", reviewTrips: "ตรวจสอบ Trip Journey",
+    fuelSummary: "สรุปน้ำมัน", fuelSummaryDescription: "ปริมาณ ค่าใช้จ่าย และสถานะตรวจใบเสร็จในเดือนที่เลือก", spend: "ค่าใช้จ่าย", litres: "ลิตร", entries: "รายการ", unchecked: "ยังไม่ตรวจ", reviewFuel: "ตรวจสอบรายการน้ำมัน", latestFuel: "กิจกรรมน้ำมันล่าสุด", latestFuelDescription: "รายการน้ำมัน 5 รายการล่าสุดในเดือนที่เลือก", viewAll: "ดูทั้งหมด", date: "วันที่", cost: "ค่าใช้จ่าย", checked: "ตรวจแล้ว", notChecked: "ยังไม่ตรวจ", noFuel: "เดือนนี้ยังไม่มีรายการน้ำมัน", noFuelDescription: "รายการน้ำมันจะแสดงที่นี่เมื่อมีการเพิ่มข้อมูล"
+  }
+} as const;
+
 export const translations = {
   en: {
     grease: greaseTranslations.en,
@@ -60,6 +87,7 @@ export const translations = {
       inventory: "Inventory",
       openMenu: "Open menu",
       closeSidebar: "Close sidebar"
+      ,collapseSidebar: "Collapse sidebar", expandSidebar: "Expand sidebar", collapse: "Collapse"
     },
     inventory: {
       title: "Inventory", description: "Stock levels, receiving and movement history in one controlled ledger.",
@@ -101,7 +129,10 @@ export const translations = {
       searchInventory: "Search inventory", searchInventoryPlaceholder: "Search item, SKU, category or option",
       allCategories: "All Categories", allStockStatuses: "All Stock Statuses", healthy: "Healthy",
       low: "Low", out: "Out", stockStatus: "Stock Status", viewItem: "View Item",
-      units: { piece: "Piece", bottle: "Bottle", container: "Container", litre: "Litre", set: "Set", pair: "Pair", box: "Box", pack: "Pack", other: "Other" }
+      units: { piece: "Piece", bottle: "Bottle", container: "Container", litre: "Litre", set: "Set", pair: "Pair", box: "Box", pack: "Pack", other: "Other" },
+      catalogue: "Catalogue", inventoryItems: "Inventory Items", item: "item", items: "items", totalPieces: "Total pieces in stock",
+      attention: "Attention", needToOrderLabel: "Need to order", critical: "Critical", noUnavailableStock: "No unavailable stock",
+      requiresImmediateAction: "Requires immediate action", value: "Value", sizesOptions: "Sizes / Options", standard: "Standard", size: "Size"
     },
     login: {
       eyebrow: "Fleet Finance",
@@ -126,6 +157,7 @@ export const translations = {
     dashboard: {
       title: "Dashboard",
       description: "Review fuel spend, trips, bookings, dispatch readiness, and fleet tasks in one clear operations view.",
+      management: dashboardManagement.en,
       driverFilter: "Driver",
       allDrivers: "All drivers",
       startDate: "Start date",
@@ -229,6 +261,18 @@ export const translations = {
       unableToDeleteDriver: "Unable to delete driver.",
       duplicateDriverName: "This driver name already exists.",
       duplicateVehicleAssignment: "This vehicle registration is already assigned to another driver.",
+      vehicleTypeRequired: "Vehicle type is required before saving a driver.",
+      loadPartial: "Drivers could not fully load. Showing available data.",
+      vehiclePlaceholder: "Vehicle registration or leave unassigned",
+      searchDetailedPlaceholder: "Search by driver, registration, or vehicle type",
+      noSearchResults: "Try a different driver, registration, or vehicle type.",
+      vehicleType: "Vehicle Type",
+      selectVehicleType: "Select vehicle type",
+      activeDriver: "Active driver",
+      missingVehicleType: "Missing vehicle type",
+      status: "Status",
+      active: "Active",
+      inactive: "Inactive",
       confirmDelete: "Delete this driver? This may also remove linked records depending on your database rules."
     },
     fuelLogs: {
@@ -574,6 +618,13 @@ export const translations = {
       lowestFuelPercent: "Lowest Fuel % of Revenue",
       highestFuelSpend: "Highest Fuel Spend",
       monthlyTrend: "Monthly performance trend",
+      allLoadedMonths: "All loaded months", monthsLoaded: "Months loaded", loadingRecords: "Loading vehicle performance records…", retry: "Retry",
+      monthlyPerformance: "Monthly Performance", missingMonthsDescription: "Missing months are shown separately from months with recorded zero values.", canonicalDataset: "Uses the same canonical monthly dataset as the table above.",
+      fleetPerformance: "Fleet performance", noMovementMatches: "No vehicles match this movement filter and registration search.", monthsWithData: "Months With Data", performanceVehicles: "Performance Vehicles", analysed: "analysed", eligible: "eligible", excluded: "excluded", margin: "Margin",
+      dataQuality: "Data Quality", dataCoverage: "Data Coverage", issues: "Issues", reconciliation: "Reconciliation", advancedDataChecks: "Advanced data checks", dataManagement: "Data Management", dataManagementDescription: "Excel import, import review and manual monthly figures.",
+      all: "All", vehicleRegistration: "Vehicle registration", searchRegistration: "Search registration", exceptionReview: "Exception review", reviewHistory: "Review history", editCorrection: "Edit correction", fuelDetails: "Fuel details", loadingFuelDetails: "Loading fuel details...",
+      date: "Date", driver: "Driver", station: "Station", fuelType: "Fuel type", litres: "Litres", pricePerLitre: "Price / litre", totalCost: "Total cost", excelFuelReference: "Excel Fuel reference", appFuelTotal: "App Fuel total", difference: "Difference",
+      partialMonthCoverage: "Partial month coverage", none: "None", vehicleCoverage: "Vehicle Coverage", vehiclesIncluded: "Vehicles Included", vehicleCoverageDescription: "Master records compared with Vehicle Performance data.", withoutPerformanceData: "Without performance data", present: "Present", missing: "Missing", monitorVehicles: "Monitor Vehicles", monitorDescription: "Profitable vehicles outside Stable thresholds, but not at Attention level.", noMonitorVehicles: "No Monitor vehicles for the selected period.", missingMonthsGaps: "Missing months render as gaps", lowestRecordedBalance: "Lowest Recorded Balance",
       addRecord: "Add monthly figures",
       editRecord: "Edit monthly figures",
       formDescription: "Enter historical monthly figures; normal fuel spend is shown automatically from Fuel Logs.",
@@ -647,6 +698,18 @@ export const translations = {
         october: "October",
         november: "November",
         december: "December"
+      },
+      management: {
+        businessImpact: "Business Impact", businessImpactDescription: "Latest complete-month fleet movement; benchmark ratios use the selected period.",
+        improving: "Improving", stable: "Stable", worsening: "Worsening", notComparable: "Not comparable",
+        improved: "improved", broadlyStable: "broadly stable", worsened: "worsened", withoutComparable: "without comparable data", showAll: "Show all vehicles",
+        improvingReason: "At least two contribution or efficiency indicators improved without material deterioration.", worseningReason: "At least two contribution or efficiency indicators weakened without material improvement.", stableReason: "Movements are small or mixed; review the individual indicators.", comparisonNeeded: "Two consecutive complete months with positive revenue and fuel evidence are needed for a reliable comparison.",
+        revenueChange: "Revenue change", balanceChange: "Recorded Balance change", marginChange: "Margin change", fuelSpendChange: "Fuel Spend change", fuelRatioChange: "Fuel / Revenue change",
+        sinceTracking: "Since tracking · complete months only", revenue: "Revenue", highestFuelRatio: "Highest fuel ratio", lowestMargin: "Lowest margin", partialExcluded: "have partial fleet coverage and are excluded from complete-month trend comparisons.",
+        actualBenchmark: "Actual vs Fleet benchmark", fuelActualMedian: "Fuel / Revenue · actual / fleet median", marginActualMedian: "Margin · actual / fleet median", fuelVariance: "Fuel variance", marginVariance: "Margin variance", recordedBalance: "Recorded Balance", unavailable: "Unavailable",
+        methodology: "Benchmark, status and movement methodology", methodologySummary: "Benchmarks use the unweighted median of eligible vehicles for the selected period. At least three comparable vehicles, positive revenue, a monthly record and fuel evidence are required. Review vehicle duty and route differences before drawing conclusions.", methodologyThresholds: "Attention indicates negative balance or ratios outside the review thresholds. Monitor identifies weaker-than-median ratios or incomplete coverage. Strong and Stable indicate healthier comparable performance. Movement requires aligned changes across at least two indicators.", balanceDefinition: "Recorded Balance equals revenue less recorded direct costs. Full company overheads are not included, and historical differences do not prove causation or actual savings.",
+        actionQueue: "Action Queue", actionQueueDescription: "Attention first, then Monitor; largest indicative opportunity first within each status.", estimatedOpportunity: "Estimated Opportunity", indicativeOpportunity: "Indicative fuel opportunity", vehicles: "vehicles", estimateNote: "Estimate for the selected period and registration search; it is not an annual forecast or guaranteed saving. Review routes, loads, prices and fuel records before setting a target.", noAction: "No vehicles in this selection require monitoring or attention.", attention: "Attention", monitor: "Monitor", strong: "Strong", months: "months", notEstimated: "Not estimated", excluded: "Excluded from estimate", viewVehicle: "View vehicle", vsMedian: "vs median",
+        vehicleDetail: "Vehicle detail", vehicleDetailDescription: "Monthly history and same-month fleet comparisons. Missing records remain visible.", closeDetail: "Close detail", latestTrend: "Latest recorded trend", fuelRatio: "fuel ratio", monthlyHistory: "Monthly performance and status history", month: "Month", fuel: "Fuel", fuelPercent: "Fuel %", balance: "Balance", margin: "Margin", fleetFuelMargin: "Fleet fuel / margin", statusReason: "Status / reason", missingMonth: "Missing vehicle-month record", reviewReason: "Review this vehicle's recorded balance, fuel ratio, margin and data coverage."
       }
     },
     transfers: {
@@ -872,6 +935,103 @@ export const translations = {
       nameTooLong: "Name must be 80 characters or less.",
       nameUpdated: "Name updated.",
       updateNameError: "Unable to update name."
+    },
+    changePassword: {
+      title: "Change Password",
+      description: "Update your sign-in password.",
+      newPassword: "New password",
+      confirmPassword: "Confirm new password",
+      minimumLength: "New password must be at least 6 characters.",
+      mismatch: "New passwords do not match.",
+      updateError: "Unable to update password.",
+      updated: "Password updated successfully.",
+      updating: "Updating...",
+      update: "Update password"
+    },
+    serviceUnavailable: {
+      eyebrow: "Data service unavailable",
+      title: "Unable to connect right now",
+      description: "The application is temporarily unable to connect to its data service. Your existing data has not been changed.",
+      connectionFailed: "Connection failed.",
+      retry: "Retry connection"
+    },
+    reports: {
+      title: "Reports Centre",
+      description: "Configure and download management reports without leaving this page.",
+      intro: "Choose a report, adjust its filters, then download directly. Open Module remains available for full record review.",
+      backToDashboard: "Back to Dashboard",
+      sourceModule: "Source module",
+      generateReport: "Generate Report",
+      openModule: "Open Module",
+      generating: "Generating report...",
+      cancel: "Cancel",
+      loadError: "Unable to load report data. Please try again.",
+      generateError: "Unable to generate report. Please try again.",
+      noFuelLogs: "No fuel logs are available for the selected period.",
+      noMileageReports: "No weekly mileage reports are available.",
+      noMileageData: "No weekly mileage data is available for the selected week.",
+      unknownDriver: "Unknown driver",
+      unknownStation: "Unknown station",
+      dateRange: "Date Range",
+      today: "Today",
+      thisWeek: "This Week",
+      lastWeek: "Last Week",
+      thisMonth: "This Month",
+      lastMonth: "Last Month",
+      custom: "Custom",
+      last7Days: "Last 7 Days",
+      last30Days: "Last 30 Days",
+      from: "From",
+      to: "To",
+      vehicle: "Vehicle",
+      driver: "Driver",
+      fuelType: "Fuel Type",
+      station: "Station",
+      allVehicles: "All Vehicles",
+      allDrivers: "All Drivers",
+      allFuelTypes: "All Fuel Types",
+      allStations: "All Stations",
+      weekEnding: "Week ending",
+      period: "Period",
+      last4Weeks: "Last 4 weeks",
+      last8Weeks: "Last 8 weeks",
+      last12Weeks: "Last 12 weeks",
+      reportAsOf: "Report as of: latest available mileage and current oil-service baseline.",
+      useModuleFilters: "Use the source module filters currently supported by this report.",
+      groups: {
+        fuelVehicle: "Fuel & Vehicle",
+        mileageMaintenance: "Mileage & Maintenance",
+        bookingOperations: "Booking & Operations"
+      },
+      cards: {
+        fuelSpendSummary: { name: "Fuel Spend Manager Summary", description: "Quick management view of fuel spend, litres, pricing, station usage and issues requiring review.", module: "Fuel Spend Report" },
+        fuelSpendFull: { name: "Full Fuel Spend Management Report", description: "Detailed fuel spend, vehicle performance, station usage and data-quality report.", module: "Fuel Spend Report" },
+        fuelEfficiency: { name: "Fuel Efficiency Analysis", description: "Driver, vehicle and date-range fuel efficiency drill-down using the existing Fuel Logs workflow.", module: "Fuel Logs / Fuel Spend" },
+        vehiclePerformance: { name: "Vehicle Performance Management Report", description: "Fleet revenue, fuel spend, balance, rankings, highlights and data-quality management report.", module: "Vehicle Performance" },
+        weeklyMileage: { name: "Weekly Fleet Mileage Overview", description: "Current week versus previous week mileage comparison across the fleet.", module: "Weekly Mileage" },
+        weeklyDistance: { name: "Weekly Distance History Report", description: "Historical weekly distance trend and current versus history comparison.", module: "Weekly Mileage" },
+        oilService: { name: "Oil Change Service Report", description: "Action-first oil service status covering overdue, due soon and OK vehicles.", module: "Weekly Mileage / Maintenance" },
+        bookingSummary: { name: "Booking Diary Manager Summary", description: "Concise operational summary, KPI cards, period movement and management actions.", module: "Booking Diary" },
+        bookingFull: { name: "Booking Diary Full Business Insights Report", description: "Detailed booking trends, repeat work, route quality, workload and data-quality insights.", module: "Booking Diary" }
+      },
+      unavailable: {
+        fuelEfficiency: "Open Fuel Logs to generate this report with its full calculation rules.",
+        vehiclePerformance: "Open Vehicle Performance to generate this report with its full calculation rules.",
+        weeklyDistance: "Open Weekly Mileage to generate the distance-history report.",
+        oilService: "Open Weekly Mileage to generate the oil-service report using the latest maintenance state.",
+        booking: "Open Booking Diary to generate the existing management report.",
+        generic: "Unable to generate report. Please try again."
+      },
+      downloads: {
+        fuelSpendSummary: "Download Manager Summary PDF",
+        fuelSpendFull: "Download Full Fuel Report PDF",
+        fuelEfficiency: "Download Fuel Efficiency PDF",
+        vehiclePerformance: "Download Vehicle Performance PDF",
+        weeklyMileage: "Download Weekly Mileage PDF",
+        weeklyDistance: "Download Distance History PDF",
+        oilService: "Download Oil Service PDF",
+        pdf: "Download PDF"
+      }
     },
     shipments: shipmentTranslations.en,
     weeklyMileage: {
@@ -1124,6 +1284,8 @@ export const translations = {
         serviceType: "Service type",
         vehicleRegistration: "Vehicle registration",
         deleteOilChange: "Delete",
+        deleteOilChangeConfirm: "Delete this oil change record?",
+        vehicleBaselineReadOnly: "This baseline comes from the vehicle record. Edit or add an oil-change service record instead.",
         editOilChange: "Edit",
         serviceOdometer: "Service Odometer",
         vehicleTypes: {
@@ -1252,6 +1414,7 @@ export const translations = {
       inventory: "สินค้าคงคลัง",
       openMenu: "เปิดเมนู",
       closeSidebar: "ปิดแถบด้านข้าง"
+      ,collapseSidebar: "ยุบแถบด้านข้าง", expandSidebar: "ขยายแถบด้านข้าง", collapse: "ยุบ"
     },
     inventory: {
       title: "สินค้าคงคลัง", description: "ติดตามยอดคงเหลือ การรับสินค้า และประวัติการเคลื่อนไหวในบัญชีเดียว",
@@ -1293,7 +1456,10 @@ export const translations = {
       searchInventory: "ค้นหาสินค้าคงคลัง", searchInventoryPlaceholder: "ค้นหาสินค้า SKU หมวดหมู่ หรือขนาด/ตัวเลือก",
       allCategories: "ทุกหมวดหมู่", allStockStatuses: "ทุกสถานะสต็อก", healthy: "เพียงพอ",
       low: "ต่ำ", out: "หมด", stockStatus: "สถานะสต็อก", viewItem: "ดูสินค้า",
-      units: { piece: "ชิ้น", bottle: "ขวด", container: "ภาชนะ", litre: "ลิตร", set: "ชุด", pair: "คู่", box: "กล่อง", pack: "แพ็ก", other: "อื่น ๆ" }
+      units: { piece: "ชิ้น", bottle: "ขวด", container: "ภาชนะ", litre: "ลิตร", set: "ชุด", pair: "คู่", box: "กล่อง", pack: "แพ็ก", other: "อื่น ๆ" },
+      catalogue: "รายการสินค้า", inventoryItems: "รายการสินค้า", item: "รายการ", items: "รายการ", totalPieces: "จำนวนคงเหลือทั้งหมด",
+      attention: "ต้องตรวจสอบ", needToOrderLabel: "จำนวนที่ควรสั่งเพิ่ม", critical: "เร่งด่วน", noUnavailableStock: "ไม่มีสินค้าหมด",
+      requiresImmediateAction: "ต้องดำเนินการทันที", value: "มูลค่า", sizesOptions: "ขนาด / ตัวเลือก", standard: "มาตรฐาน", size: "ขนาด"
     },
     login: {
       eyebrow: "การเงินรถขนส่ง",
@@ -1318,6 +1484,7 @@ export const translations = {
     dashboard: {
       title: "แดชบอร์ด",
       description: "ดูภาพรวมค่าน้ำมัน ทริป งานจอง ความพร้อมงานจัดส่ง และงานดูแลรถในมุมมองงานปฏิบัติการที่ชัดเจน",
+      management: dashboardManagement.th,
       driverFilter: "คนขับ",
       allDrivers: "คนขับทั้งหมด",
       startDate: "วันที่เริ่มต้น",
@@ -1427,6 +1594,18 @@ export const translations = {
       unableToLoadDrivers: "ไม่สามารถโหลดข้อมูลคนขับได้",
       unableToSaveDriver: "ไม่สามารถบันทึกข้อมูลคนขับได้",
       unableToDeleteDriver: "ไม่สามารถลบข้อมูลคนขับได้",
+      vehicleTypeRequired: "ต้องระบุประเภทรถก่อนบันทึกข้อมูลพนักงานขับรถ",
+      loadPartial: "ไม่สามารถโหลดข้อมูลพนักงานขับรถได้ครบถ้วน กำลังแสดงข้อมูลที่มีอยู่",
+      vehiclePlaceholder: "ทะเบียนรถ หรือเว้นว่างหากยังไม่ได้มอบหมาย",
+      searchDetailedPlaceholder: "ค้นหาด้วยชื่อพนักงานขับรถ ทะเบียนรถ หรือประเภทรถ",
+      noSearchResults: "ลองค้นหาด้วยชื่อ ทะเบียนรถ หรือประเภทรถอื่น",
+      vehicleType: "ประเภทรถ",
+      selectVehicleType: "เลือกประเภทรถ",
+      activeDriver: "พนักงานขับรถที่ใช้งานอยู่",
+      missingVehicleType: "ยังไม่ระบุประเภทรถ",
+      status: "สถานะ",
+      active: "ใช้งานอยู่",
+      inactive: "ไม่ใช้งาน",
       confirmDelete: "ลบคนขับคนนี้หรือไม่ การลบอาจส่งผลกับข้อมูลที่เชื่อมโยงอยู่ตามกฎฐานข้อมูลของคุณ"
     },
     fuelLogs: {
@@ -1769,6 +1948,13 @@ export const translations = {
       lowestFuelPercent: "ค่าน้ำมัน % ต่ำสุด",
       highestFuelSpend: "ค่าน้ำมันสูงสุด",
       monthlyTrend: "แนวโน้มรายเดือน",
+      allLoadedMonths: "ทุกเดือนที่มีข้อมูล", monthsLoaded: "เดือนที่มีข้อมูล", loadingRecords: "กำลังโหลดข้อมูลผลประกอบการรถ...", retry: "ลองอีกครั้ง",
+      monthlyPerformance: "ผลประกอบการรายเดือน", missingMonthsDescription: "เดือนที่ไม่มีข้อมูลจะแสดงแยกจากเดือนที่บันทึกค่าเป็นศูนย์", canonicalDataset: "ใช้ชุดข้อมูลรายเดือนมาตรฐานเดียวกับตารางด้านบน",
+      fleetPerformance: "ผลประกอบการกองรถ", noMovementMatches: "ไม่พบรถที่ตรงกับตัวกรองความเปลี่ยนแปลงและทะเบียนรถ", monthsWithData: "เดือนที่มีข้อมูล", performanceVehicles: "รถที่นำมาวิเคราะห์", analysed: "คันวิเคราะห์แล้ว", eligible: "คันที่เข้าเกณฑ์", excluded: "คันที่ไม่รวม", margin: "อัตราคงเหลือ",
+      dataQuality: "คุณภาพข้อมูล", dataCoverage: "ความครอบคลุมของข้อมูล", issues: "ประเด็นที่พบ", reconciliation: "การกระทบยอด", advancedDataChecks: "การตรวจข้อมูลขั้นสูง", dataManagement: "จัดการข้อมูล", dataManagementDescription: "นำเข้า Excel ตรวจสอบรายการนำเข้า และจัดการตัวเลขรายเดือน",
+      all: "ทั้งหมด", vehicleRegistration: "ทะเบียนรถ", searchRegistration: "ค้นหาทะเบียนรถ", exceptionReview: "ตรวจสอบข้อยกเว้น", reviewHistory: "ประวัติการตรวจสอบ", editCorrection: "แก้ไขรายการปรับปรุง", fuelDetails: "รายละเอียดน้ำมัน", loadingFuelDetails: "กำลังโหลดรายละเอียดน้ำมัน...",
+      date: "วันที่", driver: "พนักงานขับรถ", station: "สถานีบริการ", fuelType: "ประเภทน้ำมัน", litres: "ลิตร", pricePerLitre: "ราคาต่อลิตร", totalCost: "ค่าใช้จ่ายรวม", excelFuelReference: "ค่าน้ำมันอ้างอิงจาก Excel", appFuelTotal: "ค่าน้ำมันรวมในระบบ", difference: "ส่วนต่าง",
+      partialMonthCoverage: "ความครอบคลุมบางส่วนของเดือน", none: "ไม่มี", vehicleCoverage: "ความครอบคลุมของรถ", vehiclesIncluded: "รถที่รวมในรายงาน", vehicleCoverageDescription: "เปรียบเทียบข้อมูลรถหลักกับข้อมูลผลประกอบการรถ", withoutPerformanceData: "ไม่มีข้อมูลผลประกอบการ", present: "มีข้อมูล", missing: "ขาดข้อมูล", monitorVehicles: "รถที่ต้องเฝ้าระวัง", monitorDescription: "รถที่มีกำไรแต่ผลอยู่นอกเกณฑ์คงที่ และยังไม่ถึงระดับต้องตรวจสอบ", noMonitorVehicles: "ไม่มีรถที่ต้องเฝ้าระวังในช่วงเวลาที่เลือก", missingMonthsGaps: "เดือนที่ไม่มีข้อมูลจะแสดงเป็นช่องว่าง", lowestRecordedBalance: "ยอดคงเหลือต่ำสุด",
       addRecord: "เพิ่มตัวเลขรายเดือน",
       editRecord: "แก้ไขตัวเลขรายเดือน",
       formDescription: "บันทึกตัวเลขย้อนหลังรายเดือน โดยค่าน้ำมันปกติจะแสดงอัตโนมัติจาก Fuel Logs",
@@ -1842,6 +2028,18 @@ export const translations = {
         october: "ตุลาคม",
         november: "พฤศจิกายน",
         december: "ธันวาคม"
+      },
+      management: {
+        businessImpact: "ผลกระทบทางธุรกิจ", businessImpactDescription: "ความเปลี่ยนแปลงของกองรถในเดือนล่าสุดที่ข้อมูลครบ โดยใช้อัตรามาตรฐานจากช่วงเวลาที่เลือก",
+        improving: "ดีขึ้น", stable: "คงที่", worsening: "แย่ลง", notComparable: "ยังเปรียบเทียบไม่ได้",
+        improved: "คันที่ดีขึ้น", broadlyStable: "คันที่ค่อนข้างคงที่", worsened: "คันที่แย่ลง", withoutComparable: "คันที่ยังไม่มีข้อมูลเปรียบเทียบ", showAll: "แสดงรถทั้งหมด",
+        improvingReason: "ตัวชี้วัดด้านผลตอบแทนหรือประสิทธิภาพดีขึ้นอย่างน้อยสองรายการ โดยไม่มีรายการใดแย่ลงอย่างมีนัยสำคัญ", worseningReason: "ตัวชี้วัดด้านผลตอบแทนหรือประสิทธิภาพอ่อนลงอย่างน้อยสองรายการ โดยไม่มีรายการใดดีขึ้นอย่างมีนัยสำคัญ", stableReason: "ความเปลี่ยนแปลงมีน้อยหรือหลายทิศทาง ควรตรวจสอบตัวชี้วัดแต่ละรายการ", comparisonNeeded: "ต้องมีข้อมูลสองเดือนต่อเนื่องที่ครบถ้วน พร้อมรายได้และข้อมูลน้ำมัน จึงจะเปรียบเทียบได้อย่างน่าเชื่อถือ",
+        revenueChange: "การเปลี่ยนแปลงรายได้", balanceChange: "การเปลี่ยนแปลงยอดคงเหลือ", marginChange: "การเปลี่ยนแปลงอัตราคงเหลือ", fuelSpendChange: "การเปลี่ยนแปลงค่าน้ำมัน", fuelRatioChange: "การเปลี่ยนแปลงน้ำมันต่อรายได้",
+        sinceTracking: "ตั้งแต่เริ่มติดตาม · เฉพาะเดือนที่ข้อมูลครบ", revenue: "รายได้", highestFuelRatio: "อัตราน้ำมันสูงสุด", lowestMargin: "อัตราคงเหลือต่ำสุด", partialExcluded: "มีข้อมูลกองรถไม่ครบและไม่ถูกนำไปคำนวณแนวโน้มรายเดือน",
+        actualBenchmark: "ผลจริงเทียบค่ากลางกองรถ", fuelActualMedian: "น้ำมันต่อรายได้ · ผลจริง / ค่ากลาง", marginActualMedian: "อัตราคงเหลือ · ผลจริง / ค่ากลาง", fuelVariance: "ส่วนต่างน้ำมัน", marginVariance: "ส่วนต่างอัตราคงเหลือ", recordedBalance: "ยอดคงเหลือที่บันทึก", unavailable: "ไม่มีข้อมูล",
+        methodology: "วิธีคำนวณค่ากลาง สถานะ และความเปลี่ยนแปลง", methodologySummary: "ค่ากลางคำนวณจากรถที่มีข้อมูลเหมาะสมในช่วงเวลาที่เลือก โดยต้องมีรถเปรียบเทียบอย่างน้อยสามคัน รายได้เป็นบวก มีข้อมูลรายเดือน และมีหลักฐานค่าน้ำมัน โปรดพิจารณาลักษณะงานและเส้นทางของรถแต่ละคันประกอบ", methodologyThresholds: "สถานะต้องตรวจสอบหมายถึงยอดคงเหลือติดลบหรืออัตราส่วนเกินเกณฑ์ สถานะเฝ้าระวังหมายถึงอัตราส่วนด้อยกว่าค่ากลางหรือข้อมูลไม่ครบ ส่วนสถานะดีและคงที่หมายถึงผลเปรียบเทียบอยู่ในระดับเหมาะสม การเปลี่ยนแปลงต้องสอดคล้องกันอย่างน้อยสองตัวชี้วัด", balanceDefinition: "ยอดคงเหลือที่บันทึกคือรายได้หักค่าใช้จ่ายตรงที่บันทึกไว้ ยังไม่รวมค่าใช้จ่ายส่วนกลางทั้งหมด และข้อมูลย้อนหลังไม่สามารถยืนยันสาเหตุหรือเงินประหยัดจริงได้",
+        actionQueue: "รายการที่ต้องดำเนินการ", actionQueueDescription: "แสดงรายการต้องตรวจสอบก่อน ตามด้วยรายการเฝ้าระวัง และเรียงโอกาสโดยประมาณจากมากไปน้อย", estimatedOpportunity: "โอกาสโดยประมาณ", indicativeOpportunity: "โอกาสลดค่าน้ำมันโดยประมาณ", vehicles: "คัน", estimateNote: "เป็นค่าประมาณสำหรับช่วงเวลาและทะเบียนที่เลือก ไม่ใช่ประมาณการรายปีหรือยอดประหยัดที่รับประกัน ควรตรวจสอบเส้นทาง น้ำหนักบรรทุก ราคา และบันทึกน้ำมันก่อนกำหนดเป้าหมาย", noAction: "ไม่มีรถในมุมมองนี้ที่ต้องเฝ้าระวังหรือตรวจสอบ", attention: "ต้องตรวจสอบ", monitor: "เฝ้าระวัง", strong: "ดี", months: "เดือน", notEstimated: "ยังประเมินไม่ได้", excluded: "ไม่รวมในการประเมิน", viewVehicle: "ดูรถ", vsMedian: "เทียบค่ากลาง",
+        vehicleDetail: "รายละเอียดรถ", vehicleDetailDescription: "ประวัติรายเดือนและการเปรียบเทียบกับกองรถในเดือนเดียวกัน โดยยังแสดงเดือนที่ไม่มีข้อมูล", closeDetail: "ปิดรายละเอียด", latestTrend: "แนวโน้มล่าสุดที่บันทึก", fuelRatio: "อัตราน้ำมัน", monthlyHistory: "ประวัติประสิทธิภาพและสถานะรายเดือน", month: "เดือน", fuel: "น้ำมัน", fuelPercent: "น้ำมัน %", balance: "ยอดคงเหลือ", margin: "อัตราคงเหลือ", fleetFuelMargin: "น้ำมัน / อัตราคงเหลือของกองรถ", statusReason: "สถานะ / เหตุผล", missingMonth: "ไม่มีข้อมูลรถในเดือนนี้", reviewReason: "ตรวจสอบยอดคงเหลือ อัตราน้ำมัน อัตราคงเหลือ และความครบถ้วนของข้อมูลรถคันนี้"
       }
     },
     transfers: {
@@ -2067,6 +2265,103 @@ export const translations = {
       nameTooLong: "ชื่อต้องไม่เกิน 80 ตัวอักษร",
       nameUpdated: "อัปเดตชื่อเรียบร้อยแล้ว",
       updateNameError: "ไม่สามารถอัปเดตชื่อได้"
+    },
+    changePassword: {
+      title: "เปลี่ยนรหัสผ่าน",
+      description: "อัปเดตรหัสผ่านสำหรับเข้าสู่ระบบ",
+      newPassword: "รหัสผ่านใหม่",
+      confirmPassword: "ยืนยันรหัสผ่านใหม่",
+      minimumLength: "รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร",
+      mismatch: "รหัสผ่านใหม่ไม่ตรงกัน",
+      updateError: "ไม่สามารถอัปเดตรหัสผ่านได้",
+      updated: "อัปเดตรหัสผ่านเรียบร้อยแล้ว",
+      updating: "กำลังอัปเดต...",
+      update: "อัปเดตรหัสผ่าน"
+    },
+    serviceUnavailable: {
+      eyebrow: "ไม่สามารถเชื่อมต่อบริการข้อมูล",
+      title: "ไม่สามารถเชื่อมต่อได้ในขณะนี้",
+      description: "ระบบไม่สามารถเชื่อมต่อบริการข้อมูลได้ชั่วคราว ข้อมูลเดิมของคุณไม่ได้รับการเปลี่ยนแปลง",
+      connectionFailed: "การเชื่อมต่อล้มเหลว",
+      retry: "ลองเชื่อมต่ออีกครั้ง"
+    },
+    reports: {
+      title: "ศูนย์รายงาน",
+      description: "ตั้งค่าและดาวน์โหลดรายงานสำหรับผู้บริหารได้จากหน้าเดียว",
+      intro: "เลือกรายงาน ปรับตัวกรอง แล้วดาวน์โหลดได้ทันที หรือเปิดโมดูลต้นทางเพื่อตรวจสอบข้อมูลฉบับเต็ม",
+      backToDashboard: "กลับไปภาพรวม",
+      sourceModule: "โมดูลต้นทาง",
+      generateReport: "สร้างรายงาน",
+      openModule: "เปิดโมดูล",
+      generating: "กำลังสร้างรายงาน...",
+      cancel: "ยกเลิก",
+      loadError: "ไม่สามารถโหลดข้อมูลรายงานได้ โปรดลองอีกครั้ง",
+      generateError: "ไม่สามารถสร้างรายงานได้ โปรดลองอีกครั้ง",
+      noFuelLogs: "ไม่มีบันทึกน้ำมันในช่วงเวลาที่เลือก",
+      noMileageReports: "ยังไม่มีรายงานเลขไมล์รายสัปดาห์",
+      noMileageData: "ไม่มีข้อมูลเลขไมล์สำหรับสัปดาห์ที่เลือก",
+      unknownDriver: "ไม่ทราบพนักงานขับรถ",
+      unknownStation: "ไม่ทราบสถานี",
+      dateRange: "ช่วงวันที่",
+      today: "วันนี้",
+      thisWeek: "สัปดาห์นี้",
+      lastWeek: "สัปดาห์ก่อน",
+      thisMonth: "เดือนนี้",
+      lastMonth: "เดือนก่อน",
+      custom: "กำหนดเอง",
+      last7Days: "7 วันที่ผ่านมา",
+      last30Days: "30 วันที่ผ่านมา",
+      from: "ตั้งแต่",
+      to: "ถึง",
+      vehicle: "รถ",
+      driver: "พนักงานขับรถ",
+      fuelType: "ประเภทน้ำมัน",
+      station: "สถานีบริการ",
+      allVehicles: "รถทั้งหมด",
+      allDrivers: "พนักงานขับรถทั้งหมด",
+      allFuelTypes: "น้ำมันทุกประเภท",
+      allStations: "สถานีทั้งหมด",
+      weekEnding: "สิ้นสุดสัปดาห์",
+      period: "ช่วงเวลา",
+      last4Weeks: "4 สัปดาห์ล่าสุด",
+      last8Weeks: "8 สัปดาห์ล่าสุด",
+      last12Weeks: "12 สัปดาห์ล่าสุด",
+      reportAsOf: "รายงานจากเลขไมล์ล่าสุดและข้อมูลพื้นฐานการเปลี่ยนน้ำมันเครื่องปัจจุบัน",
+      useModuleFilters: "ใช้ตัวกรองที่รองรับในโมดูลต้นทางของรายงานนี้",
+      groups: {
+        fuelVehicle: "น้ำมันและรถ",
+        mileageMaintenance: "เลขไมล์และการบำรุงรักษา",
+        bookingOperations: "ตารางงานและการปฏิบัติงาน"
+      },
+      cards: {
+        fuelSpendSummary: { name: "สรุปค่าใช้จ่ายน้ำมันสำหรับผู้บริหาร", description: "ภาพรวมค่าใช้จ่าย ปริมาณน้ำมัน ราคา การใช้สถานี และรายการที่ต้องตรวจสอบ", module: "รายงานค่าใช้จ่ายน้ำมัน" },
+        fuelSpendFull: { name: "รายงานบริหารค่าใช้จ่ายน้ำมันฉบับเต็ม", description: "รายละเอียดค่าใช้จ่ายน้ำมัน ประสิทธิภาพรถ การใช้สถานี และคุณภาพข้อมูล", module: "รายงานค่าใช้จ่ายน้ำมัน" },
+        fuelEfficiency: { name: "วิเคราะห์ประสิทธิภาพน้ำมัน", description: "วิเคราะห์ตามพนักงานขับรถ รถ และช่วงวันที่ โดยใช้ขั้นตอนงานจากบันทึกน้ำมัน", module: "บันทึกน้ำมัน / ค่าใช้จ่ายน้ำมัน" },
+        vehiclePerformance: { name: "รายงานบริหารประสิทธิภาพรถ", description: "รายได้ ค่าใช้จ่ายน้ำมัน ยอดคงเหลือ อันดับ ประเด็นสำคัญ และคุณภาพข้อมูลของกองรถ", module: "ประสิทธิภาพรถ" },
+        weeklyMileage: { name: "ภาพรวมเลขไมล์กองรถรายสัปดาห์", description: "เปรียบเทียบเลขไมล์สัปดาห์ปัจจุบันกับสัปดาห์ก่อนของรถทั้งกอง", module: "เลขไมล์รายสัปดาห์" },
+        weeklyDistance: { name: "รายงานประวัติระยะทางรายสัปดาห์", description: "แนวโน้มระยะทางย้อนหลังและการเปรียบเทียบกับข้อมูลปัจจุบัน", module: "เลขไมล์รายสัปดาห์" },
+        oilService: { name: "รายงานเปลี่ยนน้ำมันเครื่อง", description: "สถานะงานเปลี่ยนน้ำมันเครื่อง โดยเรียงรายการเกินกำหนด ใกล้ถึงกำหนด และปกติ", module: "เลขไมล์รายสัปดาห์ / การบำรุงรักษา" },
+        bookingSummary: { name: "สรุปตารางงานสำหรับผู้บริหาร", description: "สรุปการปฏิบัติงาน ตัวชี้วัด ความเปลี่ยนแปลงตามช่วงเวลา และรายการดำเนินการ", module: "ตารางงาน" },
+        bookingFull: { name: "รายงานวิเคราะห์ธุรกิจตารางงานฉบับเต็ม", description: "รายละเอียดแนวโน้มงาน งานซ้ำ คุณภาพเส้นทาง ภาระงาน และคุณภาพข้อมูล", module: "ตารางงาน" }
+      },
+      unavailable: {
+        fuelEfficiency: "เปิดบันทึกน้ำมันเพื่อสร้างรายงานพร้อมกฎการคำนวณฉบับเต็ม",
+        vehiclePerformance: "เปิดประสิทธิภาพรถเพื่อสร้างรายงานพร้อมกฎการคำนวณฉบับเต็ม",
+        weeklyDistance: "เปิดเลขไมล์รายสัปดาห์เพื่อสร้างรายงานประวัติระยะทาง",
+        oilService: "เปิดเลขไมล์รายสัปดาห์เพื่อสร้างรายงานเปลี่ยนน้ำมันเครื่องจากข้อมูลล่าสุด",
+        booking: "เปิดตารางงานเพื่อสร้างรายงานสำหรับผู้บริหาร",
+        generic: "ไม่สามารถสร้างรายงานได้ โปรดลองอีกครั้ง"
+      },
+      downloads: {
+        fuelSpendSummary: "ดาวน์โหลด PDF สรุปผู้บริหาร",
+        fuelSpendFull: "ดาวน์โหลด PDF รายงานน้ำมันฉบับเต็ม",
+        fuelEfficiency: "ดาวน์โหลด PDF ประสิทธิภาพน้ำมัน",
+        vehiclePerformance: "ดาวน์โหลด PDF ประสิทธิภาพรถ",
+        weeklyMileage: "ดาวน์โหลด PDF เลขไมล์รายสัปดาห์",
+        weeklyDistance: "ดาวน์โหลด PDF ประวัติระยะทาง",
+        oilService: "ดาวน์โหลด PDF เปลี่ยนน้ำมันเครื่อง",
+        pdf: "ดาวน์โหลด PDF"
+      }
     },
     weeklyMileage: {
       title: "ระยะทางรายสัปดาห์",
@@ -2310,6 +2605,8 @@ export const translations = {
         serviceType: "ประเภทรายการบริการ",
         vehicleRegistration: "ทะเบียนรถ",
         deleteOilChange: "ลบ",
+        deleteOilChangeConfirm: "ลบรายการเปลี่ยนน้ำมันเครื่องนี้หรือไม่",
+        vehicleBaselineReadOnly: "ข้อมูลพื้นฐานนี้มาจากข้อมูลรถ โปรดแก้ไขหรือเพิ่มรายการเปลี่ยนน้ำมันเครื่องแทน",
         editOilChange: "แก้ไข",
         serviceOdometer: "เลขไมล์งานบริการ",
         vehicleTypes: {

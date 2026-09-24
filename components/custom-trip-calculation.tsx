@@ -41,14 +41,14 @@ export function CustomTripCalculation({
     saved: "บันทึกการคำนวณแบบกำหนดเองแล้ว", checked: "ตรวจแล้ว", review: "ต้องตรวจสอบ", excluded: "ไม่รวม",
     usedIn: "ใช้ใน", duplicate: "บันทึกน้ำมันนี้ถูกใช้ในการคำนวณทริปอื่นแล้ว", continueWarning: "อนุญาตให้บันทึกซ้ำได้หากตั้งใจ",
     notes: "หมายเหตุ", result: "ผลการคำนวณทริป", chooseMileage: "เลือกบันทึกเลขไมล์", noLogs: "เลือกพนักงานขับรถ รถ และช่วงวันที่เพื่อดูบันทึกน้ำมัน",
-    selectFuel: "เลือกอย่างน้อยหนึ่งบันทึกน้ำมัน", invalidMileage: "เลขไมล์สิ้นสุดต้องมากกว่าเลขไมล์เริ่มต้น", custom: "การคำนวณแบบกำหนดเอง"
+    selectFuel: "เลือกอย่างน้อยหนึ่งบันทึกน้ำมัน", invalidMileage: "เลขไมล์สิ้นสุดต้องมากกว่าเลขไมล์เริ่มต้น", custom: "การคำนวณแบบกำหนดเอง", saveError: "ไม่สามารถบันทึกการคำนวณทริปได้"
   } : {
     mileagePeriod: "Mileage period", start: "Start mileage", end: "End mileage", distance: "Calculated distance",
     fuelUsed: "Fuel logs used", selectedFuel: "Selected fuel", save: "Save calculation", saving: "Saving",
     saved: "Custom calculation saved", checked: "Checked", review: "Needs review", excluded: "Excluded",
     usedIn: "Used in", duplicate: "This fuel log is already used in another trip calculation.", continueWarning: "You may continue if the reuse is intentional.",
     notes: "Notes", result: "Trip calculation", chooseMileage: "Select mileage reading", noLogs: "Select a driver, vehicle, and date range to view fuel logs.",
-    selectFuel: "Select at least one fuel log", invalidMileage: "End mileage must be higher than start mileage", custom: "Custom calculation"
+    selectFuel: "Select at least one fuel log", invalidMileage: "End mileage must be higher than start mileage", custom: "Custom calculation", saveError: "Unable to save custom trip calculation."
   };
   const mileageLogs = useMemo(() => logs.filter((log) => getFuelLogMileage(log) != null), [logs]);
   const matchingCalculation = useMemo(() => calculations.find((calculation) =>
@@ -123,7 +123,7 @@ export function CustomTripCalculation({
       setMessage(copy.saved);
       await onSaved();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to save custom trip calculation.");
+      setError(caught instanceof Error && caught.message ? caught.message : copy.saveError);
     } finally { setSaving(false); }
   };
 
@@ -135,8 +135,8 @@ export function CustomTripCalculation({
         {matchingCalculation ? <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-bold text-brand-800">{copy.saved}</span> : null}
       </div>
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <div><label className="form-label">{copy.start}</label><select className="form-input bg-white" value={startLogId} onChange={(event) => setStartLogId(event.target.value)}><option value="">{copy.chooseMileage}</option>{mileageLogs.map((log) => <option key={log.id} value={log.id}>{formatDate(log.date, language)} | {formatNumber(getFuelLogMileage(log), language, 0)} km</option>)}</select></div>
-        <div><label className="form-label">{copy.end}</label><select className="form-input bg-white" value={endLogId} onChange={(event) => setEndLogId(event.target.value)}><option value="">{copy.chooseMileage}</option>{mileageLogs.map((log) => <option key={log.id} value={log.id}>{formatDate(log.date, language)} | {formatNumber(getFuelLogMileage(log), language, 0)} km</option>)}</select></div>
+        <div><label className="form-label">{copy.start}</label><select className="form-input bg-white" value={startLogId} onChange={(event) => setStartLogId(event.target.value)}><option value="">{copy.chooseMileage}</option>{mileageLogs.map((log) => <option key={log.id} value={log.id}>{formatDate(log.date, language)} | {formatNumber(getFuelLogMileage(log) ?? 0, language, 0)} km</option>)}</select></div>
+        <div><label className="form-label">{copy.end}</label><select className="form-input bg-white" value={endLogId} onChange={(event) => setEndLogId(event.target.value)}><option value="">{copy.chooseMileage}</option>{mileageLogs.map((log) => <option key={log.id} value={log.id}>{formatDate(log.date, language)} | {formatNumber(getFuelLogMileage(log) ?? 0, language, 0)} km</option>)}</select></div>
       </div>
       <div className="mt-3 rounded-xl bg-slate-50 px-4 py-3"><p className="text-xs font-semibold uppercase text-slate-500">{copy.distance}</p><p className="mt-1 text-xl font-bold text-slate-950">{snapshot ? `${formatNumber(snapshot.distanceKm, language, 0)} km` : "-"}</p></div>
       <h5 className="mt-5 font-bold text-slate-950">{copy.fuelUsed}</h5>

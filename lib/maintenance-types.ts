@@ -1,6 +1,6 @@
 import type { Driver, FuelLog, Vehicle, WeeklyMileageEntry } from "@/types/database";
 
-export const MAINTENANCE_CATEGORIES = ["grease", "oil", "brakes", "tyres", "battery", "engine", "transmission", "suspension", "steering", "electrical", "inspection", "labour", "other"] as const;
+export const MAINTENANCE_CATEGORIES = ["grease", "oil", "brakes", "tyres", "battery", "engine", "transmission", "suspension", "steering", "electrical", "inspection", "labour", "other", "air_conditioning"] as const;
 export type MaintenanceCategory = typeof MAINTENANCE_CATEGORIES[number];
 export type MaintenanceStatus = "overdue" | "mileageDue" | "dueSoon" | "noHistory" | "ok";
 export type MaintenanceAudit = { created_by: string; created_at: string; updated_by: string; updated_at: string };
@@ -12,7 +12,7 @@ export type MaintenanceRecord = MaintenanceAudit & {
 };
 export type MaintenanceItem = MaintenanceAudit & {
   id: string; record_id: string; position: number; description: string; description_th: string | null;
-  category: MaintenanceCategory; quantity: number; unit_price: number; notes: string | null;
+  category: MaintenanceCategory; quantity: number; unit_price: number; line_total?: number | null; notes: string | null;
   requirement_id: string | null; reminder_months: number | null; reminder_km: number | null;
   warning_days: number; warning_km: number; override_date: string | null; override_km: number | null;
 };

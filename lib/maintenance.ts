@@ -13,11 +13,12 @@ export function addMaintenanceMonths(date: string, months: number) {
  return target.toISOString().slice(0,10);
 }
 export function shiftMaintenanceDate(date: string, days: number) { return new Date(Date.parse(`${date}T00:00:00Z`)+days*86400000).toISOString().slice(0,10); }
-export function maintenanceLineTotal(item: Pick<MaintenanceItem,"quantity"|"unit_price">) {
+export function maintenanceLineTotal(item: Pick<MaintenanceItem,"quantity"|"unit_price"> & {line_total?:number|null}) {
+ if(item.line_total!==null && item.line_total!==undefined && Number.isFinite(Number(item.line_total))) return Math.round(Number(item.line_total)*100)/100;
  const q=BigInt(Math.round(Number(item.quantity)*100)),p=BigInt(Math.round(Number(item.unit_price)*100));
  return Number((q*p+BigInt(50))/BigInt(100))/100;
 }
-export function maintenanceTotal(items: Pick<MaintenanceItem,"quantity"|"unit_price">[]) { return items.reduce((c,i)=>c+Math.round(maintenanceLineTotal(i)*100),0)/100; }
+export function maintenanceTotal(items: (Pick<MaintenanceItem,"quantity"|"unit_price"> & {line_total?:number|null})[]) { return items.reduce((c,i)=>c+Math.round(maintenanceLineTotal(i)*100),0)/100; }
 export function receiptDifference(total: number, receipt: number | null) { return receipt===null ? null : (Math.round(total*100)-Math.round(receipt*100))/100; }
 export function maintenanceDowntime(record: Pick<MaintenanceRecord,"off_road_at"|"returned_at">, now=new Date()) { return record.off_road_at ? Math.max(0, (Date.parse(record.returned_at || now.toISOString())-Date.parse(record.off_road_at))/3600000) : 0; }
 export function maintenanceDue(item: Pick<MaintenanceItem,"reminder_months"|"reminder_km"|"override_date"|"override_km">,record: Pick<MaintenanceRecord,"service_date"|"odometer">) {
@@ -102,4 +103,4 @@ export function maintenanceObservation(data:MaintenanceData,record:MaintenanceRe
  const summarize=(range:typeof before)=>{const selected=cycles.filter(c=>c.status==="verified"&&c.startDate>=range.start&&c.endDate<=range.end);return selected.length>=2?{...range,cycles:selected.length,coverageStart:selected[0].startDate,coverageEnd:selected.at(-1)!.endDate,kmPerLitre:selected.reduce((s,c)=>s+c.distanceKm,0)/selected.reduce((s,c)=>s+c.litres,0)}:null;};
  const b=summarize(before),a=summarize(after);return b&&a&&after.end<=maintenanceToday()?{before:b,after:a}:null;
 }
-export function newMaintenanceItem(id:string,category:MaintenanceItem["category"]="other"):MaintenanceItemInput {return {id,description:"",description_th:null,category,quantity:1,unit_price:0,notes:null,requirement_id:null,reminder_months:category==="grease"?12:null,reminder_km:null,warning_days:30,warning_km:1000,override_date:null,override_km:null};}
+export function newMaintenanceItem(id:string,category:MaintenanceItem["category"]="other"):MaintenanceItemInput {return {id,description:"",description_th:null,category,quantity:1,unit_price:0,line_total:null,notes:null,requirement_id:null,reminder_months:category==="grease"?12:null,reminder_km:null,warning_days:30,warning_km:1000,override_date:null,override_km:null};}

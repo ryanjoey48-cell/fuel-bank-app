@@ -59,6 +59,7 @@ export const maintenanceCategoryTone: Record<string, string> = {
   grease: "border-emerald-200 bg-emerald-50 text-emerald-800", tyres: "border-sky-200 bg-sky-50 text-sky-800",
   battery: "border-yellow-200 bg-yellow-50 text-yellow-800", suspension: "border-indigo-200 bg-indigo-50 text-indigo-800",
   inspection: "border-teal-200 bg-teal-50 text-teal-800", labour: "border-slate-200 bg-slate-100 text-slate-700",
+  air_conditioning: "border-cyan-200 bg-cyan-50 text-cyan-800",
   other: "border-slate-200 bg-slate-50 text-slate-700"
 };
 

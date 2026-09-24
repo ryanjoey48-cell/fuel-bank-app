@@ -7,9 +7,10 @@ import { INVENTORY_UNITS, type InventoryCategory, type InventoryData, type Inven
 import { useLanguage } from "@/lib/language-provider";
 
 function Dialog({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+  const { t } = useLanguage();
   return <div className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-950/40 p-0 backdrop-blur-sm sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label={title}>
     <div className="max-h-[94vh] w-full overflow-y-auto rounded-t-3xl border border-violet-100 bg-white p-4 shadow-2xl sm:max-w-3xl sm:rounded-3xl sm:p-6">
-      <div className="mb-4 flex items-center justify-between gap-3"><h2 className="text-xl font-bold text-slate-950">{title}</h2><button type="button" className="btn-icon h-11 w-11" onClick={onClose} aria-label="Close"><X className="h-5 w-5"/></button></div>
+      <div className="mb-4 flex items-center justify-between gap-3"><h2 className="text-xl font-bold text-slate-950">{title}</h2><button type="button" className="btn-icon h-11 w-11" onClick={onClose} aria-label={t.common.cancel}><X className="h-5 w-5"/></button></div>
       {children}
     </div>
   </div>;

@@ -766,6 +766,7 @@ test("Vehicle Performance exception review UI is manual and importable only afte
   const page = fs.readFileSync(path.resolve("app/(dashboard)/vehicle-performance/page.tsx"), "utf8");
   const data = fs.readFileSync(path.resolve("lib/data.ts"), "utf8");
   const helper = fs.readFileSync(path.resolve("lib/vehicle-performance.ts"), "utf8");
+  const translations = fs.readFileSync(path.resolve("lib/translations.ts"), "utf8");
 
   assert.match(page, /View fuel details/);
   assert.match(page, /Approve using App Fuel/);
@@ -780,7 +781,9 @@ test("Vehicle Performance exception review UI is manual and importable only afte
   assert.match(page, /status:\s*"Correction required"/);
   assert.match(page, /"Resolved"/);
   assert.match(page, /Review required again/);
-  assert.match(page, /Review history/);
+  assert.match(page, /labels\.reviewHistory/);
+  assert.match(translations, /reviewHistory:\s*"Review history"/);
+  assert.match(translations, /reviewHistory:\s*"ประวัติการตรวจสอบ"/);
   assert.match(helper, /Previously approved - values have changed/);
   assert.match(page, /row\.status === "Ready" \|\| row\.status === "Historical fuel difference" \|\| row\.status === "Approved"/);
   assert.match(page, /Import exception manually reviewed and approved/);
@@ -805,24 +808,33 @@ test("Vehicle Performance exception review UI is manual and importable only afte
 
 test("Vehicle Performance dashboard layout prioritizes management view and keeps data tools collapsed", () => {
   const page = fs.readFileSync(path.resolve("app/(dashboard)/vehicle-performance/page.tsx"), "utf8");
+  const translations = fs.readFileSync(path.resolve("lib/translations.ts"), "utf8");
 
-  assert.match(page, /Revenue, recorded direct costs and vehicle performance/);
+  assert.match(page, /\{labels\.description\}/);
+  assert.match(translations, /description:\s*"Compare each vehicle's revenue with fuel spend and direct costs\."/);
+  assert.match(translations, /description:\s*"เปรียบเทียบรายรับของรถแต่ละคันกับค่าน้ำมันและต้นทุนตรง"/);
   assert.match(page, /<BusinessImpact /);
   assert.match(page, /<ActionQueue /);
-  assert.match(page, /Monthly Performance/);
-  assert.match(page, /Data Quality/);
-  assert.match(page, /Data Management/);
-  assert.match(page, /All loaded months/);
+  assert.match(page, /labels\.monthlyPerformance/);
+  assert.match(page, /labels\.dataQuality/);
+  assert.match(page, /labels\.dataManagement/);
+  assert.match(page, /labels\.allLoadedMonths/);
+  assert.match(page, /\[dataManagementOpen, setDataManagementOpen\] = useState\(false\)/);
+  assert.match(page, /\[dataQualityOpen, setDataQualityOpen\] = useState\(false\)/);
+  assert.match(translations, /monthlyPerformance:\s*"Monthly Performance"/);
+  assert.match(translations, /dataQuality:\s*"Data Quality"/);
+  assert.match(translations, /dataManagement:\s*"Data Management"/);
+  assert.match(translations, /allLoadedMonths:\s*"All loaded months"/);
   assert.match(page, /Months With Data/);
-  assert.match(page, /Vehicles Included/);
-  assert.match(page, /Fleet performance/);
+  assert.match(page, /labels\.vehiclesIncluded/);
+  assert.match(page, /labels\.fleetPerformance/);
   assert.match(page, /vehicles analysed/);
   assert.match(page, /Stable/);
   assert.match(page, /formatCompactBaht\(summary\.grossRevenue\)/);
   assert.match(page, /buildVehicleMonthlyPerformanceRows/);
   assert.match(page, /buildVehiclePerformanceSummary\(rows\)/);
   assert.match(page, /buildVehiclePerformanceSummary\(monthlyTrend\)/);
-  assert.match(page, /Advanced data checks/);
+  assert.match(page, /labels\.advancedDataChecks/);
   assert.match(page, /reconciliationDebug/);
   assert.match(page, /Data reconciled/);
   assert.match(page, /Summary ↔ vehicle table/);

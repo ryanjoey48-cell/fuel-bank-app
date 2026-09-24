@@ -2539,10 +2539,10 @@ export default function WeeklyMileagePage() {
 
   const handleDeleteServiceLog = async (log: VehicleServiceLog) => {
     if (log.id.startsWith("vehicle-baseline-") || log.id.startsWith("baseline-")) {
-      setError("This baseline comes from the vehicle record. Edit or add an oil-change service record instead.");
+      setError(t.weeklyMileage.oil.vehicleBaselineReadOnly);
       return;
     }
-    const confirmed = window.confirm("Delete this oil change record?");
+    const confirmed = window.confirm(t.weeklyMileage.oil.deleteOilChangeConfirm);
     if (!confirmed) return;
 
     try {

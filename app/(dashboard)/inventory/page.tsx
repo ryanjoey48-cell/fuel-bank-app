@@ -380,24 +380,24 @@ export default function InventoryPage() {
               <Boxes className="h-5 w-5" />
             </div>
             <span className="rounded-full bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-violet-600 shadow-sm">
-              Catalogue
+              {c.catalogue}
             </span>
           </div>
           <div className="relative mt-4">
             <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
-              {language === "th" ? "รายการสินค้า" : (language === "th" ? "รายการสินค้า" : "Inventory Items")}
+              {c.inventoryItems}
             </p>
             <div className="mt-1 flex items-end gap-2">
               <p className="text-3xl font-black tracking-tight text-slate-950">
                 {summary.totalItems}
               </p>
               <p className="pb-1 text-xs font-medium text-slate-500">
-                {summary.totalItems === 1 ? "item" : "items"}
+                {summary.totalItems === 1 ? c.item : c.items}
               </p>
             </div>
             <div className="mt-3 flex items-center justify-between border-t border-violet-100 pt-3">
               <span className="text-xs text-slate-500">
-                {language === "th" ? "จำนวนคงเหลือทั้งหมด" : (language === "th" ? "จำนวนคงเหลือทั้งหมด" : "Total pieces in stock")}
+                {c.totalPieces}
               </span>
               <span className="text-sm font-black text-violet-700">
                 {inventoryMetrics.totalUnits}
@@ -412,7 +412,7 @@ export default function InventoryPage() {
               <AlertTriangle className="h-5 w-5" />
             </div>
             <span className="rounded-full bg-amber-100/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-700">
-              Attention
+              {c.attention}
             </span>
           </div>
           <div className="mt-4">
@@ -424,7 +424,7 @@ export default function InventoryPage() {
             </p>
             <div className="mt-3 flex items-center justify-between border-t border-amber-100 pt-3">
               <span className="text-xs text-slate-500">
-                {language === "th" ? "จำนวนที่ควรสั่งเพิ่ม" : (language === "th" ? "ต้องสั่งเพิ่ม" : "Need to order")}
+                {c.needToOrderLabel}
               </span>
               <span className="text-sm font-black text-amber-700">
                 {inventoryMetrics.reorderRequired}
@@ -439,7 +439,7 @@ export default function InventoryPage() {
               <PackageOpen className="h-5 w-5" />
             </div>
             <span className="rounded-full bg-rose-100/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-rose-700">
-              Critical
+              {c.critical}
             </span>
           </div>
           <div className="mt-4">
@@ -450,13 +450,7 @@ export default function InventoryPage() {
               {summary.outOfStock}
             </p>
             <p className="mt-3 border-t border-rose-100 pt-3 text-xs text-slate-500">
-              {summary.outOfStock === 0
-                ? language === "th"
-                  ? "ไม่มีสินค้าหมด"
-                  : "No unavailable stock"
-                : language === "th"
-                ? "ต้องดำเนินการ"
-                : "Requires immediate action"}
+              {summary.outOfStock === 0 ? c.noUnavailableStock : c.requiresImmediateAction}
             </p>
           </div>
         </div>
@@ -467,7 +461,7 @@ export default function InventoryPage() {
               <CircleDollarSign className="h-5 w-5" />
             </div>
             <span className="rounded-full bg-emerald-100/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
-              Value
+              {c.value}
             </span>
           </div>
           <div className="mt-4">
@@ -479,7 +473,7 @@ export default function InventoryPage() {
             </p>
             <div className="mt-3 flex items-center justify-between border-t border-emerald-100 pt-3">
               <span className="text-xs text-slate-500">
-                {language === "th" ? "ตัวเลือกสินค้า" : (language === "th" ? "ขนาด / ตัวเลือก" : "Sizes / Options")}
+                {c.sizesOptions}
               </span>
               <span className="text-sm font-black text-emerald-700">
                 {inventoryMetrics.totalVariants}
@@ -1018,11 +1012,11 @@ export default function InventoryPage() {
                                 <div>
                                   <p className="text-sm font-black text-slate-950">
                                     {variant.is_default
-                                      ? (language === "th" ? "มาตรฐาน" : "Standard")
+                                      ? c.standard
                                       : variant.name}
                                   </p>
                                   <p className="mt-0.5 text-[10px] uppercase tracking-wide text-slate-400">
-                                    {language === "th" ? "ขนาด" : (language === "th" ? "ขนาด" : "Size")}
+                                    {c.size}
                                   </p>
                                 </div>
 

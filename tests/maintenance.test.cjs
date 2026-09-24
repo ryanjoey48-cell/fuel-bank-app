@@ -34,13 +34,72 @@ function loader(mocks = {}) {
 const load = loader();
 const translations = load('lib/translations.ts').translations;
 const logic = load('lib/maintenance.ts');
+const importer = load('lib/maintenance-import.ts');
 const empty = { vehicles: [], drivers: [], mileage: [], fuel: [], records: [], items: [], requirements: [], applicability: [], attachments: [] };
 const fleet = { ...empty, vehicles: [{ id: 'v1', vehicle_reg: 'TEST', active: true, vehicle_type: 'truck' }] };
 
-test('both languages register Maintenance and all thirteen categories', () => {
+test('both languages register Maintenance and all fourteen categories', () => {
   const { MAINTENANCE_CATEGORIES } = load('lib/maintenance-types.ts');
-  assert.deepEqual(MAINTENANCE_CATEGORIES, ['grease','oil','brakes','tyres','battery','engine','transmission','suspension','steering','electrical','inspection','labour','other']);
+  assert.deepEqual(MAINTENANCE_CATEGORIES, ['grease','oil','brakes','tyres','battery','engine','transmission','suspension','steering','electrical','inspection','labour','other','air_conditioning']);
   for (const language of ['en', 'th']) assert.ok(translations[language].maintenance.title);
+});
+
+test('CSV receipt import preserves UTF-8 Thai, groups 13 rows into one THB 20,000 draft and keeps order', () => {
+  const fixture = fs.readFileSync(path.join(process.cwd(),'tests/fixtures/maintenance-receipt-61-6672.csv'),'utf8');
+  const drafts = importer.parseMaintenanceReceiptCsv(`\uFEFF${fixture}`,'receipt.csv');
+  assert.equal(drafts.length,1);assert.equal(drafts[0].items.length,13);
+  assert.equal(importer.maintenanceImportCalculatedTotal(drafts[0]),20000);
+  assert.equal(importer.maintenanceImportDifference(drafts[0]),0);
+  assert.equal(drafts[0].items[0].descriptionTh,'ลูกปืนล้อ');
+  assert.deepEqual(drafts[0].items.map(item=>item.position),Array.from({length:13},(_,index)=>index));
+  const result=importer.validateMaintenanceImportDraft(drafts[0],[{id:'v1',vehicle_reg:' 61-6672 '}],'2026-09-23');
+  assert.equal(result.valid,true);assert.equal(result.vehicle.id,'v1');
+});
+
+test('CSV receipt validation rejects missing vehicles and bad item fields without saving', () => {
+  const csv='vehicle,service_date,garage_supplier,receipt_total,description,category,quantity,unit_price,line_total,original_thai,notes\nUNKNOWN,2026-09-21,Garage,100,,not-a-category,0,-1,nope,,';
+  const draft=importer.parseMaintenanceReceiptCsv(csv)[0];
+  const result=importer.validateMaintenanceImportDraft(draft,[],'2026-09-23');
+  assert.equal(result.valid,false);
+  assert.ok(result.issues.some(issue=>issue.code==='vehicle_not_found'));
+  assert.ok(result.issues.some(issue=>issue.code==='invalid_category'));
+  assert.ok(result.issues.some(issue=>issue.code==='invalid_quantity'));
+  assert.ok(result.issues.some(issue=>issue.field==='line_total'));
+});
+
+test('CSV importer reuses the atomic maintenance RPC and migration preserves the production safety contract',()=>{
+ const component=fs.readFileSync(path.join(process.cwd(),'components/maintenance-receipt-import.tsx'),'utf8');
+ const data=fs.readFileSync(path.join(process.cwd(),'lib/maintenance-data.ts'),'utf8');
+ const migration=fs.readFileSync(path.join(process.cwd(),'supabase/migrations/20260923110000_maintenance_receipt_csv_import.sql'),'utf8');
+ assert.match(component,/saveMaintenanceRecord\(payload, items, null\)/);
+ assert.doesNotMatch(component,/\.from\(["']maintenance_(records|items)["']\)\.insert/);
+ assert.match(data,/rpc\("save_maintenance_record"/);
+ assert.match(migration,/add column if not exists line_total/);
+ assert.match(migration,/security definer set search_path=public,pg_temp/);
+ assert.match(migration,/current_account_role\(\) not in \('admin','office_staff'\)/);
+ assert.match(migration,/pg_advisory_xact_lock/);
+ assert.match(migration,/MAINTENANCE_CONFLICT/);
+ assert.match(migration,/insert into public\.maintenance_audit/);
+ assert.match(migration,/MAINTENANCE_MILEAGE_REQUIRED/);
+ assert.match(migration,/MAINTENANCE_REQUIREMENT_SCOPE/);
+ assert.match(migration,/MAINTENANCE_RECEIPT_MISMATCH/);
+ assert.match(migration,/MAINTENANCE_ITEM_OWNER/);
+ assert.match(migration,/delete from public\.maintenance_items where record_id=rid/);
+ assert.match(migration,/grant execute on function public\.save_maintenance_record[\s\S]*to authenticated/);
+ assert.match(migration,/line_total=case when entry \? 'line_total' then excluded\.line_total else maintenance_items\.line_total end/);
+ assert.match(migration,/if not \(entry \? 'line_total'\)[\s\S]*select i\.line_total into line_amount/);
+ assert.match(migration,/else[\s\S]*line_amount := round\(\(entry->>'quantity'\)::numeric \* \(entry->>'unit_price'\)::numeric,2\)/);
+ assert.match(migration,/line_amount := \(entry->>'line_total'\)::numeric/);
+ assert.match(migration,/entry->>'override_km'[\s\S]*payload->>'odometer'[\s\S]*MAINTENANCE_DUE_MILEAGE/);
+ for (const field of ['odometer','off_road_at','returned_at','receipt_total','requirement_id','reminder_months','reminder_km','override_date','override_km','line_total']) {
+   assert.ok(migration.includes(`nullif(btrim(payload->>'${field}'),'')`) || migration.includes(`nullif(btrim(entry->>'${field}'),'')`),field);
+ }
+ assert.match(migration,/alter column unit_price type numeric\(14,4\) using unit_price::numeric\(14,4\)/);
+ const categoryList="'grease','oil','brakes','tyres','battery','engine','transmission','suspension','steering','electrical','inspection','labour','other','air_conditioning'";
+ assert.equal(migration.split(categoryList).length-1,2);
+ assert.match(migration,/begin;[\s\S]*commit;/);
+ assert.equal(logic.maintenanceLineTotal({quantity:3,unit_price:666.6667,line_total:2000}),2000);
+ assert.equal(logic.maintenanceLineTotal({quantity:2,unit_price:800,line_total:null}),1600);
 });
 
 test('empty Maintenance history produces no false reminders or invalid analytics', () => {
