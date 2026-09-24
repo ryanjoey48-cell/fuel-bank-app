@@ -131,7 +131,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       items: [
         {
           href: "/dashboard",
-          label: t.nav.dashboard,
+          label: t.home.navigationHome,
           icon: LayoutDashboard
         },
         {

@@ -2,6 +2,153 @@ import { shipmentTranslations } from "./shipment-translations";
 import { greaseTranslations } from "./grease-translations";
 import { maintenanceTranslations } from "./maintenance-translations";
 
+const homeTranslations = {
+  en: {
+    navigationHome: "Home",
+    welcome: "Welcome to EES Operations",
+    company: "Expert Express Sender Co., Ltd",
+    title: "Operations Home",
+    titlePrimary: "Operations",
+    titleAccent: "Home",
+    subtitle: "Bookings, fleet, fuel, journeys and reports in one place.",
+    brandLine: "Reliable logistics, clearly managed",
+    truckAlt: "Expert Express Sender company truck",
+    loadError: "Unable to load the latest Home summary. Please try again.",
+    quickActions: "Quick actions",
+    actions: {
+      booking: "Add Booking",
+      fuel: "Add Fuel Log",
+      trip: "Add Trip Journey",
+      dispatch: "Dispatch Board",
+      vehicle: "Add Vehicle",
+      reports: "Reports"
+    },
+    summary: {
+      bookings: "Bookings this month",
+      bookingsDetail: "Scheduled work in the current month",
+      fuelSpend: "Fuel spend this month",
+      fuelDetail: "Recorded fuel purchases in the current month",
+      fleet: "Vehicles / Fleet",
+      fleetDetail: "Active vehicles in the fleet register",
+      review: "Items to review",
+      reviewDetail: "Fuel, journey and maintenance records requiring review"
+    },
+    toolsEyebrow: "Your workspace",
+    operationsShortcuts: "Operations Shortcuts",
+    operationsShortcutsDescription: "Open the tools you use most.",
+    shortcuts: {
+      booking: "Booking Diary",
+      bookingDescription: "Manage bookings and schedules",
+      dispatch: "Dispatch Board",
+      dispatchDescription: "View today’s jobs and driver assignments",
+      fuel: "Fuel Logs",
+      fuelDescription: "Record and manage fuel purchases",
+      trip: "Trip Journey",
+      tripDescription: "Track journeys, routes and distance",
+      fleet: "Vehicles / Fleet",
+      fleetDescription: "Manage vehicle and driver details",
+      mileage: "Weekly Mileage",
+      mileageDescription: "Track odometer readings and oil change alerts",
+      maintenance: "Maintenance",
+      maintenanceDescription: "Manage service records and schedules",
+      insurance: "Insurance",
+      insuranceDescription: "View policies and expiry dates",
+      inventory: "Inventory / Stock",
+      inventoryDescription: "Manage stock, uniforms and PPE",
+      reports: "Reports",
+      reportsDescription: "View and export operational reports",
+      insights: "Business Insights",
+      insightsDescription: "Review routes and performance",
+      admin: "Admin",
+      adminDescription: "Manage system settings and users"
+    },
+    recentActivity: "Recent Activity",
+    viewAllActivity: "View all activity",
+    recentActivityDescription: "Latest updates from bookings, fuel and maintenance.",
+    noRecentActivity: "No recent booking, fuel or maintenance activity yet.",
+    activity: {
+      booking: "Booking added",
+      bookingReference: "Booking",
+      fuel: "Fuel log recorded",
+      fuelReference: "Fuel record",
+      maintenance: "Maintenance updated",
+      vehicleReference: "Vehicle"
+    }
+  },
+  th: {
+    navigationHome: "หน้าหลัก",
+    welcome: "ยินดีต้อนรับสู่ระบบปฏิบัติการ EES",
+    company: "บริษัท เอ็กซ์เปอร์ต เอ็กซ์เพรส เซ็นเดอร์ จำกัด",
+    title: "หน้าหลักการปฏิบัติงาน",
+    titlePrimary: "การปฏิบัติงาน",
+    titleAccent: "หน้าหลัก",
+    subtitle: "รวมงานจอง กองรถ น้ำมัน การเดินทาง และรายงานไว้ในที่เดียว",
+    brandLine: "จัดการงานขนส่งอย่างมั่นใจและชัดเจน",
+    truckAlt: "รถบรรทุกของบริษัท เอ็กซ์เปอร์ต เอ็กซ์เพรส เซ็นเดอร์",
+    loadError: "ไม่สามารถโหลดข้อมูลสรุปล่าสุดของหน้าหลักได้ กรุณาลองอีกครั้ง",
+    quickActions: "ทางลัด",
+    actions: {
+      booking: "เพิ่มงานจอง",
+      fuel: "เพิ่มรายการน้ำมัน",
+      trip: "เพิ่ม Trip Journey",
+      dispatch: "กระดานจัดส่ง",
+      vehicle: "เพิ่มรถ",
+      reports: "รายงาน"
+    },
+    summary: {
+      bookings: "งานจองเดือนนี้",
+      bookingsDetail: "งานที่มีกำหนดในเดือนปัจจุบัน",
+      fuelSpend: "ค่าน้ำมันเดือนนี้",
+      fuelDetail: "ยอดซื้อน้ำมันที่บันทึกในเดือนปัจจุบัน",
+      fleet: "รถ / กองรถ",
+      fleetDetail: "รถที่ใช้งานอยู่ในทะเบียนกองรถ",
+      review: "รายการที่ต้องตรวจ",
+      reviewDetail: "รายการน้ำมัน เที่ยววิ่ง และซ่อมบำรุงที่ต้องตรวจสอบ"
+    },
+    toolsEyebrow: "พื้นที่ทำงานของคุณ",
+    operationsShortcuts: "ทางลัดงานปฏิบัติการ",
+    operationsShortcutsDescription: "เปิดเครื่องมือที่คุณใช้บ่อย",
+    shortcuts: {
+      booking: "ตารางงานจอง",
+      bookingDescription: "จัดการงานจองและตารางเวลา",
+      dispatch: "กระดานจัดส่ง",
+      dispatchDescription: "ดูงานวันนี้และการมอบหมายคนขับ",
+      fuel: "บันทึกน้ำมัน",
+      fuelDescription: "บันทึกและจัดการการซื้อน้ำมัน",
+      trip: "Trip Journey",
+      tripDescription: "ติดตามเที่ยววิ่ง เส้นทาง และระยะทาง",
+      fleet: "รถ / กองรถ",
+      fleetDescription: "จัดการข้อมูลรถและพนักงานขับรถ",
+      mileage: "เลขไมล์รายสัปดาห์",
+      mileageDescription: "ติดตามเลขไมล์และการแจ้งเตือนเปลี่ยนน้ำมันเครื่อง",
+      maintenance: "ซ่อมบำรุง",
+      maintenanceDescription: "จัดการประวัติและกำหนดการซ่อมบำรุง",
+      insurance: "ประกันภัย",
+      insuranceDescription: "ดูกรมธรรม์และวันหมดอายุ",
+      inventory: "สินค้าคงคลัง / สต็อก",
+      inventoryDescription: "จัดการสต็อก เครื่องแบบ และ PPE",
+      reports: "รายงาน",
+      reportsDescription: "ดูและส่งออกรายงานการปฏิบัติงาน",
+      insights: "ข้อมูลเชิงธุรกิจ",
+      insightsDescription: "ตรวจสอบเส้นทางและผลการดำเนินงาน",
+      admin: "ผู้ดูแลระบบ",
+      adminDescription: "จัดการการตั้งค่าระบบและผู้ใช้งาน"
+    },
+    recentActivity: "กิจกรรมล่าสุด",
+    viewAllActivity: "ดูกิจกรรมทั้งหมด",
+    recentActivityDescription: "รายการอัปเดตล่าสุดจากงานจอง น้ำมัน และซ่อมบำรุง",
+    noRecentActivity: "ยังไม่มีกิจกรรมงานจอง น้ำมัน หรือซ่อมบำรุงล่าสุด",
+    activity: {
+      booking: "เพิ่มงานจอง",
+      bookingReference: "งานจอง",
+      fuel: "บันทึกรายการน้ำมัน",
+      fuelReference: "รายการน้ำมัน",
+      maintenance: "อัปเดตงานซ่อมบำรุง",
+      vehicleReference: "รถ"
+    }
+  }
+} as const;
+
 const dashboardManagement = {
   en: {
     title: "Management Dashboard", description: "A factual control centre for today's logistics, fleet risk, fuel spend, and work requiring review.", controlCentre: "Logistics control centre", selectedMonth: "Selected reporting month", month: "Month", refresh: "Refresh", refreshing: "Refreshing…", comparisonUnavailable: "Previous-month comparison unavailable", unavailable: "Data is currently unavailable",
@@ -33,6 +180,7 @@ export const translations = {
   en: {
     grease: greaseTranslations.en,
     maintenance: maintenanceTranslations.en,
+    home: homeTranslations.en,
     common: {
       appName: "EXPERT EXPRESS SENDER CO., LTD",
       appSubtitle: "Logistics Control",
@@ -1362,6 +1510,7 @@ export const translations = {
   th: {
     grease: greaseTranslations.th,
     maintenance: maintenanceTranslations.th,
+    home: homeTranslations.th,
     common: {
       navigation: "เมนูนำทาง",
       requiredField: "กรุณากรอกข้อมูลในช่องนี้",

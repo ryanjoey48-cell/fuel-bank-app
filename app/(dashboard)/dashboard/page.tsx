@@ -1,90 +1,356 @@
 "use client";
 
-import { AlertTriangle, CalendarPlus, CheckCircle2, ClipboardList, Fuel, Plus, RefreshCw, Route, ShieldCheck, Ticket, Wrench } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
-import { EmptyState } from "@/components/empty-state";
-import { Header } from "@/components/header";
-import { fetchBookingDiaryEntries, fetchDrivers, fetchFuelLogs, fetchOilChangeBaselinesForVehicles, fetchSupportTicketNotificationCount, fetchTripJourneys, fetchVehicles, fetchWeeklyMileage } from "@/lib/data";
-import { buildDispatchRows, summarizeDispatchRows, type DispatchBoardRow } from "@/lib/dispatch";
-import { isInsuranceNotRequired, type InsuranceAssetRecord } from "@/lib/insurance-intelligence";
+import {
+  Activity,
+  ArrowRight,
+  BarChart3,
+  Boxes,
+  CalendarDays,
+  ClipboardCheck,
+  FileBarChart,
+  Fuel,
+  Gauge,
+  MapPinned,
+  PackageSearch,
+  Plus,
+  Route,
+  ShieldCheck,
+  Sparkles,
+  Truck,
+  Users,
+  Wrench,
+  type LucideIcon
+} from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AccountMenu } from "@/components/account-menu";
+import { LanguageSwitcher } from "@/components/language-switcher";
+import {
+  fetchBookingDiaryEntries,
+  fetchFuelLogs,
+  fetchTripJourneys,
+  fetchVehicles
+} from "@/lib/data";
 import { useLanguage } from "@/lib/language-provider";
-import { fetchMaintenanceData } from "@/lib/maintenance-data";
 import { buildMaintenanceReminders, maintenanceToday } from "@/lib/maintenance";
-import type { MaintenanceData, MaintenanceReminder } from "@/lib/maintenance-types";
-import { buildOilChangeAlertRows, type OilChangeAlertRow } from "@/lib/operations";
-import { supabase } from "@/lib/supabase";
-import { summarizeTripFinancials } from "@/lib/trip-financials";
+import { fetchMaintenanceData } from "@/lib/maintenance-data";
+import type { MaintenanceData } from "@/lib/maintenance-types";
+import { useAccountAccess } from "@/lib/use-account-access";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/utils";
-import type { BookingDiaryEntry, Driver, FuelLogWithDriver, OilChangeBaseline, TripJourneyWithFuel, Vehicle, WeeklyMileageEntry } from "@/types/database";
+import type {
+  BookingDiaryEntry,
+  FuelLogWithDriver,
+  TripJourneyWithFuel,
+  Vehicle
+} from "@/types/database";
 
-type Tone = "danger" | "warning" | "info";
-type Action = { href: string; label: string; count: number; detail: string; icon: ComponentType<{ className?: string }>; key: string; title: string; tone: Tone };
-type Range = { start: string; end: string };
+type Shortcut = {
+  description: string;
+  href: string;
+  icon: LucideIcon;
+  label: string;
+  tone: "orange" | "purple" | "neutral";
+};
 
-const pad = (n: number) => String(n).padStart(2, "0");
-const dateKey = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const monthKey = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
-function range(key: string): Range { const [y, m] = key.split("-").map(Number); const d = Number.isFinite(y + m) ? new Date(y, m - 1, 1) : new Date(); return { start: dateKey(new Date(d.getFullYear(), d.getMonth(), 1)), end: dateKey(new Date(d.getFullYear(), d.getMonth() + 1, 0)) }; }
-function previousMonth(key: string) { const [y, m] = key.split("-").map(Number); return monthKey(new Date(y, m - 2, 1)); }
-const inRange = (value: string | null | undefined, r: Range) => Boolean(value && value >= r.start && value <= r.end);
-const num = (value: unknown) => Number.isFinite(Number(value)) ? Number(value) : 0;
-function trend(current: number, previous: number, language: "en" | "th", unavailable: string) { if (previous <= 0) return current <= 0 ? (language === "th" ? "ไม่เปลี่ยนแปลงจากเดือนก่อน" : "No change vs last month") : unavailable; const change = (current - previous) / previous * 100; return Math.abs(change) < .5 ? (language === "th" ? "ไม่เปลี่ยนแปลงจากเดือนก่อน" : "No change vs last month") : `${change > 0 ? "▲" : "▼"} ${formatNumber(Math.abs(change), language, 0)}% ${language === "th" ? "เทียบเดือนก่อน" : "vs last month"}`; }
-function actualKm(t: TripJourneyWithFuel) { if (num(t.manual_actual_km) > 0) return num(t.manual_actual_km); if (t.start_mileage != null && t.end_mileage != null && t.end_mileage > t.start_mileage) return t.end_mileage - t.start_mileage; return num(t.actual_distance_km) > 0 ? num(t.actual_distance_km) : null; }
-function estimatedKm(t: TripJourneyWithFuel) { for (const v of [t.manual_estimated_distance_km, t.google_estimated_km, t.booking_estimated_km, t.estimated_distance_km]) if (num(v) > 0) return num(v); return null; }
-const workingKm = (t: TripJourneyWithFuel) => actualKm(t) ?? estimatedKm(t);
-function needsTripReview(t: TripJourneyWithFuel) { if (t.status !== "completed") return false; if (!String(t.driver || "").trim() || !String(t.vehicle_reg || t.vehicle_type || "").trim()) return true; const a = actualKm(t), e = estimatedKm(t); return a != null && e != null && e > 0 && Math.abs(a - e) / e > .2; }
-const reg = (v: unknown) => String(v ?? "").trim().replace(/\s+|-/g, "").toUpperCase();
-function withOilBaselines(vehicles: Vehicle[], baselines: OilChangeBaseline[]) { return vehicles.map(vehicle => { const b = baselines.find(x => reg(x.vehicle_reg) === reg(vehicle.vehicle_reg)); return b ? { ...vehicle, last_oil_change_date: b.last_oil_change_date, last_oil_change_odometer: Number(b.last_odometer), oil_change_interval_km: Number(b.interval_km) } : vehicle; }); }
-function reliableOil(row: OilChangeAlertRow) { return row.lastOilChangeOdometer != null && row.oilChangeIntervalKm != null && row.currentOdometer != null && row.currentOdometer >= row.lastOilChangeOdometer && row.nextOilChangeDueOdometer != null; }
+type ActivityItem = {
+  description: string;
+  href: string;
+  icon: LucideIcon;
+  id: string;
+  occurredAt: string;
+  reference: string;
+  title: string;
+  tone: "orange" | "purple" | "blue";
+};
 
-function Metric({ label, value, helper, icon: Icon }: { label: string; value: string; helper: string; icon: ComponentType<{ className?: string }> }) { return <article className="surface-card-soft card-metric-shell min-w-0"><div className="card-metric-header"><div className="min-w-0 flex-1"><p className="metric-label">{label}</p><p className="metric-value text-slate-950">{value}</p></div><div className="card-metric-icon"><Icon className="h-4.5 w-4.5" /></div></div><p className="metric-helper">{helper}</p></article>; }
-function Mini({ label, value, tone = "default" }: { label: string; value: string | number; tone?: "default" | "good" | "warn" | "danger" }) { const cls = tone === "good" ? "border-emerald-200 bg-emerald-50" : tone === "warn" ? "border-amber-200 bg-amber-50" : tone === "danger" ? "border-rose-200 bg-rose-50" : "border-slate-200 bg-slate-50"; return <div className={`rounded-xl border p-3 ${cls}`}><p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-1 text-lg font-bold text-slate-950">{typeof value === "number" ? formatNumber(value) : value}</p></div>; }
-function JobStatus({ row, ready, attention }: { row: DispatchBoardRow; ready: string; attention: string }) { return <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${row.ready ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>{row.ready ? ready : attention}</span>; }
-function ActionRow({ item }: { item: Action }) { const cls = item.tone === "danger" ? "border-l-rose-500 bg-rose-50/70" : item.tone === "warning" ? "border-l-amber-500 bg-amber-50/70" : "border-l-sky-500 bg-sky-50/70"; return <div className={`rounded-xl border border-slate-200 border-l-4 px-3.5 py-3 ${cls}`}><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex min-w-0 items-start gap-3"><div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white shadow-sm"><item.icon className="h-4.5 w-4.5 text-slate-700" /></div><div><div className="flex flex-wrap items-center gap-2"><p className="text-sm font-bold text-slate-950">{item.title}</p><span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-slate-700">{formatNumber(item.count)}</span></div><p className="mt-0.5 text-xs leading-5 text-slate-600">{item.detail}</p></div></div><a href={item.href} className="btn-secondary min-h-9 shrink-0 px-3 py-1.5 text-xs">{item.label}</a></div></div>; }
+const pad = (value: number) => String(value).padStart(2, "0");
 
-export default function DashboardPage() {
-  const { language, t } = useLanguage(); const m = t.dashboard.management;
-  const [drivers, setDrivers] = useState<Driver[]>([]), [vehicles, setVehicles] = useState<Vehicle[]>([]), [baselines, setBaselines] = useState<OilChangeBaseline[]>([]), [fuel, setFuel] = useState<FuelLogWithDriver[]>([]), [mileage, setMileage] = useState<WeeklyMileageEntry[]>([]), [bookings, setBookings] = useState<BookingDiaryEntry[]>([]), [trips, setTrips] = useState<TripJourneyWithFuel[]>([]), [insurance, setInsurance] = useState<InsuranceAssetRecord[]>([]);
-  const [maintenance, setMaintenance] = useState<MaintenanceData | null>(null), [maintenanceFailed, setMaintenanceFailed] = useState(false), [insuranceAvailable, setInsuranceAvailable] = useState(true), [tickets, setTickets] = useState(0), [selectedMonth, setSelectedMonth] = useState(() => monthKey(new Date())), [today, setToday] = useState(maintenanceToday), [loading, setLoading] = useState(true), [refreshing, setRefreshing] = useState(false), [error, setError] = useState<string | null>(null);
-  const loadMaintenance = useCallback(async () => { setToday(maintenanceToday()); try { setMaintenance(await fetchMaintenanceData()); setMaintenanceFailed(false); } catch { setMaintenance(null); setMaintenanceFailed(true); } }, []);
-  const load = useCallback(async (blocking = false) => { try { blocking ? setLoading(true) : setRefreshing(true); setError(null); const [d, v, f, w, b, tr, tk, ins] = await Promise.all([fetchDrivers(), fetchVehicles(), fetchFuelLogs(), fetchWeeklyMileage(), fetchBookingDiaryEntries(), fetchTripJourneys(), fetchSupportTicketNotificationCount(["Open", "In Progress", "Waiting"]), supabase.from("vehicle_insurance_compliance").select("*").eq("record_status", "current")]); const base = await fetchOilChangeBaselinesForVehicles(v); setDrivers(d); setVehicles(v); setFuel(f); setMileage(w); setBookings(b); setTrips(tr); setTickets(tk); setBaselines(base); if (ins.error) { setInsuranceAvailable(false); setInsurance([]); } else { setInsuranceAvailable(true); setInsurance((ins.data ?? []) as InsuranceAssetRecord[]); } } catch (e) { console.error("Dashboard load error", e); setError(t.dashboard.loadDashboardError); } finally { setLoading(false); setRefreshing(false); } }, [t.dashboard.loadDashboardError]);
-  useEffect(() => { void load(true); void loadMaintenance(); }, [load, loadMaintenance]);
-  useEffect(() => { const reload = () => { void load(false); void loadMaintenance(); }; window.addEventListener("fuel-bank:data-changed", reload); window.addEventListener("focus", reload); const timer = window.setInterval(() => setToday(maintenanceToday()), 60000); return () => { window.removeEventListener("fuel-bank:data-changed", reload); window.removeEventListener("focus", reload); window.clearInterval(timer); }; }, [load, loadMaintenance]);
-
-  const r = useMemo(() => range(selectedMonth), [selectedMonth]), pr = useMemo(() => range(previousMonth(selectedMonth)), [selectedMonth]);
-  const mf = useMemo(() => fuel.filter(x => inRange(x.date, r)), [fuel, r]), pf = useMemo(() => fuel.filter(x => inRange(x.date, pr)), [fuel, pr]);
-  const mb = useMemo(() => bookings.filter(x => inRange(x.booking_date, r)), [bookings, r]), pb = useMemo(() => bookings.filter(x => inRange(x.booking_date, pr)), [bookings, pr]);
-  const mt = useMemo(() => trips.filter(x => inRange(x.trip_date ?? x.date, r)), [trips, r]), pt = useMemo(() => trips.filter(x => inRange(x.trip_date ?? x.date, pr)), [trips, pr]);
-  const dk = dateKey(new Date()), todayBookings = useMemo(() => bookings.filter(x => x.booking_date === dk), [bookings, dk]), todayTrips = useMemo(() => trips.filter(x => x.trip_date === dk || x.date === dk), [trips, dk]);
-  const dispatchRows = useMemo(() => buildDispatchRows({ bookings: todayBookings, trips: todayTrips, drivers, vehicles }), [todayBookings, todayTrips, drivers, vehicles]), dispatch = useMemo(() => summarizeDispatchRows(dispatchRows), [dispatchRows]), nextJobs = useMemo(() => [...dispatchRows].sort((a, b) => (a.booking.pickup_time ?? "99:99").localeCompare(b.booking.pickup_time ?? "99:99")).slice(0, 5), [dispatchRows]);
-  const oilRows = useMemo(() => buildOilChangeAlertRows({ vehicles: withOilBaselines(vehicles, baselines), weeklyMileage: mileage, drivers }), [vehicles, baselines, mileage, drivers]), oilAttention = oilRows.filter(x => x.status === "not_set" || x.status === "review_required" || (reliableOil(x) && ["overdue", "urgent", "due_soon"].includes(x.status))), oilDue = oilAttention.filter(x => reliableOil(x) && ["overdue", "urgent", "due_soon"].includes(x.status)), oilMissing = oilAttention.filter(x => x.status === "not_set" || !reliableOil(x));
-  const reminders = useMemo(() => maintenance ? buildMaintenanceReminders(maintenance, today) : [], [maintenance, today]), maintenanceAttention = reminders.filter(x => x.status !== "ok"), overdue = maintenanceAttention.filter(x => x.status === "overdue" || x.status === "mileageDue"), dueSoon = maintenanceAttention.filter(x => x.status === "dueSoon"), urgent = maintenanceAttention.filter(x => x.status !== "noHistory").slice(0, 3);
-  const linked = useMemo(() => new Set(trips.flatMap(x => [x.booking_diary_id, x.booking_id]).filter(Boolean).map(String)), [trips]); const missing = mb.filter(x => !linked.has(String(x.id))), previousMissing = pb.filter(x => !linked.has(String(x.id))), reviewTrips = mt.filter(needsTripReview), previousReviewTrips = pt.filter(needsTripReview), unchecked = mf.filter(x => !x.receipt_checked), previousUnchecked = pf.filter(x => !x.receipt_checked);
-  const spend = mf.reduce((s, x) => s + num(x.total_cost), 0), previousSpend = pf.reduce((s, x) => s + num(x.total_cost), 0), litres = mf.reduce((s, x) => s + num(x.litres), 0), distance = mt.reduce((s, x) => s + (workingKm(x) ?? 0), 0), previousDistance = pt.reduce((s, x) => s + (workingKm(x) ?? 0), 0), reviewCount = reviewTrips.length + unchecked.length + missing.length, previousReviewCount = previousReviewTrips.length + previousUnchecked.length + previousMissing.length;
-  const completed = mt.filter(x => x.status === "completed"), tripFinancials = summarizeTripFinancials(mt), averageDistance = mt.length ? distance / mt.length : 0, currentInsurance = insurance.filter(x => !isInsuranceNotRequired(x) && x.days_to_insurance_expiry != null && x.days_to_insurance_expiry >= 0).length, due30 = insurance.filter(x => !isInsuranceNotRequired(x) && x.days_to_insurance_expiry != null && x.days_to_insurance_expiry >= 0 && x.days_to_insurance_expiry <= 30).length, expired = insurance.filter(x => !isInsuranceNotRequired(x) && x.days_to_insurance_expiry != null && x.days_to_insurance_expiry < 0).length, missingExpiry = insurance.filter(x => !isInsuranceNotRequired(x) && !x.insurance_expiry_date).length, insuranceNotRequired = insurance.filter(isInsuranceNotRequired).length;
-  const latest = useMemo(() => [...mf].sort((a, b) => b.date.localeCompare(a.date) || String(b.id).localeCompare(String(a.id))).slice(0, 5), [mf]);
-  const actions: Action[] = [];
-  if (maintenanceFailed || maintenanceAttention.length) actions.push({ key: "maintenance", title: m.maintenance.title, count: maintenanceAttention.length, detail: maintenanceFailed ? m.unavailable : `${overdue.length} ${m.overdue.toLowerCase()} · ${dueSoon.length} ${m.dueSoon.toLowerCase()}`, icon: Wrench, tone: overdue.length ? "danger" : "warning", href: "/maintenance", label: m.review });
-  if (oilDue.length || oilMissing.length) actions.push({ key: "oil", title: m.oilAttention, count: oilDue.length + oilMissing.length, detail: `${oilDue.length} ${m.oilDue.toLowerCase()} · ${oilMissing.length} ${m.missingBaseline.toLowerCase()}`, icon: Fuel, tone: oilDue.some(x => x.status === "overdue" || x.status === "urgent") ? "danger" : "warning", href: "/weekly-mileage", label: m.review });
-  if (insuranceAvailable && (expired || due30 || missingExpiry)) actions.push({ key: "insurance", title: m.insurance.title, count: expired + due30 + missingExpiry, detail: `${expired} ${m.expired.toLowerCase()} · ${due30} ${m.due30.toLowerCase()} · ${missingExpiry} ${m.missingExpiry.toLowerCase()}`, icon: ShieldCheck, tone: expired ? "danger" : "warning", href: "/insurance", label: m.review });
-  if (reviewTrips.length) actions.push({ key: "trips", title: m.tripReview, count: reviewTrips.length, detail: m.tripReviewDetail, icon: Route, tone: "warning", href: "/trip-journey", label: m.review });
-  if (unchecked.length) actions.push({ key: "fuel", title: m.uncheckedFuel, count: unchecked.length, detail: m.uncheckedFuelDetail, icon: ClipboardList, tone: "info", href: "/fuel-logs?review=not_checked", label: m.review });
-  if (missing.length) actions.push({ key: "missing", title: m.missingTrips, count: missing.length, detail: m.missingTripsDetail, icon: CalendarPlus, tone: "warning", href: "/booking-diary", label: m.review });
-  if (tickets) actions.push({ key: "tickets", title: m.supportTickets, count: tickets, detail: m.supportTicketsDetail, icon: Ticket, tone: "info", href: "/admin/support-tickets", label: m.review });
-  const metrics = [{ label: m.fuelSpend, value: formatCurrency(spend, language), helper: trend(spend, previousSpend, language, m.comparisonUnavailable), icon: Fuel }, { label: m.bookings, value: formatNumber(mb.length, language), helper: trend(mb.length, pb.length, language, m.comparisonUnavailable), icon: CalendarPlus }, { label: m.operationalDistance, value: `${formatNumber(distance, language, 0)} km`, helper: trend(distance, previousDistance, language, m.comparisonUnavailable), icon: Route }, { label: m.maintenanceDue, value: formatNumber(overdue.length + dueSoon.length, language), helper: maintenanceFailed ? m.unavailable : `${overdue.length} ${m.overdue.toLowerCase()} · ${dueSoon.length} ${m.dueSoon.toLowerCase()}`, icon: Wrench }, { label: m.reviewCount, value: formatNumber(reviewCount, language), helper: trend(reviewCount, previousReviewCount, language, m.comparisonUnavailable), icon: ClipboardList }];
-  const vehicleName = (id: string) => maintenance?.vehicles.find(x => x.id === id)?.vehicle_reg ?? m.unknownVehicle;
-  const reminderDetail = (x: MaintenanceReminder) => x.days != null ? (x.days < 0 ? `${formatNumber(Math.abs(x.days), language)} ${m.daysOverdue}` : `${formatNumber(x.days, language)} ${m.daysRemaining}`) : x.km != null ? (x.km < 0 ? `${formatNumber(Math.abs(x.km), language)} ${m.kmOverdue}` : `${formatNumber(x.km, language)} ${m.kmRemaining}`) : m.scheduleReview;
-
-  return <><div className="mb-6 hidden md:block"><Header title={m.title} description={m.description} /></div>{error ? <p className="mb-4 text-sm text-rose-600">{error}</p> : null}{loading ? <section className="surface-card p-5 text-sm text-slate-500">{t.common.loading}</section> : <div className="space-y-5">
-    <section className="surface-card p-4 sm:p-5"><div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><p className="eyebrow">{m.controlCentre}</p><h2 className="section-title mt-1">{m.selectedMonth}</h2><p className="mt-1 text-sm text-slate-500">{formatDate(r.start, language)} – {formatDate(r.end, language)}</p></div><div className="flex flex-wrap items-end gap-2"><label className="min-w-[190px] text-xs font-semibold text-slate-600">{m.month}<input type="month" className="form-input mt-1" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value || monthKey(new Date()))} /></label><button className="btn-secondary min-h-11" type="button" disabled={refreshing} onClick={() => { void load(false); void loadMaintenance(); }}><RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />{refreshing ? m.refreshing : m.refresh}</button></div></div></section>
-    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{metrics.map(card => <Metric key={card.label} {...card} />)}</section>
-    <section className="surface-card p-4 sm:p-5"><div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"><div><h2 className="section-title">{m.quickActions}</h2><p className="section-description">{m.quickActionsDescription}</p></div><div className="flex flex-wrap gap-2"><a className="btn-primary min-h-10 px-3" href="/booking-diary"><CalendarPlus className="h-4 w-4" />{m.addBooking}</a><a className="btn-secondary min-h-10 px-3" href="/fuel-logs"><Fuel className="h-4 w-4" />{m.addFuel}</a><a className="btn-secondary min-h-10 px-3" href="/trip-journey"><Route className="h-4 w-4" />{m.addTrip}</a><a className="btn-secondary min-h-10 px-3" href="/insurance"><Plus className="h-4 w-4" />{m.addVehicle}</a><a className="btn-secondary min-h-10 px-3" href="/reports">{m.reports}</a></div></div></section>
-    <section className="surface-card overflow-hidden"><div className="border-b border-slate-200 p-4 sm:p-5"><div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between"><div><p className="eyebrow">{m.liveOperations}</p><h2 className="section-title mt-1">{m.todayOperations}</h2><p className="section-description">{m.todayOperationsDescription}</p></div><a href="/dispatch" className="btn-secondary min-h-10">{m.openDispatch}</a></div><div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5"><Mini label={m.jobs} value={dispatch.totalJobs} /><Mini label={m.ready} value={dispatch.ready} tone="good" /><Mini label={m.unassigned} value={dispatch.unassigned} tone={dispatch.unassigned ? "warn" : "default"} /><Mini label={m.conflicts} value={dispatch.potentialConflicts} tone={dispatch.potentialConflicts ? "danger" : "default"} /><Mini label={m.missingJourneyRecords} value={dispatch.missingTrip} tone={dispatch.missingTrip ? "warn" : "default"} /></div></div>{nextJobs.length ? <div className="overflow-x-auto"><table className="data-table min-w-[800px]"><thead><tr><th>{m.time}</th><th>{m.customerJob}</th><th>{m.driver}</th><th>{m.vehicle}</th><th>{m.route}</th><th>{m.status}</th></tr></thead><tbody>{nextJobs.map(row => <tr key={row.booking.id}><td className="font-semibold">{row.booking.pickup_time?.slice(0, 5) || "—"}</td><td><p className="font-semibold text-slate-900">{row.booking.client?.name || row.booking.job_order_number || row.booking.booking_id || m.unassigned}</p>{row.booking.job_order_number && row.booking.client?.name ? <p className="text-xs text-slate-500">{row.booking.job_order_number}</p> : null}</td><td>{row.booking.driver || m.unassigned}</td><td>{row.booking.vehicle || m.unassigned}</td><td className="max-w-[260px]"><p className="truncate">{row.booking.pickup || "—"} → {row.booking.dropoff || "—"}</p></td><td><JobStatus row={row} ready={m.ready} attention={m.needsAttention} /></td></tr>)}</tbody></table></div> : <div className="p-5"><EmptyState title={m.noJobsToday} description={m.noJobsTodayDescription} /></div>}</section>
-    <section className="surface-card p-4 sm:p-5"><div className="flex items-start justify-between"><div><p className="eyebrow">{m.priorityWork}</p><h2 className="section-title mt-1">{m.actionCentre}</h2><p className="section-description">{m.actionCentreDescription}</p></div><AlertTriangle className="h-5 w-5 text-amber-500" /></div><div className="mt-4 space-y-2.5">{actions.length ? actions.map(item => <ActionRow key={item.key} item={item} />) : <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-700"><CheckCircle2 className="mr-2 inline h-4 w-4" />{m.noActions}</div>}</div></section>
-    <div className="grid gap-5 xl:grid-cols-3"><Snapshot title={m.fleetAttention} description={m.fleetAttentionDescription} link="/weekly-mileage" linkLabel={m.reviewFleet}><Mini label={m.activeVehicles} value={vehicles.filter(x => x.active !== false).length} /><Mini label={m.baselineReady} value={oilRows.filter(reliableOil).length} /><Mini label={m.assignedDrivers} value={drivers.filter(x => x.active !== false && x.assigned_vehicle_id).length} /><Mini label={m.mileageReported} value={new Set(mileage.map(x => x.vehicle_id).filter(Boolean)).size} /></Snapshot><Snapshot title={m.insurance.title} description={m.insurance.description} link="/insurance" linkLabel={m.reviewInsurance}>{insuranceAvailable ? <><Mini label={m.current} value={currentInsurance} tone="good" /><Mini label={m.due30} value={due30} tone={due30 ? "warn" : "default"} /><Mini label={m.expired} value={expired} tone={expired ? "danger" : "default"} /><Mini label={m.notRequired} value={insuranceNotRequired} /></> : <p className="col-span-2 text-sm text-slate-500">{m.unavailable}</p>}</Snapshot><section className="surface-card p-4 sm:p-5"><h2 className="section-title">{m.maintenance.title}</h2><p className="section-description">{m.maintenance.description}</p><div className="mt-4 space-y-2">{maintenanceFailed ? <p className="text-sm text-slate-500">{m.unavailable}</p> : urgent.length ? urgent.map(x => <div key={x.key} className="rounded-lg border border-slate-200 p-3"><div className="flex justify-between gap-3"><p className="truncate text-sm font-bold text-slate-900">{vehicleName(x.vehicle_id)} · {x.name}</p><span className={`text-xs font-semibold ${x.status === "dueSoon" ? "text-amber-700" : "text-rose-700"}`}>{x.status === "dueSoon" ? m.dueSoon : m.overdue}</span></div><p className="mt-1 text-xs text-slate-500">{reminderDetail(x)}</p></div>) : <p className="rounded-lg bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">{m.noMaintenanceDue}</p>}</div><a href="/maintenance" className="mt-4 inline-flex text-sm font-semibold text-violet-700">{m.reviewMaintenance} →</a></section></div>
-    <div className="grid gap-5 xl:grid-cols-[0.8fr_1.2fr]"><Snapshot title={m.tripSummary} description={m.tripSummaryDescription} link="/trip-journey" linkLabel={m.reviewTrips}><Mini label={m.completedTrips} value={completed.length} /><Mini label={m.operationalDistance} value={`${formatNumber(distance, language, 0)} km`} /><Mini label={m.missingJourneyRecords} value={missing.length} tone={missing.length ? "warn" : "good"} /><Mini label={m.tripRevenue} value={formatCurrency(tripFinancials.includedRevenue, language)} /><Mini label={m.averageDistance} value={`${formatNumber(averageDistance, language, 0)} km`} /><p className="col-span-2 text-xs leading-5 text-slate-500">{m.distanceMethodNote}</p></Snapshot><Snapshot title={m.fuelSummary} description={m.fuelSummaryDescription} link="/fuel-logs" linkLabel={m.reviewFuel}><Mini label={m.spend} value={formatCurrency(spend, language)} /><Mini label={m.litres} value={formatNumber(litres, language, 1)} /><Mini label={m.entries} value={mf.length} /><Mini label={m.unchecked} value={unchecked.length} tone={unchecked.length ? "warn" : "good"} /></Snapshot></div>
-    <section className="surface-card overflow-hidden"><div className="flex items-center justify-between border-b border-slate-200 p-4 sm:p-5"><div><h2 className="section-title">{m.latestFuel}</h2><p className="section-description">{m.latestFuelDescription}</p></div><a href="/fuel-logs" className="btn-secondary min-h-9 px-3 text-xs">{m.viewAll}</a></div>{latest.length ? <div className="overflow-x-auto"><table className="data-table min-w-[720px]"><thead><tr><th>{m.date}</th><th>{m.driver}</th><th>{m.vehicle}</th><th>{m.litres}</th><th>{m.cost}</th><th>{m.status}</th></tr></thead><tbody>{latest.map(x => <tr key={x.id}><td>{formatDate(x.date, language)}</td><td className="font-semibold text-slate-900">{x.driver || "—"}</td><td>{x.vehicle_reg || "—"}</td><td>{formatNumber(num(x.litres), language, 1)}</td><td>{formatCurrency(num(x.total_cost), language)}</td><td><span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${x.receipt_checked ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>{x.receipt_checked ? m.checked : m.notChecked}</span></td></tr>)}</tbody></table></div> : <div className="p-5"><EmptyState title={m.noFuel} description={m.noFuelDescription} /></div>}</section>
-  </div>}</>;
+function currentMonthRange() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  return {
+    start: `${year}-${pad(month + 1)}-01`,
+    end: `${year}-${pad(month + 1)}-${pad(new Date(year, month + 1, 0).getDate())}`
+  };
 }
 
-function Snapshot({ title, description, link, linkLabel, children }: { title: string; description: string; link: string; linkLabel: string; children: ReactNode }) { return <section className="surface-card p-4 sm:p-5"><h2 className="section-title">{title}</h2><p className="section-description">{description}</p><div className="mt-4 grid grid-cols-2 gap-3">{children}</div><a href={link} className="mt-4 inline-flex text-sm font-semibold text-violet-700 hover:text-violet-900">{linkLabel} →</a></section>; }
+function inRange(value: string | null | undefined, start: string, end: string) {
+  return Boolean(value && value >= start && value <= end);
+}
+
+function asNumber(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function safeTimestamp(value: string | null | undefined) {
+  const parsed = Date.parse(value ?? "");
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatActivityTime(value: string, language: "en" | "th") {
+  const parsed = new Date(value);
+  if (!Number.isFinite(parsed.getTime())) return formatDate(value.slice(0, 10), language);
+  return new Intl.DateTimeFormat(language === "th" ? "th-TH" : "en-GB", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(parsed);
+}
+
+function ShortcutCard({ shortcut, compact = false }: { shortcut: Shortcut; compact?: boolean }) {
+  const tone = shortcut.tone === "orange"
+    ? "border-orange-200/80 bg-orange-50/55 text-orange-700 group-hover:border-orange-300 group-hover:shadow-orange-100/70"
+    : shortcut.tone === "purple"
+      ? "border-violet-200/80 bg-violet-50/55 text-violet-700 group-hover:border-violet-300 group-hover:shadow-violet-100/70"
+      : "border-slate-200 bg-white text-slate-700 group-hover:border-slate-300 group-hover:shadow-slate-200/70";
+
+  return (
+    <Link
+      href={shortcut.href}
+      className={`group flex h-full items-start gap-3 rounded-2xl border p-3.5 shadow-[0_7px_20px_rgba(15,23,42,0.05)] transition duration-200 hover:-translate-y-0.5 hover:shadow-md ${compact ? "min-h-[92px]" : "min-h-[116px]"} ${tone}`}
+    >
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm">
+        <shortcut.icon className="h-5 w-5" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className={`${compact ? "text-sm" : "text-base"} block font-bold text-slate-950`}>{shortcut.label}</span>
+        <span className="mt-1 block text-xs leading-[1.15rem] text-slate-600">{shortcut.description}</span>
+      </span>
+      <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-current" />
+    </Link>
+  );
+}
+
+function SummaryCard({ icon: Icon, label, value, detail, tone }: { icon: LucideIcon; label: string; value: string; detail: string; tone: "orange" | "purple" | "blue" | "slate" }) {
+  const accent = tone === "orange" ? "bg-orange-50 text-orange-700" : tone === "purple" ? "bg-violet-50 text-violet-700" : tone === "blue" ? "bg-sky-50 text-sky-700" : "bg-slate-100 text-slate-700";
+  return (
+    <article className="h-full rounded-2xl border border-slate-300/80 bg-white p-4 shadow-[0_9px_24px_rgba(15,23,42,0.075)]">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.1em] text-slate-500">{label}</p>
+          <p className="mt-1.5 text-2xl font-black tracking-tight text-slate-950 sm:text-[1.7rem]">{value}</p>
+        </div>
+        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${accent}`}><Icon className="h-5 w-5" /></span>
+      </div>
+      <p className="mt-1.5 text-xs leading-5 text-slate-500">{detail}</p>
+    </article>
+  );
+}
+
+export default function DashboardPage() {
+  const { language, t } = useLanguage();
+  const home = t.home;
+  const { can } = useAccountAccess();
+  const isAdmin = can("admin:user_management");
+  const [bookings, setBookings] = useState<BookingDiaryEntry[]>([]);
+  const [fuelLogs, setFuelLogs] = useState<FuelLogWithDriver[]>([]);
+  const [trips, setTrips] = useState<TripJourneyWithFuel[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [maintenance, setMaintenance] = useState<MaintenanceData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      const [bookingRows, fuelRows, tripRows, vehicleRows, maintenanceResult] = await Promise.all([
+        fetchBookingDiaryEntries(),
+        fetchFuelLogs(),
+        fetchTripJourneys(),
+        fetchVehicles(),
+        fetchMaintenanceData().catch(() => null)
+      ]);
+      setBookings(bookingRows);
+      setFuelLogs(fuelRows);
+      setTrips(tripRows);
+      setVehicles(vehicleRows);
+      setMaintenance(maintenanceResult);
+    } catch (caught) {
+      console.error("Home data load failed", caught);
+      setError(home.loadError);
+    } finally {
+      setLoading(false);
+    }
+  }, [home.loadError]);
+
+  useEffect(() => {
+    void load();
+    const reload = () => void load();
+    window.addEventListener("fuel-bank:data-changed", reload);
+    return () => window.removeEventListener("fuel-bank:data-changed", reload);
+  }, [load]);
+
+  const range = useMemo(currentMonthRange, []);
+  const monthlyBookings = useMemo(() => bookings.filter((row) => inRange(row.booking_date, range.start, range.end)), [bookings, range]);
+  const monthlyFuel = useMemo(() => fuelLogs.filter((row) => inRange(row.date, range.start, range.end)), [fuelLogs, range]);
+  const tripBookingIds = useMemo(() => new Set(trips.flatMap((trip) => [trip.booking_diary_id, trip.booking_id]).filter(Boolean).map(String)), [trips]);
+  const missingTrips = monthlyBookings.filter((booking) => !tripBookingIds.has(String(booking.id))).length;
+  const uncheckedFuel = monthlyFuel.filter((row) => !row.receipt_checked).length;
+  const maintenanceReview = maintenance ? buildMaintenanceReminders(maintenance, maintenanceToday()).filter((row) => row.status !== "ok").length : 0;
+  const reviewCount = missingTrips + uncheckedFuel + maintenanceReview;
+  const fuelSpend = monthlyFuel.reduce((sum, row) => sum + asNumber(row.total_cost), 0);
+  const activeVehicles = vehicles.filter((vehicle) => vehicle.active !== false).length;
+
+  const recentActivity = useMemo<ActivityItem[]>(() => {
+    const bookingActivity = bookings.map((booking) => ({
+      id: `booking-${booking.id}`,
+      title: home.activity.booking,
+      reference: booking.job_order_number || booking.booking_id || booking.client?.name || home.activity.bookingReference,
+      description: `${booking.pickup || "—"} → ${booking.dropoff || "—"}`,
+      occurredAt: booking.created_at,
+      href: "/booking-diary",
+      icon: CalendarDays,
+      tone: "purple" as const
+    }));
+    const fuelActivity = fuelLogs.map((fuel) => ({
+      id: `fuel-${fuel.id}`,
+      title: home.activity.fuel,
+      reference: fuel.vehicle_reg || fuel.driver || home.activity.fuelReference,
+      description: `${formatNumber(asNumber(fuel.litres), language, 1)} L · ${formatCurrency(asNumber(fuel.total_cost), language)}`,
+      occurredAt: fuel.created_at,
+      href: "/fuel-logs",
+      icon: Fuel,
+      tone: "orange" as const
+    }));
+    const maintenanceActivity = (maintenance?.records ?? []).filter((record) => !record.is_deleted).map((record) => ({
+      id: `maintenance-${record.id}`,
+      title: home.activity.maintenance,
+      reference: maintenance?.vehicles.find((vehicle) => vehicle.id === record.vehicle_id)?.vehicle_reg || home.activity.vehicleReference,
+      description: record.garage || formatCurrency(record.calculated_total, language),
+      occurredAt: record.updated_at || record.created_at,
+      href: "/maintenance",
+      icon: Wrench,
+      tone: "blue" as const
+    }));
+    return [...bookingActivity, ...fuelActivity, ...maintenanceActivity]
+      .filter((item) => safeTimestamp(item.occurredAt) > 0)
+      .sort((left, right) => safeTimestamp(right.occurredAt) - safeTimestamp(left.occurredAt))
+      .slice(0, 6);
+  }, [bookings, fuelLogs, home.activity, language, maintenance]);
+
+  const primaryShortcuts: Shortcut[] = [
+    { href: "/booking-diary", label: home.shortcuts.booking, description: home.shortcuts.bookingDescription, icon: CalendarDays, tone: "orange" },
+    { href: "/dispatch", label: home.shortcuts.dispatch, description: home.shortcuts.dispatchDescription, icon: ClipboardCheck, tone: "purple" },
+    { href: "/fuel-logs", label: home.shortcuts.fuel, description: home.shortcuts.fuelDescription, icon: Fuel, tone: "orange" },
+    { href: "/trip-journey", label: home.shortcuts.trip, description: home.shortcuts.tripDescription, icon: MapPinned, tone: "purple" },
+    { href: "/drivers", label: home.shortcuts.fleet, description: home.shortcuts.fleetDescription, icon: Truck, tone: "neutral" }
+  ];
+
+  const secondaryShortcuts: Shortcut[] = [
+    { href: "/weekly-mileage", label: home.shortcuts.mileage, description: home.shortcuts.mileageDescription, icon: Gauge, tone: "purple" },
+    { href: "/maintenance", label: home.shortcuts.maintenance, description: home.shortcuts.maintenanceDescription, icon: Wrench, tone: "orange" },
+    { href: "/insurance", label: home.shortcuts.insurance, description: home.shortcuts.insuranceDescription, icon: ShieldCheck, tone: "purple" },
+    { href: "/inventory", label: home.shortcuts.inventory, description: home.shortcuts.inventoryDescription, icon: PackageSearch, tone: "orange" },
+    { href: "/reports", label: home.shortcuts.reports, description: home.shortcuts.reportsDescription, icon: FileBarChart, tone: "purple" },
+    { href: "/booking-diary", label: home.shortcuts.insights, description: home.shortcuts.insightsDescription, icon: BarChart3, tone: "neutral" },
+    ...(isAdmin ? [{ href: "/admin/users", label: home.shortcuts.admin, description: home.shortcuts.adminDescription, icon: Users, tone: "neutral" as const }] : [])
+  ];
+
+  return (
+    <div className="w-full space-y-3.5 pb-4 sm:space-y-4 lg:-mx-3 lg:w-[calc(100%+1.5rem)] xl:-mx-4 xl:w-[calc(100%+2rem)]">
+      <div className="hidden items-center justify-between rounded-2xl border border-slate-200/80 bg-white/85 px-4 py-2.5 shadow-sm backdrop-blur md:flex">
+        <div className="flex items-center gap-2 text-sm font-semibold text-slate-600"><Sparkles className="h-4 w-4 text-orange-500" />{home.welcome}</div>
+        <div className="flex items-center gap-3"><LanguageSwitcher /><AccountMenu compact /></div>
+      </div>
+
+      <section className="overflow-hidden rounded-[1.35rem] border border-orange-100/80 shadow-[0_16px_42px_rgba(42,32,72,0.11)]">
+        <div className="relative hidden aspect-[31/10] md:block">
+          <h1 className="sr-only">{home.title}</h1>
+          <p className="sr-only">{home.subtitle}</p>
+          <Image
+            src="/ees-truck.png"
+            alt={home.truckAlt}
+            fill
+            sizes="100vw"
+            className="h-full w-full object-cover object-center"
+            priority
+          />
+        </div>
+        <div className="md:hidden">
+          <div className="relative overflow-hidden bg-[linear-gradient(138deg,#fff8ee_0%,#fffdf9_58%,#f7f2ff_100%)] px-5 py-7 sm:px-8">
+            <span className="absolute -left-16 -top-20 h-48 w-48 rounded-full bg-orange-100/70 blur-3xl" aria-hidden="true" />
+            <div className="relative">
+              <Image src="/ees-logo.png" alt="EES" width={170} height={110} className="h-14 w-auto object-contain" priority />
+              <h1 className="mt-5 text-3xl font-black tracking-[-0.035em]">
+                <span className="text-slate-950">{home.titlePrimary}</span>{" "}
+                <span className="text-orange-600">{home.titleAccent}</span>
+              </h1>
+              <p className="mt-3 max-w-md text-sm leading-6 text-slate-600">{home.subtitle}</p>
+            </div>
+          </div>
+          <div className="relative min-h-[220px] overflow-hidden bg-[#f7d8a8] sm:min-h-[280px]">
+            <Image src="/ees-truck.png" alt={home.truckAlt} fill sizes="100vw" className="object-cover object-right" priority />
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="quick-actions-title">
+        <div className="mb-2.5 flex items-center justify-between"><h2 id="quick-actions-title" className="text-sm font-extrabold uppercase tracking-[0.12em] text-slate-700">{home.quickActions}</h2></div>
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
+          <QuickAction href="/booking-diary" label={home.actions.booking} icon={CalendarDays} primary />
+          <QuickAction href="/fuel-logs" label={home.actions.fuel} icon={Fuel} />
+          <QuickAction href="/trip-journey" label={home.actions.trip} icon={Route} />
+          <QuickAction href="/dispatch" label={home.actions.dispatch} icon={ClipboardCheck} />
+          <QuickAction href="/insurance" label={home.actions.vehicle} icon={Plus} neutral />
+          <QuickAction href="/reports" label={home.actions.reports} icon={FileBarChart} neutral />
+        </div>
+      </section>
+
+      {error ? <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
+
+      <section className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
+        <SummaryCard icon={CalendarDays} label={home.summary.bookings} value={loading ? "—" : formatNumber(monthlyBookings.length, language)} detail={home.summary.bookingsDetail} tone="purple" />
+        <SummaryCard icon={Fuel} label={home.summary.fuelSpend} value={loading ? "—" : formatCurrency(fuelSpend, language)} detail={home.summary.fuelDetail} tone="orange" />
+        <SummaryCard icon={Truck} label={home.summary.fleet} value={loading ? "—" : formatNumber(activeVehicles, language)} detail={home.summary.fleetDetail} tone="blue" />
+        <SummaryCard icon={Activity} label={home.summary.review} value={loading ? "—" : formatNumber(reviewCount, language)} detail={home.summary.reviewDetail} tone="slate" />
+      </section>
+
+      <section aria-labelledby="operations-shortcuts-title" className="rounded-[1.35rem] border border-slate-200/90 bg-[#fbfafc] p-4 shadow-sm">
+        <div className="mb-3.5">
+          <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-orange-600">{home.toolsEyebrow}</p>
+          <h2 id="operations-shortcuts-title" className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">{home.operationsShortcuts}</h2>
+          <p className="mt-1 text-sm text-slate-500">{home.operationsShortcutsDescription}</p>
+        </div>
+        <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-5">{primaryShortcuts.map((shortcut) => <ShortcutCard key={shortcut.href} shortcut={shortcut} />)}</div>
+        <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{secondaryShortcuts.map((shortcut) => <ShortcutCard key={`${shortcut.href}-${shortcut.label}`} shortcut={shortcut} compact />)}</div>
+      </section>
+
+      <section className="overflow-hidden rounded-[1.35rem] border border-slate-200 bg-white shadow-[0_12px_34px_rgba(15,23,42,0.055)]">
+        <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-4 py-3 sm:px-5">
+          <div><h2 className="text-lg font-extrabold text-slate-950">{home.recentActivity}</h2><p className="mt-1 text-xs text-slate-500">{home.recentActivityDescription}</p></div>
+          <Link href="/reports" className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold text-violet-700 transition hover:bg-violet-50 hover:text-violet-900">
+            <Boxes className="h-4 w-4" />{home.viewAllActivity}<ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+        {recentActivity.length ? (
+          <div className="divide-y divide-slate-100">
+            {recentActivity.map((item) => {
+              const colour = item.tone === "orange" ? "bg-orange-50 text-orange-700" : item.tone === "purple" ? "bg-violet-50 text-violet-700" : "bg-sky-50 text-sky-700";
+              return (
+                <Link key={item.id} href={item.href} className="group flex items-start gap-2.5 px-4 py-2 transition hover:bg-slate-50 sm:items-center sm:px-5">
+                  <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${colour}`}><item.icon className="h-3.5 w-3.5" /></span>
+                  <span className="min-w-0 flex-1"><span className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2"><span className="text-sm font-bold text-slate-900">{item.title}</span><span className="truncate text-xs font-semibold text-slate-500">{item.reference}</span></span><span className="mt-0.5 block truncate text-xs text-slate-500">{item.description}</span></span>
+                  <span className="shrink-0 text-right text-[11px] font-medium tabular-nums text-slate-400 sm:w-28">{formatActivityTime(item.occurredAt, language)}</span>
+                  <ArrowRight className="hidden h-4 w-4 shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-violet-600 sm:block" />
+                </Link>
+              );
+            })}
+          </div>
+        ) : <div className="px-6 py-8 text-center text-sm text-slate-500">{loading ? t.common.loading : home.noRecentActivity}</div>}
+      </section>
+    </div>
+  );
+}
+
+function QuickAction({ href, label, icon: Icon, primary = false, neutral = false }: { href: string; label: string; icon: LucideIcon; primary?: boolean; neutral?: boolean }) {
+  const style = primary
+    ? "border-orange-600 bg-orange-600 text-white shadow-orange-200 hover:bg-orange-700"
+    : neutral
+      ? "border-slate-200 bg-white text-slate-800 shadow-slate-100 hover:border-slate-300"
+      : "border-violet-200 bg-violet-50 text-violet-800 shadow-violet-100 hover:border-violet-300 hover:bg-violet-100";
+  return <Link href={href} className={`flex h-full min-h-11 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-center text-sm font-bold shadow-sm transition duration-200 hover:-translate-y-px hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 ${style}`}><Icon className="h-4 w-4 shrink-0" />{label}</Link>;
+}

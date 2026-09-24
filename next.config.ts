@@ -49,6 +49,12 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_SUPABASE_URL: supabaseUrl,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: supabaseAnonKey,
     NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: publicGoogleMapsApiKey
+  },
+  async rewrites() {
+    return [
+      { source: "/ees-logo.png", destination: "/ees-logo.png.png" },
+      { source: "/ees-truck.jpg", destination: "/ees-truck.jpg.jpeg" }
+    ];
   }
 };
 
