@@ -15,7 +15,6 @@ import {
   Plus,
   Route,
   ShieldCheck,
-  Sparkles,
   Truck,
   Users,
   Wrench,
@@ -24,8 +23,6 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AccountMenu } from "@/components/account-menu";
-import { LanguageSwitcher } from "@/components/language-switcher";
 import {
   fetchBookingDiaryEntries,
   fetchFuelLogs,
@@ -252,11 +249,6 @@ export default function DashboardPage() {
 
   return (
     <div className="w-full space-y-3.5 pb-4 sm:space-y-4 lg:-mx-3 lg:w-[calc(100%+1.5rem)] xl:-mx-4 xl:w-[calc(100%+2rem)]">
-      <div className="hidden items-center justify-between rounded-2xl border border-slate-200/80 bg-white/85 px-4 py-2.5 shadow-sm backdrop-blur md:flex">
-        <div className="flex items-center gap-2 text-sm font-semibold text-slate-600"><Sparkles className="h-4 w-4 text-orange-500" />{home.welcome}</div>
-        <div className="flex items-center gap-3"><LanguageSwitcher /><AccountMenu compact /></div>
-      </div>
-
       <section className="overflow-hidden rounded-[1.35rem] border border-orange-100/80 shadow-[0_16px_42px_rgba(42,32,72,0.11)]">
         <div className="relative hidden aspect-[31/10] md:block">
           <h1 className="sr-only">{home.title}</h1>

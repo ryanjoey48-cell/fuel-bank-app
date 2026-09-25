@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { MobileAppBar } from "@/components/mobile-app-bar";
-import { Sidebar } from "@/components/sidebar";
 import { SetupNotice } from "@/components/setup-notice";
+import { TopNavigation } from "@/components/top-navigation";
 import { AdminFetchError } from "@/lib/account-management";
 import { useLanguage } from "@/lib/language-provider";
 import { supabase } from "@/lib/supabase";
@@ -88,7 +87,6 @@ function DashboardShell({
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [serviceUnavailable, setServiceUnavailable] = useState<ServiceUnavailableState | null>(null);
   const [retryCount, setRetryCount] = useState(0);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { t } = useLanguage();
   const { refresh } = useAccountAccess();
 
@@ -184,32 +182,7 @@ function DashboardShell({
   useEffect(() => {
     document.body.style.overflow = "";
     document.documentElement.style.overflow = "";
-    setMobileMenuOpen(false);
   }, [pathname]);
-
-  useEffect(() => {
-    if (!mobileMenuOpen) {
-      document.body.style.overflow = "";
-      document.documentElement.style.overflow = "";
-      return;
-    }
-
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setMobileMenuOpen(false);
-      }
-    };
-
-    document.body.style.overflow = "hidden";
-    document.documentElement.style.overflow = "hidden";
-    window.addEventListener("keydown", closeOnEscape);
-
-    return () => {
-      document.body.style.overflow = "";
-      document.documentElement.style.overflow = "";
-      window.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [mobileMenuOpen]);
 
   if (checkingAuth) {
     return (
@@ -233,13 +206,9 @@ function DashboardShell({
 
   return (
     <div className="min-h-[100dvh]">
-      <Sidebar open={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} />
-      <MobileAppBar
-        open={mobileMenuOpen}
-        onToggle={() => setMobileMenuOpen((current) => !current)}
-      />
-      <div className="dashboard-content-frame">
-        <main className="dashboard-mobile-shell mx-auto flex min-h-[100dvh] w-full max-w-[1440px] max-w-full flex-col gap-3.5 pb-5 sm:gap-4 sm:px-5 sm:pt-20 sm:pb-6 md:px-6 md:pt-8 md:pb-7 lg:px-8">
+      <TopNavigation />
+      <div className="dashboard-content-frame !pl-0">
+        <main className="dashboard-mobile-shell mx-auto flex min-h-[calc(100dvh-68px)] w-full max-w-full flex-col gap-3.5 px-4 pb-5 !pt-4 sm:gap-4 sm:px-5 sm:pb-6 md:px-6 md:pb-7 lg:px-8">
           <SetupNotice />
           {children}
         </main>

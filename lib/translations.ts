@@ -5,6 +5,16 @@ import { maintenanceTranslations } from "./maintenance-translations";
 const homeTranslations = {
   en: {
     navigationHome: "Home",
+    topNavigation: {
+      home: "Home",
+      operations: "Operations",
+      fleet: "Fleet",
+      fuel: "Fuel",
+      reports: "Reports",
+      admin: "Admin",
+      openMenu: "Open navigation menu",
+      closeMenu: "Close navigation menu"
+    },
     welcome: "Welcome to EES Operations",
     company: "Expert Express Sender Co., Ltd",
     title: "Operations Home",
@@ -77,6 +87,16 @@ const homeTranslations = {
   },
   th: {
     navigationHome: "หน้าหลัก",
+    topNavigation: {
+      home: "หน้าหลัก",
+      operations: "งานปฏิบัติการ",
+      fleet: "กองรถ",
+      fuel: "น้ำมัน",
+      reports: "รายงาน",
+      admin: "ผู้ดูแลระบบ",
+      openMenu: "เปิดเมนูนำทาง",
+      closeMenu: "ปิดเมนูนำทาง"
+    },
     welcome: "ยินดีต้อนรับสู่ระบบปฏิบัติการ EES",
     company: "บริษัท เอ็กซ์เปอร์ต เอ็กซ์เพรส เซ็นเดอร์ จำกัด",
     title: "หน้าหลักการปฏิบัติงาน",
