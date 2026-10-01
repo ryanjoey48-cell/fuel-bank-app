@@ -67,8 +67,9 @@ export async function GET(request: Request) {
     }
 
     const accessByUserId = new Map((accessRows ?? []).map((row) => [row.user_id, row as AccessRow]));
-    const users = data.users.map((account) => {
+    const users = data.users.flatMap((account) => {
       const row = accessByUserId.get(account.id);
+      if (!row) return [];
       const metadata = account.user_metadata as Record<string, unknown> | undefined;
       const displayName =
         row?.display_name?.trim() ||
@@ -79,7 +80,7 @@ export async function GET(request: Request) {
       const role = row ? normalizeAccountRole(row.role) : "office_staff";
       const status = row ? normalizeAccountStatus(row.status) : "active";
 
-      return {
+      return [{
         userId: account.id,
         email: account.email ?? "",
         displayName,
@@ -91,7 +92,7 @@ export async function GET(request: Request) {
         lastSignInAt: account.last_sign_in_at ?? null,
         isCurrentUser: account.id === currentUser.id,
         history: histories.get(account.id) ?? []
-      } satisfies ServerManagedAccount;
+      } satisfies ServerManagedAccount];
     });
 
     const visibleUsers = users.filter((account) => matchesFilters(account, filters));

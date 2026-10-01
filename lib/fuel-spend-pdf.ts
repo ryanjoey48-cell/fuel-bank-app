@@ -108,7 +108,7 @@ async function loadFuelSpendPdfLogo(): Promise<HTMLImageElement | null> {
       window.clearTimeout(timeout);
       resolve(null);
     };
-    image.src = "/logo.png";
+    image.src = "/ees-logo.png";
   });
 }
 

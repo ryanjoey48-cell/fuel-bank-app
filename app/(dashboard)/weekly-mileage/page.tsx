@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
-import { Header } from "@/components/header";
 import {
   deleteWeeklyMileage,
   fetchDrivers,
@@ -431,7 +430,7 @@ async function loadCanvasImage(dataUrl: string) {
 async function loadOilServicePdfLogo(): Promise<OilServicePdfLogo> {
   if (typeof document === "undefined") return { dataUrl: null };
   try {
-    const response = await fetch("/logo.png");
+    const response = await fetch("/ees-logo.png");
     if (!response.ok) return { dataUrl: null };
     const blob = await response.blob();
     const imageUrl = URL.createObjectURL(blob);
@@ -1380,6 +1379,9 @@ export default function WeeklyMileagePage() {
   const [generatingWeeklyMileagePdf, setGeneratingWeeklyMileagePdf] = useState(false);
   const [generatingWeeklyDistanceHistoryPdf, setGeneratingWeeklyDistanceHistoryPdf] = useState(false);
   const [weeklyDistanceHistoryOpen, setWeeklyDistanceHistoryOpen] = useState(true);
+  const [pageMode, setPageMode] = useState<"mileage" | "results" | "oil">("mileage");
+  const [mileageModalOpen, setMileageModalOpen] = useState(false);
+  const [expandedOilRows, setExpandedOilRows] = useState<Record<string, boolean>>({});
   const [weeklyDistanceHistoryFilter, setWeeklyDistanceHistoryFilter] = useState<WeeklyDistanceHistoryFilter>("last12");
   const [weeklyDistanceHistoryFrom, setWeeklyDistanceHistoryFrom] = useState("");
   const [weeklyDistanceHistoryTo, setWeeklyDistanceHistoryTo] = useState("");
@@ -1595,6 +1597,15 @@ export default function WeeklyMileagePage() {
     () => buildWeeklyDistanceHistorySummary(filteredWeeklyDistanceHistoryRows),
     [filteredWeeklyDistanceHistoryRows]
   );
+  const rankedWeeklyDistanceHistoryRows = useMemo(
+    () =>
+      [...filteredWeeklyDistanceHistoryRows].sort((a, b) => {
+        const distanceDiff = Number(b.weeklyDistance || 0) - Number(a.weeklyDistance || 0);
+        if (distanceDiff !== 0) return distanceDiff;
+        return String(b.weekEnding).localeCompare(String(a.weekEnding));
+      }),
+    [filteredWeeklyDistanceHistoryRows]
+  );
   const driverComparisonRows = useMemo(
     () => buildDriverWeeklyComparisons(sortedEntries),
     [sortedEntries]
@@ -1720,6 +1731,95 @@ export default function WeeklyMileagePage() {
     () => sortedEntries.filter((entry) => entry.week_ending === selectedWeekValue),
     [selectedWeekValue, sortedEntries]
   );
+  const selectedWeekVehicleKeys = useMemo(
+    () => new Set(selectedWeekEntries.map((entry) => normalizeReg(entry.vehicle_reg)).filter(Boolean)),
+    [selectedWeekEntries]
+  );
+
+  const missingVehiclesForSelectedWeek = useMemo(
+    () =>
+      activeVehicles
+        .map((vehicle) => {
+          const registration = String(vehicle.vehicle_reg || vehicle.registration || "").trim();
+          if (!registration || selectedWeekVehicleKeys.has(normalizeReg(registration))) return null;
+
+          const assignedDriver =
+            drivers.find((driver) => {
+              if (driver.active === false) return false;
+              if (vehicle.id && driver.assigned_vehicle_id) {
+                return String(driver.assigned_vehicle_id) === String(vehicle.id);
+              }
+              return normalizeReg(driver.vehicle_reg) === normalizeReg(registration);
+            }) ?? null;
+
+          return { vehicle, registration, driver: assignedDriver };
+        })
+        .filter(Boolean) as Array<{ vehicle: Vehicle; registration: string; driver: Driver | null }>,
+    [activeVehicles, drivers, selectedWeekVehicleKeys]
+  );
+
+  const selectedWeekOperationalRows = useMemo(() => {
+    const result = new Map<
+      string,
+      { previousEntry: WeeklyMileageEntry | null; weeklyKm: number | null; status: "ready" | "baseline" | "review" | "no_previous" }
+    >();
+
+    for (const entry of selectedWeekEntries) {
+      const vehicleKey = normalizeReg(entry.vehicle_reg);
+      const previousEntry =
+        sortedEntries.find(
+          (candidate) =>
+            candidate.week_ending < entry.week_ending &&
+            normalizeReg(candidate.vehicle_reg) === vehicleKey
+        ) ?? null;
+
+      const currentMileage = Number(entry.mileage);
+      const previousMileage = previousEntry?.mileage == null ? null : Number(previousEntry.mileage);
+      const weeklyKm =
+        entry.is_odometer_baseline ||
+        previousMileage == null ||
+        !Number.isFinite(currentMileage) ||
+        !Number.isFinite(previousMileage)
+          ? null
+          : currentMileage - previousMileage;
+
+      result.set(String(entry.id), {
+        previousEntry,
+        weeklyKm,
+        status: entry.is_odometer_baseline
+          ? "baseline"
+          : previousEntry == null
+            ? "no_previous"
+            : weeklyKm != null && weeklyKm < 0
+              ? "review"
+              : "ready"
+      });
+    }
+
+    return result;
+  }, [selectedWeekEntries, sortedEntries]);
+
+  const openMileageEntry = (weekEnding = selectedWeekValue) => {
+    setForm(createInitialForm(weekEnding));
+    setError(null);
+    setSuccessMessage(null);
+    setMileageModalOpen(true);
+  };
+
+  const openMileageEdit = (entry: WeeklyMileageEntry) => {
+    setForm({
+      id: String(entry.id),
+      week_ending: entry.week_ending,
+      driver_id: String(entry.driver_id),
+      vehicle_reg: entry.vehicle_reg,
+      mileage: String(entry.mileage),
+      is_odometer_baseline: entry.is_odometer_baseline === true,
+      odometer_note: entry.odometer_note ?? ""
+    });
+    setError(null);
+    setSuccessMessage(null);
+    setMileageModalOpen(true);
+  };
   const selectedWeekSummary =
     weeklySummaryRows.find((row) => row.weekEnding === selectedWeekValue) ?? weeklySummaryRows[0] ?? null;
   const selectedWeekHistoryRow = weeklyDistanceHistoryRows.find((row) => row.weekEnding === selectedWeekValue) ?? null;
@@ -1727,12 +1827,24 @@ export default function WeeklyMileagePage() {
     !selectedWeekSummary ||
     !selectedWeekHistoryRow ||
     selectedWeekHistoryRow.weeklyDistance === selectedWeekSummary.weeklyDistance;
-  const selectedWeekTotalPages = Math.max(1, Math.ceil(selectedWeekEntries.length / PAGE_SIZE));
+  const selectedWeekEntriesRanked = useMemo(
+    () =>
+      [...selectedWeekEntries].sort((a, b) => {
+        const aDistance = selectedWeekOperationalRows.get(String(a.id))?.weeklyKm;
+        const bDistance = selectedWeekOperationalRows.get(String(b.id))?.weeklyKm;
+        const aValue = aDistance == null || !Number.isFinite(aDistance) ? Number.NEGATIVE_INFINITY : aDistance;
+        const bValue = bDistance == null || !Number.isFinite(bDistance) ? Number.NEGATIVE_INFINITY : bDistance;
+        if (bValue !== aValue) return bValue - aValue;
+        return String(a.vehicle_reg || "").localeCompare(String(b.vehicle_reg || ""));
+      }),
+    [selectedWeekEntries, selectedWeekOperationalRows]
+  );
+  const selectedWeekTotalPages = Math.max(1, Math.ceil(selectedWeekEntriesRanked.length / PAGE_SIZE));
   const pagedEntries = useMemo(() => {
     const safePage = Math.min(tablePage, selectedWeekTotalPages);
     const startIndex = (safePage - 1) * PAGE_SIZE;
-    return selectedWeekEntries.slice(startIndex, startIndex + PAGE_SIZE);
-  }, [selectedWeekEntries, selectedWeekTotalPages, tablePage]);
+    return selectedWeekEntriesRanked.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [selectedWeekEntriesRanked, selectedWeekTotalPages, tablePage]);
   const selectedWeekIndex = availableWeeks.findIndex((week) => week === selectedWeekValue);
   const previousWeekValue =
     selectedWeekIndex >= 0 && selectedWeekIndex < availableWeeks.length - 1
@@ -2068,6 +2180,9 @@ export default function WeeklyMileagePage() {
               .replace("{driver}", savedEntry.driver || selectedDriver?.name || "")
               .replace("{date}", formatDate(savedEntry.week_ending ?? form.week_ending, language))
       );
+      if (!shouldAddNext || isEditing) {
+        setMileageModalOpen(false);
+      }
       await loadData();
     } catch (err) {
       console.error("Weekly mileage save error:", err);
@@ -3248,9 +3363,54 @@ export default function WeeklyMileagePage() {
 
   return (
     <>
-      <div className="mb-6 hidden md:block">
-        <Header title={t.weeklyMileage.title} description={t.weeklyMileage.description} />
-      </div>
+      <section className="surface-card mb-5 p-5 sm:p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-violet-600">
+              EXPERT EXPRESS SENDER CO., LTD.
+            </p>
+            <h1 className="mt-1 text-2xl font-black text-slate-950">{t.weeklyMileage.title}</h1>
+            <p className="mt-1 max-w-3xl text-sm text-slate-500">
+              {language === "th"
+                ? "บันทึกเลขไมล์รายสัปดาห์ ดูผลระยะทาง และจัดการรอบเปลี่ยนน้ำมันจากข้อมูลเดียวกัน"
+                : "Record weekly odometers, review distance results and manage oil-service status from the same mileage data."}
+            </p>
+          </div>
+
+          <div className="inline-flex w-full rounded-xl border border-violet-100 bg-violet-50/60 p-1 sm:w-auto">
+            <button
+              type="button"
+              onClick={() => setPageMode("mileage")}
+              className={`flex-1 rounded-lg px-4 py-2 text-sm font-black transition sm:flex-none ${
+                pageMode === "mileage" ? "bg-white text-violet-800 shadow-sm" : "text-slate-500 hover:text-violet-700"
+              }`}
+            >
+              {language === "th" ? "เลขไมล์รายสัปดาห์" : "Weekly Mileage"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPageMode("results");
+                setWeeklyDistanceHistoryOpen(true);
+              }}
+              className={`flex-1 rounded-lg px-4 py-2 text-sm font-black transition sm:flex-none ${
+                pageMode === "results" ? "bg-white text-violet-800 shadow-sm" : "text-slate-500 hover:text-violet-700"
+              }`}
+            >
+              {language === "th" ? "ผลระยะทาง" : "Distance Results"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setPageMode("oil")}
+              className={`flex-1 rounded-lg px-4 py-2 text-sm font-black transition sm:flex-none ${
+                pageMode === "oil" ? "bg-white text-violet-800 shadow-sm" : "text-slate-500 hover:text-violet-700"
+              }`}
+            >
+              {language === "th" ? "บริการน้ำมันเครื่อง" : "Oil Service"}
+            </button>
+          </div>
+        </div>
+      </section>
 
       {loadError ? (
         <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -3301,11 +3461,15 @@ export default function WeeklyMileagePage() {
         </section>
       ) : null}
 
-      <section className="surface-card mb-4 p-4 sm:p-5">
+      {pageMode === "mileage" ? (
+        <>
+<section className="surface-card mb-4 p-4 sm:p-5">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h3 className="section-title">{t.weeklyMileage.reportingWeekSummary}</h3>
-            <p className="section-subtitle">{t.weeklyMileage.reportingWeekSummaryDescription}</p>
+            <p className="section-subtitle">{language === "th"
+              ? "ดูความครบถ้วนของสัปดาห์และเพิ่มเลขไมล์ที่ยังขาด"
+              : "Check this week's completion and add any missing odometer readings."}</p>
           </div>
           <div className="flex flex-col gap-2 sm:items-end">
             {selectedWeekSummary ? (
@@ -3314,18 +3478,17 @@ export default function WeeklyMileagePage() {
             <div className="flex flex-col gap-2 sm:flex-row">
               <button
                 type="button"
-                onClick={() => setWeeklyDistanceHistoryOpen((current) => !current)}
-                disabled={loading || !weeklyDistanceHistoryRows.length}
-                className="btn-secondary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                onClick={() => openMileageEntry()}
+                className="btn-primary w-full gap-2 sm:w-auto"
               >
-                <History className="h-4 w-4" />
-                {weeklyDistanceHistoryCopy.open}
+                <Plus className="h-4 w-4" />
+                {language === "th" ? "เพิ่มเลขไมล์" : "Add Mileage"}
               </button>
               <button
                 type="button"
                 onClick={() => void downloadWeeklyMileagePdf()}
                 disabled={generatingWeeklyMileagePdf || loading || !selectedWeekValue}
-                className="btn-primary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                className="btn-secondary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
               >
                 <Download className="h-4 w-4" />
                 {generatingWeeklyMileagePdf ? weeklyMileagePdfCopy.generating : weeklyMileagePdfCopy.download}
@@ -3341,88 +3504,138 @@ export default function WeeklyMileagePage() {
         ) : !selectedWeekSummary ? (
           <EmptyState title={t.weeklyMileage.noDataTitle} description={t.weeklyMileage.noDataDescription} />
         ) : (
-          <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-4">
-            <div className="subtle-panel p-4 sm:col-span-3 xl:col-span-1">
+          <>
+          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="subtle-panel p-3.5">
               <p className="metric-label">{t.weeklyMileage.weeklyDistanceCovered}</p>
-              <p className="mt-2 text-[2rem] font-semibold tracking-[-0.05em] text-slate-950">
+              <p className="mt-2 text-[1.75rem] font-semibold tracking-[-0.05em] text-slate-950">
                 {selectedWeekSummary.comparableVehicles > 0
                   ? `${formatNumber(selectedWeekSummary.weeklyDistance, language)} KM`
                   : t.weeklyMileage.weeklyDistanceCoveredUnavailable}
               </p>
-              <p className={`mt-1 text-sm font-semibold ${changeToneClass(selectedWeekSummary.weekOnWeekChangeKm)}`}>
-                {formatWeekChangeLabel(selectedWeekSummary)}
+              <p className="mt-1 text-xs font-semibold text-slate-500">
+                {language === "th" ? "ระยะทางรวมจากเลขไมล์ที่เปรียบเทียบได้" : "Total from comparable odometer readings"}
               </p>
-              {selectedWeekSummary.weekOnWeekChangeKm != null ? (
-                <p className="mt-0.5 text-xs font-semibold text-slate-500">{formatSignedKm(selectedWeekSummary.weekOnWeekChangeKm)}</p>
-              ) : null}
             </div>
-            <div className="subtle-panel p-4">
-              <p className="metric-label">{t.weeklyMileage.highestDistanceVehicleThisWeek}</p>
-              {selectedWeekSummary.highestDistanceVehicle ? (
-                <>
-                  <p className="mt-2 text-[1.35rem] font-semibold tracking-normal text-slate-950">
-                    {selectedWeekSummary.highestDistanceVehicle.vehicleReg}
-                  </p>
-                  <p className="text-sm font-bold text-sky-700">{formatKmValue(selectedWeekSummary.highestDistanceVehicle.distance)} KM</p>
-                  {selectedWeekSummary.highestDistanceVehicle.driverName ? (
-                    <p className="mt-1 text-xs font-semibold text-slate-500">{selectedWeekSummary.highestDistanceVehicle.driverName}</p>
-                  ) : null}
-                </>
-              ) : (
-                <p className="mt-2 text-lg font-semibold text-slate-500">-</p>
-              )}
-            </div>
-            <div className="subtle-panel p-4">
-              <p className="metric-label">{t.weeklyMileage.lowestDistanceVehicleThisWeek}</p>
-              {selectedWeekSummary.lowestDistanceVehicle ? (
-                <>
-                  <p className="mt-2 text-[1.35rem] font-semibold tracking-normal text-slate-950">
-                    {selectedWeekSummary.lowestDistanceVehicle.vehicleReg}
-                  </p>
-                  <p className="text-sm font-bold text-sky-700">{formatKmValue(selectedWeekSummary.lowestDistanceVehicle.distance)} KM</p>
-                  {selectedWeekSummary.lowestDistanceVehicle.distance === 0 ? (
-                    <p className="mt-1 text-xs font-semibold text-amber-700">0 KM</p>
-                  ) : null}
-                  {selectedWeekSummary.lowestDistanceVehicle.driverName ? (
-                    <p className="mt-1 text-xs font-semibold text-slate-500">{selectedWeekSummary.lowestDistanceVehicle.driverName}</p>
-                  ) : null}
-                </>
-              ) : (
-                <p className="mt-2 text-lg font-semibold text-slate-500">-</p>
-              )}
-            </div>
-            <div className="subtle-panel p-4">
-              <p className="metric-label">{weeklyDistanceHistoryCopy.validVehicleEntries}</p>
-              <p className="mt-2 text-[1.45rem] font-semibold tracking-normal text-slate-950">
+
+            <div className="subtle-panel p-3.5">
+              <p className="metric-label">{language === "th" ? "รถที่อัปเดตแล้ว" : "Vehicles Entered"}</p>
+              <p className="mt-2 text-[1.55rem] font-semibold text-slate-950">
                 {formatCompleteness(selectedWeekSummary.validVehicleEntries, selectedWeekSummary.expectedVehicleEntries)}
               </p>
-              <p className={`mt-1 text-sm font-semibold ${selectedWeekSummary.missingVehicleCount ? "text-amber-700" : "text-emerald-700"}`}>
-                {selectedWeekSummary.missingVehicleCount
-                  ? `${formatNumber(selectedWeekSummary.missingVehicleCount, language, 0)} ${weeklyDistanceHistoryCopy.missing}`
-                  : weeklyDistanceHistoryCopy.complete}
+              <p className="mt-1 text-xs font-semibold text-emerald-700">
+                {formatNumber(selectedWeekEntries.length, language, 0)} {language === "th" ? "รายการในสัปดาห์นี้" : "entries this week"}
               </p>
-              {selectedWeekSummary.reviewVehicleCount ? (
-                <p className="mt-0.5 text-xs font-semibold text-rose-700">
-                  {formatNumber(selectedWeekSummary.reviewVehicleCount, language, 0)} {weeklyDistanceHistoryCopy.excluded}
-                </p>
-              ) : null}
+            </div>
+
+            <div className={`subtle-panel p-3.5 ${missingVehiclesForSelectedWeek.length ? "border-amber-200 bg-amber-50/60" : ""}`}>
+              <p className="metric-label">{language === "th" ? "รายการที่ยังขาด" : "Missing Entries"}</p>
+              <p className={`mt-2 text-[1.55rem] font-semibold ${missingVehiclesForSelectedWeek.length ? "text-amber-800" : "text-emerald-700"}`}>
+                {formatNumber(missingVehiclesForSelectedWeek.length, language, 0)}
+              </p>
+              <p className="mt-1 text-xs font-semibold text-slate-500">
+                {missingVehiclesForSelectedWeek.length
+                  ? (language === "th" ? "ยังต้องเพิ่มเลขไมล์" : "Still needs a weekly odometer")
+                  : (language === "th" ? "ครบทุกคัน" : "All vehicles complete")}
+              </p>
+            </div>
+
+            <div className="subtle-panel p-3.5">
+              <p className="metric-label">{language === "th" ? "เปลี่ยนจากสัปดาห์ก่อน" : "Change vs Previous Week"}</p>
+              <p className={`mt-2 text-[1.55rem] font-semibold ${changeToneClass(selectedWeekSummary.weekOnWeekChangeKm)}`}>
+                {formatWeekChangeLabel(selectedWeekSummary)}
+              </p>
+              <p className="mt-1 text-xs font-semibold text-slate-500">
+                {selectedWeekSummary.weekOnWeekChangeKm != null
+                  ? formatSignedKm(selectedWeekSummary.weekOnWeekChangeKm)
+                  : (language === "th" ? "ยังไม่มีข้อมูลเปรียบเทียบ" : "No previous-week comparison")}
+              </p>
             </div>
           </div>
+
+          {missingVehiclesForSelectedWeek.length ? (
+            <div className="mt-2.5 flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50/70 px-3.5 py-2.5 text-sm">
+              <span className="inline-flex h-2 w-2 rounded-full bg-amber-500" />
+              <span className="font-black text-amber-950">
+                {language === "th" ? "ยังขาด:" : "Missing:"}
+              </span>
+              {missingVehiclesForSelectedWeek.slice(0, 8).map(({ vehicle, registration, driver }) => (
+                <button
+                  key={String(vehicle.id || registration)}
+                  type="button"
+                  onClick={() => {
+                    setForm({
+                      ...createInitialForm(selectedWeekValue),
+                      vehicle_reg: registration,
+                      driver_id: driver ? String(driver.id) : ""
+                    });
+                    setMileageModalOpen(true);
+                  }}
+                  className="rounded-full border border-amber-300 bg-white px-2.5 py-1 text-xs font-black text-amber-900 transition hover:bg-amber-100"
+                >
+                  {registration}{driver?.name ? ` · ${driver.name}` : ""}
+                </button>
+              ))}
+              {missingVehiclesForSelectedWeek.length > 8 ? (
+                <span className="text-xs font-bold text-amber-800">+{missingVehiclesForSelectedWeek.length - 8}</span>
+              ) : null}
+            </div>
+          ) : null}
+          </>
         )}
       </section>
+        </>
+      ) : null}
 
-      {weeklyDistanceHistoryOpen ? (
-        <section id="weekly-distance-history" className="surface-card mb-4 p-4 sm:p-5">
-          <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+
+      {pageMode === "results" ? (
+        <>
+
+
+      {selectedWeekSummary ? (
+        <section className="mb-3 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <p className="metric-label">{language === "th" ? "ระยะทางสัปดาห์ที่เลือก" : "Selected Week Distance"}</p>
+            <p className="mt-2 text-2xl font-black text-slate-950">{formatNumber(selectedWeekSummary.weeklyDistance, language)} KM</p>
+            <p className="mt-1 text-xs text-slate-500">{formatDate(selectedWeekSummary.weekEnding, language)}</p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <p className="metric-label">{language === "th" ? "เฉลี่ยต่อรถ" : "Average per Vehicle"}</p>
+            <p className="mt-2 text-2xl font-black text-slate-950">
+              {selectedWeekSummary.comparableVehicles > 0
+                ? `${formatNumber(Math.round(selectedWeekSummary.weeklyDistance / selectedWeekSummary.comparableVehicles), language)} KM`
+                : "-"}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">{formatNumber(selectedWeekSummary.comparableVehicles, language)} {language === "th" ? "คันที่เปรียบเทียบได้" : "comparable vehicles"}</p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <p className="metric-label">{language === "th" ? "ระยะทางสูงสุด" : "Highest This Week"}</p>
+            <div className="mt-2 flex items-end justify-between gap-3">
+              <div>
+                <p className="text-xl font-black text-slate-950">{selectedWeekSummary.highestDistanceVehicle?.vehicleReg ?? "-"}</p>
+                <p className="text-xs text-slate-500">{selectedWeekSummary.highestDistanceVehicle?.driverName ?? "-"}</p>
+              </div>
+              <p className="text-sm font-black text-sky-700">{selectedWeekSummary.highestDistanceVehicle ? `${formatKmValue(selectedWeekSummary.highestDistanceVehicle.distance)} KM` : "-"}</p>
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <p className="metric-label">{language === "th" ? "ระยะทางต่ำสุด" : "Lowest This Week"}</p>
+            <div className="mt-2 flex items-end justify-between gap-3">
+              <div>
+                <p className="text-xl font-black text-slate-950">{selectedWeekSummary.lowestDistanceVehicle?.vehicleReg ?? "-"}</p>
+                <p className="text-xs text-slate-500">{selectedWeekSummary.lowestDistanceVehicle?.driverName ?? "-"}</p>
+              </div>
+              <p className="text-sm font-black text-sky-700">{selectedWeekSummary.lowestDistanceVehicle ? `${formatKmValue(selectedWeekSummary.lowestDistanceVehicle.distance)} KM` : "-"}</p>
+            </div>
+          </div>
+        </section>
+      ) : null}
+{weeklyDistanceHistoryOpen ? (
+        <section id="weekly-distance-history" className="surface-card mb-3 p-4">
+          <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="section-title">{weeklyDistanceHistoryCopy.title}</h3>
-                {selectedWeekHistoryMatchesSummary ? (
-                  <span className="badge-muted border-emerald-200 bg-emerald-50 text-emerald-700">
-                    <CircleCheck className="h-3.5 w-3.5" />
-                    {weeklyDistanceHistoryCopy.validationMatch}
-                  </span>
-                ) : null}
               </div>
               <p className="section-subtitle">{weeklyDistanceHistoryCopy.description}</p>
             </div>
@@ -3561,12 +3774,18 @@ export default function WeeklyMileagePage() {
               </div>
 
               <div>
-                <h4 className="mb-3 text-sm font-bold text-slate-950">{weeklyDistanceHistoryCopy.tableTitle}</h4>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <h4 className="text-sm font-bold text-slate-950">{weeklyDistanceHistoryCopy.tableTitle}</h4>
+                  <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">
+                    {language === "th" ? "เรียง: ระยะทางสูงสุด → ต่ำสุด" : "Ranked: highest distance → lowest"}
+                  </span>
+                </div>
                 <div className="table-shell">
                   <div className="table-scroll">
                     <table className="enterprise-table">
                       <thead>
                         <tr>
+                          <th className="table-head-cell w-[72px]">{language === "th" ? "อันดับ" : "Rank"}</th>
                           <th className="table-head-cell">{weeklyDistanceHistoryCopy.reportingWeek}</th>
                           <th className="table-head-cell">{weeklyDistanceHistoryCopy.validVehicleEntries}</th>
                           <th className="table-head-cell">{weeklyDistanceHistoryCopy.missingEntries}</th>
@@ -3575,7 +3794,7 @@ export default function WeeklyMileagePage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredWeeklyDistanceHistoryRows.map((row) => {
+                        {rankedWeeklyDistanceHistoryRows.map((row, rankIndex) => {
                           const expanded = expandedWeeklyDistanceWeek === row.weekEnding;
                           const excludedCount = row.vehicleBreakdown.filter((vehicleRow) => !vehicleRow.valid).length;
                           return (
@@ -3584,6 +3803,13 @@ export default function WeeklyMileagePage() {
                                 className="enterprise-table-row cursor-pointer"
                                 onClick={() => setExpandedWeeklyDistanceWeek(expanded ? null : row.weekEnding)}
                               >
+                                <td className="table-body-cell">
+                                  <span className={`inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-xs font-black ${
+                                    rankIndex < 3 ? "bg-violet-100 text-violet-800" : "bg-slate-100 text-slate-500"
+                                  }`}>
+                                    {rankIndex + 1}
+                                  </span>
+                                </td>
                                 <td className="table-body-cell font-semibold text-slate-950">
                                   <div className="flex flex-wrap items-center gap-2">
                                     <span>{formatDate(row.weekEnding, language)}</span>
@@ -3605,16 +3831,18 @@ export default function WeeklyMileagePage() {
                                   </div>
                                 </td>
                                 <td className="table-body-cell">{formatNumber(row.missingVehicleCount, language, 0)}</td>
-                                <td className={`table-body-cell font-semibold ${changeToneClass(row.weekOnWeekChangeKm)}`}>
-                                  {row.weekOnWeekChangePercent == null ? "-" : formatPercentValue(row.weekOnWeekChangePercent)}
+                                <td className="table-body-cell">
+                                  <span className={`text-xs font-semibold ${changeToneClass(row.weekOnWeekChangeKm)}`}>
+                                    {row.weekOnWeekChangePercent == null ? "-" : formatPercentValue(row.weekOnWeekChangePercent)}
+                                  </span>
                                 </td>
-                                <td className="table-body-cell text-right font-bold text-slate-950">
+                                <td className="table-body-cell text-right text-base font-black tabular-nums text-violet-800">
                                   {formatNumber(row.weeklyDistance, language, 0)}
                                 </td>
                               </tr>
                               {expanded ? (
                                 <tr key={`${row.weekEnding}-breakdown`}>
-                                  <td className="table-body-cell bg-slate-50" colSpan={5}>
+                                  <td className="table-body-cell bg-slate-50" colSpan={6}>
                                     <div className="rounded-lg border border-slate-200 bg-white p-3">
                                       <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                                         <h5 className="text-sm font-bold text-slate-950">{weeklyDistanceHistoryCopy.vehicleBreakdown}</h5>
@@ -3675,453 +3903,217 @@ export default function WeeklyMileagePage() {
         </section>
       ) : null}
 
-      <section className="surface-card mb-4 p-4 sm:p-5">
-        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <h3 className="section-title">{oilReportCopy.title}</h3>
-            <p className="section-subtitle">{oilReportCopy.description}</p>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <button
-              type="button"
-              onClick={() => void downloadOilServicePdf()}
-              disabled={generatingOilServicePdf}
-              className="btn-primary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-            >
-              <Download className="h-4 w-4" />
-              {generatingOilServicePdf ? oilServicePdfButtonCopy.generating : oilServicePdfButtonCopy.download}
-            </button>
-            <button
-              type="button"
-              onClick={() => void downloadLastOilChangesPdf()}
-              disabled={generatingLastOilChangesPdf || !oilChangeRows.length}
-              className="btn-secondary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-            >
-              <Download className="h-4 w-4" />
-              {generatingLastOilChangesPdf ? oilServicePdfButtonCopy.generating : lastOilChangesPdfButtonCopy.download}
-            </button>
-            <button
-              type="button"
-              onClick={() => void copyOilReportSummary()}
-              disabled={!oilChangeRows.length}
-              className="btn-secondary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-            >
-              <Copy className="h-4 w-4" />
-              {oilReportCopy.copyReportSummary}
-            </button>
-          </div>
-        </div>
 
-        {oilBaselineError ? (
-          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
-            {oilBaselineError}
-            <span className="mt-1 block font-normal text-amber-700">
-              {language === "th"
-                ? "ข้อมูลระยะทางรายสัปดาห์ยังโหลดได้ตามปกติ แต่รายงานน้ำมันอาจไม่มีข้อมูลพื้นฐานล่าสุดจนกว่าจะซ่อมตารางหรือสิทธิ์ Supabase"
-                : "Weekly mileage records are still loaded. Oil service reporting may miss saved baselines until the Supabase table or policy is repaired."}
-            </span>
-          </div>
-        ) : null}
-
-        <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-          {[
-            { label: oilReportCopy.overdueVehicles, value: oilReportSummary.overdue, className: "text-rose-700" },
-            { label: oilReportCopy.urgentVehicles, value: oilReportSummary.urgent, className: "text-orange-700" },
-            { label: oilReportCopy.dueSoonVehicles, value: oilReportSummary.dueSoon, className: "text-amber-700" },
-            { label: oilReportCopy.reviewRequired, value: oilReportSummary.reviewRequired, className: "text-sky-700" },
-            { label: oilReportCopy.okVehicles, value: oilReportSummary.ok, className: "text-emerald-700" }
-          ].map((item) => (
-            <div key={item.label} className="rounded-[0.85rem] border border-slate-200 bg-white/85 px-3 py-3">
-              <p className="metric-label">{item.label}</p>
-              <p className={`mt-1 text-2xl font-bold tracking-normal ${item.className}`}>
-                {formatNumber(item.value, language)}
-              </p>
+        </>
+      ) : null}
+{pageMode === "oil" ? (
+        <>
+          <section className="mb-3 rounded-2xl border border-violet-100 bg-[linear-gradient(135deg,#faf8ff_0%,#ffffff_70%)] px-4 py-3.5 shadow-sm">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-violet-600">{language === "th" ? "การบริการจากเลขไมล์" : "Mileage-driven maintenance"}</p>
+                <h2 className="mt-1 text-xl font-black text-slate-950">{language === "th" ? "สถานะเปลี่ยนน้ำมันเครื่อง" : "Oil Service"}</h2>
+                <p className="mt-1 text-sm text-slate-500">{language === "th" ? "ใช้เลขไมล์ล่าสุดจาก Weekly Mileage เพื่อคำนวณสถานะบริการโดยอัตโนมัติ" : "Uses the latest Weekly Mileage readings to calculate service status automatically."}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => void downloadOilServicePdf()} disabled={generatingOilServicePdf} className="btn-primary gap-2 disabled:opacity-50"><Download className="h-4 w-4" />{generatingOilServicePdf ? oilServicePdfButtonCopy.generating : oilServicePdfButtonCopy.download}</button>
+                <details className="relative">
+                  <summary className="btn-secondary cursor-pointer list-none gap-2">••• {language === "th" ? "เพิ่มเติม" : "More"}</summary>
+                  <div className="absolute right-0 top-12 z-30 w-64 rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
+                    <button type="button" onClick={() => void downloadLastOilChangesPdf()} disabled={generatingLastOilChangesPdf || !oilChangeRows.length} className="w-full rounded-lg px-3 py-2 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{lastOilChangesPdfButtonCopy.download}</button>
+                    <button type="button" onClick={() => void copyOilReportSummary()} disabled={!oilChangeRows.length} className="w-full rounded-lg px-3 py-2 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{oilReportCopy.copyReportSummary}</button>
+                    <div className="my-1 border-t border-slate-100" />
+                    <button type="button" onClick={() => exportOilServiceReport("all", "all")} className="w-full rounded-lg px-3 py-2 text-left text-xs font-bold text-slate-700 hover:bg-slate-50">{oilReportCopy.exportAll}</button>
+                    <button type="button" onClick={() => exportOilServiceReport("overdue", "overdue")} disabled={!getOilReportRows("overdue").length} className="w-full rounded-lg px-3 py-2 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{oilReportCopy.exportOverdue}</button>
+                    <button type="button" onClick={() => exportOilServiceReport("urgent_overdue", "urgent-overdue")} disabled={!getOilReportRows("urgent_overdue").length} className="w-full rounded-lg px-3 py-2 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{oilReportCopy.exportUrgentOverdue}</button>
+                    <button type="button" onClick={() => exportOilServiceReport("due_soon", "due-soon")} disabled={!getOilReportRows("due_soon").length} className="w-full rounded-lg px-3 py-2 text-left text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{oilReportCopy.exportDueSoon}</button>
+                  </div>
+                </details>
+              </div>
             </div>
-          ))}
-        </div>
+          </section>
 
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
-          {[
-            { label: oilReportCopy.exportAll, scope: "all", suffix: "all" },
-            { label: oilReportCopy.exportOverdue, scope: "overdue", suffix: "overdue" },
-            { label: oilReportCopy.exportUrgentOverdue, scope: "urgent_overdue", suffix: "urgent-overdue" },
-            { label: oilReportCopy.exportDueSoon, scope: "due_soon", suffix: "due-soon" },
-            { label: oilReportCopy.exportReview, scope: "review_required", suffix: "review-required" }
-          ].map((option) => (
-            <button
-              key={option.scope}
-              type="button"
-              onClick={() => exportOilServiceReport(option.scope as OilReportScope, option.suffix)}
-              disabled={!getOilReportRows(option.scope as OilReportScope).length}
-              className="btn-secondary min-h-[44px] justify-center gap-2 px-3 text-xs disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Download className="h-4 w-4" />
-              {option.label}
-            </button>
-          ))}
-        </div>
-      </section>
+          <section className="surface-card p-3.5 sm:p-4">
+            {oilBaselineError ? (
+              <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{oilBaselineError}</div>
+            ) : null}
 
-      <section className="surface-card mb-4 p-4 sm:p-5">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h3 className="section-title">{t.weeklyMileage.oil.title}</h3>
-            <p className="section-subtitle">{t.weeklyMileage.oil.description}</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {(["all", "overdue", "urgent", "due_soon", "review_required", "not_set", "ok"] as OilFilter[]).map((filter) => (
-              <button
-                key={filter}
-                type="button"
-                onClick={() => setOilFilter(filter)}
-                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                  oilFilter === filter
-                    ? "border-slate-900 bg-slate-900 text-white"
-                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                }`}
-              >
-                {filter === "all" ? oilReportCopy.all : oilStatusLabel(filter)}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {loading ? (
-          <EmptyState title={t.common.loading} description={t.weeklyMileage.loading} />
-        ) : loadError ? (
-          <EmptyState title={t.weeklyMileage.errorLoad} description={loadError} />
-        ) : oilChangeRows.length === 0 ? (
-          <EmptyState title={t.weeklyMileage.oil.noVehiclesTitle} description={t.weeklyMileage.oil.noVehiclesDescription} />
-        ) : (
-          <>
-            <div className="mb-5 grid gap-3 md:grid-cols-3">
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
               {[
-                {
-                  key: "overdue",
-                  label: oilReportCopy.overdueVehicles,
-                  value: oilSummary.overdue,
-                  helper: oilReportCopy.requiresImmediateService,
-                  className: "border-rose-300 bg-rose-50 text-rose-800 hover:border-rose-400"
-                },
-                {
-                  key: "urgent",
-                  label: oilReportCopy.urgentVehicles,
-                  value: oilSummary.urgent,
-                  helper: oilReportCopy.dueWithin1000,
-                  className: "border-orange-300 bg-orange-50 text-orange-800 hover:border-orange-400"
-                },
-                {
-                  key: "due_soon",
-                  label: oilReportCopy.dueSoonVehicles,
-                  value: oilSummary.due_soon,
-                  helper: oilReportCopy.dueWithin3000,
-                  className: "border-amber-300 bg-amber-50 text-amber-800 hover:border-amber-400"
-                }
+                { key: "overdue", label: oilReportCopy.overdueVehicles, value: oilReportSummary.overdue, tone: "text-rose-700", box: "border-rose-200 bg-rose-50/70" },
+                { key: "urgent", label: oilReportCopy.urgentVehicles, value: oilReportSummary.urgent, tone: "text-orange-700", box: "border-orange-200 bg-orange-50/70" },
+                { key: "due_soon", label: oilReportCopy.dueSoonVehicles, value: oilReportSummary.dueSoon, tone: "text-amber-700", box: "border-amber-200 bg-amber-50/70" },
+                { key: "review_required", label: oilReportCopy.reviewRequired, value: oilReportSummary.reviewRequired, tone: "text-sky-700", box: "border-sky-200 bg-sky-50/70" },
+                { key: "ok", label: oilReportCopy.okVehicles, value: oilReportSummary.ok, tone: "text-emerald-700", box: "border-emerald-200 bg-emerald-50/70" }
               ].map((item) => (
                 <button
                   key={item.key}
                   type="button"
                   onClick={() => setOilFilter(item.key as OilFilter)}
-                  className={`rounded-lg border px-4 py-4 text-left transition duration-200 hover:-translate-y-0.5 hover:shadow-lg ${item.className}`}
+                  aria-pressed={oilFilter === item.key}
+                  className={`rounded-xl border px-3 py-2.5 text-left transition hover:shadow-sm ${item.box} ${
+                    oilFilter === item.key ? "ring-2 ring-violet-500/30 shadow-md" : ""
+                  }`}
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-xs font-bold uppercase text-current/70">{item.label}</p>
-                      <p className="mt-1 text-sm font-medium text-current/75">{item.helper}</p>
-                    </div>
-                    <AlertTriangle aria-hidden="true" className="h-5 w-5 shrink-0 text-current" />
-                  </div>
-                  <p className="mt-4 text-4xl font-bold tracking-normal text-current">{formatNumber(item.value, language)}</p>
+                  <p className="metric-label">{item.label}</p>
+                  <p className={`mt-0.5 text-xl font-black ${item.tone}`}>{formatNumber(item.value, language)}</p>
                 </button>
               ))}
             </div>
 
-            <div className="mb-5 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <h4 className="text-sm font-bold uppercase tracking-normal text-slate-900">
-                    {oilReportCopy.weeklyMileageUpdateStatus}
-                  </h4>
-                  <p className="mt-1 text-sm font-semibold text-slate-500">
-                    {oilReportCopy.vehiclesChecked}: {formatNumber(weeklyMileageUpdateSummary.total, language)}
-                  </p>
-                </div>
-                <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[420px]">
-                  {[
-                    {
-                      key: "updated",
-                      label: oilReportCopy.updatedThisWeek,
-                      value: weeklyMileageUpdateSummary.updatedThisWeek,
-                      className: "border-emerald-200 bg-emerald-50 text-emerald-800"
-                    },
-                    {
-                      key: "not-updated",
-                      label: oilReportCopy.notUpdatedThisWeek,
-                      value: weeklyMileageUpdateSummary.notUpdatedThisWeek,
-                      className: "border-amber-200 bg-amber-50 text-amber-800"
-                    }
-                  ].map((item) => (
-                    <div key={item.key} className={`rounded-lg border px-3 py-2 ${item.className}`}>
-                      <p className="text-xs font-bold uppercase leading-4 tracking-normal text-current/70">{item.label}</p>
-                      <p className="mt-1 text-2xl font-bold tracking-normal text-current">
-                        {formatNumber(item.value, language)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
+            <div className="mt-3 flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2.5 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-600">
+                <span>{oilReportCopy.weeklyMileageUpdateStatus}</span>
+                <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-700">{oilReportCopy.updatedThisWeek}: {formatNumber(weeklyMileageUpdateSummary.updatedThisWeek, language)}</span>
+                <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-800">{oilReportCopy.notUpdatedThisWeek}: {formatNumber(weeklyMileageUpdateSummary.notUpdatedThisWeek, language)}</span>
               </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {[
-                  {
-                    key: "all",
-                    label: oilReportCopy.all
-                  },
-                  {
-                    key: "updated_this_week",
-                    label: oilReportCopy.updatedThisWeek
-                  },
-                  {
-                    key: "not_updated_this_week",
-                    label: oilReportCopy.notUpdatedThisWeek
-                  }
-                ].map((filter) => (
-                  <button
-                    key={filter.key}
-                    type="button"
-                    onClick={() => setWeeklyMileageUpdateFilter(filter.key as WeeklyMileageUpdateFilter)}
-                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                      weeklyMileageUpdateFilter === filter.key
-                        ? "border-slate-900 bg-slate-900 text-white"
-                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                    }`}
-                  >
-                    {filter.label}
+              <div className="flex flex-wrap gap-2">
+                {(["all", "overdue", "urgent", "due_soon", "review_required", "not_set", "ok"] as OilFilter[]).map((filter) => (
+                  <button key={filter} type="button" onClick={() => setOilFilter(filter)} className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${oilFilter === filter ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}>
+                    {filter === "all" ? oilReportCopy.all : oilStatusLabel(filter)}
                   </button>
                 ))}
               </div>
             </div>
 
-            {filteredOilChangeRows.length === 0 ? (
-              <EmptyState title={t.weeklyMileage.oil.noVehiclesInStatusTitle} description={t.weeklyMileage.oil.noVehiclesInStatusDescription} />
+            {loading ? (
+              <div className="mt-4"><EmptyState title={t.common.loading} description={t.weeklyMileage.loading} /></div>
+            ) : loadError ? (
+              <div className="mt-4"><EmptyState title={t.weeklyMileage.errorLoad} description={loadError} /></div>
+            ) : filteredOilChangeRows.length === 0 ? (
+              <div className="mt-4"><EmptyState title={t.weeklyMileage.oil.noVehiclesInStatusTitle} description={t.weeklyMileage.oil.noVehiclesInStatusDescription} /></div>
             ) : (
-              <div className="space-y-4">
+              <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <div className="hidden grid-cols-[1.35fr_0.75fr_0.8fr_0.8fr_0.7fr_0.82fr_0.68fr] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400 xl:grid">
+                  <span>{language === "th" ? "รถ / คนขับ" : "Vehicle / Driver"}</span>
+                  <span>{language === "th" ? "เลขไมล์" : "Current KM"}</span>
+                  <span>{language === "th" ? "ตั้งแต่เปลี่ยนน้ำมัน" : "Since Oil"}</span>
+                  <span>{language === "th" ? "กำหนดถัดไป" : "Next Due"}</span>
+                  <span>{language === "th" ? "คงเหลือ" : "Remaining"}</span>
+                  <span>{language === "th" ? "อัปเดตล่าสุด" : "Updated"}</span>
+                  <span className="text-right">{t.common.action}</span>
+                </div>
                 {filteredOilChangeRows.map((row) => {
-                  const vehicleLogs = appendBaselineHistoryLog(
-                    row.registration,
-                    serviceLogsByVehicle.get(normalizeReg(row.registration)) ?? []
-                  );
-                  const primaryAction =
-                    row.status === "not_set"
-                      ? oilReportCopy.setBaseline
-                      : oilReportCopy.markOilChanged;
+                  const vehicleLogs = appendBaselineHistoryLog(row.registration, serviceLogsByVehicle.get(normalizeReg(row.registration)) ?? []);
+                  const serviceHistoryCount = vehicleLogs.length || (row.lastOilChangeDate && row.lastOilChangeOdometer != null ? 1 : 0);
                   const progress = getServiceProgress(row);
-                  const serviceHistoryCount =
-                    vehicleLogs.length ||
-                    (row.lastOilChangeDate && row.lastOilChangeOdometer != null ? 1 : 0);
-                  const weeklyMileageUpdatedThisWeek = row.weeklyMileageUpdatedThisWeek;
-                  const weeklyMileageAddedAge = formatWeeklyMileageAddedAge(row.lastWeeklyMileageAddedAt);
-                  const oilCardMetricBoxes = [
-                    {
-                      key: "current-odometer",
-                      className: "border-white/80 bg-white/70",
-                      content: (
-                        <>
-                          <p className="metric-label">{oilReportCopy.currentOdometer}</p>
-                          <p className="mt-1 text-lg font-bold text-slate-950">
-                            {row.currentOdometer == null ? oilReportCopy.noData : formatKmValue(row.currentOdometer)}
-                          </p>
-                        </>
-                      )
-                    },
-                    {
-                      key: "km-used-since-oil-change",
-                      className: "border-white/80 bg-white/70",
-                      content: (
-                        <>
-                          <p className="metric-label">{t.weeklyMileage.oil.kmUsedSinceOilChange}</p>
-                          <p className={`mt-1 text-lg font-bold ${row.kmUsedSinceOilChange != null && row.kmUsedSinceOilChange < 0 ? "text-rose-700" : "text-slate-950"}`}>
-                            {row.kmUsedSinceOilChange == null ? "-" : formatKmValue(row.kmUsedSinceOilChange)}
-                          </p>
-                        </>
-                      )
-                    },
-                    {
-                      key: "next-service-due",
-                      className: "border-white/80 bg-white/70",
-                      content: (
-                        <>
-                          <p className="metric-label">{oilReportCopy.nextServiceDue}</p>
-                          <p className="mt-1 text-lg font-bold text-slate-950">{formatKmValue(row.nextOilChangeDueOdometer)}</p>
-                        </>
-                      )
-                    },
-                    {
-                      key: "km-remaining",
-                      className: "border-white/80 bg-white/70",
-                      content: (
-                        <>
-                          <p className="metric-label">{oilReportCopy.kmRemaining}</p>
-                          <p className={`mt-1 text-2xl font-bold tracking-normal ${kmRemainingClass(row.kmRemaining)}`}>
-                            {row.kmRemaining == null ? "-" : formatKmValue(row.kmRemaining)}
-                          </p>
-                        </>
-                      )
-                    },
-                    {
-                      key: "last-weekly-mileage",
-                      className:
-                        row.lastWeeklyMileageDate && !weeklyMileageUpdatedThisWeek
-                          ? "border-amber-300 bg-amber-50"
-                          : "border-white/80 bg-white/70",
-                      content: (
-                        <>
-                          <p className="mt-1.5 text-[10px] font-bold uppercase leading-4 tracking-normal text-slate-500">
-                            {oilReportCopy.lastWeeklyMileageAdded}
-                          </p>
-                          {row.lastWeeklyMileageDate ? (
-                            <>
-                              <p className="mt-1 text-base font-bold text-slate-950">
-                                {formatDate(row.lastWeeklyMileageDate, language)}
-                              </p>
-                              <p className="mt-1 text-xs font-semibold text-slate-600">
-                                {oilReportCopy.odometer}: {formatKmValue(row.lastWeeklyMileageOdometer)}
-                              </p>
-                              <div className="mt-2 flex flex-wrap items-center gap-2">
-                                <span
-                                  className={`inline-flex rounded-full px-2 py-0.5 text-xs font-bold ${
-                                    weeklyMileageUpdatedThisWeek
-                                      ? "bg-emerald-100 text-emerald-700"
-                                      : "bg-amber-100 text-amber-800"
-                                  }`}
-                                >
-                                  {weeklyMileageUpdatedThisWeek
-                                    ? oilReportCopy.updatedThisWeek
-                                    : oilReportCopy.notUpdatedThisWeek}
-                                </span>
-                                {weeklyMileageAddedAge ? (
-                                  <span className="text-xs font-semibold text-slate-500">
-                                    {weeklyMileageAddedAge}
-                                  </span>
-                                ) : null}
-                              </div>
-                            </>
-                          ) : (
-                            <p className="mt-1 text-sm font-semibold text-slate-500">
-                              {oilReportCopy.noWeeklyMileageFound}
-                            </p>
-                          )}
-                        </>
-                      )
-                    }
-                  ];
-
+                  const expanded = expandedOilRows[row.registration] === true;
+                  const primaryAction = row.status === "not_set" ? oilReportCopy.setBaseline : oilReportCopy.markOilChanged;
                   return (
                     <article
                       key={row.registration}
-                      className={`rounded-lg border p-4 transition duration-200 hover:-translate-y-0.5 hover:shadow-xl sm:p-5 ${oilCardClass(row.status)}`}
+                      className={`border-b border-slate-100 last:border-b-0 transition-colors hover:bg-slate-50/60 ${
+                        row.status === "overdue"
+                          ? "bg-rose-50/25"
+                          : row.status === "urgent"
+                            ? "bg-orange-50/20"
+                            : row.status === "due_soon"
+                              ? "bg-amber-50/20"
+                              : "bg-white"
+                      }`}
                     >
-                      <div className="grid gap-4 xl:grid-cols-[minmax(190px,0.68fr)_minmax(0,1.8fr)_minmax(190px,0.52fr)] xl:items-start">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h4 className="text-2xl font-bold tracking-normal text-slate-950">{row.registration}</h4>
-                            <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold ${oilStatusClass(row.status)}`}>
-                              <OilStatusIcon status={row.status} />
-                              {oilStatusLabelForRow(row)}
-                            </span>
-                          </div>
-                          <p className="mt-2 text-sm font-medium text-slate-600">
-                            {row.driverName || oilReportCopy.noDriverAssigned} | {vehicleTypeLabel(row.vehicleType)}
+                      <div className="grid gap-2 px-4 py-2 xl:grid-cols-[1.35fr_0.75fr_0.8fr_0.8fr_0.7fr_0.82fr_0.68fr] xl:items-center">
+                        <button type="button" onClick={() => setExpandedOilRows((current) => ({ ...current, [row.registration]: !expanded }))} className="min-w-0 text-left">
+                          <div className="flex flex-wrap items-center gap-2"><span className="text-lg font-black text-slate-950">{row.registration}</span><span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.08em] ${oilStatusClass(row.status)}`}><OilStatusIcon status={row.status} />{oilStatusLabelForRow(row)}</span></div>
+                          <p className="mt-1 truncate text-xs font-semibold text-slate-500">{row.driverName || oilReportCopy.noDriverAssigned} · {vehicleTypeLabel(row.vehicleType)}</p>
+                        </button>
+                        <div><p className="metric-label xl:hidden">{oilReportCopy.currentOdometer}</p><p className="font-bold text-slate-950">{row.currentOdometer == null ? "-" : formatKmValue(row.currentOdometer)}</p></div>
+                        <div><p className="metric-label xl:hidden">{t.weeklyMileage.oil.kmUsedSinceOilChange}</p><p className="font-bold text-slate-950">{row.kmUsedSinceOilChange == null ? "-" : formatKmValue(row.kmUsedSinceOilChange)}</p></div>
+                        <div><p className="metric-label xl:hidden">{oilReportCopy.nextServiceDue}</p><p className="font-bold text-slate-950">{formatKmValue(row.nextOilChangeDueOdometer)}</p></div>
+                        <div><p className="metric-label xl:hidden">{oilReportCopy.kmRemaining}</p><p className={`text-base font-black tabular-nums ${kmRemainingClass(row.kmRemaining)}`}>{row.kmRemaining == null ? "-" : `${formatKmValue(row.kmRemaining)} km`}</p></div>
+                        <div>
+                          <p className="metric-label xl:hidden">{oilReportCopy.lastWeeklyMileageAdded}</p>
+                          <p className="text-sm font-bold text-slate-950">{row.lastWeeklyMileageDate ? formatDate(row.lastWeeklyMileageDate, language) : "-"}</p>
+                          <p className={`mt-0.5 inline-flex items-center gap-1 text-[10px] font-bold ${row.weeklyMileageUpdatedThisWeek ? "text-emerald-700" : "text-amber-700"}`}>
+                            <span className={`h-1.5 w-1.5 rounded-full ${row.weeklyMileageUpdatedThisWeek ? "bg-emerald-500" : "bg-amber-500"}`} />
+                            {row.weeklyMileageUpdatedThisWeek
+                              ? (language === "th" ? "ล่าสุด" : "Current")
+                              : (language === "th" ? "ต้องอัปเดต" : "Needs update")}
                           </p>
-                          <p className="mt-3 text-base font-bold uppercase text-slate-900">
-                            {actionLine(row)}
-                          </p>
-                          {row.reviewReasons.length ? (
-                            <p className="mt-2 text-xs font-semibold text-sky-700">{row.reviewReasons.map(reviewReasonLabel).join("; ")}</p>
+                        </div>
+                        <div className="flex items-center justify-end gap-2">
+                          {row.status === "overdue" || row.status === "urgent" || row.status === "due_soon" || row.status === "not_set" || row.status === "review_required" ? (
+                            <button
+                              type="button"
+                              onClick={() => openServiceModal(row.status === "not_set" ? "set" : "mark", row)}
+                              className="min-h-8 rounded-lg border border-violet-700 bg-violet-700 px-2.5 py-1.5 text-[11px] font-black text-white shadow-sm transition hover:bg-violet-800"
+                            >
+                              {row.status === "not_set"
+                                ? (language === "th" ? "ตั้งค่า" : "Set Baseline")
+                                : (language === "th" ? "บันทึกเปลี่ยน" : "Service")}
+                            </button>
                           ) : null}
-                        </div>
-
-                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                          {oilCardMetricBoxes.map((box) => (
-                            <div key={box.key} className={`min-h-[116px] rounded-lg border p-3 ${box.className}`}>
-                              {box.content}
+                          <details className="relative">
+                            <summary className="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50">•••</summary>
+                            <div className="absolute right-0 top-10 z-30 min-w-[175px] rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
+                              {row.status === "ok" ? (
+                                <button
+                                  type="button"
+                                  onClick={() => openServiceModal("mark", row)}
+                                  className="w-full rounded-lg px-3 py-2 text-left text-xs font-bold text-violet-700 hover:bg-violet-50"
+                                >
+                                  {language === "th" ? "บันทึกเปลี่ยนน้ำมัน" : "Mark Oil Changed"}
+                                </button>
+                              ) : null}
+                              <button type="button" onClick={() => openServiceModal(row.status === "not_set" ? "set" : "edit", row)} className="w-full rounded-lg px-3 py-2 text-left text-xs font-bold text-slate-700 hover:bg-slate-50">{row.status === "not_set" ? oilReportCopy.setBaseline : oilReportCopy.edit}</button>
+                              <button type="button" onClick={() => void openServiceHistory(row.registration)} className="w-full rounded-lg px-3 py-2 text-left text-xs font-bold text-slate-700 hover:bg-slate-50">{oilReportCopy.serviceHistory}</button>
+                              <button type="button" onClick={() => setExpandedOilRows((current) => ({ ...current, [row.registration]: !expanded }))} className="w-full rounded-lg px-3 py-2 text-left text-xs font-bold text-slate-700 hover:bg-slate-50">{expanded ? (language === "th" ? "ซ่อนรายละเอียด" : "Hide details") : (language === "th" ? "ดูรายละเอียด" : "View details")}</button>
                             </div>
-                          ))}
-                        </div>
-
-                        <div className="flex flex-col gap-2 sm:flex-row xl:flex-col">
-                          <button type="button" onClick={() => openServiceModal(row.status === "not_set" ? "set" : "mark", row)} className="btn-primary w-full justify-center gap-2 shadow-lg shadow-slate-900/10">
-                            {row.status === "not_set" ? <Plus className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-                            {primaryAction}
-                          </button>
-                          <button type="button" onClick={() => openServiceModal(row.status === "not_set" ? "set" : "edit", row)} className="btn-secondary w-full justify-center gap-2">
-                            <Pencil className="h-4 w-4" />
-                            {row.status === "not_set" ? oilReportCopy.setBaseline : oilReportCopy.edit}
-                          </button>
-                          <button type="button" onClick={() => void openServiceHistory(row.registration)} className="btn-secondary w-full justify-center gap-2">
-                            <History className="h-4 w-4" />
-                            {oilReportCopy.serviceHistory}
-                          </button>
+                          </details>
                         </div>
                       </div>
-
-                      <div className="mt-4">
-                        <div className="mb-2 flex items-center justify-between gap-3 text-xs font-semibold text-slate-500">
-                          <span>{oilReportCopy.oilServiceUsage}</span>
-                          <span>
-                            {progress == null
-                              ? oilReportCopy.waitingForBaseline
-                              : `${formatKmValue(progress.usedKm)} / ${formatKmValue(row.oilChangeIntervalKm)} KM (${oilReportCopy.percentUsed.replace("{percent}", progress.displayPercent)})`}
-                          </span>
+                      {expanded ? (
+                        <div className="border-t border-slate-200 bg-slate-50/60 px-4 py-3">
+                          <div className="mb-3 flex items-center justify-between gap-3 text-xs font-semibold text-slate-500"><span>{oilReportCopy.oilServiceUsage}</span><span>{progress == null ? oilReportCopy.waitingForBaseline : `${formatKmValue(progress.usedKm)} / ${formatKmValue(row.oilChangeIntervalKm)} KM (${oilReportCopy.percentUsed.replace("{percent}", progress.displayPercent)})`}</span></div>
+                          <div className="h-2 overflow-hidden rounded-full bg-white ring-1 ring-slate-200"><div className={`h-full rounded-full ${progressBarClass(row.status)}`} style={{ width: `${progress?.barPercent ?? 0}%` }} /></div>
+                          <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-5">
+                            <div><p className="metric-label">{oilReportCopy.lastOilChange}</p><p className="mt-1 font-semibold text-slate-900">{row.lastOilChangeDate ? formatDate(row.lastOilChangeDate, language) : oilReportCopy.notSet}</p></div>
+                            <div><p className="metric-label">{oilReportCopy.lastOdometer}</p><p className="mt-1 font-semibold text-slate-900">{formatKmValue(row.lastOilChangeOdometer)}</p></div>
+                            <div><p className="metric-label">{oilReportCopy.interval}</p><p className="mt-1 font-semibold text-slate-900">{formatKmValue(row.oilChangeIntervalKm)} KM</p></div>
+                            <div><p className="metric-label">{oilReportCopy.history}</p><p className="mt-1 font-semibold text-slate-900">{serviceHistoryCount ? `${formatNumber(serviceHistoryCount, language)} ${oilReportCopy.records}` : oilReportCopy.noRecords}</p></div>
+                            <div><p className="metric-label">{language === "th" ? "การดำเนินการ" : "Action"}</p><p className="mt-1 font-semibold text-slate-900">{actionLine(row)}</p></div>
+                          </div>
+                          {row.reviewReasons.length ? <p className="mt-3 text-xs font-semibold text-sky-700">{row.reviewReasons.map(reviewReasonLabel).join("; ")}</p> : null}
                         </div>
-                        <div className="h-2.5 overflow-hidden rounded-full bg-white/80 ring-1 ring-slate-200/70">
-                          <div
-                            className={`h-full rounded-full transition-all duration-500 ${progressBarClass(row.status)}`}
-                            style={{ width: `${progress?.barPercent ?? 0}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-5">
-                        <div>
-                          <p className="metric-label">{oilReportCopy.lastOilChange}</p>
-                          <p className="mt-1 font-semibold text-slate-900">{row.lastOilChangeDate ? formatDate(row.lastOilChangeDate, language) : oilReportCopy.notSet}</p>
-                        </div>
-                        <div>
-                          <p className="metric-label">{oilReportCopy.lastOdometer}</p>
-                          <p className="mt-1 font-semibold text-slate-900">{formatKmValue(row.lastOilChangeOdometer)}</p>
-                        </div>
-                        <div>
-                          <p className="metric-label">{oilReportCopy.interval}</p>
-                          <p className="mt-1 font-semibold text-slate-900">{formatKmValue(row.oilChangeIntervalKm)} KM</p>
-                        </div>
-                        <div>
-                          <p className="metric-label">{oilReportCopy.overdueBy}</p>
-                          <p className="mt-1 font-semibold text-rose-700">{row.overdueKm == null ? "-" : formatKmValue(row.overdueKm)}</p>
-                        </div>
-                        <div>
-                          <p className="metric-label">{oilReportCopy.history}</p>
-                          <p className="mt-1 font-semibold text-slate-900">{serviceHistoryCount ? `${formatNumber(serviceHistoryCount, language)} ${oilReportCopy.records}` : oilReportCopy.noRecords}</p>
-                        </div>
-                      </div>
+                      ) : null}
                     </article>
                   );
                 })}
               </div>
             )}
-          </>
-        )}
-      </section>
+          </section>
+        </>
+      ) : null}
 
-      <section className="surface-card p-5 sm:p-6">
-        <form onSubmit={handleSubmit} className="max-w-[780px]">
-          <div className="mb-4">
-            <h3 className="section-title">
-              {isEditing ? t.weeklyMileage.editEntry : t.weeklyMileage.addEntry}
-            </h3>
-            <p className="section-subtitle">
-              {isEditing ? t.weeklyMileage.helperEdit : t.weeklyMileage.helperAdd}
-            </p>
-          </div>
+
+      {pageMode === "mileage" && mileageModalOpen ? (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm">
+          <section className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-white/60 bg-white p-5 shadow-2xl sm:p-6">
+            <form onSubmit={handleSubmit}>
+              <div className="mb-5 flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-violet-600">
+                    {language === "th" ? "เลขไมล์รายสัปดาห์" : "Weekly Mileage"}
+                  </p>
+                  <h3 className="mt-1 text-xl font-black text-slate-950">
+                    {isEditing ? t.weeklyMileage.editEntry : t.weeklyMileage.addEntry}
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {isEditing ? t.weeklyMileage.helperEdit : t.weeklyMileage.helperAdd}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMileageModalOpen(false);
+                    resetForm();
+                  }}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-50"
+                  aria-label={language === "th" ? "ปิด" : "Close"}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
 
           <div className="form-section">
             <div className="grid gap-4 md:grid-cols-2">
@@ -4303,38 +4295,72 @@ export default function WeeklyMileagePage() {
                 </button>
               ) : null}
               {isEditing ? (
-                <button type="button" onClick={() => resetForm()} className="btn-secondary w-full sm:w-auto">
+                <button type="button" onClick={() => { resetForm(); setMileageModalOpen(false); }} className="btn-secondary w-full sm:w-auto">
                   {t.common.cancel}
                 </button>
               ) : null}
             </div>
           </div>
-        </form>
-      </section>
+            </form>
+          </section>
+        </div>
+      ) : null}
 
-      <section className="surface-card mt-4 p-4 sm:p-5">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+
+      {pageMode === "mileage" ? (
+        <>
+<section className="surface-card mt-3 p-4 sm:p-5">
+        <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h3 className="section-title">{t.weeklyMileage.recordsForWeek}</h3>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="section-title">{t.weeklyMileage.recordsForWeek}</h3>
+              <span className="badge-muted">
+                {formatDate(selectedWeekValue, language)} · {formatNumber(selectedWeekEntries.length, language)} {t.common.entries}
+              </span>
+            </div>
             <p className="section-subtitle">{t.weeklyMileage.recordsForWeekDescription}</p>
+            <p className="mt-1 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">
+              {language === "th" ? "เรียงตามระยะทางสัปดาห์: มาก → น้อย" : "Sorted by weekly distance: highest → lowest"}
+            </p>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <button type="button" onClick={() => previousWeekValue && setSelectedWeek(previousWeekValue)} disabled={!previousWeekValue} className="btn-secondary disabled:opacity-50">
-              {t.weeklyMileage.previousWeek}
+          <div className="flex w-full items-center gap-1 rounded-xl border border-slate-200 bg-slate-50/70 p-1.5 lg:w-auto">
+            <button
+              type="button"
+              onClick={() => previousWeekValue && setSelectedWeek(previousWeekValue)}
+              disabled={!previousWeekValue}
+              title={language === "th" ? "สัปดาห์ก่อน" : "Previous week"}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-100 disabled:opacity-35"
+            >
+              ←
             </button>
-            <select value={selectedWeekValue} onChange={(event) => setSelectedWeek(event.target.value)} className="form-input bg-white sm:min-w-[220px]">
+            <select
+              value={selectedWeekValue}
+              onChange={(event) => setSelectedWeek(event.target.value)}
+              className="h-9 min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 lg:w-[180px] lg:flex-none"
+            >
               {availableWeeks.map((week) => (
                 <option key={week} value={week}>
                   {formatDate(week, language)}
                 </option>
               ))}
             </select>
-            <button type="button" onClick={() => nextWeekValue && setSelectedWeek(nextWeekValue)} disabled={!nextWeekValue} className="btn-secondary disabled:opacity-50">
-              {t.weeklyMileage.nextWeek}
+            <button
+              type="button"
+              onClick={() => nextWeekValue && setSelectedWeek(nextWeekValue)}
+              disabled={!nextWeekValue}
+              title={language === "th" ? "สัปดาห์ถัดไป" : "Next week"}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-100 disabled:opacity-35"
+            >
+              →
             </button>
-            <button type="button" onClick={exportWeeklyMileage} disabled={!sortedEntries.length} className="btn-secondary gap-2 disabled:opacity-50">
-              <Download className="h-4 w-4" />
+            <button
+              type="button"
+              onClick={exportWeeklyMileage}
+              disabled={!sortedEntries.length}
+              className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-white px-3 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-100 disabled:opacity-40"
+            >
+              <Download className="h-3.5 w-3.5" />
               {t.common.export}
             </button>
           </div>
@@ -4348,12 +4374,6 @@ export default function WeeklyMileagePage() {
           <EmptyState title={t.weeklyMileage.noDataTitle} description={t.weeklyMileage.noDataDescription} />
         ) : (
           <>
-            <div className="mb-4 flex items-center gap-3 text-sm text-slate-500">
-              <span className="badge-muted">{t.weeklyMileage.showingWeek}</span>
-              <span>{formatDate(selectedWeekValue, language)}</span>
-              <span>{formatNumber(selectedWeekEntries.length, language)} {t.common.entries}</span>
-            </div>
-
             <div className="space-y-3.5 md:hidden">
               {pagedEntries.map((entry) => (
                 <div key={entry.id} className="subtle-panel p-4">
@@ -4364,16 +4384,34 @@ export default function WeeklyMileagePage() {
                     </div>
                     <p className="supporting-date-strong">{formatDate(entry.week_ending, language)}</p>
                   </div>
-                  <p className="mt-3 text-base font-semibold text-slate-950">
-                    {formatNumber(entry.mileage, language)}
-                  </p>
+                  {(() => {
+                    const operational = selectedWeekOperationalRows.get(String(entry.id));
+                    return (
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <div className="rounded-xl bg-slate-50 p-3">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">
+                            {language === "th" ? "เลขไมล์ปัจจุบัน" : "Current Odo."}
+                          </p>
+                          <p className="mt-1 font-black text-slate-950">{formatNumber(entry.mileage, language)}</p>
+                        </div>
+                        <div className="rounded-xl bg-slate-50 p-3">
+                          <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">
+                            {language === "th" ? "ระยะทางสัปดาห์" : "Weekly KM"}
+                          </p>
+                          <p className="mt-1 font-black text-slate-950">
+                            {operational?.weeklyKm == null ? "-" : `${formatNumber(operational.weeklyKm, language)} km`}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <div className="mt-2 flex flex-wrap gap-2">
                     {entry.is_odometer_baseline ? <span className="badge-muted">{baselineCopy.badge}</span> : null}
                     {!entry.is_odometer_baseline && entry.week_ending < "2026-06-07" ? <span className="badge-muted">{baselineCopy.legacy}</span> : null}
                     {entry.odometer_note ? <span className="text-xs text-slate-500">{entry.odometer_note}</span> : null}
                   </div>
                   <div className="mt-3 flex gap-2">
-                    <button type="button" onClick={() => setForm({ id: String(entry.id), week_ending: entry.week_ending, driver_id: String(entry.driver_id), vehicle_reg: entry.vehicle_reg, mileage: String(entry.mileage), is_odometer_baseline: entry.is_odometer_baseline === true, odometer_note: entry.odometer_note ?? "" })} className="btn-secondary flex-1">
+                    <button type="button" onClick={() => openMileageEdit(entry)} className="btn-secondary flex-1">
                       {t.common.edit}
                     </button>
                     <button type="button" onClick={() => void handleDelete(String(entry.id))} disabled={deletingId === String(entry.id)} className="btn-danger flex-1 gap-2 disabled:opacity-50">
@@ -4386,44 +4424,78 @@ export default function WeeklyMileagePage() {
             </div>
 
             <div className="hidden md:block">
-              <div className="table-shell rounded-2xl">
+              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                 <div className="table-scroll">
-                  <table className="w-full min-w-[760px] text-sm">
+                  <table className="w-full min-w-[1080px] text-sm">
                     <thead>
-                      <tr className="bg-slate-50/70 text-slate-600">
-                        <th className="table-head-cell text-left">{t.weeklyMileage.table.weekEnding}</th>
+                      <tr className="bg-slate-50 text-slate-500">
                         <th className="table-head-cell text-left">{t.weeklyMileage.table.driver}</th>
                         <th className="table-head-cell text-left">{t.weeklyMileage.table.vehicleReg}</th>
-                        <th className="table-head-cell text-right">{t.weeklyMileage.table.mileage}</th>
-                        <th className="table-head-cell text-left">{t.weeklyMileage.table.action}</th>
+                        <th className="table-head-cell text-right">{language === "th" ? "เลขไมล์ก่อนหน้า" : "Previous Odometer"}</th>
+                        <th className="table-head-cell text-right">{language === "th" ? "เลขไมล์ปัจจุบัน" : "Current Odometer"}</th>
+                        <th className="table-head-cell text-right">{language === "th" ? "ระยะทางสัปดาห์" : "Weekly KM"}</th>
+                        <th className="table-head-cell text-right">{t.weeklyMileage.table.action}</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {pagedEntries.map((entry) => (
-                        <tr key={entry.id} className="enterprise-table-row">
-                          <td className="table-body-cell supporting-date-strong">{formatDate(entry.week_ending, language)}</td>
-                          <td className="table-body-cell table-driver-name">{entry.driver || "-"}</td>
-                          <td className="table-body-cell">{entry.vehicle_reg || "-"}</td>
-                          <td className="table-body-cell text-right font-medium text-slate-800">
-                            <div className="flex flex-col items-end gap-1">
-                              <span>{formatNumber(entry.mileage, language)}</span>
-                              {entry.is_odometer_baseline ? <span className="badge-muted">{baselineCopy.badge}</span> : null}
-                              {!entry.is_odometer_baseline && entry.week_ending < "2026-06-07" ? <span className="badge-muted">{baselineCopy.legacy}</span> : null}
-                              {entry.odometer_note ? <span className="max-w-[220px] truncate text-xs font-normal text-slate-500">{entry.odometer_note}</span> : null}
-                            </div>
-                          </td>
-                          <td className="table-body-cell">
-                            <div className="flex items-center gap-1.5 whitespace-nowrap">
-                              <button type="button" onClick={() => setForm({ id: String(entry.id), week_ending: entry.week_ending, driver_id: String(entry.driver_id), vehicle_reg: entry.vehicle_reg, mileage: String(entry.mileage), is_odometer_baseline: entry.is_odometer_baseline === true, odometer_note: entry.odometer_note ?? "" })} className="table-action-secondary">
-                                {t.common.edit}
-                              </button>
-                              <button type="button" onClick={() => void handleDelete(String(entry.id))} disabled={deletingId === String(entry.id)} className="table-action-danger disabled:opacity-50">
-                                {deletingId === String(entry.id) ? t.common.deleting : t.common.delete}
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                      {pagedEntries.map((entry) => {
+                        const operational = selectedWeekOperationalRows.get(String(entry.id));
+                        const status = operational?.status ?? "no_previous";
+                        return (
+                          <tr key={entry.id} className="enterprise-table-row">
+                            <td className="table-body-cell py-3 table-driver-name">{entry.driver || "-"}</td>
+                            <td className="table-body-cell py-3 font-black text-slate-900">
+                              <div>{entry.vehicle_reg || "-"}</div>
+                              {status === "baseline" ? (
+                                <span className="mt-1 inline-flex rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em] text-sky-700">
+                                  {baselineCopy.badge}
+                                </span>
+                              ) : status === "review" ? (
+                                <span className="mt-1 inline-flex rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em] text-rose-700">
+                                  {language === "th" ? "ตรวจสอบ" : "Review"}
+                                </span>
+                              ) : status === "no_previous" ? (
+                                <span className="mt-1 inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em] text-amber-700">
+                                  {language === "th" ? "ไม่มีสัปดาห์ก่อน" : "No previous week"}
+                                </span>
+                              ) : null}
+                            </td>
+                            <td className="table-body-cell py-3 text-right tabular-nums text-slate-500">
+                              {operational?.previousEntry
+                                ? formatNumber(operational.previousEntry.mileage, language)
+                                : "-"}
+                            </td>
+                            <td className="table-body-cell py-3 text-right font-semibold tabular-nums text-slate-900">
+                              {formatNumber(entry.mileage, language)}
+                            </td>
+                            <td className="table-body-cell py-3 text-right text-base font-black tabular-nums text-violet-800">
+                              {operational?.weeklyKm == null ? "-" : `${formatNumber(operational.weeklyKm, language)} km`}
+                            </td>
+                            <td className="table-body-cell">
+                              <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
+                                <button type="button" onClick={() => openMileageEdit(entry)} className="table-action-secondary">
+                                  {t.common.edit}
+                                </button>
+                                <details className="relative">
+                                  <summary className="flex h-9 w-10 cursor-pointer list-none items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50">
+                                    •••
+                                  </summary>
+                                  <div className="absolute right-0 top-10 z-30 min-w-[145px] rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleDelete(String(entry.id))}
+                                      disabled={deletingId === String(entry.id)}
+                                      className="w-full rounded-lg px-3 py-2 text-left text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+                                    >
+                                      {deletingId === String(entry.id) ? t.common.deleting : t.common.delete}
+                                    </button>
+                                  </div>
+                                </details>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -4446,117 +4518,109 @@ export default function WeeklyMileagePage() {
           </>
         )}
       </section>
+        </>
+      ) : null}
 
-      <section className="surface-card mt-4 p-4 sm:p-5">
-        <details>
-          <summary className="cursor-pointer list-none">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 className="section-title">{t.weeklyMileage.weeklyDistanceByDriver}</h3>
-                <p className="section-subtitle">{t.weeklyMileage.weeklyDistanceByDriverDescription}</p>
+
+      {pageMode === "results" ? (
+        <>
+<section className="surface-card mt-3 p-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h3 className="section-title">{language === "th" ? "ระยะทางคนขับสัปดาห์นี้" : "This Week - Driver Distance"}</h3>
+            <p className="section-subtitle">{language === "th" ? "ดูระยะทางสูงสุดของสัปดาห์ และเลือกคนขับเพื่อดูประวัติ" : "See this week's leading distances, then select a driver to inspect their history."}</p>
+          </div>
+          <span className="badge-muted">{formatNumber(weeklyDistanceByDriverRows.length, language)} {t.common.entries}</span>
+        </div>
+
+        {loading ? (
+          <div className="mt-4"><EmptyState title={t.common.loading} description={t.weeklyMileage.loading} /></div>
+        ) : (
+          <div className="mt-3 space-y-3">
+            <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-sm font-black text-slate-950">{language === "th" ? "ระยะทางสูงสุด 5 อันดับในสัปดาห์" : "Top 5 this week"}</p>
+                <span className="text-xs font-semibold text-slate-500">{formatDate(selectedWeekValue, language)}</span>
               </div>
-              <span className="badge-muted">{formatNumber(weeklyDistanceByDriverRows.length, language)} {t.common.entries}</span>
-            </div>
-          </summary>
-
-          {loading ? (
-            <div className="mt-4">
-              <EmptyState title={t.common.loading} description={t.weeklyMileage.loading} />
-            </div>
-          ) : (
-            <div className="mt-4 space-y-3">
-              <div className="grid gap-3.5 lg:grid-cols-[minmax(240px,280px)_minmax(0,1fr)]">
-                <div className="form-field">
-                  <label className="form-label">{t.weeklyMileage.compareDriver}</label>
-                  <select value={comparisonDriverId} onChange={(event) => setComparisonDriverId(event.target.value)} className="form-input bg-white">
-                    <option value="">{t.weeklyMileage.selectDriver}</option>
-                    {comparisonDrivers.map((driver) => (
-                      <option key={driver.id} value={String(driver.id)}>
-                        {driver.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="subtle-panel p-4">
-                  <p className="text-sm font-semibold text-slate-900">{t.weeklyMileage.weeklyDistanceCovered}</p>
-                  {weeklyDistanceByDriverRows.length === 0 ? (
-                    <p className="mt-3 text-sm text-slate-500">{t.weeklyMileage.weeklyDistanceCoveredUnavailable}</p>
-                  ) : (
-                    <div className="mt-3 space-y-2">
-                      {weeklyDistanceByDriverRows.slice(0, 3).map((row) => (
-                        <div key={`${row.driverId}-${row.latestWeekEnding}`} className="flex items-center justify-between gap-3 border-b border-slate-100/70 pb-2 last:border-b-0 last:pb-0">
-                          <div className="min-w-0">
-                            <p className="table-driver-name truncate">{row.driver}</p>
-                            <p className="mt-0.5 text-xs text-slate-400">{row.vehicleReg}</p>
-                          </div>
-                          <p className="text-sm font-semibold text-slate-950">{formatNumber(row.weeklyDistance!, language)}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {!selectedComparison ? (
-                <div className="subtle-panel flex min-h-[180px] items-center justify-center p-5">
-                  <EmptyState title={t.weeklyMileage.compareDriver} description={t.weeklyMileage.selectDriverToCompare} />
-                </div>
-              ) : selectedComparison.unusual || !selectedComparison.previousWeekEnding ? (
-                <div className="subtle-panel flex min-h-[180px] items-center justify-center p-5">
-                  <EmptyState title={t.weeklyMileage.weeklyDistanceCovered} description={t.weeklyMileage.weeklyComparisonHistoryDescription} />
-                </div>
+              {weeklyDistanceByDriverRows.length === 0 ? (
+                <p className="text-sm text-slate-500">{t.weeklyMileage.weeklyDistanceCoveredUnavailable}</p>
               ) : (
-                <div className="grid gap-3.5 xl:grid-cols-[minmax(0,1.05fr)_minmax(260px,0.95fr)]">
-                  <div className="subtle-panel p-4">
-                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                      <div>
-                        <p className="metric-label">{t.weeklyMileage.currentReportingWeek}</p>
-                        <p className="mt-1 font-semibold text-slate-950">{formatDate(selectedComparison.latestWeekEnding, language)}</p>
+                <div className="grid gap-2 lg:grid-cols-5">
+                  {weeklyDistanceByDriverRows.slice(0, 5).map((row, index) => (
+                    <button
+                      key={`${row.driverId}-${row.latestWeekEnding}`}
+                      type="button"
+                      onClick={() => setComparisonDriverId(String(row.driverId))}
+                      className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-left transition hover:border-violet-200 hover:bg-violet-50/30"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">#{index + 1}</span>
+                        <span className="text-sm font-black text-slate-950">{formatNumber(row.weeklyDistance!, language)} km</span>
                       </div>
-                      <div>
-                        <p className="metric-label">{t.weeklyMileage.currentOdometer}</p>
-                        <p className="mt-1 font-semibold text-slate-950">{formatNumber(selectedComparison.latestOdometer, language)}</p>
-                      </div>
-                      <div>
-                        <p className="metric-label">{t.weeklyMileage.selectedVehicleReg}</p>
-                        <p className="mt-1 font-semibold text-slate-950">{selectedComparison.vehicleReg || "-"}</p>
-                      </div>
-                      <div>
-                        <p className="metric-label">{t.weeklyMileage.previousReportingWeek}</p>
-                        <p className="mt-1 font-semibold text-slate-950">{formatDate(selectedComparison.previousWeekEnding!, language)}</p>
-                      </div>
-                      <div>
-                        <p className="metric-label">{t.weeklyMileage.previousOdometer}</p>
-                        <p className="mt-1 font-semibold text-slate-950">{formatNumber(selectedComparison.previousOdometer!, language)}</p>
-                      </div>
-                      <div>
-                        <p className="metric-label">{t.weeklyMileage.weeklyDistanceCovered}</p>
-                        <p className="mt-1 font-semibold text-slate-950">{formatNumber(selectedComparison.weeklyDistance!, language)}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="subtle-panel p-4">
-                    <p className="text-sm font-semibold text-slate-900">{t.weeklyMileage.weeklyComparisonHistory}</p>
-                    <div className="mt-3 space-y-2">
-                      {selectedComparisonHistory.map((entry) => (
-                        <div key={entry.id} className="flex items-center justify-between gap-3 border-b border-slate-100/70 pb-2 last:border-b-0 last:pb-0">
-                          <div>
-                            <p className="supporting-date-strong text-slate-800">{formatDate(entry.week_ending, language)}</p>
-                            <p className="mt-0.5 text-xs text-slate-400">{entry.vehicle_reg || "-"}</p>
-                          </div>
-                          <p className="text-sm font-semibold text-slate-950">{formatNumber(entry.mileage, language)}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                      <p className="mt-1.5 truncate font-black text-slate-900">{row.driver}</p>
+                      <p className="mt-0.5 truncate text-xs text-slate-400">{row.vehicleReg}</p>
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
-          )}
-        </details>
+
+            <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+              <div className="grid gap-2.5 lg:grid-cols-[215px_minmax(0,1fr)]">
+                <div className="form-field">
+                  <label className="form-label">{language === "th" ? "ประวัติคนขับ" : "Driver History"}</label>
+                  <select value={comparisonDriverId} onChange={(event) => setComparisonDriverId(event.target.value)} className="form-input bg-white">
+                    <option value="">{t.weeklyMileage.selectDriver}</option>
+                    {comparisonDrivers.map((driver) => (
+                      <option key={driver.id} value={String(driver.id)}>{driver.name}</option>
+                    ))}
+                  </select>
+                  {!selectedComparison ? (
+                    <p className="mt-2 text-xs text-slate-500">{language === "th" ? "เลือกคนขับเพื่อดูเลขไมล์และประวัติ 5 สัปดาห์ล่าสุด" : "Select a driver to view odometers, weekly KM and the latest 5 weeks."}</p>
+                  ) : null}
+                </div>
+
+                {!selectedComparison ? (
+                  <div className="flex min-h-[88px] items-center rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-4 text-sm text-slate-500">
+                    {language === "th" ? "เลือกคนขับทางซ้ายเพื่อดูประวัติ" : "Select a driver to view their recent mileage history."}
+                  </div>
+                ) : selectedComparison.unusual || !selectedComparison.previousWeekEnding ? (
+                  <div className="flex min-h-[88px] items-center rounded-xl border border-amber-200 bg-amber-50 px-4 text-sm font-semibold text-amber-800">
+                    {t.weeklyMileage.weeklyComparisonHistoryDescription}
+                  </div>
+                ) : (
+                  <div className="grid gap-3 xl:grid-cols-[1.05fr_0.95fr]">
+                    <div className="rounded-xl bg-slate-50/70 p-3">
+                      <div className="grid gap-x-4 gap-y-2.5 sm:grid-cols-3">
+                        <div><p className="metric-label">{t.weeklyMileage.currentOdometer}</p><p className="mt-1 font-black text-slate-950">{formatNumber(selectedComparison.latestOdometer, language)}</p></div>
+                        <div><p className="metric-label">{t.weeklyMileage.previousOdometer}</p><p className="mt-1 font-black text-slate-950">{formatNumber(selectedComparison.previousOdometer!, language)}</p></div>
+                        <div><p className="metric-label">{t.weeklyMileage.weeklyDistanceCovered}</p><p className="mt-1 font-black text-slate-950">{formatNumber(selectedComparison.weeklyDistance!, language)} km</p></div>
+                        <div><p className="metric-label">{t.weeklyMileage.selectedVehicleReg}</p><p className="mt-1 font-semibold text-slate-900">{selectedComparison.vehicleReg || "-"}</p></div>
+                        <div><p className="metric-label">{t.weeklyMileage.currentReportingWeek}</p><p className="mt-1 font-semibold text-slate-900">{formatDate(selectedComparison.latestWeekEnding, language)}</p></div>
+                        <div><p className="metric-label">{t.weeklyMileage.previousReportingWeek}</p><p className="mt-1 font-semibold text-slate-900">{formatDate(selectedComparison.previousWeekEnding!, language)}</p></div>
+                      </div>
+                    </div>
+                    <div className="rounded-xl bg-slate-50/70 p-3">
+                      <p className="text-sm font-black text-slate-900">{t.weeklyMileage.weeklyComparisonHistory}</p>
+                      <div className="mt-1.5 space-y-1">
+                        {selectedComparisonHistory.map((entry) => (
+                          <div key={entry.id} className="flex items-center justify-between gap-3 border-b border-slate-200/70 pb-2 last:border-b-0 last:pb-0">
+                            <div><p className="text-xs font-bold text-slate-800">{formatDate(entry.week_ending, language)}</p><p className="text-[11px] text-slate-400">{entry.vehicle_reg || "-"}</p></div>
+                            <p className="text-sm font-black text-slate-950">{formatNumber(entry.mileage, language)}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </section>
+        </>
+      ) : null}
+
 
       {serviceModal ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/45 p-3 sm:items-center">

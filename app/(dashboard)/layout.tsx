@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { SetupNotice } from "@/components/setup-notice";
 import { TopNavigation } from "@/components/top-navigation";
-import { AdminFetchError } from "@/lib/account-management";
+import { AdminFetchError, resolveLoginRouting } from "@/lib/account-management";
 import { useLanguage } from "@/lib/language-provider";
 import { supabase } from "@/lib/supabase";
 import { AccountAccessProvider, useAccountAccess } from "@/lib/use-account-access";
@@ -135,7 +135,21 @@ function DashboardShell({
       }
 
       try {
-        await withTimeout(refresh(), AUTH_CHECK_TIMEOUT_MS, "Account access check");
+        const routing = await withTimeout(
+          resolveLoginRouting(data.session!.access_token),
+          AUTH_CHECK_TIMEOUT_MS,
+          "Account routing check"
+        );
+        if (routing.accountType === "driver") {
+          await supabase.auth.signOut({ scope: "local" });
+          window.location.replace("/driver");
+          return;
+        }
+        if (routing.accountType !== "office") {
+          window.location.replace(routing.destination);
+          return;
+        }
+        await withTimeout(refresh({ force: true }), AUTH_CHECK_TIMEOUT_MS, "Account access check");
       } catch (error) {
         if (active && error instanceof AdminFetchError && error.status === 401) {
           await supabase.auth.signOut();
@@ -144,6 +158,11 @@ function DashboardShell({
         }
 
         if (active && error instanceof AdminFetchError && error.status === 403) {
+          if (/driver accounts must use the driver portal/i.test(error.message)) {
+            await supabase.auth.signOut();
+            router.replace("/driver");
+            return;
+          }
           setCheckingAuth(false);
           return;
         }

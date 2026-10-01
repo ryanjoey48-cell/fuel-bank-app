@@ -166,7 +166,7 @@ async function loadLogo() {
       window.clearTimeout(timeout);
       resolve(null);
     };
-    image.src = "/logo.png";
+    image.src = "/ees-logo.png";
   });
 }
 

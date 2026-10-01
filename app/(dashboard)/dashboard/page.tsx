@@ -23,6 +23,7 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { EESLogo } from "@/components/ees-logo";
 import {
   fetchBookingDiaryEntries,
   fetchFuelLogs,
@@ -47,7 +48,7 @@ type Shortcut = {
   href: string;
   icon: LucideIcon;
   label: string;
-  tone: "orange" | "purple" | "neutral";
+  tone: "purple" | "neutral";
 };
 
 type ActivityItem = {
@@ -58,10 +59,20 @@ type ActivityItem = {
   occurredAt: string;
   reference: string;
   title: string;
-  tone: "orange" | "purple" | "blue";
+  tone: "purple" | "slate";
+};
+
+type ReviewBreakdown = {
+  fuel: number;
+  maintenance: number;
+  trips: number;
 };
 
 const pad = (value: number) => String(value).padStart(2, "0");
+
+function dateKey(value: Date) {
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+}
 
 function currentMonthRange() {
   const now = new Date();
@@ -87,6 +98,23 @@ function safeTimestamp(value: string | null | undefined) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function hasAssignedDriver(booking: BookingDiaryEntry) {
+  const row = booking as unknown as Record<string, unknown>;
+  const directValues = [
+    row.driver_id,
+    row.assigned_driver_id,
+    row.driver_name,
+    row.driver
+  ];
+
+  return directValues.some((value) => {
+    if (typeof value === "string") return value.trim().length > 0;
+    if (typeof value === "number") return Number.isFinite(value);
+    if (value && typeof value === "object") return Object.keys(value as object).length > 0;
+    return false;
+  });
+}
+
 function formatActivityTime(value: string, language: "en" | "th") {
   const parsed = new Date(value);
   if (!Number.isFinite(parsed.getTime())) return formatDate(value.slice(0, 10), language);
@@ -99,42 +127,107 @@ function formatActivityTime(value: string, language: "en" | "th") {
 }
 
 function ShortcutCard({ shortcut, compact = false }: { shortcut: Shortcut; compact?: boolean }) {
-  const tone = shortcut.tone === "orange"
-    ? "border-orange-200/80 bg-orange-50/55 text-orange-700 group-hover:border-orange-300 group-hover:shadow-orange-100/70"
-    : shortcut.tone === "purple"
-      ? "border-violet-200/80 bg-violet-50/55 text-violet-700 group-hover:border-violet-300 group-hover:shadow-violet-100/70"
-      : "border-slate-200 bg-white text-slate-700 group-hover:border-slate-300 group-hover:shadow-slate-200/70";
+  const tone = shortcut.tone === "purple"
+    ? "border-violet-200/80 bg-white text-violet-700 group-hover:border-violet-300 group-hover:bg-violet-50/50 group-hover:shadow-violet-100/70"
+    : "border-slate-200 bg-white text-slate-700 group-hover:border-violet-200 group-hover:bg-violet-50/30 group-hover:text-violet-700 group-hover:shadow-violet-100/60";
 
   return (
     <Link
       href={shortcut.href}
-      className={`group flex h-full items-start gap-3 rounded-2xl border p-3.5 shadow-[0_7px_20px_rgba(15,23,42,0.05)] transition duration-200 hover:-translate-y-0.5 hover:shadow-md ${compact ? "min-h-[92px]" : "min-h-[116px]"} ${tone}`}
+      className={`group flex h-full items-start gap-3 rounded-2xl border p-3.5 shadow-[0_7px_20px_rgba(15,23,42,0.045)] transition duration-200 hover:-translate-y-0.5 hover:shadow-md ${compact ? "min-h-[92px]" : "min-h-[116px]"} ${tone}`}
     >
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-700 shadow-sm">
         <shortcut.icon className="h-5 w-5" />
       </span>
       <span className="min-w-0 flex-1">
         <span className={`${compact ? "text-sm" : "text-base"} block font-bold text-slate-950`}>{shortcut.label}</span>
         <span className="mt-1 block text-xs leading-[1.15rem] text-slate-600">{shortcut.description}</span>
       </span>
-      <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-current" />
+      <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-violet-700" />
     </Link>
   );
 }
 
-function SummaryCard({ icon: Icon, label, value, detail, tone }: { icon: LucideIcon; label: string; value: string; detail: string; tone: "orange" | "purple" | "blue" | "slate" }) {
-  const accent = tone === "orange" ? "bg-orange-50 text-orange-700" : tone === "purple" ? "bg-violet-50 text-violet-700" : tone === "blue" ? "bg-sky-50 text-sky-700" : "bg-slate-100 text-slate-700";
+function SummaryCard({ icon: Icon, label, value, detail }: { icon: LucideIcon; label: string; value: string; detail: string }) {
   return (
-    <article className="h-full rounded-2xl border border-slate-300/80 bg-white p-4 shadow-[0_9px_24px_rgba(15,23,42,0.075)]">
+    <article className="h-full rounded-2xl border border-slate-300/80 bg-white p-4 shadow-[0_9px_24px_rgba(15,23,42,0.065)]">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.1em] text-slate-500">{label}</p>
           <p className="mt-1.5 text-2xl font-black tracking-tight text-slate-950 sm:text-[1.7rem]">{value}</p>
         </div>
-        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${accent}`}><Icon className="h-5 w-5" /></span>
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-700">
+          <Icon className="h-5 w-5" />
+        </span>
       </div>
       <p className="mt-1.5 text-xs leading-5 text-slate-500">{detail}</p>
     </article>
+  );
+}
+
+function ReviewSummaryCard({
+  label,
+  value,
+  detail,
+  breakdown,
+  language
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  breakdown: ReviewBreakdown;
+  language: "en" | "th";
+}) {
+  const labels = language === "th"
+    ? { fuel: "เชื้อเพลิง", trips: "เที่ยววิ่ง", maintenance: "ซ่อมบำรุง", open: "ดูรายละเอียด" }
+    : { fuel: "Fuel", trips: "Trip journeys", maintenance: "Maintenance", open: "View breakdown" };
+
+  return (
+    <details className="group h-full rounded-2xl border border-slate-300/80 bg-white p-4 shadow-[0_9px_24px_rgba(15,23,42,0.065)]">
+      <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.1em] text-slate-500">{label}</p>
+            <p className="mt-1.5 text-2xl font-black tracking-tight text-slate-950 sm:text-[1.7rem]">{value}</p>
+          </div>
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-700">
+            <Activity className="h-5 w-5" />
+          </span>
+        </div>
+        <p className="mt-1.5 text-xs leading-5 text-slate-500">{detail}</p>
+        <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-violet-700">
+          {labels.open}<ArrowRight className="h-3 w-3 transition group-open:rotate-90" />
+        </span>
+      </summary>
+      <div className="mt-3 grid grid-cols-3 gap-2 border-t border-slate-100 pt-3">
+        <ReviewMini label={labels.fuel} value={breakdown.fuel} href="/fuel-logs" />
+        <ReviewMini label={labels.trips} value={breakdown.trips} href="/trip-journey" />
+        <ReviewMini label={labels.maintenance} value={breakdown.maintenance} href="/maintenance" />
+      </div>
+    </details>
+  );
+}
+
+function ReviewMini({ label, value, href }: { label: string; value: number; href: string }) {
+  return (
+    <Link href={href} className="rounded-xl bg-violet-50/70 px-2 py-2 text-center transition hover:bg-violet-100">
+      <span className="block text-base font-black text-slate-950">{value}</span>
+      <span className="block truncate text-[10px] font-semibold text-slate-500">{label}</span>
+    </Link>
+  );
+}
+
+function TodayMetric({ href, label, value, icon: Icon }: { href: string; label: string; value: string; icon: LucideIcon }) {
+  return (
+    <Link href={href} className="group flex min-h-[70px] items-center gap-3 rounded-xl border border-slate-200 bg-white px-3.5 py-3 transition hover:border-violet-200 hover:bg-violet-50/40">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-700">
+        <Icon className="h-4 w-4" />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-xl font-black leading-none text-slate-950">{value}</span>
+        <span className="mt-1 block truncate text-xs font-semibold text-slate-500 group-hover:text-violet-700">{label}</span>
+      </span>
+    </Link>
   );
 }
 
@@ -182,8 +275,12 @@ export default function DashboardPage() {
   }, [load]);
 
   const range = useMemo(currentMonthRange, []);
+  const today = useMemo(() => dateKey(new Date()), []);
   const monthlyBookings = useMemo(() => bookings.filter((row) => inRange(row.booking_date, range.start, range.end)), [bookings, range]);
   const monthlyFuel = useMemo(() => fuelLogs.filter((row) => inRange(row.date, range.start, range.end)), [fuelLogs, range]);
+  const todayBookings = useMemo(() => bookings.filter((row) => row.booking_date === today), [bookings, today]);
+  const assignedToday = useMemo(() => todayBookings.filter(hasAssignedDriver).length, [todayBookings]);
+  const unassignedToday = Math.max(todayBookings.length - assignedToday, 0);
   const tripBookingIds = useMemo(() => new Set(trips.flatMap((trip) => [trip.booking_diary_id, trip.booking_id]).filter(Boolean).map(String)), [trips]);
   const missingTrips = monthlyBookings.filter((booking) => !tripBookingIds.has(String(booking.id))).length;
   const uncheckedFuel = monthlyFuel.filter((row) => !row.receipt_checked).length;
@@ -191,6 +288,10 @@ export default function DashboardPage() {
   const reviewCount = missingTrips + uncheckedFuel + maintenanceReview;
   const fuelSpend = monthlyFuel.reduce((sum, row) => sum + asNumber(row.total_cost), 0);
   const activeVehicles = vehicles.filter((vehicle) => vehicle.active !== false).length;
+
+  const todayLabels = language === "th"
+    ? { title: "วันนี้", jobs: "งานวันนี้", assigned: "มอบหมายคนขับแล้ว", unassigned: "ยังไม่มอบหมาย", maintenance: "ซ่อมบำรุงที่ต้องดู" }
+    : { title: "Today", jobs: "Jobs today", assigned: "Drivers assigned", unassigned: "Unassigned", maintenance: "Maintenance due" };
 
   const recentActivity = useMemo<ActivityItem[]>(() => {
     const bookingActivity = bookings.map((booking) => ({
@@ -211,7 +312,7 @@ export default function DashboardPage() {
       occurredAt: fuel.created_at,
       href: "/fuel-logs",
       icon: Fuel,
-      tone: "orange" as const
+      tone: "purple" as const
     }));
     const maintenanceActivity = (maintenance?.records ?? []).filter((record) => !record.is_deleted).map((record) => ({
       id: `maintenance-${record.id}`,
@@ -221,36 +322,39 @@ export default function DashboardPage() {
       occurredAt: record.updated_at || record.created_at,
       href: "/maintenance",
       icon: Wrench,
-      tone: "blue" as const
+      tone: "slate" as const
     }));
-    return [...bookingActivity, ...fuelActivity, ...maintenanceActivity]
-      .filter((item) => safeTimestamp(item.occurredAt) > 0)
+
+    const recentPerType = [bookingActivity, fuelActivity, maintenanceActivity]
+      .flatMap((items) => items
+        .filter((item) => safeTimestamp(item.occurredAt) > 0)
+        .sort((left, right) => safeTimestamp(right.occurredAt) - safeTimestamp(left.occurredAt))
+        .slice(0, 3));
+
+    return recentPerType
       .sort((left, right) => safeTimestamp(right.occurredAt) - safeTimestamp(left.occurredAt))
-      .slice(0, 6);
+      .slice(0, 8);
   }, [bookings, fuelLogs, home.activity, language, maintenance]);
 
-  const primaryShortcuts: Shortcut[] = [
-    { href: "/booking-diary", label: home.shortcuts.booking, description: home.shortcuts.bookingDescription, icon: CalendarDays, tone: "orange" },
+  const shortcuts: Shortcut[] = [
+    { href: "/booking-diary", label: home.shortcuts.booking, description: home.shortcuts.bookingDescription, icon: CalendarDays, tone: "purple" },
     { href: "/dispatch", label: home.shortcuts.dispatch, description: home.shortcuts.dispatchDescription, icon: ClipboardCheck, tone: "purple" },
-    { href: "/fuel-logs", label: home.shortcuts.fuel, description: home.shortcuts.fuelDescription, icon: Fuel, tone: "orange" },
     { href: "/trip-journey", label: home.shortcuts.trip, description: home.shortcuts.tripDescription, icon: MapPinned, tone: "purple" },
-    { href: "/drivers", label: home.shortcuts.fleet, description: home.shortcuts.fleetDescription, icon: Truck, tone: "neutral" }
-  ];
-
-  const secondaryShortcuts: Shortcut[] = [
-    { href: "/weekly-mileage", label: home.shortcuts.mileage, description: home.shortcuts.mileageDescription, icon: Gauge, tone: "purple" },
-    { href: "/maintenance", label: home.shortcuts.maintenance, description: home.shortcuts.maintenanceDescription, icon: Wrench, tone: "orange" },
-    { href: "/insurance", label: home.shortcuts.insurance, description: home.shortcuts.insuranceDescription, icon: ShieldCheck, tone: "purple" },
-    { href: "/inventory", label: home.shortcuts.inventory, description: home.shortcuts.inventoryDescription, icon: PackageSearch, tone: "orange" },
-    { href: "/reports", label: home.shortcuts.reports, description: home.shortcuts.reportsDescription, icon: FileBarChart, tone: "purple" },
+    { href: "/fuel-logs", label: home.shortcuts.fuel, description: home.shortcuts.fuelDescription, icon: Fuel, tone: "purple" },
+    { href: "/weekly-mileage", label: home.shortcuts.mileage, description: home.shortcuts.mileageDescription, icon: Gauge, tone: "neutral" },
+    { href: "/drivers", label: home.shortcuts.fleet, description: home.shortcuts.fleetDescription, icon: Truck, tone: "neutral" },
+    { href: "/maintenance", label: home.shortcuts.maintenance, description: home.shortcuts.maintenanceDescription, icon: Wrench, tone: "neutral" },
+    { href: "/insurance", label: home.shortcuts.insurance, description: home.shortcuts.insuranceDescription, icon: ShieldCheck, tone: "neutral" },
+    { href: "/inventory", label: home.shortcuts.inventory, description: home.shortcuts.inventoryDescription, icon: PackageSearch, tone: "neutral" },
+    { href: "/reports", label: home.shortcuts.reports, description: home.shortcuts.reportsDescription, icon: FileBarChart, tone: "neutral" },
     { href: "/booking-diary", label: home.shortcuts.insights, description: home.shortcuts.insightsDescription, icon: BarChart3, tone: "neutral" },
     ...(isAdmin ? [{ href: "/admin/users", label: home.shortcuts.admin, description: home.shortcuts.adminDescription, icon: Users, tone: "neutral" as const }] : [])
   ];
 
   return (
     <div className="w-full space-y-3.5 pb-4 sm:space-y-4 lg:-mx-3 lg:w-[calc(100%+1.5rem)] xl:-mx-4 xl:w-[calc(100%+2rem)]">
-      <section className="overflow-hidden rounded-[1.35rem] border border-orange-100/80 shadow-[0_16px_42px_rgba(42,32,72,0.11)]">
-        <div className="relative hidden aspect-[31/10] md:block">
+      <section className="overflow-hidden rounded-[1.35rem] border border-violet-100/80 shadow-[0_16px_42px_rgba(42,32,72,0.11)]">
+        <div className="relative hidden aspect-[31/8.8] md:block">
           <h1 className="sr-only">{home.title}</h1>
           <p className="sr-only">{home.subtitle}</p>
           <Image
@@ -263,57 +367,82 @@ export default function DashboardPage() {
           />
         </div>
         <div className="md:hidden">
-          <div className="relative overflow-hidden bg-[linear-gradient(138deg,#fff8ee_0%,#fffdf9_58%,#f7f2ff_100%)] px-5 py-7 sm:px-8">
-            <span className="absolute -left-16 -top-20 h-48 w-48 rounded-full bg-orange-100/70 blur-3xl" aria-hidden="true" />
+          <div className="relative overflow-hidden bg-[linear-gradient(138deg,#faf8ff_0%,#ffffff_58%,#f5f1ff_100%)] px-5 py-7 sm:px-8">
+            <span className="absolute -left-16 -top-20 h-48 w-48 rounded-full bg-violet-100/70 blur-3xl" aria-hidden="true" />
             <div className="relative">
-              <Image src="/ees-logo.png" alt="EES" width={170} height={110} className="h-14 w-auto object-contain" priority />
+              <EESLogo alt="EES" size={48} className="h-12 w-12" priority />
               <h1 className="mt-5 text-3xl font-black tracking-[-0.035em]">
                 <span className="text-slate-950">{home.titlePrimary}</span>{" "}
-                <span className="text-orange-600">{home.titleAccent}</span>
+                <span className="text-violet-700">{home.titleAccent}</span>
               </h1>
               <p className="mt-3 max-w-md text-sm leading-6 text-slate-600">{home.subtitle}</p>
             </div>
           </div>
-          <div className="relative min-h-[220px] overflow-hidden bg-[#f7d8a8] sm:min-h-[280px]">
+          <div className="relative min-h-[210px] overflow-hidden bg-violet-50 sm:min-h-[260px]">
             <Image src="/ees-truck.png" alt={home.truckAlt} fill sizes="100vw" className="object-cover object-right" priority />
           </div>
         </div>
       </section>
 
       <section aria-labelledby="quick-actions-title">
-        <div className="mb-2.5 flex items-center justify-between"><h2 id="quick-actions-title" className="text-sm font-extrabold uppercase tracking-[0.12em] text-slate-700">{home.quickActions}</h2></div>
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
+        <div className="mb-2.5 flex items-center justify-between">
+          <h2 id="quick-actions-title" className="text-sm font-extrabold uppercase tracking-[0.12em] text-slate-700">{home.quickActions}</h2>
+        </div>
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
           <QuickAction href="/booking-diary" label={home.actions.booking} icon={CalendarDays} primary />
           <QuickAction href="/fuel-logs" label={home.actions.fuel} icon={Fuel} />
           <QuickAction href="/trip-journey" label={home.actions.trip} icon={Route} />
-          <QuickAction href="/dispatch" label={home.actions.dispatch} icon={ClipboardCheck} />
-          <QuickAction href="/insurance" label={home.actions.vehicle} icon={Plus} neutral />
-          <QuickAction href="/reports" label={home.actions.reports} icon={FileBarChart} neutral />
+          <QuickAction href="/drivers" label={home.actions.vehicle} icon={Plus} />
         </div>
       </section>
 
       {error ? <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
 
       <section className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
-        <SummaryCard icon={CalendarDays} label={home.summary.bookings} value={loading ? "—" : formatNumber(monthlyBookings.length, language)} detail={home.summary.bookingsDetail} tone="purple" />
-        <SummaryCard icon={Fuel} label={home.summary.fuelSpend} value={loading ? "—" : formatCurrency(fuelSpend, language)} detail={home.summary.fuelDetail} tone="orange" />
-        <SummaryCard icon={Truck} label={home.summary.fleet} value={loading ? "—" : formatNumber(activeVehicles, language)} detail={home.summary.fleetDetail} tone="blue" />
-        <SummaryCard icon={Activity} label={home.summary.review} value={loading ? "—" : formatNumber(reviewCount, language)} detail={home.summary.reviewDetail} tone="slate" />
+        <SummaryCard icon={CalendarDays} label={home.summary.bookings} value={loading ? "—" : formatNumber(monthlyBookings.length, language)} detail={home.summary.bookingsDetail} />
+        <SummaryCard icon={Fuel} label={home.summary.fuelSpend} value={loading ? "—" : formatCurrency(fuelSpend, language)} detail={home.summary.fuelDetail} />
+        <SummaryCard icon={Truck} label={home.summary.fleet} value={loading ? "—" : formatNumber(activeVehicles, language)} detail={home.summary.fleetDetail} />
+        <ReviewSummaryCard
+          label={home.summary.review}
+          value={loading ? "—" : formatNumber(reviewCount, language)}
+          detail={home.summary.reviewDetail}
+          breakdown={{ fuel: uncheckedFuel, trips: missingTrips, maintenance: maintenanceReview }}
+          language={language}
+        />
+      </section>
+
+      <section aria-labelledby="today-title" className="rounded-[1.35rem] border border-violet-100 bg-violet-50/35 p-3.5 shadow-sm">
+        <div className="mb-2.5 flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-violet-600" />
+          <h2 id="today-title" className="text-xs font-extrabold uppercase tracking-[0.14em] text-violet-800">{todayLabels.title}</h2>
+        </div>
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+          <TodayMetric href="/booking-diary" label={todayLabels.jobs} value={loading ? "—" : formatNumber(todayBookings.length, language)} icon={CalendarDays} />
+          <TodayMetric href="/dispatch" label={todayLabels.assigned} value={loading ? "—" : formatNumber(assignedToday, language)} icon={Users} />
+          <TodayMetric href="/dispatch" label={todayLabels.unassigned} value={loading ? "—" : formatNumber(unassignedToday, language)} icon={ClipboardCheck} />
+          <TodayMetric href="/maintenance" label={todayLabels.maintenance} value={loading ? "—" : formatNumber(maintenanceReview, language)} icon={Wrench} />
+        </div>
       </section>
 
       <section aria-labelledby="operations-shortcuts-title" className="rounded-[1.35rem] border border-slate-200/90 bg-[#fbfafc] p-4 shadow-sm">
         <div className="mb-3.5">
-          <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-orange-600">{home.toolsEyebrow}</p>
+          <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-violet-700">{home.toolsEyebrow}</p>
           <h2 id="operations-shortcuts-title" className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">{home.operationsShortcuts}</h2>
           <p className="mt-1 text-sm text-slate-500">{home.operationsShortcutsDescription}</p>
         </div>
-        <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-5">{primaryShortcuts.map((shortcut) => <ShortcutCard key={shortcut.href} shortcut={shortcut} />)}</div>
-        <div className="mt-2.5 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{secondaryShortcuts.map((shortcut) => <ShortcutCard key={`${shortcut.href}-${shortcut.label}`} shortcut={shortcut} compact />)}</div>
+        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {shortcuts.map((shortcut, index) => (
+            <ShortcutCard key={`${shortcut.href}-${shortcut.label}`} shortcut={shortcut} compact={index >= 4} />
+          ))}
+        </div>
       </section>
 
       <section className="overflow-hidden rounded-[1.35rem] border border-slate-200 bg-white shadow-[0_12px_34px_rgba(15,23,42,0.055)]">
         <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-4 py-3 sm:px-5">
-          <div><h2 className="text-lg font-extrabold text-slate-950">{home.recentActivity}</h2><p className="mt-1 text-xs text-slate-500">{home.recentActivityDescription}</p></div>
+          <div>
+            <h2 className="text-lg font-extrabold text-slate-950">{home.recentActivity}</h2>
+            <p className="mt-1 text-xs text-slate-500">{home.recentActivityDescription}</p>
+          </div>
           <Link href="/reports" className="inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold text-violet-700 transition hover:bg-violet-50 hover:text-violet-900">
             <Boxes className="h-4 w-4" />{home.viewAllActivity}<ArrowRight className="h-3.5 w-3.5" />
           </Link>
@@ -321,11 +450,17 @@ export default function DashboardPage() {
         {recentActivity.length ? (
           <div className="divide-y divide-slate-100">
             {recentActivity.map((item) => {
-              const colour = item.tone === "orange" ? "bg-orange-50 text-orange-700" : item.tone === "purple" ? "bg-violet-50 text-violet-700" : "bg-sky-50 text-sky-700";
+              const colour = item.tone === "purple" ? "bg-violet-50 text-violet-700" : "bg-slate-100 text-slate-700";
               return (
-                <Link key={item.id} href={item.href} className="group flex items-start gap-2.5 px-4 py-2 transition hover:bg-slate-50 sm:items-center sm:px-5">
+                <Link key={item.id} href={item.href} className="group flex items-start gap-2.5 px-4 py-2 transition hover:bg-violet-50/30 sm:items-center sm:px-5">
                   <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${colour}`}><item.icon className="h-3.5 w-3.5" /></span>
-                  <span className="min-w-0 flex-1"><span className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2"><span className="text-sm font-bold text-slate-900">{item.title}</span><span className="truncate text-xs font-semibold text-slate-500">{item.reference}</span></span><span className="mt-0.5 block truncate text-xs text-slate-500">{item.description}</span></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2">
+                      <span className="text-sm font-bold text-slate-900">{item.title}</span>
+                      <span className="truncate text-xs font-semibold text-slate-500">{item.reference}</span>
+                    </span>
+                    <span className="mt-0.5 block truncate text-xs text-slate-500">{item.description}</span>
+                  </span>
                   <span className="shrink-0 text-right text-[11px] font-medium tabular-nums text-slate-400 sm:w-28">{formatActivityTime(item.occurredAt, language)}</span>
                   <ArrowRight className="hidden h-4 w-4 shrink-0 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-violet-600 sm:block" />
                 </Link>
@@ -338,11 +473,17 @@ export default function DashboardPage() {
   );
 }
 
-function QuickAction({ href, label, icon: Icon, primary = false, neutral = false }: { href: string; label: string; icon: LucideIcon; primary?: boolean; neutral?: boolean }) {
+function QuickAction({ href, label, icon: Icon, primary = false }: { href: string; label: string; icon: LucideIcon; primary?: boolean }) {
   const style = primary
-    ? "border-orange-600 bg-orange-600 text-white shadow-orange-200 hover:bg-orange-700"
-    : neutral
-      ? "border-slate-200 bg-white text-slate-800 shadow-slate-100 hover:border-slate-300"
-      : "border-violet-200 bg-violet-50 text-violet-800 shadow-violet-100 hover:border-violet-300 hover:bg-violet-100";
-  return <Link href={href} className={`flex h-full min-h-11 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-center text-sm font-bold shadow-sm transition duration-200 hover:-translate-y-px hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 ${style}`}><Icon className="h-4 w-4 shrink-0" />{label}</Link>;
+    ? "border-violet-700 bg-violet-700 text-white shadow-violet-200 hover:bg-violet-800"
+    : "border-violet-200 bg-violet-50 text-violet-800 shadow-violet-100 hover:border-violet-300 hover:bg-violet-100";
+
+  return (
+    <Link
+      href={href}
+      className={`flex h-full min-h-11 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-center text-sm font-bold shadow-sm transition duration-200 hover:-translate-y-px hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 ${style}`}
+    >
+      <Icon className="h-4 w-4 shrink-0" />{label}
+    </Link>
+  );
 }

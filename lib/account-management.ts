@@ -40,6 +40,26 @@ export type ManagedAccountList = {
   total: number;
 };
 
+export type DriverAccessRequest = {
+  id: string;
+  authUserId: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  requestedAccountType: "driver" | "office_staff";
+  status: "pending" | "approved" | "rejected";
+  requestedAt: string;
+  reviewedAt: string | null;
+  linkedDriverId: string | null;
+  rejectionReason: string | null;
+};
+
+export type DriverAccessDriverOption = {
+  id: string;
+  name: string;
+  vehicleRegistration: string | null;
+};
+
 export async function getAccessToken() {
   const { data, error } = await supabase.auth.getSession();
   if (error) throw new Error(error.message);
@@ -83,6 +103,27 @@ export async function fetchCurrentAccess() {
   return adminFetch<{ access: AccountAccess; permissions: string[] }>("/api/admin/me");
 }
 
+export type LoginRoutingResult = {
+  accountType: "driver" | "office" | "pending" | "rejected";
+  destination: "/driver" | "/dashboard" | "/access/pending" | "/access/rejected";
+};
+
+export async function resolveLoginRouting(accessToken?: string) {
+  const token = accessToken || await getAccessToken();
+  const response = await fetch("/api/auth/login-routing", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`
+    }
+  });
+  const payload = await response.json().catch(() => null) as (LoginRoutingResult & { error?: string }) | null;
+  if (!response.ok || !payload) {
+    throw new AdminFetchError(response.status, payload?.error || "Unable to determine account access.");
+  }
+  return payload;
+}
+
 export async function fetchManagedAccounts(params: {
   page: number;
   pageSize: number;
@@ -115,5 +156,20 @@ export async function sendManagedAccountPasswordReset(userId: string) {
   return adminFetch<{ ok: true }>(`/api/admin/users/${encodeURIComponent(userId)}/password-reset`, {
     method: "POST",
     body: JSON.stringify({})
+  });
+}
+
+export async function fetchDriverAccessRequests() {
+  return adminFetch<{ canReview: boolean; requests: DriverAccessRequest[]; drivers: DriverAccessDriverOption[] }>("/api/admin/driver-access-requests");
+}
+
+export async function reviewDriverAccessRequest(requestId: string, payload: {
+  decision: "approved" | "rejected";
+  driverId?: string;
+  rejectionReason?: string;
+}) {
+  return adminFetch<{ request: DriverAccessRequest }>(`/api/admin/driver-access-requests/${encodeURIComponent(requestId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload)
   });
 }

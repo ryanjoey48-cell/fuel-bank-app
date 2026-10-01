@@ -12,7 +12,6 @@ import {
   Unlink
 } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
-import { Header } from "@/components/header";
 import { LocationAutocomplete, type StructuredLocation } from "@/components/location-autocomplete";
 import {
   createTripJourneyFromBooking,
@@ -39,8 +38,8 @@ const tripJourneyCopy = {
     tripJourney: "Trip Journey",
     booking: "Booking",
     dataStatus: "Data status",
-    tripPerformance: "Trip Operations",
-    description: "Track planned jobs against actual trip execution, mileage checks, fuel events, and verification status.",
+    tripPerformance: "TRIP CHECKS",
+    description: "Verify completed jobs against booking, route, mileage and fuel data.",
     refresh: "Refresh",
     tripStatus: "Trip Status",
     operationsOverview: "Operations Overview",
@@ -146,7 +145,7 @@ const tripJourneyCopy = {
     bestDriver: "Best Driver",
     worstDriver: "Worst Driver",
     filters: "Filters",
-    filtersDescription: "Date, driver, vehicle, route, data status and fuel link.",
+    filtersDescription: "Find trips by date, driver, vehicle, route or verification status.",
     allDrivers: "All drivers",
     allVehicles: "All vehicles",
     route: "Route",
@@ -193,7 +192,7 @@ const tripJourneyCopy = {
     linkFuelLogsOrManual: "Link or confirm the fuel data used for this trip.",
     showAllTrips: "Show all trips",
     tripRecords: "Trip Records",
-    tripRecordsDescription: "Compact list of booking journeys. Review one trip to edit details.",
+    tripRecordsDescription: "Review each booking journey and confirm distance, mileage and fuel checks.",
     newestTripsFirst: "Newest trips first.",
     loadingTripJourneys: "Loading trip journeys...",
     noTripRecordsYet: "No Trip Journeys have been created yet.",
@@ -912,6 +911,7 @@ function FinancialTreatmentFields({
 }
 
 type SelectedTripTab = "overview" | "journey" | "fuel" | "notes";
+type ReviewStep = 1 | 2 | 3;
 type AttentionFilter = "all" | "missing_mileage" | "missing_estimate" | "missing_fuel" | "missing_weekly_mileage";
 type DerivedTripStatus = "completed" | "missing_mileage" | "missing_estimated_distance" | "missing_fuel";
 type TripJobStatus = "planned" | "in_progress" | "completed";
@@ -2089,11 +2089,13 @@ export default function TripJourneyPage() {
   const [manualFuelExpanded, setManualFuelExpanded] = useState(false);
   const [visibleManualFuelLogCount, setVisibleManualFuelLogCount] = useState(10);
   const [selectedTripTab, setSelectedTripTab] = useState<SelectedTripTab>("overview");
+  const [reviewStep, setReviewStep] = useState<ReviewStep>(1);
   const [attentionFilter, setAttentionFilter] = useState<AttentionFilter>("all");
   const [visibleTripCount, setVisibleTripCount] = useState(10);
   const [comparisonTab, setComparisonTab] = useState<ComparisonTab>("drivers");
   const [comparisonSort, setComparisonSort] = useState<ComparisonSort>("best_kml");
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [pageMode, setPageMode] = useState<"trips" | "results">("trips");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -2483,6 +2485,194 @@ export default function TripJourneyPage() {
     };
   }, [baseFilteredTrips, copy, fuelCycles, fuelLogs, weeklyMileage]);
 
+
+  const operationalCounts = useMemo(() => {
+    let needsAttention = 0;
+    let missingFuel = 0;
+    let missingMileage = 0;
+    let missingEstimate = 0;
+    let readyToVerify = 0;
+    let verified = 0;
+
+    baseFilteredTrips.forEach((trip) => {
+      const fuelCycle = getFuelCycleForTrip(trip, fuelCycles);
+      const possibleFuelLogs = getPossibleFuelLogsForTrip(trip, fuelLogs, fuelCycle);
+      const readiness = getTripDataReadiness(
+        trip,
+        weeklyMileage,
+        copy,
+        baseFilteredTrips,
+        possibleFuelLogs,
+        fuelCycle
+      );
+
+      if (readiness.status === "data_ready") {
+        verified += 1;
+        return;
+      }
+
+      needsAttention += 1;
+      if (readiness.issues.fuel) missingFuel += 1;
+      if (readiness.issues.weeklyMileage) missingMileage += 1;
+      if ((getTripMetrics(trip).estimatedDistance ?? 0) <= 0) missingEstimate += 1;
+
+      if (
+        isCompletedTrip(trip) &&
+        !readiness.issues.fuel &&
+        !readiness.issues.weeklyMileage &&
+        (getTripMetrics(trip).workingDistance ?? 0) > 0
+      ) {
+        readyToVerify += 1;
+      }
+    });
+
+    return {
+      needsAttention,
+      missingFuel,
+      missingMileage,
+      missingEstimate,
+      readyToVerify,
+      verified
+    };
+  }, [baseFilteredTrips, copy, fuelCycles, fuelLogs, weeklyMileage]);
+
+  const resultsData = useMemo(() => {
+    const verifiedTrips = baseFilteredTrips.filter((trip) => {
+      const fuelCycle = getFuelCycleForTrip(trip, fuelCycles);
+      const possibleFuelLogs = getPossibleFuelLogsForTrip(trip, fuelLogs, fuelCycle);
+      return getTripDataReadiness(
+        trip,
+        weeklyMileage,
+        copy,
+        baseFilteredTrips,
+        possibleFuelLogs,
+        fuelCycle
+      ).status === "data_ready";
+    });
+
+    const totalPlannedKm = verifiedTrips.reduce(
+      (sum, trip) => sum + (getTripMetrics(trip).estimatedDistance ?? 0),
+      0
+    );
+    const totalWorkingKm = verifiedTrips.reduce(
+      (sum, trip) => sum + (getTripMetrics(trip).workingDistance ?? 0),
+      0
+    );
+    const totalDifferenceKm = totalWorkingKm - totalPlannedKm;
+    const averageVariancePercent =
+      verifiedTrips.length > 0
+        ? verifiedTrips.reduce((sum, trip) => {
+            const metrics = getTripMetrics(trip);
+            return sum + Math.abs(metrics.differencePercent ?? 0);
+          }, 0) / verifiedTrips.length
+        : null;
+
+    const routeMap = verifiedTrips.reduce((map, trip) => {
+      const bookingRoute =
+        [shortenLocation(trip.pickup_location, copy), shortenLocation(trip.dropoff_location, copy)]
+          .filter(Boolean)
+          .join(" -> ");
+      const route = bookingRoute || trip.route || copy.unknownRoute;
+      const current = map.get(route) ?? {
+        route,
+        trips: 0,
+        plannedKm: 0,
+        workingKm: 0,
+        differenceKm: 0
+      };
+      const metrics = getTripMetrics(trip);
+      current.trips += 1;
+      current.plannedKm += metrics.estimatedDistance ?? 0;
+      current.workingKm += metrics.workingDistance ?? 0;
+      current.differenceKm += metrics.differenceKm ?? 0;
+      map.set(route, current);
+      return map;
+    }, new Map<string, { route: string; trips: number; plannedKm: number; workingKm: number; differenceKm: number }>());
+
+    const routes = Array.from(routeMap.values())
+      .map((row) => ({
+        ...row,
+        averagePlannedKm: row.trips ? row.plannedKm / row.trips : null,
+        averageWorkingKm: row.trips ? row.workingKm / row.trips : null,
+        averageDifferenceKm: row.trips ? row.differenceKm / row.trips : null,
+        averageDifferencePercent:
+          row.plannedKm > 0 ? ((row.workingKm - row.plannedKm) / row.plannedKm) * 100 : null
+      }))
+      .sort((a, b) => b.trips - a.trips || Math.abs(b.averageDifferenceKm ?? 0) - Math.abs(a.averageDifferenceKm ?? 0));
+
+    const buildComparableRows = (getName: (trip: TripJourneyWithFuel) => string) => {
+      const map = verifiedTrips.reduce((acc, trip) => {
+        const name = getName(trip) || copy.unassigned;
+        const current = acc.get(name) ?? {
+          name,
+          trips: 0,
+          plannedKm: 0,
+          workingKm: 0,
+          absoluteVarianceKm: 0
+        };
+        const metrics = getTripMetrics(trip);
+        current.trips += 1;
+        current.plannedKm += metrics.estimatedDistance ?? 0;
+        current.workingKm += metrics.workingDistance ?? 0;
+        current.absoluteVarianceKm += Math.abs(metrics.differenceKm ?? 0);
+        acc.set(name, current);
+        return acc;
+      }, new Map<string, { name: string; trips: number; plannedKm: number; workingKm: number; absoluteVarianceKm: number }>());
+
+      return Array.from(map.values())
+        .map((row) => ({
+          ...row,
+          averageDifferenceKm: row.trips ? row.absoluteVarianceKm / row.trips : null
+        }))
+        .sort((a, b) => b.trips - a.trips || (a.averageDifferenceKm ?? 0) - (b.averageDifferenceKm ?? 0));
+    };
+
+    const drivers = buildComparableRows((trip) => trip.driver || copy.unassigned);
+    const vehicles = buildComparableRows((trip) => trip.vehicle_reg || trip.vehicle_type || copy.unassigned);
+
+    const relevantFuelCycles = fuelCycles.filter((cycle) =>
+      verifiedTrips.some((trip) => {
+        const sameVehicle =
+          normalizeVehicleKey(trip.vehicle_reg || trip.vehicle_type || "") ===
+          normalizeVehicleKey(cycle.vehicleReg);
+        return sameVehicle && trip.trip_date >= cycle.startDate && trip.trip_date <= cycle.endDate;
+      })
+    );
+
+    const cycleCoverageRows = relevantFuelCycles
+      .map((cycle) => getFuelCycleCoverage(cycle, verifiedTrips))
+      .filter((coverage) => coverage?.coveragePercent != null);
+    const totalLinkedTripKm = cycleCoverageRows.reduce(
+      (sum, coverage) => sum + Math.max(0, Number(coverage?.linkedDistance ?? 0)),
+      0
+    );
+    const totalUnallocatedKm = cycleCoverageRows.reduce(
+      (sum, coverage) => sum + Math.max(0, Number(coverage?.unallocatedDistance ?? 0)),
+      0
+    );
+    const totalRelevantFuelCycleKm = totalLinkedTripKm + totalUnallocatedKm;
+    const averageFuelCycleCoverage =
+      totalRelevantFuelCycleKm > 0
+        ? Math.min(100, (totalLinkedTripKm / totalRelevantFuelCycleKm) * 100)
+        : null;
+
+    return {
+      verifiedTrips,
+      totalPlannedKm,
+      totalWorkingKm,
+      totalDifferenceKm,
+      averageVariancePercent,
+      routes,
+      repeatRoutes: routes.filter((route) => route.trips >= 2),
+      drivers,
+      vehicles,
+      averageFuelCycleCoverage,
+      totalLinkedTripKm,
+      totalRelevantFuelCycleKm,
+      totalUnallocatedKm
+    };
+  }, [baseFilteredTrips, copy, fuelCycles, fuelLogs, weeklyMileage]);
+
   const sortedDriverRows = useMemo(() => sortPerformanceRows(summary.driverRows, comparisonSort), [comparisonSort, summary.driverRows]);
   const sortedVehicleRows = useMemo(() => sortPerformanceRows(summary.vehicleRows, comparisonSort), [comparisonSort, summary.vehicleRows]);
   const sortedRouteRows = useMemo(() => sortPerformanceRows(summary.routeRows, comparisonSort), [comparisonSort, summary.routeRows]);
@@ -2569,6 +2759,7 @@ export default function TripJourneyPage() {
     setForm(tripToForm(trip));
     setHasUnsavedChanges(false);
     setSelectedTripTab("overview");
+    setReviewStep(1);
     setManualFuelExpanded(false);
     setDistanceMessage(null);
     setDistanceDurationText(trip.google_estimated_minutes ? formatDuration(trip.google_estimated_minutes * 60) : null);
@@ -2579,6 +2770,29 @@ export default function TripJourneyPage() {
     params.set("tripId", trip.id);
     params.delete("trip");
     window.history.replaceState(null, "", `/trip-journey?${params.toString()}`);
+  };
+
+  const closeTripReview = () => {
+    // Clear BOTH the selected trip and any trip/booking request that originally
+    // opened the review. Otherwise load() sees the old requestedTripId and
+    // immediately re-opens the modal after the X button is pressed.
+    setSelectedTripId(null);
+    setRequestedTripId(null);
+    setRequestedBookingId(null);
+    setForm(null);
+    setHasUnsavedChanges(false);
+    setManualFuelExpanded(false);
+    setReviewStep(1);
+    setNotice(null);
+    setError(null);
+
+    const params = new URLSearchParams(window.location.search);
+    params.delete("tripId");
+    params.delete("trip");
+    params.delete("bookingId");
+    params.delete("booking");
+    const query = params.toString();
+    window.history.replaceState(null, "", query ? `/trip-journey?${query}` : "/trip-journey");
   };
 
   const applyQuickFilter = (filter: "today" | "yesterday" | "week" | "month" | "missing_mileage" | "missing_fuel" | "completed") => {
@@ -3065,111 +3279,169 @@ export default function TripJourneyPage() {
 
   return (
     <div className="space-y-5">
-      <div className="hidden md:block">
-        <Header title={copy.tripJourney} description={copy.description} />
-      </div>
-      <section className="surface-card p-4 sm:p-5">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <section className="surface-card p-5 sm:p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">{copy.tripPerformance}</p>
-            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">{copy.description}</p>
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-violet-700">
+              EXPERT EXPRESS SENDER CO., LTD.
+            </p>
+            <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-950">
+              {copy.tripJourney}
+            </h1>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
+              {copy.description}
+            </p>
           </div>
-          <button type="button" onClick={() => void load()} className="btn-secondary gap-2">
-            <RefreshCw className="h-4 w-4" />
-            {copy.refresh}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-xl border border-violet-100 bg-violet-50/60 p-1">
+              <button
+                type="button"
+                onClick={() => setPageMode("trips")}
+                className={`rounded-lg px-4 py-2 text-sm font-black transition ${
+                  pageMode === "trips"
+                    ? "bg-white text-violet-800 shadow-sm"
+                    : "text-slate-500 hover:text-violet-700"
+                }`}
+              >
+                {language === "th" ? "ทริป" : "Trips"}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setPageMode("results"); setAttentionFilter("all"); }}
+                className={`rounded-lg px-4 py-2 text-sm font-black transition ${
+                  pageMode === "results"
+                    ? "bg-white text-violet-800 shadow-sm"
+                    : "text-slate-500 hover:text-violet-700"
+                }`}
+              >
+                {language === "th" ? "ผลลัพธ์" : "Results"}
+              </button>
+            </div>
+            <button type="button" onClick={() => void load()} className="btn-secondary gap-2">
+              <RefreshCw className="h-4 w-4" />
+              {copy.refresh}
+            </button>
+          </div>
         </div>
         {error ? <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{error}</div> : null}
         {notice ? <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">{notice}</div> : null}
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-4">
-        <div className="rounded-xl border border-brand-100 bg-white p-5 shadow-sm shadow-brand-950/5">
+      {pageMode === "trips" ? (
+        <>
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <button
+          type="button"
+          onClick={() => setAttentionFilter("all")}
+          className="rounded-2xl border border-violet-100 bg-white p-4 text-left shadow-[0_10px_26px_rgba(76,29,149,0.05)] transition hover:border-violet-200 hover:bg-violet-50/30"
+        >
           <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-brand-50 p-2 text-brand-700"><BarChart3 className="h-5 w-5" /></div>
-              <div>
-                <p className="text-sm font-semibold text-slate-500">{copy.operationsOverview}</p>
-                <p className="mt-1 text-3xl font-bold text-slate-950">{summary.totalTrips}</p>
-              </div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">{copy.trips}</p>
+              <p className="mt-1 text-3xl font-black text-slate-950">{summary.totalTrips}</p>
             </div>
-            <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-bold text-brand-700">{copy.trips}</span>
+            <div className="rounded-xl bg-violet-50 p-2.5 text-violet-700">
+              <BarChart3 className="h-5 w-5" />
+            </div>
           </div>
-          <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-            <div className={metricTileClass("green")}><p className="text-xs font-semibold opacity-80">{copy.tripsCompleted}</p><p className="text-lg font-bold">{summary.completedTrips}</p></div>
-            <div className={metricTileClass(summary.inProgressTrips ? "amber" : "slate")}><p className="text-xs font-semibold opacity-80">{copy.tripsInProgress}</p><p className="text-lg font-bold">{summary.inProgressTrips}</p></div>
-            <div className={metricTileClass(summary.missingMileage ? "amber" : "slate")}><p className="text-xs font-semibold opacity-80">{copy.missingMileage}</p><p className="text-lg font-bold">{summary.missingMileage}</p></div>
-            <div className={metricTileClass(summary.missingEstimate ? "amber" : "slate")}><p className="text-xs font-semibold opacity-80">{copy.missingEstimate}</p><p className="text-lg font-bold">{summary.missingEstimate}</p></div>
-            <div className={metricTileClass(summary.missingFuel ? "amber" : "slate")}><p className="text-xs font-semibold opacity-80">{copy.missingFuel}</p><p className="text-lg font-bold">{summary.missingFuel}</p></div>
-            <div className={metricTileClass("purple")}><p className="text-xs font-semibold opacity-80">{copy.overallCompletion}</p><p className="text-lg font-bold">{summary.completionPercentage}%</p></div>
+          <p className="mt-2 text-xs font-medium text-slate-500">
+            {copy.completedTripsLabel}: {summary.completedTrips}
+          </p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setAttentionFilter("missing_fuel")}
+          className={`rounded-2xl border p-4 text-left shadow-[0_10px_26px_rgba(15,23,42,0.04)] transition ${
+            operationalCounts.needsAttention > 0
+              ? "border-amber-200 bg-amber-50/70 hover:bg-amber-50"
+              : "border-emerald-100 bg-white hover:bg-emerald-50/30"
+          }`}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+                {language === "th" ? "ต้องตรวจสอบ" : "Needs Attention"}
+              </p>
+              <p className="mt-1 text-3xl font-black text-slate-950">
+                {operationalCounts.needsAttention}
+              </p>
+            </div>
+            <div className={`rounded-xl p-2.5 ${operationalCounts.needsAttention > 0 ? "bg-amber-100 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>
+              <Gauge className="h-5 w-5" />
+            </div>
           </div>
-        </div>
-        <div className={`rounded-xl border p-5 shadow-sm shadow-slate-950/5 ${getScoreClass(summary.fleetPerformanceScore)}`}>
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-white/70 p-2"><Gauge className="h-5 w-5" /></div>
-            <p className="text-sm font-semibold">{copy.fleetPerformance}</p>
+          <p className="mt-2 text-xs font-medium text-slate-500">
+            {operationalCounts.needsAttention > 0
+              ? (language === "th" ? "เชื้อเพลิงหรือข้อมูลยังต้องตรวจสอบ" : "Fuel or trip data still needs checking")
+              : (language === "th" ? "ไม่มีรายการสำคัญที่ต้องแก้ไข" : "No major trip issues")}
+          </p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setAttentionFilter("all")}
+          className="rounded-2xl border border-sky-100 bg-white p-4 text-left shadow-[0_10px_26px_rgba(15,23,42,0.04)] transition hover:border-sky-200 hover:bg-sky-50/30"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+                {language === "th" ? "พร้อมตรวจสอบ" : "Ready to Verify"}
+              </p>
+              <p className="mt-1 text-3xl font-black text-slate-950">
+                {operationalCounts.readyToVerify}
+              </p>
+            </div>
+            <div className="rounded-xl bg-sky-50 p-2.5 text-sky-700">
+              <MapPinned className="h-5 w-5" />
+            </div>
           </div>
-          <p className="mt-4 text-5xl font-bold tracking-normal">{summary.fleetPerformanceScore}%</p>
-          <p className="mt-2 text-sm font-semibold opacity-80">{copy.fleetPerformanceHelper}</p>
-          <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-            <div className="rounded-lg bg-white/70 px-3 py-2"><p className="font-semibold opacity-70">{copy.overallCompletion}</p><p className="text-lg font-bold">{summary.completionPercentage}%</p></div>
-            <div className="rounded-lg bg-white/70 px-3 py-2"><p className="font-semibold opacity-70">{copy.routeAccuracy}</p><p className="text-lg font-bold">{formatNumber(summary.routeAccuracyScore)}%</p></div>
+          <p className="mt-2 text-xs font-medium text-slate-500">
+            {language === "th" ? "งานเสร็จแล้วแต่ยังไม่ Data Ready" : "Completed trips not yet Data Ready"}
+          </p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setFilters((current) => ({ ...current, dataStatus: "completed" }))}
+          className="rounded-2xl border border-emerald-100 bg-white p-4 text-left shadow-[0_10px_26px_rgba(15,23,42,0.04)] transition hover:border-emerald-200 hover:bg-emerald-50/30"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+                {language === "th" ? "ยืนยันแล้ว" : "Verified"}
+              </p>
+              <p className="mt-1 text-3xl font-black text-slate-950">{operationalCounts.verified}</p>
+            </div>
+            <div className="rounded-xl bg-emerald-50 p-2.5 text-emerald-700">
+              <Link2 className="h-5 w-5" />
+            </div>
           </div>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-emerald-50 p-2 text-emerald-700"><MapPinned className="h-5 w-5" /></div>
-            <p className="text-sm font-semibold text-slate-500">{copy.fleetDistance}</p>
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            <div className={metricTileClass("purple")}><p className="text-xs font-semibold opacity-80">{copy.workingDistance}</p><p className="text-xl font-bold text-slate-950">{formatNumber(summary.totalActual)}</p></div>
-            <div className={metricTileClass("slate")}><p className="text-xs font-semibold opacity-80">{copy.estimatedKm}</p><p className="text-xl font-bold text-slate-950">{formatNumber(summary.totalEstimated)}</p></div>
-            <div className={metricTileClass("amber")}><p className="text-xs font-semibold opacity-80">{copy.difference}</p><p className="text-xl font-bold text-slate-950">{formatNumber(summary.averageDifference)} km</p></div>
-            <div className={metricTileClass("green")}><p className="text-xs font-semibold opacity-80">{copy.routeAccuracy}</p><p className="text-xl font-bold text-slate-950">{formatNumber(summary.routeAccuracyScore)}%</p></div>
-          </div>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-amber-50 p-2 text-amber-700"><Gauge className="h-5 w-5" /></div>
-            <p className="text-sm font-semibold text-slate-500">{copy.dataCompletion}</p>
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            <div className={metricTileClass(summary.missingFuel ? "amber" : "green")}><p className="text-xs font-semibold opacity-80">{copy.missingFuelEvent}</p><p className="text-xl font-bold text-slate-950">{summary.missingFuel}</p></div>
-            <div className={metricTileClass(summary.missingWeeklyMileage ? "amber" : "green")}><p className="text-xs font-semibold opacity-80">{copy.missingWeeklyMileage}</p><p className="text-xl font-bold text-slate-950">{summary.missingWeeklyMileage}</p></div>
-            <div className={metricTileClass("green")}><p className="text-xs font-semibold opacity-80">{copy.verifiedTrips}</p><p className="text-xl font-bold text-slate-950">{summary.verifiedTrips}</p></div>
-            <div className={metricTileClass("slate")}><p className="text-xs font-semibold opacity-80">{copy.fuelCycles}</p><p className="text-xl font-bold text-slate-950">{summary.fuelCycles}</p><p className="mt-1 text-[11px] font-semibold leading-4 text-slate-500">{copy.fuelCyclesHelper}</p></div>
-          </div>
-        </div>
+          <p className="mt-2 text-xs font-medium text-slate-500">
+            {language === "th" ? "พร้อมใช้ในรายงาน" : "Data Ready for reporting"}
+          </p>
+        </button>
       </section>
 
-      <section className="rounded-xl border border-slate-200 bg-white/95 p-4 shadow-sm shadow-slate-950/5">
-        <div className="mb-3 flex items-center justify-between gap-3">
+      <section className="rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-sm shadow-slate-950/5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h3 className="text-sm font-bold text-slate-950">{copy.filters}</h3>
-            <p className="text-xs text-slate-500">{copy.filtersDescription}</p>
+            <h3 className="text-sm font-black text-slate-950">{copy.filters}</h3>
+            <p className="mt-0.5 text-xs text-slate-500">{copy.filtersDescription}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => applyQuickFilter("today")} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700">{copy.today}</button>
+            <button type="button" onClick={() => applyQuickFilter("week")} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700">{copy.thisWeek}</button>
+            <button type="button" onClick={() => setAttentionFilter("missing_fuel")} className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 hover:bg-amber-100">
+              {language === "th" ? "ต้องตรวจสอบ" : "Needs Attention"}
+            </button>
+            <button type="button" onClick={() => setFilters((current) => ({ ...current, dataStatus: "completed" }))} className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800 hover:bg-emerald-100">
+              {language === "th" ? "ยืนยันแล้ว" : "Verified"}
+            </button>
           </div>
         </div>
-        <div className="mb-3 flex flex-wrap gap-2">
-          {[
-            ["today", copy.today],
-            ["yesterday", copy.yesterday],
-            ["week", copy.thisWeek],
-            ["month", copy.thisMonth],
-            ["missing_mileage", copy.missingMileageTitle],
-            ["missing_fuel", copy.missingFuelTitle],
-            ["completed", copy.completed]
-          ].map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => applyQuickFilter(key as Parameters<typeof applyQuickFilter>[0])}
-              className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[repeat(7,minmax(0,1fr))_auto]">
+
+        <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-[1fr_1fr_1.15fr_1.15fr_1.4fr_1.15fr_auto]">
           <input type="date" value={filters.fromDate} onChange={(event) => setFilters((current) => ({ ...current, fromDate: event.target.value }))} className="form-input bg-white" />
           <input type="date" value={filters.toDate} onChange={(event) => setFilters((current) => ({ ...current, toDate: event.target.value }))} className="form-input bg-white" />
           <select value={filters.driver} onChange={(event) => setFilters((current) => ({ ...current, driver: event.target.value }))} className="form-input bg-white">
@@ -3182,14 +3454,9 @@ export default function TripJourneyPage() {
           </select>
           <input value={filters.route} onChange={(event) => setFilters((current) => ({ ...current, route: event.target.value }))} placeholder={copy.route} className="form-input bg-white" />
           <select value={filters.dataStatus} onChange={(event) => setFilters((current) => ({ ...current, dataStatus: event.target.value as TripFilter["dataStatus"] }))} className="form-input bg-white">
-            <option value="all">{copy.allData}</option>
-            <option value="missing">{copy.missingDataOnly}</option>
-            <option value="completed">{copy.completedOnly}</option>
-          </select>
-          <select value={filters.fuelLink} onChange={(event) => setFilters((current) => ({ ...current, fuelLink: event.target.value as TripFilter["fuelLink"] }))} className="form-input bg-white">
-            <option value="all">{copy.allFuelLinks}</option>
-            <option value="linked">{copy.fuelLogsLinked}</option>
-            <option value="not_linked">{copy.fuelLogsNotLinked}</option>
+            <option value="all">{language === "th" ? "สถานะทั้งหมด" : "All statuses"}</option>
+            <option value="missing">{language === "th" ? "ต้องตรวจสอบ" : "Needs Attention"}</option>
+            <option value="completed">{language === "th" ? "ยืนยันแล้ว" : "Verified"}</option>
           </select>
           <button type="button" onClick={() => { setFilters(emptyFilters); setAttentionFilter("all"); }} className="btn-secondary min-h-11 whitespace-nowrap px-4 py-2 text-sm">
             {copy.resetFilters}
@@ -3197,47 +3464,51 @@ export default function TripJourneyPage() {
         </div>
       </section>
 
-      <section className="rounded-xl border border-amber-100 bg-white p-4 shadow-sm shadow-amber-950/5">
+      <section className={`rounded-2xl border p-4 shadow-sm ${
+        operationalCounts.needsAttention > 0
+          ? "border-amber-200 bg-amber-50/45"
+          : "border-emerald-100 bg-emerald-50/35"
+      }`}>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h3 className="section-title">{copy.needsAttention}</h3>
-            <p className="section-subtitle">{copy.needsAttentionDescription}</p>
+            <p className="section-subtitle">
+              {operationalCounts.needsAttention > 0
+                ? (language === "th" ? "เลือกปัญหาเพื่อกรองรายการทริปที่ต้องแก้ไข" : "Choose an issue to focus the trips that still need checking.")
+                : (language === "th" ? "ทุกทริปที่แสดงอยู่ตรวจสอบเรียบร้อย" : "All visible trips are up to date.")}
+            </p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 lg:min-w-[760px]">
-            <button type="button" onClick={() => setAttentionFilter("missing_mileage")} className={`rounded-lg border px-4 py-3 text-left transition ${attentionFilter === "missing_mileage" ? "border-brand-300 bg-brand-50 ring-2 ring-brand-100" : summary.missingMileage ? "border-amber-200 bg-amber-50 hover:border-amber-300" : "border-emerald-100 bg-emerald-50/60 hover:border-emerald-200"}`}>
-              <p className={`text-xs font-semibold ${summary.missingMileage ? "text-amber-700" : "text-emerald-700"}`}>{copy.missingMileage}</p>
-              <p className="mt-1 text-lg font-bold text-slate-950">{summary.missingMileage} {summary.missingMileage === 1 ? copy.trip : copy.trips}</p>
-              <p className="mt-1 text-xs text-slate-500">{copy.actualKmNeeded}</p>
-              <span className="mt-3 inline-flex rounded-md bg-white/75 px-2.5 py-1 text-xs font-bold text-slate-700">{copy.fixNow}</span>
-            </button>
-            <button type="button" onClick={() => setAttentionFilter("missing_estimate")} className={`rounded-lg border px-4 py-3 text-left transition ${attentionFilter === "missing_estimate" ? "border-brand-300 bg-brand-50 ring-2 ring-brand-100" : summary.missingEstimate ? "border-amber-200 bg-amber-50 hover:border-amber-300" : "border-emerald-100 bg-emerald-50/60 hover:border-emerald-200"}`}>
-              <p className={`text-xs font-semibold ${summary.missingEstimate ? "text-amber-700" : "text-emerald-700"}`}>{copy.missingEstimate}</p>
-              <p className="mt-1 text-lg font-bold text-slate-950">{summary.missingEstimate} {summary.missingEstimate === 1 ? copy.trip : copy.trips}</p>
-              <p className="mt-1 text-xs text-slate-500">{copy.comparePlannedActual}</p>
-              <span className="mt-3 inline-flex rounded-md bg-white/75 px-2.5 py-1 text-xs font-bold text-slate-700">{copy.fixNow}</span>
-            </button>
-            <button type="button" onClick={() => setAttentionFilter("missing_fuel")} className={`rounded-lg border px-4 py-3 text-left transition ${attentionFilter === "missing_fuel" ? "border-brand-300 bg-brand-50 ring-2 ring-brand-100" : summary.missingFuel ? "border-amber-200 bg-amber-50 hover:border-amber-300" : "border-emerald-100 bg-emerald-50/60 hover:border-emerald-200"}`}>
-              <p className={`text-xs font-semibold ${summary.missingFuel ? "text-amber-700" : "text-emerald-700"}`}>{copy.missingFuel}</p>
-              <p className="mt-1 text-lg font-bold text-slate-950">{summary.missingFuel} {summary.missingFuel === 1 ? copy.trip : copy.trips}</p>
-              <p className="mt-1 text-xs text-slate-500">{copy.linkFuelLogsOrManual}</p>
-              <span className="mt-3 inline-flex rounded-md bg-white/75 px-2.5 py-1 text-xs font-bold text-slate-700">{copy.fixNow}</span>
-            </button>
-            <button type="button" onClick={() => setAttentionFilter("missing_weekly_mileage")} className={`rounded-lg border px-4 py-3 text-left transition ${attentionFilter === "missing_weekly_mileage" ? "border-brand-300 bg-brand-50 ring-2 ring-brand-100" : summary.missingWeeklyMileage ? "border-amber-200 bg-amber-50 hover:border-amber-300" : "border-emerald-100 bg-emerald-50/60 hover:border-emerald-200"}`}>
-              <p className={`text-xs font-semibold ${summary.missingWeeklyMileage ? "text-amber-700" : "text-emerald-700"}`}>{copy.mileageNotVerified}</p>
-              <p className="mt-1 text-lg font-bold text-slate-950">{summary.missingWeeklyMileage} {summary.missingWeeklyMileage === 1 ? copy.trip : copy.trips}</p>
-              <p className="mt-1 text-xs text-slate-500">{copy.mileageVerification}</p>
-              <span className="mt-3 inline-flex rounded-md bg-white/75 px-2.5 py-1 text-xs font-bold text-slate-700">{copy.fixNow}</span>
-            </button>
+
+          <div className="flex flex-wrap gap-2">
+            {operationalCounts.needsAttention > 0 ? (
+              <button type="button" onClick={() => setAttentionFilter("missing_fuel")} className="rounded-xl border border-amber-200 bg-white px-3 py-2 text-left text-xs font-bold text-amber-800 shadow-sm">
+                <span className="block text-[10px] uppercase tracking-[0.08em] text-amber-600">{copy.missingFuel}</span>
+                <span className="mt-0.5 block text-sm text-slate-950">{operationalCounts.missingFuel} {operationalCounts.missingFuel === 1 ? copy.trip : copy.trips}</span>
+              </button>
+            ) : null}
+            {operationalCounts.missingMileage > 0 ? (
+              <button type="button" onClick={() => setAttentionFilter("missing_mileage")} className="rounded-xl border border-amber-200 bg-white px-3 py-2 text-left text-xs font-bold text-amber-800 shadow-sm">
+                <span className="block text-[10px] uppercase tracking-[0.08em] text-amber-600">{copy.missingMileage}</span>
+                <span className="mt-0.5 block text-sm text-slate-950">{operationalCounts.missingMileage} {operationalCounts.missingMileage === 1 ? copy.trip : copy.trips}</span>
+              </button>
+            ) : null}
+            {operationalCounts.missingEstimate > 0 ? (
+              <button type="button" onClick={() => setAttentionFilter("missing_estimate")} className="rounded-xl border border-amber-200 bg-white px-3 py-2 text-left text-xs font-bold text-amber-800 shadow-sm">
+                <span className="block text-[10px] uppercase tracking-[0.08em] text-amber-600">{copy.missingEstimate}</span>
+                <span className="mt-0.5 block text-sm text-slate-950">{operationalCounts.missingEstimate} {operationalCounts.missingEstimate === 1 ? copy.trip : copy.trips}</span>
+              </button>
+            ) : null}
+
+            {attentionFilter !== "all" ? (
+              <button type="button" onClick={() => setAttentionFilter("all")} className="btn-secondary min-h-10 px-3 py-2 text-xs">
+                {copy.showAllTrips}
+              </button>
+            ) : null}
           </div>
         </div>
-        {attentionFilter !== "all" ? (
-          <button type="button" onClick={() => setAttentionFilter("all")} className="btn-secondary mt-3 min-h-9 px-3 py-1.5 text-xs">
-            {copy.showAllTrips}
-          </button>
-        ) : null}
       </section>
 
-      <details className="rounded-xl border border-slate-200 bg-white/95 p-4 shadow-sm shadow-slate-950/5">
+      <details className="hidden rounded-xl border border-slate-200 bg-white/95 p-4 shadow-sm shadow-slate-950/5">
         <summary className="cursor-pointer list-none">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -3342,7 +3613,7 @@ export default function TripJourneyPage() {
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="section-title">{copy.tripRecords}</h3>
+              <h3 className="section-title">{language === "th" ? "ทริป" : "Trips"}</h3>
               <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{filteredTrips.length} {filteredTrips.length === 1 ? copy.trip : copy.trips}</span>
             </div>
             <p className="section-subtitle">{copy.tripRecordsDescription}</p>
@@ -3372,7 +3643,7 @@ export default function TripJourneyPage() {
               const attentionAction = dataReadiness.status === "needs_fuel_check" ? (fuelStatus === "possible" ? copy.reviewLinkFuelLog : copy.linkFuelLogAction) : statusActionText(derivedStatus, copy);
               const topPossibleFuelLog = possibleFuelLogs[0] ?? null;
               return (
-                <article id={`trip-${trip.id}`} key={trip.id} className={`scroll-mt-6 rounded-xl border-l-4 px-4 py-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${getStatusAccent(dataReadiness.status === "data_ready" ? "completed" : "missing_fuel")} ${selectedTripId === trip.id ? "border-brand-300 ring-2 ring-brand-200" : "border-slate-200 hover:border-brand-200"}`}>
+                <article id={`trip-${trip.id}`} key={trip.id} className={`scroll-mt-6 rounded-2xl border px-4 py-4 shadow-sm transition hover:border-violet-200 hover:shadow-md ${getStatusAccent(dataReadiness.status === "data_ready" ? "completed" : "missing_fuel")} ${selectedTripId === trip.id ? "border-brand-300 ring-2 ring-brand-200" : "border-slate-200 hover:border-brand-200"}`}>
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
@@ -3390,37 +3661,13 @@ export default function TripJourneyPage() {
                         <span>{copy.workingDistance}: {metrics.workingDistance == null ? "-" : `${formatNumber(metrics.workingDistance)} km`}</span>
                         <span>{copy.difference}: {metrics.differenceKm == null ? "-" : `${formatNumber(metrics.differenceKm)} km`}</span>
                         <span>{copy.distanceSource}: {metrics.distanceSource}</span>
-                        <span>{copy.financialAmount}: {trip.original_trip_price == null ? "-" : formatCurrency(trip.original_trip_price)}{trip.include_in_financials === false ? ` · ${copy.financiallyExcluded}` : ""}</span>
                       </div>
                       <div className="mt-3 flex flex-wrap gap-1.5">
                         <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${bookingLinked ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>{bookingLinked ? copy.bookingLinked : copy.bookingNotLinked}</span>
                         <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${distanceReview.matched ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>{distanceReview.matched ? copy.distanceMatched : copy.distanceNeedsReview}</span>
                         <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${fuelStatusClass(fuelStatus)}`}>{fuelCycle || incompleteFuelLog ? fuelCycleState.title : getFuelStatusLabel(fuelStatus, copy)}</span>
                         <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${dataReadiness.issues.weeklyMileage ? "border-yellow-200 bg-yellow-50 text-yellow-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>{mileageVerificationLabel}</span>
-                        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${dataReadiness.status === "data_ready" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>{dataReadiness.label}</span>
                       </div>
-                      {fuelCycle && fuelCycleCoverage ? (
-                        <div className={`mt-2 rounded-lg border px-3 py-2 text-xs font-semibold ${fuelCycleState.tone === "green" ? "border-emerald-100 bg-emerald-50/70 text-emerald-900" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
-                          <p className="font-bold">{fuelCycleState.title}</p>
-                          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
-                            <span>{copy.fuelCycleDistance}: {formatNumber(fuelCycle.distanceKm)} km</span>
-                            <span>{copy.linkedTripDistanceInCycle}: {formatNumber(fuelCycleCoverage.linkedDistance)} km</span>
-                            <span>{copy.unallocatedDistance}: {formatNumber(fuelCycleCoverage.unallocatedDistance)} km</span>
-                            <span>{copy.coverage}: {formatNumber(fuelCycleCoverage.coveragePercent, 1)}%</span>
-                            <span>{copy.cycleStatus}: {fuelCycleCoverage.coveragePercent != null && fuelCycleCoverage.coveragePercent < 100 ? copy.partialCycleCoverage : fuelCycleState.status}</span>
-                          </div>
-                          {fuelCycleCoverage.coveragePercent != null && fuelCycleCoverage.coveragePercent < 100 ? <p className="mt-1 text-[11px]">{copy.fuelCycleNormalHelper}</p> : null}
-                          {fuelCycleState.pendingNotes.length > 0 ? <p className="mt-1 text-[11px]">{fuelCycleState.pendingNotes.join(" | ")}</p> : null}
-                        </div>
-                      ) : incompleteFuelLog ? (
-                        <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
-                          <p className="font-bold">{fuelCycleState.title}</p>
-                          <p className="mt-1">{formatDate(incompleteFuelLog.date)} | {incompleteFuelLog.vehicle_reg || "-"} | {formatNumber(Number(incompleteFuelLog.mileage || 0))} km</p>
-                          <p className="mt-1">{fuelCycleState.status}</p>
-                        </div>
-                      ) : (
-                        <p className="mt-2 text-xs font-semibold text-slate-500">{fuelCycleState.title}: {fuelCycleState.status}</p>
-                      )}
                       {topPossibleFuelLog ? (
                         <div className="mt-2 rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs font-semibold text-yellow-900">
                           <p>{copy.possibleFuelLogFound}: {formatDate(topPossibleFuelLog.date)} | {topPossibleFuelLog.vehicle_reg || "-"} | {topPossibleFuelLog.driver || "-"} | {formatNumber(Number(topPossibleFuelLog.litres || 0), 2)} L | {formatCurrency(Number(topPossibleFuelLog.total_cost || 0))}</p>
@@ -3428,19 +3675,55 @@ export default function TripJourneyPage() {
                         </div>
                       ) : null}
                     </div>
-                    <div className="flex shrink-0 flex-wrap items-center gap-2 lg:flex-col lg:items-end">
-                      {dataReadiness.status !== "data_ready" ? (
-                        <span className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                          {copy.needsAttentionAction}: {attentionAction}
-                        </span>
+                    <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
+                      <button
+                        type="button"
+                        onClick={() => openTrip(trip)}
+                        className="btn-primary min-h-9 px-4 py-2 text-xs"
+                      >
+                        {dataReadiness.status === "data_ready"
+                          ? (language === "th" ? "ดูทริป" : "View Trip")
+                          : (language === "th" ? "ตรวจสอบทริป" : "Review Trip")}
+                      </button>
+
+                      {fuelStatus === "possible" || dataReadiness.status === "needs_fuel_check" ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            openTrip(trip);
+                            setReviewStep(2);
+                            setSelectedTripTab("fuel");
+                            setManualFuelExpanded(true);
+                          }}
+                          className="btn-secondary min-h-9 px-3 py-2 text-xs"
+                        >
+                          {fuelStatus === "possible" ? copy.reviewLinkFuelLog : copy.linkFuelLogAction}
+                        </button>
                       ) : null}
-                      <button type="button" onClick={() => openTrip(trip)} className="btn-secondary min-h-8 px-3 py-1 text-xs">{copy.view}</button>
-                      <button type="button" onClick={() => openTrip(trip)} className="btn-secondary min-h-8 px-3 py-1 text-xs">{copy.edit}</button>
-                      <button type="button" onClick={() => { openTrip(trip); setSelectedTripTab("fuel"); setManualFuelExpanded(true); }} className="btn-secondary min-h-8 px-3 py-1 text-xs">{fuelStatus === "possible" ? copy.reviewLinkFuelLog : fuelEventOk ? copy.openFuelLogs : copy.linkFuelLogAction}</button>
+
                       {trip.booking_id || trip.booking_diary_id ? (
-                        <a href={`/booking-diary?bookingId=${encodeURIComponent(String(trip.booking_id ?? trip.booking_diary_id))}`} className="btn-secondary min-h-8 px-3 py-1 text-xs">{copy.openBooking}</a>
+                        <a
+                          href={`/booking-diary?bookingId=${encodeURIComponent(String(trip.booking_id ?? trip.booking_diary_id))}`}
+                          className="btn-secondary min-h-9 px-3 py-2 text-xs"
+                        >
+                          {copy.openBooking}
+                        </a>
                       ) : null}
-                      <button type="button" onClick={() => requestDeleteTrip(trip)} className="min-h-8 rounded-lg border border-rose-200 bg-white px-3 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-50">{copy.delete}</button>
+
+                      <details className="relative">
+                        <summary className="flex min-h-9 cursor-pointer list-none items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50">
+                          •••
+                        </summary>
+                        <div className="absolute right-0 top-10 z-20 min-w-[150px] rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
+                          <button
+                            type="button"
+                            onClick={() => requestDeleteTrip(trip)}
+                            className="w-full rounded-lg px-3 py-2 text-left text-xs font-bold text-rose-700 hover:bg-rose-50"
+                          >
+                            {copy.delete}
+                          </button>
+                        </div>
+                      </details>
                     </div>
                   </div>
                 </article>
@@ -3455,417 +3738,918 @@ export default function TripJourneyPage() {
         )}
       </section>
 
-      {form && selectedTrip ? (
-        <section className="overflow-hidden rounded-xl border border-brand-100 bg-white shadow-sm shadow-brand-950/5">
-          {(() => {
-            const selectedFuelCycle = selectedTripFuelCycle;
-            const selectedPossibleFuelLogs = getPossibleFuelLogsForTrip(selectedTrip, fuelLogs, selectedFuelCycle);
-            const selectedFuelCycleCoverage = getFuelCycleCoverage(selectedFuelCycle, baseFilteredTrips);
-            const selectedIncompleteFuelLog = getIncompleteLinkedFuelLog(selectedTrip, fuelLogs, selectedFuelCycle);
-            const selectedFuelCycleState = getFuelCycleVerificationState(selectedFuelCycle, copy, selectedIncompleteFuelLog);
-            const selectedFuelStatus = getFuelReviewStatus(selectedTrip, selectedPossibleFuelLogs, selectedFuelCycle);
-            const selectedFuelEventOk = hasFuelEvent(selectedTrip);
-            const selectedWeeklyCheck = getWeeklyMileageCheck(selectedTrip, baseFilteredTrips, weeklyMileage, copy);
-            const selectedDataReadiness = getTripDataReadiness(selectedTrip, weeklyMileage, copy, baseFilteredTrips, selectedPossibleFuelLogs, selectedFuelCycle);
-            const selectedJobStatus = getTripJobStatus(selectedTrip);
-            const selectedMileageTone = selectedDataReadiness.issues.weeklyMileage ? selectedWeeklyCheck.tone : "green";
-            const selectedMileageLabel = getMileageVerificationLabel(selectedDataReadiness, selectedWeeklyCheck.label, copy);
-            return (
-          <>
-          <div className="border-b border-brand-100 bg-gradient-to-r from-brand-50 via-white to-emerald-50/70 p-4">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-brand-600 px-2.5 py-1 text-[11px] font-bold text-white">{copy.selectedTrip}</span>
-                  <h3 className="text-lg font-bold text-slate-950">{copy.selectedTripOverview}</h3>
-                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${tripJobStatusClass(selectedJobStatus)}`}>{copy.tripStatus}: {tripJobStatusLabel(selectedJobStatus, copy)}</span>
-                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${dataStatusClass(selectedDataReadiness.status)}`}>{copy.dataStatus}: {selectedDataReadiness.label}</span>
-                </div>
-                <p className="mt-1 max-w-4xl text-sm font-semibold leading-6 text-slate-700" title={getRoutePreview(selectedTrip)}>{getShortRoutePreview(selectedTrip, copy)}</p>
-              </div>
-              <div className="flex min-w-[240px] flex-wrap gap-2 text-sm">
-                <div className={metricTileClass("purple")}><p className="text-[11px] font-semibold opacity-80">{copy.driver}</p><p className="font-bold text-slate-950">{selectedTrip.driver || "-"}</p></div>
-                <div className={metricTileClass("slate")}><p className="text-[11px] font-semibold opacity-80">{copy.vehicle}</p><p className="font-bold text-slate-950">{selectedTrip.vehicle_reg || "-"}</p></div>
-              </div>
-            </div>
-            <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-              <div className={metricTileClass("purple")}><p className="text-xs font-semibold opacity-80">{copy.workingDistance}</p><p className="font-bold text-slate-950">{formatNumber(selectedFormMetrics?.workingDistance)} km</p><p className="text-xs font-semibold text-slate-500">{selectedFormMetrics?.actualSource}</p></div>
-              <div className={metricTileClass(selectedFuelEventOk ? "green" : selectedFuelStatus === "possible" ? "amber" : "amber")}><p className="text-xs font-semibold opacity-80">{copy.fuelStatus}</p><p className="font-bold text-slate-950">{selectedFuelCycle || selectedIncompleteFuelLog ? selectedFuelCycleState.title : getFuelStatusLabel(selectedFuelStatus, copy)}</p></div>
-              <div className={metricTileClass(selectedMileageTone)}><p className="text-xs font-semibold opacity-80">{copy.mileageVerification}</p><p className="font-bold text-slate-950">{selectedMileageLabel}</p>{selectedWeeklyCheck.difference != null && selectedDataReadiness.issues.weeklyMileage ? <p className="text-xs font-semibold text-slate-500">{formatNumber(selectedWeeklyCheck.difference)} km</p> : null}</div>
-              <div className={metricTileClass(selectedDataReadiness.tone)}><p className="text-xs font-semibold opacity-80">{copy.dataStatus}</p><p className="font-bold text-slate-950">{selectedDataReadiness.label}</p></div>
-            </div>
-            {selectedFuelCycle && selectedFuelCycleCoverage ? (
-              <div className={`mt-3 rounded-lg border px-3 py-2 text-xs font-semibold ${selectedFuelCycleState.tone === "green" ? "border-emerald-100 bg-emerald-50/70 text-emerald-900" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
-                <p className="font-bold">{selectedFuelCycleState.title}</p>
-                <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
-                  <span>{copy.fuelCycleDistance}: {formatNumber(selectedFuelCycle.distanceKm)} km</span>
-                  <span>{copy.linkedTripDistanceInCycle}: {formatNumber(selectedFuelCycleCoverage.linkedDistance)} km</span>
-                  <span>{copy.unallocatedDistance}: {formatNumber(selectedFuelCycleCoverage.unallocatedDistance)} km</span>
-                  <span>{copy.coverage}: {formatNumber(selectedFuelCycleCoverage.coveragePercent, 1)}%</span>
-                  <span>{copy.cycleStatus}: {selectedFuelCycleCoverage.coveragePercent != null && selectedFuelCycleCoverage.coveragePercent < 100 ? copy.partialCycleCoverage : selectedFuelCycleState.status}</span>
-                </div>
-                {selectedFuelCycleCoverage.coveragePercent != null && selectedFuelCycleCoverage.coveragePercent < 100 ? <p className="mt-1 text-[11px]">{copy.fuelCycleNormalHelper}</p> : null}
-                {selectedFuelCycleState.pendingNotes.length > 0 ? <p className="mt-1 text-[11px]">{selectedFuelCycleState.pendingNotes.join(" | ")}</p> : null}
-              </div>
-            ) : selectedIncompleteFuelLog ? (
-              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
-                <p className="font-bold">{selectedFuelCycleState.title}</p>
-                <p className="mt-1">{formatDate(selectedIncompleteFuelLog.date)} | {selectedIncompleteFuelLog.vehicle_reg || "-"} | {formatNumber(Number(selectedIncompleteFuelLog.mileage || 0))} km</p>
-                <p className="mt-1">{selectedFuelCycleState.status}</p>
-              </div>
-            ) : null}
-            <p className="mt-3 rounded-lg border border-brand-100 bg-brand-50/60 px-3 py-2 text-xs font-semibold text-brand-800">{copy.fuelCycleHelper}</p>
-            <div className="mt-3 flex flex-col gap-3 rounded-lg border border-brand-100 bg-white/85 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+        </>
+      ) : (
+        <div className="space-y-4">
+          <section className="rounded-2xl border border-violet-100 bg-[linear-gradient(135deg,#faf8ff_0%,#ffffff_55%,#f8fafc_100%)] p-5 shadow-sm">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
               <div>
-                <p className="text-xs font-semibold text-slate-500">{copy.nextAction}</p>
-                <p className="text-sm font-bold text-slate-950">{statusActionText(selectedTripStatus ?? "created", copy)}</p>
-                <p className="text-xs text-slate-500">{getNextActionHelper(selectedTripStatus ?? "created", copy)}</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-violet-700">
+                  {language === "th" ? "ผลลัพธ์จากทริปที่ตรวจสอบแล้ว" : "Verified Trip Results"}
+                </p>
+                <h2 className="mt-1 text-xl font-black text-slate-950">
+                  {language === "th" ? "สิ่งที่ข้อมูล Trip Journey กำลังบอกเรา" : "What the Trip Journey data is telling us"}
+                </h2>
+                <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
+                  {language === "th"
+                    ? "ผลลัพธ์หลักใช้เฉพาะทริปที่ Data Ready เพื่อไม่ให้ข้อมูลที่ยังไม่ตรวจสอบบิดเบือนผลลัพธ์"
+                    : "Core results use Data Ready trips only, so incomplete fuel or mileage checks do not distort the analysis."}
+                </p>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => handlePrimaryTripAction(selectedTripStatus ?? "created")} className="btn-primary min-h-9 px-3 py-1.5 text-sm">
-                  {statusActionText(selectedTripStatus ?? "created", copy)}
-                </button>
-                <button type="button" onClick={() => setSelectedTripTab("fuel")} className="btn-secondary min-h-9 px-3 py-1.5 text-sm">{copy.manageFuelLogs}</button>
-                <button type="button" onClick={() => requestDeleteTrip(selectedTrip)} className="min-h-9 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-50">{copy.deleteTrip}</button>
-                <button type="button" onClick={() => { setSelectedTripId(null); setHasUnsavedChanges(false); }} className="btn-secondary min-h-9 px-3 py-1.5 text-sm">{copy.backToTripList}</button>
+              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-800">
+                {resultsData.verifiedTrips.length} {language === "th" ? "ทริปที่ตรวจแล้ว" : "verified trips"}
+              </span>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <h3 className="text-sm font-black text-slate-950">
+                  {language === "th" ? "ตัวกรองผลลัพธ์" : "Results filters"}
+                </h3>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {language === "th" ? "ใช้ช่วงวันที่ คนขับ รถ หรือเส้นทางเพื่อดูผลเฉพาะส่วน" : "Filter the analysis by date, driver, vehicle or route."}
+                </p>
+              </div>
+              <button type="button" onClick={() => setFilters(emptyFilters)} className="btn-secondary min-h-10 px-3 py-2 text-xs">
+                {copy.resetFilters}
+              </button>
+            </div>
+            <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-5">
+              <input type="date" value={filters.fromDate} onChange={(event) => setFilters((current) => ({ ...current, fromDate: event.target.value }))} className="form-input bg-white" />
+              <input type="date" value={filters.toDate} onChange={(event) => setFilters((current) => ({ ...current, toDate: event.target.value }))} className="form-input bg-white" />
+              <select value={filters.driver} onChange={(event) => setFilters((current) => ({ ...current, driver: event.target.value }))} className="form-input bg-white">
+                <option value="">{copy.allDrivers}</option>
+                {driverOptions.map((driver) => <option key={driver} value={driver}>{driver}</option>)}
+              </select>
+              <select value={filters.vehicle} onChange={(event) => setFilters((current) => ({ ...current, vehicle: event.target.value }))} className="form-input bg-white">
+                <option value="">{copy.allVehicles}</option>
+                {vehicleOptions.map((vehicle) => <option key={vehicle} value={vehicle}>{vehicle}</option>)}
+              </select>
+              <input value={filters.route} onChange={(event) => setFilters((current) => ({ ...current, route: event.target.value }))} placeholder={copy.route} className="form-input bg-white" />
+            </div>
+          </section>
+
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            {[
+              {
+                label: language === "th" ? "ทริปที่ตรวจแล้ว" : "Verified Trips",
+                value: formatNumber(resultsData.verifiedTrips.length),
+                helper: language === "th" ? "ใช้ในผลลัพธ์" : "Used in results"
+              },
+              {
+                label: language === "th" ? "กม. ตามแผน" : "Planned KM",
+                value: `${formatNumber(resultsData.totalPlannedKm, 1)} km`,
+                helper: language === "th" ? "รวมระยะทางประมาณการ" : "Total estimated distance"
+              },
+              {
+                label: language === "th" ? "กม. ใช้งาน" : "Working KM",
+                value: `${formatNumber(resultsData.totalWorkingKm, 1)} km`,
+                helper: language === "th" ? "ระยะทางที่ใช้ตรวจสอบ" : "Verified working distance"
+              },
+              {
+                label: language === "th" ? "ส่วนต่างรวม" : "Total Variance",
+                value: `${resultsData.totalDifferenceKm >= 0 ? "+" : ""}${formatNumber(resultsData.totalDifferenceKm, 1)} km`,
+                helper: language === "th" ? "Working - Planned" : "Working - Planned"
+              },
+              {
+                label: language === "th" ? "ส่วนต่างเฉลี่ย" : "Avg Variance",
+                value: resultsData.averageVariancePercent == null ? "-" : `${formatNumber(resultsData.averageVariancePercent, 1)}%`,
+                helper: language === "th" ? "ค่าเฉลี่ยแบบสัมบูรณ์" : "Average absolute variance"
+              }
+            ].map((card) => (
+              <div key={card.label} className="rounded-2xl border border-violet-100 bg-white p-4 shadow-[0_10px_26px_rgba(76,29,149,0.04)]">
+                <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{card.label}</p>
+                <p className="mt-1 text-2xl font-black text-slate-950">{card.value}</p>
+                <p className="mt-1 text-xs text-slate-500">{card.helper}</p>
+              </div>
+            ))}
+          </section>
+
+          {resultsData.verifiedTrips.length < 5 ? (
+            <section className="rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3">
+              <p className="font-black text-amber-900">
+                {language === "th" ? "ข้อมูลยังมีน้อยสำหรับการเปรียบเทียบ" : "More verified trips are needed for stronger comparisons"}
+              </p>
+              <p className="mt-1 text-xs leading-5 text-amber-800">
+                {language === "th"
+                  ? "ตอนนี้แสดงผลจริงที่มีอยู่ แต่ยังไม่ควรใช้เพื่อจัดอันดับคนขับหรือรถ เมื่อมีอย่างน้อย 5 ทริปผลจะเริ่มมีความหมายมากขึ้น"
+                  : "The figures below are real, but we will not treat them as driver or vehicle rankings yet. Comparisons become more useful once at least 5 verified trips are available."}
+              </p>
+            </section>
+          ) : null}
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h3 className="section-title">{language === "th" ? "ผลลัพธ์ตามเส้นทาง" : "Route Results"}</h3>
+                <p className="section-subtitle">
+                  {language === "th" ? "เปรียบเทียบระยะทางตามแผนกับระยะทางใช้งานของเส้นทางรับสินค้า → ส่งสินค้า จาก Booking Diary" : "Compare planned and working distance for Booking Diary pickup → drop-off routes."}
+                </p>
+              </div>
+              <span className="text-xs font-semibold text-slate-500">
+                {resultsData.repeatRoutes.length} {language === "th" ? "เส้นทางซ้ำ" : "repeat routes"}
+              </span>
+            </div>
+
+            {resultsData.routes.length === 0 ? (
+              <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+                {language === "th" ? "ยังไม่มีทริป Data Ready สำหรับวิเคราะห์เส้นทาง" : "No Data Ready trips are available for route analysis yet."}
+              </div>
+            ) : (
+              <div className="mt-4 space-y-2">
+                {resultsData.routes.slice(0, 8).map((route) => (
+                  <div key={route.route} className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4 lg:grid-cols-[2fr_0.65fr_0.8fr_0.8fr_0.8fr] lg:items-center">
+                    <div className="min-w-0">
+                      <p className="truncate font-black text-slate-950" title={route.route}>{route.route}</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {route.trips >= 3
+                          ? `${language === "th" ? "แนวโน้มเส้นทาง:" : "Route trend:"} ${(route.averageDifferenceKm ?? 0) >= 0 ? "+" : ""}${formatNumber(route.averageDifferenceKm, 1)} km ${language === "th" ? "เทียบกับ Booking" : "vs booking"}`
+                          : route.trips >= 2
+                            ? (language === "th" ? "มีข้อมูลเส้นทางซ้ำ — เพิ่มอีก 1 ทริปเพื่อเริ่มเห็นแนวโน้ม" : "Repeat-route data available — 1 more trip will start showing a route trend")
+                            : (language === "th" ? "มีเพียง 1 ทริป" : "Only 1 verified trip")}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase text-slate-400">{language === "th" ? "ทริป" : "Trips"}</p>
+                      <p className="font-black text-slate-950">{route.trips}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase text-slate-400">{language === "th" ? "แผนเฉลี่ย" : "Avg planned"}</p>
+                      <p className="font-black text-slate-950">{formatNumber(route.averagePlannedKm, 1)} km</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase text-slate-400">{language === "th" ? "ใช้งานเฉลี่ย" : "Avg working"}</p>
+                      <p className="font-black text-slate-950">{formatNumber(route.averageWorkingKm, 1)} km</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase text-slate-400">{copy.difference}</p>
+                      <p className={`font-black ${(route.averageDifferenceKm ?? 0) > 0 ? "text-amber-700" : "text-emerald-700"}`}>
+                        {(route.averageDifferenceKm ?? 0) >= 0 ? "+" : ""}{formatNumber(route.averageDifferenceKm, 1)} km
+                        {route.averageDifferencePercent != null ? ` (${route.averageDifferencePercent >= 0 ? "+" : ""}${formatNumber(route.averageDifferencePercent, 1)}%)` : ""}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <div className="grid gap-4 xl:grid-cols-2">
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h3 className="section-title">{language === "th" ? "ภาพรวมคนขับ" : "Driver Comparison"}</h3>
+              <p className="section-subtitle">
+                {language === "th" ? "แสดงจำนวนทริปและส่วนต่างระยะทาง ไม่จัดอันดับเมื่อข้อมูลยังน้อย" : "Shows trip volume and distance variance without ranking people when the sample is small."}
+              </p>
+              <div className="mt-4 space-y-2">
+                {resultsData.drivers.slice(0, 6).map((row) => (
+                  <div key={row.name} className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-black text-slate-950">{row.name}</p>
+                      <p className="text-xs text-slate-500">{row.trips} {row.trips === 1 ? copy.trip : copy.trips}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-black text-slate-950">{formatNumber(row.workingKm, 1)} km</p>
+                      <p className="text-xs text-slate-500">
+                        {language === "th" ? "ส่วนต่างเฉลี่ย" : "Avg variance"}: {formatNumber(row.averageDifferenceKm, 1)} km
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                {resultsData.drivers.length === 0 ? <p className="text-sm text-slate-500">{copy.enoughDataNeeded}</p> : null}
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h3 className="section-title">{language === "th" ? "ภาพรวมรถ" : "Vehicle Comparison"}</h3>
+              <p className="section-subtitle">
+                {language === "th" ? "แสดงระยะทางและส่วนต่างของรถจากทริปที่ตรวจแล้ว" : "Shows verified distance and variance by vehicle."}
+              </p>
+              <div className="mt-4 space-y-2">
+                {resultsData.vehicles.slice(0, 6).map((row) => (
+                  <div key={row.name} className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-black text-slate-950">{row.name}</p>
+                      <p className="text-xs text-slate-500">{row.trips} {row.trips === 1 ? copy.trip : copy.trips}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-black text-slate-950">{formatNumber(row.workingKm, 1)} km</p>
+                      <p className="text-xs text-slate-500">
+                        {language === "th" ? "ส่วนต่างเฉลี่ย" : "Avg variance"}: {formatNumber(row.averageDifferenceKm, 1)} km
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                {resultsData.vehicles.length === 0 ? <p className="text-sm text-slate-500">{copy.enoughDataNeeded}</p> : null}
+              </div>
+            </section>
+          </div>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="grid gap-4 lg:grid-cols-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.12em] text-violet-600">
+                  {language === "th" ? "ความครอบคลุมของทริปที่เชื่อมโยง" : "Linked Trip Coverage"}
+                </p>
+                <p className="mt-1 text-2xl font-black text-slate-950">
+                  {resultsData.averageFuelCycleCoverage == null ? "-" : `${formatNumber(resultsData.averageFuelCycleCoverage, 1)}%`}
+                </p>
+                <p className="mt-1 text-xs font-semibold text-slate-600">
+                  {resultsData.totalRelevantFuelCycleKm > 0
+                    ? `${formatNumber(resultsData.totalLinkedTripKm, 1)} km ${language === "th" ? "เชื่อมโยงจาก" : "linked /"} ${formatNumber(resultsData.totalRelevantFuelCycleKm, 1)} km ${language === "th" ? "ในรอบน้ำมันที่เกี่ยวข้อง" : "relevant fuel-cycle movement"}`
+                    : (language === "th" ? "ยังไม่มีรอบน้ำมันที่เกี่ยวข้อง" : "No relevant fuel-cycle movement yet")}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {language === "th"
+                    ? "แสดงว่าการเคลื่อนที่ในรอบน้ำมันที่เกี่ยวข้องอธิบายได้ด้วยทริปที่ตรวจแล้วมากน้อยเพียงใด"
+                    : "Shows how much relevant fuel-cycle movement is explained by verified linked trips."}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.12em] text-violet-600">
+                  {language === "th" ? "การเคลื่อนที่ที่ยังไม่จัดสรร" : "Unallocated movement"}
+                </p>
+                <p className="mt-1 text-2xl font-black text-slate-950">{formatNumber(resultsData.totalUnallocatedKm, 1)} km</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {language === "th"
+                    ? "ระยะทางในรอบน้ำมันที่เกี่ยวข้องซึ่งยังไม่ถูกอธิบายด้วยทริปที่ตรวจแล้ว อาจเป็นการกลับคลัง ย้ายรถ หรืองานที่ยังไม่ได้เชื่อม"
+                    : "Relevant fuel-cycle distance not yet explained by verified trips; it may be depot movement, repositioning or jobs not yet linked."}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.12em] text-violet-600">
+                  {language === "th" ? "คุณภาพข้อมูล" : "Data quality"}
+                </p>
+                <p className="mt-1 text-2xl font-black text-slate-950">
+                  {baseFilteredTrips.length > 0 ? `${formatNumber((resultsData.verifiedTrips.length / baseFilteredTrips.length) * 100, 0)}%` : "-"}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {operationalCounts.needsAttention > 0
+                    ? `${operationalCounts.needsAttention} ${language === "th" ? "ทริปยังต้องตรวจสอบ" : "trip(s) still need attention"}`
+                    : (language === "th" ? "ทริปทั้งหมดในตัวกรองพร้อมใช้งาน" : "All filtered trips are Data Ready.")}
+                </p>
               </div>
             </div>
-          </div>
-          </>
-            );
-          })()}
+          </section>
 
-          <div className="border-b border-slate-200 bg-slate-50/90 px-4 py-3">
-            <div className="flex flex-wrap gap-2">
-              {[
-                ["overview", copy.overview],
-                ["journey", copy.journeyDetails],
-                ["fuel", copy.fuelLogs],
-                ["notes", copy.notes]
-              ].map(([key, label]) => (
+          {operationalCounts.needsAttention > 0 ? (
+            <section className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-black text-amber-900">
+                    {language === "th" ? "ยังมีข้อมูลที่ต้องแก้ไข" : "Some trip data still needs attention"}
+                  </p>
+                  <p className="mt-1 text-xs text-amber-800">
+                    {operationalCounts.missingFuel} {language === "th" ? "ต้องตรวจน้ำมัน" : "fuel checks"} · {operationalCounts.missingMileage} {language === "th" ? "ต้องตรวจระยะทาง" : "mileage checks"} · {operationalCounts.missingEstimate} {language === "th" ? "ไม่มี estimate" : "missing estimates"}
+                  </p>
+                </div>
                 <button
-                  key={key}
                   type="button"
-                  onClick={() => setSelectedTripTab(key as SelectedTripTab)}
-                  className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${selectedTripTab === key ? "bg-white text-brand-700 shadow-sm ring-1 ring-brand-100" : "text-slate-600 hover:bg-white hover:text-slate-900"}`}
+                  onClick={() => {
+                    setPageMode("trips");
+                    setFilters((current) => ({ ...current, dataStatus: "missing" }));
+                    setAttentionFilter("all");
+                  }}
+                  className="btn-secondary min-h-10 px-4 py-2 text-sm"
                 >
-                  {label}
+                  {language === "th" ? "ไปแก้ไขทริป" : "Review problem trips"}
                 </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="p-4">
-            {selectedTripTab === "overview" ? (
-              <div className="space-y-4">
-                <FinancialTreatmentFields copy={copy} form={form} onChange={updateForm} onSave={() => void handleSaveTrip()} saving={saving} />
-                <div className="rounded-lg border border-brand-100 bg-brand-50/45 p-4">
-                  <h4 className="font-bold text-slate-950">{copy.route}</h4>
-                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-700" title={getRoutePreview(selectedTrip)}>{getShortRoutePreview(selectedTrip, copy)}</p>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                    <div><p className="text-xs text-slate-500">{copy.date}</p><p className="font-bold text-slate-950">{formatDate(selectedTrip.trip_date)}</p></div>
-                    <div><p className="text-xs text-slate-500">{copy.pickupTime}</p><p className="font-bold text-slate-950">{selectedTrip.pickup_time || "-"}</p></div>
-                    <div><p className="text-xs text-slate-500">{copy.bookingRef}</p><p className="font-bold text-slate-950">{selectedTrip.booking_reference || "-"}</p></div>
-                  </div>
-                </div>
-                <div className="rounded-lg border border-slate-200 bg-white p-4">
-                  <h4 className="font-bold text-slate-950">{copy.journeyTimeline}</h4>
-                  <div className="mt-3 flex flex-col gap-2 md:flex-row md:items-stretch">
-                    {compactRouteParts(getShortRoutePreview(selectedTrip, copy).split(" -> ")).map((stop, index, routeStops) => (
-                      <div key={`${stop}-${index}`} className="flex flex-1 items-center gap-2">
-                        <div className="min-h-[72px] flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                          <p className="text-[11px] font-bold uppercase text-slate-500">
-                            {index === 0 ? copy.pickup : index === routeStops.length - 1 && selectedTrip.return_to_depot ? copy.return : index === routeStops.length - 1 ? copy.dropoff : copy.additionalStops}
-                          </p>
-                          <p className="mt-1 line-clamp-2 text-sm font-bold text-slate-950">{stop}</p>
-                        </div>
-                        {index < routeStops.length - 1 ? <span className="hidden text-slate-400 md:inline">→</span> : null}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-3 grid gap-2 sm:grid-cols-4">
-                    <div className={metricTileClass("purple")}><p className="text-xs font-semibold opacity-80">{copy.estimatedKm}</p><p className="font-bold text-slate-950">{formatNumber(selectedFormMetrics?.estimatedDistance)} km</p></div>
-                    <div className={metricTileClass("green")}><p className="text-xs font-semibold opacity-80">{copy.workingDistance}</p><p className="font-bold text-slate-950">{formatNumber(selectedFormMetrics?.workingDistance)} km</p></div>
-                    <div className={metricTileClass("amber")}><p className="text-xs font-semibold opacity-80">{copy.difference}</p><p className="font-bold text-slate-950">{formatNumber(selectedFormMetrics?.differenceKm)} km</p></div>
-                    <div className={metricTileClass("slate")}><p className="text-xs font-semibold opacity-80">{copy.distanceSource}</p><p className="font-bold text-slate-950">{selectedFormMetrics?.actualSource}</p></div>
-                  </div>
-                </div>
               </div>
-            ) : null}
+            </section>
+          ) : null}
+        </div>
+      )}
 
-            {selectedTripTab === "journey" ? (
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
-                <div className="space-y-3">
-                  <section className="rounded-lg border border-brand-100 bg-white p-3 shadow-sm">
-                    <h4 className="rounded-md bg-brand-50 px-3 py-2 font-bold text-slate-950">{copy.bookingInfo}</h4>
-                    <div className="mt-2 grid gap-3 sm:grid-cols-3">
-                      <div className="form-field"><label className="form-label">{copy.bookingRef}</label><input value={form.booking_reference} onChange={(event) => updateForm("booking_reference", event.target.value)} className="form-input bg-white" /></div>
-                      <div className="form-field"><label className="form-label">{copy.date}</label><input type="date" value={form.trip_date} onChange={(event) => updateForm("trip_date", event.target.value)} className="form-input bg-white" /></div>
-                      <div className="form-field"><label className="form-label">{copy.pickupTime}</label><input value={form.pickup_time} onChange={(event) => updateForm("pickup_time", event.target.value)} className="form-input bg-white" /></div>
-                    </div>
-                  </section>
+      {form && selectedTrip ? (
+        <div className="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-slate-950/35 px-3 py-4 backdrop-blur-[2px] sm:px-5">
+          <section className="my-auto w-full max-w-[1500px] overflow-hidden rounded-[1.5rem] border border-violet-100 bg-[#fbfbff] shadow-[0_30px_90px_rgba(30,20,70,0.25)]">
+            {(() => {
+              const selectedFuelCycle = selectedTripFuelCycle;
+              const selectedPossibleFuelLogs = getPossibleFuelLogsForTrip(selectedTrip, fuelLogs, selectedFuelCycle);
+              const selectedFuelCycleCoverage = getFuelCycleCoverage(selectedFuelCycle, baseFilteredTrips);
+              const selectedIncompleteFuelLog = getIncompleteLinkedFuelLog(selectedTrip, fuelLogs, selectedFuelCycle);
+              const selectedFuelCycleState = getFuelCycleVerificationState(selectedFuelCycle, copy, selectedIncompleteFuelLog);
+              const selectedFuelStatus = getFuelReviewStatus(selectedTrip, selectedPossibleFuelLogs, selectedFuelCycle);
+              const selectedWeeklyCheck = getWeeklyMileageCheck(selectedTrip, baseFilteredTrips, weeklyMileage, copy);
+              const selectedDataReadiness = getTripDataReadiness(
+                selectedTrip,
+                weeklyMileage,
+                copy,
+                baseFilteredTrips,
+                selectedPossibleFuelLogs,
+                selectedFuelCycle
+              );
+              const selectedJobStatus = getTripJobStatus(selectedTrip);
+              const mileageVerified = !selectedDataReadiness.issues.weeklyMileage;
+              const distanceReady =
+                selectedFormMetrics?.workingDistance != null &&
+                Number(selectedFormMetrics.workingDistance) > 0;
+              const fuelChecked =
+                selectedFuelStatus === "linked" ||
+                selectedFuelStatus === "manual" ||
+                selectedFuelStatus === "cycle";
+              const bookingLinked = Boolean(selectedTrip.booking_id || selectedTrip.booking_diary_id);
 
-                  <FinancialTreatmentFields copy={copy} form={form} onChange={updateForm} />
-
-                  <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-                    <h4 className="rounded-md bg-slate-50 px-3 py-2 font-bold text-slate-950">{copy.driverVehicle}</h4>
-                    <p className="mt-1 text-xs text-slate-500">{copy.driverVehicleHelper}</p>
-                    <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                      <div className="form-field">
-                        <label className="form-label">{copy.driver}</label>
-                        <input list="trip-driver-options" value={form.driver} onChange={(event) => handleDriverChange(event.target.value)} placeholder={copy.selectOrTypeDriver} className="form-input bg-white" />
-                        <datalist id="trip-driver-options">
-                          {driverDatalistOptions.map((driver) => <option key={driver} value={driver} />)}
-                          <option value={copy.manualDriverEntry} />
-                        </datalist>
+              return (
+                <>
+                  <div className="sticky top-0 z-20 border-b border-violet-100 bg-white/95 px-5 py-4 backdrop-blur sm:px-6">
+                    <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-full bg-violet-600 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-white">
+                            {language === "th" ? "ตรวจสอบทริป" : "Review Trip"}
+                          </span>
+                          <span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${tripJobStatusClass(selectedJobStatus)}`}>
+                            {tripJobStatusLabel(selectedJobStatus, copy)}
+                          </span>
+                          <span className={`rounded-full border px-2.5 py-1 text-xs font-bold ${dataStatusClass(selectedDataReadiness.status)}`}>
+                            {selectedDataReadiness.label}
+                          </span>
+                        </div>
+                        <h2 className="mt-2 truncate text-xl font-black text-slate-950 sm:text-2xl" title={getRoutePreview(selectedTrip)}>
+                          {getShortRoutePreview(selectedTrip, copy)}
+                        </h2>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {formatDate(selectedTrip.trip_date)} · {copy.driver}: {selectedTrip.driver || "-"} · {copy.vehicle}: {selectedTrip.vehicle_reg || "-"}
+                        </p>
                       </div>
-                      <div className="form-field">
-                        <label className="form-label">{copy.vehicle}</label>
-                        <input list="trip-vehicle-options" value={form.vehicle_reg} onChange={(event) => handleVehicleChange(event.target.value)} placeholder={copy.selectOrTypeVehicle} className="form-input bg-white" />
-                        <datalist id="trip-vehicle-options">
-                          {vehicleDatalistOptions.map((vehicle) => <option key={vehicle} value={vehicle} />)}
-                          <option value={copy.manualVehicleEntry} />
-                        </datalist>
-                      </div>
-                    </div>
-                    {driverVehicleMessage ? <p className="mt-2 text-xs font-semibold text-slate-500">{driverVehicleMessage}</p> : null}
-                  </section>
 
-                  <section className="rounded-lg border border-emerald-100 bg-white p-3 shadow-sm">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <h4 className="rounded-md bg-emerald-50 px-3 py-2 font-bold text-slate-950">{copy.routeGoogleMaps}</h4>
-                        <p className="mt-1 text-xs text-slate-500">{copy.routeGoogleMapsHelper}</p>
-                      </div>
-                      <button type="button" onClick={() => void handleCalculateRouteDistance()} disabled={calculatingDistance} className="btn-secondary min-h-9 px-3 py-1.5 text-sm">
-                        {calculatingDistance ? copy.calculating : form.route_calculated_at ? copy.refreshRoute : copy.calculateRouteDistance}
+                      <button
+                        type="button"
+                        onClick={closeTripReview}
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-lg font-bold text-slate-500 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700"
+                        aria-label={language === "th" ? "ปิด" : "Close review"}
+                      >
+                        ×
                       </button>
                     </div>
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                      <div className="sm:col-span-2">
-                        <p className="form-label">{copy.startLocationType}</p>
-                        <div className="grid gap-2 lg:grid-cols-3">
-                          <label className={`flex min-h-11 items-center gap-2 rounded-lg border px-3 text-sm font-semibold ${form.start_location_type === "depot" ? "border-brand-200 bg-brand-50 text-brand-800" : "border-slate-200 bg-white text-slate-700"}`}>
-                            <input type="radio" name="trip-start-location-type" checked={form.start_location_type === "depot"} onChange={() => handleStartLocationTypeChange("depot")} className="h-4 w-4" />
-                            {copy.startsFromDepot}
-                          </label>
-                          <label className={`flex min-h-11 items-center gap-2 rounded-lg border px-3 text-sm font-semibold ${form.start_location_type === "custom" ? "border-brand-200 bg-brand-50 text-brand-800" : "border-slate-200 bg-white text-slate-700"}`}>
-                            <input type="radio" name="trip-start-location-type" checked={form.start_location_type === "custom"} onChange={() => handleStartLocationTypeChange("custom")} className="h-4 w-4" />
-                            {copy.startsFromCustom}
-                          </label>
-                          <label className={`flex min-h-11 items-center gap-2 rounded-lg border px-3 text-sm font-semibold ${form.start_location_type === "pickup_only" ? "border-brand-200 bg-brand-50 text-brand-800" : "border-slate-200 bg-white text-slate-700"}`}>
-                            <input type="radio" name="trip-start-location-type" checked={form.start_location_type === "pickup_only"} onChange={() => handleStartLocationTypeChange("pickup_only")} className="h-4 w-4" />
-                            {copy.startsPickupDropoffOnly}
-                          </label>
-                        </div>
-                      </div>
-                      {form.start_location_type !== "pickup_only" ? (
-                        <div className="form-field sm:col-span-2">
-                          <label className="form-label">{form.start_location_type === "depot" ? copy.depotAddress : copy.startLocation}</label>
-                          <input value={form.start_location_type === "depot" ? form.depot_address || DEPOT_ADDRESS : form.start_location} onChange={(event) => updateForm(form.start_location_type === "depot" ? "depot_address" : "start_location", event.target.value)} disabled={form.start_location_type === "depot"} placeholder={form.start_location_type === "custom" ? copy.enterStartLocation : copy.depotAddress} className="form-input bg-white disabled:bg-slate-100 disabled:text-slate-500" />
-                        </div>
-                      ) : null}
-                      <LocationAutocomplete
-                        label={`${copy.pickupLocation}${form.pickup_display_name ? ` - ${form.pickup_display_name}` : ""}`}
-                        value={form.pickup_location}
-                        onChange={(value) => updateTripLocationText("pickup", value)}
-                        onManualInput={(value) => updateTripLocationText("pickup", value)}
-                        onSelectLocation={(location) => updateTripStructuredLocation("pickup", location)}
-                        selectedLocation={getTripStructuredLocation(form, "pickup")}
-                        savedLocationApplied={Boolean(form.booking_diary_id && (form.pickup_place_id || (form.pickup_lat && form.pickup_lng)))}
-                        savedLocationAppliedText={copy.savedLocationApplied}
-                        changeLocationText={copy.changeGoogleMapsLocation}
-                        language={language}
-                        configMissingMessage={copy.googleMapsUnavailable}
-                        helperText={copy.googleMapsLocationHelper}
-                        verifiedText={copy.googleVerified}
-                        manualUnverifiedText={copy.manualUnverified}
-                        manualEntryText={copy.manualEntryStillAllowed}
-                        containerClassName="form-field"
-                      />
-                      <LocationAutocomplete
-                        label={`${copy.dropoffLocation}${form.dropoff_display_name ? ` - ${form.dropoff_display_name}` : ""}`}
-                        value={form.dropoff_location}
-                        onChange={(value) => updateTripLocationText("dropoff", value)}
-                        onManualInput={(value) => updateTripLocationText("dropoff", value)}
-                        onSelectLocation={(location) => updateTripStructuredLocation("dropoff", location)}
-                        selectedLocation={getTripStructuredLocation(form, "dropoff")}
-                        savedLocationApplied={Boolean(form.booking_diary_id && (form.dropoff_place_id || (form.dropoff_lat && form.dropoff_lng)))}
-                        savedLocationAppliedText={copy.savedLocationApplied}
-                        changeLocationText={copy.changeGoogleMapsLocation}
-                        language={language}
-                        configMissingMessage={copy.googleMapsUnavailable}
-                        helperText={copy.googleMapsLocationHelper}
-                        verifiedText={copy.googleVerified}
-                        manualUnverifiedText={copy.manualUnverified}
-                        manualEntryText={copy.manualEntryStillAllowed}
-                        containerClassName="form-field"
-                      />
-                      <label className="flex min-h-11 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700"><input type="checkbox" checked={form.return_to_depot} onChange={(event) => updateForm("return_to_depot", event.target.checked)} className="h-4 w-4" />{copy.returnToDepot}</label>
-                      <div className="rounded-lg border border-brand-100 bg-brand-50 px-3 py-2 text-sm sm:col-span-2">
-                        <p className="text-xs font-semibold text-slate-500">{copy.routePreview}</p>
-                        <p className="font-bold text-slate-950">{getCurrentRoutePreview() || "-"}</p>
-                      </div>
-                      <div className="grid gap-2 rounded-lg bg-slate-50 p-2 text-sm sm:col-span-2 md:grid-cols-3">
-                        <div className="rounded-md bg-white px-3 py-2">
-                          <p className="text-xs font-semibold text-slate-500">{copy.bookingEstimate}</p>
-                          <p className="font-bold text-slate-950">{bookingEstimateKm != null && bookingEstimateKm > 0 ? `${formatNumber(bookingEstimateKm, 2)} km` : copy.notCalculated}</p>
-                          <p className="text-xs text-slate-500">{copy.bookingEstimateHelper}{bookingEstimateMinutes != null && bookingEstimateMinutes > 0 ? ` / ${formatDuration(bookingEstimateMinutes * 60)}` : ""}</p>
-                        </div>
-                        <div className="rounded-md bg-white px-3 py-2">
-                          <p className="text-xs font-semibold text-slate-500">{copy.tripJourneyEstimate}</p>
-                          <p className="font-bold text-slate-950">{tripGoogleEstimateKm != null && tripGoogleEstimateKm > 0 ? `${formatNumber(tripGoogleEstimateKm, 2)} km` : copy.notCalculated}</p>
-                          <p className="text-xs text-slate-500">{copy.tripJourneyEstimateHelper}{tripGoogleEstimateMinutes != null && tripGoogleEstimateMinutes > 0 ? ` / ${formatDuration(tripGoogleEstimateMinutes * 60)}` : distanceDurationText ? ` / ${distanceDurationText}` : ""}</p>
-                        </div>
-                        <div className="rounded-md bg-white px-3 py-2">
-                          <p className="text-xs font-semibold text-slate-500">{copy.routeSource}</p>
-                          <p className="font-bold text-slate-950">{selectedEstimateSource}</p>
-                          <p className="text-xs text-slate-500">{copy.displayEstimatePriority}</p>
-                        </div>
-                      </div>
-                      <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm sm:col-span-2">
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                          <div>
-                            <p className="text-xs font-semibold text-slate-500">{copy.routeSummary}</p>
-                            <p className="font-bold text-slate-950">{copy.bookingRouteLabel}: {copy.pickupDropoffOnly} = {bookingEstimateKm != null && bookingEstimateKm > 0 ? `${formatNumber(bookingEstimateKm, 2)} km` : copy.notCalculated}{bookingEstimateMinutes != null && bookingEstimateMinutes > 0 ? ` / ${formatDuration(bookingEstimateMinutes * 60)}` : ""}</p>
-                            <p className="mt-1 font-bold text-slate-950">{copy.tripRouteLabel}: {getCurrentRoutePreview() || "-"} = {tripGoogleEstimateKm != null && tripGoogleEstimateKm > 0 ? `${formatNumber(tripGoogleEstimateKm, 2)} km` : copy.notCalculated}{tripGoogleEstimateMinutes != null && tripGoogleEstimateMinutes > 0 ? ` / ${formatDuration(tripGoogleEstimateMinutes * 60)}` : ""}</p>
-                          </div>
-                          {currentGoogleMapsUrl ? (
-                            <a href={currentGoogleMapsUrl} target="_blank" rel="noreferrer" className="btn-secondary min-h-9 shrink-0 px-3 py-1.5 text-sm">
-                              <MapPinned className="h-4 w-4" />
-                              {copy.openInGoogleMaps}
-                            </a>
-                          ) : null}
-                        </div>
-                      </div>
-                      <div className="form-field">
-                        <label className="form-label">{copy.manualEstimatedOverride}</label>
-                        <input ref={manualEstimatedKmRef} type="number" min="0" step="0.01" value={form.manual_estimated_distance_km} onChange={(event) => updateForm("manual_estimated_distance_km", event.target.value)} className="form-input bg-white" />
-                        <p className="text-xs text-slate-500">{copy.manualEstimateHelper}</p>
-                      </div>
+
+                    <div className="mt-4 grid grid-cols-3 gap-2">
+                      {[
+                        { step: 1 as ReviewStep, label: language === "th" ? "ทริป" : "Trip" },
+                        { step: 2 as ReviewStep, label: language === "th" ? "เชื้อเพลิงและระยะทาง" : "Fuel & Mileage" },
+                        { step: 3 as ReviewStep, label: language === "th" ? "ตรวจสอบและบันทึก" : "Verify" }
+                      ].map((item) => {
+                        const complete = reviewStep > item.step;
+                        const active = reviewStep === item.step;
+                        return (
+                          <button
+                            key={item.step}
+                            type="button"
+                            onClick={() => setReviewStep(item.step)}
+                            className={`flex min-h-12 items-center gap-2 rounded-xl border px-3 text-left text-xs font-black uppercase tracking-[0.07em] transition sm:text-sm ${
+                              complete
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                                : active
+                                  ? "border-violet-300 bg-violet-50 text-violet-800"
+                                  : "border-slate-200 bg-slate-50 text-slate-400 hover:border-violet-200 hover:text-violet-700"
+                            }`}
+                          >
+                            <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs ${
+                              complete
+                                ? "bg-emerald-500 text-white"
+                                : active
+                                  ? "bg-violet-600 text-white"
+                                  : "bg-white text-slate-400"
+                            }`}>
+                              {complete ? "✓" : item.step}
+                            </span>
+                            {item.label}
+                          </button>
+                        );
+                      })}
                     </div>
-                    {distanceMessage ? <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600">{distanceMessage}</p> : null}
-                    {form.route_calculated_at ? (
-                      <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold">
-                        <span className="rounded-full bg-emerald-50 px-2 py-1 text-emerald-700">
-                          {form.route_label === "DEFAULT_ROUTE" ? copy.googleRecommendedRoute : copy.fastestRoute}
-                        </span>
-                        <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-600">
-                          {form.route_departure_time ? copy.plannedTrafficEstimate : copy.currentTrafficEstimate}
-                        </span>
-                        {!form.route_traffic_aware ? <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-800">{copy.trafficDataUnavailable}</span> : null}
+                  </div>
+
+                  <div className="max-h-[calc(100vh-190px)] overflow-y-auto px-4 py-5 sm:px-6">
+                    {error ? (
+                      <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+                        {error}
                       </div>
                     ) : null}
-                    <p className="mt-2 text-xs text-slate-500">{copy.standardDriveWarning}</p>
-                  </section>
+                    {notice ? (
+                      <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
+                        {notice}
+                      </div>
+                    ) : null}
 
-                  <section className="rounded-lg border border-amber-100 bg-white p-3 shadow-sm">
-                    <h4 className="rounded-md bg-amber-50 px-3 py-2 font-bold text-slate-950">{copy.actualDistance}</h4>
-                    <div className="mt-2 grid gap-3 sm:grid-cols-3">
-                      <div className="form-field"><label className="form-label">{copy.manualActualKm}</label><input ref={manualActualKmRef} type="number" min="0" step="0.01" value={form.manual_actual_km} onChange={(event) => updateForm("manual_actual_km", event.target.value)} className="form-input bg-white" /><p className="form-helper">{copy.actualKmOverrideHelper}</p></div>
-                      <div className="form-field"><label className="form-label">{copy.startMileage}</label><input type="number" min="0" value={form.start_mileage} onChange={(event) => updateForm("start_mileage", event.target.value)} className="form-input bg-white" /></div>
-                      <div className="form-field"><label className="form-label">{copy.endMileage}</label><input type="number" min="0" value={form.end_mileage} onChange={(event) => updateForm("end_mileage", event.target.value)} className="form-input bg-white" /></div>
-                    </div>
-                  </section>
-                </div>
-                <div className="self-start rounded-lg border border-brand-100 bg-brand-50/60 p-3 shadow-sm xl:sticky xl:top-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-xs font-semibold text-slate-500">{selectedFormMetrics?.actualSource}</p>
-                      <p className="text-xl font-bold text-slate-950">{formatNumber(selectedFormMetrics?.workingDistance)} km</p>
-                    </div>
-                    {selectedTripStatus ? <span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${statusClass(selectedTripStatus)}`}>{statusLabel(selectedTripStatus, copy)}</span> : null}
-                  </div>
-                  <div className="mt-3 grid gap-2 text-sm">
-                    <div className="rounded-lg bg-white px-3 py-2"><p className="text-xs text-slate-500">{copy.estimatedKm}</p><p className="font-bold text-slate-950">{formatNumber(selectedFormMetrics?.estimatedDistance)} km</p><p className="text-xs font-semibold text-slate-500">{selectedEstimateSource}</p></div>
-                    <div className="rounded-lg bg-white px-3 py-2"><p className="text-xs text-slate-500">{copy.difference}</p><p className="font-bold text-slate-950">{formatNumber(selectedFormMetrics?.differenceKm)} km</p></div>
-                    <div className="rounded-lg bg-white px-3 py-2"><p className="text-xs text-slate-500">{copy.distanceSource}</p><p className="font-bold text-slate-950">{selectedFormMetrics?.actualSource}</p></div>
-                  </div>
-                  <button type="button" onClick={() => void handleSaveTrip()} disabled={saving} className="btn-primary mt-3 w-full gap-2"><Save className="h-4 w-4" />{saving ? copy.saving : copy.saveTrip}</button>
-                  <p className={`mt-2 text-xs font-semibold ${hasUnsavedChanges ? "text-amber-700" : "text-emerald-700"}`}>{hasUnsavedChanges ? copy.unsavedChanges : notice === copy.tripSavedSuccessfully ? copy.tripSavedSuccessfully : copy.noUnsavedChanges}</p>
-                  <p className="mt-1 text-xs text-slate-500">{copy.editDoesNotChangeBooking}</p>
-                </div>
-              </div>
-            ) : null}
-
-            {selectedTripTab === "fuel" ? (
-              <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
-                <div className="rounded-lg border border-slate-200 bg-white p-4">
-                  <h4 className="font-bold text-slate-950">{copy.fuelSummary}</h4>
-                  <div className="mt-3 grid gap-3">
-                    <div className="form-field"><label className="form-label">{copy.fuelSource}</label><select value={form.fuel_source} onChange={(event) => updateForm("fuel_source", event.target.value as TripFuelSource)} className="form-input bg-white"><option value="linked">{copy.useLinkedFuelLogs}</option><option value="manual">{copy.useManualFuelEntry}</option></select></div>
-                    {form.fuel_source === "manual" ? <><div className="form-field"><label className="form-label">{copy.manualLitresUsed}</label><input type="number" min="0" step="0.01" value={form.manual_litres_used} onChange={(event) => updateForm("manual_litres_used", event.target.value)} className="form-input bg-white" /></div><div className="form-field"><label className="form-label">{copy.manualFuelCost}</label><input type="number" min="0" step="0.01" value={form.manual_fuel_cost} onChange={(event) => updateForm("manual_fuel_cost", event.target.value)} className="form-input bg-white" /></div></> : null}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">{copy.fuelStatus}</p><p className="font-bold text-slate-950">{(() => {
-                        const incompleteLog = selectedTrip ? getIncompleteLinkedFuelLog(selectedTrip, fuelLogs, selectedTripFuelCycle) : null;
-                        return selectedTripFuelCycle || incompleteLog
-                          ? getFuelCycleVerificationState(selectedTripFuelCycle, copy, incompleteLog).title
-                          : getFuelStatusLabel(getFuelReviewStatus(selectedTrip, suggestedFuelLogs, selectedTripFuelCycle), copy);
-                      })()}</p></div>
-                      <div className="rounded-lg bg-slate-50 p-3"><p className="text-xs text-slate-500">{copy.fuelCycleDistance}</p><p className="font-bold text-slate-950">{selectedTripFuelCycle ? `${formatNumber(selectedTripFuelCycle.distanceKm)} km` : copy.fuelCycleNotVerified}</p></div>
-                    </div>
-                    {(() => {
-                      const incompleteLog = selectedTrip ? getIncompleteLinkedFuelLog(selectedTrip, fuelLogs, selectedTripFuelCycle) : null;
-                      const cycleState = getFuelCycleVerificationState(selectedTripFuelCycle, copy, incompleteLog);
-                      if (!selectedTripFuelCycle && incompleteLog) {
-                        return (
-                          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
-                            <p className="font-bold">{cycleState.title}</p>
-                            <p className="mt-1">{formatDate(incompleteLog.date)} | {incompleteLog.vehicle_reg || "-"} | {formatNumber(Number(incompleteLog.mileage || 0))} km</p>
-                            <p className="mt-1">{cycleState.status}</p>
+                    {reviewStep === 1 ? (
+                      <div className="space-y-4">
+                        <div className="grid gap-3 lg:grid-cols-4">
+                          <div className="rounded-2xl border border-violet-100 bg-white p-4">
+                            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{copy.date}</p>
+                            <p className="mt-1 font-black text-slate-950">{formatDate(selectedTrip.trip_date)}</p>
                           </div>
-                        );
-                      }
-                      if (!selectedTripFuelCycle) return null;
-                      const coverage = getFuelCycleCoverage(selectedTripFuelCycle, baseFilteredTrips);
-                      return coverage ? (
-                        <div className={`rounded-lg border px-3 py-2 text-xs font-semibold ${cycleState.tone === "green" ? "border-emerald-100 bg-emerald-50/70 text-emerald-900" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
-                          <p className="font-bold">{cycleState.title}</p>
-                          <div className="mt-1 grid gap-1">
-                            <p>{copy.fuelCycleDistance}: {formatNumber(selectedTripFuelCycle.distanceKm)} km</p>
-                            <p>{copy.linkedTripDistanceInCycle}: {formatNumber(coverage.linkedDistance)} km</p>
-                            <p>{copy.unallocatedDistance}: {formatNumber(coverage.unallocatedDistance)} km</p>
-                            <p>{copy.coverage}: {formatNumber(coverage.coveragePercent, 1)}%</p>
-                            <p>{copy.cycleStatus}: {coverage.coveragePercent != null && coverage.coveragePercent < 100 ? copy.partialCycleCoverage : cycleState.status}</p>
-                            {coverage.coveragePercent != null && coverage.coveragePercent < 100 ? <p>{copy.fuelCycleNormalHelper}</p> : null}
-                            {cycleState.pendingNotes.length > 0 ? <p>{cycleState.pendingNotes.join(" | ")}</p> : null}
+                          <div className="rounded-2xl border border-violet-100 bg-white p-4">
+                            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{copy.driver}</p>
+                            <p className="mt-1 font-black text-slate-950">{selectedTrip.driver || "-"}</p>
+                          </div>
+                          <div className="rounded-2xl border border-violet-100 bg-white p-4">
+                            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{copy.vehicle}</p>
+                            <p className="mt-1 font-black text-slate-950">{selectedTrip.vehicle_reg || "-"}</p>
+                          </div>
+                          <div className="rounded-2xl border border-violet-100 bg-white p-4">
+                            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{copy.bookingRef}</p>
+                            <p className="mt-1 truncate font-black text-slate-950">
+                              {selectedTrip.booking_reference || (language === "th" ? "ไม่มีเลขอ้างอิงการจอง" : "No booking reference")}
+                            </p>
                           </div>
                         </div>
-                      ) : null;
-                    })()}
-                    <p className="rounded-lg border border-brand-100 bg-brand-50/60 px-3 py-2 text-xs font-semibold text-brand-800">{copy.fuelCycleHelper}</p>
-                    <button type="button" onClick={() => void handleManualFuelConfirm()} className="btn-secondary w-full min-h-9 px-3 py-1.5 text-sm">{copy.manuallyConfirmFuelCheck}</button>
-                    <button type="button" onClick={() => void handleSaveTrip()} disabled={saving} className="btn-primary w-full gap-2"><Save className="h-4 w-4" />{saving ? copy.saving : copy.saveTrip}</button>
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <div className="rounded-lg border border-slate-200 bg-white p-4">
-                    <h4 className="font-bold text-slate-950">{copy.linkedFuelLogs}</h4>
-                    <div className="mt-3 space-y-2">
-                      {selectedTrip.linkedFuelLogs.length === 0 ? <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-500">{copy.noFuelLogsLinkedYet}</p> : null}
-                      {selectedTrip.linkedFuelLogs.map((log) => <div key={log.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3"><div className="min-w-0"><p className="truncate text-sm font-bold text-slate-900">{formatDate(log.date)} | {log.vehicle_reg} | {log.driver}</p><p className="text-xs text-slate-500">{formatNumber(Number(log.litres || 0), 2)} L | {formatCurrency(Number(log.total_cost || 0))} | {log.mileage ? `${formatNumber(Number(log.mileage))} km | ` : ""}{log.station || log.location}</p><p className="text-[11px] font-semibold text-slate-500">{copy.fuelLogSupportsTrip}</p></div><button type="button" onClick={() => void handleUnlinkFuelLog(String(log.id))} className="btn-secondary min-h-8 gap-2 px-3 py-1 text-xs"><Unlink className="h-3.5 w-3.5" /> {copy.unlink}</button></div>)}
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-slate-200 bg-white p-4">
-                    <div className="flex items-center justify-between gap-3"><h4 className="font-bold text-slate-950">{copy.addSearchFuelLogs}</h4><button type="button" onClick={() => setManualFuelExpanded((current) => !current)} className="btn-secondary min-h-9 px-3 py-1.5 text-xs">{manualFuelExpanded ? copy.hide : copy.addFuelLog}</button></div>
-                    {manualFuelExpanded ? <div className="mt-4 space-y-4"><div><p className="text-sm font-semibold text-slate-800">{copy.possibleFuelLogFound}</p><div className="mt-2 space-y-2">{suggestedFuelLogs.length === 0 ? <p className="text-sm text-slate-500">{copy.noSuggestedFuelLogs}</p> : null}{suggestedFuelLogs.map((log) => <div key={log.id} className="flex items-center justify-between gap-3 rounded-lg border border-yellow-200 bg-yellow-50 p-3"><div className="min-w-0"><p className="truncate text-sm font-bold text-slate-900">{formatDate(log.date)} | {log.vehicle_reg} | {log.driver}</p><p className="text-xs text-slate-600">{formatNumber(Number(log.litres || 0), 2)} L | {formatCurrency(Number(log.total_cost || 0))} | {log.mileage ? `${formatNumber(Number(log.mileage))} km | ` : ""}{log.station || log.location || "-"}</p>{(fuelLogTripCounts.get(String(log.id)) ?? 0) > 0 ? <p className="text-[11px] font-semibold text-yellow-800">{copy.fuelLogAlreadyLinkedCount.replace("{count}", String(fuelLogTripCounts.get(String(log.id)) ?? 0))}</p> : null}</div><button type="button" onClick={() => void handleLinkFuelLog(String(log.id))} className="btn-primary min-h-8 gap-2 px-3 py-1 text-xs"><Link2 className="h-3.5 w-3.5" /> {copy.linkToThisTrip}</button></div>)}</div></div><div className="grid gap-2 sm:grid-cols-2"><input value={manualFuelSearch} onChange={(event) => setManualFuelSearch(event.target.value)} placeholder={copy.searchFuelPlaceholder} className="form-input bg-white" /><input type="date" value={manualFuelDate} onChange={(event) => setManualFuelDate(event.target.value)} className="form-input bg-white" /></div><div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">{manualFuelLogOptions.length === 0 ? <p className="text-sm text-slate-500">{copy.noOtherFuelLogs}</p> : null}{manualFuelLogOptions.map((log) => <div key={log.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3"><div className="min-w-0"><p className="truncate text-sm font-bold text-slate-900">{formatDate(log.date)} | {log.vehicle_reg} | {log.driver}</p><p className="text-xs text-slate-500">{formatNumber(Number(log.litres || 0), 2)} L | {formatCurrency(Number(log.total_cost || 0))} | {log.mileage ? `${formatNumber(Number(log.mileage))} km | ` : ""}{log.station || log.location}</p>{(fuelLogTripCounts.get(String(log.id)) ?? 0) > 0 ? <p className="text-[11px] font-semibold text-slate-500">{copy.fuelLogAlreadyLinkedCount.replace("{count}", String(fuelLogTripCounts.get(String(log.id)) ?? 0))}</p> : null}</div><button type="button" onClick={() => void handleLinkFuelLog(String(log.id))} className="btn-secondary min-h-8 gap-2 px-3 py-1 text-xs"><Link2 className="h-3.5 w-3.5" /> {copy.linkToThisTrip}</button></div>)}</div>{manualFuelLogOptions.length < manualFuelLogMatches.length ? <button type="button" onClick={() => setVisibleManualFuelLogCount((count) => count + 10)} className="btn-secondary w-full min-h-9 px-3 py-1.5 text-xs">{copy.loadMore}</button> : null}</div> : null}
-                  </div>
-                </div>
-              </div>
-            ) : null}
 
-            {selectedTripTab === "notes" ? (
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className="form-field"><label className="form-label">{copy.waitingIdleNotes}</label><textarea rows={5} value={form.waiting_idle_notes} onChange={(event) => updateForm("waiting_idle_notes", event.target.value)} className="form-textarea bg-white" /></div>
-                <div className="form-field"><label className="form-label">{copy.extraRouteNotes}</label><textarea rows={5} value={form.extra_route_notes} onChange={(event) => updateForm("extra_route_notes", event.target.value)} className="form-textarea bg-white" /></div>
-                <button type="button" onClick={() => void handleSaveTrip()} disabled={saving} className="btn-primary gap-2 lg:col-span-2"><Save className="h-4 w-4" />{saving ? copy.saving : copy.saveTrip}</button>
-              </div>
-            ) : null}
-          </div>
-        </section>
+                        <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+                          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-violet-600">
+                                {language === "th" ? "เส้นทางจาก Booking Diary" : "Booking Diary route"}
+                              </p>
+                              <h3 className="mt-1 text-lg font-black text-slate-950">{getShortRoutePreview(selectedTrip, copy)}</h3>
+                              <p className="mt-1 text-xs text-slate-500">
+                                {language === "th"
+                                  ? "ข้อมูลหลักมาจาก Booking Diary และแก้ไขเฉพาะเมื่อจำเป็น"
+                                  : "Main trip information comes from Booking Diary. Only adjust it here when necessary."}
+                              </p>
+                            </div>
+                            <span className="rounded-full border border-violet-100 bg-violet-50 px-3 py-1.5 text-xs font-bold text-violet-700">
+                              {language === "th" ? "ข้อมูลจาก Booking Diary" : "Booking Diary source"}
+                            </span>
+                          </div>
+
+                          <div className="mt-4 grid gap-3 md:grid-cols-3">
+                            <div className="rounded-xl bg-violet-50/70 p-4">
+                              <p className="text-xs font-semibold text-slate-500">{language === "th" ? "ระยะทางแผน" : "Planned distance"}</p>
+                              <p className="mt-1 text-2xl font-black text-slate-950">{formatNumber(selectedFormMetrics?.estimatedDistance)} km</p>
+                              <p className="text-xs text-slate-500">{selectedEstimateSource}</p>
+                            </div>
+                            <div className="rounded-xl bg-emerald-50/70 p-4">
+                              <p className="text-xs font-semibold text-slate-500">{language === "th" ? "ระยะทางใช้งาน" : "Working distance"}</p>
+                              <p className="mt-1 text-2xl font-black text-slate-950">{formatNumber(selectedFormMetrics?.workingDistance)} km</p>
+                              <p className="text-xs text-slate-500">{selectedFormMetrics?.actualSource}</p>
+                            </div>
+                            <div className="rounded-xl bg-amber-50/70 p-4">
+                              <p className="text-xs font-semibold text-slate-500">{copy.difference}</p>
+                              <p className="mt-1 text-2xl font-black text-slate-950">{formatNumber(selectedFormMetrics?.differenceKm)} km</p>
+                              <p className="text-xs text-slate-500">{distanceReady ? (language === "th" ? "พร้อมตรวจสอบ" : "Ready to check") : copy.notCalculated}</p>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 grid gap-3 md:grid-cols-2">
+                            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
+                                {language === "th" ? "จุดรับสินค้า" : "Pickup"}
+                              </p>
+                              <p className="mt-1 text-base font-black text-slate-950">
+                                {selectedTrip.pickup_location || (language === "th" ? "ไม่มีข้อมูล" : "Not available")}
+                              </p>
+                              <p className="mt-1 text-xs text-slate-500">
+                                {language === "th" ? "ดึงจาก Booking Diary" : "From Booking Diary"}
+                              </p>
+                            </div>
+
+                            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
+                                {language === "th" ? "จุดส่งสินค้า" : "Drop-off"}
+                              </p>
+                              <p className="mt-1 text-base font-black text-slate-950">
+                                {selectedTrip.dropoff_location || (language === "th" ? "ไม่มีข้อมูล" : "Not available")}
+                              </p>
+                              <p className="mt-1 text-xs text-slate-500">
+                                {language === "th" ? "ดึงจาก Booking Diary" : "From Booking Diary"}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 rounded-xl border border-violet-100 bg-violet-50/60 px-4 py-3">
+                            <p className="text-sm font-black text-violet-900">
+                              {language === "th" ? "Trip Journey ใช้ข้อมูลงานจาก Booking Diary" : "Trip Journey uses the Booking Diary job"}
+                            </p>
+                            <p className="mt-1 text-xs text-violet-700">
+                              {language === "th"
+                                ? "หน้านี้มีไว้เพื่อตรวจระยะทางและจับคู่ Fuel Logs กับงาน ไม่ใช่สร้างเส้นทางใหม่"
+                                : "Use this page to verify distance and match Fuel Logs to the job — not to rebuild the booking route."}
+                            </p>
+                          </div>
+
+                          <details className="mt-4 rounded-xl border border-slate-200 bg-slate-50">
+                            <summary className="cursor-pointer px-4 py-3 text-sm font-bold text-slate-700">
+                              {language === "th" ? "การแก้ไขเส้นทางสำหรับผู้ดูแลระบบ" : "Admin route override"}
+                            </summary>
+                            <div className="border-t border-slate-200 bg-white p-4">
+                              <p className="mb-3 text-xs text-slate-500">
+                                {language === "th"
+                                  ? "ใช้เฉพาะเมื่อข้อมูลเส้นทางจาก Booking Diary ไม่ถูกต้องหรือจำเป็นต้องแก้ระยะทางด้วยตนเอง"
+                                  : "Only use these controls when the Booking Diary route is wrong or the distance needs a manual correction."}
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => void handleCalculateRouteDistance()}
+                                disabled={calculatingDistance}
+                                className="btn-secondary mb-4 min-h-10 px-4 py-2 text-sm"
+                              >
+                                {calculatingDistance
+                                  ? copy.calculating
+                                  : form.route_calculated_at
+                                    ? copy.refreshRoute
+                                    : copy.calculateRouteDistance}
+                              </button>
+                              <div className="grid gap-3 md:grid-cols-2">
+                              <div className="form-field">
+                                <label className="form-label">{copy.manualEstimatedOverride}</label>
+                                <input
+                                  ref={manualEstimatedKmRef}
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={form.manual_estimated_distance_km}
+                                  onChange={(event) => updateForm("manual_estimated_distance_km", event.target.value)}
+                                  className="form-input bg-white"
+                                />
+                              </div>
+                              <div className="form-field">
+                                <label className="form-label">{copy.manualActualKm}</label>
+                                <input
+                                  ref={manualActualKmRef}
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={form.manual_actual_km}
+                                  onChange={(event) => updateForm("manual_actual_km", event.target.value)}
+                                  className="form-input bg-white"
+                                />
+                              </div>
+                              <div className="form-field">
+                                <label className="form-label">{copy.startMileage}</label>
+                                <input type="number" min="0" value={form.start_mileage} onChange={(event) => updateForm("start_mileage", event.target.value)} className="form-input bg-white" />
+                              </div>
+                              <div className="form-field">
+                                <label className="form-label">{copy.endMileage}</label>
+                                <input type="number" min="0" value={form.end_mileage} onChange={(event) => updateForm("end_mileage", event.target.value)} className="form-input bg-white" />
+                              </div>
+                              </div>
+                            </div>
+                          </details>
+                        </section>
+
+                        <div className="flex justify-end">
+                          <button type="button" onClick={() => setReviewStep(2)} className="btn-primary min-h-11 px-5 py-2.5">
+                            {language === "th" ? "ต่อไป: เชื้อเพลิงและระยะทาง →" : "Continue to Fuel & Mileage →"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {reviewStep === 2 ? (
+                      <div className="space-y-4">
+                        <div className="grid gap-3 md:grid-cols-3">
+                          <div className="rounded-2xl border border-violet-100 bg-white p-4">
+                            <p className="text-xs font-semibold text-slate-500">{language === "th" ? "ระยะทางแผน" : "Planned"}</p>
+                            <p className="mt-1 text-2xl font-black text-slate-950">{formatNumber(selectedFormMetrics?.estimatedDistance)} km</p>
+                          </div>
+                          <div className="rounded-2xl border border-emerald-100 bg-white p-4">
+                            <p className="text-xs font-semibold text-slate-500">{language === "th" ? "ระยะทางใช้งาน" : "Working / actual"}</p>
+                            <p className="mt-1 text-2xl font-black text-slate-950">{formatNumber(selectedFormMetrics?.workingDistance)} km</p>
+                          </div>
+                          <div className="rounded-2xl border border-amber-100 bg-white p-4">
+                            <p className="text-xs font-semibold text-slate-500">{copy.difference}</p>
+                            <p className="mt-1 text-2xl font-black text-slate-950">{formatNumber(selectedFormMetrics?.differenceKm)} km</p>
+                          </div>
+                        </div>
+
+                        <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+                          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-violet-600">
+                                {language === "th" ? "ตรวจระยะทาง" : "Mileage check"}
+                              </p>
+                              <h3 className="mt-1 text-lg font-black text-slate-950">
+                                {mileageVerified ? (language === "th" ? "ระยะทางยืนยันแล้ว" : "Mileage verified") : (language === "th" ? "ต้องตรวจระยะทาง" : "Mileage needs checking")}
+                              </h3>
+                            </div>
+                            <span className={`rounded-full border px-3 py-1.5 text-xs font-black ${
+                              mileageVerified
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                                : "border-amber-200 bg-amber-50 text-amber-800"
+                            }`}>
+                              {mileageVerified
+                                ? (language === "th" ? "ยืนยันแล้ว" : "Verified")
+                                : (language === "th" ? "ต้องตรวจสอบ" : "Needs review")}
+                            </span>
+                          </div>
+
+                          <details className={`mt-4 rounded-xl border ${
+                            mileageVerified ? "border-slate-200 bg-slate-50" : "border-amber-200 bg-amber-50/50"
+                          }`}>
+                            <summary className="cursor-pointer px-4 py-3 text-sm font-bold text-slate-700">
+                              {language === "th" ? "ปรับระยะทางด้วยตนเอง" : "Manual mileage adjustment"}
+                              <span className="ml-2 text-xs font-normal text-slate-400">
+                                {language === "th" ? "(ใช้เมื่อจำเป็น)" : "(only when needed)"}
+                              </span>
+                            </summary>
+                            <div className="grid gap-3 border-t border-slate-200 bg-white p-4 md:grid-cols-3">
+                              <div className="form-field">
+                                <label className="form-label">{copy.startMileage}</label>
+                                <input type="number" min="0" value={form.start_mileage} onChange={(event) => updateForm("start_mileage", event.target.value)} className="form-input bg-white" />
+                              </div>
+                              <div className="form-field">
+                                <label className="form-label">{copy.endMileage}</label>
+                                <input type="number" min="0" value={form.end_mileage} onChange={(event) => updateForm("end_mileage", event.target.value)} className="form-input bg-white" />
+                              </div>
+                              <div className="form-field">
+                                <label className="form-label">{copy.manualActualKm}</label>
+                                <input type="number" min="0" step="0.01" value={form.manual_actual_km} onChange={(event) => updateForm("manual_actual_km", event.target.value)} className="form-input bg-white" />
+                              </div>
+                            </div>
+                          </details>
+                        </section>
+
+                        <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+                          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                            <div>
+                              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-violet-600">
+                                {language === "th" ? "บันทึกเชื้อเพลิง" : "Fuel records"}
+                              </p>
+                              <h3 className="mt-1 text-lg font-black text-slate-950">
+                                {fuelChecked ? (language === "th" ? "ตรวจเชื้อเพลิงแล้ว" : "Fuel check complete") : (language === "th" ? "ต้องตรวจเชื้อเพลิง" : "Fuel check required")}
+                              </h3>
+                              <p className="mt-1 text-xs text-slate-500">
+                                {language === "th"
+                                  ? "Fuel logs ใช้ตรวจรอบเชื้อเพลิงและระยะทาง ไม่ถือว่าเป็นเชื้อเพลิงของทริปเดียวโดยตรง"
+                                  : "Fuel logs support fuel-cycle and mileage checking; they are not treated as exact fuel use for one trip."}
+                              </p>
+                            </div>
+                            {!fuelChecked ? (
+                              <button type="button" onClick={() => void handleManualFuelConfirm()} className="btn-secondary min-h-10 px-4 py-2 text-sm">
+                                {language === "th" ? "ยืนยันการตรวจเชื้อเพลิง" : "Confirm fuel check"}
+                              </button>
+                            ) : null}
+                          </div>
+
+                          <div className="mt-4 space-y-2">
+                            {selectedTrip.linkedFuelLogs.length === 0 ? (
+                              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                                {copy.noFuelLogsLinkedYet}
+                              </div>
+                            ) : null}
+                            {selectedTrip.linkedFuelLogs.map((log) => (
+                              <div key={log.id} className="flex flex-col gap-3 rounded-xl border border-emerald-100 bg-emerald-50/35 p-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-black text-slate-950">
+                                    {formatDate(log.date)} · {log.vehicle_reg} · {log.driver}
+                                  </p>
+                                  <p className="mt-1 text-xs text-slate-600">
+                                    {formatNumber(Number(log.litres || 0), 2)} L · {formatCurrency(Number(log.total_cost || 0))}
+                                    {log.mileage ? ` · ${formatNumber(Number(log.mileage))} km` : ""}
+                                    {log.station || log.location ? ` · ${log.station || log.location}` : ""}
+                                  </p>
+                                </div>
+                                <button type="button" onClick={() => void handleUnlinkFuelLog(String(log.id))} className="btn-secondary min-h-9 px-3 py-1.5 text-xs">
+                                  {copy.unlink}
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+
+                          {selectedPossibleFuelLogs.length > 0 ? (
+                            <div className="mt-4">
+                              <p className="text-xs font-black uppercase tracking-[0.1em] text-amber-700">
+                                {language === "th" ? "บันทึกที่อาจตรงกัน" : "Possible matches"}
+                              </p>
+                              <div className="mt-2 grid gap-2 lg:grid-cols-2">
+                                {selectedPossibleFuelLogs.slice(0, 4).map((log) => (
+                                  <div key={log.id} className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                                    <div className="min-w-0">
+                                      <p className="truncate text-sm font-bold text-slate-950">{formatDate(log.date)} · {log.vehicle_reg} · {log.driver}</p>
+                                      <p className="text-xs text-slate-600">
+                                        {formatNumber(Number(log.litres || 0), 2)} L · {formatCurrency(Number(log.total_cost || 0))}
+                                      </p>
+                                    </div>
+                                    <button type="button" onClick={() => void handleLinkFuelLog(String(log.id))} className="btn-primary min-h-8 px-3 py-1 text-xs">
+                                      {language === "th" ? "เชื่อม" : "Link"}
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            <button type="button" onClick={() => setManualFuelExpanded((current) => !current)} className="btn-secondary min-h-9 px-3 py-1.5 text-xs">
+                              {manualFuelExpanded ? (language === "th" ? "ซ่อนการค้นหา" : "Hide fuel search") : (language === "th" ? "ค้นหา Fuel Logs อื่น" : "Search other Fuel Logs")}
+                            </button>
+                          </div>
+
+                          {manualFuelExpanded ? (
+                            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                <input value={manualFuelSearch} onChange={(event) => setManualFuelSearch(event.target.value)} placeholder={copy.searchFuelPlaceholder} className="form-input bg-white" />
+                                <input type="date" value={manualFuelDate} onChange={(event) => setManualFuelDate(event.target.value)} className="form-input bg-white" />
+                              </div>
+                              <div className="mt-3 max-h-[240px] space-y-2 overflow-y-auto pr-1">
+                                {manualFuelLogOptions.length === 0 ? <p className="text-sm text-slate-500">{copy.noOtherFuelLogs}</p> : null}
+                                {manualFuelLogOptions.map((log) => (
+                                  <div key={log.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3">
+                                    <div className="min-w-0">
+                                      <p className="truncate text-sm font-bold text-slate-950">{formatDate(log.date)} · {log.vehicle_reg} · {log.driver}</p>
+                                      <p className="text-xs text-slate-500">{formatNumber(Number(log.litres || 0), 2)} L · {formatCurrency(Number(log.total_cost || 0))}</p>
+                                    </div>
+                                    <button type="button" onClick={() => void handleLinkFuelLog(String(log.id))} className="btn-secondary min-h-8 px-3 py-1 text-xs">
+                                      {language === "th" ? "เชื่อม" : "Link"}
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null}
+
+                          {(selectedFuelCycle || selectedIncompleteFuelLog) ? (
+                            <details className="mt-4 rounded-xl border border-slate-200 bg-slate-50">
+                              <summary className="cursor-pointer px-4 py-3 text-sm font-bold text-slate-700">
+                                {language === "th" ? "ดูรายละเอียดรอบเชื้อเพลิง" : "View fuel-cycle details"}
+                              </summary>
+                              <div className="border-t border-slate-200 bg-white p-4 text-sm text-slate-600">
+                                {selectedFuelCycle ? (
+                                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                                    <div><p className="text-xs text-slate-400">{copy.fuelCycleDistance}</p><p className="font-bold text-slate-950">{formatNumber(selectedFuelCycle.distanceKm)} km</p></div>
+                                    <div><p className="text-xs text-slate-400">{copy.linkedTripDistanceInCycle}</p><p className="font-bold text-slate-950">{formatNumber(selectedFuelCycleCoverage?.linkedDistance)} km</p></div>
+                                    <div><p className="text-xs text-slate-400">{copy.unallocatedDistance}</p><p className="font-bold text-slate-950">{formatNumber(selectedFuelCycleCoverage?.unallocatedDistance)} km</p></div>
+                                    <div><p className="text-xs text-slate-400">{copy.coverage}</p><p className="font-bold text-slate-950">{formatNumber(selectedFuelCycleCoverage?.coveragePercent, 1)}%</p></div>
+                                  </div>
+                                ) : (
+                                  <p>{selectedFuelCycleState.status}</p>
+                                )}
+                              </div>
+                            </details>
+                          ) : null}
+                        </section>
+
+                        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <button type="button" onClick={() => setReviewStep(1)} className="btn-secondary min-h-11 px-5 py-2.5">
+                            ← {language === "th" ? "กลับไปทริป" : "Back to Trip"}
+                          </button>
+                          <button type="button" onClick={() => setReviewStep(3)} className="btn-primary min-h-11 px-5 py-2.5">
+                            {language === "th" ? "ต่อไป: ตรวจสอบ →" : "Continue to Verify →"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {reviewStep === 3 ? (
+                      <div className="space-y-4">
+                        <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-violet-600">
+                              {language === "th" ? "ตรวจสอบสุดท้าย" : "Final verification"}
+                            </p>
+                            <h3 className="mt-1 text-xl font-black text-slate-950">
+                              {language === "th" ? "พร้อมยืนยันทริปนี้หรือไม่?" : "Is this trip ready to verify?"}
+                            </h3>
+                          </div>
+
+                          <div className={`mt-4 rounded-xl border px-4 py-3 ${
+                            bookingLinked && distanceReady && mileageVerified && fuelChecked
+                              ? "border-emerald-200 bg-emerald-50"
+                              : "border-amber-200 bg-amber-50"
+                          }`}>
+                            <p className={`font-black ${
+                              bookingLinked && distanceReady && mileageVerified && fuelChecked
+                                ? "text-emerald-800"
+                                : "text-amber-800"
+                            }`}>
+                              {bookingLinked && distanceReady && mileageVerified && fuelChecked
+                                ? (language === "th" ? "พร้อมยืนยันทริป" : "Ready to verify")
+                                : (language === "th" ? "ยังมีรายการที่ต้องตรวจสอบ" : "Items still need attention")}
+                            </p>
+                            <p className="mt-0.5 text-xs text-slate-600">
+                              {bookingLinked && distanceReady && mileageVerified && fuelChecked
+                                ? (language === "th" ? "Booking, route, mileage และ fuel check ครบแล้ว" : "Booking, route, mileage and fuel checks are complete.")
+                                : (language === "th" ? "ตรวจรายการสีเหลืองก่อนยืนยันทริป" : "Review any amber checks before verifying the trip.")}
+                            </p>
+                          </div>
+
+                          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                            {[
+                              {
+                                label: language === "th" ? "เชื่อม Booking" : "Booking linked",
+                                ok: bookingLinked
+                              },
+                              {
+                                label: language === "th" ? "เส้นทาง / ระยะทาง" : "Route & distance",
+                                ok: distanceReady
+                              },
+                              {
+                                label: language === "th" ? "ระยะทางยืนยัน" : "Mileage verified",
+                                ok: mileageVerified
+                              },
+                              {
+                                label: language === "th" ? "ตรวจเชื้อเพลิง" : "Fuel checked",
+                                ok: fuelChecked
+                              }
+                            ].map((check) => (
+                              <div key={check.label} className={`rounded-xl border p-4 ${
+                                check.ok
+                                  ? "border-emerald-200 bg-emerald-50"
+                                  : "border-amber-200 bg-amber-50"
+                              }`}>
+                                <p className={`text-sm font-black ${check.ok ? "text-emerald-800" : "text-amber-800"}`}>
+                                  {check.ok ? "✓ " : "⚠ "}{check.label}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </section>
+
+                        <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5">
+                          <p className="text-[10px] font-black uppercase tracking-[0.12em] text-violet-600">
+                            {language === "th" ? "หมายเหตุ (ไม่บังคับ)" : "Optional notes"}
+                          </p>
+                          <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                            <div className="form-field">
+                              <label className="form-label">{copy.waitingIdleNotes}</label>
+                              <textarea rows={4} value={form.waiting_idle_notes} onChange={(event) => updateForm("waiting_idle_notes", event.target.value)} className="form-textarea bg-white" />
+                            </div>
+                            <div className="form-field">
+                              <label className="form-label">{copy.extraRouteNotes}</label>
+                              <textarea rows={4} value={form.extra_route_notes} onChange={(event) => updateForm("extra_route_notes", event.target.value)} className="form-textarea bg-white" />
+                            </div>
+                          </div>
+                        </section>
+
+                        <section className="rounded-2xl border border-violet-100 bg-violet-50/45 p-4">
+                          <div className="grid gap-3 md:grid-cols-4">
+                            <div>
+                              <p className="text-xs text-slate-500">{copy.route}</p>
+                              <p className="mt-1 truncate font-bold text-slate-950">{getShortRoutePreview(selectedTrip, copy)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-500">{language === "th" ? "ระยะทางแผน" : "Planned"}</p>
+                              <p className="mt-1 font-bold text-slate-950">{formatNumber(selectedFormMetrics?.estimatedDistance)} km</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-500">{language === "th" ? "ระยะทางใช้งาน" : "Working"}</p>
+                              <p className="mt-1 font-bold text-slate-950">{formatNumber(selectedFormMetrics?.workingDistance)} km</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-500">{copy.fuelStatus}</p>
+                              <p className="mt-1 font-bold text-slate-950">{getFuelStatusLabel(selectedFuelStatus, copy)}</p>
+                            </div>
+                          </div>
+                        </section>
+
+                        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex flex-wrap gap-2">
+                            <button type="button" onClick={() => setReviewStep(2)} className="btn-secondary min-h-11 px-5 py-2.5">
+                              ← {language === "th" ? "กลับไปเชื้อเพลิงและระยะทาง" : "Back to Fuel & Mileage"}
+                            </button>
+                            <details className="relative">
+                              <summary className="flex min-h-11 cursor-pointer list-none items-center rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50">
+                                {language === "th" ? "การดำเนินการเพิ่มเติม" : "More actions"}
+                              </summary>
+                              <div className="absolute bottom-12 left-0 z-20 min-w-[180px] rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
+                                <button
+                                  type="button"
+                                  onClick={() => requestDeleteTrip(selectedTrip)}
+                                  className="w-full rounded-lg px-3 py-2 text-left text-sm font-bold text-rose-700 hover:bg-rose-50"
+                                >
+                                  {copy.deleteTrip}
+                                </button>
+                              </div>
+                            </details>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                            <button type="button" onClick={closeTripReview} className="btn-secondary min-h-11 px-4 py-2.5">
+                              {language === "th" ? "ปิด" : "Close"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleSaveTrip()}
+                              disabled={saving}
+                              className="btn-primary min-h-11 px-6 py-2.5"
+                            >
+                              <Save className="h-4 w-4" />
+                              {saving
+                                ? copy.saving
+                                : language === "th"
+                                  ? "ยืนยันทริป"
+                                  : "Verify Trip"}
+                            </button>
+                          </div>
+                        </div>
+
+                        <p className={`text-right text-xs font-semibold ${hasUnsavedChanges ? "text-amber-700" : "text-emerald-700"}`}>
+                          {hasUnsavedChanges ? copy.unsavedChanges : notice === copy.tripSavedSuccessfully ? copy.tripSavedSuccessfully : copy.noUnsavedChanges}
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                </>
+              );
+            })()}
+          </section>
+        </div>
       ) : null}
 
-      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5">
+      <section className="hidden rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <h3 className="section-title">{copy.performanceComparison}</h3>

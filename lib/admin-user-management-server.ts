@@ -17,6 +17,30 @@ type AccessRow = {
   last_access_changed_at: string | null;
 };
 
+export type ActiveDriverAccount = {
+  id: string;
+  auth_user_id: string;
+  driver_id: string | number;
+  active: true;
+};
+
+export type DriverAccessRequestStatus = "pending" | "approved" | "rejected";
+
+export type DriverAccessRequest = {
+  id: string;
+  auth_user_id: string;
+  full_name: string;
+  email: string;
+  phone: string;
+  requested_account_type: "driver" | "office_staff";
+  status: DriverAccessRequestStatus;
+  requested_at: string;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  linked_driver_id: string | number | null;
+  rejection_reason: string | null;
+};
+
 export type AuditRow = {
   id: string;
   action: string;
@@ -51,6 +75,27 @@ export type ServerManagedAccount = AccountAccess & {
 
 const ACCOUNT_ACCESS_TABLE = "account_access";
 const ACCOUNT_AUDIT_TABLE = "account_access_audit";
+
+function configuredAccessRequestApproverId() {
+  const value = process.env.JOEY_APPROVER_USER_ID?.trim();
+  return value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+    ? value.toLowerCase()
+    : null;
+}
+
+export function canReviewAccessRequests(userId: string) {
+  const approverId = configuredAccessRequestApproverId();
+  return approverId !== null && userId.toLowerCase() === approverId;
+}
+
+export function requireAccessRequestApprover(userId: string) {
+  if (!configuredAccessRequestApproverId()) {
+    throw new AdminApiError(503, "Access request approver is not configured on the server.");
+  }
+  if (!canReviewAccessRequests(userId)) {
+    throw new AdminApiError(403, "Only the configured access request approver can approve or reject requests.");
+  }
+}
 
 export class AdminApiError extends Error {
   status: number;
@@ -193,8 +238,44 @@ async function readAccessRow(admin: SupabaseClient, user: User) {
   return data as AccessRow | null;
 }
 
+export async function findActiveDriverAccount(admin: SupabaseClient, authUserId: string) {
+  const { data, error } = await admin
+    .from("driver_accounts")
+    .select("id,auth_user_id,driver_id,active")
+    .eq("auth_user_id", authUserId)
+    .eq("active", true)
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === "42P01" || error.code === "PGRST205") return null;
+    throw error;
+  }
+
+  return data as ActiveDriverAccount | null;
+}
+
+export async function findDriverAccessRequest(admin: SupabaseClient, authUserId: string) {
+  const { data, error } = await admin
+    .from("driver_access_requests")
+    .select("id,auth_user_id,full_name,email,phone,requested_account_type,status,requested_at,reviewed_at,reviewed_by,linked_driver_id,rejection_reason")
+    .eq("auth_user_id", authUserId)
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === "42P01" || error.code === "PGRST205") return null;
+    throw error;
+  }
+  return data as DriverAccessRequest | null;
+}
+
 export async function resolveAccountAccess(admin: SupabaseClient, user: User): Promise<AccountAccess> {
+  const driverAccount = await findActiveDriverAccount(admin, user.id);
+  if (driverAccount) {
+    throw new AdminApiError(403, "Driver accounts must use the driver portal.");
+  }
+
   const row = await readAccessRow(admin, user);
+  if (!row) throw new AdminApiError(403, "Account access is not authorised.");
   const role = row ? normalizeAccountRole(row.role) : "office_staff";
   const status = row ? normalizeAccountStatus(row.status) : "active";
 

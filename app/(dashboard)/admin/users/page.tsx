@@ -1,9 +1,20 @@
 "use client";
 
 import clsx from "clsx";
-import { CheckCircle2, RefreshCw, Search, ShieldCheck, UserCog, XCircle } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  KeyRound,
+  Pencil,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  UserCog,
+  X,
+  XCircle
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Header } from "@/components/header";
+import { PendingDriverRequests } from "@/components/admin/pending-driver-requests";
 import {
   fetchManagedAccounts,
   sendManagedAccountPasswordReset,
@@ -25,7 +36,10 @@ function formatDate(value: string | null | undefined, language: "en" | "th") {
   if (!value) return "-";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return "-";
-  return new Intl.DateTimeFormat(language === "th" ? "th-TH" : "en-GB", { dateStyle: "medium", timeStyle: "short" }).format(parsed);
+  return new Intl.DateTimeFormat(language === "th" ? "th-TH" : "en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(parsed);
 }
 
 function statusClass(status: AccountStatus) {
@@ -40,12 +54,32 @@ function roleClass(role: AccountRole) {
   return "border-slate-200 bg-slate-50 text-slate-700";
 }
 
-function SummaryCard({ label, value }: { label: string; value: number }) {
+function SummaryCard({
+  label,
+  value,
+  description,
+  active = false,
+  onClick
+}: {
+  label: string;
+  value: number;
+  description: string;
+  active?: boolean;
+  onClick: () => void;
+}) {
   return (
-    <div className="rounded-2xl border border-violet-100 bg-white px-4 py-3 shadow-sm">
+    <button
+      type="button"
+      onClick={onClick}
+      className={clsx(
+        "rounded-2xl border px-4 py-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md",
+        active ? "border-brand-300 bg-brand-50/70" : "border-violet-100 bg-white"
+      )}
+    >
       <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{label}</p>
       <p className="mt-1 text-3xl font-black leading-none text-brand-700">{value}</p>
-    </div>
+      <p className="mt-2 text-xs leading-5 text-slate-500">{description}</p>
+    </button>
   );
 }
 
@@ -63,7 +97,7 @@ export default function AdminUsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
-  const [editingNameFor, setEditingNameFor] = useState<string | null>(null);
+  const [managedUserId, setManagedUserId] = useState<string | null>(null);
   const [nameInput, setNameInput] = useState("");
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -72,7 +106,13 @@ export default function AdminUsersPage() {
     setLoading(true);
     setError(null);
     try {
-      const result = await fetchManagedAccounts({ page, pageSize: PAGE_SIZE, search, role: roleFilter, status: statusFilter });
+      const result = await fetchManagedAccounts({
+        page,
+        pageSize: PAGE_SIZE,
+        search,
+        role: roleFilter,
+        status: statusFilter
+      });
       setUsers(result.users);
       setSummary(result.summary);
       setTotal(result.total);
@@ -90,6 +130,15 @@ export default function AdminUsersPage() {
   useEffect(() => {
     setPage(1);
   }, [roleFilter, search, statusFilter]);
+
+  const managedUser = useMemo(
+    () => users.find((user) => user.userId === managedUserId) ?? null,
+    [managedUserId, users]
+  );
+
+  useEffect(() => {
+    if (managedUser) setNameInput(managedUser.displayName);
+  }, [managedUser]);
 
   const actionText = useMemo(() => {
     if (!pendingAction) return "";
@@ -132,8 +181,6 @@ export default function AdminUsersPage() {
         setSuccess(t.adminUsers.updateSuccess);
       }
       setPendingAction(null);
-      setEditingNameFor(null);
-      setNameInput("");
       void loadUsers();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t.adminUsers.updateError);
@@ -142,158 +189,194 @@ export default function AdminUsersPage() {
     }
   };
 
-  const startNameEdit = (user: ManagedAccount) => {
-    setEditingNameFor(user.userId);
-    setNameInput(user.displayName);
+  const applySummaryFilter = (type: "all" | "admin" | "staff" | "suspended") => {
+    setSearch("");
+    if (type === "all") {
+      setRoleFilter("");
+      setStatusFilter("");
+    } else if (type === "admin") {
+      setRoleFilter("admin");
+      setStatusFilter("");
+    } else if (type === "staff") {
+      setRoleFilter("office_staff");
+      setStatusFilter("");
+    } else {
+      setRoleFilter("");
+      setStatusFilter("suspended");
+    }
   };
-
-  const UserActions = ({ user }: { user: ManagedAccount }) => (
-    <div className="flex flex-wrap gap-2">
-      <select
-        value={user.role}
-        onChange={(event) => setPendingAction({ type: "role", user, role: event.target.value as AccountRole })}
-        className="min-h-9 rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-brand-200"
-      >
-        {ACCOUNT_ROLES.map((role) => <option key={role} value={role}>{t.adminUsers.roles[roleDisplayKey(role)]}</option>)}
-      </select>
-      {user.status === "active" ? (
-        <button type="button" onClick={() => setPendingAction({ type: "status", user, status: "suspended" })} className="btn-secondary min-h-9 px-3 py-1.5 text-xs text-rose-700">
-          {t.adminUsers.suspendAccount}
-        </button>
-      ) : (
-        <button type="button" onClick={() => setPendingAction({ type: "status", user, status: "active" })} className="btn-secondary min-h-9 px-3 py-1.5 text-xs text-emerald-700">
-          {t.adminUsers.reactivateAccount}
-        </button>
-      )}
-      <button type="button" onClick={() => startNameEdit(user)} className="btn-secondary min-h-9 px-3 py-1.5 text-xs">
-        {t.adminUsers.correctName}
-      </button>
-      <button type="button" onClick={() => setPendingAction({ type: "password", user })} className="btn-secondary min-h-9 px-3 py-1.5 text-xs">
-        {t.adminUsers.sendPasswordReset}
-      </button>
-    </div>
-  );
 
   return (
     <>
-      <div className="mb-6 hidden md:block">
-        <Header title={t.adminUsers.title} description={t.adminUsers.description} />
-      </div>
-
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <SummaryCard label={t.adminUsers.totalAccounts} value={summary.total} />
-        <SummaryCard label={t.adminUsers.roles.administrator} value={summary.admin} />
-        <SummaryCard label={t.adminUsers.roles.officeStaff} value={summary.officeStaff} />
-        <SummaryCard label={t.adminUsers.roles.readOnly} value={summary.readOnly} />
-        <SummaryCard label={t.adminUsers.statuses.suspended} value={summary.suspended} />
+      <PendingDriverRequests />
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <SummaryCard
+          label={t.adminUsers.totalAccounts}
+          value={summary.total}
+          description="Everyone with access to EES"
+          active={!roleFilter && !statusFilter}
+          onClick={() => applySummaryFilter("all")}
+        />
+        <SummaryCard
+          label={t.adminUsers.roles.administrator}
+          value={summary.admin}
+          description="Full system access"
+          active={roleFilter === "admin" && !statusFilter}
+          onClick={() => applySummaryFilter("admin")}
+        />
+        <SummaryCard
+          label={t.adminUsers.roles.officeStaff}
+          value={summary.officeStaff}
+          description="Day-to-day operational access"
+          active={roleFilter === "office_staff" && !statusFilter}
+          onClick={() => applySummaryFilter("staff")}
+        />
+        <SummaryCard
+          label={t.adminUsers.statuses.suspended}
+          value={summary.suspended}
+          description="Accounts currently blocked"
+          active={statusFilter === "suspended"}
+          onClick={() => applySummaryFilter("suspended")}
+        />
       </section>
 
-      <section className="mt-4 surface-card p-4 sm:p-5">
-        <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <h2 className="section-title">{t.adminUsers.accountList}</h2>
-            <p className="section-subtitle">{t.adminUsers.accountListDescription}</p>
-          </div>
-          <div className="grid gap-2 md:grid-cols-[minmax(14rem,1fr)_10rem_10rem_auto]">
-            <label>
-              <span className="form-label">{t.adminUsers.search}</span>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input value={search} onChange={(event) => setSearch(event.target.value)} className="form-input bg-white pl-9" placeholder={t.adminUsers.searchPlaceholder} />
-              </div>
-            </label>
-            <label>
-              <span className="form-label">{t.profile.role}</span>
-              <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} className="form-input bg-white">
-                <option value="">{t.adminUsers.allRoles}</option>
-                {ACCOUNT_ROLES.map((role) => <option key={role} value={role}>{t.adminUsers.roles[roleDisplayKey(role)]}</option>)}
-              </select>
-            </label>
-            <label>
-              <span className="form-label">{t.adminUsers.accountStatus}</span>
-              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="form-input bg-white">
-                <option value="">{t.adminUsers.allStatuses}</option>
-                {ACCOUNT_STATUSES.map((status) => <option key={status} value={status}>{t.adminUsers.statuses[status]}</option>)}
-              </select>
-            </label>
-            <button type="button" onClick={() => void loadUsers()} className="btn-secondary self-end">
-              <RefreshCw className="h-4 w-4" />
-              {t.support.refresh}
-            </button>
+      <section className="mt-4 overflow-hidden rounded-[1.4rem] border border-violet-100 bg-white shadow-sm">
+        <div className="border-b border-slate-100 bg-gradient-to-r from-white via-white to-violet-50/60 px-4 py-5 sm:px-5">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-brand-700">Access control</p>
+              <h2 className="mt-1 text-xl font-semibold text-slate-950">Application accounts</h2>
+              <p className="mt-1 max-w-2xl text-sm text-slate-500">
+                See who can access EES, what level they have and when they last signed in. Open Manage only when you need to change an account.
+              </p>
+            </div>
+            <div className="grid gap-2 md:grid-cols-[minmax(16rem,1fr)_10rem_10rem_auto]">
+              <label>
+                <span className="form-label">{t.adminUsers.search}</span>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    className="form-input bg-white pl-9"
+                    placeholder={t.adminUsers.searchPlaceholder}
+                  />
+                </div>
+              </label>
+              <label>
+                <span className="form-label">{t.profile.role}</span>
+                <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} className="form-input bg-white">
+                  <option value="">{t.adminUsers.allRoles}</option>
+                  {ACCOUNT_ROLES.map((role) => (
+                    <option key={role} value={role}>{t.adminUsers.roles[roleDisplayKey(role)]}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span className="form-label">{t.adminUsers.accountStatus}</span>
+                <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="form-input bg-white">
+                  <option value="">{t.adminUsers.allStatuses}</option>
+                  {ACCOUNT_STATUSES.map((status) => (
+                    <option key={status} value={status}>{t.adminUsers.statuses[status]}</option>
+                  ))}
+                </select>
+              </label>
+              <button type="button" onClick={() => void loadUsers()} className="btn-secondary self-end">
+                <RefreshCw className="h-4 w-4" />
+                {t.support.refresh}
+              </button>
+            </div>
           </div>
         </div>
 
-        {success ? <p className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">{success}</p> : null}
-        {error ? <p className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-800">{error}</p> : null}
+        {success ? <p className="mx-4 mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 sm:mx-5">{success}</p> : null}
+        {error ? <p className="mx-4 mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-800 sm:mx-5">{error}</p> : null}
 
-        <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white min-[980px]:block">
+        <div className="hidden min-[980px]:block">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50">
+            <thead className="bg-violet-50/60">
               <tr>
-                {[t.adminUsers.account, t.profile.role, t.adminUsers.accountStatus, t.adminUsers.emailConfirmed, t.adminUsers.accountCreated, t.adminUsers.lastSignIn, t.adminUsers.lastAccessChange, t.support.action].map((heading) => (
-                  <th key={heading} className="px-4 py-3 text-left text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{heading}</th>
+                {["User", "Access", "Status", "Last sign-in", "Security", "Manage"].map((heading) => (
+                  <th key={heading} className="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{heading}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} className="px-4 py-6 text-slate-500">{t.adminUsers.loading}</td></tr>
+                <tr><td colSpan={6} className="px-5 py-8 text-slate-500">{t.adminUsers.loading}</td></tr>
               ) : users.map((user) => (
-                <tr key={user.userId} className="border-t border-slate-100 align-top">
-                  <td className="px-4 py-3">
-                    <div className="font-bold text-slate-950">
-                      {user.displayName}
-                      {user.isCurrentUser ? <span className="ml-2 rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-bold text-brand-700">{t.adminUsers.you}</span> : null}
+                <tr key={user.userId} className="border-t border-slate-100 align-middle transition hover:bg-violet-50/30">
+                  <td className="px-5 py-4">
+                    <div className="flex flex-wrap items-center gap-2 font-bold text-slate-950">
+                      <span>{user.displayName}</span>
+                      {user.isCurrentUser ? (
+                        <span className="rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1 text-[11px] font-bold text-brand-700">Primary account</span>
+                      ) : null}
                     </div>
-                    <div className="mt-0.5 text-xs text-slate-500">{user.email}</div>
+                    <div className="mt-1 text-xs text-slate-500">{user.email}</div>
                   </td>
-                  <td className="px-4 py-3"><span className={clsx("inline-flex rounded-full border px-2.5 py-1 text-xs font-bold", roleClass(user.role))}>{t.adminUsers.roles[roleDisplayKey(user.role)]}</span></td>
-                  <td className="px-4 py-3"><span className={clsx("inline-flex rounded-full border px-2.5 py-1 text-xs font-bold", statusClass(user.status))}>{t.adminUsers.statuses[user.status]}</span></td>
-                  <td className="px-4 py-3">{user.emailConfirmedAt ? <CheckCircle2 className="h-5 w-5 text-emerald-600" /> : <XCircle className="h-5 w-5 text-rose-500" />}</td>
-                  <td className="px-4 py-3 text-slate-600">{formatDate(user.createdAt, language)}</td>
-                  <td className="px-4 py-3 text-slate-600">{formatDate(user.lastSignInAt, language)}</td>
-                  <td className="px-4 py-3 text-slate-600">{formatDate(user.lastAccessChangedAt, language)}</td>
-                  <td className="px-4 py-3"><UserActions user={user} /></td>
+                  <td className="px-5 py-4">
+                    <span className={clsx("inline-flex rounded-full border px-2.5 py-1 text-xs font-bold", roleClass(user.role))}>
+                      {t.adminUsers.roles[roleDisplayKey(user.role)]}
+                    </span>
+                  </td>
+                  <td className="px-5 py-4">
+                    <span className={clsx("inline-flex rounded-full border px-2.5 py-1 text-xs font-bold", statusClass(user.status))}>
+                      {t.adminUsers.statuses[user.status]}
+                    </span>
+                  </td>
+                  <td className="px-5 py-4 text-slate-600">{formatDate(user.lastSignInAt, language)}</td>
+                  <td className="px-5 py-4">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                      {user.emailConfirmedAt ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <XCircle className="h-4 w-4 text-rose-500" />}
+                      {user.emailConfirmedAt ? "Email confirmed" : "Email not confirmed"}
+                    </div>
+                  </td>
+                  <td className="px-5 py-4">
+                    <button type="button" onClick={() => setManagedUserId(user.userId)} className="btn-secondary min-h-9 px-3 py-1.5 text-xs">
+                      Manage
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
 
-        <div className="grid gap-3 min-[980px]:hidden">
+        <div className="grid gap-3 p-4 min-[980px]:hidden">
           {loading ? <p className="rounded-2xl border border-slate-200 bg-white px-4 py-5 text-sm text-slate-500">{t.adminUsers.loading}</p> : null}
           {!loading && users.map((user) => (
             <article key={user.userId} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <h3 className="break-words font-bold text-slate-950">{user.displayName}</h3>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="break-words font-bold text-slate-950">{user.displayName}</h3>
+                    {user.isCurrentUser ? <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-bold text-brand-700">Primary account</span> : null}
+                  </div>
                   <p className="mt-1 break-all text-xs text-slate-500">{user.email}</p>
                 </div>
-                {user.isCurrentUser ? <span className="shrink-0 rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-bold text-brand-700">{t.adminUsers.you}</span> : null}
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <span className={clsx("inline-flex rounded-full border px-2.5 py-1 text-xs font-bold", roleClass(user.role))}>{t.adminUsers.roles[roleDisplayKey(user.role)]}</span>
                 <span className={clsx("inline-flex rounded-full border px-2.5 py-1 text-xs font-bold", statusClass(user.status))}>{t.adminUsers.statuses[user.status]}</span>
               </div>
-              <dl className="mt-3 grid gap-2 text-sm">
-                <Info label={t.adminUsers.emailConfirmed} value={user.emailConfirmedAt ? t.adminUsers.yes : t.adminUsers.no} />
-                <Info label={t.adminUsers.accountCreated} value={formatDate(user.createdAt, language)} />
-                <Info label={t.adminUsers.lastSignIn} value={formatDate(user.lastSignInAt, language)} />
-                <Info label={t.adminUsers.lastAccessChange} value={formatDate(user.lastAccessChangedAt, language)} />
-              </dl>
-              <div className="mt-3"><UserActions user={user} /></div>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                <Info label="Last sign-in" value={formatDate(user.lastSignInAt, language)} />
+                <Info label="Email security" value={user.emailConfirmedAt ? "Confirmed" : "Not confirmed"} />
+              </div>
+              <button type="button" onClick={() => setManagedUserId(user.userId)} className="btn-secondary mt-4 w-full">Manage account</button>
             </article>
           ))}
         </div>
 
         {!loading && users.length === 0 ? (
-          <div className="mt-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center">
+          <div className="m-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center sm:m-5">
             <UserCog className="mx-auto h-6 w-6 text-slate-400" />
             <p className="mt-2 font-semibold text-slate-800">{t.adminUsers.noUsers}</p>
           </div>
         ) : null}
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-4 sm:px-5">
           <p className="text-sm font-semibold text-slate-500">{t.adminUsers.totalCount.replace("{count}", String(total))}</p>
           <div className="flex items-center gap-2">
             <button type="button" className="btn-secondary min-h-9 px-3 py-1.5 text-xs" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>
@@ -307,33 +390,128 @@ export default function AdminUsersPage() {
         </div>
       </section>
 
-      {editingNameFor ? (
-        <div className="fixed inset-0 z-[var(--z-modal)] overflow-y-auto bg-slate-950/45 p-3 sm:flex sm:items-center sm:justify-center sm:p-6">
-          <div className="mx-auto w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_70px_rgba(15,23,42,0.24)]">
-            <h3 className="text-lg font-semibold text-slate-950">{t.adminUsers.correctName}</h3>
-            <input value={nameInput} onChange={(event) => setNameInput(event.target.value)} className="form-input mt-3 bg-white" maxLength={80} autoFocus />
-            <div className="mt-5 flex justify-end gap-2">
-              <button type="button" className="btn-secondary" onClick={() => setEditingNameFor(null)}>{t.common.cancel}</button>
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={() => {
-                  const user = users.find((account) => account.userId === editingNameFor);
-                  if (user) {
-                    setEditingNameFor(null);
-                    setPendingAction({ type: "name", user, displayName: nameInput.trim() });
-                  }
-                }}
-              >
-                {t.adminUsers.changeAccess}
+      {managedUser ? (
+        <div className="fixed inset-0 z-[var(--z-modal)] overflow-y-auto bg-slate-950/45 p-3 sm:p-6">
+          <div className="ml-auto min-h-full w-full max-w-2xl overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.3)]">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 bg-gradient-to-r from-white to-violet-50 px-5 py-5 sm:px-6">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-brand-700">Manage account</p>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <h3 className="text-2xl font-semibold text-slate-950">{managedUser.displayName}</h3>
+                  {managedUser.isCurrentUser ? (
+                    <span className="rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-bold text-brand-700">Primary account</span>
+                  ) : null}
+                </div>
+                <p className="mt-1 text-sm text-slate-500">{managedUser.email}</p>
+              </div>
+              <button type="button" onClick={() => setManagedUserId(null)} className="rounded-xl border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-50" aria-label="Close">
+                <X className="h-5 w-5" />
               </button>
+            </div>
+
+            <div className="space-y-5 p-5 sm:p-6">
+              {managedUser.isCurrentUser ? (
+                <div className="flex gap-3 rounded-2xl border border-brand-200 bg-brand-50/70 p-4">
+                  <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-brand-700" />
+                  <div>
+                    <p className="font-semibold text-slate-900">Protected primary account</p>
+                    <p className="mt-1 text-sm leading-6 text-slate-600">This is your main EES administrator account. It cannot be suspended or downgraded from this screen.</p>
+                  </div>
+                </div>
+              ) : null}
+
+              <section className="rounded-2xl border border-slate-200 p-4">
+                <div className="mb-4 flex items-center gap-2">
+                  <Pencil className="h-4 w-4 text-brand-700" />
+                  <h4 className="font-semibold text-slate-950">Profile</h4>
+                </div>
+                <label className="block">
+                  <span className="form-label">Display name</span>
+                  <div className="mt-1 flex gap-2">
+                    <input value={nameInput} onChange={(event) => setNameInput(event.target.value)} className="form-input bg-white" maxLength={80} />
+                    <button
+                      type="button"
+                      className="btn-secondary shrink-0"
+                      disabled={!nameInput.trim() || nameInput.trim() === managedUser.displayName}
+                      onClick={() => setPendingAction({ type: "name", user: managedUser, displayName: nameInput.trim() })}
+                    >
+                      Save name
+                    </button>
+                  </div>
+                </label>
+              </section>
+
+              <section className="rounded-2xl border border-slate-200 p-4">
+                <div className="mb-4 flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-brand-700" />
+                  <h4 className="font-semibold text-slate-950">Access & role</h4>
+                </div>
+                <label className="block">
+                  <span className="form-label">Role</span>
+                  <select
+                    value={managedUser.role}
+                    disabled={managedUser.isCurrentUser}
+                    onChange={(event) => setPendingAction({ type: "role", user: managedUser, role: event.target.value as AccountRole })}
+                    className="form-input bg-white disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
+                  >
+                    {ACCOUNT_ROLES.map((role) => (
+                      <option key={role} value={role}>{t.adminUsers.roles[roleDisplayKey(role)]}</option>
+                    ))}
+                  </select>
+                </label>
+                <p className="mt-2 text-xs leading-5 text-slate-500">Role changes require confirmation before they are applied.</p>
+              </section>
+
+              <section className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <div className="mb-3 flex items-center gap-2">
+                    <KeyRound className="h-4 w-4 text-brand-700" />
+                    <h4 className="font-semibold text-slate-950">Security</h4>
+                  </div>
+                  <p className="text-sm text-slate-600">Email {managedUser.emailConfirmedAt ? "confirmed" : "not confirmed"}</p>
+                  <button type="button" onClick={() => setPendingAction({ type: "password", user: managedUser })} className="btn-secondary mt-3 w-full">
+                    Send password reset email
+                  </button>
+                </div>
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <h4 className="font-semibold text-slate-950">Activity</h4>
+                  <dl className="mt-3 space-y-2 text-sm">
+                    <DetailLine label="Account created" value={formatDate(managedUser.createdAt, language)} />
+                    <DetailLine label="Last sign-in" value={formatDate(managedUser.lastSignInAt, language)} />
+                    <DetailLine label="Last access change" value={formatDate(managedUser.lastAccessChangedAt, language)} />
+                  </dl>
+                </div>
+              </section>
+
+              {!managedUser.isCurrentUser ? (
+                <section className="rounded-2xl border border-rose-200 bg-rose-50/40 p-4">
+                  <div className="flex gap-3">
+                    <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-slate-950">Account status</h4>
+                      <p className="mt-1 text-sm leading-6 text-slate-600">
+                        {managedUser.status === "active" ? "Suspending blocks this user from using the application." : "This account is suspended and cannot currently use the application."}
+                      </p>
+                      {managedUser.status === "active" ? (
+                        <button type="button" onClick={() => setPendingAction({ type: "status", user: managedUser, status: "suspended" })} className="btn-secondary mt-3 text-rose-700">
+                          Suspend account
+                        </button>
+                      ) : (
+                        <button type="button" onClick={() => setPendingAction({ type: "status", user: managedUser, status: "active" })} className="btn-secondary mt-3 text-emerald-700">
+                          Reactivate account
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </section>
+              ) : null}
             </div>
           </div>
         </div>
       ) : null}
 
       {pendingAction ? (
-        <div className="fixed inset-0 z-[var(--z-modal)] overflow-y-auto bg-slate-950/45 p-3 sm:flex sm:items-center sm:justify-center sm:p-6">
+        <div className="fixed inset-0 z-[calc(var(--z-modal)+1)] overflow-y-auto bg-slate-950/45 p-3 sm:flex sm:items-center sm:justify-center sm:p-6">
           <div className="mx-auto w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_70px_rgba(15,23,42,0.24)]">
             <div className="flex items-start gap-3">
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-brand-700">
@@ -342,9 +520,6 @@ export default function AdminUsersPage() {
               <div>
                 <h3 className="text-lg font-semibold text-slate-950">{t.adminUsers.confirmTitle}</h3>
                 <p className="mt-2 text-sm leading-6 text-slate-600">{actionText}</p>
-                {pendingAction.type === "role" && pendingAction.user.isCurrentUser ? (
-                  <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">{t.adminUsers.selfRoleWarning}</p>
-                ) : null}
               </div>
             </div>
             <div className="mt-5 flex justify-end gap-2">
@@ -363,8 +538,17 @@ export default function AdminUsersPage() {
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{label}</dt>
-      <dd className="mt-1 break-words font-semibold text-slate-800">{value}</dd>
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{label}</p>
+      <p className="mt-1 break-words font-semibold text-slate-800">{value}</p>
+    </div>
+  );
+}
+
+function DetailLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-2 last:border-0 last:pb-0">
+      <dt className="text-slate-500">{label}</dt>
+      <dd className="text-right font-semibold text-slate-800">{value}</dd>
     </div>
   );
 }

@@ -184,6 +184,7 @@ function omitTripOptionalColumns<T extends Record<string, unknown>>(payload: T) 
 const BOOKING_DIARY_ROUTE_COLUMNS = new Set([
   "job_order_number",
   "created_by_user_id",
+  "driver_id",
   "pickup_place_id",
   "pickup_location_id",
   "dropoff_place_id",
@@ -2913,6 +2914,7 @@ function normalizeBookingDiaryRow(booking: BookingDiaryEntry) {
     vehicle: normalizeVehicleRegistration(booking.vehicle),
     vehicle_registration: normalizeVehicleRegistration(booking.vehicle_registration ?? booking.vehicle) || null,
     trailer_registration: normalizeVehicleRegistration(booking.trailer_registration) || null,
+    driver_id: booking.driver_id ?? null,
     driver: normalizeDisplayName(booking.driver),
     notes: booking.notes ?? null,
     pickup_place_id: booking.pickup_place_id ?? null,
@@ -3317,6 +3319,7 @@ export async function saveBookingDiaryEntry(
     vehicle: normalizeVehicleRegistration(rest.vehicle) || null,
     vehicle_registration: normalizeVehicleRegistration(rest.vehicle_registration) || null,
     trailer_registration: normalizeVehicleRegistration(rest.trailer_registration) || null,
+    driver_id: rest.driver_id ?? null,
     driver: normalizeDisplayName(rest.driver) || null,
     job_order_number: rest.job_order_number?.trim() || null,
     notes: rest.notes?.trim() || null,

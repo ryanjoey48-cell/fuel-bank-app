@@ -19,8 +19,6 @@ import {
   Search,
   X
 } from "lucide-react";
-import { Header } from "@/components/header";
-import { InsuranceIntelligenceWorkspace } from "@/components/insurance-intelligence-workspace";
 import { InsuranceProfileInsights } from "@/components/insurance-profile-insights";
 import { supabase } from "@/lib/supabase";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -41,6 +39,7 @@ import {
 } from "@/lib/insurance-providers";
 
 type ViewMode = "review" | "renewals" | "all" | "verified";
+type WorkspaceTab = "overview" | "vehicles" | "renewals" | "analytics";
 
 type InsuranceRecord = InsuranceAssetRecord;
 type InsuranceDocument = InsuranceDocumentRecord;
@@ -231,6 +230,13 @@ export default function InsurancePage() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [view, setView] = useState<ViewMode>("review");
+  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("overview");
+  const [vehicleStatusFilter, setVehicleStatusFilter] = useState("all");
+  const [vehicleRegistrationFilter, setVehicleRegistrationFilter] = useState("all");
+  const [vehicleInsurerFilter, setVehicleInsurerFilter] = useState("all");
+  const [vehicleSort, setVehicleSort] = useState("expiry_asc");
+  const [renewalSearch, setRenewalSearch] = useState("");
+  const [renewalInsurerFilter, setRenewalInsurerFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
@@ -1139,22 +1145,330 @@ export default function InsurancePage() {
   const progress =
     stats.total === 0 ? 0 : Math.round((stats.verified / stats.total) * 100);
 
+  const insuranceWorkspace = useMemo(() => {
+    const required = records.filter((record) => !isInsuranceNotRequired(record));
+    const notRequired = records.filter((record) => isInsuranceNotRequired(record));
+    const attention = required
+      .filter((record) =>
+        record.insurance_status === "expired" ||
+        record.insurance_status === "due_30" ||
+        record.insurance_status === "missing" ||
+        isAwaitingInsuranceReview(record, { records, documents })
+      )
+      .sort((a, b) => urgencyRank(a) - urgencyRank(b));
+    const upcoming = required
+      .filter((record) => {
+        const days = record.days_to_insurance_expiry;
+        return days != null && days >= 0 && days <= 90;
+      })
+      .sort((a, b) => (a.days_to_insurance_expiry ?? 9999) - (b.days_to_insurance_expiry ?? 9999));
+    const annualPremium = required.reduce((sum, record) => sum + (record.insurance_premium ?? 0), 0);
+    const insuredValue = required.reduce((sum, record) => sum + (record.insured_value ?? 0), 0);
+    const current = required.filter((record) => record.insurance_status === "active").length;
+    const insurerTotals = new Map<string, { total: number; vehicles: number }>();
+    required.forEach((record) => {
+      const insurer = canonicalInsurerName(record.insurer_en, record.insurer_th, language) || (isThai ? "ไม่ระบุบริษัท" : "Not recorded");
+      const current = insurerTotals.get(insurer) ?? { total: 0, vehicles: 0 };
+      current.total += record.insurance_premium ?? 0;
+      current.vehicles += 1;
+      insurerTotals.set(insurer, current);
+    });
+    const insurers = Array.from(insurerTotals.entries())
+      .map(([name, value]) => ({ name, ...value }))
+      .sort((a, b) => b.total - a.total);
+    return { required, notRequired, attention, upcoming, annualPremium, insuredValue, current, insurers };
+  }, [documents, isThai, language, records]);
+
+  const premiumFor = (record: InsuranceRecord) => record.insurance_premium ?? 0;
+
+  const vehicleRegistrationOptions = useMemo(() => {
+    const values = insuranceWorkspace.required
+      .map((record) => record.vehicle_registration)
+      .filter((value): value is string => Boolean(value));
+    return Array.from(new Set(values)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  }, [insuranceWorkspace.required]);
+
+  const vehicleInsurerOptions = useMemo(() => {
+    const values = insuranceWorkspace.required
+      .map((record) => canonicalInsurerName(record.insurer_en, record.insurer_th, language))
+      .filter((value): value is string => Boolean(value));
+    return Array.from(new Set(values)).sort((a, b) => a.localeCompare(b));
+  }, [insuranceWorkspace.required, language]);
+
+  const insuredVehicleRows = useMemo(() => {
+    const rows = insuranceWorkspace.required.filter((record) => {
+      if (!matchesInsuranceSearch(record, search)) return false;
+
+      if (vehicleRegistrationFilter !== "all" && record.vehicle_registration !== vehicleRegistrationFilter) return false;
+
+      if (vehicleInsurerFilter !== "all") {
+        const insurer = canonicalInsurerName(record.insurer_en, record.insurer_th, language) || "";
+        if (insurer !== vehicleInsurerFilter) return false;
+      }
+
+      if (vehicleStatusFilter === "current" && record.insurance_status !== "active") return false;
+      if (vehicleStatusFilter === "renewal" && !["due_30", "due_60", "due_90"].includes(record.insurance_status)) return false;
+      if (vehicleStatusFilter === "expired" && record.insurance_status !== "expired") return false;
+      if (vehicleStatusFilter === "missing" && record.insurance_status !== "missing") return false;
+
+      return true;
+    });
+
+    return [...rows].sort((a, b) => {
+      if (vehicleSort === "premium_desc") {
+        const premiumDifference = premiumFor(b) - premiumFor(a);
+        if (premiumDifference !== 0) return premiumDifference;
+      }
+
+      if (vehicleSort === "registration") {
+        return a.vehicle_registration.localeCompare(b.vehicle_registration, undefined, { numeric: true });
+      }
+
+      const aDays = a.days_to_insurance_expiry ?? Number.MAX_SAFE_INTEGER;
+      const bDays = b.days_to_insurance_expiry ?? Number.MAX_SAFE_INTEGER;
+      if (aDays !== bDays) return aDays - bDays;
+      return a.vehicle_registration.localeCompare(b.vehicle_registration, undefined, { numeric: true });
+    });
+  }, [insuranceWorkspace.required, language, search, vehicleInsurerFilter, vehicleRegistrationFilter, vehicleSort, vehicleStatusFilter]);
+
+  const renewalRows = useMemo(() => {
+    const rows = insuranceWorkspace.upcoming.filter((record) => {
+      if (!matchesInsuranceSearch(record, renewalSearch)) return false;
+      if (renewalInsurerFilter !== "all") {
+        const insurer = canonicalInsurerName(record.insurer_en, record.insurer_th, language) || "";
+        if (insurer !== renewalInsurerFilter) return false;
+      }
+      return true;
+    });
+
+    return [...rows].sort((a, b) => {
+      const aDays = a.days_to_insurance_expiry ?? Number.MAX_SAFE_INTEGER;
+      const bDays = b.days_to_insurance_expiry ?? Number.MAX_SAFE_INTEGER;
+      if (aDays !== bDays) return aDays - bDays;
+      return a.vehicle_registration.localeCompare(b.vehicle_registration, undefined, { numeric: true });
+    });
+  }, [insuranceWorkspace.upcoming, language, renewalInsurerFilter, renewalSearch]);
+
   return (
     <div className="maintenance-shell -m-3 min-h-full space-y-4 bg-[#f7f7fa] p-3 sm:-m-4 sm:p-4 lg:-m-5 lg:p-5">
-      <Header title={c.title} description={c.description} />
+      <section className="rounded-[28px] border border-slate-200/80 bg-white px-5 py-5 shadow-[0_16px_44px_rgba(31,27,61,0.055)] sm:px-7 sm:py-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-[.18em] text-violet-600">EXPERT EXPRESS SENDER CO., LTD.</p>
+            <h1 className="mt-1.5 text-[28px] font-semibold tracking-[-0.03em] text-slate-950 sm:text-[30px]">{c.title}</h1>
+            <p className="mt-1 text-sm text-slate-500">{c.description}</p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-1 rounded-2xl border border-violet-100 bg-[#f5f3fb] p-1.5">
+            {([
+              ["overview", isThai ? "ภาพรวม" : "Overview"],
+              ["vehicles", isThai ? "รถ" : "Vehicles"],
+              ["renewals", isThai ? "ต่ออายุ" : "Renewals"],
+              ["analytics", isThai ? "วิเคราะห์" : "Analytics"]
+            ] as Array<[WorkspaceTab, string]>).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setWorkspaceTab(key)}
+                className={workspaceTab === key
+                  ? "rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-violet-700 shadow-[0_3px_10px_rgba(109,40,217,0.08)] ring-1 ring-violet-100"
+                  : "rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-500 transition hover:bg-white/70 hover:text-slate-900"}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
 
-      <InsuranceIntelligenceWorkspace
-        records={records}
-        documents={documents}
-        historyRecords={allHistory}
-        language={language}
-        onOpenRecord={openRecord}
-        onReviewRecord={openRecordForReview}
-      />
+      <section className="overflow-hidden rounded-[28px] border border-slate-200/80 bg-white shadow-[0_18px_50px_rgba(31,27,61,0.05)]">
 
-      <details className="group rounded-2xl border border-slate-200/80 bg-white">
+        {workspaceTab === "overview" && (
+          <div className="space-y-5 p-5 sm:p-6 lg:p-7">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[.18em] text-violet-600">{isThai ? "ภาพรวมฝูงรถ" : "FLEET INSURANCE"}</p>
+                <h2 className="mt-1 text-xl font-bold tracking-tight text-slate-950">{isThai ? "สถานะประกันภัยวันนี้" : "Insurance status today"}</h2>
+                <p className="mt-1 text-sm text-slate-500">{isThai ? "แสดงเฉพาะสิ่งที่ต้องรู้และสิ่งที่ต้องทำต่อ" : "A quick view of what is current, what is coming up and what needs action."}</p>
+              </div>
+              <p className="text-xs font-semibold text-slate-400">{stats.total} {isThai ? "ทรัพย์สินในระบบ" : "assets in system"}</p>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <InsuranceMetric
+                eyebrow={isThai ? "สถานะ" : "FLEET STATUS"}
+                value={insuranceWorkspace.attention.length ? `${insuranceWorkspace.attention.length} ${isThai ? "ต้องดู" : "need action"}` : (isThai ? "เรียบร้อย" : "All clear")}
+                helper={`${stats.expired} ${isThai ? "หมดอายุ" : "expired"} · ${stats.due30} ${isThai ? "ภายใน 30 วัน" : "within 30 days"}`}
+                tone={insuranceWorkspace.attention.length ? "warning" : "success"}
+              />
+              <InsuranceMetric
+                eyebrow={isThai ? "ต้องมีประกัน" : "INSURED ASSETS"}
+                value={String(insuranceWorkspace.required.length)}
+                helper={`${insuranceWorkspace.notRequired.length} ${isThai ? "รายการไม่ต้องมีประกัน" : "do not require insurance"}`}
+                tone="neutral"
+              />
+              <InsuranceMetric
+                eyebrow={isThai ? "ต่ออายุ 90 วัน" : "RENEWALS · 90 DAYS"}
+                value={String(insuranceWorkspace.upcoming.length)}
+                helper={insuranceWorkspace.upcoming.length ? `${formatCurrency(insuranceWorkspace.upcoming.reduce((sum, record) => sum + premiumFor(record), 0), language)} ${isThai ? "เบี้ยปัจจุบัน" : "current premium"}` : (isThai ? "ไม่มีรายการ" : "No upcoming renewals")}
+                tone="accent"
+              />
+              <InsuranceMetric
+                eyebrow={isThai ? "เบี้ยหลักปัจจุบัน" : "RECORDED PREMIUM"}
+                value={formatCurrency(insuranceWorkspace.annualPremium, language)}
+                helper={isThai ? "รวมเบี้ยประกันหลักที่บันทึกไว้" : "Current recorded main-insurance premium"}
+                tone="blue"
+              />
+            </div>
+
+            {insuranceWorkspace.attention.length > 0 ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/45 p-4 sm:p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-bold text-slate-950">{isThai ? "ต้องดำเนินการ" : "Needs attention"}</p>
+                    <p className="mt-1 text-xs text-slate-500">{isThai ? "รายการที่ควรจัดการก่อน" : "Only records that need action are shown here."}</p>
+                  </div>
+                  <button type="button" onClick={() => setWorkspaceTab("vehicles")} className="text-sm font-bold text-violet-700">{isThai ? "ดูรถทั้งหมด" : "View vehicles"} →</button>
+                </div>
+                <div className="mt-4 grid gap-2 lg:grid-cols-2">
+                  {insuranceWorkspace.attention.slice(0, 6).map((record) => (
+                    <button key={record.id} type="button" onClick={() => openRecord(record)} className="flex items-center justify-between gap-4 rounded-xl border border-white/80 bg-white px-4 py-3 text-left shadow-sm transition hover:border-violet-200">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2"><p className="font-bold text-slate-950">{record.vehicle_registration}</p><InsuranceStatusPill record={record} isThai={isThai} /></div>
+                        <p className="mt-1 truncate text-xs text-slate-500">{canonicalInsurerName(record.insurer_en, record.insurer_th, language) || c.missing}</p>
+                      </div>
+                      <div className="shrink-0 text-right"><p className="text-sm font-semibold text-slate-800">{record.insurance_expiry_date ? formatDate(record.insurance_expiry_date, language) : "—"}</p><p className="mt-0.5 text-xs text-slate-400">{record.days_to_insurance_expiry == null ? c.missing : `${record.days_to_insurance_expiry} ${c.days}`}</p></div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/55 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                <div>
+                  <p className="font-bold text-emerald-900">{isThai ? "ไม่มีรายการเร่งด่วน" : "No urgent insurance action"}</p>
+                  <p className="mt-1 text-sm text-emerald-700">{isThai ? "ไม่มีประกันหมดอายุหรือครบกำหนดภายใน 30 วัน" : "No expired policies or policies due within 30 days."}</p>
+                </div>
+                <button type="button" onClick={() => setWorkspaceTab("renewals")} className="shrink-0 rounded-xl border border-emerald-200 bg-white px-4 py-2 text-sm font-bold text-emerald-800 shadow-sm">{isThai ? "ดูแผนต่ออายุ" : "View renewal plan"}</button>
+              </div>
+            )}
+
+            <div className="rounded-2xl border border-slate-200/80 bg-gradient-to-b from-white to-[#fbfaff] p-4 sm:p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div><p className="text-sm font-bold text-slate-950">{isThai ? "การต่ออายุถัดไป" : "Next renewals"}</p><p className="mt-1 text-xs text-slate-500">{isThai ? "รายการใน 90 วัน เรียงตามวันหมดอายุ" : "Next 90 days, sorted by expiry."}</p></div>
+                <button type="button" onClick={() => setWorkspaceTab("renewals")} className="text-sm font-bold text-violet-700">{isThai ? "ดูทั้งหมด" : "Open renewals"} →</button>
+              </div>
+              <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                {insuranceWorkspace.upcoming.slice(0, 6).map((record) => (
+                  <button key={record.id} type="button" onClick={() => openRecord(record)} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:border-violet-200 hover:shadow-sm">
+                    <div><p className="font-bold text-slate-950">{record.vehicle_registration}</p><p className="mt-0.5 text-xs text-slate-400">{record.days_to_insurance_expiry} {c.days}</p></div>
+                    <div className="text-right"><p className="text-sm font-semibold text-slate-800">{record.insurance_expiry_date ? formatDate(record.insurance_expiry_date, language) : "—"}</p><p className="mt-0.5 text-xs text-slate-400">{premiumFor(record) ? formatCurrency(premiumFor(record), language) : "—"}</p></div>
+                  </button>
+                ))}
+                {!insuranceWorkspace.upcoming.length && <p className="py-6 text-sm text-slate-400">{isThai ? "ไม่มีรายการต่ออายุใน 90 วัน" : "No renewals in the next 90 days."}</p>}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {workspaceTab === "vehicles" && (
+          <div className="space-y-5 p-5 sm:p-6">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[.18em] text-violet-600">{isThai ? "ทะเบียนรถ" : "VEHICLE COVER"}</p>
+                <h3 className="mt-1 text-xl font-bold text-slate-950">{isThai ? "รถที่มีประกัน" : "Current insurance cover"}</h3>
+                <p className="mt-1 text-sm text-slate-500">{isThai ? "เรียงจากวันหมดอายุใกล้ที่สุดก่อน และกรองเฉพาะข้อมูลที่ต้องการได้" : "Sorted by the earliest insurance expiry first. Use the filters to narrow the fleet without losing the full record."}</p>
+              </div>
+              <button type="button" onClick={() => { setNewVehicle(EMPTY_NEW_VEHICLE); setAddVehicleError(null); setAddVehicleOpen(true); }} className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#31245c] px-4 text-sm font-bold text-white shadow-[0_8px_18px_rgba(49,36,92,0.15)]"><Plus className="h-4 w-4" />{isThai ? "เพิ่มรถ" : "Add vehicle"}</button>
+            </div>
+
+            <div className="grid gap-2 rounded-2xl border border-slate-200/80 bg-[#faf9fd] p-2.5 md:grid-cols-2 xl:grid-cols-[1.25fr_.72fr_.72fr_1fr_.8fr]">
+              <div className="relative min-w-0">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input className="form-input w-full border-slate-200 bg-white pl-9 shadow-none" type="search" placeholder={isThai ? "ค้นหาทะเบียน รถ บริษัทประกัน หรือเลขกรมธรรม์" : "Search registration, make, insurer or policy"} value={search} onChange={(e) => setSearch(e.target.value)} />
+              </div>
+              <select className="form-input border-slate-200 bg-white shadow-none" value={vehicleRegistrationFilter} onChange={(e) => setVehicleRegistrationFilter(e.target.value)}>
+                <option value="all">{isThai ? "ทุกทะเบียน" : "All registrations"}</option>
+                {vehicleRegistrationOptions.map((registration) => <option key={registration} value={registration}>{registration}</option>)}
+              </select>
+              <select className="form-input border-slate-200 bg-white shadow-none" value={vehicleStatusFilter} onChange={(e) => setVehicleStatusFilter(e.target.value)}>
+                <option value="all">{isThai ? "ทุกสถานะ" : "All statuses"}</option>
+                <option value="renewal">{isThai ? "ใกล้ต่ออายุ" : "Renewal due"}</option>
+                <option value="current">{isThai ? "ปัจจุบัน" : "Current"}</option>
+                <option value="expired">{isThai ? "หมดอายุ" : "Expired"}</option>
+                <option value="missing">{isThai ? "ข้อมูลไม่ครบ" : "Missing expiry"}</option>
+              </select>
+              <select className="form-input border-slate-200 bg-white shadow-none" value={vehicleInsurerFilter} onChange={(e) => setVehicleInsurerFilter(e.target.value)}>
+                <option value="all">{isThai ? "ทุกบริษัทประกัน" : "All insurers"}</option>
+                {vehicleInsurerOptions.map((insurer) => <option key={insurer} value={insurer}>{insurer}</option>)}
+              </select>
+              <select className="form-input border-slate-200 bg-white shadow-none" value={vehicleSort} onChange={(e) => setVehicleSort(e.target.value)}>
+                <option value="expiry_asc">{isThai ? "หมดอายุใกล้สุด" : "Expiry: earliest"}</option>
+                <option value="premium_desc">{isThai ? "เบี้ยสูงสุด" : "Premium: highest"}</option>
+                <option value="registration">{isThai ? "ทะเบียนรถ" : "Registration"}</option>
+              </select>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+              <p className="text-xs font-semibold text-slate-500">{insuredVehicleRows.length} {isThai ? "รายการที่แสดง" : "insured vehicles shown"}</p>
+              {(search || vehicleRegistrationFilter !== "all" || vehicleStatusFilter !== "all" || vehicleInsurerFilter !== "all" || vehicleSort !== "expiry_asc") && (
+                <button type="button" onClick={() => { setSearch(""); setVehicleRegistrationFilter("all"); setVehicleStatusFilter("all"); setVehicleInsurerFilter("all"); setVehicleSort("expiry_asc"); }} className="text-xs font-bold text-violet-700 hover:text-violet-900">{isThai ? "ล้างตัวกรอง" : "Clear filters"}</button>
+              )}
+            </div>
+
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              <div className="hidden grid-cols-[150px_1.35fr_175px_150px_145px_44px] gap-4 bg-[#f7f5fc] px-4 py-3 text-[10px] font-bold uppercase tracking-[.14em] text-slate-400 lg:grid"><div>{c.vehicle}</div><div>{c.cover}</div><div>{c.insuranceExpiry}</div><div>{c.premium}</div><div>{isThai ? "สถานะ" : "Status"}</div><div /></div>
+              <div className="divide-y divide-slate-100">
+                {insuredVehicleRows.map((record) => (
+                  <button key={record.id} type="button" onClick={() => openRecord(record)} className={`grid w-full gap-3 border-l-2 px-4 py-4 text-left transition hover:bg-violet-50/30 lg:grid-cols-[150px_1.35fr_175px_150px_145px_44px] lg:items-center ${record.insurance_status === "expired" ? "border-l-rose-300 bg-rose-50/10" : ["due_30", "due_60", "due_90"].includes(record.insurance_status) ? "border-l-amber-300 bg-amber-50/10" : "border-l-transparent"}`}>
+                    <div><p className="font-bold text-slate-950">{record.vehicle_registration}</p><p className="mt-0.5 text-xs text-slate-400">{record.vehicle_make || "—"}</p></div>
+                    <div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-800">{canonicalInsurerName(record.insurer_en, record.insurer_th, language) || c.missing}</p><p className="mt-0.5 truncate text-xs text-slate-400">{record.policy_number || "—"}</p></div>
+                    <div><p className="text-sm font-semibold text-slate-800">{record.insurance_expiry_date ? formatDate(record.insurance_expiry_date, language) : "—"}</p><p className="mt-0.5 text-xs text-slate-400">{record.days_to_insurance_expiry == null ? "" : `${record.days_to_insurance_expiry} ${c.days}`}</p></div>
+                    <div className="text-sm font-bold text-slate-900">{premiumFor(record) ? formatCurrency(premiumFor(record), language) : "—"}</div>
+                    <div><InsuranceStatusPill record={record} isThai={isThai} /></div><ChevronRight className="h-4 w-4 text-violet-500" />
+                  </button>
+                ))}
+                {!insuredVehicleRows.length && <p className="p-8 text-center text-sm text-slate-400">{isThai ? "ไม่พบรถตามตัวกรอง" : "No insured vehicles match these filters."}</p>}
+              </div>
+            </div>
+
+            <details className="group overflow-hidden rounded-2xl border border-slate-200 bg-[#fafafa]">
+              <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3.5 text-sm font-bold text-slate-700 sm:px-5"><span>{isThai ? `ไม่ต้องมีประกัน (${insuranceWorkspace.notRequired.length})` : `Insurance not required (${insuranceWorkspace.notRequired.length})`}</span><ChevronRight className="h-4 w-4 text-slate-400 transition group-open:rotate-90" /></summary>
+              <div className="border-t border-slate-200 bg-white">
+                {insuranceWorkspace.notRequired.filter((record) => matchesInsuranceSearch(record, search)).map((record) => (
+                  <button key={record.id} type="button" onClick={() => openRecord(record)} className="flex w-full items-center justify-between gap-4 border-b border-slate-100 px-5 py-3 text-left last:border-b-0 hover:bg-slate-50"><div><p className="font-semibold text-slate-900">{record.vehicle_registration}</p><p className="mt-0.5 text-xs text-slate-400">{record.vehicle_make || record.ownership_holder || "—"}</p></div><div className="flex items-center gap-3"><InsuranceStatusPill record={record} isThai={isThai} /><ChevronRight className="h-4 w-4 text-slate-400" /></div></button>
+                ))}
+              </div>
+            </details>
+          </div>
+        )}
+
+        {workspaceTab === "renewals" && (
+          <div className="space-y-5 p-5 sm:p-6">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div><p className="text-[11px] font-bold uppercase tracking-[.18em] text-violet-600">{isThai ? "แผนต่ออายุ" : "RENEWAL PLANNER"}</p><h3 className="mt-1 text-xl font-bold text-slate-950">{isThai ? "กรมธรรม์ที่ใกล้หมดอายุ" : "Renewal planner"}</h3><p className="mt-1 text-sm text-slate-500">{isThai ? "จัดลำดับจากวันหมดอายุใกล้ที่สุด และใช้ตัวกรองเมื่อต้องการโฟกัสเฉพาะรายการ" : "Always sorted by the earliest expiry first. Use the filters only when you need to narrow the renewal plan."}</p></div>
+              <div className="rounded-full border border-violet-100 bg-violet-50/60 px-3 py-1.5 text-xs font-bold text-violet-700">{isThai ? "เรียง: หมดอายุใกล้สุด" : "Sorted: earliest expiry"}</div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3"><RenewalBand label={isThai ? "เร่งด่วน" : "Urgent"} value={stats.expired + stats.due30} helper={isThai ? "หมดอายุหรือภายใน 30 วัน" : "Expired or within 30 days"} tone="danger" /><RenewalBand label={isThai ? "31–60 วัน" : "31–60 days"} value={insuranceWorkspace.required.filter((r) => r.insurance_status === "due_60").length} helper={isThai ? "ควรเตรียมต่ออายุ" : "Prepare renewal"} tone="warning" /><RenewalBand label={isThai ? "61–90 วัน" : "61–90 days"} value={insuranceWorkspace.required.filter((r) => r.insurance_status === "due_90").length} helper={isThai ? "อยู่ในแผนต่ออายุ" : "Renewal planning"} tone="neutral" /></div>
+            <div className="grid gap-2 rounded-2xl border border-slate-200/80 bg-[#faf9fd] p-2.5 md:grid-cols-[1.35fr_1fr]">
+              <div className="relative min-w-0"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input className="form-input w-full border-slate-200 bg-white pl-9 shadow-none" type="search" placeholder={isThai ? "ค้นหาทะเบียน รถ บริษัทประกัน หรือเลขกรมธรรม์" : "Search registration, make, insurer or policy"} value={renewalSearch} onChange={(e) => setRenewalSearch(e.target.value)} /></div>
+              <select className="form-input border-slate-200 bg-white shadow-none" value={renewalInsurerFilter} onChange={(e) => setRenewalInsurerFilter(e.target.value)}><option value="all">{isThai ? "ทุกบริษัทประกัน" : "All insurers"}</option>{vehicleInsurerOptions.map((insurer) => <option key={insurer} value={insurer}>{insurer}</option>)}</select>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 px-1"><p className="text-xs font-semibold text-slate-500">{renewalRows.length} {isThai ? "รายการต่ออายุที่แสดง" : "renewals shown"}</p>{(renewalSearch || renewalInsurerFilter !== "all") && <button type="button" onClick={() => { setRenewalSearch(""); setRenewalInsurerFilter("all"); }} className="text-xs font-bold text-violet-700 hover:text-violet-900">{isThai ? "ล้างตัวกรอง" : "Clear filters"}</button>}</div>
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white"><div className="hidden grid-cols-[140px_1.25fr_170px_130px_150px_44px] gap-4 bg-[#f7f5fc] px-4 py-3 text-[10px] font-bold uppercase tracking-[.14em] text-slate-400 lg:grid"><div>{c.vehicle}</div><div>{c.insurer}</div><div>{c.insuranceExpiry}</div><div>{isThai ? "เหลือ" : "Days left"}</div><div>{c.premium}</div><div /></div><div className="divide-y divide-slate-100">{renewalRows.map((record) => (<button key={record.id} type="button" onClick={() => openRecord(record)} className={`grid w-full gap-3 border-l-2 px-4 py-4 text-left transition hover:bg-violet-50/30 lg:grid-cols-[140px_1.25fr_170px_130px_150px_44px] lg:items-center ${record.insurance_status === "expired" ? "border-l-rose-300 bg-rose-50/10" : record.insurance_status === "due_30" ? "border-l-rose-200" : ["due_60", "due_90"].includes(record.insurance_status) ? "border-l-amber-300 bg-amber-50/10" : "border-l-transparent"}`}><p className="font-bold text-slate-950">{record.vehicle_registration}</p><p className="truncate text-sm font-semibold text-slate-700">{canonicalInsurerName(record.insurer_en, record.insurer_th, language) || c.missing}</p><p className="text-sm text-slate-700">{record.insurance_expiry_date ? formatDate(record.insurance_expiry_date, language) : "—"}</p><p className="text-sm font-semibold text-slate-800">{record.days_to_insurance_expiry ?? "—"}</p><p className="text-sm font-bold text-slate-900">{premiumFor(record) ? formatCurrency(premiumFor(record), language) : "—"}</p><ChevronRight className="h-4 w-4 text-violet-500" /></button>))}{!renewalRows.length && <p className="p-10 text-center text-sm text-slate-400">{isThai ? "ไม่พบรายการต่ออายุตามตัวกรอง" : "No renewals match these filters."}</p>}</div></div>
+          </div>
+        )}
+
+        {workspaceTab === "analytics" && (
+          <div className="space-y-5 p-5 sm:p-6">
+            <div><p className="text-[11px] font-bold uppercase tracking-[.18em] text-violet-600">{isThai ? "ข้อมูลค่าใช้จ่าย" : "COST INTELLIGENCE"}</p><h3 className="mt-1 text-xl font-bold text-slate-950">{isThai ? "ภาพรวมต้นทุนประกัน" : "Insurance cost intelligence"}</h3><p className="mt-1 text-sm text-slate-500">{isThai ? "สรุปข้อมูลที่บันทึกไว้โดยไม่แสดงรายละเอียดมากเกินไป" : "See total exposure, average premium and where the fleet insurance spend is concentrated."}</p></div>
+            <div className="grid gap-3 md:grid-cols-3"><div className="rounded-2xl border border-slate-200 bg-[#faf9fe] p-4"><p className="text-[10px] font-bold uppercase tracking-[.14em] text-slate-400">{isThai ? "เบี้ยหลักรวม" : "TOTAL PREMIUM"}</p><p className="mt-2 text-2xl font-bold text-slate-950">{formatCurrency(insuranceWorkspace.annualPremium, language)}</p><p className="mt-1 text-xs text-slate-500">{insuranceWorkspace.required.length} {isThai ? "รายการที่ต้องมีประกัน" : "insured assets"}</p></div><div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-[10px] font-bold uppercase tracking-[.14em] text-slate-400">{isThai ? "ทุนประกันรวม" : "RECORDED INSURED VALUE"}</p><p className="mt-2 text-2xl font-bold text-slate-950">{formatCurrency(insuranceWorkspace.insuredValue, language)}</p><p className="mt-1 text-xs text-slate-500">{isThai ? "รวมเฉพาะค่าที่บันทึกไว้" : "Recorded values only"}</p></div><div className="rounded-2xl border border-slate-200 bg-white p-4"><p className="text-[10px] font-bold uppercase tracking-[.14em] text-slate-400">{isThai ? "เบี้ยเฉลี่ยต่อรถ" : "AVERAGE PREMIUM"}</p><p className="mt-2 text-2xl font-bold text-slate-950">{formatCurrency(insuranceWorkspace.required.length ? insuranceWorkspace.annualPremium / insuranceWorkspace.required.length : 0, language)}</p><p className="mt-1 text-xs text-slate-500">{isThai ? "เฉลี่ยต่อทรัพย์สินที่ต้องมีประกัน" : "Per insured asset"}</p></div></div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5"><div><p className="text-sm font-bold text-slate-950">{isThai ? "เบี้ยตามบริษัทประกัน" : "Insurance spend by provider"}</p><p className="mt-1 text-xs text-slate-500">{isThai ? "สัดส่วนของเบี้ยประกันหลักทั้งหมด" : "Current main-insurance premium grouped by provider."}</p></div><div className="mt-4 space-y-4">{insuranceWorkspace.insurers.map((insurer) => { const share = insuranceWorkspace.annualPremium > 0 ? Math.round((insurer.total / insuranceWorkspace.annualPremium) * 100) : 0; return <div key={insurer.name}><div className="flex items-end justify-between gap-4"><div><p className="text-sm font-semibold text-slate-800">{insurer.name}</p><p className="mt-0.5 text-xs text-slate-400">{insurer.vehicles} {isThai ? "คัน" : "vehicles"} · {share}%</p></div><p className="text-sm font-bold text-slate-950">{formatCurrency(insurer.total, language)}</p></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-violet-400" style={{ width: `${Math.max(2, share)}%` }} /></div></div>; })}</div></div>
+          </div>
+        )}
+      </section>
+
+      <details className="hidden">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 sm:px-5">
-          <span>{isThai ? "พื้นที่ตรวจสอบข้อมูลต้นทางและเพิ่มรถ" : "Source review workspace and vehicle administration"}</span>
+          <span>{isThai ? "พื้นที่ตรวจสอบข้อมูลต้นทางและเพิ่มรถ" : "Manage insurance records and source data"}</span>
           <ChevronRight className="h-4 w-4 text-slate-400 transition group-open:rotate-90" />
         </summary>
         <div className="space-y-4 border-t border-slate-200 bg-[#f7f7fa] p-3 sm:p-4">
@@ -2588,6 +2902,38 @@ export default function InsurancePage() {
   );
 }
 
+function InsuranceMetric({ eyebrow, value, helper, tone }: { eyebrow: string; value: string; helper: string; tone: "success" | "warning" | "accent" | "blue" | "neutral" }) {
+  const tones = {
+    success: "border-emerald-200 bg-emerald-50/60",
+    warning: "border-amber-200 bg-amber-50/60",
+    accent: "border-violet-200 bg-violet-50/60",
+    blue: "border-sky-200 bg-sky-50/60",
+    neutral: "border-slate-200 bg-white"
+  };
+  return <div className={`rounded-2xl border p-4 ${tones[tone]}`}>
+    <p className="text-[10px] font-bold uppercase tracking-[.14em] text-slate-400">{eyebrow}</p>
+    <p className="mt-2 text-2xl font-bold tracking-tight text-slate-950">{value}</p>
+    <p className="mt-1 text-xs text-slate-500">{helper}</p>
+  </div>;
+}
+
+function RenewalBand({ label, value, helper, tone }: { label: string; value: number; helper: string; tone: "danger" | "warning" | "neutral" }) {
+  const tones = tone === "danger" ? "border-rose-200 bg-rose-50/60" : tone === "warning" ? "border-amber-200 bg-amber-50/60" : "border-slate-200 bg-white";
+  return <div className={`rounded-2xl border p-4 ${tones}`}>
+    <p className="text-[10px] font-bold uppercase tracking-[.14em] text-slate-400">{label}</p>
+    <p className="mt-2 text-2xl font-bold text-slate-950">{value}</p>
+    <p className="mt-1 text-xs text-slate-500">{helper}</p>
+  </div>;
+}
+
+function InsuranceStatusPill({ record, isThai }: { record: InsuranceRecord; isThai: boolean }) {
+  if (isInsuranceNotRequired(record)) return <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{isThai ? "ไม่ต้องมีประกัน" : "Not required"}</span>;
+  if (record.insurance_status === "expired") return <span className="inline-flex rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">{isThai ? "หมดอายุ" : "Expired"}</span>;
+  if (["due_30", "due_60", "due_90"].includes(record.insurance_status)) return <span className="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">{isThai ? "ใกล้ต่ออายุ" : "Renewal due"}</span>;
+  if (record.insurance_status === "missing") return <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{isThai ? "ข้อมูลไม่ครบ" : "Missing info"}</span>;
+  return <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">{isThai ? "ปัจจุบัน" : "Current"}</span>;
+}
+
 function QuietStat({
   label,
   value,
@@ -2786,7 +3132,7 @@ function DocumentPanel({
           <p className="mt-1 text-xs text-slate-400">{help}</p>
           {document && (
             <p className="mt-1 text-[11px] font-semibold text-emerald-600">
-              Paper preview
+              Uploaded document
             </p>
           )}
         </div>
@@ -2855,15 +3201,15 @@ function DocumentPanel({
           </div>
 
           {documentUrl && (
-            <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
-              <div className="flex justify-center bg-[#ececf0] p-4">
-                <iframe
-                  title={title}
-                  src={`${documentUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
-                  className="h-[620px] w-full max-w-[470px] rounded-sm bg-white shadow-[0_8px_24px_rgba(15,23,42,0.18)]"
-                />
-              </div>
-            </div>
+            <a
+              href={documentUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-3 flex items-center justify-between rounded-xl border border-violet-100 bg-violet-50/45 px-4 py-3 text-sm font-bold text-violet-700 transition hover:border-violet-200 hover:bg-violet-50"
+            >
+              <span>{viewLabel}</span>
+              <ExternalLink className="h-4 w-4" />
+            </a>
           )}
         </div>
       ) : (

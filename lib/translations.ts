@@ -303,10 +303,10 @@ export const translations = {
       requiresImmediateAction: "Requires immediate action", value: "Value", sizesOptions: "Sizes / Options", standard: "Standard", size: "Size"
     },
     login: {
-      eyebrow: "Fleet Finance",
-      title: "Control bookings, trips, fuel, and fleet operations in one logistics hub.",
+      eyebrow: "EES Operations · Logistics Control",
+      title: "Secure access for drivers and office staff",
       description:
-        "Built for logistics teams that need clean daily records, accurate spend totals, and a simple workflow across mobile and desktop.",
+        "Expert Express Sender operational platform for approved drivers and authorised office staff.",
       loginTab: "Login",
       signupTab: "Create Account",
       email: "Email",
@@ -1631,10 +1631,10 @@ export const translations = {
       requiresImmediateAction: "ต้องดำเนินการทันที", value: "มูลค่า", sizesOptions: "ขนาด / ตัวเลือก", standard: "มาตรฐาน", size: "ขนาด"
     },
     login: {
-      eyebrow: "การเงินรถขนส่ง",
-      title: "ควบคุมงานจอง ทริป น้ำมัน และฟลีทรถในศูนย์งานขนส่งเดียว",
+      eyebrow: "EES Operations · Logistics Control",
+      title: "การเข้าใช้งานที่ปลอดภัยสำหรับคนขับและพนักงานสำนักงาน",
       description:
-        "ออกแบบสำหรับทีมโลจิสติกส์ที่ต้องการบันทึกประจำวันอย่างเป็นระเบียบ ยอดค่าใช้จ่ายที่แม่นยำ และการใช้งานที่ง่ายทั้งบนมือถือและเดสก์ท็อป",
+        "แพลตฟอร์มปฏิบัติการของ Expert Express Sender สำหรับคนขับและพนักงานสำนักงานที่ได้รับอนุมัติ",
       loginTab: "เข้าสู่ระบบ",
       signupTab: "สร้างบัญชี",
       email: "อีเมล",

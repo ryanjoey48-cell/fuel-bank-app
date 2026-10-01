@@ -11,6 +11,7 @@ import {
   Edit3,
   Filter,
   MapPin,
+  MoreHorizontal,
   PackagePlus,
   Plus,
   RefreshCw,
@@ -23,15 +24,10 @@ import {
   X
 } from "lucide-react";
 import { Fragment, type RefObject, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { BookingBusinessInsights } from "@/components/booking-business-insights";
-import { BookingLocationReview } from "@/components/booking-location-review";
-import { BookingMapCheck } from "@/components/booking-map-check";
-import { BookingRouteApproval } from "@/components/booking-route-approval";
 import { ClientDirectoryDialog } from "@/components/client-directory-dialog";
 import { ClientSelector } from "@/components/client-selector";
 import { EmptyState } from "@/components/empty-state";
 import { GoogleMapsLoader } from "@/components/google-maps-loader";
-import { Header } from "@/components/header";
 import { LocationAutocomplete, type StructuredLocation } from "@/components/location-autocomplete";
 import type { GoogleMapsHealthStatus } from "@/lib/google-maps";
 import {
@@ -51,7 +47,6 @@ import {
 } from "@/lib/data";
 import { fetchCurrentAccess } from "@/lib/account-management";
 import { hasPermission } from "@/lib/authorization";
-import { bookingLocationReviewEnabled, shouldShowLocationReviewTab } from "@/lib/booking-location-review";
 import { exportToXlsx } from "@/lib/export";
 import { fetchJson } from "@/lib/http";
 import { useLanguage } from "@/lib/language-provider";
@@ -67,10 +62,6 @@ import { LOCATION_SUGGESTIONS } from "@/src/data/locations";
 import type { BookingDiaryEntry, Client, Driver, SavedLocation, SavedLocationType, TripJourney, TripJourneyStatus, Vehicle } from "@/types/database";
 
 const PAGE_SIZE = 50;
-const LOCATION_REVIEW_FEATURE_ENABLED = bookingLocationReviewEnabled(
-  process.env.NEXT_PUBLIC_BOOKING_LOCATION_REVIEW_ENABLED
-);
-
 type BookingForm = {
   id: string;
   client_id: string;
@@ -1095,12 +1086,6 @@ export default function BookingDiaryPage() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [form, setForm] = useState<BookingForm>(() => emptyForm());
-  const [activeTab, setActiveTab] = useState<"daily" | "insights" | "locationReview" | "bookingCheck" | "routeApproval">("daily");
-  const [locationReviewCount, setLocationReviewCount] = useState(0);
-  const [bookingCheckCount, setBookingCheckCount] = useState(0);
-  const [routeApprovalCount, setRouteApprovalCount] = useState(0);
-  const [bookingCheckFocus, setBookingCheckFocus] = useState<{ label: string; side: "pickup" | "dropoff" | "pickup_dropoff" } | null>(null);
-  const locationReviewDeepLinkHandled = useRef(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [quickFilter, setQuickFilter] = useState<"today" | "week" | "all">("today");
   const [searchQuery, setSearchQuery] = useState("");
@@ -1197,38 +1182,6 @@ export default function BookingDiaryPage() {
     return () => window.removeEventListener("fuel-bank:user-updated", syncCurrentUser);
   }, []);
 
-  const showLocationReviewTab = shouldShowLocationReviewTab({
-    enabled: LOCATION_REVIEW_FEATURE_ENABLED,
-    authorized: Boolean(currentUser?.isAdmin),
-    awaitingReview: locationReviewCount
-  });
-
-  useEffect(() => {
-    if (activeTab === "locationReview" && !showLocationReviewTab) setActiveTab("daily");
-  }, [activeTab, showLocationReviewTab]);
-
-  useEffect(() => {
-    if (locationReviewDeepLinkHandled.current || !currentUser?.isAdmin) return;
-    const requestedTab = new URLSearchParams(window.location.search).get("tab");
-    if (requestedTab === "location-review" && showLocationReviewTab) {
-      locationReviewDeepLinkHandled.current = true;
-      setActiveTab("locationReview");
-    }
-    if (requestedTab === "booking-check") {
-      locationReviewDeepLinkHandled.current = true;
-      const label = new URLSearchParams(window.location.search).get("location");
-      const side = new URLSearchParams(window.location.search).get("side");
-      if (label && (side === "pickup" || side === "dropoff" || side === "pickup_dropoff")) {
-        setBookingCheckFocus({ label, side });
-      }
-      setActiveTab("bookingCheck");
-    }
-    if (requestedTab === "route-approval") {
-      locationReviewDeepLinkHandled.current = true;
-      setActiveTab("routeApproval");
-    }
-  }, [currentUser?.isAdmin, showLocationReviewTab]);
-
   useEffect(() => {
     const channel = supabase
       .channel("booking-diary-live")
@@ -1239,9 +1192,6 @@ export default function BookingDiaryPage() {
         void load(false);
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "saved_locations" }, () => {
-        void load(false);
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "booking_route_approvals" }, () => {
         void load(false);
       })
       .subscribe();
@@ -1292,6 +1242,19 @@ export default function BookingDiaryPage() {
       if (key && driver.vehicle_reg?.trim()) lookup.set(key, driver.vehicle_reg.trim());
     }
     return lookup;
+  }, [drivers]);
+  const driverIdByName = useMemo(() => {
+    const grouped = new Map<string, string[]>();
+    for (const driver of drivers) {
+      const key = driver.name.trim().toLocaleLowerCase();
+      if (!key) continue;
+      grouped.set(key, [...(grouped.get(key) ?? []), String(driver.id)]);
+    }
+    return new Map(
+      [...grouped.entries()]
+        .filter(([, ids]) => ids.length === 1)
+        .map(([name, ids]) => [name, ids[0]])
+    );
   }, [drivers]);
   const creatorOptions = useMemo(
     () => uniqueSorted(bookings.map((booking) => getCreatorDisplayName(booking, currentUser))),
@@ -1828,6 +1791,7 @@ export default function BookingDiaryPage() {
         vehicle: form.vehicle,
         vehicle_registration: form.vehicle_registration,
         trailer_registration: form.trailer_registration,
+        driver_id: driverIdByName.get(form.driver.trim().toLocaleLowerCase()) ?? null,
         driver: form.driver,
         job_order_number: form.job_order_number,
         notes: form.notes
@@ -2411,8 +2375,6 @@ export default function BookingDiaryPage() {
           destinationPlaceId: form.dropoff_place_id
         })
       : form.google_maps_route_url;
-  const dailyDiaryTabLabel = language === "th" ? "สมุดงานประจำวัน" : copy.dailyDiaryTab;
-  const businessInsightsTabLabel = language === "th" ? "ข้อมูลธุรกิจ" : copy.businessInsightsTab;
   const pickupShortLabel = language === "th" ? "รับของ" : "Pickup";
   const timeMissingLabel = language === "th" ? "รอยืนยัน" : "TBC";
   const tripJourneyColumnLabel = language === "th" ? "Trip Journey" : "Trip";
@@ -2421,85 +2383,52 @@ export default function BookingDiaryPage() {
   return (
     <div className="booking-diary-page w-full max-w-full overflow-x-hidden">
       <GoogleMapsLoader onStatusChange={handleGoogleMapsStatusChange} />
-      <div className="mb-4 hidden md:block">
-        <Header title={copy.title} description={copy.description} />
-      </div>
-      {activeTab === "daily" ? <section className="booking-diary-header">
-        <div className="booking-diary-title min-w-0 md:hidden">
-          <p className="truncate text-[10px] font-bold uppercase tracking-[0.16em] text-brand-700">{copy.company}</p>
-          <h1 className="truncate text-[1.2rem] font-semibold leading-7 text-slate-950 sm:text-[1.35rem]">{bookingTitle}</h1>
-        </div>
-        <div className="booking-diary-header-actions">
-          <button
-            type="button"
-            onClick={() => setMobileFiltersOpen(true)}
-            className="booking-filter-toggle lg:hidden"
-          >
-            <Filter className="h-3.5 w-3.5" />
-            {copy.filters}
-          </button>
-          <button
-            type="button"
-            onClick={exportFilteredBookings}
-            disabled={!filteredBookings.length}
-            className="booking-icon-button btn-secondary disabled:cursor-not-allowed disabled:opacity-50"
-            aria-label={copy.exportExcel}
-          >
-            <Download className="h-4 w-4" />
-          </button>
-          <button type="button" onClick={openCreate} className="booking-icon-button btn-primary" aria-label={copy.addBooking}>
-            <Plus className="h-4 w-4" />
-          </button>
-        </div>
-      </section> : null}
+      <section className="mb-4 rounded-[1.35rem] border border-violet-100/90 bg-white px-4 py-4 shadow-[0_12px_34px_rgba(76,29,149,0.07)] sm:px-5 lg:px-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex min-w-0 items-center gap-3.5">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-50 text-violet-700 ring-1 ring-violet-100">
+              <CalendarDays className="h-6 w-6" />
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-[10px] font-bold uppercase tracking-[0.16em] text-violet-700">{copy.company}</p>
+              <h1 className="mt-0.5 truncate text-[1.45rem] font-bold tracking-[-0.025em] text-slate-950 sm:text-[1.7rem]">{bookingTitle}</h1>
+              <p className="mt-0.5 max-w-2xl text-xs leading-5 text-slate-500 sm:text-sm">{copy.description}</p>
+            </div>
+          </div>
 
-      <nav className="booking-diary-tabs" aria-label={copy.title}>
-        <button
-          type="button"
-          onClick={() => setActiveTab("daily")}
-          className={clsx("booking-diary-tab", activeTab === "daily" && "booking-diary-tab-active")}
-          aria-current={activeTab === "daily" ? "page" : undefined}
-        >
-          {dailyDiaryTabLabel}
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("insights")}
-          className={clsx("booking-diary-tab", activeTab === "insights" && "booking-diary-tab-active")}
-          aria-current={activeTab === "insights" ? "page" : undefined}
-        >
-          {businessInsightsTabLabel}
-        </button>
-        {showLocationReviewTab ? <button
-          type="button"
-          onClick={() => setActiveTab("locationReview")}
-          className={clsx("booking-diary-tab", activeTab === "locationReview" && "booking-diary-tab-active")}
-          aria-current={activeTab === "locationReview" ? "page" : undefined}
-        >
-          {language === "th" ? "ตรวจสอบสถานที่" : "Location review"} ({locationReviewCount.toLocaleString()})
-        </button> : null}
-        {LOCATION_REVIEW_FEATURE_ENABLED && currentUser?.isAdmin ? <button
-          type="button"
-          onClick={() => setActiveTab("bookingCheck")}
-          className={clsx("booking-diary-tab", activeTab === "bookingCheck" && "booking-diary-tab-active")}
-          aria-current={activeTab === "bookingCheck" ? "page" : undefined}
-        >
-          {language === "th" ? "ตรวจสอบงานจอง" : "Booking check"} ({bookingCheckCount.toLocaleString()})
-        </button> : null}
-        {LOCATION_REVIEW_FEATURE_ENABLED && currentUser?.isAdmin ? <button
-          type="button"
-          onClick={() => setActiveTab("routeApproval")}
-          className={clsx("booking-diary-tab", activeTab === "routeApproval" && "booking-diary-tab-active")}
-          aria-current={activeTab === "routeApproval" ? "page" : undefined}
-        >
-          {language === "th" ? "อนุมัติเส้นทาง" : "Route Approval"} ({routeApprovalCount.toLocaleString()})
-        </button> : null}
-      </nav>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setMobileFiltersOpen(true)}
+              className="booking-filter-toggle lg:hidden"
+            >
+              <Filter className="h-4 w-4" />
+              {copy.filters}
+            </button>
+            <button
+              type="button"
+              onClick={exportFilteredBookings}
+              disabled={!filteredBookings.length}
+              className="btn-secondary min-h-[42px] gap-2 rounded-xl px-3.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline">{copy.exportExcel}</span>
+            </button>
+            <button
+              type="button"
+              onClick={openCreate}
+              className="btn-primary min-h-[42px] gap-2 rounded-xl px-4 text-sm shadow-[0_8px_20px_rgba(109,40,217,0.18)]"
+            >
+              <Plus className="h-4 w-4" />
+              {copy.addBooking}
+            </button>
+          </div>
+        </div>
+      </section>
 
-      {activeTab === "daily" ? (
-      <>
+
       <section className="booking-responsive-controls hidden max-w-full md:block">
-        <div className="booking-filter-panel surface-card-soft">
+        <div className="booking-filter-panel surface-card-soft rounded-[1.25rem] border border-violet-100/80 bg-white shadow-[0_10px_28px_rgba(76,29,149,0.055)]">
           <div className="booking-filter-panel-header">
             <div className="flex items-center gap-2">
               <Filter className="h-4 w-4 text-brand-700" />
@@ -2510,27 +2439,12 @@ export default function BookingDiaryPage() {
               {copy.live}
             </div>
           </div>
-          <div className="booking-filter-grid grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-[minmax(220px,1.4fr)_repeat(8,minmax(132px,1fr))]">
+          <div className="booking-filter-grid grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-[minmax(300px,1.8fr)_150px_170px_repeat(6,minmax(118px,1fr))]">
             {filterControls}
           </div>
           <div className="booking-filter-footer">
             <div className="booking-quick-filters flex flex-wrap gap-2">
               {quickFilterControls}
-            </div>
-            <div className="booking-controls-actions">
-              <button
-                type="button"
-                onClick={exportFilteredBookings}
-                disabled={!filteredBookings.length}
-                className="booking-action-button btn-secondary gap-2 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Download className="h-4 w-4" />
-                {copy.exportExcel}
-              </button>
-              <button type="button" onClick={openCreate} className="booking-action-button btn-primary gap-2">
-                <PackagePlus className="h-4 w-4" />
-                {copy.addBooking}
-              </button>
             </div>
           </div>
         </div>
@@ -2570,7 +2484,7 @@ export default function BookingDiaryPage() {
         </div>
       ) : null}
 
-      <section className="booking-diary-book min-w-0 max-w-full">
+      <section className="booking-diary-book min-w-0 max-w-full rounded-[1.35rem] border border-slate-200/90 bg-white p-3 shadow-[0_10px_30px_rgba(15,23,42,0.055)] sm:p-4">
         <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-sm font-semibold text-slate-700">{copy.tableHint}</h2>
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
@@ -2581,10 +2495,6 @@ export default function BookingDiaryPage() {
               className="booking-section-toggle disabled:cursor-not-allowed disabled:opacity-50"
             >
               {dateSectionControlLabel}
-            </button>
-            <button type="button" onClick={() => void load(false)} disabled={refreshing} className="btn-secondary min-h-[36px] gap-2 rounded-[0.8rem] px-3 text-xs disabled:opacity-60">
-              <RefreshCw className={clsx("h-4 w-4", refreshing && "animate-spin")} />
-              {refreshing ? copy.loading : copy.live}
             </button>
           </div>
         </div>
@@ -2607,16 +2517,23 @@ export default function BookingDiaryPage() {
                     <button
                       type="button"
                       onClick={() => toggleDateSection(date)}
-                      className={clsx("booking-date-heading", expanded && "booking-date-heading-open")}
+                      className={clsx("booking-date-heading bg-violet-50/55 transition hover:bg-violet-50", expanded && "booking-date-heading-open")}
                       aria-expanded={expanded}
                     >
                       <span className="booking-date-heading-main">
                         <span className="booking-date-chevron">
                           <ChevronRight className={clsx("h-3.5 w-3.5 transition-transform duration-200", expanded && "rotate-90")} />
                         </span>
-                        <span>{formatDateHeading(date, language)}</span>
+                        <span className="flex flex-wrap items-center gap-2">
+                          <span>{formatDateHeading(date, language)}</span>
+                          {date === todayKey() ? (
+                            <span className="rounded-full bg-violet-600 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-white">
+                              {copy.today}
+                            </span>
+                          ) : null}
+                        </span>
                       </span>
-                      <strong>{dateCounts.get(date) ?? totalEntries} {copy.entries}</strong>
+                      <strong className="rounded-full border border-violet-100 bg-white px-3 py-1 text-[10px] font-bold text-violet-700 shadow-sm">{dateCounts.get(date) ?? totalEntries} {copy.entries}</strong>
                     </button>
                     {expanded && entries.length ? (
                       <div className="booking-date-lines">
@@ -2632,7 +2549,10 @@ export default function BookingDiaryPage() {
                             </span>
                             <span className="booking-line-route">{getBookingPickupDisplay(booking)} <span>-&gt;</span> {getBookingDropoffDisplay(booking)}</span>
                             <span className="mt-1 flex flex-wrap gap-1.5">
-                              <span className={clsx("booking-client-badge", !booking.client_id && "is-missing")}>
+                              <span className={clsx(
+                                "block truncate text-[12px] font-bold text-slate-900",
+                                !booking.client_id && "text-amber-700"
+                              )}>
                                 {bookingClientName(booking) || copy.clientNotRecorded}
                               </span>
                               <span className="inline-flex w-fit rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600">
@@ -2895,7 +2815,7 @@ export default function BookingDiaryPage() {
                   <div className="booking-card-route booking-entry-extra">
                     <p><MapPin className="booking-card-icon text-brand-600" /> <span>{getBookingPickupDisplay(booking)}</span></p>
                     <p className="booking-card-warehouse">{copy.warehouseNo}: {booking.warehouse_no || "-"}</p>
-                    <p><MapPin className="booking-card-icon text-orange-500" /> <span>{getBookingDropoffDisplay(booking)}</span></p>
+                    <p><MapPin className="booking-card-icon text-violet-600" /> <span>{getBookingDropoffDisplay(booking)}</span></p>
                   </div>
                   <div className="booking-card-meta">
                     <p><Truck className="booking-card-icon" />{booking.vehicle || "-"}</p>
@@ -2911,190 +2831,315 @@ export default function BookingDiaryPage() {
               ))}
             </div>
 
-            <div className="table-shell booking-desktop-table hidden lg:block">
-              <div className="table-scroll">
-                <table className="min-w-[980px]">
-                  <thead>
-                    <tr>
-                      {[copy.date, copy.clientName, copy.pickupTime, copy.route, copy.estimatedDistance, copy.vehicle, copy.driver, copy.load, copy.warehouseNo, copy.notes, copy.dataQuality, tripJourneyColumnLabel, copy.actions].map((heading) => (
-                        <th key={heading || "actions"} className="booking-desktop-head-cell">{heading}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paginatedGroups.map(({ date, entries, totalEntries }) => {
-                      const expanded = expandedDateKeys.has(date);
+            <div className="booking-desktop-table hidden w-full lg:block">
+              <div className="overflow-visible rounded-2xl border border-slate-200/90 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.045)]">
+                <div className="divide-y divide-slate-100">
+                  {paginatedGroups.map(({ date, entries, totalEntries }) => {
+                    const expanded = expandedDateKeys.has(date);
 
-                      return (
-                        <Fragment key={date}>
-                        <tr className="booking-desktop-date-row">
-                          <td colSpan={13}>
-                            <button
-                              type="button"
-                              onClick={() => toggleDateSection(date)}
-                              className={clsx("booking-desktop-date-heading", expanded && "booking-desktop-date-heading-open")}
-                              aria-expanded={expanded}
+                    return (
+                      <div key={date}>
+                        <button
+                          type="button"
+                          onClick={() => toggleDateSection(date)}
+                          className={clsx(
+                            "flex w-full items-center justify-between gap-4 px-4 py-3.5 text-left transition",
+                            expanded
+                              ? "border-b border-violet-100 bg-violet-50/60"
+                              : "bg-white hover:bg-violet-50/35"
+                          )}
+                          aria-expanded={expanded}
+                        >
+                          <span className="flex min-w-0 items-center gap-3">
+                            <span
+                              className={clsx(
+                                "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition",
+                                expanded
+                                  ? "border-violet-200 bg-white text-violet-700"
+                                  : "border-slate-200 bg-slate-50 text-slate-500"
+                              )}
                             >
-                              <span className="booking-desktop-date-heading-main">
-                                <span className="booking-date-chevron">
-                                  <ChevronRight className={clsx("h-3.5 w-3.5 transition-transform duration-200", expanded && "rotate-90")} />
+                              <ChevronRight className={clsx("h-3.5 w-3.5 transition-transform duration-200", expanded && "rotate-90")} />
+                            </span>
+                            <span className="min-w-0">
+                              <span className="flex flex-wrap items-center gap-2">
+                                <span className="truncate text-[12px] font-extrabold uppercase tracking-[0.08em] text-violet-800">
+                                  {formatDateHeading(date, language)}
                                 </span>
-                                <span>{formatDateHeading(date, language)}</span>
-                              </span>
-                              <strong>{dateCounts.get(date) ?? totalEntries} {copy.entries}</strong>
-                            </button>
-                          </td>
-                        </tr>
-                        {expanded && entries.length ? entries.map((booking) => (
-                          <tr key={booking.id} className="enterprise-table-row cursor-pointer" onClick={() => openEdit(booking)}>
-                            <td className="booking-desktop-cell whitespace-nowrap font-semibold text-slate-950">
-                              <span className="block">{formatDate(booking.booking_date, language)}</span>
-                              <span className="mt-1 inline-flex max-w-[150px] items-center gap-1 truncate text-[10px] font-medium text-slate-500">
-                                <UserRound className="h-3 w-3 flex-shrink-0" />
-                                {copy.addedBy} {getCreatorDisplayName(booking, currentUser) || copy.creatorUnavailable}
-                              </span>
-                            </td>
-                            <td className="booking-desktop-cell max-w-[170px]">
-                              <span className={clsx("booking-client-badge", !booking.client_id && "is-missing")}>
-                                {bookingClientName(booking) || copy.clientNotRecorded}
-                              </span>
-                            </td>
-                            <td className="booking-desktop-cell whitespace-nowrap"><span className="booking-desktop-time">{formatPickupTime(booking.pickup_time) || "-"}</span></td>
-                            <td
-                              className="booking-desktop-cell max-w-[280px] font-semibold text-slate-900"
-                              title={[booking.pickup_address || booking.pickup, booking.dropoff_address || booking.dropoff].filter(Boolean).join(" -> ")}
-                            >
-                              <span className="block truncate">{getBookingPickupDisplay(booking)} <span className="text-brand-600">-&gt;</span> {getBookingDropoffDisplay(booking)}</span>
-                              <span
-                                className={clsx(
-                                  "mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold",
-                                  hasVerifiedGoogleLocation(booking)
-                                    ? "border-emerald-100 bg-emerald-50 text-emerald-700"
-                                    : "border-amber-100 bg-amber-50 text-amber-700"
-                                )}
-                              >
-                                {hasVerifiedGoogleLocation(booking) ? copy.googleVerified : copy.manualUnverified}
-                              </span>
-                              <span
-                                className={clsx(
-                                  "ml-1 mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold",
-                                  hasConfirmedRoute(booking)
-                                    ? "border-emerald-100 bg-emerald-50 text-emerald-700"
-                                    : "border-slate-200 bg-slate-50 text-slate-600"
-                                )}
-                              >
-                                {hasConfirmedRoute(booking) ? copy.routeConfirmed : copy.routePendingApproval}
-                              </span>
-                            </td>
-                            <td className="booking-desktop-cell whitespace-nowrap">
-                              <span className={clsx(
-                                "inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold",
-                                booking.estimated_distance_km ? "border-indigo-100 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-slate-50 text-slate-500"
-                              )}>
-                                {formatDistanceKm(booking.estimated_distance_km) ?? copy.noEstimate}
-                              </span>
-                            </td>
-                            <td className="booking-desktop-cell whitespace-nowrap">
-                              <span className="booking-desktop-vehicle">{booking.vehicle || "-"}</span>
-                              <span className="mt-1 block text-[11px] font-bold text-slate-700">{booking.vehicle_registration || "-"}</span>
-                              {booking.trailer_registration ? <span className="mt-0.5 block text-[10px] font-semibold text-slate-500">{copy.trailerRegistration}: {booking.trailer_registration}</span> : null}
-                            </td>
-                            <td className="booking-desktop-cell whitespace-nowrap"><span className="booking-desktop-driver">{booking.driver || "-"}</span></td>
-                            <td className="booking-desktop-cell whitespace-nowrap">{booking.amount_pallets || "-"} PLT / {booking.weight ? `${booking.weight}kg` : "-"}</td>
-                            <td className="booking-desktop-cell max-w-[130px]" title={booking.warehouse_no || ""}><span className="block truncate">{booking.warehouse_no || "-"}</span></td>
-                            <td
-                              className="booking-desktop-cell max-w-[170px]"
-                              title={[booking.job_order_number ? `${copy.jobOrderLabel}: ${booking.job_order_number}` : "", booking.notes || ""].filter(Boolean).join(" | ")}
-                            >
-                              {booking.job_order_number ? (
-                                <span className="mb-1 block truncate rounded-full border border-brand-100 bg-brand-50 px-2 py-0.5 text-[10px] font-semibold text-brand-700">
-                                  {copy.jobOrderLabel}: {booking.job_order_number}
-                                </span>
-                              ) : null}
-                              <span className="block truncate">{booking.notes || "-"}</span>
-                            </td>
-                            <td className="booking-desktop-cell whitespace-nowrap">
-                              {(() => {
-                                const quality = getBookingDataQuality(booking, copy);
-                                return (
-                                  <span
-                                    className={clsx(
-                                      "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold",
-                                      quality.complete
-                                        ? "border-emerald-100 bg-emerald-50 text-emerald-700"
-                                        : "border-amber-100 bg-amber-50 text-amber-700"
-                                    )}
-                                    title={quality.issues.join(" | ") || quality.label}
-                                  >
-                                    {quality.complete ? <CheckCircle2 className="h-3.5 w-3.5" /> : <ShieldAlert className="h-3.5 w-3.5" />}
-                                    {quality.label}
+                                {date === todayKey() ? (
+                                  <span className="rounded-full bg-violet-600 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-white">
+                                    {copy.today}
                                   </span>
-                                );
-                              })()}
-                            </td>
-                            <td className="booking-desktop-cell whitespace-nowrap">
-                              <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getBookingTripClass(booking)}`}>
-                                {getBookingTripLabel(booking)}
+                                ) : null}
                               </span>
-                            </td>
-                            <td className="booking-desktop-cell text-right">
-                              <div className="flex flex-wrap justify-end gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    void createTripRecord(booking);
-                                  }}
-                                  className="table-action-secondary min-h-[36px] gap-1.5 px-2.5"
-                                  aria-label={getTripButtonLabel(booking)}
-                                >
-                                  <PackagePlus className="h-3.5 w-3.5" />
-                                  {getTripButtonLabel(booking)}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    openEdit(booking);
-                                  }}
-                                  className="table-action-secondary min-h-[36px] gap-1.5 px-2.5"
-                                  aria-label={copy.editBooking}
-                                >
-                                  <Edit3 className="h-3.5 w-3.5" />
-                                  {copy.edit}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    openDuplicate(booking);
-                                  }}
-                                  className="table-action-secondary min-h-[36px] gap-1.5 px-2.5"
-                                  aria-label={copy.duplicate}
-                                >
-                                  <Copy className="h-3.5 w-3.5" />
-                                  {copy.duplicate}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    setDeleteTarget(booking);
-                                  }}
-                                  className="table-action-danger min-h-[36px] gap-1.5 px-2.5"
-                                  aria-label={copy.deleteBooking}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </button>
+                            </span>
+                          </span>
+                          <span className="shrink-0 rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-bold text-slate-600 shadow-sm">
+                            {dateCounts.get(date) ?? totalEntries} {copy.entries}
+                          </span>
+                        </button>
+
+                        {expanded && entries.length ? (
+                          <div>
+                            <div className="sticky top-[72px] z-30 grid grid-cols-[1.25fr_2.3fr_1.45fr_1.2fr_1.3fr_1.1fr_220px] items-stretch border-y-2 border-violet-300 bg-[#eee9fb] px-4 shadow-[0_6px_16px_rgba(76,29,149,0.10)]">
+                              <div className="py-3.5 pr-4">
+                                <span className="block text-[12px] font-black uppercase tracking-[0.11em] text-violet-950">
+                                  {language === "th" ? "งานจอง" : "Booking"}
+                                </span>
+                                <span className="mt-0.5 block text-[10px] font-semibold text-slate-600">
+                                  {language === "th" ? "เวลารับของ · ลูกค้า" : "Pickup time · Customer"}
+                                </span>
                               </div>
-                            </td>
-                          </tr>
-                        )) : null}
-                        </Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                              <div className="border-l border-violet-200/90 px-4 py-3.5">
+                                <span className="block text-[12px] font-black uppercase tracking-[0.11em] text-violet-950">{copy.route}</span>
+                                <span className="mt-0.5 block text-[10px] font-semibold text-slate-600">
+                                  {language === "th" ? "จุดรับ → จุดส่ง · ระยะทาง" : "Pickup → Drop-off · Distance"}
+                                </span>
+                              </div>
+                              <div className="border-l border-violet-200/90 px-4 py-3.5">
+                                <span className="block text-[12px] font-black uppercase tracking-[0.11em] text-violet-950">
+                                  {language === "th" ? "รถ / คนขับ" : "Vehicle / Driver"}
+                                </span>
+                                <span className="mt-0.5 block text-[10px] font-semibold text-slate-600">
+                                  {language === "th" ? "ทะเบียน · ประเภทรถ · คนขับ" : "Registration · Vehicle type · Driver"}
+                                </span>
+                              </div>
+                              <div className="border-l border-violet-200/90 px-4 py-3.5">
+                                <span className="block text-[12px] font-black uppercase tracking-[0.11em] text-violet-950">{copy.load}</span>
+                                <span className="mt-0.5 block text-[10px] font-semibold text-slate-600">
+                                  {language === "th" ? "พาเลท · น้ำหนัก · คลัง" : "Pallets · Weight · Warehouse"}
+                                </span>
+                              </div>
+                              <div className="border-l border-violet-200/90 px-4 py-3.5">
+                                <span className="block text-[12px] font-black uppercase tracking-[0.11em] text-violet-950">
+                                  {language === "th" ? "รายละเอียด" : "Details"}
+                                </span>
+                                <span className="mt-0.5 block text-[10px] font-semibold text-slate-600">
+                                  {language === "th" ? "เลขใบงาน · หมายเหตุ" : "Job order · Notes"}
+                                </span>
+                              </div>
+                              <div className="border-l border-violet-200/90 px-4 py-3.5">
+                                <span className="block text-[12px] font-black uppercase tracking-[0.11em] text-violet-950">
+                                  {language === "th" ? "สถานะ" : "Status"}
+                                </span>
+                                <span className="mt-0.5 block text-[10px] font-semibold text-slate-600">
+                                  {language === "th" ? "คุณภาพข้อมูล · ทริป" : "Data quality · Trip"}
+                                </span>
+                              </div>
+                              <div className="border-l border-violet-200/90 py-3.5 pl-3 text-right">
+                                <span className="block text-[12px] font-black uppercase tracking-[0.11em] text-violet-950">{copy.actions}</span>
+                                <span className="mt-0.5 block text-[10px] font-semibold text-slate-600">
+                                  {language === "th" ? "ทริป · แก้ไข · ทำซ้ำ · ลบ" : "Trip · Edit · Copy · Delete"}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="divide-y divide-slate-100">
+                              {entries.map((booking) => {
+                              const quality = getBookingDataQuality(booking, copy);
+                              const tripLabel = getBookingTripLabel(booking);
+                              const tripClass = getBookingTripClass(booking);
+
+                              return (
+                                <div
+                                  key={booking.id}
+                                  onClick={() => openEdit(booking)}
+                                  className="group grid cursor-pointer grid-cols-[1.25fr_2.3fr_1.45fr_1.2fr_1.3fr_1.1fr_220px] items-center gap-0 px-4 py-3.5 transition hover:bg-violet-50/20"
+                                >
+                                  <div className="min-w-0 pr-4">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">
+                                        {language === "th" ? "รับของ" : "Pickup"}
+                                      </span>
+                                      <span className="text-[13px] font-black text-violet-700">
+                                        {formatPickupTime(booking.pickup_time) || timeMissingLabel}
+                                      </span>
+                                    </div>
+                                    <p className={clsx(
+                                      "mt-1.5 truncate text-[12px] font-bold",
+                                      booking.client_id ? "text-slate-950" : "text-amber-700"
+                                    )}>
+                                      {bookingClientName(booking) || copy.clientNotRecorded}
+                                    </p>
+                                    <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[9px] font-medium text-slate-400">
+                                      <span className="shrink-0">{formatDate(booking.booking_date, language)}</span>
+                                      <span className="text-slate-300">·</span>
+                                      <span className="truncate">
+                                        {copy.addedBy} {getCreatorDisplayName(booking, currentUser) || copy.creatorUnavailable}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div
+                                    className="min-w-0 border-l border-slate-100 px-4"
+                                    title={[booking.pickup_address || booking.pickup, booking.dropoff_address || booking.dropoff].filter(Boolean).join(" → ")}
+                                  >
+                                    <p className="truncate text-[12px] font-extrabold text-slate-950">
+                                      {getBookingPickupDisplay(booking)}
+                                      <span className="px-2 text-violet-400">→</span>
+                                      {getBookingDropoffDisplay(booking)}
+                                    </p>
+                                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                                      <span
+                                        className={clsx(
+                                          "inline-flex items-center gap-1 text-[9px] font-semibold",
+                                          hasVerifiedGoogleLocation(booking) ? "text-emerald-600" : "text-amber-600"
+                                        )}
+                                      >
+                                        <MapPin className="h-3 w-3" />
+                                        {hasVerifiedGoogleLocation(booking) ? copy.googleVerified : copy.manualUnverified}
+                                      </span>
+                                      {formatDistanceKm(booking.estimated_distance_km) ? (
+                                        <span className="text-[10px] font-semibold text-slate-600">
+                                          {formatDistanceKm(booking.estimated_distance_km)}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  </div>
+
+                                  <div className="min-w-0 border-l border-slate-100 px-4">
+                                    <div className="flex min-w-0 items-center gap-1.5">
+                                      <span className="shrink-0 text-[8px] font-bold uppercase tracking-[0.06em] text-slate-400">
+                                        {language === "th" ? "ทะเบียน" : "Reg"}
+                                      </span>
+                                      <p className="truncate text-[11px] font-bold text-slate-900">
+                                        {booking.vehicle_registration || booking.vehicle || "-"}
+                                      </p>
+                                    </div>
+                                    <p className="mt-1 truncate text-[10px] font-medium text-slate-500">
+                                      {booking.vehicle || "-"}
+                                      {booking.trailer_registration ? ` · ${copy.trailerRegistration}: ${booking.trailer_registration}` : ""}
+                                    </p>
+                                    <div className="mt-1 flex min-w-0 items-center gap-1.5">
+                                      <span className="shrink-0 text-[8px] font-bold uppercase tracking-[0.06em] text-slate-400">
+                                        {language === "th" ? "คนขับ" : "Driver"}
+                                      </span>
+                                      <p className="truncate text-[11px] font-semibold text-slate-800">
+                                        {booking.driver || "-"}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <div className="min-w-0 border-l border-slate-100 px-4">
+                                    <p className="truncate text-[11px] font-semibold text-slate-800">
+                                      <span className="text-slate-400">{language === "th" ? "สินค้า" : "Load"}:</span>{" "}
+                                      {booking.amount_pallets || "-"} PLT
+                                      <span className="px-1 text-slate-300">/</span>
+                                      {booking.weight ? `${booking.weight}kg` : "-"}
+                                    </p>
+                                    <p className="mt-1 truncate text-[10px] text-slate-500">
+                                      {copy.warehouseNo}: {booking.warehouse_no || "-"}
+                                    </p>
+                                    {booking.dimensions ? (
+                                      <p className="mt-1 truncate text-[9px] text-slate-400">
+                                        {language === "th" ? "ขนาด" : "Dimensions"}: {booking.dimensions}
+                                      </p>
+                                    ) : null}
+                                  </div>
+
+                                  <div
+                                    className="min-w-0 border-l border-slate-100 px-4"
+                                    title={[booking.job_order_number ? `${copy.jobOrderLabel}: ${booking.job_order_number}` : "", booking.notes || ""].filter(Boolean).join(" | ")}
+                                  >
+                                    {booking.job_order_number ? (
+                                      <p className="truncate text-[10px] font-bold text-violet-700">
+                                        {copy.jobOrderLabel}: {booking.job_order_number}
+                                      </p>
+                                    ) : null}
+                                    <p className={clsx(
+                                      "truncate text-[10px] text-slate-500",
+                                      booking.job_order_number && "mt-1"
+                                    )}>
+                                      {booking.notes || "-"}
+                                    </p>
+                                  </div>
+
+                                  <div className="min-w-0 border-l border-slate-100 px-4">
+                                    <div className="flex flex-col items-start gap-1.5">
+                                      <span
+                                        className={clsx(
+                                          "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-semibold",
+                                          quality.complete
+                                            ? "border-emerald-100 bg-emerald-50 text-emerald-700"
+                                            : "border-amber-100 bg-amber-50 text-amber-700"
+                                        )}
+                                        title={quality.issues.join(" | ") || quality.label}
+                                      >
+                                        {quality.complete ? <CheckCircle2 className="h-3 w-3" /> : <ShieldAlert className="h-3 w-3" />}
+                                        {quality.label}
+                                      </span>
+                                      <span className={`inline-flex rounded-full border px-2 py-0.5 text-[9px] font-semibold ${tripClass}`}>
+                                        {tripLabel}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center justify-end gap-1.5 border-l border-slate-100 pl-3">
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        void createTripRecord(booking);
+                                      }}
+                                      className="inline-flex min-h-[32px] items-center gap-1.5 rounded-lg border border-violet-100 bg-violet-50/60 px-2.5 text-[10px] font-bold text-violet-800 transition hover:border-violet-200 hover:bg-violet-100"
+                                      aria-label={getTripButtonLabel(booking)}
+                                    >
+                                      <PackagePlus className="h-3.5 w-3.5" />
+                                      {getTripButtonLabel(booking)}
+                                    </button>
+
+                                    <div
+                                      className="flex items-center gap-1"
+                                      onClick={(event) => event.stopPropagation()}
+                                    >
+                                      <button
+                                        type="button"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          openEdit(booking);
+                                        }}
+                                        className="flex h-[32px] w-[32px] items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700"
+                                        aria-label={copy.editBooking}
+                                        title={copy.edit}
+                                      >
+                                        <Edit3 className="h-3.5 w-3.5" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          openDuplicate(booking);
+                                        }}
+                                        className="flex h-[32px] w-[32px] items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700"
+                                        aria-label={copy.duplicate}
+                                        title={copy.duplicate}
+                                      >
+                                        <Copy className="h-3.5 w-3.5" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          setDeleteTarget(booking);
+                                        }}
+                                        className="flex h-[32px] w-[32px] items-center justify-center rounded-lg border border-rose-100 bg-white text-rose-500 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+                                        aria-label={copy.deleteBooking}
+                                        title={copy.deleteBooking}
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                              })}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
@@ -3129,49 +3174,8 @@ export default function BookingDiaryPage() {
           </>
         )}
       </section>
-      </>
-      ) : activeTab === "insights" ? (
-        <BookingBusinessInsights
-          bookings={bookings}
-          tripsByBookingId={tripsByBookingId}
-          vehicles={vehicles}
-          drivers={drivers}
-          language={language}
-          loading={loading}
-          refreshing={refreshing}
-          onRefresh={() => void load(false)}
-          onOpenRouteApproval={currentUser?.isAdmin ? () => setActiveTab("routeApproval") : undefined}
-        />
-      ) : null}
 
-      {LOCATION_REVIEW_FEATURE_ENABLED && currentUser?.isAdmin && currentUser.id ? <BookingLocationReview
-        active={activeTab === "locationReview"}
-        language={language}
-        userId={currentUser.id}
-        onAvailabilityChange={setLocationReviewCount}
-          onOpenBooking={(bookingId) => {
-          const booking = bookings.find((item) => item.id === bookingId);
-          if (!booking) return;
-            setActiveTab("daily");
-            openEdit(booking);
-          }}
-        /> : null}
-
-      {LOCATION_REVIEW_FEATURE_ENABLED && currentUser?.isAdmin && currentUser.id ? <BookingMapCheck
-        active={activeTab === "bookingCheck"}
-        language={language}
-        focus={bookingCheckFocus}
-        onClearFocus={() => setBookingCheckFocus(null)}
-        onAvailabilityChange={setBookingCheckCount}
-      /> : null}
-
-      {LOCATION_REVIEW_FEATURE_ENABLED && currentUser?.isAdmin ? <BookingRouteApproval
-        active={activeTab === "routeApproval"}
-        language={language}
-        onAvailabilityChange={setRouteApprovalCount}
-      /> : null}
-
-      {activeTab === "daily" && !modalOpen && !deleteTarget ? (
+      {!modalOpen && !deleteTarget ? (
         <button
           type="button"
           onClick={openCreate}

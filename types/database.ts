@@ -499,6 +499,7 @@ export type BookingDiaryEntry = {
   vehicle_id?: string | null;
   vehicle_registration?: string | null;
   trailer_registration?: string | null;
+  driver_id?: string | null;
   driver: string | null;
   notes: string | null;
   status: string | null;

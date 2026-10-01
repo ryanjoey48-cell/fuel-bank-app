@@ -18,7 +18,6 @@ import {
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { GoogleMapsLoader } from "@/components/google-maps-loader";
-import { Header } from "@/components/header";
 import { LocationAutocomplete, type StructuredLocation } from "@/components/location-autocomplete";
 import { StatCard } from "@/components/stat-card";
 import {
@@ -221,7 +220,7 @@ function createInitialForm(
     driver_id: "",
     vehicle_reg: "",
     notes: "",
-    auto_create_trip_journey: true,
+    auto_create_trip_journey: false,
     status: "Draft",
     cost_estimation_status: "pending",
     cost_estimation_note: ""
@@ -544,20 +543,157 @@ function getStatusBadgeClass(status: string | null | undefined) {
   }
 }
 
+function readFiniteShipmentNumber(record: Record<string, unknown>, ...keys: string[]) {
+  for (const key of keys) {
+    const raw = record[key];
+    if (raw === null || raw === undefined || raw === "") continue;
+    const value = Number(raw);
+    if (Number.isFinite(value)) return value;
+  }
+  return null;
+}
+
+function parseCommercialDataFromNotes(notes: string | null | undefined) {
+  const line = String(notes ?? "")
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .find((item) => item.startsWith("Commercial data:"));
+
+  if (!line) return null;
+
+  try {
+    const parsed = JSON.parse(line.slice("Commercial data:".length).trim()) as Record<string, unknown>;
+    const numberValue = (key: string) => {
+      const value = Number(parsed[key]);
+      return Number.isFinite(value) ? value : null;
+    };
+
+    return {
+      fuelEfficiencyKmPerLitre: numberValue("fuelEfficiencyKmPerLitre"),
+      fuelPricePerLitre: numberValue("fuelPricePerLitre"),
+      fuelCost: numberValue("fuelCost"),
+      driverCost: numberValue("driverCost"),
+      tolls: numberValue("tolls"),
+      parkingCost: numberValue("parkingCost"),
+      operatingCost: numberValue("operatingCost"),
+      quotePrice: numberValue("quotePrice"),
+      recommendedQuote: numberValue("recommendedQuote")
+    };
+  } catch {
+    return null;
+  }
+}
+
+function normalizeShipmentForPage(shipment: ShipmentWithDriver) {
+  const normalized = normalizeShipment(shipment);
+  const raw = shipment as unknown as Record<string, unknown>;
+  const commercial = parseCommercialDataFromNotes(shipment.notes);
+
+  const fuelCost =
+    commercial?.fuelCost ??
+    readFiniteShipmentNumber(raw, "fuel_cost", "estimated_fuel_cost", "estimated_fuel_cost_thb") ??
+    normalized.fuelCost;
+
+  const driverCost =
+    commercial?.driverCost ??
+    readFiniteShipmentNumber(raw, "driver_cost", "driver_allowance", "driver_cost_thb") ??
+    normalized.driverCost;
+
+  const tolls =
+    commercial?.tolls ??
+    readFiniteShipmentNumber(raw, "toll_cost", "toll_estimate", "tolls") ??
+    normalized.tolls;
+
+  const parkingCost =
+    commercial?.parkingCost ??
+    readFiniteShipmentNumber(raw, "parking_cost", "parking_cost_thb") ??
+    normalized.parkingCost;
+
+  const componentOperatingCost =
+    (fuelCost ?? 0) + (driverCost ?? 0) + (tolls ?? 0) + (parkingCost ?? 0);
+
+  const storedOperatingCost =
+    commercial?.operatingCost ??
+    readFiniteShipmentNumber(raw, "subtotal_cost", "operating_cost", "total_operating_cost");
+
+  const operatingCost =
+    storedOperatingCost != null && storedOperatingCost > 0
+      ? storedOperatingCost
+      : componentOperatingCost > 0
+        ? componentOperatingCost
+        : normalized.operatingCost;
+
+  const quotePrice =
+    commercial?.quotePrice ??
+    readFiniteShipmentNumber(raw, "final_price", "quoted_price", "quote_price") ??
+    normalized.quotePrice;
+
+  const profit =
+    quotePrice != null && operatingCost != null
+      ? quotePrice - operatingCost
+      : normalized.profit;
+
+  const marginPercent =
+    quotePrice != null && quotePrice > 0 && profit != null
+      ? (profit / quotePrice) * 100
+      : normalized.marginPercent;
+
+  const markupPercent =
+    operatingCost != null && operatingCost > 0 && profit != null
+      ? (profit / operatingCost) * 100
+      : normalized.markupPercent;
+
+  return {
+    ...normalized,
+    fuelCost,
+    driverCost,
+    tolls,
+    parkingCost,
+    operatingCost,
+    quotePrice,
+    finalQuote: quotePrice,
+    systemRecommendedQuote: commercial?.recommendedQuote ?? normalized.systemRecommendedQuote,
+    fuelPricePerLitre: commercial?.fuelPricePerLitre ?? normalized.fuelPricePerLitre,
+    standardKmPerLitre:
+      commercial?.fuelEfficiencyKmPerLitre ??
+      readFiniteShipmentNumber(raw, "standard_km_per_litre") ??
+      null,
+    profit,
+    marginPercent,
+    markupPercent
+  };
+}
+
+function cleanStoredShipmentNotes(notes: string | null | undefined) {
+  return String(notes ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !line.startsWith(LOCATION_DATA_PREFIX))
+    .filter((line) => !line.startsWith("Commercial data:"))
+    .filter(
+      (line) =>
+        !/^(Cargo Type|Start Route|Total Travel Time|Parking|Return to Start Route|Additional Drop-offs):/i.test(
+          line
+        )
+    )
+    .join("\n");
+}
+
 function getEstimatedJobCost(shipment: ShipmentWithDriver) {
-  return normalizeShipment(shipment).operatingCost;
+  return normalizeShipmentForPage(shipment).operatingCost;
 }
 
 function getShipmentQuote(shipment: ShipmentWithDriver) {
-  return normalizeShipment(shipment).quotePrice;
+  return normalizeShipmentForPage(shipment).quotePrice;
 }
 
 function getShipmentProfit(shipment: ShipmentWithDriver) {
-  return normalizeShipment(shipment).profit;
+  return normalizeShipmentForPage(shipment).profit;
 }
 
 function getShipmentMarginPercent(shipment: ShipmentWithDriver) {
-  return normalizeShipment(shipment).marginPercent;
+  return normalizeShipmentForPage(shipment).marginPercent;
 }
 
 function getShipmentSaveErrorMessage(error: unknown, labels: ShipmentTranslations) {
@@ -1096,7 +1232,7 @@ function openQuotePdfWindow(
     timeStyle: "short"
   }).format(new Date());
   const validityDate = formatPdfDate(addDaysToDateInput(quoteDate, 7), language);
-  const logoUrl = `${window.location.origin}/logo.png`;
+  const logoUrl = `${window.location.origin}/ees-logo.png`;
   const printable = window.open("", "_blank", "width=920,height=1200");
 
   if (!printable) {
@@ -1196,7 +1332,7 @@ function openQuotePdfWindow(
   const costSummaryMarkup =
     variant === "internal"
       ? `
-      <section class="section">
+      <section class="section avoid-break">
         <p class="section-title">${escapeHtml(labels.pdf.internalCostSummary)}</p>
         <div class="box" style="margin-bottom: 12px;">
           <p class="label">${escapeHtml(labels.pdf.fuelCalculationBasis)}</p>
@@ -1268,14 +1404,15 @@ function openQuotePdfWindow(
 <head>
   <title>${escapeHtml(titleText)} ${escapeHtml(data.jobReference || labels.title)}</title>
   <style>
-    @page { size: A4; margin: 14mm; }
+    @page { size: A4; margin: 0; }
     * { box-sizing: border-box; }
-    body { margin: 0; color: #0f172a; font-family: Arial, Helvetica, sans-serif; background: #edf2f7; }
-    .page { min-height: 100vh; background: #fff; padding: 24px; }
+    body { margin: 0; color: #0f172a; font-family: Arial, Helvetica, sans-serif; background: #fff; }
+    .page { min-height: 100vh; background: #fff; padding: 10mm; }
     .header { position: relative; display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 20px 22px; border-radius: 20px; background: linear-gradient(135deg, #0f766e 0%, #0f172a 100%); color: #fff; overflow: hidden; }
     .header::after { content: ""; position: absolute; inset: auto -60px -80px auto; width: 180px; height: 180px; background: radial-gradient(circle, rgba(255,255,255,0.16), rgba(255,255,255,0)); }
     .brand-wrap { display: flex; gap: 16px; align-items: flex-start; position: relative; z-index: 1; }
     .logo { width: 72px; height: 72px; object-fit: contain; border-radius: 16px; background: rgba(255,255,255,0.96); padding: 10px; box-shadow: 0 18px 36px rgba(15, 23, 42, 0.18); }
+    .logo-fallback { display: none; width: 72px; height: 72px; align-items: center; justify-content: center; border-radius: 16px; background: rgba(255,255,255,0.96); color: #b91c1c; font-size: 22px; font-weight: 900; letter-spacing: -0.04em; box-shadow: 0 18px 36px rgba(15,23,42,0.18); }
     .brand-kicker { margin: 0 0 6px; font-size: 11px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: rgba(255,255,255,0.75); }
     .brand { font-size: 22px; font-weight: 800; letter-spacing: .02em; color: #fff; line-height: 1.15; }
     .brand-subtitle { margin: 8px 0 0; max-width: 420px; color: rgba(255,255,255,0.82); font-size: 12px; line-height: 1.55; }
@@ -1405,7 +1542,7 @@ function openQuotePdfWindow(
         ? `<header class="customer-header avoid-break">
       <div class="customer-header-top">
         <div class="customer-brand">
-          <img src="${escapeHtml(logoUrl)}" alt="Expert Express Sender Co., Ltd. logo" class="logo" />
+          <img src="${escapeHtml(logoUrl)}" alt="Expert Express Sender Co., Ltd. logo" class="logo" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';" /><div class="logo-fallback">EES</div>
           <div>
             <p class="customer-eyebrow">${escapeHtml(labels.pdf.companyTagline)}</p>
             <h1>${escapeHtml(labels.pdf.companyName)}</h1>
@@ -1439,7 +1576,7 @@ function openQuotePdfWindow(
     </header>`
         : `<header class="header">
       <div class="brand-wrap">
-        <img src="${escapeHtml(logoUrl)}" alt="${escapeHtml(labels.pdf.companyName)} logo" class="logo" />
+        <img src="${escapeHtml(logoUrl)}" alt="${escapeHtml(labels.pdf.companyName)} logo" class="logo" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';" /><div class="logo-fallback">EES</div>
         <div>
           <p class="brand-kicker">${escapeHtml(labels.pdf.companyTagline)}</p>
           <div class="brand">${escapeHtml(labels.pdf.companyName)}</div>
@@ -1543,7 +1680,7 @@ function openQuotePdfWindow(
     </section>
 
     <section class="section">
-      <p class="section-title">${escapeHtml(labels.jobDetailsTitle)}</p>
+      <p class="section-title">${escapeHtml(language === "th" ? "รายละเอียดงาน" : "JOB DETAILS")}</p>
       <div class="grid">
         <div class="box"><p class="label">${escapeHtml(labels.pdf.pickupLocation)}</p><p class="value">${escapeHtml(data.pickupLocation || EMPTY_VALUE)}</p></div>
         <div class="box"><p class="label">${escapeHtml(labels.dropoff)}</p><p class="value">${escapeHtml(data.dropoffLocation || EMPTY_VALUE)}</p></div>
@@ -1554,7 +1691,6 @@ function openQuotePdfWindow(
         <div class="box"><p class="label">${escapeHtml(labels.pdf.routeSummary)}</p><p class="value">${escapeHtml(data.routeSummary || EMPTY_VALUE)}</p></div>
         <div class="box"><p class="label">${escapeHtml(labels.pdf.distance)}</p><p class="value">${data.distanceKm != null ? `${formatPdfNumber(data.distanceKm, language, 1)} km` : EMPTY_VALUE}</p></div>
         <div class="box"><p class="label">${escapeHtml(labels.duration)}</p><p class="value">${escapeHtml(formatPdfDuration(data.durationMinutes, language))}</p></div>
-        <div class="box"><p class="label">${escapeHtml(labels.pdf.quoteDate)}</p><p class="value">${escapeHtml(formatPdfDate(quoteDate, language))}</p></div>
       </div>
       <div class="route-card">
         <p class="label">${escapeHtml(labels.pdf.routePlan)}</p>
@@ -1567,12 +1703,14 @@ function openQuotePdfWindow(
 
     ${
       variant === "customer"
-        ? `<section class="closing-panel section avoid-break">
+        ? (data.notes.trim()
+            ? `<section class="closing-panel section avoid-break">
       <p class="panel-kicker">${escapeHtml(labels.pdf.serviceNotesTitle)}</p>
       <h3 class="closing-title">${escapeHtml(labels.pdf.readyForApproval)}</h3>
-      <p class="closing-copy">${escapeHtml(customerClosingNote)}</p>
+      <p class="closing-copy">${escapeHtml(data.notes.trim())}</p>
       <p class="closing-footer">${escapeHtml(labels.pdf.thankYouDefault)}</p>
     </section>`
+            : "")
         : `<section class="section">
       <p class="section-title">${escapeHtml(labels.pdf.notes)}</p>
       <div class="box notes">${escapeHtml(notesText)}</div>
@@ -1648,6 +1786,8 @@ export default function ShipmentsPage() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [shipments, setShipments] = useState<ShipmentWithDriver[]>([]);
   const [form, setForm] = useState<FormState>(() => createInitialForm());
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [shipmentStep, setShipmentStep] = useState<1 | 2 | 3 | 4>(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [estimating, setEstimating] = useState(false);
@@ -1751,7 +1891,16 @@ export default function ShipmentsPage() {
   const expectedMarginPercent = shipmentCost.marginPercent;
   const markupOnCostPercent = shipmentCost.markupOnCostPercent;
   const isManualQuoteOverride = shipmentCost.isManualQuoteOverride;
-  const finalQuoteBelowCost = finalQuotePrice > 0 && finalQuotePrice < totalEstimatedJobCost;
+  const finalQuoteBelowCost =
+    finalQuotePrice > 0 &&
+    Math.round(finalQuotePrice * 100) < Math.round(totalEstimatedJobCost * 100);
+
+  const displayExpectedProfit =
+    expectedProfit != null && Math.abs(expectedProfit) < 0.005 ? 0 : expectedProfit;
+  const displayExpectedMargin =
+    expectedMarginPercent != null && Math.abs(expectedMarginPercent) < 0.05 ? 0 : expectedMarginPercent;
+  const displayMarkup =
+    markupOnCostPercent != null && Math.abs(markupOnCostPercent) < 0.05 ? 0 : markupOnCostPercent;
 
   useEffect(() => {
     if (manualQuoteOverride) return;
@@ -1768,7 +1917,7 @@ export default function ShipmentsPage() {
       Array.from(
         new Set(
           shipments
-            .map((shipment) => normalizeShipment(shipment).customerName.trim())
+            .map((shipment) => normalizeShipmentForPage(shipment).customerName.trim())
             .filter((customer): customer is string => Boolean(customer))
         )
       ).slice(0, 40),
@@ -1780,7 +1929,7 @@ export default function ShipmentsPage() {
     if (!customerKey) return [];
 
     return shipments
-      .filter((shipment) => normalizeLocationKey(normalizeShipment(shipment).customerName) === customerKey)
+      .filter((shipment) => normalizeLocationKey(normalizeShipmentForPage(shipment).customerName) === customerKey)
       .slice(0, 3)
       .map((shipment) => ({
         ref: shipment.job_reference,
@@ -2011,6 +2160,8 @@ export default function ShipmentsPage() {
     setRouteEstimateMeta(null);
     setLastEstimatedRouteKey("");
     setManualQuoteOverride(false);
+    setEditorOpen(false);
+    setShipmentStep(1);
   }, [shipments]);
 
   const setLocationField = useCallback(
@@ -2300,7 +2451,7 @@ export default function ShipmentsPage() {
   }, [estimateRoute, labels.routeKeyMissing]);
 
   const startEditingShipment = useCallback((shipment: ShipmentWithDriver) => {
-    const normalized = normalizeShipment(shipment);
+    const normalized = normalizeShipmentForPage(shipment);
     const defaults = getRouteDefaults(shipments);
     const savedLocationData = parseSavedLocationData(shipment.notes);
     const savedAdditionalDropoffData = Array.isArray(shipment.additional_dropoffs_data)
@@ -2343,7 +2494,9 @@ export default function ShipmentsPage() {
       estimated_duration_minutes: formatInputNumber(normalized.durationMinutes, 0),
       vehicle_type: normalized.vehicleType,
       standard_km_per_litre:
-        formatInputNumber(shipment.standard_km_per_litre, 2) || defaults.kmPerLitre,
+        formatInputNumber(normalized.standardKmPerLitre, 2) ||
+        formatInputNumber(shipment.standard_km_per_litre, 2) ||
+        defaults.kmPerLitre,
       fuel_price_per_litre:
         formatInputNumber(normalized.fuelPricePerLitre, 2) || defaults.fuelPrice,
       toll_estimate: formatInputNumber(normalized.tolls, 2),
@@ -2380,7 +2533,25 @@ export default function ShipmentsPage() {
     setRouteEstimateMeta(null);
     setError(null);
     setSuccessMessage(null);
-    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setShipmentStep(1);
+    setEditorOpen(true);
+  }, [shipments]);
+
+  const openNewShipment = useCallback(() => {
+    const defaults = getRouteDefaults(shipments);
+    setForm({
+      ...createInitialForm(defaults.kmPerLitre, defaults.fuelPrice),
+      job_reference: generateJobReference(shipments)
+    });
+    setManualVehicleDefaults({ vehicleType: false, efficiency: false });
+    setError(null);
+    setSuccessMessage(null);
+    setDistanceMessage(null);
+    setRouteEstimateMeta(null);
+    setLastEstimatedRouteKey("");
+    setManualQuoteOverride(false);
+    setShipmentStep(1);
+    setEditorOpen(true);
   }, [shipments]);
 
   const handleDeleteShipment = useCallback(
@@ -2477,7 +2648,7 @@ export default function ShipmentsPage() {
   ]);
 
   const generateQuotePdfFromShipment = useCallback((shipment: ShipmentWithDriver, variant: QuotePdfVariant) => {
-    const normalized = normalizeShipment(shipment);
+    const normalized = normalizeShipmentForPage(shipment);
     const route = buildNormalizedShipmentRouteLabel(normalized);
     openQuotePdfWindow(
       {
@@ -2532,7 +2703,7 @@ export default function ShipmentsPage() {
         marginPercent: normalized.marginPercent,
         markupOnCostPercent: normalized.markupPercent,
         status: normalized.status,
-        notes: normalized.notes
+        notes: cleanStoredShipmentNotes(normalized.notes)
       },
       variant,
       language
@@ -2759,6 +2930,17 @@ export default function ShipmentsPage() {
                 additional_dropoffs: additionalDropoffLocations
               }),
               cargoDetails.length ? `${labels.cargoType}: ${cargoDetails.join("; ")}` : "",
+              `Commercial data: ${JSON.stringify({
+                fuelEfficiencyKmPerLitre: kmPerLitreValue,
+                fuelPricePerLitre: fuelPriceValue,
+                fuelCost: estimatedFuelCost,
+                driverCost: parseNumber(form.driver_allowance) ?? 0,
+                tolls: parseNumber(form.toll_estimate) ?? 0,
+                parkingCost,
+                operatingCost: totalEstimatedJobCost,
+                quotePrice: finalQuotePrice,
+                recommendedQuote: recommendedQuotePrice
+              })}`,
               `${labels.startRoute}: ${routeStartLabel}`,
               `${labels.totalTravelTime}: ${durationValue}`,
               `${labels.parking}: ${parkingCost}`,
@@ -2772,7 +2954,7 @@ export default function ShipmentsPage() {
           cost_estimation_note: routeEstimateStale ? labels.routeChanged : form.cost_estimation_note
         });
 
-        if (!form.id && form.auto_create_trip_journey) {
+        if (!form.id && form.auto_create_trip_journey && ["Approved", "In Progress", "Completed"].includes(statusToSave)) {
           await saveTripJourney({
             booking_id: savedShipment.id,
             booking_reference: savedShipment.job_reference ?? form.job_reference.trim(),
@@ -2862,7 +3044,7 @@ export default function ShipmentsPage() {
   const filteredShipments = useMemo(() => {
     const searchFiltered = filterShipments(shipments, deferredSearchTerm);
     return searchFiltered.filter((shipment) => {
-      const normalized = normalizeShipment(shipment);
+      const normalized = normalizeShipmentForPage(shipment);
       const shipmentDateValue = toDateInputValue(normalized.shipmentDate);
       if (selectedDriverFilter && String(shipment.driver_id ?? "") !== selectedDriverFilter) {
         return false;
@@ -2905,7 +3087,7 @@ export default function ShipmentsPage() {
         new Set(
           [
             ...vehicles.map((vehicle) => normalizeVehicleRegistration(vehicle.vehicle_reg)),
-            ...shipments.map((shipment) => normalizeVehicleRegistration(normalizeShipment(shipment).vehicleReg))
+            ...shipments.map((shipment) => normalizeVehicleRegistration(normalizeShipmentForPage(shipment).vehicleReg))
           ]
             .filter(Boolean)
         )
@@ -2917,7 +3099,7 @@ export default function ShipmentsPage() {
     const todayKey = today();
     const activeJobs = filteredShipments.filter(
       (shipment) => {
-        const normalized = normalizeShipment(shipment);
+        const normalized = normalizeShipmentForPage(shipment);
         const shipmentDateValue = toDateInputValue(normalized.shipmentDate);
         return (
           shipmentDateValue === todayKey ||
@@ -2931,11 +3113,11 @@ export default function ShipmentsPage() {
     return {
       totalJobs: filteredShipments.length,
       totalDistance: filteredShipments.reduce(
-        (sum, shipment) => sum + Number(normalizeShipment(shipment).distanceKm ?? 0),
+        (sum, shipment) => sum + Number(normalizeShipmentForPage(shipment).distanceKm ?? 0),
         0
       ),
       estimatedFuelCost: filteredShipments.reduce(
-        (sum, shipment) => sum + Number(normalizeShipment(shipment).fuelCost ?? 0),
+        (sum, shipment) => sum + Number(normalizeShipmentForPage(shipment).fuelCost ?? 0),
         0
       ),
       estimatedJobCost: filteredShipments.reduce(
@@ -2952,12 +3134,12 @@ export default function ShipmentsPage() {
       ),
       averageMargin:
         filteredShipments.reduce((sum, shipment) => {
-          const margin = normalizeShipment(shipment).marginPercent;
+          const margin = normalizeShipmentForPage(shipment).marginPercent;
           return margin != null ? sum + margin : sum;
         }, 0) /
         Math.max(
           1,
-          filteredShipments.filter((shipment) => normalizeShipment(shipment).marginPercent != null)
+          filteredShipments.filter((shipment) => normalizeShipmentForPage(shipment).marginPercent != null)
             .length
         ),
       activeJobs
@@ -2972,18 +3154,6 @@ export default function ShipmentsPage() {
         value: formatNumber(summary.totalJobs, language),
         helper: hasJobs ? labels.summaryJobsHelper : labels.summaryHelper,
         icon: <Package className="h-4.5 w-4.5" />
-      },
-      {
-        label: labels.totalDistance,
-        value: `${formatNumber(summary.totalDistance, language, 1)} km`,
-        helper: hasJobs ? labels.summaryDistanceHelper : labels.summaryHelper,
-        icon: <MapPinned className="h-4.5 w-4.5" />
-      },
-      {
-        label: labels.totalOperatingCost,
-        value: formatCurrency(summary.estimatedJobCost, language),
-        helper: hasJobs ? labels.summaryOperatingCostHelper : labels.summaryHelper,
-        icon: <Fuel className="h-4.5 w-4.5" />
       },
       {
         label: labels.totalQuoteValue,
@@ -3014,7 +3184,7 @@ export default function ShipmentsPage() {
   const pagedShipmentRows = useMemo(
     () =>
       pagedShipments.map((shipment) => {
-        const normalized = normalizeShipment(shipment);
+        const normalized = normalizeShipmentForPage(shipment);
         return {
           shipment,
           normalized,
@@ -3042,7 +3212,7 @@ export default function ShipmentsPage() {
       labels.export.headers.date
     ];
     const rows = filteredShipments.map((shipment) => {
-      const normalized = normalizeShipment(shipment);
+      const normalized = normalizeShipmentForPage(shipment);
       return [
         normalized.jobReference,
         normalized.customerName,
@@ -3082,11 +3252,33 @@ export default function ShipmentsPage() {
         onStatusChange={handleGoogleMapsStatusChange}
       />
 
-      <div className="mb-6 hidden md:block">
-        <Header title={labels.title} description={labels.description} />
-      </div>
+      <section className="mb-4 rounded-[1.35rem] border border-slate-200/90 bg-white px-5 py-5 shadow-[0_12px_32px_rgba(15,23,42,0.05)] sm:px-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-violet-700">
+              EXPERT EXPRESS SENDER CO., LTD.
+            </p>
+            <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-950">
+              {labels.title}
+            </h1>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
+              {language === "th"
+                ? "จัดการใบเสนอราคา งานขนส่ง การมอบหมาย และข้อมูลทางการเงินจากหน้าหลักเดียว"
+                : "Manage quotations, transport jobs, assignments and commercial information from one place."}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={openNewShipment}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 text-sm font-black text-white shadow-[0_10px_24px_rgba(124,58,237,0.22)] transition hover:bg-violet-700"
+          >
+            <Plus className="h-4 w-4" />
+            {language === "th" ? "เพิ่มงานขนส่ง" : "Add Shipment"}
+          </button>
+        </div>
+      </section>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {statCards.map((card) => (
           <StatCard
             key={card.label}
@@ -3098,22 +3290,252 @@ export default function ShipmentsPage() {
         ))}
       </div>
 
-      <section ref={formRef} className="mt-4 surface-card overflow-hidden p-4 sm:p-5">
-        <div className="absolute inset-x-0 top-0 h-28 bg-[linear-gradient(135deg,rgba(15,118,110,0.08),rgba(249,115,22,0.04)_55%,transparent)]" />
+      {editorOpen ? (
+        <div className="fixed inset-0 z-[80] bg-slate-950/35 backdrop-blur-[2px]">
+          <div className="absolute inset-y-0 right-0 w-full overflow-y-auto bg-slate-50 shadow-[-24px_0_70px_rgba(15,23,42,0.20)] xl:w-[94vw]">
+      <section ref={formRef} className="relative min-h-full bg-slate-50 p-4 sm:p-6 lg:p-7">
+        <div className="absolute inset-x-0 top-0 h-28 bg-[linear-gradient(135deg,rgba(109,40,217,0.08),rgba(139,92,246,0.035)_55%,transparent)]" />
         <div className="relative">
-          <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <h3 className="section-title">{form.id ? labels.updateJob : labels.createJob}</h3>
-              <p className="section-subtitle">{labels.routeDescription}</p>
+              <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-violet-700">
+                {form.id
+                  ? (language === "th" ? "แก้ไขงานขนส่ง" : "Edit Shipment")
+                  : (language === "th" ? "งานขนส่งใหม่" : "New Shipment")}
+              </p>
+              <h3 className="mt-1 text-2xl font-black tracking-tight text-slate-950">
+                {form.id ? labels.updateJob : labels.createJob}
+              </h3>
+              <p className="section-subtitle">
+                {language === "th"
+                  ? "สร้างงานขนส่งทีละขั้น: รายละเอียด → เส้นทาง → ราคา → ตรวจสอบ"
+                  : "Create the shipment step by step: details → route → pricing → review."}
+              </p>
             </div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-teal-100 bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-700">
-              <Truck className="h-4 w-4" />
-              {formatDate(form.shipment_date, language)}
+            <div className="flex items-center gap-2">
+              <div className="inline-flex items-center gap-2 rounded-full border border-violet-100 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700">
+                <Truck className="h-4 w-4" />
+                {formatDate(form.shipment_date, language)}
+              </div>
+              <button
+                type="button"
+                onClick={resetForm}
+                className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700"
+                aria-label={language === "th" ? "ปิด" : "Close"}
+                title={language === "th" ? "ปิด" : "Close"}
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
           </div>
 
+          <div className="mb-5 rounded-2xl border border-violet-100 bg-white p-3 shadow-[0_8px_24px_rgba(76,29,149,0.05)]">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[
+                [1, language === "th" ? "รายละเอียด" : "Details"],
+                [2, language === "th" ? "เส้นทาง" : "Route"],
+                [3, language === "th" ? "ราคา" : "Pricing"],
+                [4, language === "th" ? "ตรวจสอบ" : "Review"]
+              ].map(([step, label]) => {
+                const stepNumber = Number(step) as 1 | 2 | 3 | 4;
+                const active = shipmentStep === stepNumber;
+                const complete = shipmentStep > stepNumber;
+                return (
+                  <button
+                    key={stepNumber}
+                    type="button"
+                    onClick={() => setShipmentStep(stepNumber)}
+                    className={`rounded-xl border px-3 py-2 text-left transition ${
+                      active
+                        ? "border-violet-300 bg-violet-50"
+                        : complete
+                          ? "border-emerald-200 bg-emerald-50/70"
+                          : "border-slate-200 bg-slate-50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-black ${
+                        active
+                          ? "bg-violet-600 text-white"
+                          : complete
+                            ? "bg-emerald-500 text-white"
+                            : "bg-white text-slate-500"
+                      }`}>
+                        {complete ? "✓" : stepNumber}
+                      </span>
+                      <span className={`text-[11px] font-black uppercase tracking-[0.08em] ${
+                        active ? "text-violet-900" : complete ? "text-emerald-800" : "text-slate-500"
+                      }`}>
+                        {label}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <form onSubmit={handleSubmit} className="space-y-3">
-            <SectionCard title={labels.routeTitle} description={labels.routeDescription}>
+            {shipmentStep === 1 ? (
+              <div className="space-y-3">
+                <SectionCard
+                  title={language === "th" ? "1. รายละเอียดงานขนส่ง" : "1. Shipment Details"}
+                  description={language === "th" ? "เริ่มจากวันที่ เลขงาน ลูกค้า และรายละเอียดสินค้า" : "Start with the shipment date, job reference, customer and cargo details."}
+                >
+                  <div className="grid gap-3 lg:grid-cols-3">
+                    <div className="form-field">
+                      <label className="form-label form-label-required">{labels.shipmentDate}</label>
+                      <input
+                        type="date"
+                        value={form.shipment_date}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            shipment_date: event.target.value
+                          }))
+                        }
+                        className="form-input bg-white"
+                        required
+                      />
+                      <p className="form-helper">
+                        {labels.shipmentDateHelper}
+                      </p>
+                    </div>
+                    <div className="form-field">
+                      <label className="form-label form-label-required">{labels.shipmentRef}</label>
+                      <input
+                        value={form.job_reference}
+                        onChange={(event) =>
+                          setForm((current) => ({ ...current, job_reference: event.target.value }))
+                        }
+                        className="form-input bg-white"
+                        required
+                      />
+                    </div>
+                    <div className="form-field">
+                      <label className="form-label">{labels.customer}</label>
+                      <input
+                        value={form.customer_name}
+                        onChange={(event) =>
+                          setForm((current) => ({ ...current, customer_name: event.target.value }))
+                        }
+                        list="shipment-customer-memory"
+                        className="form-input bg-white"
+                      />
+                      <datalist id="shipment-customer-memory">
+                        {customerOptions.map((customer) => (
+                          <option key={customer} value={customer} />
+                        ))}
+                      </datalist>
+                      {recentCustomerQuotes.length ? (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {recentCustomerQuotes.map((quote) => (
+                            <span
+                              key={quote.ref}
+                              className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-600"
+                            >
+                              {quote.ref}:{" "}
+                              {quote.quote != null ? formatCurrency(quote.quote, language) : EMPTY_VALUE}
+                              {quote.margin != null
+                                ? ` / ${formatNumber(quote.margin, language, 1)}%`
+                                : ""}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="form-field">
+                      <label className="form-label">{labels.goods}</label>
+                      <textarea
+                        value={form.goods_description}
+                        onChange={(event) =>
+                          setForm((current) => ({ ...current, goods_description: event.target.value }))
+                        }
+                        rows={3}
+                        className="form-textarea bg-white"
+                      />
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="form-field">
+                      <label className="form-label">{labels.weight}</label>
+                        <input
+                          value={form.weight}
+                          onChange={(event) =>
+                            setForm((current) => ({ ...current, weight: event.target.value }))
+                          }
+                          className="form-input bg-white"
+                          inputMode="decimal"
+                        />
+                      </div>
+                      <div className="form-field">
+                      <label className="form-label">{labels.pallets}</label>
+                        <input
+                          value={form.pallets}
+                          onChange={(event) =>
+                            setForm((current) => ({ ...current, pallets: event.target.value }))
+                          }
+                          className="form-input bg-white"
+                          inputMode="numeric"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="form-field">
+                      <label className="form-label">{labels.width}</label>
+                        <input
+                          value={form.width}
+                          onChange={(event) =>
+                            setForm((current) => ({ ...current, width: event.target.value }))
+                          }
+                          className="form-input bg-white"
+                          inputMode="decimal"
+                        />
+                      </div>
+                      <div className="form-field">
+                      <label className="form-label">{labels.length}</label>
+                        <input
+                          value={form.length}
+                          onChange={(event) =>
+                            setForm((current) => ({ ...current, length: event.target.value }))
+                          }
+                          className="form-input bg-white"
+                          inputMode="decimal"
+                        />
+                      </div>
+                      <div className="form-field">
+                      <label className="form-label">{labels.height}</label>
+                        <input
+                          value={form.height}
+                          onChange={(event) =>
+                            setForm((current) => ({ ...current, height: event.target.value }))
+                          }
+                          className="form-input bg-white"
+                          inputMode="decimal"
+                        />
+                      </div>
+                    </div>
+                    <div className="form-field">
+                      <label className="form-label">{labels.cargoType}</label>
+                      <input
+                        value={form.cargo_type}
+                        onChange={(event) =>
+                          setForm((current) => ({ ...current, cargo_type: event.target.value }))
+                        }
+                        className="form-input bg-white"
+                      />
+                    </div>
+                  </div>
+                </SectionCard>
+                <div className="flex justify-end">
+                  <button type="button" onClick={() => setShipmentStep(2)} className="btn-primary min-w-[190px]">
+                    {language === "th" ? "ถัดไป: เส้นทาง →" : "Continue to Route →"}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {shipmentStep === 2 ? (
+              <div className="space-y-3">
+            <SectionCard title={language === "th" ? "2. เส้นทางและระยะทาง" : "2. Route & Distance"} description={labels.routeDescription}>
               <div className="grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
                 <div className="space-y-2">
                   <label className="flex items-start gap-2 rounded-[0.9rem] border border-brand-100 bg-brand-50/70 px-3 py-2 text-sm font-semibold text-slate-800">
@@ -3177,14 +3599,14 @@ export default function ShipmentsPage() {
                   onConfigurationChange={handleGoogleMapsConfigurationChange}
                 />
                 {form.start_from_depot ? (
-                  <div className="flex flex-col gap-2 rounded-[1rem] border border-emerald-100 bg-emerald-50/70 p-3 text-xs text-slate-600 lg:col-span-3">
-                    <span className="block font-semibold text-emerald-800">{DEFAULT_DEPOT_LOCATION.label}</span>
-                    <span className="block">{DEFAULT_DEPOT_LOCATION.formatted_address}</span>
+                  <div className="flex flex-wrap items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-xs text-slate-600 lg:col-span-3">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                    <span className="font-semibold text-emerald-800">{DEFAULT_DEPOT_LOCATION.label}</span>
+                    <span className="text-slate-400">•</span>
+                    <span className="truncate">{DEFAULT_DEPOT_LOCATION.formatted_address}</span>
                     {!DEPOT_COORDINATES_CONFIGURED ? (
-                      <span className="block text-amber-700">{labels.depotMissing}</span>
-                    ) : (
-                      <span className="block text-emerald-700">Verified by Google and used as the route start.</span>
-                    )}
+                      <span className="font-semibold text-amber-700">{labels.depotMissing}</span>
+                    ) : null}
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2 rounded-[1rem] border border-slate-200 bg-white/80 p-3 text-xs text-slate-500 lg:col-span-3 lg:flex-row lg:items-center lg:justify-between">
@@ -3194,25 +3616,6 @@ export default function ShipmentsPage() {
                     </button>
                   </div>
                 )}
-                {showGoogleMapsHealth ? (
-                  <div className="rounded-[1rem] border border-amber-200 bg-amber-50/80 p-3 text-xs text-amber-900 lg:col-span-3">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                      <p className="font-semibold">
-                        {googleMapsStatus?.errorMessage ??
-                          googleMapsConfigMessage ??
-                          "Google Maps configuration status"}
-                      </p>
-                      <button type="button" onClick={retryGoogleMapsLoad} className="table-action-secondary bg-white">
-                        Retry Google Maps
-                      </button>
-                    </div>
-                    <div className="mt-2 grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
-                      {googleMapsHealthLines.map((line) => (
-                        <span key={line}>{line}</span>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
                 <div className="form-field justify-end lg:col-span-3">
                   <label className="form-label opacity-0">{labels.estimateRoute}</label>
                   <button
@@ -3405,7 +3808,7 @@ export default function ShipmentsPage() {
                   ) : null}
                 </div>
 
-                <div className="mt-3 grid gap-3 lg:grid-cols-3">
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <div className="rounded-[1.15rem] border border-teal-100 bg-white p-4 shadow-[0_12px_28px_rgba(15,118,110,0.08)]">
                     <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-teal-700">{labels.totalDistance}</p>
                     <p className="mt-1.5 text-2xl font-semibold tracking-normal text-slate-950">
@@ -3420,14 +3823,6 @@ export default function ShipmentsPage() {
                         language,
                         labels.durationUnavailable
                       )}
-                    </p>
-                  </div>
-                  <div className="rounded-[1.15rem] border border-amber-100 bg-white p-4 shadow-[0_12px_28px_rgba(245,158,11,0.1)]">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-amber-700">{labels.estimatedFuelCost}</p>
-                    <p className="mt-1.5 text-2xl font-semibold tracking-normal text-slate-950">
-                      {estimatedFuelCost != null
-                        ? formatCurrency(estimatedFuelCost, language)
-                        : labels.costUnavailable}
                     </p>
                   </div>
                 </div>
@@ -3488,30 +3883,37 @@ export default function ShipmentsPage() {
                         {language === "th" ? "เปิดใน Google Maps" : "Open in Google Maps"}
                       </a>
                     </div>
-                    <div className="overflow-hidden rounded-[1.15rem] border border-slate-200 bg-slate-100">
-                      {routeEstimateMeta.embedUrl ? (
-                        <iframe
-                          title={language === "th" ? "ตัวอย่างแผนที่เส้นทาง" : "Route map preview"}
-                          src={routeEstimateMeta.embedUrl}
-                          className="h-[260px] w-full border-0"
-                          loading="lazy"
-                          referrerPolicy="no-referrer-when-downgrade"
-                        />
-                      ) : (
-                        <div className="flex min-h-[220px] items-center justify-center p-4 text-center text-sm text-slate-500">
+                    <div className="flex min-h-[220px] flex-col items-center justify-center gap-3 rounded-[1.15rem] border border-slate-200 bg-slate-50 p-5 text-center">
+                      <MapPinned className="h-7 w-7 text-violet-500" />
+                      <div>
+                        <p className="text-sm font-black text-slate-800">
+                          {language === "th" ? "ดูเส้นทางใน Google Maps" : "View route in Google Maps"}
+                        </p>
+                        <p className="mt-1 max-w-sm text-xs leading-5 text-slate-500">
                           {language === "th"
-                            ? "ตั้งค่า NEXT_PUBLIC_GOOGLE_MAPS_API_KEY เพื่อดูตัวอย่างแผนที่"
-                            : "Set NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to show the map preview."}
-                        </div>
-                      )}
+                            ? "ใช้ปุ่ม Open in Google Maps ด้านซ้ายเพื่อดูแผนที่และเส้นทางแบบเต็ม"
+                            : "Use Open in Google Maps on the left to view the full map and route."}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 ) : null}
               </div>
             </SectionCard>
+                <div className="flex items-center justify-between">
+                  <button type="button" onClick={() => setShipmentStep(1)} className="btn-secondary">
+                    {language === "th" ? "← ย้อนกลับ" : "← Back"}
+                  </button>
+                  <button type="button" onClick={() => setShipmentStep(3)} className="btn-primary min-w-[190px]">
+                    {language === "th" ? "ถัดไป: ราคา →" : "Continue to Pricing →"}
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
-            <div className="grid gap-3 xl:grid-cols-[1.15fr_0.85fr]">
-              <SectionCard title={labels.costTitle} description={labels.costDescription}>
+            {shipmentStep === 3 ? (
+              <div className="space-y-3">
+              <SectionCard title={language === "th" ? "3. ราคาและต้นทุน" : "3. Pricing & Cost"} description={labels.costDescription}>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="form-field">
                     <label className="form-label">{labels.fuelEfficiency}</label>
@@ -3593,146 +3995,53 @@ export default function ShipmentsPage() {
                   {labels.fuelAutoFillHelper}
                 </p>
 
-                <div className="mt-3 rounded-[1.15rem] border border-slate-200 bg-slate-50/80 p-3.5">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
-                    {labels.fuelCalculationBasis}
-                  </p>
-                  <p className="mt-2 text-sm font-semibold text-slate-900">{fuelCalculationBasis}</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {labels.fuelCalculationExplanation}
-                  </p>
-                </div>
-
-                <div className="mt-3 grid gap-3 sm:grid-cols-3 xl:grid-cols-4">
-                  <div className="subtle-panel p-3.5">
-                    <p className="metric-label">{labels.fuelEfficiency}</p>
-                    <p className="mt-2 text-[1.2rem] font-semibold text-slate-950">
-                      {kmPerLitre != null && kmPerLitre > 0
-                        ? `${formatNumber(kmPerLitre, language, 2)} KM/L`
-                        : labels.validation.enterFuelEfficiencyToCalculate}
-                    </p>
-                  </div>
-                  <div className="subtle-panel p-3.5">
-                    <p className="metric-label">{labels.fuelLitres}</p>
-                    <p className="mt-2 text-[1.2rem] font-semibold text-slate-950">
-                      {estimatedFuelLitres != null
-                        ? `${formatNumber(estimatedFuelLitres, language, 2)} L`
-                        : labels.validation.enterFuelEfficiencyToCalculate}
-                    </p>
-                  </div>
-                  <div className="subtle-panel p-3.5">
-                    <p className="metric-label">{labels.fuelCost}</p>
-                    <p className="mt-2 text-[1.2rem] font-semibold text-slate-950">
-                      {estimatedFuelCost != null
-                        ? formatCurrency(estimatedFuelCost, language)
-                        : labels.validation.enterFuelEfficiencyToCalculate}
-                    </p>
-                  </div>
-                  <div className="rounded-[1.2rem] border border-teal-100 bg-[linear-gradient(135deg,#ecfeff_0%,#ffffff_45%,#fff7ed_100%)] p-3.5">
-                    <p className="metric-label">{labels.totalCost}</p>
-                    <p className="mt-2 text-[1.45rem] font-semibold tracking-[-0.04em] text-slate-950">
-                      {totalEstimatedJobCost > 0
-                        ? formatCurrency(totalEstimatedJobCost, language)
-                        : labels.costUnavailable}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-3 rounded-[1.35rem] border border-slate-900/10 bg-slate-950 p-3.5 text-white shadow-[0_22px_48px_rgba(15,23,42,0.18)] transition duration-300 hover:-translate-y-0.5 sm:p-4 xl:sticky xl:top-4">
-                  <div className="flex items-center justify-between gap-3">
+                <div className="mt-4 rounded-[1.25rem] border border-violet-100 bg-[linear-gradient(135deg,#faf9ff_0%,#ffffff_56%,#f8fafc_100%)] p-4 shadow-[0_12px_28px_rgba(76,29,149,0.06)]">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-300">
-                        {labels.operatingCostSummary}
+                      <p className="text-[11px] font-black uppercase tracking-[0.14em] text-violet-700">
+                        {language === "th" ? "สรุปราคา" : "Commercial Summary"}
                       </p>
-                      <p className="mt-1 text-sm text-slate-300">
-                        {labels.operatingCostSummaryDescription}
+                      <p className="mt-1 text-sm text-slate-500">
+                        {language === "th"
+                          ? "ต้นทุนจริง ราคาที่แนะนำ ราคาลูกค้า และกำไรในมุมมองเดียว"
+                          : "Operating cost, recommended price, customer quote and profit in one view."}
                       </p>
                     </div>
-                  </div>
-
-                  <div className="mt-4 grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-                    {[
-                      { label: labels.totalDistance, value: estimatedDistanceKm, valueClass: "text-white", type: "distance" },
-                      { label: labels.fuelEfficiency, value: kmPerLitre, valueClass: "text-sky-100", type: "efficiency" },
-                      { label: labels.fuelPrice, value: fuelPricePerLitre, valueClass: "text-amber-200", type: "money" },
-                      { label: labels.fuelLitres, value: estimatedFuelLitres, valueClass: "text-sky-100", type: "litres" },
-                      { label: labels.totalTravelTime, value: estimatedDurationMinutes, valueClass: "text-white", type: "duration" },
-                      { label: labels.fuelCost, value: estimatedFuelCost, valueClass: "text-amber-200", type: "money" },
-                      { label: labels.totalCost, value: totalEstimatedJobCost > 0 ? totalEstimatedJobCost : null, valueClass: "text-white", type: "money" },
-                      { label: labels.systemRecommendedQuote, value: recommendedQuotePrice > 0 ? recommendedQuotePrice : null, valueClass: "text-slate-100", type: "money" },
-                      { label: labels.finalCustomerQuote, value: finalQuotePrice > 0 ? finalQuotePrice : null, valueClass: "text-emerald-200", type: "money" },
-                      {
-                        label: labels.expectedProfit,
-                        value: expectedProfit,
-                        valueClass: expectedProfit != null && expectedProfit < 0 ? "text-rose-200" : "text-emerald-200",
-                        type: "money"
-                      },
-                      { label: labels.expectedMargin, value: expectedMarginPercent, valueClass: expectedMarginPercent != null && expectedMarginPercent < 0 ? "text-rose-100" : "text-emerald-100", type: "percent" },
-                      { label: labels.markup, value: markupOnCostPercent, valueClass: markupOnCostPercent != null && markupOnCostPercent < 0 ? "text-rose-100" : "text-emerald-100", type: "percent" }
-                    ].map(({ label, value, valueClass, type }) => {
-                      const numericValue = typeof value === "number" ? value : null;
-
-                      return (
-                        <div key={label} className="rounded-[1rem] border border-white/10 bg-white/[0.06] p-3">
-                          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
-                            {label}
-                          </p>
-                          <p className={`mt-1.5 truncate text-xl font-semibold tracking-normal ${valueClass}`}>
-                            {type === "distance"
-                              ? formatDistance(numericValue, language, labels.distanceUnavailable)
-                              : type === "efficiency"
-                                ? numericValue != null && numericValue > 0
-                                  ? `${formatNumber(numericValue, language, 2)} KM/L`
-                                  : labels.validation.enterFuelEfficiencyToCalculate
-                              : type === "litres"
-                                ? numericValue != null
-                                  ? `${formatNumber(numericValue, language, 2)} L`
-                                  : labels.validation.enterFuelEfficiencyToCalculate
-                              : type === "duration"
-                                ? formatDuration(numericValue, language, labels.durationUnavailable)
-                                : type === "percent"
-                                  ? numericValue != null
-                                    ? `${formatNumber(numericValue, language, 1)}%`
-                                    : EMPTY_VALUE
-                                : numericValue != null
-                                  ? formatCurrency(numericValue, language)
-                                  : EMPTY_VALUE}
-                          </p>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <div className="mt-4 rounded-[1rem] border border-white/10 bg-white/[0.04] p-3">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
-                      {labels.fuelCalculationBasis}
+                    <p className="text-xs font-semibold text-slate-500">
+                      {fuelCalculationBasis}
                     </p>
-                    <p className="mt-2 text-sm font-semibold text-slate-100">{fuelCalculationBasis}</p>
                   </div>
 
-                  <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
-                    <div className="rounded-[1rem] border border-white/10 bg-white/[0.04] p-3">
-                      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
-                        {labels.systemRecommendedQuote}
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                      <p className="metric-label">{labels.totalCost}</p>
+                      <p className="mt-2 text-2xl font-black text-slate-950">
+                        {totalEstimatedJobCost > 0 ? formatCurrency(totalEstimatedJobCost, language) : labels.costUnavailable}
                       </p>
-                      <p className="mt-2 text-xl font-semibold text-slate-100">
+                      <p className="mt-1 text-[10px] font-medium text-slate-400">
+                        {estimatedFuelCost != null ? `${labels.fuelCost}: ${formatCurrency(estimatedFuelCost, language)}` : labels.validation.enterFuelEfficiencyToCalculate}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-violet-100 bg-violet-50/45 p-4">
+                      <p className="metric-label">{language === "th" ? "ราคาที่แนะนำสำหรับลูกค้า" : "Recommended Customer Quote"}</p>
+                      <p className="mt-2 text-2xl font-black text-violet-900">
                         {formatCurrency(recommendedQuotePrice, language)}
                       </p>
+                      <p className="mt-1 text-[10px] font-medium text-violet-500">
+                        {language === "th" ? "คำนวณจากต้นทุนและเปอร์เซ็นต์เพิ่มราคา" : "Calculated from operating cost and markup"}
+                      </p>
                     </div>
-                    <div className="rounded-[1rem] border border-emerald-300/30 bg-emerald-400/10 p-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <label className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-100">
-                          {labels.finalQuoteSentToCustomer}
-                        </label>
+
+                    <div className="rounded-2xl border border-emerald-100 bg-emerald-50/45 p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="metric-label">{labels.finalQuoteSentToCustomer}</label>
                         {isManualQuoteOverride ? (
-                          <span className="rounded-full border border-amber-200/40 bg-amber-300/15 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-100">
+                          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em] text-amber-700">
                             {labels.manualOverride}
                           </span>
                         ) : null}
                       </div>
-                      <p className="mt-2 text-xs font-semibold text-emerald-50/80">
-                        {labels.systemRecommendedQuote}: {formatCurrency(recommendedQuotePrice, language)}
-                      </p>
                       <input
                         value={form.final_quote_price}
                         onChange={(event) => {
@@ -3744,7 +4053,7 @@ export default function ShipmentsPage() {
                           setForm((current) => ({ ...current, final_quote_price: nextValue }));
                         }}
                         placeholder={formatInputNumber(recommendedQuotePrice, 2)}
-                        className="mt-2 min-h-[48px] rounded-[0.95rem] border-white/10 bg-white text-lg font-semibold text-slate-950"
+                        className="mt-2 min-h-[48px] w-full rounded-xl border border-emerald-200 bg-white px-3 text-xl font-black text-slate-950 outline-none focus:border-violet-300 focus:ring-2 focus:ring-violet-100"
                         inputMode="decimal"
                       />
                       {isManualQuoteOverride ? (
@@ -3757,204 +4066,116 @@ export default function ShipmentsPage() {
                               final_quote_price: recommendedQuotePrice > 0 ? formatInputNumber(recommendedQuotePrice, 2) : ""
                             }));
                           }}
-                          className="mt-2 min-h-8 rounded-full border border-white/20 px-3 py-1 text-xs font-bold text-white transition hover:bg-white/10"
+                          className="mt-2 text-[10px] font-bold text-violet-700 hover:text-violet-900"
                         >
                           {labels.resetToRecommended}
                         </button>
                       ) : null}
-                      {finalQuoteBelowCost ? (
-                        <p className="mt-2 rounded-lg border border-rose-300/30 bg-rose-400/15 px-2 py-1.5 text-xs font-bold text-rose-100">
-                          {labels.finalQuoteBelowCost}
-                        </p>
-                      ) : null}
                     </div>
-                  </div>
-                </div>
-              </SectionCard>
 
-              <div className="space-y-3">
-                <SectionCard
-                  title={labels.jobDetailsTitle}
-                  description={labels.jobDetailsDescription}
-                >
-                  <div className="grid gap-3">
-                    <div className="form-field">
-                      <label className="form-label form-label-required">{labels.shipmentDate}</label>
-                      <input
-                        type="date"
-                        value={form.shipment_date}
-                        onChange={(event) =>
-                          setForm((current) => ({
-                            ...current,
-                            shipment_date: event.target.value
-                          }))
-                        }
-                        className="form-input bg-white"
-                        required
-                      />
-                      <p className="form-helper">
-                        {labels.shipmentDateHelper}
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                      <p className="metric-label">{labels.expectedProfit}</p>
+                      <p className={`mt-2 text-xl font-black ${
+                        displayExpectedProfit != null && displayExpectedProfit < 0
+                          ? "text-rose-700"
+                          : displayExpectedProfit != null && displayExpectedProfit > 0
+                            ? "text-emerald-700"
+                            : "text-slate-950"
+                      }`}>
+                        {displayExpectedProfit != null ? formatCurrency(displayExpectedProfit, language) : EMPTY_VALUE}
                       </p>
                     </div>
-                    <div className="form-field">
-                      <label className="form-label form-label-required">{labels.shipmentRef}</label>
-                      <input
-                        value={form.job_reference}
-                        onChange={(event) =>
-                          setForm((current) => ({ ...current, job_reference: event.target.value }))
-                        }
-                        className="form-input bg-white"
-                        required
-                      />
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                      <p className="metric-label">{labels.expectedMargin}</p>
+                      <p className={`mt-2 text-xl font-black ${displayExpectedMargin != null && displayExpectedMargin < 0 ? "text-rose-700" : "text-slate-950"}`}>
+                        {displayExpectedMargin != null ? `${formatNumber(displayExpectedMargin, language, 1)}%` : EMPTY_VALUE}
+                      </p>
                     </div>
-                    <div className="form-field">
-                      <label className="form-label">{labels.customer}</label>
-                      <input
-                        value={form.customer_name}
-                        onChange={(event) =>
-                          setForm((current) => ({ ...current, customer_name: event.target.value }))
-                        }
-                        list="shipment-customer-memory"
-                        className="form-input bg-white"
-                      />
-                      <datalist id="shipment-customer-memory">
-                        {customerOptions.map((customer) => (
-                          <option key={customer} value={customer} />
-                        ))}
-                      </datalist>
-                      {recentCustomerQuotes.length ? (
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {recentCustomerQuotes.map((quote) => (
-                            <span
-                              key={quote.ref}
-                              className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-600"
-                            >
-                              {quote.ref}:{" "}
-                              {quote.quote != null ? formatCurrency(quote.quote, language) : EMPTY_VALUE}
-                              {quote.margin != null
-                                ? ` / ${formatNumber(quote.margin, language, 1)}%`
-                                : ""}
-                            </span>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                    <div className="form-field">
-                      <label className="form-label">{labels.goods}</label>
-                      <textarea
-                        value={form.goods_description}
-                        onChange={(event) =>
-                          setForm((current) => ({ ...current, goods_description: event.target.value }))
-                        }
-                        rows={3}
-                        className="form-textarea bg-white"
-                      />
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="form-field">
-                      <label className="form-label">{labels.weight}</label>
-                        <input
-                          value={form.weight}
-                          onChange={(event) =>
-                            setForm((current) => ({ ...current, weight: event.target.value }))
-                          }
-                          className="form-input bg-white"
-                          inputMode="decimal"
-                        />
-                      </div>
-                      <div className="form-field">
-                      <label className="form-label">{labels.pallets}</label>
-                        <input
-                          value={form.pallets}
-                          onChange={(event) =>
-                            setForm((current) => ({ ...current, pallets: event.target.value }))
-                          }
-                          className="form-input bg-white"
-                          inputMode="numeric"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      <div className="form-field">
-                      <label className="form-label">{labels.width}</label>
-                        <input
-                          value={form.width}
-                          onChange={(event) =>
-                            setForm((current) => ({ ...current, width: event.target.value }))
-                          }
-                          className="form-input bg-white"
-                          inputMode="decimal"
-                        />
-                      </div>
-                      <div className="form-field">
-                      <label className="form-label">{labels.length}</label>
-                        <input
-                          value={form.length}
-                          onChange={(event) =>
-                            setForm((current) => ({ ...current, length: event.target.value }))
-                          }
-                          className="form-input bg-white"
-                          inputMode="decimal"
-                        />
-                      </div>
-                      <div className="form-field">
-                      <label className="form-label">{labels.height}</label>
-                        <input
-                          value={form.height}
-                          onChange={(event) =>
-                            setForm((current) => ({ ...current, height: event.target.value }))
-                          }
-                          className="form-input bg-white"
-                          inputMode="decimal"
-                        />
-                      </div>
-                    </div>
-                    <div className="form-field">
-                      <label className="form-label">{labels.cargoType}</label>
-                      <input
-                        value={form.cargo_type}
-                        onChange={(event) =>
-                          setForm((current) => ({ ...current, cargo_type: event.target.value }))
-                        }
-                        className="form-input bg-white"
-                      />
-                    </div>
-                    <div className="form-field">
-                      <label className="form-label">{labels.status}</label>
-                      <select
-                        value={form.status}
-                        onChange={(event) =>
-                          setForm((current) => ({
-                            ...current,
-                            status: event.target.value as ShipmentStatus
-                          }))
-                        }
-                        className="form-input bg-white"
-                      >
-                        {STATUS_OPTIONS.map((status) => (
-                          <option key={status.value} value={status.value}>
-                            {getStatusLabel(status.value, labels)}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="form-field">
-                      <label className="form-label">{labels.notes}</label>
-                      <textarea
-                        value={form.notes}
-                        onChange={(event) =>
-                          setForm((current) => ({ ...current, notes: event.target.value }))
-                        }
-                        rows={3}
-                        className="form-textarea bg-white"
-                      />
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                      <p className="metric-label">{labels.markup}</p>
+                      <p className={`mt-2 text-xl font-black ${displayMarkup != null && displayMarkup < 0 ? "text-rose-700" : "text-slate-950"}`}>
+                        {displayMarkup != null ? `${formatNumber(displayMarkup, language, 1)}%` : EMPTY_VALUE}
+                      </p>
                     </div>
                   </div>
-                </SectionCard>
 
+                  {finalQuoteBelowCost ? (
+                    <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">
+                      {labels.finalQuoteBelowCost}
+                    </p>
+                  ) : null}
+                </div>
+              </SectionCard>
+                <div className="flex items-center justify-between">
+                  <button type="button" onClick={() => setShipmentStep(2)} className="btn-secondary">
+                    {language === "th" ? "← ย้อนกลับ" : "← Back"}
+                  </button>
+                  <button type="button" onClick={() => setShipmentStep(4)} className="btn-primary min-w-[190px]">
+                    {language === "th" ? "ถัดไป: ตรวจสอบ →" : "Continue to Review →"}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {shipmentStep === 4 ? (
+              <div className="space-y-3">
+            <SectionCard
+              title={language === "th" ? "4. ตรวจสอบและบันทึก" : "4. Review & Save"}
+              description={language === "th" ? "ตรวจสอบสถานะ หมายเหตุ และการมอบหมายก่อนบันทึกงาน" : "Review the workflow status, notes and optional assignment before saving."}
+            >
+              <div className="grid gap-3 lg:grid-cols-2">
+                {form.id ? (
+                  <div className="form-field">
+                    <label className="form-label">{labels.status}</label>
+                    <select
+                      value={form.status}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          status: event.target.value as ShipmentStatus
+                        }))
+                      }
+                      className="form-input bg-white"
+                    >
+                      {STATUS_OPTIONS.map((status) => (
+                        <option key={status.value} value={status.value}>
+                          {getStatusLabel(status.value, labels)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-violet-100 bg-violet-50/55 px-4 py-3 text-sm text-slate-600 lg:col-span-2">
+                    <span className="font-bold text-violet-900">
+                      {language === "th" ? "เลือกวิธีบันทึกด้านล่าง" : "Choose how to save below."}
+                    </span>{" "}
+                    {language === "th"
+                      ? "บันทึกและเสนอราคา = Quoted · บันทึกฉบับร่าง = Draft"
+                      : "Save & Quote creates a Quoted shipment. Save as Draft keeps it as Draft."}
+                  </div>
+                )}
+
+                <div className="form-field lg:col-span-2">
+                  <label className="form-label">{labels.notes}</label>
+                  <textarea
+                    value={form.notes}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, notes: event.target.value }))
+                    }
+                    rows={3}
+                    className="form-textarea bg-white"
+                    placeholder={labels.notesPlaceholder}
+                  />
+                </div>
+              </div>
+            </SectionCard>
                 <SectionCard
-                  title={labels.assignmentTitle}
-                  description={labels.assignmentDescription}
+                  title={language === "th" ? "การมอบหมาย (ไม่บังคับ)" : "Assignment (Optional)"}
+                  description={
+                    language === "th"
+                      ? "ไม่บังคับตอนเสนอราคา — สามารถกำหนดคนขับและรถหลังลูกค้ายืนยันงาน"
+                      : "Optional while quoting — assign the driver and vehicle after the customer accepts the job."
+                  }
                 >
                   <div className="grid gap-3">
                     <div className="form-field">
@@ -3994,7 +4215,7 @@ export default function ShipmentsPage() {
                         className="form-input bg-white"
                       />
                     </div>
-                    <label className="flex cursor-pointer items-start gap-2 rounded-[1rem] border border-teal-100 bg-teal-50/70 px-3 py-2 text-sm font-semibold text-slate-800">
+                    <label className="flex cursor-pointer items-start gap-2 rounded-[1rem] border border-teal-100 bg-teal-50/70 px-3 py-2 text-sm font-semibold text-slate-800 lg:col-span-3">
                       <input
                         type="checkbox"
                         checked={form.auto_create_trip_journey}
@@ -4012,74 +4233,86 @@ export default function ShipmentsPage() {
                         </span>
                         <span className="block text-xs font-normal text-slate-500">
                           {language === "th"
-                            ? "เปิดไว้เพื่อส่งระยะทางและเวลาโดยประมาณไปยัง Trip Journey"
-                            : "Keep this on to send the estimate into Trip Journey when saving."}
+                            ? "ระบบจะสร้าง Trip Journey เมื่อบันทึกงานในสถานะที่พร้อมดำเนินงานเท่านั้น"
+                            : "A Trip Journey is created only when the shipment is saved in an operational status."}
                         </span>
                       </span>
                     </label>
                   </div>
                 </SectionCard>
+                {error ? <p className="form-error">{error}</p> : null}
+                {successMessage ? <p className="text-sm text-emerald-600">{successMessage}</p> : null}
+                <div className="flex items-center">
+                  <button
+                    type="button"
+                    onClick={() => setShipmentStep(3)}
+                    className="btn-secondary"
+                  >
+                    {language === "th" ? "← ย้อนกลับไปที่ราคา" : "← Back to Pricing"}
+                  </button>
+                </div>
+            <div className="flex flex-col gap-2.5 border-t border-slate-200 pt-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-col gap-2.5 sm:flex-row">
+                <button
+                  type="submit"
+                  data-status="Quoted"
+                  disabled={!canSave || saving || !defaultsReady}
+                  className="btn-primary min-w-[180px] disabled:opacity-70"
+                >
+                  {saving
+                    ? labels.saving
+                    : language === "th"
+                      ? "บันทึกและเสนอราคา"
+                      : "Save & Quote"}
+                </button>
+                <button
+                  type="submit"
+                  data-status="Draft"
+                  disabled={!canSave || saving || !defaultsReady}
+                  className="btn-secondary min-w-[150px] disabled:opacity-70"
+                >
+                  {labels.saveAsDraft}
+                </button>
+                {form.id ? (
+                  <button type="button" onClick={resetForm} className="btn-secondary">
+                    {labels.cancel}
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="btn-secondary gap-2 disabled:opacity-50"
+                  onClick={() => handleGenerateFormPdf("customer")}
+                  disabled={!form.id}
+                  title={labels.customerPdf}
+                >
+                  <FileText className="h-4 w-4" />
+                  {labels.customerPdf}
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary gap-2 disabled:opacity-50"
+                  onClick={() => handleGenerateFormPdf("internal")}
+                  disabled={!form.id}
+                  title={labels.internalPdf}
+                >
+                  <FileText className="h-4 w-4" />
+                  {labels.internalPdf}
+                </button>
               </div>
             </div>
 
-            {error ? <p className="form-error">{error}</p> : null}
-            {successMessage ? <p className="text-sm text-emerald-600">{successMessage}</p> : null}
-
-            <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
-              <button
-                type="submit"
-                data-status="Quoted"
-                disabled={!canSave || saving || !defaultsReady}
-                className="btn-primary min-w-[180px] disabled:opacity-70"
-              >
-                {saving ? labels.saving : labels.saveShipment}
-              </button>
-              <button
-                type="submit"
-                data-status="Quoted"
-                data-create-another="true"
-                disabled={!canSave || saving || !defaultsReady}
-                className="btn-secondary min-w-[190px] disabled:opacity-70"
-              >
-                {language === "th" ? "บันทึกและสร้างรายการใหม่" : "Save & Create Another"}
-              </button>
-              <button
-                type="submit"
-                data-status="Draft"
-                disabled={!canSave || saving || !defaultsReady}
-                className="btn-secondary min-w-[160px] disabled:opacity-70"
-              >
-                {labels.saveAsDraft}
-              </button>
-              <button
-                type="button"
-                className="btn-secondary min-w-[180px] gap-2 disabled:opacity-70"
-                onClick={() => handleGenerateFormPdf("customer")}
-                disabled={!form.job_reference.trim()}
-                title={labels.customerPdf}
-              >
-                <FileText className="h-4 w-4" />
-                {labels.customerPdf}
-              </button>
-              <button
-                type="button"
-                className="btn-secondary min-w-[180px] gap-2 disabled:opacity-70"
-                onClick={() => handleGenerateFormPdf("internal")}
-                disabled={!form.job_reference.trim()}
-                title={labels.internalPdf}
-              >
-                <FileText className="h-4 w-4" />
-                {labels.internalPdf}
-              </button>
-              {form.id ? (
-                <button type="button" onClick={resetForm} className="btn-secondary">
-                  {labels.cancel}
-                </button>
-              ) : null}
-            </div>
+              </div>
+            ) : null}
           </form>
         </div>
       </section>
+
+          </div>
+        </div>
+      ) : null}
 
       <section className="mt-4 surface-card p-4 sm:p-5">
         <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -4087,19 +4320,23 @@ export default function ShipmentsPage() {
             <h3 className="section-title">{labels.tableTitle}</h3>
             <p className="section-subtitle">{labels.tableDescription}</p>
           </div>
-          <div className="relative w-full lg:max-w-[360px]">
+          <div className="ml-auto flex w-full flex-col gap-2 sm:flex-row lg:w-auto lg:items-center">
+            <div className="relative w-full sm:min-w-[320px] lg:w-[360px]">
+
             <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder={labels.searchPlaceholder}
               className="form-input bg-white pl-11"
-            />
-          </div>
-          <button type="button" onClick={exportCsv} className="btn-secondary gap-2">
+              />
+            </div>
+            <button type="button" onClick={exportCsv} className="btn-secondary gap-2">
+
             <Download className="h-4 w-4" />
             {labels.exportCsv}
           </button>
+        </div>
         </div>
 
         <div className="mb-4 subtle-panel p-3.5">
@@ -4337,118 +4574,116 @@ export default function ShipmentsPage() {
             </div>
 
             <div className="hidden md:block">
-              <div className="table-shell rounded-2xl">
-                <div className="table-scroll">
-                  <table className="w-full min-w-[1420px] text-sm">
-                    <thead>
-                      <tr>
-                        <th className="table-head-cell">{labels.table.ref}</th>
-                        <th className="table-head-cell">{labels.table.customer}</th>
-                        <th className="table-head-cell">{labels.table.route}</th>
-                        <th className="table-head-cell text-right">{labels.table.distance}</th>
-                        <th className="table-head-cell">{labels.table.driver}</th>
-                        <th className="table-head-cell">{labels.table.vehicle}</th>
-                        <th className="table-head-cell text-right">{labels.table.cost}</th>
-                        <th className="table-head-cell text-right">{labels.table.quote}</th>
-                        <th className="table-head-cell text-right">{labels.table.profit}</th>
-                        <th className="table-head-cell text-right">{labels.table.margin}</th>
-                        <th className="table-head-cell text-right">{labels.markup}</th>
-                        <th className="table-head-cell">{labels.table.status}</th>
-                        <th className="table-head-cell">{labels.table.date}</th>
-                        <th className="table-head-cell">{labels.table.action}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pagedShipmentRows.map(({ shipment, normalized, route }) => (
-                        <tr key={shipment.id} className="enterprise-table-row">
-                          <td className="table-body-cell font-medium text-slate-900">
-                            <p>{normalized.jobReference}</p>
-                            <p className="mt-1 text-xs text-slate-500">
-                              {normalized.jobDescription || EMPTY_VALUE}
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+                <div className="grid grid-cols-[1.2fr_2fr_1.35fr_1.65fr_0.9fr_1.35fr] border-b-2 border-violet-200 bg-[#f4f1fb] px-4">
+                  {[
+                    [language === "th" ? "งาน" : "Shipment", language === "th" ? "เลขงาน · วันที่ · ลูกค้า" : "Reference · Date · Customer"],
+                    [labels.table.route, language === "th" ? "จุดรับ → จุดส่ง · ระยะทาง" : "Pickup → Drop-off · Distance"],
+                    [language === "th" ? "การมอบหมาย" : "Assignment", language === "th" ? "คนขับ · รถ" : "Driver · Vehicle"],
+                    [language === "th" ? "การเงิน" : "Financials", language === "th" ? "ต้นทุน · ราคา · กำไร · มาร์จิ้น" : "Cost · Quote · Profit · Margin"],
+                    [labels.table.status, language === "th" ? "ขั้นตอนงาน" : "Workflow"],
+                    [labels.table.action, language === "th" ? "แก้ไข · PDF · ลบ" : "Edit · PDF · Delete"]
+                  ].map(([title, subtitle], index) => (
+                    <div key={title} className={`${index ? "border-l border-violet-100" : ""} px-3 py-3`}>
+                      <p className="text-[11px] font-black uppercase tracking-[0.12em] text-violet-950">{title}</p>
+                      <p className="mt-0.5 text-[9px] font-semibold text-slate-500">{subtitle}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="divide-y divide-slate-100">
+                  {pagedShipmentRows.map(({ shipment, normalized, route }) => (
+                    <div
+                      key={shipment.id}
+                      className="grid grid-cols-[1.2fr_2fr_1.35fr_1.65fr_0.9fr_1.35fr] items-center px-4 py-4 transition hover:bg-violet-50/20"
+                    >
+                      <div className="min-w-0 px-3">
+                        <p className="truncate text-[12px] font-black text-slate-950">{normalized.jobReference}</p>
+                        <p className="mt-1 text-[10px] font-semibold text-slate-500">{formatDate(normalized.shipmentDate, language)}</p>
+                        <p className="mt-1 truncate text-[11px] font-semibold text-slate-700">{normalized.customerName || EMPTY_VALUE}</p>
+                      </div>
+
+                      <div className="min-w-0 border-l border-slate-100 px-3">
+                        <p className="truncate text-[12px] font-bold text-slate-950">
+                          {shortenRouteLabel(route.start, route.end)}
+                        </p>
+                        <p className="mt-1 text-[10px] font-semibold text-violet-700">
+                          {formatDistance(normalized.distanceKm, language, EMPTY_VALUE)}
+                        </p>
+                      </div>
+
+                      <div className="min-w-0 border-l border-slate-100 px-3">
+                        <p className="truncate text-[11px] font-bold text-slate-900">{normalized.driverName || (language === "th" ? "ยังไม่กำหนด" : "Unassigned")}</p>
+                        <p className="mt-1 truncate text-[10px] font-medium text-slate-500">{normalized.vehicleReg || EMPTY_VALUE}</p>
+                      </div>
+
+                      <div className="min-w-0 border-l border-slate-100 px-3">
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+                          <div>
+                            <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">{language === "th" ? "ต้นทุน" : "Cost"}</p>
+                            <p className="text-[11px] font-bold text-slate-800">
+                              {normalized.operatingCost != null ? formatCurrency(normalized.operatingCost, language) : EMPTY_VALUE}
                             </p>
-                          </td>
-                          <td className="table-body-cell">{normalized.customerName || EMPTY_VALUE}</td>
-                          <td className="table-body-cell">
-                            {shortenRouteLabel(route.start, route.end)}
-                          </td>
-                          <td className="table-body-cell text-right">
-                            <span className="inline-flex rounded-full border border-teal-100 bg-teal-50 px-2.5 py-1 text-xs font-bold text-teal-800">
-                              {formatDistance(normalized.distanceKm, language, EMPTY_VALUE)}
-                            </span>
-                          </td>
-                          <td className="table-body-cell">{normalized.driverName || EMPTY_VALUE}</td>
-                          <td className="table-body-cell">{normalized.vehicleReg || EMPTY_VALUE}</td>
-                          <td className="table-body-cell text-right text-base font-bold text-slate-950">
-                            {normalized.operatingCost != null
-                              ? formatCurrency(normalized.operatingCost, language)
-                              : EMPTY_VALUE}
-                          </td>
-                          <td className="table-body-cell text-right text-base font-bold text-slate-950">
-                            {normalized.quotePrice != null
-                              ? formatCurrency(normalized.quotePrice, language)
-                              : EMPTY_VALUE}
-                          </td>
-                          <td className="table-body-cell text-right text-base font-bold text-emerald-700">
-                            {normalized.profit != null
-                              ? formatCurrency(normalized.profit, language)
-                              : EMPTY_VALUE}
-                          </td>
-                          <td className="table-body-cell text-right text-base font-bold text-slate-950">
-                            {normalized.marginPercent != null
-                              ? `${formatNumber(normalized.marginPercent, language, 1)}%`
-                              : EMPTY_VALUE}
-                          </td>
-                          <td className="table-body-cell text-right text-base font-bold text-slate-950">
-                            {normalized.markupPercent != null
-                              ? `${formatNumber(normalized.markupPercent, language, 1)}%`
-                              : EMPTY_VALUE}
-                          </td>
-                          <td className="table-body-cell">
-                            <span
-                              className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getStatusBadgeClass(normalized.status)}`}
-                            >
-                              {getStatusLabel(normalized.status, labels)}
-                            </span>
-                          </td>
-                          <td className="table-body-cell">
-                            {formatDate(normalized.shipmentDate, language)}
-                          </td>
-                          <td className="table-body-cell">
-                            <div className="flex gap-2">
-                              <button
-                                type="button"
-                                className="table-action-secondary"
-                                onClick={() => startEditingShipment(shipment)}
-                              >
-                                {labels.edit}
-                              </button>
-                              <button
-                                type="button"
-                                className="table-action-secondary"
-                                onClick={() => handleGenerateShipmentPdf(shipment, "customer")}
-                              >
-                                {labels.customerPdf}
-                              </button>
-                              <button
-                                type="button"
-                                className="table-action-secondary"
-                                onClick={() => handleGenerateShipmentPdf(shipment, "internal")}
-                              >
-                                {labels.internalPdf}
-                              </button>
-                              <button
-                                type="button"
-                                className="table-action-danger"
-                                onClick={() => void handleDeleteShipment(shipment.id)}
-                              >
-                                {labels.delete}
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                          </div>
+                          <div>
+                            <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">{language === "th" ? "ราคา" : "Quote"}</p>
+                            <p className="text-[11px] font-black text-slate-950">
+                              {normalized.quotePrice != null ? formatCurrency(normalized.quotePrice, language) : EMPTY_VALUE}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">{language === "th" ? "กำไร" : "Profit"}</p>
+                            <p className="text-[11px] font-bold text-emerald-700">
+                              {normalized.profit != null ? formatCurrency(normalized.profit, language) : EMPTY_VALUE}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">{language === "th" ? "มาร์จิ้น" : "Margin"}</p>
+                            <p className="text-[11px] font-bold text-slate-800">
+                              {normalized.marginPercent != null ? `${formatNumber(normalized.marginPercent, language, 1)}%` : EMPTY_VALUE}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="border-l border-slate-100 px-3">
+                        <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold ${getStatusBadgeClass(normalized.status)}`}>
+                          {getStatusLabel(normalized.status, labels)}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-1.5 border-l border-slate-100 px-3">
+                        <button
+                          type="button"
+                          className="table-action-secondary"
+                          onClick={() => startEditingShipment(shipment)}
+                        >
+                          {labels.edit}
+                        </button>
+                        <button
+                          type="button"
+                          className="table-action-secondary"
+                          onClick={() => handleGenerateShipmentPdf(shipment, "customer")}
+                        >
+                          {language === "th" ? "PDF ลูกค้า" : "Customer PDF"}
+                        </button>
+                        <button
+                          type="button"
+                          className="table-action-secondary"
+                          onClick={() => handleGenerateShipmentPdf(shipment, "internal")}
+                        >
+                          {language === "th" ? "PDF ภายใน" : "Internal PDF"}
+                        </button>
+                        <button
+                          type="button"
+                          className="table-action-danger"
+                          onClick={() => void handleDeleteShipment(shipment.id)}
+                        >
+                          {labels.delete}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>

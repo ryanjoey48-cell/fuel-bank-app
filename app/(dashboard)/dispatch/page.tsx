@@ -4,18 +4,14 @@ import clsx from "clsx";
 import {
   AlertTriangle,
   CalendarDays,
-  CheckCircle2,
-  Clock3,
-  ExternalLink,
+  ChevronLeft,
+  ChevronRight,
   Map,
-  Pencil,
-  RefreshCw,
   Route,
   Truck,
   UserRound
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Header } from "@/components/header";
 import {
   createTripJourneyFromBooking,
   fetchBookingDiaryEntriesByDate,
@@ -34,7 +30,7 @@ type DispatchFilter = "all" | "ready" | "unassigned" | "conflicts" | "missing_ro
 const DISPATCH_COPY = {
   en: {
     title: "Dispatch Board",
-    description: "Daily control for bookings, assignments, route readiness, trip links, and scheduling warnings.",
+    description: "Run the selected day: see every job, assignment, trip status, and anything that needs attention.",
     today: "Today",
     tomorrow: "Tomorrow",
     previousDay: "Previous day",
@@ -54,6 +50,8 @@ const DISPATCH_COPY = {
     allJobs: "All jobs",
     noJobsTitle: "No dispatch jobs for this date",
     noJobsDescription: "Bookings for the selected day will appear here.",
+    noFilterMatchesTitle: "No jobs match this filter",
+    noFilterMatchesDescription: "There are jobs on this date, but none match the selected status.",
     loadError: "Unable to load the Dispatch Board.",
     createTrip: "Create Trip",
     openTrip: "Open Trip",
@@ -95,7 +93,7 @@ const DISPATCH_COPY = {
   },
   th: {
     title: "กระดานจัดส่งงาน",
-    description: "ควบคุมงานจอง การมอบหมาย เส้นทาง ทริป และคำเตือนตารางงานประจำวัน",
+    description: "ควบคุมงานของวันที่เลือก ดูงาน คนขับ รถ สถานะทริป และสิ่งที่ต้องตรวจสอบในที่เดียว",
     today: "วันนี้",
     tomorrow: "พรุ่งนี้",
     previousDay: "วันก่อนหน้า",
@@ -115,6 +113,8 @@ const DISPATCH_COPY = {
     allJobs: "งานทั้งหมด",
     noJobsTitle: "ไม่มีงานจัดส่งในวันที่เลือก",
     noJobsDescription: "งานจองของวันที่เลือกจะแสดงที่นี่",
+    noFilterMatchesTitle: "ไม่มีงานที่ตรงกับตัวกรองนี้",
+    noFilterMatchesDescription: "วันนี้มีงาน แต่ไม่มีงานที่ตรงกับสถานะที่เลือก",
     loadError: "ไม่สามารถโหลดกระดานจัดส่งงานได้",
     createTrip: "สร้างทริป",
     openTrip: "เปิดทริป",
@@ -168,6 +168,25 @@ function shiftDate(dateKey: string, days: number) {
   const [year, month, day] = dateKey.split("-").map(Number);
   const date = new Date(year, month - 1, day + days);
   return getLocalDateKey(date);
+}
+
+function formatDurationFriendly(value: number | string | null | undefined, language: "en" | "th") {
+  const numeric = typeof value === "number" ? value : value ? Number.parseFloat(String(value)) : 0;
+  if (!Number.isFinite(numeric) || numeric <= 0) return null;
+
+  const totalMinutes = Math.round(numeric);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (language === "th") {
+    if (hours && minutes) return `${hours} ชม. ${minutes} นาที`;
+    if (hours) return `${hours} ชม.`;
+    return `${minutes} นาที`;
+  }
+
+  if (hours && minutes) return `${hours} hr ${minutes} min`;
+  if (hours) return `${hours} hr`;
+  return `${minutes} min`;
 }
 
 function getBookingReference(booking: BookingDiaryEntry) {
@@ -283,12 +302,9 @@ export default function DispatchPage() {
 
   const summaryCards = [
     { key: "all" as const, label: copy.totalJobs, value: summary.totalJobs, icon: CalendarDays },
-    { key: "ready" as const, label: copy.ready, value: summary.ready, icon: CheckCircle2 },
     { key: "unassigned" as const, label: copy.unassigned, value: summary.unassigned, icon: UserRound },
     { key: "conflicts" as const, label: copy.potentialConflicts, value: summary.potentialConflicts, icon: AlertTriangle },
-    { key: "missing_route" as const, label: copy.missingRoute, value: summary.missingRoute, icon: Map },
-    { key: "missing_trip" as const, label: copy.missingTrip, value: summary.missingTrip, icon: Route },
-    { key: "needs_review" as const, label: copy.needsReview, value: summary.needsReview, icon: Clock3 }
+    { key: "missing_trip" as const, label: copy.missingTrip, value: summary.missingTrip, icon: Route }
   ];
 
   const handleCreateTrip = async (booking: BookingDiaryEntry) => {
@@ -309,147 +325,269 @@ export default function DispatchPage() {
 
   return (
     <>
-      <div className="hidden md:block">
-        <Header title={copy.title} description={copy.description} />
-      </div>
+      <section className="rounded-[1.35rem] border border-slate-200/90 bg-white px-5 py-5 shadow-[0_12px_32px_rgba(15,23,42,0.055)] sm:px-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-violet-700">
+              EXPERT EXPRESS SENDER CO., LTD.
+            </p>
+            <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-950">{copy.title}</h1>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">{copy.description}</p>
+          </div>
 
-      {error ? <p className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{error}</p> : null}
-      {actionMessage ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">{actionMessage}</p> : null}
-
-      <section className="sticky top-[86px] z-20 rounded-lg border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur md:top-3">
-        <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
-          <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => setSelectedDate(shiftDate(selectedDate, -1))} className="btn-secondary min-h-10 px-3 text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedDate(shiftDate(selectedDate, -1))}
+              className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 shadow-sm transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-800"
+            >
+              <ChevronLeft className="h-4 w-4" />
               {copy.previousDay}
             </button>
-            <button type="button" onClick={() => setSelectedDate(getLocalDateKey(new Date()))} className="btn-secondary min-h-10 px-3 text-sm">
+            <button
+              type="button"
+              onClick={() => setSelectedDate(getLocalDateKey(new Date()))}
+              className="inline-flex h-10 items-center rounded-xl border border-violet-200 bg-violet-50 px-3 text-sm font-bold text-violet-800 shadow-sm transition hover:bg-violet-100"
+            >
               {copy.today}
             </button>
-            <button type="button" onClick={() => setSelectedDate(shiftDate(getLocalDateKey(new Date()), 1))} className="btn-secondary min-h-10 px-3 text-sm">
-              {copy.tomorrow}
-            </button>
-            <button type="button" onClick={() => setSelectedDate(shiftDate(selectedDate, 1))} className="btn-secondary min-h-10 px-3 text-sm">
+            <button
+              type="button"
+              onClick={() => setSelectedDate(shiftDate(selectedDate, 1))}
+              className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 shadow-sm transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-800"
+            >
               {copy.nextDay}
+              <ChevronRight className="h-4 w-4" />
             </button>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-[minmax(0,190px)_auto] sm:items-end">
-            <label>
-              <span className="form-label">{copy.selectedDate}</span>
-              <input type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} className="form-input bg-white" />
+
+            <label className="ml-0 sm:ml-2">
+              <span className="sr-only">{copy.selectedDate}</span>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(event) => setSelectedDate(event.target.value)}
+                className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 shadow-sm outline-none transition focus:border-violet-300 focus:ring-2 focus:ring-violet-100"
+              />
             </label>
-            <button type="button" onClick={() => void loadData(false)} className="btn-primary min-h-10 gap-2 px-3 text-sm" disabled={refreshing}>
-              <RefreshCw className={clsx("h-4 w-4", refreshing && "animate-spin")} />
-              {refreshing ? copy.refreshing : copy.refresh}
-            </button>
           </div>
         </div>
-        <p className="mt-2 text-xs font-semibold text-slate-500">
-          {copy.lastRefresh}: {lastRefresh ? new Date(lastRefresh).toLocaleString(language === "th" ? "th-TH" : "en-US") : copy.never}
-        </p>
+
+        <div className="mt-3 flex items-center gap-2 text-[11px] font-semibold text-slate-400">
+          <span className={clsx("h-2 w-2 rounded-full", refreshing ? "bg-amber-400" : "bg-emerald-500")} />
+          <span>
+            {refreshing
+              ? copy.refreshing
+              : `${copy.lastRefresh}: ${lastRefresh ? new Date(lastRefresh).toLocaleTimeString(language === "th" ? "th-TH" : "en-GB", { hour: "2-digit", minute: "2-digit" }) : copy.never}`}
+          </span>
+        </div>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
+      {error ? <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{error}</p> : null}
+      {actionMessage ? <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">{actionMessage}</p> : null}
+
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {summaryCards.map(({ key, label, value, icon: Icon }) => (
           <button
             key={key}
             type="button"
             onClick={() => setFilter(key)}
             className={clsx(
-              "rounded-lg border bg-white p-4 text-left shadow-sm transition hover:border-brand-200 hover:bg-brand-50/40",
-              filter === key ? "border-brand-300 ring-2 ring-brand-100" : "border-slate-200"
+              "rounded-2xl border bg-white p-4 text-left shadow-[0_8px_24px_rgba(15,23,42,0.05)] transition hover:-translate-y-px hover:border-violet-200 hover:shadow-md",
+              filter === key ? "border-violet-300 bg-violet-50/45 ring-2 ring-violet-100" : "border-slate-200"
             )}
           >
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{label}</p>
-              <Icon className="h-4 w-4 text-brand-700" />
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-slate-500">{label}</p>
+                <p className="mt-1.5 text-3xl font-black tracking-tight text-slate-950">{formatNumber(value, language)}</p>
+              </div>
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-700">
+                <Icon className="h-5 w-5" />
+              </span>
             </div>
-            <p className="mt-2 text-2xl font-black text-slate-950">{formatNumber(value, language)}</p>
           </button>
         ))}
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-        <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+      <section className="overflow-hidden rounded-[1.35rem] border border-slate-200/90 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
+        <div className="flex flex-col gap-2 border-b border-slate-200 px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-5">
           <div>
-            <h3 className="section-title">{filter === "all" ? copy.allJobs : summaryCards.find((card) => card.key === filter)?.label}</h3>
-            <p className="section-subtitle">{formatDate(selectedDate, language)}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-lg font-black text-slate-950">
+                {filter === "all" ? copy.allJobs : summaryCards.find((card) => card.key === filter)?.label}
+              </h2>
+              {filter !== "all" ? (
+                <button
+                  type="button"
+                  onClick={() => setFilter("all")}
+                  className="rounded-full border border-violet-100 bg-violet-50 px-2.5 py-1 text-[10px] font-bold text-violet-700 transition hover:bg-violet-100"
+                >
+                  {copy.allJobs}
+                </button>
+              ) : null}
+            </div>
+            <p className="mt-1 text-xs font-semibold text-slate-500">{formatDate(selectedDate, language)}</p>
           </div>
-          <span className="text-xs font-bold text-slate-500">{formatNumber(visibleRows.length, language)} / {formatNumber(rows.length, language)}</span>
+          <span className="text-xs font-bold text-slate-500">
+            {formatNumber(visibleRows.length, language)} / {formatNumber(rows.length, language)}
+          </span>
         </div>
 
         {loading ? (
-          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm font-semibold text-slate-500">{copy.refreshing}</div>
+          <div className="px-6 py-12 text-center text-sm font-semibold text-slate-500">{copy.refreshing}</div>
         ) : visibleRows.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
-            <p className="font-bold text-slate-900">{copy.noJobsTitle}</p>
-            <p className="mt-1 text-sm text-slate-500">{copy.noJobsDescription}</p>
+          <div className="px-6 py-12 text-center">
+            <p className="font-bold text-slate-900">{rows.length ? copy.noFilterMatchesTitle : copy.noJobsTitle}</p>
+            <p className="mt-1 text-sm text-slate-500">{rows.length ? copy.noFilterMatchesDescription : copy.noJobsDescription}</p>
+            {rows.length && filter !== "all" ? (
+              <button
+                type="button"
+                onClick={() => setFilter("all")}
+                className="mt-4 rounded-xl border border-violet-200 bg-violet-50 px-4 py-2 text-sm font-bold text-violet-800 transition hover:bg-violet-100"
+              >
+                {copy.allJobs}
+              </button>
+            ) : null}
           </div>
         ) : (
-          <div className="grid gap-3">
+          <div className="divide-y divide-slate-100">
             {visibleRows.map((row) => {
               const booking = row.booking;
               const mapsUrl = getRouteUrl(booking);
+              const friendlyDuration = formatDurationFriendly(booking.estimated_duration_minutes, language === "th" ? "th" : "en");
               const estimateText = Number(booking.estimated_distance_km) > 0
-                ? `${formatNumber(Number(booking.estimated_distance_km), language, 1)} ${copy.km}${Number(booking.estimated_duration_minutes) > 0 ? ` / ${formatNumber(Number(booking.estimated_duration_minutes), language, 0)} ${copy.minutes}` : ""}`
+                ? `${formatNumber(Number(booking.estimated_distance_km), language, 1)} ${copy.km}${friendlyDuration ? ` / ${friendlyDuration}` : ""}`
                 : copy.noEstimate;
 
               return (
-                <article key={booking.id} className={clsx("rounded-lg border p-3 shadow-sm sm:p-4", row.ready ? "border-emerald-200 bg-emerald-50/25" : row.conflicts.some((conflict) => conflict.severity === "confirmed") ? "border-rose-200 bg-rose-50/40" : "border-amber-200 bg-amber-50/25")}>
-                  <div className="grid gap-3 xl:grid-cols-[140px_minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.3fr)] xl:items-start">
-                    <div>
-                      <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{copy.pickup}</p>
-                      <p className="mt-1 flex items-center gap-2 text-lg font-black text-slate-950"><Clock3 className="h-4 w-4 text-brand-700" />{booking.pickup_time || copy.noPickupTime}</p>
-                      <p className="mt-2 break-words text-xs font-semibold text-slate-500">{copy.jobReference}: {getBookingReference(booking)}</p>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-black text-slate-950">{getClientName(booking)}</p>
-                      <p className="mt-2 break-words text-sm text-slate-700"><strong>{copy.pickup}:</strong> {booking.pickup || "-"}</p>
-                      <p className="mt-1 break-words text-sm text-slate-700"><strong>{copy.dropoff}:</strong> {booking.dropoff || "-"}</p>
-                    </div>
-                    <div className="grid gap-2 text-sm">
-                      <p className="flex items-center gap-2 font-semibold text-slate-800"><UserRound className="h-4 w-4 text-slate-500" />{booking.driver || copy.noDriver}</p>
-                      <p className="flex items-center gap-2 font-semibold text-slate-800"><Truck className="h-4 w-4 text-slate-500" />{booking.vehicle || copy.noVehicle}</p>
-                      <p className="text-xs text-slate-500">{copy.vehicleType}: {row.vehicle?.vehicle_type || row.vehicle?.vehicle_category || copy.noVehicleType}</p>
-                    </div>
-                    <div className="grid gap-2 text-sm">
-                      <p><strong>{copy.estimated}:</strong> {estimateText}</p>
-                      <p><strong>{copy.routeStatus}:</strong> {routeStatus(row, copy)}</p>
-                      <p><strong>{copy.tripStatus}:</strong> {row.trip ? row.trip.status : copy.noTrip}</p>
-                    </div>
-                    <div className="grid gap-2">
-                      <div className="flex flex-wrap gap-1.5">
-                        {row.attention.length ? row.attention.map((item, index) => (
-                          <span key={`${item.key}-${index}`} className={clsx("rounded-full border px-2.5 py-1 text-xs font-bold", item.tone === "danger" ? "border-rose-200 bg-rose-50 text-rose-700" : item.tone === "warning" ? "border-amber-200 bg-amber-50 text-amber-800" : "border-sky-200 bg-sky-50 text-sky-700")}>
-                            {attentionLabel(item.key, copy)}
-                          </span>
-                        )) : (
-                          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">{copy.ready}</span>
-                        )}
-                      </div>
-                      {row.conflicts.length ? (
-                        <div className="grid gap-1 text-xs font-semibold text-slate-600">
-                          {row.conflicts.slice(0, 3).map((conflict) => (
-                            <a key={`${conflict.kind}-${conflict.otherBookingId}`} href={`/booking-diary`} className="underline decoration-slate-300 underline-offset-2">
-                              {conflict.severity === "possible" ? copy.possibleConflict : copy.potentialConflicts}: {copy.conflictWith} {conflict.otherBookingId}
-                            </a>
-                          ))}
-                        </div>
+                <article
+                  key={booking.id}
+                  className={clsx(
+                    "grid gap-4 px-4 py-4 transition sm:px-5 xl:grid-cols-[110px_minmax(260px,1.7fr)_minmax(210px,1.15fr)_minmax(190px,1fr)_minmax(220px,1.15fr)_auto] xl:items-center",
+                    row.conflicts.some((conflict) => conflict.severity === "confirmed")
+                      ? "bg-rose-50/35"
+                      : row.attention.length
+                        ? "bg-amber-50/20"
+                        : "bg-white hover:bg-violet-50/20"
+                  )}
+                >
+                  <div>
+                    <p className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-slate-400">{copy.pickup}</p>
+                    <p className="mt-1 text-lg font-black text-violet-700">{booking.pickup_time ? booking.pickup_time.slice(0, 5) : "TBC"}</p>
+                    <p className="mt-1 truncate text-[9px] font-medium text-slate-300">
+                      {getBookingReference(booking)}
+                    </p>
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-black text-slate-950">{getClientName(booking)}</p>
+                    <p className="mt-1 truncate text-sm font-bold text-slate-800">
+                      {booking.pickup || "-"}
+                      <span className="px-2 text-violet-400">→</span>
+                      {booking.dropoff || "-"}
+                    </p>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[10px] font-semibold text-slate-500">
+                      <span>{estimateText}</span>
+                      <span className="text-slate-300">•</span>
+                      <span>{routeStatus(row, copy)}</span>
+                      {mapsUrl ? (
+                        <a
+                          href={mapsUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(event) => event.stopPropagation()}
+                          className="inline-flex items-center gap-1 text-violet-700 hover:text-violet-900"
+                        >
+                          <Map className="h-3 w-3" />
+                          {copy.openMaps}
+                        </a>
                       ) : null}
                     </div>
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-200 pt-3">
-                    <a href="/booking-diary" className="btn-secondary min-h-10 gap-1.5 px-3 text-xs"><ExternalLink className="h-3.5 w-3.5" />{copy.openBooking}</a>
-                    <a href="/booking-diary" className="btn-secondary min-h-10 gap-1.5 px-3 text-xs"><Pencil className="h-3.5 w-3.5" />{copy.editBooking}</a>
-                    {mapsUrl ? <a href={mapsUrl} target="_blank" rel="noreferrer" className="btn-secondary min-h-10 gap-1.5 px-3 text-xs"><Map className="h-3.5 w-3.5" />{copy.openMaps}</a> : null}
+
+                  <div className="min-w-0">
+                    <p className="flex items-center gap-2 truncate text-[13px] font-black text-slate-950">
+                      <UserRound className="h-4 w-4 shrink-0 text-slate-400" />
+                      {booking.driver || copy.noDriver}
+                    </p>
+                    <p className="mt-1 flex items-center gap-2 truncate text-[12px] font-bold text-slate-800">
+                      <Truck className="h-4 w-4 shrink-0 text-slate-400" />
+                      {booking.vehicle || copy.noVehicle}
+                    </p>
+                    <p className="mt-1 truncate text-[10px] font-medium text-slate-400">
+                      {row.vehicle?.vehicle_type || row.vehicle?.vehicle_category || copy.noVehicleType}
+                    </p>
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-slate-400">{copy.tripStatus}</p>
+                    <p className={clsx("mt-1 text-sm font-bold", row.trip ? "text-emerald-700" : "text-slate-600")}>
+                      {row.trip ? row.trip.status : copy.noTrip}
+                    </p>
                     {row.trip ? (
-                      <a href="/trip-journey" className="btn-primary min-h-10 gap-1.5 px-3 text-xs"><Route className="h-3.5 w-3.5" />{copy.openTrip}</a>
+                      <p className="mt-1 text-[10px] font-medium text-emerald-600">{copy.tripReady}</p>
+                    ) : null}
+                  </div>
+
+                  <div className="min-w-0">
+                    {row.attention.some((item) => item.key !== "missing_trip") ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {row.attention
+                          .filter((item) => item.key !== "missing_trip")
+                          .slice(0, 3)
+                          .map((item, index) => (
+                            <span
+                              key={`${item.key}-${index}`}
+                              className={clsx(
+                                "rounded-full border px-2.5 py-1 text-[10px] font-bold",
+                                item.tone === "danger"
+                                  ? "border-rose-200 bg-rose-50 text-rose-700"
+                                  : item.tone === "warning"
+                                    ? "border-amber-200 bg-amber-50 text-amber-800"
+                                    : "border-sky-200 bg-sky-50 text-sky-700"
+                              )}
+                            >
+                              {attentionLabel(item.key, copy)}
+                            </span>
+                          ))}
+                      </div>
+                    ) : row.attention.length === 0 ? (
+                      <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700">
+                        {copy.ready}
+                      </span>
+                    ) : null}
+
+                    {row.conflicts.length ? (
+                      <div className="mt-2 grid gap-1 text-[10px] font-semibold text-rose-700">
+                        {row.conflicts.slice(0, 2).map((conflict) => (
+                          <span key={`${conflict.kind}-${conflict.otherBookingId}`}>
+                            {copy.possibleConflict}: {copy.conflictWith} {conflict.otherBookingId}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="flex flex-wrap justify-end gap-1.5">
+                    {row.trip ? (
+                      <a href="/trip-journey" className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 text-xs font-bold text-violet-800 transition hover:bg-violet-100">
+                        <Route className="h-3.5 w-3.5" />
+                        {copy.openTrip}
+                      </a>
                     ) : (
-                      <button type="button" onClick={() => void handleCreateTrip(booking)} disabled={tripActionId === String(booking.id)} className="btn-primary min-h-10 gap-1.5 px-3 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => void handleCreateTrip(booking)}
+                        disabled={tripActionId === String(booking.id)}
+                        className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 text-xs font-bold text-violet-800 transition hover:bg-violet-100 disabled:opacity-60"
+                      >
                         <Route className="h-3.5 w-3.5" />
                         {tripActionId === String(booking.id) ? copy.creatingTrip : copy.createTrip}
                       </button>
                     )}
-                    {(!booking.driver || !booking.vehicle) ? <a href="/booking-diary" className="btn-secondary min-h-10 px-3 text-xs">{copy.assign}</a> : null}
+                    <a href="/booking-diary" className="inline-flex min-h-9 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-800">
+                      {copy.openBooking}
+                    </a>
                   </div>
                 </article>
               );

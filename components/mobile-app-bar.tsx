@@ -2,9 +2,9 @@
 
 import clsx from "clsx";
 import { Menu, X } from "lucide-react";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { AccountMenu } from "@/components/account-menu";
+import { EESLogo } from "@/components/ees-logo";
 import { useLanguage } from "@/lib/language-provider";
 
 type PageKey = "dashboard" | "bookingDiary" | "dispatch" | "drivers" | "fuelLogs" | "fuelSpendReport" | "shipments" | "tripJourney" | "weeklyMileage" | "greaseMaintenance" | "inventory";
@@ -67,7 +67,7 @@ export function MobileAppBar({ open, onToggle }: MobileAppBarProps) {
   const accent = getMobileAccent(pathname);
 
   return (
-    <div className="mobile-app-bar fixed inset-x-0 top-0 z-30 border-b border-[#ece8ff] bg-[linear-gradient(90deg,#faf8ff_0%,#ffffff_45%,#faf8ff_100%)] shadow-[0_14px_34px_rgba(79,70,229,0.11)] backdrop-blur-xl min-[1367px]:hidden">
+    <div className="mobile-app-bar fixed inset-x-0 top-0 z-30 border-b border-[#eae1d1] bg-[linear-gradient(90deg,#fff9ef_0%,#fffdf8_45%,#fff9ef_100%)] shadow-[0_14px_34px_rgba(91,35,142,0.09)] backdrop-blur-xl min-[1367px]:hidden">
       <div className="mx-auto flex min-h-[76px] w-full max-w-full items-center gap-3 px-4 py-3">
         <button
           type="button"
@@ -84,15 +84,8 @@ export function MobileAppBar({ open, onToggle }: MobileAppBarProps) {
         </button>
 
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          <div className="flex h-[3.25rem] w-[3.25rem] shrink-0 items-center justify-center rounded-[1.15rem] border border-[#e4ddff] bg-[#f4f0ff] shadow-[0_10px_22px_rgba(79,70,229,0.09)]">
-            <Image
-              src="/logo.png"
-              alt={t.common.appName}
-              width={40}
-              height={40}
-              className="h-9 w-9 object-contain"
-              priority
-            />
+          <div className="flex h-[3.25rem] w-[3.25rem] shrink-0 items-center justify-center rounded-[1.15rem] border border-slate-800 bg-slate-950 shadow-[0_10px_22px_rgba(79,70,229,0.09)]">
+            <EESLogo alt={t.common.appName} size={38} className="h-[38px] w-[38px]" priority />
           </div>
 
           <div className="flex min-w-0 items-start gap-2">

@@ -1,7 +1,6 @@
 "use client";
 
 import clsx from "clsx";
-import Image from "next/image";
 import {
   AlertCircle,
   BarChart3,
@@ -17,6 +16,7 @@ import {
   Truck,
   Users
 } from "lucide-react";
+import { EESLogo } from "@/components/ees-logo";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   buildBookingBusinessInsights,
@@ -925,5 +925,5 @@ function PrintReport({ insights, language, period, actions, generatedAt, full }:
 
 function PrintHeader({ title, period, latest, generatedAt, language }: { title: string; period: string; latest: string; generatedAt: string; language: "en" | "th" }) {
   const copy = copyByLanguage[language];
-  return <header className="booking-insights-print-header"><Image src="/logo.png" alt="Expert Express Sender Co., Ltd." width={48} height={48} priority /><div><p>Expert Express Sender Co., Ltd. · Booking Diary</p><h1>{title}</h1><span>{copy.selectedPeriod}: {period} · {copy.latestRecord}: {latest} · {copy.generated}: {generatedAt}</span></div></header>;
+  return <header className="booking-insights-print-header"><EESLogo alt="Expert Express Sender Co., Ltd." size={48} priority /><div><p>Expert Express Sender Co., Ltd. · Booking Diary</p><h1>{title}</h1><span>{copy.selectedPeriod}: {period} · {copy.latestRecord}: {latest} · {copy.generated}: {generatedAt}</span></div></header>;
 }

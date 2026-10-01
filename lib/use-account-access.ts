@@ -4,7 +4,6 @@ import { createContext, createElement, useCallback, useContext, useEffect, useMe
 import { fetchCurrentAccess } from "@/lib/account-management";
 import { hasPermission, type AccountAccess, type Permission } from "@/lib/authorization";
 
-type AccessResult = Awaited<ReturnType<typeof fetchCurrentAccess>>;
 type RefreshOptions = { force?: boolean };
 
 type AccountAccessContextValue = {
@@ -15,57 +14,22 @@ type AccountAccessContextValue = {
   can: (permission: Permission) => boolean;
 };
 
-const ACCESS_TTL_MS = 15_000;
 const AccountAccessContext = createContext<AccountAccessContextValue | null>(null);
 
-let cachedAccessResult: AccessResult | null = null;
-let cachedAt = 0;
-let pendingAccessRequest: Promise<AccessResult> | null = null;
-
-function loadCurrentAccess(options: RefreshOptions = {}) {
-  const now = Date.now();
-  if (!options.force && cachedAccessResult && now - cachedAt < ACCESS_TTL_MS) {
-    return Promise.resolve(cachedAccessResult);
-  }
-
-  if (!options.force && pendingAccessRequest) {
-    return pendingAccessRequest;
-  }
-
-  pendingAccessRequest = fetchCurrentAccess()
-    .then((result) => {
-      cachedAccessResult = result;
-      cachedAt = Date.now();
-      return result;
-    })
-    .finally(() => {
-      pendingAccessRequest = null;
-    });
-
-  return pendingAccessRequest;
-}
-
-function clearAccessCache() {
-  cachedAccessResult = null;
-  cachedAt = 0;
-  pendingAccessRequest = null;
-}
-
 export function AccountAccessProvider({ children }: { children: ReactNode }) {
-  const [access, setAccess] = useState<AccountAccess | null>(cachedAccessResult?.access ?? null);
-  const [loading, setLoading] = useState(!cachedAccessResult);
+  const [access, setAccess] = useState<AccountAccess | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback((options: RefreshOptions = {}) => {
+  const refresh = useCallback((_options: RefreshOptions = {}) => {
     setLoading(true);
     setError(null);
-    return loadCurrentAccess(options)
+    return fetchCurrentAccess()
       .then((result) => {
         setAccess(result.access);
         return result.access;
       })
       .catch((caught: Error) => {
-        if (options.force) clearAccessCache();
         setAccess(null);
         setError(caught.message);
         throw caught;
@@ -74,29 +38,12 @@ export function AccountAccessProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    let active = true;
-
-    loadCurrentAccess()
-      .then((result) => {
-        if (active) setAccess(result.access);
-      })
-      .catch((caught: Error) => {
-        if (active) {
-          setError(caught.message);
-          setAccess(null);
-        }
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
     const handleUserUpdated = () => {
       void refresh({ force: true }).catch(() => undefined);
     };
 
     window.addEventListener("fuel-bank:user-updated", handleUserUpdated);
     return () => {
-      active = false;
       window.removeEventListener("fuel-bank:user-updated", handleUserUpdated);
     };
   }, [refresh]);

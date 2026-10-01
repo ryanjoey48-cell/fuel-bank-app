@@ -4,10 +4,8 @@ import Link from "next/link";
 import { AlertTriangle, Calculator, CheckCircle2, ChevronDown, Download, FileUp, Info, Pencil, Search, Trash2, TrendingUp, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
-import { BusinessImpact, ActionQueue, VehicleDrillDown } from "@/components/vehicle-performance-management";
 import { buildPerformanceManagement, type Direction } from "@/lib/vehicle-performance-management";
 import { EmptyState } from "@/components/empty-state";
-import { Header } from "@/components/header";
 import {
   deleteVehicleMonthlyPerformance,
   deleteVehiclePerformanceImportReview,
@@ -53,6 +51,7 @@ type RankingKey = "recordedBalance" | "grossRevenue" | "marginPercent" | "fuelPe
 type ImportStatusFilter = "" | VehiclePerformanceImportRow["status"];
 type VehicleSortKey = "vehicleRegistration" | "grossRevenue" | "fuelSpend" | "fuelPercent" | "lpgCost" | "salaryCost" | "tripIncome" | "otherExpenses" | "recordedBalance" | "marginPercent" | "status";
 type TrendMetric = "grossRevenue" | "recordedBalance" | "fuelSpend" | "marginPercent";
+type VehiclePerformanceView = "fleet" | "monthly" | "trips";
 type CoverageVehicleDetail = {
   registration: string;
   presentMonths: number[];
@@ -296,7 +295,7 @@ async function loadCanvasImage(dataUrl: string) {
 async function loadVehiclePerformancePdfLogo(): Promise<VehiclePerformancePdfLogo> {
   if (typeof document === "undefined") return { dataUrl: null };
   try {
-    const image = await loadCanvasImage("/logo.png");
+    const image = await loadCanvasImage("/ees-logo.png");
     const targetWidth = 132;
     const targetHeight = targetWidth * (image.height / image.width);
     const canvas = document.createElement("canvas");
@@ -701,10 +700,13 @@ export default function VehiclePerformancePage() {
   const [coverageVehicleDetail, setCoverageVehicleDetail] = useState<CoverageVehicleDetail | null>(null);
   const [monitorDetailOpen, setMonitorDetailOpen] = useState(false);
   const [trendMetric, setTrendMetric] = useState<TrendMetric>("grossRevenue");
+  const [performanceView, setPerformanceView] = useState<VehiclePerformanceView>("fleet");
   const [vehicleSort, setVehicleSort] = useState<{ key: VehicleSortKey; direction: "asc" | "desc" }>({
     key: "recordedBalance",
     direction: "desc"
   });
+  const [coverageFilter, setCoverageFilter] = useState<"all" | "complete" | "partial">("all");
+  const [detailMonthFilter, setDetailMonthFilter] = useState<MonthFilter>("");
   const importInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -791,8 +793,69 @@ export default function VehiclePerformancePage() {
     const model = buildPerformanceManagement({ records, fuelRows, months: [monthNumber] });
     return { month: monthNumber, row: model.rows.find(row => row.vehicleRegistration === detailVehicle), benchmark: model.benchmark };
   }) : [], [records, fuelRows, detailVehicle]);
-  const openVehicle = (registration: string) => { setDetailVehicle(registration); requestAnimationFrame(() => document.getElementById("vehicle-detail")?.scrollIntoView({ behavior: "smooth", block: "start" })); };
+  const openVehicle = (registration: string) => {
+    setDetailVehicle(registration);
+    setDetailMonthFilter("");
+    requestAnimationFrame(() => document.getElementById("vehicle-detail")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
   const summary = useMemo(() => buildVehiclePerformanceSummary(rows), [rows]);
+  const vehicleDetailSummary = useMemo(() => {
+    const months = vehicleHistory
+      .filter((item) => Boolean(item.row))
+      .map((item) => ({ month: item.month, row: item.row! }));
+    if (!months.length) return null;
+
+    const totals = months.reduce((acc, item) => {
+      acc.revenue += item.row.grossRevenue;
+      acc.fuel += item.row.fuelSpend;
+      acc.salaryTrip += item.row.salaryCost + item.row.tripIncome;
+      acc.other += item.row.otherExpenses;
+      acc.balance += item.row.recordedBalance;
+      return acc;
+    }, { revenue: 0, fuel: 0, salaryTrip: 0, other: 0, balance: 0 });
+
+    const latest = months[months.length - 1];
+    const previous = months.length > 1 ? months[months.length - 2] : null;
+    return {
+      months,
+      latest,
+      previous,
+      totals,
+      directCosts: totals.revenue - totals.balance,
+      margin: totals.revenue > 0 ? (totals.balance / totals.revenue) * 100 : null,
+      fuelShare: totals.revenue > 0 ? (totals.fuel / totals.revenue) * 100 : null
+    };
+  }, [vehicleHistory]);
+
+  const detailScope = useMemo(() => {
+    if (!vehicleDetailSummary) return null;
+    const months = detailMonthFilter === ""
+      ? vehicleDetailSummary.months
+      : vehicleDetailSummary.months.filter((item) => item.month === detailMonthFilter);
+    if (!months.length) return null;
+    const totals = months.reduce((acc, item) => {
+      acc.revenue += item.row.grossRevenue;
+      acc.fuel += item.row.fuelSpend;
+      acc.salaryTrip += item.row.salaryCost + item.row.tripIncome;
+      acc.other += item.row.otherExpenses;
+      acc.balance += item.row.recordedBalance;
+      return acc;
+    }, { revenue: 0, fuel: 0, salaryTrip: 0, other: 0, balance: 0 });
+    const latest = months[months.length - 1];
+    const allMonths = vehicleDetailSummary.months;
+    const latestIndex = allMonths.findIndex((item) => item.month === latest.month);
+    const previous = latestIndex > 0 ? allMonths[latestIndex - 1] : null;
+    const directCosts = totals.revenue - totals.balance;
+    return {
+      months,
+      totals,
+      latest,
+      previous,
+      directCosts,
+      margin: totals.revenue > 0 ? (totals.balance / totals.revenue) * 100 : null,
+      fuelShare: totals.revenue > 0 ? (totals.fuel / totals.revenue) * 100 : null
+    };
+  }, [vehicleDetailSummary, detailMonthFilter]);
 
   const monthlyTrend = useMemo(() => buildVehicleMonthlyTrend(selectedRecords, fuelRows), [fuelRows, selectedRecords]);
   const monthlyPerformanceRows = useMemo(
@@ -858,7 +921,10 @@ export default function VehiclePerformancePage() {
       return compareNullableMetric(left[vehicleSort.key] as number | null, right[vehicleSort.key] as number | null, vehicleSort.direction);
     });
   }, [rows, vehicleSort]);
-  const visibleTableRows = useMemo(() => sortedRows.filter(row => !movementFilter || management.changes.some(change => change.registration === row.vehicleRegistration && change.direction === movementFilter)), [sortedRows, movementFilter, management.changes]);
+
+  const detailVehicleIndex = useMemo(() => detailVehicle ? sortedRows.findIndex((row) => vehicleKey(row.vehicleRegistration) === vehicleKey(detailVehicle)) : -1, [detailVehicle, sortedRows]);
+  const previousDetailVehicle = detailVehicleIndex > 0 ? sortedRows[detailVehicleIndex - 1]?.vehicleRegistration ?? null : null;
+  const nextDetailVehicle = detailVehicleIndex >= 0 && detailVehicleIndex < sortedRows.length - 1 ? sortedRows[detailVehicleIndex + 1]?.vehicleRegistration ?? null : null;
   const vehicleMonthCounts = useMemo(() => {
     const counts = new Map<string, Set<number>>();
     for (const record of selectedRecords) {
@@ -868,6 +934,14 @@ export default function VehiclePerformancePage() {
     }
     return new Map(Array.from(counts.entries()).map(([key, months]) => [key, months.size]));
   }, [selectedRecords]);
+
+  const visibleTableRows = useMemo(() => sortedRows.filter((row) => {
+    if (movementFilter && !management.changes.some(change => change.registration === row.vehicleRegistration && change.direction === movementFilter)) return false;
+    const monthsLoaded = vehicleMonthCounts.get(vehicleKey(row.vehicleRegistration)) ?? 0;
+    if (coverageFilter === "complete" && monthsLoaded !== selectedMonths.length) return false;
+    if (coverageFilter === "partial" && monthsLoaded === selectedMonths.length) return false;
+    return true;
+  }), [sortedRows, movementFilter, management.changes, coverageFilter, vehicleMonthCounts, selectedMonths.length]);
   const expectedVehicleRegistrations = useMemo(
     () => Array.from(new Set(records.filter(record => normalizeComparableText(record.vehicle_registration).includes(normalizeComparableText(searchQuery))).map((record) => normalizeVehicleRegistration(record.vehicle_registration)).filter(Boolean))).sort(),
     [records, searchQuery]
@@ -2030,39 +2104,157 @@ export default function VehiclePerformancePage() {
     }
   };
 
+  const previousPeriodLabel = previousMonthComparison
+    ? `${shortMonthLabel(previousMonthComparison.previous.month)} → ${shortMonthLabel(previousMonthComparison.current.month)}`
+    : null;
+
+  const deltaTone = (value: number | null) => {
+    if (value == null || !Number.isFinite(value) || Math.abs(value) < 0.05) return "text-slate-500";
+    return value > 0 ? "text-emerald-700" : "text-rose-700";
+  };
+
+  const moneyDelta = (value: number | null) => value == null ? null : formatSignedPercent(value, language);
+  const pointDelta = (value: number | null) => value == null ? null : formatSignedPointChange(value, language);
+
+  const tripDataAvailable = selectedTripFinancials.operationalTrips > 0 || selectedTripFinancials.revenueGeneratingTrips > 0;
+
+  const fleetDecisionData = useMemo(() => {
+    const validMargins = rows.filter((row) => row.marginPercent != null);
+    const validFuel = rows.filter((row) => row.fuelPercent != null);
+
+    const median = (values: number[]) => {
+      if (!values.length) return null;
+      const sorted = [...values].sort((a, b) => a - b);
+      const middle = Math.floor(sorted.length / 2);
+      return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+    };
+
+    const fleetMedianMargin = median(validMargins.map((row) => row.marginPercent as number));
+    const fleetMedianFuel = median(validFuel.map((row) => row.fuelPercent as number));
+
+    const highestFuelShare = [...validFuel]
+      .sort((left, right) => (right.fuelPercent ?? 0) - (left.fuelPercent ?? 0))
+      .slice(0, 5);
+    const lowestMargins = [...validMargins]
+      .sort((left, right) => (left.marginPercent ?? Number.POSITIVE_INFINITY) - (right.marginPercent ?? Number.POSITIVE_INFINITY))
+      .slice(0, 5);
+    const topBalance = [...rows]
+      .sort((left, right) => right.recordedBalance - left.recordedBalance)
+      .slice(0, 5);
+    const topRevenue = [...rows]
+      .sort((left, right) => right.grossRevenue - left.grossRevenue)
+      .slice(0, 5);
+    const topVehicles = [...rows]
+      .sort((left, right) => right.recordedBalance - left.recordedBalance)
+      .slice(0, 8);
+    const bestMargins = [...validMargins]
+      .sort((left, right) => (right.marginPercent ?? -Infinity) - (left.marginPercent ?? -Infinity))
+      .slice(0, 5);
+
+    const highFuelKeys = new Set(highestFuelShare.slice(0, 3).map((row) => vehicleKey(row.vehicleRegistration)));
+    const lowMarginKeys = new Set(lowestMargins.slice(0, 3).map((row) => vehicleKey(row.vehicleRegistration)));
+
+    const reviewCandidates = rows
+      .map((row) => {
+        const reasons: string[] = [];
+        let priority = 0;
+        const monthsLoaded = vehicleMonthCounts.get(vehicleKey(row.vehicleRegistration)) ?? 0;
+        const missingMonths = Math.max(0, selectedMonths.length - monthsLoaded);
+
+        if (missingMonths > 0) {
+          reasons.push(`${missingMonths} ${missingMonths === 1 ? "month" : "months"} missing from the selected period`);
+          priority += 100 + missingMonths;
+        }
+        if (row.grossRevenue <= 0 && row.fuelSpend > 0) {
+          reasons.push(`${formatCompactBaht(row.fuelSpend)} fuel recorded with no revenue`);
+          priority += 95;
+        }
+        if (row.recordedBalance < 0) {
+          reasons.push(`Recorded balance is ${formatCompactBaht(row.recordedBalance)}`);
+          priority += 90;
+        }
+        if (highFuelKeys.has(vehicleKey(row.vehicleRegistration)) && row.fuelPercent != null) {
+          const variance = fleetMedianFuel == null ? null : row.fuelPercent - fleetMedianFuel;
+          reasons.push(
+            variance == null
+              ? `Fuel / revenue is ${formatPercent(row.fuelPercent, language)}`
+              : `Fuel / revenue ${formatPercent(row.fuelPercent, language)} · ${formatSignedPointChange(variance, language)} vs fleet median`
+          );
+          priority += 60 + Math.max(0, variance ?? 0);
+        }
+        if (lowMarginKeys.has(vehicleKey(row.vehicleRegistration)) && row.marginPercent != null) {
+          const variance = fleetMedianMargin == null ? null : row.marginPercent - fleetMedianMargin;
+          reasons.push(
+            variance == null
+              ? `Margin is ${formatPercent(row.marginPercent, language)}`
+              : `Margin ${formatPercent(row.marginPercent, language)} · ${formatSignedPointChange(variance, language)} vs fleet median`
+          );
+          priority += 50 + Math.max(0, -(variance ?? 0));
+        }
+
+        return { row, reasons, priority };
+      })
+      .filter((item) => item.reasons.length > 0)
+      .sort((left, right) => right.priority - left.priority);
+
+    const topFiveBalance = topBalance.reduce((sum, row) => sum + Math.max(0, row.recordedBalance), 0);
+    const positiveBalance = rows.reduce((sum, row) => sum + Math.max(0, row.recordedBalance), 0);
+
+    return {
+      reviewCandidates,
+      topBalance,
+      topRevenue,
+      topVehicles,
+      highestFuelShare,
+      bestMargins,
+      fleetMedianMargin,
+      fleetMedianFuel,
+      topFiveBalanceShare: positiveBalance > 0 ? (topFiveBalance / positiveBalance) * 100 : null,
+      averageBalancePerVehicle: rows.length ? summary.recordedBalance / rows.length : 0,
+      averageRevenuePerVehicle: rows.length ? summary.grossRevenue / rows.length : 0
+    };
+  }, [language, rows, selectedMonths.length, summary.grossRevenue, summary.recordedBalance, vehicleMonthCounts]);
+
+  const scrollToDataManagement = () => {
+    setDataManagementOpen((current) => !current);
+    requestAnimationFrame(() => document.getElementById("vehicle-performance-data-management")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
+
   return (
     <>
-      <div className="mb-6 hidden md:block">
-        <Header title={labels.title} description={labels.description} />
-      </div>
-
-      <section className="surface-card p-4 sm:p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-brand-100 bg-brand-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">
-              <TrendingUp className="h-3.5 w-3.5" />
-              {labels.title}
+      <section className="surface-card overflow-hidden border border-brand-100/80 shadow-[0_14px_38px_rgba(76,29,149,0.07)]">
+        <div className="border-b border-brand-100 bg-[radial-gradient(circle_at_top_right,rgba(124,58,237,0.10),transparent_34%),linear-gradient(135deg,#ffffff_0%,#fbf9ff_58%,#f6f2ff_100%)] px-5 py-5 sm:px-6">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div className="min-w-0">
+              <div className="inline-flex items-center gap-2 rounded-full border border-brand-100 bg-white/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-700 shadow-sm">
+                <TrendingUp className="h-3.5 w-3.5" />
+                Vehicle performance
+              </div>
+              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 sm:text-[1.8rem]">Vehicle Performance</h1>
+              <p className="mt-1 max-w-3xl text-sm text-slate-500">Understand fleet revenue, direct costs, fuel share and recorded balance without turning the page into a wall of reports.</p>
             </div>
-            <h2 className="mt-3 text-xl font-semibold text-slate-950">{labels.title}</h2>
-            <p className="mt-1 max-w-3xl text-sm text-slate-500">{labels.description}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex rounded-2xl border border-brand-100 bg-white/90 p-1 shadow-sm">
+                {([
+                  ["fleet", "Fleet overview"],
+                  ["monthly", "Monthly performance"]
+                ] as const).map(([value, label]) => (
+                  <button key={value} type="button" onClick={() => setPerformanceView(value)} className={`rounded-xl px-3.5 py-2 text-sm font-semibold transition ${performanceView === value ? "bg-brand-700 text-white shadow-sm" : "text-slate-600 hover:bg-brand-50"}`}>{label}</button>
+                ))}
+                {tripDataAvailable ? (
+                  <button type="button" onClick={() => setPerformanceView("trips")} className={`rounded-xl px-3.5 py-2 text-sm font-semibold transition ${performanceView === "trips" ? "bg-brand-700 text-white shadow-sm" : "text-slate-600 hover:bg-brand-50"}`}>Trip performance</button>
+                ) : null}
+              </div>
+              <button type="button" className="btn-secondary" onClick={scrollToDataManagement}>Manage data</button>
+              <Link className="btn-secondary" href="/maintenance/analytics">{t.maintenance.analytics}</Link>
+              <button type="button" onClick={() => void downloadVehiclePerformancePdf()} disabled={generatingPdf || loading || !!loadError || !rows.length} className="btn-primary gap-2 disabled:cursor-not-allowed disabled:opacity-50">
+                <Download className="h-4 w-4" />
+                {generatingPdf ? "Generating..." : "Download report"}
+              </button>
+            </div>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <Link className="btn-secondary" href="/maintenance/analytics">{t.maintenance.analytics}</Link>
-            <span className="badge-muted self-start sm:self-auto">Period: {periodLabel}</span>
-            <button
-              type="button"
-              onClick={() => void downloadVehiclePerformancePdf()}
-              disabled={generatingPdf || loading || !!loadError || !rows.length}
-              className="btn-primary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-            >
-              <Download className="h-4 w-4" />
-              {generatingPdf ? "Generating PDF..." : "Download PDF Report"}
-            </button>
-          </div>
-        </div>
 
-        <div className="mt-5 rounded-[0.85rem] border border-slate-200/80 bg-white/95 p-3 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-          <div className="grid gap-3 md:grid-cols-[120px_170px_minmax(220px,1fr)] md:items-end">
+          <div className="mt-5 grid gap-3 rounded-2xl border border-white/80 bg-white/80 p-3 shadow-sm md:grid-cols-[120px_190px_minmax(240px,1fr)] md:items-end">
             <div>
               <label className="form-label">{labels.year}</label>
               <input className="form-input w-full bg-white" type="number" min="2000" max="2100" value={year} onChange={(event) => setYear(Number(event.target.value) || 2026)} />
@@ -2071,9 +2263,7 @@ export default function VehiclePerformancePage() {
               <label className="form-label">{labels.month}</label>
               <select className="form-input w-full bg-white" value={month} onChange={(event) => setMonth(event.target.value ? Number(event.target.value) : "")}>
                 <option value="">{labels.allLoadedMonths}</option>
-                {MONTH_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>{labels.months[option.labelKey]}</option>
-                ))}
+                {MONTH_OPTIONS.map((option) => <option key={option.value} value={option.value}>{labels.months[option.labelKey]}</option>)}
               </select>
             </div>
             <div>
@@ -2084,344 +2274,300 @@ export default function VehiclePerformancePage() {
               </div>
             </div>
           </div>
-          {!loading && !loadError && selectedRecords.length > 0 && <>
-          <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_180px] lg:items-center">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{labels.monthsLoaded}</p>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {coverageRows.map((item) => (
-                  <button
-                    key={item.month}
-                    type="button"
-                    onClick={() => item.status === "partial" ? setPartialMonthDetail(item.month) : undefined}
-                    className={`rounded-md border px-2 py-1 text-xs font-semibold ${
-                      item.status === "missing"
-                        ? "border-slate-200 bg-slate-50 text-slate-400"
-                        : item.status === "partial"
-                          ? "border-amber-200 bg-amber-50 text-amber-800"
-                          : "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    }`}
-                    title={`${monthLabel(item.month)} - ${item.status === "complete" ? "Complete" : item.status === "partial" ? `Partial: ${(missingVehiclesByMonth.get(item.month) ?? []).join(", ") || "missing vehicle data"}` : "Missing"}`}
-                  >
-                    {item.label} {item.status === "complete" ? "Complete" : item.status === "partial" ? "Partial" : "Missing"}
-                  </button>
-                ))}
-              </div>
+
+          {!loading && !loadError && selectedRecords.length > 0 ? (
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+              <span className="badge-muted">{periodLabel}</span>
+              <button type="button" onClick={() => setVehicleCoverageOpen(true)} className="badge-muted transition hover:border-brand-200 hover:text-brand-700">{dataQuality.representedVehicles} vehicles analysed</button>
+              <span className={`badge-muted ${monthCoverageCounts.partial || dataQuality.missingMonths.length ? "border-amber-200 bg-amber-50 text-amber-800" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{monthCoverageCounts.complete} complete · {monthCoverageCounts.partial} partial</span>
+              {incompletePeriodMessage ? <span className="font-medium text-amber-800">{incompletePeriodMessage}</span> : null}
             </div>
-            <KpiCard label="Months With Data" value={`${loadedMonthCount} / ${selectedMonths.length}`} detail={`${monthCoverageCounts.complete} complete - ${monthCoverageCounts.partial} partial`} />
-            <KpiCard
-              label="Performance Vehicles"
-              value={`${dataQuality.representedVehicles} analysed`}
-              detail={`${dataQuality.representedVehicles} eligible; ${vehicleCoverageDetails.withoutPerformance.length} excluded`}
-              helper={`${dataQuality.representedVehicles} vehicles have eligible performance records. Vehicles with performance data are counted as analysed; ${vehicleCoverageDetails.withoutPerformance.length} fleet ${vehicleCoverageDetails.withoutPerformance.length === 1 ? "vehicle has" : "vehicles have"} no eligible financial performance data for this period.`}
-              tooltip={vehicleCoverageDetails.withoutPerformance.length ? `Excluded: ${vehicleCoverageDetails.withoutPerformance.map((vehicle) => `${vehicle.registration} (${vehicle.reasons.join(", ")})`).join("; ")}` : "All fleet vehicles have eligible performance data for this period."}
-              onClick={() => setVehicleCoverageOpen(true)}
-            />
-          </div>
-          {incompletePeriodMessage ? (
-            <p className="mt-4 rounded-[0.85rem] border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">
-              {incompletePeriodMessage}
-            </p>
           ) : null}
-          </>}
         </div>
       </section>
 
       {loading ? <p role="status" className="surface-card p-5">{labels.loadingRecords}</p> : loadError ? (
-        <div role="alert" className="surface-card p-5">
-          <p className="form-error">Unable to load vehicle performance: {loadError}</p>
-          <button type="button" className="btn-secondary mt-3" onClick={() => void load()}>{labels.retry}</button>
-        </div>
+        <div role="alert" className="surface-card p-5"><p className="form-error">Unable to load vehicle performance: {loadError}</p><button type="button" className="btn-secondary mt-3" onClick={() => void load()}>{labels.retry}</button></div>
       ) : !selectedRecords.length ? <p role="status" className="surface-card p-5">{labels.noDataTitle}</p> : <>
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label={labels.revenue} value={formatCompactBaht(summary.grossRevenue)} detail={`${formatBaht(summary.grossRevenue)} - Across ${loadedMonthCount} loaded ${loadedMonthCount === 1 ? "month" : "months"}`} tooltip="Total revenue allocated to the selected vehicles and months." />
-        <KpiCard label={labels.recordedBalance} value={formatCompactBaht(summary.recordedBalance)} detail={`${formatBaht(summary.recordedBalance)} - Across ${loadedMonthCount} loaded ${loadedMonthCount === 1 ? "month" : "months"}`} tone={summary.recordedBalance < 0 ? "danger" : "success"} tooltip="Revenue remaining after fuel, salary, trip payments and other recorded direct costs. This is not full accounting profit." />
-        <KpiCard label="Margin" value={formatPercent(summary.marginPercent, language)} detail={`${labels.recordedBalance} / ${labels.revenue}`} helper={summary.marginPercent == null ? undefined : `${formatBaht(summary.marginPercent)} of every ฿100 revenue remained after recorded direct costs.`} tone={summary.recordedBalance < 0 ? "danger" : "success"} tooltip="Recorded Balance divided by Revenue." />
-        <KpiCard label={labels.fuelSpend} value={formatCompactBaht(summary.fuelSpend)} detail={`${formatBaht(summary.fuelSpend)} - Across ${loadedMonthCount} loaded ${loadedMonthCount === 1 ? "month" : "months"}`} tooltip="Total recorded fuel cost." />
-        <KpiCard label={labels.fuelPercentOfRevenue} value={formatPercent(summary.fuelPercent, language)} detail={`${labels.fuelSpend} / ${labels.revenue}`} helper={summary.fuelPercent == null ? undefined : `${formatBaht(summary.fuelPercent)} of every ฿100 revenue was spent on fuel.`} tooltip="How much fuel costs for every ฿100 of revenue." />
-        <KpiCard label={labels.salary} value={formatCompactBaht(summary.salaryCost)} detail={`${formatBaht(summary.salaryCost)} - Across ${loadedMonthCount} loaded ${loadedMonthCount === 1 ? "month" : "months"}`} tooltip="Recorded driver salary allocated to these vehicles." />
-        <KpiCard label={labels.tripPayments} value={formatCompactBaht(summary.tripIncome)} detail={`${formatBaht(summary.tripIncome)} - Across ${loadedMonthCount} loaded ${loadedMonthCount === 1 ? "month" : "months"}`} tooltip="Recorded trip-related driver payments." />
-        <KpiCard label={labels.otherExpenses} value={formatCompactBaht(summary.otherExpenses)} detail={`${formatBaht(summary.otherExpenses)} - Across ${loadedMonthCount} loaded ${loadedMonthCount === 1 ? "month" : "months"}`} tooltip="Other direct costs recorded against these vehicles." />
-      </section>
 
-      <section className="surface-card p-4 sm:p-5">
-        <div className="mb-4">
-          <h3 className="section-title">{language === "th" ? "ประสิทธิภาพทริป: ปฏิบัติงานและการเงิน" : "Trip Performance: Operational vs Financial"}</h3>
-          <p className="section-subtitle">{language === "th" ? "ระยะทางปฏิบัติงานนับทุกทริป ส่วนรายได้และระยะทางรายได้นับเฉพาะทริปที่รวมในการเงิน" : "Operational distance counts every trip; revenue and revenue distance count financially included trips only."}</p>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          <KpiCard label={language === "th" ? "ระยะทางรวม" : "Total Distance"} value={`${formatNumber(selectedTripFinancials.operationalDistanceKm, language, 1)} km`} detail={`${selectedTripFinancials.operationalTrips} ${language === "th" ? "ทริปปฏิบัติงาน" : "operational trips"}`} />
-          <KpiCard label={language === "th" ? "ระยะทางรายได้" : "Revenue Distance"} value={`${formatNumber(selectedTripFinancials.revenueDistanceKm, language, 1)} km`} detail={`${selectedTripFinancials.revenueGeneratingTrips} ${language === "th" ? "ทริปสร้างรายได้" : "revenue-generating trips"}`} />
-          <KpiCard label={language === "th" ? "ระยะทางไม่คิดค่าบริการ" : "Non-chargeable Distance"} value={`${formatNumber(selectedTripFinancials.nonChargeableDistanceKm, language, 1)} km`} detail={`${selectedTripFinancials.excludedTrips} ${language === "th" ? "ทริปไม่รวมการเงิน" : "financially excluded trips"}`} />
-          <KpiCard label={language === "th" ? "รายได้จากทริป" : "Trip Revenue"} value={formatBaht(selectedTripFinancials.includedRevenue)} detail={language === "th" ? "ไม่รวมราคาทริปที่ถูกยกเว้น" : "Excluded trip prices are not counted"} />
-          <KpiCard label={language === "th" ? "รายได้ / กม." : "Revenue / KM"} value={selectedTripFinancials.revenuePerKm == null ? "-" : formatBaht(selectedTripFinancials.revenuePerKm)} detail={language === "th" ? "รายได้ / ระยะทางรายได้" : "Included revenue / revenue distance"} />
-        </div>
-      </section>
-
-      <BusinessImpact model={management} actual={summary} onMovement={(direction) => { setMovementFilter(direction); requestAnimationFrame(() => document.getElementById("vehicle-performance-table")?.scrollIntoView({ behavior: "smooth" })); }} />
-
-      <section className="surface-card p-4 sm:p-5">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h3 className="section-title">{labels.monthlyPerformance}</h3>
-            <p className="section-subtitle">{labels.missingMonthsDescription}</p>
+      <section className="surface-card overflow-hidden border border-brand-100/80 bg-[linear-gradient(180deg,#ffffff_0%,#fbf9ff_100%)] p-0 shadow-[0_16px_38px_rgba(76,29,149,0.06)]">
+        {performanceView === "monthly" && previousMonthComparison ? (
+          <div className="grid divide-y divide-slate-100 sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-5">
+            <PerformanceHeroMetric label={`${monthLabel(previousMonthComparison.current.month)} revenue`} value={formatCompactBaht(previousMonthComparison.current.grossRevenue)} detail={formatBaht(previousMonthComparison.current.grossRevenue)} delta={moneyDelta(previousMonthComparison.revenueChange)} deltaClass={deltaTone(previousMonthComparison.revenueChange)} compareLabel={previousPeriodLabel} />
+            <PerformanceHeroMetric label="Recorded balance" value={formatCompactBaht(previousMonthComparison.current.recordedBalance)} detail="Revenue after recorded direct costs" delta={moneyDelta(previousMonthComparison.balanceChange)} deltaClass={deltaTone(previousMonthComparison.balanceChange)} compareLabel={previousPeriodLabel} tone={previousMonthComparison.current.recordedBalance < 0 ? "danger" : "success"} />
+            <PerformanceHeroMetric label="Margin" value={formatPercent(previousMonthComparison.current.marginPercent, language)} detail="Recorded balance ÷ revenue" delta={pointDelta(previousMonthComparison.marginPointChange)} deltaClass={deltaTone(previousMonthComparison.marginPointChange)} compareLabel={previousPeriodLabel} />
+            <PerformanceHeroMetric label="Fuel / revenue" value={formatPercent(previousMonthComparison.current.fuelPercent, language)} detail={`${formatCompactBaht(previousMonthComparison.current.fuelSpend)} fuel spend`} delta={moneyDelta(previousMonthComparison.fuelChange)} deltaClass={previousMonthComparison.fuelChange == null ? "text-slate-500" : previousMonthComparison.fuelChange > 0 ? "text-rose-700" : "text-emerald-700"} compareLabel={previousPeriodLabel} />
+            <PerformanceHeroMetric label="Vehicles analysed" value={formatNumber(previousMonthComparison.current.vehicleCount, language)} detail={`${monthLabel(previousMonthComparison.current.month)} complete-month view`} />
           </div>
-          <span className="badge-muted">{periodLabel}</span>
-        </div>
-
-        <MonthlyPerformanceTable
-          rows={monthlyPerformanceRows}
-          labels={labels}
-          language={language}
-          monthLabel={monthLabel}
-          expectedVehicleCount={expectedVehicleRegistrations.length}
-          missingVehiclesByMonth={missingVehiclesByMonth}
-          onPartialClick={setPartialMonthDetail}
-        />
-      </section>
-
-      <section className="surface-card p-4 sm:p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h3 className="section-title">{labels.monthlyTrend}</h3>
-            <p className="section-subtitle">{labels.canonicalDataset}</p>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <span className={`badge-muted ${totalsReconcile ? "" : "border-rose-200 bg-rose-50 text-rose-700"}`}>
-              {totalsReconcile ? "Totals reconciled" : "Totals need review"}
-            </span>
-            <select value={trendMetric} onChange={(event) => setTrendMetric(event.target.value as TrendMetric)} className="form-input bg-white">
-              <option value="grossRevenue">{labels.revenue}</option>
-              <option value="recordedBalance">{labels.recordedBalance}</option>
-              <option value="fuelSpend">{labels.fuelSpend}</option>
-              <option value="marginPercent">{labels.marginPercent}</option>
-            </select>
-          </div>
-        </div>
-        <MonthlyTrend rows={monthlyPerformanceRows} labels={labels} language={language} metric={trendMetric} monthLabel={shortMonthLabel} />
-      </section>
-
-      <ActionQueue model={queueManagement} onVehicle={openVehicle} />
-      {detailVehicle && <div id="vehicle-detail" className="scroll-mt-6"><VehicleDrillDown registration={detailVehicle} history={vehicleHistory} onClose={() => setDetailVehicle(null)} /></div>}
-
-      <section className="surface-card p-4 sm:p-5">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h3 id="vehicle-performance-table" className="section-title scroll-mt-6">{labels.tableTitle}</h3>
-            {movementFilter && <button type="button" onClick={() => setMovementFilter(null)} className="mt-2 text-sm text-brand-700">Movement filter: {movementFilter} · {visibleTableRows.length} vehicles · Clear</button>}
-            <p className="section-subtitle">
-              {formatNumber(rows.length, language)} vehicles - {periodLabel} - {formatNumber(loadedMonthCount, language)} loaded {loadedMonthCount === 1 ? "month" : "months"}.
-              {month === "" ? " Select a specific month to edit monthly records." : ""}
-            </p>
-          </div>
-        </div>
-        <div className="mb-4 grid gap-2 rounded-[0.85rem] border border-slate-200 bg-slate-50 p-3 text-sm lg:grid-cols-[minmax(180px,1fr)_repeat(4,minmax(90px,0.6fr))_repeat(2,minmax(120px,0.8fr))]">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">{labels.fleetPerformance}</p>
-            <p className="mt-1 font-bold text-slate-950">{formatNumber(rows.length, language)} vehicles analysed</p>
-          </div>
-          <PreviewMetric label="Strong" value={String(performanceStatusCounts.strong)} tone="success" />
-          <PreviewMetric label="Stable" value={String(performanceStatusCounts.stable)} tone="info" />
-          <PreviewMetric label="Monitor" value={String(performanceStatusCounts.monitor)} tone="warning" />
-          <PreviewMetric label="Attention" value={String(performanceStatusCounts.attention)} tone="danger" />
-          <PreviewMetric label="Fleet margin" value={formatPercent(summary.marginPercent, language)} tone="default" />
-          <PreviewMetric label="Fleet fuel %" value={formatPercent(summary.fuelPercent, language)} tone="default" />
-        </div>
-        {movementFilter && !visibleTableRows.length && <p role="status" className="mb-3 text-sm text-slate-600">{labels.noMovementMatches}</p>}
-        {loading ? (
-          <p className="text-sm text-slate-500">{t.common.loading}</p>
-        ) : rows.length === 0 ? (
-          <EmptyState title={labels.noDataTitle} description={labels.noDataDescription} />
         ) : (
-          <>
-            <div className="space-y-3 md:hidden">
-              {visibleTableRows.map((row) => {
-                const matchingRecords = records.filter(
-                  (record) =>
-                    (month === "" || record.month === month) &&
-                    normalizeComparableText(record.vehicle_registration) ===
-                      normalizeComparableText(row.vehicleRegistration)
-                );
-                const sourceRecord = matchingRecords.length === 1 && month !== "" ? matchingRecords[0] : null;
-                return (
-                  <MobilePerformanceCard
-                    key={row.vehicleRegistration}
-                    row={row}
-                    labels={labels}
-                    language={language}
-                    sourceRecord={sourceRecord}
-                    canWrite={canWrite}
-                    canDelete={canDelete}
-                    deletingId={deletingId}
-                    onEdit={editRecord}
-                    onDelete={handleDelete}
-                    onView={openVehicle}
-                    showActions={month !== ""}
-                  />
-                );
-              })}
-            </div>
-            <div className="hidden md:block">
-              <div className="table-shell rounded-[0.85rem]">
-                <div className="table-scroll overflow-x-auto">
-                  <table className="w-full min-w-[1260px] text-sm">
-                    <thead className="bg-slate-50/95 text-slate-600">
-                      <tr>
-                        <SortHead label={labels.vehicle} sortKey="vehicleRegistration" active={vehicleSort} onSort={toggleVehicleSort} className="sticky left-0 z-20 bg-slate-50 text-left" />
-                        <th className="table-head-cell text-right">{labels.monthsLoaded}</th>
-                        <SortHead label={labels.revenue} sortKey="grossRevenue" active={vehicleSort} onSort={toggleVehicleSort} />
-                        <SortHead label={labels.fuel} sortKey="fuelSpend" active={vehicleSort} onSort={toggleVehicleSort} />
-                        <SortHead label={labels.fuelPercent} sortKey="fuelPercent" active={vehicleSort} onSort={toggleVehicleSort} />
-                        <SortHead label={labels.lpg} sortKey="lpgCost" active={vehicleSort} onSort={toggleVehicleSort} />
-                        <SortHead label={labels.salary} sortKey="salaryCost" active={vehicleSort} onSort={toggleVehicleSort} />
-                        <SortHead label={labels.tripPayments} sortKey="tripIncome" active={vehicleSort} onSort={toggleVehicleSort} />
-                        <SortHead label={labels.otherCosts} sortKey="otherExpenses" active={vehicleSort} onSort={toggleVehicleSort} />
-                        <SortHead label={labels.recordedBalance} sortKey="recordedBalance" active={vehicleSort} onSort={toggleVehicleSort} />
-                        <SortHead label={labels.marginPercent} sortKey="marginPercent" active={vehicleSort} onSort={toggleVehicleSort} />
-                        <SortHead label="Performance" sortKey="status" active={vehicleSort} onSort={toggleVehicleSort} className="text-left" />
-                        {month !== "" ? <th className="table-head-cell sticky right-0 z-10 min-w-[180px] bg-slate-50 text-left shadow-[-10px_0_18px_rgba(15,23,42,0.06)]">{labels.actions}</th> : null}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {visibleTableRows.map((row) => {
-                        const matchingRecords = records.filter(
-                          (record) =>
-                            (month === "" || record.month === month) &&
-                            normalizeComparableText(record.vehicle_registration) ===
-                              normalizeComparableText(row.vehicleRegistration)
-                        );
-                        const sourceRecord = matchingRecords.length === 1 && month !== "" ? matchingRecords[0] : null;
-                        const rowVehicleKey = vehicleKey(row.vehicleRegistration);
-                        const presentMonths = selectedMonths.filter((monthNumber) =>
-                          selectedRecords.some((record) => record.month === monthNumber && vehicleKey(record.vehicle_registration) === rowVehicleKey)
-                        );
-                        const missingMonths = missingMonthsByVehicle.get(rowVehicleKey) ?? [];
-                        return (
-                          <tr key={row.vehicleRegistration} className="enterprise-table-row">
-                            <td className="table-body-cell table-driver-name sticky left-0 z-10 bg-white font-bold"><button type="button" onClick={() => openVehicle(row.vehicleRegistration)} className="text-brand-700 underline underline-offset-4">{row.vehicleRegistration}</button></td>
-                            <td className="table-body-cell text-right">
-                              {missingMonths.length ? (
-                                <button
-                                  type="button"
-                                  onClick={() => setCoverageVehicleDetail({ registration: row.vehicleRegistration, presentMonths, missingMonths })}
-                                  title={`Missing: ${missingMonths.map(monthLabel).join(", ")}`}
-                                  className="inline-flex rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800 hover:border-amber-300 hover:bg-amber-100"
-                                >
-                                  {vehicleMonthCounts.get(rowVehicleKey) ?? 0} / {selectedMonths.length}
-                                </button>
-                              ) : (
-                                <span
-                                  title="Complete coverage"
-                                  className="inline-flex rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-700"
-                                >
-                                  {vehicleMonthCounts.get(rowVehicleKey) ?? 0} / {selectedMonths.length}
-                                </span>
-                              )}
-                            </td>
-                            <td className="table-body-cell text-right font-semibold">{formatBaht(row.grossRevenue)}</td>
-                            <td className="table-body-cell text-right">{formatBaht(row.fuelSpend)}</td>
-                            <td className="table-body-cell text-right">{formatPercent(row.fuelPercent, language)}</td>
-                            <td className="table-body-cell text-right">{formatBaht(row.lpgCost)}</td>
-                            <td className="table-body-cell text-right">{formatBaht(row.salaryCost)}</td>
-                            <td className="table-body-cell text-right">{formatBaht(row.tripIncome)}</td>
-                            <td className="table-body-cell text-right">{formatBaht(row.otherExpenses)}</td>
-                            <td className={`table-body-cell text-right font-bold ${row.recordedBalance < 0 ? "text-rose-700" : "text-emerald-700"}`}>{formatBaht(row.recordedBalance)}</td>
-                            <td className="table-body-cell text-right">{formatPercent(row.marginPercent, language)}</td>
-                            <td className="table-body-cell"><StatusBadge row={row} labels={labels} language={language} /></td>
-                            {month !== "" ? (
-                              <td className="table-body-cell sticky right-0 bg-white shadow-[-10px_0_18px_rgba(15,23,42,0.05)]">
-                                {sourceRecord ? (
-                                  <div className="flex items-center gap-1.5">
-                                    <button type="button" onClick={() => editRecord(sourceRecord)} className="table-action-secondary gap-1.5" disabled={!canWrite}><Pencil className="h-3.5 w-3.5" />{t.common.edit}</button>
-                                    <button type="button" onClick={() => void handleDelete(sourceRecord.id)} className="table-action-danger gap-1.5" disabled={!canDelete || deletingId === sourceRecord.id}><Trash2 className="h-3.5 w-3.5" />{deletingId === sourceRecord.id ? t.common.deleting : t.common.delete}</button>
-                                  </div>
-                                ) : "-"}
-                              </td>
-                            ) : null}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </>
+          <div className="grid divide-y divide-slate-100 sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-5">
+            <PerformanceHeroMetric label="Revenue" value={formatCompactBaht(summary.grossRevenue)} detail={`${periodLabel} total`} />
+            <PerformanceHeroMetric label="Recorded balance" value={formatCompactBaht(summary.recordedBalance)} detail="Revenue after recorded direct costs" tone={summary.recordedBalance < 0 ? "danger" : "success"} />
+            <PerformanceHeroMetric label="Margin" value={formatPercent(summary.marginPercent, language)} detail="Recorded balance ÷ revenue" />
+            <PerformanceHeroMetric label="Fuel / revenue" value={formatPercent(summary.fuelPercent, language)} detail={`${formatCompactBaht(summary.fuelSpend)} fuel spend`} />
+            <PerformanceHeroMetric label="Vehicles analysed" value={formatNumber(rows.length, language)} detail={`${loadedMonthCount} loaded ${loadedMonthCount === 1 ? "month" : "months"}`} />
+          </div>
         )}
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        <div className="surface-card p-4 sm:p-5">
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h3 className="section-title">{labels.rankingsTitle}</h3>
-            <select value={rankingKey} onChange={(event) => setRankingKey(event.target.value as RankingKey)} className="form-input bg-white">
-              <option value="recordedBalance">{labels.highestRecordedBalance}</option>
-              <option value="grossRevenue">{labels.highestRevenue}</option>
-              <option value="marginPercent">{labels.bestMargin}</option>
-              <option value="fuelPercent">{labels.lowestFuelPercent}</option>
-              <option value="fuelSpend">{labels.highestFuelSpend}</option>
-              <option value="lowestRecordedBalance">{labels.lowestRecordedBalance}</option>
-            </select>
+      {performanceView === "fleet" ? <>
+        <section className="surface-card overflow-hidden border border-brand-100/70 p-0 shadow-[0_14px_34px_rgba(76,29,149,0.05)]">
+          <div className="flex flex-col gap-3 border-b border-brand-100/70 bg-[linear-gradient(135deg,#ffffff_0%,#fbf9ff_68%,#f5f0ff_100%)] px-5 py-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">Fleet highlights</p>
+              <h2 className="mt-1 text-xl font-semibold text-slate-950">The clearest picture of the fleet</h2>
+              <p className="mt-1 max-w-3xl text-sm text-slate-500">Four factual signals from the selected period. Open any vehicle to see the figures behind it.</p>
+            </div>
+            <span className="badge-muted">{periodLabel}</span>
           </div>
-          <RankedList rows={rankedRows} labels={labels} language={language} rankingKey={rankingKey} onView={openVehicle} />
-        </div>
 
-        <details open={dataQualityOpen} onToggle={(event) => setDataQualityOpen(event.currentTarget.open)} className="surface-card p-4 sm:p-5">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+          <div className="grid sm:grid-cols-2 xl:grid-cols-4">
+            {fleetDecisionData.topBalance[0] ? (
+              <button type="button" onClick={() => openVehicle(fleetDecisionData.topBalance[0].vehicleRegistration)} className="border-b border-slate-100 bg-[linear-gradient(180deg,#ffffff_0%,#f3fbf7_100%)] p-5 text-left transition hover:-translate-y-0.5 hover:bg-emerald-50/60 hover:shadow-inner sm:border-r xl:border-b-0">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-emerald-700">Top recorded balance</p>
+                <div className="mt-3 flex items-end justify-between gap-3"><div><p className="text-xl font-bold text-slate-950">{fleetDecisionData.topBalance[0].vehicleRegistration}</p><p className="mt-1 text-xs text-slate-500">{formatPercent(fleetDecisionData.topBalance[0].marginPercent, language)} retained margin</p></div><p className="text-lg font-bold text-emerald-700">{formatCompactBaht(fleetDecisionData.topBalance[0].recordedBalance)}</p></div>
+              </button>
+            ) : null}
+            {fleetDecisionData.topRevenue[0] ? (
+              <button type="button" onClick={() => openVehicle(fleetDecisionData.topRevenue[0].vehicleRegistration)} className="border-b border-slate-100 bg-[linear-gradient(180deg,#ffffff_0%,#faf7ff_100%)] p-5 text-left transition hover:-translate-y-0.5 hover:bg-brand-50/60 hover:shadow-inner xl:border-b-0 xl:border-r">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-brand-700">Highest revenue</p>
+                <div className="mt-3 flex items-end justify-between gap-3"><div><p className="text-xl font-bold text-slate-950">{fleetDecisionData.topRevenue[0].vehicleRegistration}</p><p className="mt-1 text-xs text-slate-500">Selected-period revenue</p></div><p className="text-lg font-bold text-brand-700">{formatCompactBaht(fleetDecisionData.topRevenue[0].grossRevenue)}</p></div>
+              </button>
+            ) : null}
+            {fleetDecisionData.bestMargins[0] ? (
+              <button type="button" onClick={() => openVehicle(fleetDecisionData.bestMargins[0].vehicleRegistration)} className="border-b border-slate-100 bg-[linear-gradient(180deg,#ffffff_0%,#faf7ff_100%)] p-5 text-left transition hover:-translate-y-0.5 hover:bg-brand-50/60 hover:shadow-inner sm:border-r sm:border-b-0">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-brand-700">Best retained margin</p>
+                <div className="mt-3 flex items-end justify-between gap-3"><div><p className="text-xl font-bold text-slate-950">{fleetDecisionData.bestMargins[0].vehicleRegistration}</p><p className="mt-1 text-xs text-slate-500">{formatCompactBaht(fleetDecisionData.bestMargins[0].recordedBalance)} recorded balance</p></div><p className="text-lg font-bold text-brand-700">{formatPercent(fleetDecisionData.bestMargins[0].marginPercent, language)}</p></div>
+              </button>
+            ) : null}
+            {fleetDecisionData.highestFuelShare[0] ? (
+              <button type="button" onClick={() => openVehicle(fleetDecisionData.highestFuelShare[0].vehicleRegistration)} className="bg-[linear-gradient(180deg,#ffffff_0%,#fff9f4_100%)] p-5 text-left transition hover:-translate-y-0.5 hover:bg-orange-50/60 hover:shadow-inner">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-orange-700">Highest fuel share</p>
+                <div className="mt-3 flex items-end justify-between gap-3"><div><p className="text-xl font-bold text-slate-950">{fleetDecisionData.highestFuelShare[0].vehicleRegistration}</p><p className="mt-1 text-xs text-slate-500">{formatCompactBaht(fleetDecisionData.highestFuelShare[0].fuelSpend)} fuel spend</p></div><p className="text-lg font-bold text-orange-700">{formatPercent(fleetDecisionData.highestFuelShare[0].fuelPercent, language)}</p></div>
+              </button>
+            ) : null}
+          </div>
+        </section>
+
+        <section id="vehicle-performance-table" className="surface-card scroll-mt-6 overflow-hidden border border-brand-100/70 p-0 shadow-[0_16px_40px_rgba(76,29,149,0.06)]">
+          <div className="flex flex-col gap-3 border-b border-brand-100/70 bg-[linear-gradient(135deg,#ffffff_0%,#fbf9ff_72%,#f6f1ff_100%)] px-5 py-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h3 className="section-title">{labels.dataQuality}</h3>
-              <p className={`section-subtitle font-semibold ${totalsReconcile ? "text-emerald-700" : "text-rose-700"}`}>
-                {totalsReconcile ? "Data reconciled - totals reconciled" : "Data reconciliation issue"}
-                <span className="mt-2 block text-xs font-normal text-slate-600">{management.benchmark.eligibleCount} benchmark-eligible · {monthCoverageCounts.complete} complete months · {monthCoverageCounts.partial} partial months · {Array.from(missingVehiclesByMonth.values()).reduce((sum, missing) => sum + missing.length, 0)} missing vehicle-month records · {management.benchmark.excludedCount} excluded from estimates · {vehicleCoverageDetails.withoutPerformance.length} fleet vehicles without performance records</span>
-              </p>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">Vehicle performance</p>
+              <h2 className="mt-1 text-xl font-semibold text-slate-950">Fleet vehicle ranking</h2>
+              <p className="mt-1 text-sm text-slate-500">Every analysed vehicle in one ranked comparison. Change the sort to rank by balance, revenue, margin or fuel share, then open a vehicle for the full monthly breakdown.</p>
             </div>
-            <ChevronDown className={`h-4 w-4 text-slate-500 transition ${dataQualityOpen ? "rotate-180" : ""}`} />
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="badge-muted">{visibleTableRows.length} vehicles</span>
+              <span className="badge-muted">{periodLabel}</span>
+            </div>
+          </div>
+          <div className="border-t border-brand-100/70 bg-brand-50/35 px-5 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold text-slate-700">Rank follows the selected sort.</p>
+                <p className="mt-0.5 text-xs text-slate-500">Direct costs = fuel + salary/trip payments + other recorded costs.</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="inline-flex rounded-xl bg-slate-50 p-1">
+                  {([
+                    ["all", "All"],
+                    ["complete", "Full coverage"],
+                    ["partial", "Incomplete"]
+                  ] as const).map(([key, label]) => (
+                    <button key={key} type="button" onClick={(event) => { event.preventDefault(); setCoverageFilter(key); }} className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${coverageFilter === key ? "bg-white text-brand-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>{label}</button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap items-center gap-1 rounded-xl bg-brand-50/70 p-1">
+                  <span className="px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">Sort</span>
+                  {[
+                    ["recordedBalance", "Balance"],
+                    ["grossRevenue", "Revenue"],
+                    ["marginPercent", "Margin"],
+                    ["fuelPercent", "Fuel %"]
+                  ].map(([key, label]) => (
+                    <button key={key} type="button" onClick={(event) => { event.preventDefault(); toggleVehicleSort(key as VehicleSortKey); }} className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${vehicleSort.key === key ? "bg-white text-brand-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>{label}{vehicleSort.key === key ? (vehicleSort.direction === "desc" ? " ↓" : " ↑") : ""}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="overflow-x-auto border-t border-slate-100">
+            <table className="w-full min-w-[980px] text-sm">
+              <thead className="bg-[linear-gradient(90deg,#f7f3ff_0%,#fbf9ff_55%,#f6f2ff_100%)] text-[11px] uppercase tracking-[0.1em] text-slate-500"><tr><th className="px-5 py-3 text-left font-semibold">Rank / vehicle</th><th className="px-4 py-3 text-right font-semibold">Revenue</th><th className="px-4 py-3 text-right font-semibold">Direct costs</th><th className="px-4 py-3 text-right font-semibold">Recorded balance</th><th className="px-4 py-3 text-right font-semibold">Margin</th><th className="px-4 py-3 text-right font-semibold">Fuel / revenue</th><th className="px-4 py-3 text-center font-semibold">Coverage</th><th className="px-5 py-3 text-right font-semibold">Details</th></tr></thead>
+              <tbody>
+                {visibleTableRows.map((row, index) => {
+                  const monthsLoaded = vehicleMonthCounts.get(vehicleKey(row.vehicleRegistration)) ?? 0;
+                  const directCosts = row.grossRevenue - row.recordedBalance;
+                  return (
+                    <tr key={row.vehicleRegistration} onClick={() => openVehicle(row.vehicleRegistration)} className={`cursor-pointer border-t border-slate-100 transition hover:bg-brand-50/55 ${index % 2 ? "bg-slate-50/35" : "bg-white"}`}>
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${index < 3 ? "bg-brand-700 text-white shadow-sm" : "bg-brand-50 text-brand-700"}`}>{index + 1}</span>
+                          <div>
+                            <p className="font-bold text-slate-950">{row.vehicleRegistration}</p>
+                            <p className="mt-0.5 text-xs text-slate-500">{monthsLoaded}/{selectedMonths.length} months loaded</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5 text-right font-semibold text-slate-900">{formatBaht(row.grossRevenue)}</td>
+                      <td className="px-4 py-3.5 text-right text-slate-700">{formatBaht(directCosts)}</td>
+                      <td className={`px-4 py-3.5 text-right font-bold ${row.recordedBalance < 0 ? "text-rose-700" : "text-emerald-700"}`}>{formatBaht(row.recordedBalance)}</td>
+                      <td className="px-4 py-3.5 text-right font-semibold text-slate-900">{formatPercent(row.marginPercent, language)}</td>
+                      <td className="px-4 py-3.5 text-right font-semibold text-brand-700">{formatPercent(row.fuelPercent, language)}</td>
+                      <td className="px-4 py-3.5 text-center"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${monthsLoaded === selectedMonths.length ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{monthsLoaded}/{selectedMonths.length}</span></td>
+                      <td className="px-5 py-3.5 text-right"><span className="inline-flex rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-brand-700 shadow-sm">Open →</span></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {detailVehicle && vehicleDetailSummary && detailScope ? (
+          <section id="vehicle-detail" className="surface-card scroll-mt-6 overflow-hidden border border-brand-100/80 p-0 shadow-[0_18px_46px_rgba(76,29,149,0.08)]">
+            <div className="flex flex-col gap-4 border-b border-slate-100 bg-[linear-gradient(135deg,#ffffff_0%,#fbf9ff_65%,#f4efff_100%)] px-5 py-5 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">Vehicle detail</p>
+                <div className="mt-1 flex flex-wrap items-center gap-3">
+                  <h2 className="text-2xl font-semibold text-slate-950">{detailVehicle}</h2>
+                  <span className="badge-muted">{vehicleDetailSummary.months.length} months of data</span>
+                </div>
+                <p className="mt-1 text-sm text-slate-500">Selected-period totals, direct-cost breakdown and month-by-month performance.</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" disabled={!previousDetailVehicle} onClick={() => previousDetailVehicle && openVehicle(previousDetailVehicle)} className="btn-secondary disabled:cursor-not-allowed disabled:opacity-40">← Previous vehicle</button>
+                <button type="button" disabled={!nextDetailVehicle} onClick={() => nextDetailVehicle && openVehicle(nextDetailVehicle)} className="btn-secondary disabled:cursor-not-allowed disabled:opacity-40">Next vehicle →</button>
+                <button type="button" className="btn-secondary" onClick={() => setDetailVehicle(null)}>Close detail</button>
+              </div>
+            </div>
+
+            <div className="border-b border-brand-100/70 bg-[linear-gradient(90deg,#ffffff_0%,#fbf9ff_100%)] px-5 py-3">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Detail period</p>
+                  <p className="mt-0.5 text-sm text-slate-600">Switch between the full selected period and a single recorded month. The figures below update instantly.</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={() => setDetailMonthFilter("")} className={`rounded-xl border px-3 py-2 text-sm font-semibold transition ${detailMonthFilter === "" ? "border-brand-200 bg-brand-50 text-brand-700" : "border-slate-200 bg-white text-slate-600 hover:border-brand-200"}`}>All months</button>
+                  <select value={detailMonthFilter} onChange={(event) => setDetailMonthFilter(event.target.value ? Number(event.target.value) : "")} className="form-input min-w-[180px] bg-white">
+                    <option value="">Select month</option>
+                    {vehicleDetailSummary.months.map((item) => <option key={item.month} value={item.month}>{monthLabel(item.month)}</option>)}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid divide-y divide-brand-100/60 bg-[linear-gradient(180deg,#ffffff_0%,#fcfbff_100%)] sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-6">
+              <PerformanceHeroMetric label="Revenue" value={formatCompactBaht(detailScope.totals.revenue)} detail="Selected-period revenue" />
+              <PerformanceHeroMetric label="Fuel" value={formatCompactBaht(detailScope.totals.fuel)} detail="Recorded fuel spend" />
+              <PerformanceHeroMetric label="Direct costs" value={formatCompactBaht(detailScope.directCosts)} detail="Fuel + salary/trip + other" />
+              <PerformanceHeroMetric label="Recorded balance" value={formatCompactBaht(detailScope.totals.balance)} detail="Revenue after recorded direct costs" tone={detailScope.totals.balance < 0 ? "danger" : "success"} />
+              <PerformanceHeroMetric label="Margin" value={formatPercent(detailScope.margin, language)} detail="Recorded balance ÷ revenue" />
+              <PerformanceHeroMetric label="Fuel / revenue" value={formatPercent(detailScope.fuelShare, language)} detail="Fuel as share of revenue" />
+            </div>
+
+            <div className="grid border-t border-brand-100/70 bg-[linear-gradient(180deg,#ffffff_0%,#fbf9ff_100%)] lg:grid-cols-[0.8fr_1.2fr]">
+              <div className="border-b border-slate-100 p-5 lg:border-b-0 lg:border-r">
+                <p className="text-xs font-semibold uppercase tracking-[0.13em] text-brand-700">Cost composition</p>
+                <h3 className="mt-1 text-lg font-semibold text-slate-950">Where the recorded direct costs came from</h3>
+                <div className="mt-4 space-y-3">
+                  {[
+                    ["Fuel", detailScope.totals.fuel],
+                    ["Salary + trip payments", detailScope.totals.salaryTrip],
+                    ["Other recorded costs", detailScope.totals.other]
+                  ].map(([label, value]) => {
+                    const numericValue = Number(value);
+                    const share = detailScope.directCosts > 0 ? (numericValue / detailScope.directCosts) * 100 : 0;
+                    return <div key={String(label)} className="rounded-xl border border-brand-100/70 bg-white/90 px-3.5 py-3 shadow-[0_6px_18px_rgba(76,29,149,0.035)]"><div className="flex items-center justify-between gap-3"><span className="text-sm font-semibold text-slate-700">{label}</span><span className="font-bold text-slate-950">{formatBaht(numericValue)}</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-brand-600" style={{ width: `${Math.max(0, Math.min(100, share))}%` }} /></div><p className="mt-1 text-[11px] text-slate-500">{formatPercent(share, language)} of recorded direct costs</p></div>;
+                  })}
+                </div>
+              </div>
+
+              <div className="p-5">
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div><p className="text-xs font-semibold uppercase tracking-[0.13em] text-brand-700">Latest recorded month</p><h3 className="mt-1 text-lg font-semibold text-slate-950">{monthLabel(detailScope.latest.month)} snapshot</h3></div>
+                  {detailScope.previous ? <span className="badge-muted">vs {monthLabel(detailScope.previous.month)}</span> : null}
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border border-brand-100/70 bg-white p-3.5 shadow-[0_8px_20px_rgba(76,29,149,0.04)]"><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Revenue</p><p className="mt-1 text-lg font-bold text-slate-950">{formatBaht(detailScope.latest.row.grossRevenue)}</p>{detailScope.previous ? <p className={`mt-1 text-xs font-semibold ${deltaTone(((detailScope.latest.row.grossRevenue - detailScope.previous.row.grossRevenue) / Math.abs(detailScope.previous.row.grossRevenue || 1)) * 100)}`}>{formatSignedPercent(((detailScope.latest.row.grossRevenue - detailScope.previous.row.grossRevenue) / Math.abs(detailScope.previous.row.grossRevenue || 1)) * 100, language)} vs previous month</p> : null}</div>
+                  <div className="rounded-xl border border-brand-100/70 bg-white p-3.5 shadow-[0_8px_20px_rgba(76,29,149,0.04)]"><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Recorded balance</p><p className={`mt-1 text-lg font-bold ${detailScope.latest.row.recordedBalance < 0 ? "text-rose-700" : "text-emerald-700"}`}>{formatBaht(detailScope.latest.row.recordedBalance)}</p>{detailScope.previous ? <p className={`mt-1 text-xs font-semibold ${deltaTone(((detailScope.latest.row.recordedBalance - detailScope.previous.row.recordedBalance) / Math.abs(detailScope.previous.row.recordedBalance || 1)) * 100)}`}>{formatSignedPercent(((detailScope.latest.row.recordedBalance - detailScope.previous.row.recordedBalance) / Math.abs(detailScope.previous.row.recordedBalance || 1)) * 100, language)} vs previous month</p> : null}</div>
+                  <div className="rounded-xl border border-brand-100/70 bg-white p-3.5 shadow-[0_8px_20px_rgba(76,29,149,0.04)]"><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Margin</p><p className="mt-1 text-lg font-bold text-slate-950">{formatPercent(detailScope.latest.row.marginPercent, language)}</p>{detailScope.previous && detailScope.latest.row.marginPercent != null && detailScope.previous.row.marginPercent != null ? <p className={`mt-1 text-xs font-semibold ${deltaTone(detailScope.latest.row.marginPercent - detailScope.previous.row.marginPercent)}`}>{formatSignedPointChange(detailScope.latest.row.marginPercent - detailScope.previous.row.marginPercent, language)} vs previous month</p> : null}</div>
+                  <div className="rounded-xl border border-brand-100/70 bg-white p-3.5 shadow-[0_8px_20px_rgba(76,29,149,0.04)]"><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Fuel / revenue</p><p className="mt-1 text-lg font-bold text-brand-700">{formatPercent(detailScope.latest.row.fuelPercent, language)}</p>{detailScope.previous && detailScope.latest.row.fuelPercent != null && detailScope.previous.row.fuelPercent != null ? <p className={`mt-1 text-xs font-semibold ${deltaTone(-(detailScope.latest.row.fuelPercent - detailScope.previous.row.fuelPercent))}`}>{formatSignedPointChange(detailScope.latest.row.fuelPercent - detailScope.previous.row.fuelPercent, language)} vs previous month</p> : null}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100">
+              <div className="px-5 py-4"><p className="text-xs font-semibold uppercase tracking-[0.13em] text-brand-700">Monthly history</p><h3 className="mt-1 text-lg font-semibold text-slate-950">How this vehicle changed month by month</h3><p className="mt-1 text-sm text-slate-500">No hidden scoring — just recorded figures. Choose a month above to focus the summary while keeping the full history visible here.</p></div>
+              <div className="overflow-x-auto border-t border-slate-100">
+                <table className="w-full min-w-[980px] text-sm">
+                  <thead className="bg-[linear-gradient(90deg,#f7f3ff_0%,#fbf9ff_55%,#f6f2ff_100%)] text-[11px] uppercase tracking-[0.1em] text-slate-500"><tr><th className="px-5 py-3 text-left font-semibold">Month</th><th className="px-4 py-3 text-right font-semibold">Revenue</th><th className="px-4 py-3 text-right font-semibold">Fuel</th><th className="px-4 py-3 text-right font-semibold">Direct costs</th><th className="px-4 py-3 text-right font-semibold">Recorded balance</th><th className="px-4 py-3 text-right font-semibold">Margin</th><th className="px-5 py-3 text-right font-semibold">Fuel / revenue</th></tr></thead>
+                  <tbody>
+                    {vehicleDetailSummary.months.map((item) => {
+                      const directCosts = item.row.grossRevenue - item.row.recordedBalance;
+                      return <tr key={item.month} className={`border-t border-slate-100 ${detailMonthFilter === item.month ? "bg-brand-50/50" : ""}`}><td className="px-5 py-3.5 font-bold text-slate-950">{monthLabel(item.month)}</td><td className="px-4 py-3.5 text-right font-semibold text-slate-900">{formatBaht(item.row.grossRevenue)}</td><td className="px-4 py-3.5 text-right text-slate-700">{formatBaht(item.row.fuelSpend)}</td><td className="px-4 py-3.5 text-right text-slate-700">{formatBaht(directCosts)}</td><td className={`px-4 py-3.5 text-right font-bold ${item.row.recordedBalance < 0 ? "text-rose-700" : "text-emerald-700"}`}>{formatBaht(item.row.recordedBalance)}</td><td className="px-4 py-3.5 text-right font-semibold text-slate-900">{formatPercent(item.row.marginPercent, language)}</td><td className="px-5 py-3.5 text-right font-semibold text-brand-700">{formatPercent(item.row.fuelPercent, language)}</td></tr>;
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        ) : null}
+      </> : null}
+
+      {performanceView === "monthly" ? <>
+        <section className="surface-card overflow-hidden border border-brand-100/70 bg-[linear-gradient(180deg,#ffffff_0%,#fbf9ff_100%)] p-4 shadow-[0_16px_38px_rgba(76,29,149,0.055)] sm:p-5">
+          <div className="mb-4 flex flex-col gap-3 border-b border-brand-100/60 pb-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">Monthly performance</p>
+              <h2 className="mt-1 text-xl font-semibold text-slate-950">Month-by-month fleet results</h2>
+              <p className="mt-1 text-sm text-slate-500">Use this table to see where revenue, fuel share and retained margin changed month by month.</p>
+            </div>
+            <span className="badge-muted">{periodLabel}</span>
+          </div>
+          <MonthlyPerformanceTable rows={monthlyPerformanceRows} labels={labels} language={language} monthLabel={monthLabel} expectedVehicleCount={expectedVehicleRegistrations.length} missingVehiclesByMonth={missingVehiclesByMonth} onPartialClick={setPartialMonthDetail} />
+        </section>
+
+        <details className="surface-card overflow-hidden border border-brand-100/70 bg-[linear-gradient(180deg,#ffffff_0%,#fbf9ff_100%)] p-0 shadow-[0_14px_34px_rgba(76,29,149,0.05)]">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">Trend explorer</p>
+              <h3 className="mt-1 text-lg font-semibold text-slate-950">Show monthly trend chart</h3>
+              <p className="mt-1 text-sm text-slate-500">Open when you want the visual trend; keep it closed when reviewing the numbers.</p>
+            </div>
+            <ChevronDown className="h-4 w-4 text-slate-500" />
           </summary>
-          <div className="mt-4 space-y-4 text-sm">
-            <div className={`rounded-[0.85rem] border px-3 py-2 font-semibold ${totalsReconcile ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"}`}>
-              {totalsReconcile ? "OK Totals reconciled" : "! Totals do not reconcile"}
+          <div className="border-t border-brand-100/70 bg-brand-50/20 p-5">
+            <div className="mb-3 flex justify-end">
+              <select value={trendMetric} onChange={(event) => setTrendMetric(event.target.value as TrendMetric)} className="form-input max-w-xs bg-white">
+                <option value="grossRevenue">{labels.revenue}</option>
+                <option value="recordedBalance">{labels.recordedBalance}</option>
+                <option value="fuelSpend">{labels.fuelSpend}</option>
+                <option value="marginPercent">{labels.marginPercent}</option>
+              </select>
             </div>
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{labels.dataCoverage}</p>
-              <div className="mt-2 grid gap-2">
-                <QualityLine good label={`Eligible performance vehicles: ${formatNumber(dataQuality.representedVehicles, language)}`} />
-                <QualityLine good label={`Vehicles included: ${formatNumber(rows.length, language)}`} />
-                <QualityLine good={vehicleCoverageDetails.withoutPerformance.length === 0} label={`Vehicles excluded: ${formatNumber(vehicleCoverageDetails.withoutPerformance.length, language)}`} detail={vehicleCoverageDetails.withoutPerformance.length ? vehicleCoverageDetails.withoutPerformance.map((vehicle) => vehicle.registration).join(", ") : "None"} />
-                <QualityLine good label={`Complete months: ${formatNumber(dataQuality.completeMonths, language)}`} />
-                <QualityLine good={dataQuality.partialMonths === 0} label={`Partial months: ${formatNumber(dataQuality.partialMonths, language)}`} />
-                <QualityLine good={dataQuality.missingVehicleMonthRecords === 0} label={`Missing vehicle-month records: ${formatNumber(dataQuality.missingVehicleMonthRecords, language)}`} />
-                {monthlyPerformanceRows.map((row) => (
-                  <QualityLine key={row.month} good={row.status !== "missing"} label={`${monthLabel(row.month)} - ${row.status === "complete" ? "Complete" : row.status === "partial" ? "Partial" : "Missing"}`} detail={row.status === "missing" ? undefined : `${row.vehicleCount} vehicles`} />
-                ))}
-                <QualityLine good label={`Last data update: ${dataQuality.lastDataUpdate ? dataQuality.lastDataUpdate.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "Not available"}`} />
-              </div>
-            </div>
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{labels.issues}</p>
-              <div className="mt-2 grid gap-2">
-                <QualityLine good={dataQuality.negativeBalances === 0} label={`${formatNumber(dataQuality.negativeBalances, language)} negative balance${dataQuality.negativeBalances === 1 ? "" : "s"}`} />
-                <QualityLine good={dataQuality.unresolvedImportExceptions === 0} label={`${formatNumber(dataQuality.unresolvedImportExceptions, language)} unresolved import${dataQuality.unresolvedImportExceptions === 1 ? "" : "s"}`} />
-              </div>
-            </div>
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{labels.reconciliation}</p>
-              <div className="mt-2 grid gap-2">
-                <QualityLine good={reconciliation.summaryToVehicle} label={`Summary ↔ vehicle table — ${reconciliation.summaryToVehicle ? "Passed" : "Failed"}`} />
-                <QualityLine good={reconciliation.vehicleToMonthly} label={`Vehicle table ↔ monthly totals — ${reconciliation.vehicleToMonthly ? "Passed" : "Failed"}`} />
-                <QualityLine good={reconciliation.fuelToVehicle} label={`Fuel logs ↔ vehicle totals — ${reconciliation.fuelToVehicle ? "Passed" : "Failed"}`} />
-              </div>
-            </div>
-            <details className="rounded-[0.85rem] border border-slate-100 bg-slate-50 p-3">
-              <summary className="cursor-pointer text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{labels.advancedDataChecks}</summary>
-              <pre className="mt-3 max-h-72 overflow-auto rounded-md bg-white p-3 text-[11px] text-slate-700">{JSON.stringify(reconciliationDebug, null, 2)}</pre>
-            </details>
+            <MonthlyTrend rows={monthlyPerformanceRows} labels={labels} language={language} metric={trendMetric} monthLabel={shortMonthLabel} />
           </div>
         </details>
-      </section>
+      </> : null}
+
+      {performanceView === "trips" ? (
+        <section className="surface-card p-4 sm:p-5">
+          <div className="mb-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">Trip performance</p><h2 className="mt-1 text-xl font-semibold text-slate-950">Operational vs financial trips</h2><p className="mt-1 text-sm text-slate-500">Trip Journey data is kept separate from monthly vehicle finance so zero or incomplete trip data never makes the financial page look broken.</p></div>
+          {tripDataAvailable ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <KpiCard label="Total distance" value={`${formatNumber(selectedTripFinancials.operationalDistanceKm, language, 1)} km`} detail={`${selectedTripFinancials.operationalTrips} operational trips`} />
+            <KpiCard label="Revenue distance" value={`${formatNumber(selectedTripFinancials.revenueDistanceKm, language, 1)} km`} detail={`${selectedTripFinancials.revenueGeneratingTrips} revenue-generating trips`} />
+            <KpiCard label="Non-chargeable distance" value={`${formatNumber(selectedTripFinancials.nonChargeableDistanceKm, language, 1)} km`} detail={`${selectedTripFinancials.excludedTrips} financially excluded trips`} />
+            <KpiCard label="Trip revenue" value={formatBaht(selectedTripFinancials.includedRevenue)} detail="Financially included trip prices" />
+            <KpiCard label="Revenue / km" value={selectedTripFinancials.revenuePerKm == null ? "-" : formatBaht(selectedTripFinancials.revenuePerKm)} detail="Included revenue ÷ revenue distance" />
+          </div> : <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-8 text-center"><p className="font-semibold text-slate-900">Trip performance is not available for this period yet.</p><p className="mt-1 text-sm text-slate-500">No eligible Trip Journey records are linked to the selected financial period. Financial performance above remains unaffected.</p></div>}
+        </section>
+      ) : null}
 
       </>}
 
-      <details open={dataManagementOpen} onToggle={(event) => setDataManagementOpen(event.currentTarget.open)} className="surface-card p-4 sm:p-5">
+      {dataManagementOpen ? <details id="vehicle-performance-data-management" open className="surface-card scroll-mt-6 p-4 sm:p-5">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
           <div>
             <h3 className="section-title">{labels.dataManagement}</h3>
@@ -2587,7 +2733,7 @@ export default function VehiclePerformancePage() {
                   </thead>
                   <tbody>
                     {importCandidateRows.map((row) => (
-                      <tr key={row.id} className="enterprise-table-row">
+                      <tr key={row.id} className="enterprise-table-row odd:bg-white even:bg-slate-50/35 hover:bg-brand-50/45">
                         <td className="table-body-cell">{row.month ? labels.months[MONTH_OPTIONS[row.month - 1].labelKey] : "-"}</td>
                         <td className="table-body-cell font-semibold text-slate-900">{row.canonicalVehicleRegistration || row.vehicleRegistration || "-"}</td>
                         <td className="table-body-cell text-right">{formatBaht(row.grossRevenue)}</td>
@@ -2693,7 +2839,7 @@ export default function VehiclePerformancePage() {
           </div>
         </form>
         </div>
-      </details>
+      </details> : null}
 
       {selectedFuelDetailRow ? (
         <FuelDetailsModal
@@ -2767,6 +2913,49 @@ function Field({ label, required, full, children }: { label: string; required?: 
 
 function MoneyInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return <Field label={label}><input type="number" min="0" step="0.01" value={value} onChange={(event) => onChange(event.target.value)} className="form-input w-full" placeholder="0.00" /></Field>;
+}
+
+function PerformanceHeroMetric({
+  label,
+  value,
+  detail,
+  delta,
+  deltaClass = "text-slate-500",
+  compareLabel,
+  tone = "default"
+}: {
+  label: string;
+  value: string;
+  detail?: string;
+  delta?: string | null;
+  deltaClass?: string;
+  compareLabel?: string | null;
+  tone?: "default" | "success" | "danger";
+}) {
+  const valueClass = tone === "success" ? "text-emerald-700" : tone === "danger" ? "text-rose-700" : "text-slate-950";
+  return (
+    <article className="group min-w-0 bg-white/55 px-5 py-4 transition hover:bg-brand-50/35">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-slate-500">{label}</p>
+      <div className="mt-2 flex flex-wrap items-baseline gap-2">
+        <p className={`text-xl font-bold tracking-tight ${valueClass}`}>{value}</p>
+        {delta ? <span className={`rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-bold ${deltaClass}`}>{delta}</span> : null}
+      </div>
+      {detail ? <p className="mt-1 text-xs text-slate-500">{detail}</p> : null}
+      {delta && compareLabel ? <p className="mt-1 text-[10px] font-medium text-slate-400">{compareLabel}</p> : null}
+    </article>
+  );
+}
+
+function MovementMetric({ label, value, invert = false }: { label: string; value: string | null; invert?: boolean }) {
+  const numeric = value ? Number(value.replace(/[^0-9+-.]/g, "")) : Number.NaN;
+  const positive = Number.isFinite(numeric) ? numeric > 0 : false;
+  const negative = Number.isFinite(numeric) ? numeric < 0 : false;
+  const tone = !Number.isFinite(numeric) || (!positive && !negative)
+    ? "text-slate-600"
+    : invert
+      ? positive ? "text-rose-700" : "text-emerald-700"
+      : positive ? "text-emerald-700" : "text-rose-700";
+  return <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3"><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">{label}</p><p className={`mt-1 text-lg font-bold ${tone}`}>{value ?? "-"}</p></div>;
 }
 
 function KpiCard({
@@ -2894,7 +3083,7 @@ function MonthlyPerformanceTable({
   onPartialClick: (month: number) => void;
 }) {
   return (
-    <div className="table-shell rounded-[0.85rem]">
+    <div className="table-shell overflow-hidden rounded-[1rem] border border-brand-100/60 shadow-[0_8px_22px_rgba(76,29,149,0.035)]">
       <div className="table-scroll overflow-x-auto">
         <table className="w-full min-w-[1040px] text-sm">
           <thead className="bg-slate-50/95 text-slate-600">
@@ -2914,7 +3103,7 @@ function MonthlyPerformanceTable({
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.month} className="enterprise-table-row">
+              <tr key={row.month} className="enterprise-table-row odd:bg-white even:bg-slate-50/35 hover:bg-brand-50/45">
                 <td className="table-body-cell font-semibold text-slate-950">
                   <div>{monthLabel(row.month)}</div>
                   {row.status === "partial" ? (
@@ -3263,7 +3452,7 @@ function FuelDetailsModal({
           ) : logs.length === 0 ? (
             <EmptyState title="No matching fuel logs" description="No Fuel Logs matched this vehicle registration and calendar month." />
           ) : (
-            <div className="table-shell rounded-[0.85rem]">
+            <div className="table-shell overflow-hidden rounded-[1rem] border border-brand-100/60 shadow-[0_8px_22px_rgba(76,29,149,0.035)]">
               <div className="table-scroll overflow-x-auto">
                 <table className="w-full min-w-[980px] text-xs">
                   <thead className="bg-slate-50 text-slate-600">
@@ -3280,7 +3469,7 @@ function FuelDetailsModal({
                   </thead>
                   <tbody>
                     {logs.map((log) => (
-                      <tr key={log.id} className="enterprise-table-row">
+                      <tr key={log.id} className="enterprise-table-row odd:bg-white even:bg-slate-50/35 hover:bg-brand-50/45">
                         <td className="table-body-cell">{log.date}</td>
                         <td className="table-body-cell">{log.driver || "-"}</td>
                         <td className="table-body-cell font-semibold text-slate-900">{log.vehicle_reg}</td>

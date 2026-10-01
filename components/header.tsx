@@ -1,9 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { memo } from "react";
 import { AccountMenu } from "@/components/account-menu";
+import { EESLogo } from "@/components/ees-logo";
 import { useLanguage } from "@/lib/language-provider";
 
 type HeaderProps = {
@@ -40,15 +40,8 @@ function HeaderComponent({ title, description, showSignOut = false }: HeaderProp
     <header className="page-header relative overflow-visible px-3.5 py-3 transition duration-150 min-[1367px]:px-4">
       <div className="relative flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex min-w-0 flex-1 items-center gap-3.5">
-          <div className="flex h-16 w-[4.35rem] shrink-0 items-center justify-center rounded-[1rem] border border-[#e4ddff] bg-[#f4f0ff] shadow-[0_10px_22px_rgba(79,70,229,0.09),inset_0_1px_0_rgba(255,255,255,0.92)]">
-            <Image
-              src="/logo.png"
-              alt={t.common.appName}
-              width={92}
-              height={64}
-              className="h-[3.25rem] w-auto object-contain brightness-105"
-              priority
-            />
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[0.9rem] border border-[#e4ddff] bg-slate-950 shadow-[0_8px_18px_rgba(79,70,229,0.09)]">
+            <EESLogo alt={t.common.appName} size={40} className="h-10 w-10" priority />
           </div>
           <div className="min-w-0">
             <p className="truncate text-[10px] font-bold uppercase tracking-[0.16em] text-brand-700">

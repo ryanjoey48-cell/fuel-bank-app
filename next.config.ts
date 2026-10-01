@@ -52,7 +52,6 @@ const nextConfig: NextConfig = {
   },
   async rewrites() {
     return [
-      { source: "/ees-logo.png", destination: "/ees-logo.png.png" },
       { source: "/ees-truck.jpg", destination: "/ees-truck.jpg.jpeg" }
     ];
   }

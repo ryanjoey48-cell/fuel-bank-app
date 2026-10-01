@@ -17,10 +17,8 @@ import {
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { EmptyState } from "@/components/empty-state";
-import { CustomTripCalculation } from "@/components/custom-trip-calculation";
+import { FuelStationBadge } from "@/components/fuel-station-badge";
 import { FuelStatementImporter } from "@/components/fuel-statement-importer";
-import { Header } from "@/components/header";
-import { StatCard } from "@/components/stat-card";
 import {
   FUEL_TYPE_KEYS,
   getFuelTypeLabel,
@@ -36,16 +34,13 @@ import {
   fetchFuelLogDuplicateMatches,
   fetchFuelLogReceiptSummary,
   fetchFuelLogsForExport,
-  fetchFuelLogRecentDaySummaries,
   fetchFuelLogTodayRows,
-  fetchFuelEfficiencyTripCalculations,
   fetchFuelLogsPage,
   fetchTripFuelLogLinks,
   saveFuelLog,
   updateFuelLogReceiptCheck
 } from "@/lib/data";
 import { exportToCsv } from "@/lib/export";
-import type { CustomTripCalculationSnapshot } from "@/lib/custom-trip-calculations";
 import { applyRequiredValidationMessage, clearValidationMessage } from "@/lib/form-validation";
 import { normalizeFuelLogLocation, shouldShowFuelLogLocationOption } from "@/lib/fuel-log-location";
 import { useLanguage } from "@/lib/language-provider";
@@ -54,14 +49,12 @@ import { safeLocalStorage, safeSessionStorage } from "@/lib/safe-browser-storage
 import { formatCurrency, formatDate, formatNumber, normalizeVehicleRegistration, today } from "@/lib/utils";
 import type {
   Driver,
-  FuelLogDaySummary,
   FuelLogEntrySource,
   FuelLogFilters,
   FuelLogReceiptSummary,
   FuelLogSortDirection,
   FuelLogSortKey,
   FuelLogWithDriver,
-  FuelEfficiencyTripCalculationWithLogs,
   TripFuelLogLink
 } from "@/types/database";
 
@@ -432,7 +425,7 @@ function getPdfFileSafePart(value: string) {
 
 async function loadPdfLogo(): Promise<PdfLogo> {
   try {
-    const response = await fetch("/logo.png");
+    const response = await fetch("/ees-logo.png");
     if (!response.ok) return null;
     const blob = await response.blob();
     const imageUrl = URL.createObjectURL(blob);
@@ -1428,19 +1421,20 @@ export default function FuelLogsPage() {
     label: sourceCopy.options[value]
   }));
 
+  const [activeFuelView, setActiveFuelView] = useState<"overview" | "entries" | "efficiency">("overview");
+  const [entryModalOpen, setEntryModalOpen] = useState(false);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [fuelLogs, setFuelLogs] = useState<FuelLogWithDriver[]>([]);
   const [efficiencySourceLogs, setEfficiencySourceLogs] = useState<FuelLogWithDriver[]>([]);
   const [todayLogs, setTodayLogs] = useState<FuelLogWithDriver[]>([]);
   const [tripFuelLinks, setTripFuelLinks] = useState<TripFuelLogLink[]>([]);
-  const [last7DayRows, setLast7DayRows] = useState<FuelLogDaySummary[]>([]);
   const [form, setForm] = useState(initialForm);
   const [filters, setFilters] = useState<FuelLogFilters>(() => getStoredFilters());
   const [efficiencyFilters, setEfficiencyFilters] = useState<EfficiencyFilters>(initialEfficiencyFilters);
-  const [efficiencyCalculationMode, setEfficiencyCalculationMode] = useState<EfficiencyCalculationMode>("per_fill");
+  const efficiencyCalculationMode = useMemo<EfficiencyCalculationMode>(() => "trip_summary", []);
   const [tripSummaryMethod, setTripSummaryMethod] = useState<TripSummaryMethod>("automatic");
-  const [customTripCalculations, setCustomTripCalculations] = useState<FuelEfficiencyTripCalculationWithLogs[]>([]);
-  const [customTripSnapshot, setCustomTripSnapshot] = useState<CustomTripCalculationSnapshot | null>(null);
+  const [customFuelLogIds, setCustomFuelLogIds] = useState<Set<string>>(new Set());
+  const [customMileageLogIds, setCustomMileageLogIds] = useState<Set<string>>(new Set());
   const [efficiencyAnalysisOpen, setEfficiencyAnalysisOpen] = useState(false);
   const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
   const [missingMileageExpanded, setMissingMileageExpanded] = useState(false);
@@ -1483,22 +1477,146 @@ export default function FuelLogsPage() {
   const stats = {
     fuelSpendToday: todayLogs.reduce((sum, log) => sum + Number(log.total_cost || 0), 0),
     litresToday: todayLogs.reduce((sum, log) => sum + Number(log.litres || 0), 0),
-    entriesToday: todayLogs.length
+    entriesToday: todayLogs.length,
+    vehiclesToday: new Set(todayLogs.map((log) => normalizeVehicleRegistration(log.vehicle_reg)).filter(Boolean)).size
   };
-  const last7DaysSummary = useMemo(() => {
-    const totalSpend = last7DayRows.reduce((sum, row) => sum + Number(row.spend || 0), 0);
-    const totalLitres = last7DayRows.reduce((sum, row) => sum + Number(row.litres || 0), 0);
-    const totalEntries = last7DayRows.reduce((sum, row) => sum + Number(row.entries || 0), 0);
-    const highestDay = [...last7DayRows].sort((a, b) => Number(b.spend || 0) - Number(a.spend || 0))[0] ?? null;
+  const currentMonthSummary = useMemo(() => {
+    const monthKey = todayValue.slice(0, 7);
+    const logs = efficiencySourceLogs.filter((log) => String(log.date || "").startsWith(monthKey));
+    const totalSpend = logs.reduce((sum, log) => sum + Number(log.total_cost || 0), 0);
+    const totalLitres = logs.reduce((sum, log) => sum + Number(log.litres || 0), 0);
+    const vehicleCount = new Set(logs.map((log) => log.vehicle_reg?.trim()).filter(Boolean)).size;
+    const receiptChecked = logs.filter((log) => log.receipt_checked).length;
+    const receiptPending = logs.length - receiptChecked;
+    const missingMileage = logs.filter((log) => isMissingMileage(log)).length;
+    const stationCounts = logs.reduce((counts, log) => {
+      const station = normalizeFuelLogLocation(log.location || "") || "Other";
+      const key = station.toLowerCase().includes("shell")
+        ? "Shell"
+        : station.toLowerCase().includes("bangchak")
+          ? "Bangchak"
+          : "Other";
+      counts[key] = (counts[key] || 0) + 1;
+      return counts;
+    }, {} as Record<string, number>);
+    const monthLabel = new Date(`${monthKey}-01T00:00:00`).toLocaleDateString(language === "th" ? "th-TH" : "en-GB", {
+      month: "long",
+      year: "numeric"
+    });
 
     return {
+      logs,
+      monthLabel,
       totalSpend,
       totalLitres,
-      totalEntries,
+      totalEntries: logs.length,
+      vehicleCount,
       averagePricePerLitre: totalLitres > 0 ? totalSpend / totalLitres : null,
-      highestDay
+      receiptChecked,
+      receiptPending,
+      receiptRate: logs.length > 0 ? Math.round((receiptChecked / logs.length) * 100) : 0,
+      missingMileage,
+      stationCounts
     };
-  }, [last7DayRows]);
+  }, [efficiencySourceLogs, language, todayValue]);
+
+  const currentMonthComparison = useMemo(() => {
+    const currentDate = new Date(`${todayValue}T00:00:00`);
+    const currentYear = currentDate.getFullYear();
+    const currentMonthIndex = currentDate.getMonth();
+    const currentDay = currentDate.getDate();
+    const previousMonthDate = new Date(currentYear, currentMonthIndex - 1, 1);
+    const previousYear = previousMonthDate.getFullYear();
+    const previousMonthIndex = previousMonthDate.getMonth();
+    const previousMonthLastDay = new Date(previousYear, previousMonthIndex + 1, 0).getDate();
+    const comparisonDay = Math.min(currentDay, previousMonthLastDay);
+
+    const previousLogs = efficiencySourceLogs.filter((log) => {
+      const rawDate = String(log.date || "");
+      if (!rawDate) return false;
+      const parsed = new Date(`${rawDate}T00:00:00`);
+      return parsed.getFullYear() === previousYear && parsed.getMonth() === previousMonthIndex && parsed.getDate() <= comparisonDay;
+    });
+
+    const previousSpend = previousLogs.reduce((sum, log) => sum + Number(log.total_cost || 0), 0);
+    const previousLitres = previousLogs.reduce((sum, log) => sum + Number(log.litres || 0), 0);
+    const previousAveragePrice = previousLitres > 0 ? previousSpend / previousLitres : null;
+    const deltaPercent = (currentValue: number | null, previousValue: number | null) => {
+      if (currentValue == null || previousValue == null || previousValue === 0) return null;
+      return ((currentValue - previousValue) / previousValue) * 100;
+    };
+
+    return {
+      previousLabel: previousMonthDate.toLocaleDateString(language === "th" ? "th-TH" : "en-GB", { month: "long", year: "numeric" }),
+      comparisonDay,
+      previousSpend,
+      previousLitres,
+      previousEntries: previousLogs.length,
+      previousAveragePrice,
+      spendDelta: deltaPercent(currentMonthSummary.totalSpend, previousSpend),
+      litresDelta: deltaPercent(currentMonthSummary.totalLitres, previousLitres),
+      entriesDelta: deltaPercent(currentMonthSummary.totalEntries, previousLogs.length),
+      priceDelta: deltaPercent(currentMonthSummary.averagePricePerLitre, previousAveragePrice)
+    };
+  }, [currentMonthSummary, efficiencySourceLogs, language, todayValue]);
+
+  const monthlyFuelHistory = useMemo(() => {
+    const currentDate = new Date(`${todayValue}T00:00:00`);
+    const monthBuckets = new Map<string, FuelLogWithDriver[]>();
+
+    for (const log of efficiencySourceLogs) {
+      const rawDate = String(log.date || "");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) continue;
+      const key = rawDate.slice(0, 7);
+      const bucket = monthBuckets.get(key) || [];
+      bucket.push(log);
+      monthBuckets.set(key, bucket);
+    }
+
+    const rows = Array.from({ length: 6 }, (_, index) => {
+      const monthDate = new Date(currentDate.getFullYear(), currentDate.getMonth() - index, 1);
+      const year = monthDate.getFullYear();
+      const month = monthDate.getMonth();
+      const key = `${year}-${String(month + 1).padStart(2, "0")}`;
+      const isCurrentMonth = index === 0;
+      const currentDay = currentDate.getDate();
+      const logs = (monthBuckets.get(key) || []).filter((log) => {
+        if (!isCurrentMonth) return true;
+        const parsed = new Date(`${log.date}T00:00:00`);
+        return parsed.getDate() <= currentDay;
+      });
+
+      const previousDate = new Date(year, month - 1, 1);
+      const previousKey = `${previousDate.getFullYear()}-${String(previousDate.getMonth() + 1).padStart(2, "0")}`;
+      const previousLastDay = new Date(previousDate.getFullYear(), previousDate.getMonth() + 1, 0).getDate();
+      const comparisonDay = Math.min(currentDay, previousLastDay);
+      const previousLogs = (monthBuckets.get(previousKey) || []).filter((log) => {
+        if (!isCurrentMonth) return true;
+        const parsed = new Date(`${log.date}T00:00:00`);
+        return parsed.getDate() <= comparisonDay;
+      });
+
+      const totalSpend = logs.reduce((sum, log) => sum + Number(log.total_cost || 0), 0);
+      const totalLitres = logs.reduce((sum, log) => sum + Number(log.litres || 0), 0);
+      const previousSpend = previousLogs.reduce((sum, log) => sum + Number(log.total_cost || 0), 0);
+      const spendDelta = previousSpend > 0 ? ((totalSpend - previousSpend) / previousSpend) * 100 : null;
+
+      return {
+        key,
+        label: monthDate.toLocaleDateString(language === "th" ? "th-TH" : "en-GB", { month: "long", year: "numeric" }),
+        totalSpend,
+        totalLitres,
+        averagePricePerLitre: totalLitres > 0 ? totalSpend / totalLitres : null,
+        entries: logs.length,
+        spendDelta,
+        isCurrentMonth
+      };
+    });
+
+    return rows;
+  }, [efficiencySourceLogs, language, todayValue]);
+
+  const receiptControlRate = receiptSummary.total > 0 ? Math.round((receiptSummary.checked / receiptSummary.total) * 100) : 0;
 
   const vehicleOptions = useMemo(
     () =>
@@ -1515,6 +1633,23 @@ export default function FuelLogsPage() {
       ).sort(),
     [drivers, efficiencySourceLogs, fuelLogs]
   );
+
+  const efficiencyVehicleOptions = useMemo(() => {
+    if (!efficiencyFilters.driverId) return vehicleOptions;
+
+    const selectedDriverRecord = drivers.find(
+      (driver) => String(driver.id) === String(efficiencyFilters.driverId)
+    );
+    const driverVehicles = efficiencySourceLogs
+      .filter((log) => String(log.driver_id || "") === String(efficiencyFilters.driverId))
+      .map((log) => log.vehicle_reg?.trim())
+      .filter((vehicleReg): vehicleReg is string => Boolean(vehicleReg));
+
+    const assignedVehicle = selectedDriverRecord?.vehicle_reg?.trim();
+    if (assignedVehicle) driverVehicles.push(assignedVehicle);
+
+    return Array.from(new Set(driverVehicles)).sort();
+  }, [drivers, efficiencyFilters.driverId, efficiencySourceLogs, vehicleOptions]);
 
   const locationOptions = useMemo(() => {
     const locationsByKey = new Map<string, string>();
@@ -1647,6 +1782,7 @@ export default function FuelLogsPage() {
     () =>
       [...efficiencySourceLogs]
         .filter((log) => {
+          if (efficiencyCalculationMode === "trip_summary" && !efficiencyFilters.vehicleReg) return false;
           if (efficiencyFilters.driverId && String(log.driver_id || "") !== efficiencyFilters.driverId) return false;
           if (efficiencyFilters.vehicleReg && log.vehicle_reg !== efficiencyFilters.vehicleReg) return false;
           if (efficiencyFilters.fromDate && log.date < efficiencyFilters.fromDate) return false;
@@ -1657,6 +1793,7 @@ export default function FuelLogsPage() {
         })
         .sort(compareFuelLogsByMileageOrder),
     [
+      efficiencyCalculationMode,
       efficiencyFilters.driverId,
       efficiencyFilters.fromDate,
       efficiencyFilters.receiptCheckedStatus,
@@ -1742,40 +1879,75 @@ export default function FuelLogsPage() {
     };
   }, [t.fuelLogs.efficiency, tripSummaryLogs]);
 
+  useEffect(() => {
+    if (tripSummaryMethod !== "custom") return;
+    setCustomFuelLogIds(new Set(tripSummaryLogs.map((log) => String(log.id))));
+    setCustomMileageLogIds(
+      new Set(
+        tripSummaryLogs
+          .filter((log) => getMileageValue(log.mileage) != null)
+          .map((log) => String(log.id))
+      )
+    );
+  }, [tripSummaryLogs, tripSummaryMethod]);
+
   const tripSummary = useMemo<TripSummary>(() => {
     if (tripSummaryMethod !== "custom") return automaticTripSummary;
-    if (!customTripSnapshot) return {
-      logs: [], startMileage: null, endMileage: null, tripKm: null, totalLitres: 0, totalFuelCost: 0,
-      tripKmPerLitre: null, averagePricePerLitre: null, fuelLogCount: 0, receiptCheckedCount: 0,
-      receiptUncheckedCount: 0, missingMileageCount: 0, mileageRecordCount: 0, vehicleCount: 0,
-      status: "not_enough_data", reason: t.fuelLogs.efficiency.tripNotEnoughLitres
-    };
-    const logs = customTripSnapshot.selectedLogs;
-    const receiptCheckedCount = logs.filter((log) => log.receipt_checked).length;
-    const receiptUncheckedCount = logs.length - receiptCheckedCount;
+
+    const fuelLogs = tripSummaryLogs.filter((log) => customFuelLogIds.has(String(log.id)));
+    const mileageLogs = tripSummaryLogs
+      .filter((log) => customMileageLogIds.has(String(log.id)) && getMileageValue(log.mileage) != null)
+      .sort(compareFuelLogsByMileageOrder);
+
+    const startMileage = mileageLogs.length ? getMileageValue(mileageLogs[0].mileage) : null;
+    const endMileage = mileageLogs.length ? getMileageValue(mileageLogs[mileageLogs.length - 1].mileage) : null;
+    const totalLitres = fuelLogs.reduce((sum, log) => sum + getNumericValue(log.litres), 0);
+    const totalFuelCost = fuelLogs.reduce((sum, log) => sum + getNumericValue(log.total_cost), 0);
+    const receiptCheckedCount = fuelLogs.filter((log) => log.receipt_checked).length;
+    const receiptUncheckedCount = fuelLogs.length - receiptCheckedCount;
+
+    let tripKm: number | null = null;
+    let tripKmPerLitre: number | null = null;
+    let status: TripSummaryStatus = "not_enough_data";
+    let reason = language === "th" ? "เลือกเลขไมล์อย่างน้อย 2 รายการ" : "Select at least two mileage readings.";
+
+    if (mileageLogs.length < 2 || startMileage == null || endMileage == null) {
+      status = "not_enough_data";
+      reason = language === "th" ? "เลือกเลขไมล์อย่างน้อย 2 รายการ" : "Select at least two mileage readings.";
+    } else if (endMileage <= startMileage) {
+      status = "check_mileage";
+      reason = t.fuelLogs.efficiency.tripEndMileageMustBeHigher;
+    } else {
+      tripKm = endMileage - startMileage;
+      if (fuelLogs.length === 0 || totalLitres <= 0) {
+        status = "not_enough_data";
+        reason = language === "th" ? "เลือกบันทึกน้ำมันอย่างน้อย 1 รายการเพื่อคำนวณ KM/L" : "Select at least one fuel entry to calculate KM/L.";
+      } else {
+        tripKmPerLitre = tripKm / totalLitres;
+        status = receiptUncheckedCount > 0 ? "check_receipts" : "calculated";
+        reason = receiptUncheckedCount > 0 ? t.fuelLogs.efficiency.tripReceiptsTooltip : t.fuelLogs.efficiency.tripCalculatedTooltip;
+      }
+    }
+
     return {
-      logs,
-      startMileage: customTripSnapshot.startMileage,
-      endMileage: customTripSnapshot.endMileage,
-      tripKm: customTripSnapshot.distanceKm,
-      totalLitres: customTripSnapshot.totalLitres,
-      totalFuelCost: customTripSnapshot.totalFuelCost,
-      tripKmPerLitre: customTripSnapshot.kmPerLitre,
-      averagePricePerLitre: customTripSnapshot.totalLitres > 0 ? customTripSnapshot.totalFuelCost / customTripSnapshot.totalLitres : null,
-      fuelLogCount: logs.length,
+      logs: fuelLogs,
+      startMileage,
+      endMileage,
+      tripKm,
+      totalLitres,
+      totalFuelCost,
+      tripKmPerLitre,
+      averagePricePerLitre: totalLitres > 0 ? totalFuelCost / totalLitres : null,
+      fuelLogCount: fuelLogs.length,
       receiptCheckedCount,
       receiptUncheckedCount,
       missingMileageCount: 0,
-      mileageRecordCount: 2,
-      vehicleCount: 1,
-      status: receiptUncheckedCount > 0 ? "check_receipts" : "calculated",
-      reason: receiptUncheckedCount > 0 ? t.fuelLogs.efficiency.tripReceiptsTooltip : t.fuelLogs.efficiency.tripCalculatedTooltip
+      mileageRecordCount: mileageLogs.length,
+      vehicleCount: efficiencyFilters.vehicleReg ? 1 : 0,
+      status,
+      reason
     };
-  }, [automaticTripSummary, customTripSnapshot, t.fuelLogs.efficiency, tripSummaryMethod]);
-
-  const reloadCustomTripCalculations = useCallback(async () => {
-    setCustomTripCalculations(await fetchFuelEfficiencyTripCalculations());
-  }, []);
+  }, [automaticTripSummary, customFuelLogIds, customMileageLogIds, efficiencyFilters.vehicleReg, language, t.fuelLogs.efficiency, tripSummaryLogs, tripSummaryMethod]);
 
   const statusLabels: Record<EfficiencyStatus, string> = {
     missing_mileage: t.fuelLogs.efficiency.statusMissingMileage,
@@ -1935,26 +2107,19 @@ export default function FuelLogsPage() {
   }, [t.fuelLogs.unableToLoadFuelData]);
 
   const loadSummaryData = useCallback(async () => {
-    const [todayRows, recentDayRows, receiptSummaryRows, efficiencyRowsForAnalysis, tripLinks, customCalculations] = await Promise.all([
+    const [todayRows, receiptSummaryRows, efficiencyRowsForAnalysis, tripLinks] = await Promise.all([
       fetchFuelLogTodayRows(todayValue),
-      fetchFuelLogRecentDaySummaries(7),
       fetchFuelLogReceiptSummary(filters),
       fetchFuelLogsForExport({}),
       fetchTripFuelLogLinks().catch((tripLinkError) => {
         console.warn("Fuel logs trip links unavailable:", tripLinkError);
         return [] as TripFuelLogLink[];
-      }),
-      fetchFuelEfficiencyTripCalculations().catch((customError) => {
-        console.warn("Custom trip calculations unavailable:", customError);
-        return [] as FuelEfficiencyTripCalculationWithLogs[];
       })
     ]);
     setTodayLogs(todayRows);
-    setLast7DayRows(recentDayRows);
     setReceiptSummary(receiptSummaryRows);
     setEfficiencySourceLogs(efficiencyRowsForAnalysis);
     setTripFuelLinks(tripLinks);
-    setCustomTripCalculations(customCalculations);
   }, [filters, todayValue]);
 
   const loadFuelLogPage = useCallback(
@@ -2091,6 +2256,7 @@ export default function FuelLogsPage() {
   };
 
   const populateForm = (log: FuelLogWithDriver) => {
+    setEntryModalOpen(true);
     setForm({
       id: String(log.id),
       date: log.date,
@@ -2281,6 +2447,7 @@ export default function FuelLogsPage() {
             : t.fuelLogs.saveSuccessMessage
       );
       await refreshCurrentPage(mode === "addAnother" ? 1 : currentPage);
+      if (mode === "save") setEntryModalOpen(false);
     },
     [
       currentPage,
@@ -2547,8 +2714,8 @@ export default function FuelLogsPage() {
       const sortedLogs = [...tripSummary.logs].sort(compareFuelLogsByMileageOrder);
       const firstLogDate = sortedLogs[0]?.date ?? "";
       const lastLogDate = sortedLogs[sortedLogs.length - 1]?.date ?? firstLogDate;
-      const reportStartDate = tripSummaryMethod === "custom" && customTripSnapshot ? customTripSnapshot.startLog.date : efficiencyFilters.fromDate || firstLogDate;
-      const reportEndDate = tripSummaryMethod === "custom" && customTripSnapshot ? customTripSnapshot.endLog.date : efficiencyFilters.toDate || lastLogDate;
+      const reportStartDate = efficiencyFilters.fromDate || firstLogDate;
+      const reportEndDate = efficiencyFilters.toDate || lastLogDate;
       const reportDateRange =
         reportStartDate || reportEndDate
           ? `${formatDate(reportStartDate, pdfLanguage)} - ${formatDate(reportEndDate, pdfLanguage)}`
@@ -2633,7 +2800,6 @@ export default function FuelLogsPage() {
     }
   };
 
-  const avgPriceToday = stats.litresToday > 0 ? stats.fuelSpendToday / stats.litresToday : 0;
 
   const handleReceiptToggle = useCallback(
     async (log: FuelLogWithDriver, checked: boolean) => {
@@ -2695,17 +2861,121 @@ export default function FuelLogsPage() {
 
   return (
     <>
-      <div className="mb-6 hidden md:block">
-        <Header title={t.fuelLogs.title} description={t.fuelLogs.description} />
-      </div>
-
-      <section className="mb-4.5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label={t.fuelLogs.fuelSpendToday} value={formatCurrency(stats.fuelSpendToday, language)} helper={t.fuelLogs.fuelSpendTodayHelper} icon={<Wallet className="h-5 w-5" />} />
-        <StatCard label={t.fuelLogs.litresToday} value={formatNumber(stats.litresToday, language, 2)} helper={t.fuelLogs.litresTodayHelper} icon={<Droplets className="h-5 w-5" />} />
-        <StatCard label={t.fuelLogs.entriesToday} value={formatNumber(stats.entriesToday, language)} helper={t.fuelLogs.entriesTodayHelper} icon={<ReceiptText className="h-5 w-5" />} />
-        <StatCard label={t.fuelLogs.averagePricePerLitreToday} value={stats.litresToday > 0 ? formatCurrency(avgPriceToday, language) : "-"} helper={stats.litresToday > 0 ? t.fuelLogs.averagePricePerLitreTodayHelper : t.fuelLogs.noTodayFuelDescription} icon={<TrendingUp className="h-5 w-5" />} />
+      <section className="surface-card mb-5 overflow-hidden px-5 py-5 sm:px-7 sm:py-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-600">EXPERT EXPRESS SENDER CO., LTD.</p>
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">Fuel Control</h1>
+            <p className="mt-1 text-sm text-slate-500">Monitor daily fuel activity, receipt checks and period efficiency in one place.</p>
+          </div>
+          <div className="inline-flex w-full rounded-2xl bg-brand-50/70 p-1 lg:w-auto">
+            {([
+              ["overview", language === "th" ? "ภาพรวม" : "Overview"],
+              ["entries", language === "th" ? "รายการน้ำมัน" : "Fuel entries"],
+              ["efficiency", language === "th" ? "ประสิทธิภาพ" : "Efficiency"]
+            ] as const).map(([view, label]) => (
+              <button
+                key={view}
+                type="button"
+                onClick={() => {
+                  setActiveFuelView(view);
+                  if (view === "efficiency") setEfficiencyAnalysisOpen(true);
+                }}
+                className={`flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold transition lg:flex-none ${
+                  activeFuelView === view
+                    ? "bg-white text-brand-700 shadow-sm ring-1 ring-brand-100"
+                    : "text-slate-500 hover:text-slate-900"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
       </section>
 
+      {activeFuelView === "overview" ? (
+      <section className="surface-card mb-4.5 overflow-hidden border-0 p-0">
+        <div className="relative overflow-hidden bg-gradient-to-br from-[#211336] via-[#2b1745] to-brand-700 px-5 py-4 text-white sm:px-6 sm:py-4">
+          <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-24 left-1/3 h-56 w-56 rounded-full bg-violet-400/20 blur-3xl" />
+          <div className="relative">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-200">
+                  {language === "th" ? "ภาพรวมวันนี้" : "TODAY'S FUEL CONTROL"}
+                </p>
+                <h2 className="mt-1 text-xl font-semibold tracking-tight sm:text-2xl">
+                  {language === "th" ? "ภาพรวมการเติมน้ำมันวันนี้" : "Today at a glance"}
+                </h2>
+                <p className="mt-1 max-w-2xl text-sm text-violet-100/80">
+                  {language === "th"
+                    ? "ดูค่าใช้จ่าย ปริมาณน้ำมัน จำนวนรายการ และราคาต่อลิตรของวันนี้ในจุดเดียว"
+                    : "Daily spend, litres, entries and price per litre in one operational view."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveFuelView("entries")}
+                className="inline-flex w-fit items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/15"
+              >
+                {language === "th" ? "เปิดรายการน้ำมัน" : "Open fuel ledger"}
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              {[
+                {
+                  label: t.fuelLogs.fuelSpendToday,
+                  value: formatCurrency(stats.fuelSpendToday, language),
+                  helper: t.fuelLogs.fuelSpendTodayHelper,
+                  icon: <Wallet className="h-5 w-5" />
+                },
+                {
+                  label: t.fuelLogs.litresToday,
+                  value: formatNumber(stats.litresToday, language, 2),
+                  helper: t.fuelLogs.litresTodayHelper,
+                  icon: <Droplets className="h-5 w-5" />
+                },
+                {
+                  label: t.fuelLogs.entriesToday,
+                  value: formatNumber(stats.entriesToday, language),
+                  helper: t.fuelLogs.entriesTodayHelper,
+                  icon: <ReceiptText className="h-5 w-5" />
+                },
+                {
+                  label: language === "th" ? "รถที่เติมน้ำมันวันนี้" : "Vehicles fuelled today",
+                  value: formatNumber(stats.vehiclesToday, language),
+                  helper: language === "th" ? "จำนวนทะเบียนรถที่มีการเติมน้ำมันวันนี้" : "Unique vehicle registrations with fuel recorded today.",
+                  icon: <TrendingUp className="h-5 w-5" />
+                }
+              ].map((card) => (
+                <div
+                  key={card.label}
+                  className="rounded-2xl border border-white/10 bg-white/[0.08] p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-sm"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-violet-100/70">
+                        {card.label}
+                      </p>
+                      <p className="mt-2 text-2xl font-semibold tracking-tight text-white">{card.value}</p>
+                    </div>
+                    <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10 text-violet-100">
+                      {card.icon}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs leading-5 text-violet-100/65">{card.helper}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+      ) : null}
+
+      {activeFuelView === "efficiency" ? (
       <section className="surface-card mb-4.5 overflow-hidden p-4 sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -2714,18 +2984,18 @@ export default function FuelLogsPage() {
               {t.fuelLogs.efficiency.badge}
             </div>
             <h3 className="mt-3 text-xl font-semibold text-slate-950">{t.fuelLogs.efficiency.title}</h3>
-            <p className="mt-1 max-w-3xl text-sm text-slate-500">{t.fuelLogs.efficiency.subtitle}</p>
+            <p className="mt-1 max-w-3xl text-sm text-slate-500">Select one vehicle and a period to calculate fuel-cycle efficiency. Fuel receipts may cover multiple jobs, so this is not exact per-job fuel usage.</p>
           </div>
           <button
             type="button"
             onClick={() => setEfficiencyAnalysisOpen((current) => !current)}
-            className="btn-secondary w-full gap-2 sm:w-auto"
+            className="hidden"
           >
             {efficiencyAnalysisOpen ? uxCopy.hideAnalysis : uxCopy.openAnalysis}
           </button>
         </div>
 
-        <div className="mt-4 grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
             <p className="text-xs font-semibold text-slate-500">{t.fuelLogs.efficiency.averageKmPerLitre}</p>
             <p className="mt-1 text-lg font-bold text-slate-950">{efficiencySummary.averageKmPerLitre != null ? formatNumber(efficiencySummary.averageKmPerLitre, language, 2) : "-"}</p>
@@ -2738,7 +3008,7 @@ export default function FuelLogsPage() {
             <p className="text-xs font-semibold text-rose-700">{t.fuelLogs.efficiency.reviewNeeded}</p>
             <p className="mt-1 text-lg font-bold text-rose-900">{formatNumber(efficiencySummary.reviewNeededEntries, language)}</p>
           </div>
-          <button type="button" onClick={() => setEfficiencyAnalysisOpen((current) => !current)} className="btn-secondary min-h-[58px]">
+          <button type="button" onClick={() => setEfficiencyAnalysisOpen((current) => !current)} className="hidden">
             {efficiencyAnalysisOpen ? uxCopy.collapse : uxCopy.openAnalysis}
           </button>
         </div>
@@ -2768,65 +3038,61 @@ export default function FuelLogsPage() {
           </button>
         </div>
 
-        <div className="mt-5 rounded-[1.25rem] border border-brand-100 bg-brand-50/50 p-3">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">
-            {t.fuelLogs.efficiency.calculationMode}
-          </p>
-          <div className="grid grid-cols-2 gap-2 rounded-2xl bg-white p-1 shadow-[inset_0_0_0_1px_rgba(124,58,237,0.08)] sm:inline-grid sm:min-w-[320px]">
-            {([
-              ["per_fill", t.fuelLogs.efficiency.perFill],
-              ["trip_summary", t.fuelLogs.efficiency.tripSummary]
-            ] as [EfficiencyCalculationMode, string][]).map(([mode, label]) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setEfficiencyCalculationMode(mode)}
-                className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
-                  efficiencyCalculationMode === mode
-                    ? "bg-brand-700 text-white shadow-sm"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-
         <div className="mt-5 rounded-[1.5rem] border border-slate-200/80 bg-white/95 p-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)] sm:p-5">
           <div className="mb-4 flex items-center justify-between gap-3">
             <p className="text-sm font-semibold text-slate-900">{t.fuelLogs.efficiency.filters}</p>
             <button type="button" onClick={() => setEfficiencyFilters(initialEfficiencyFilters)} className="text-sm font-medium text-slate-500 hover:text-slate-900">{t.fuelLogs.efficiency.clearFilters}</button>
           </div>
           <div className="grid gap-3 md:grid-cols-12">
-            <div className="md:col-span-3">
+            <div className="md:col-span-3 lg:col-span-2">
               <label className="form-label">{t.fuelLogs.efficiency.driver}</label>
-              <select value={efficiencyFilters.driverId} onChange={(event) => updateEfficiencyFilters((current) => ({ ...current, driverId: event.target.value }))} className="form-input bg-white">
+              <select
+                value={efficiencyFilters.driverId}
+                onChange={(event) => {
+                  const driverId = event.target.value;
+                  updateEfficiencyFilters((current) => ({
+                    ...current,
+                    driverId
+                  }));
+                }}
+                className="form-input bg-white"
+              >
                 <option value="">{t.fuelLogs.efficiency.allDrivers}</option>
                 {drivers.map((driver) => <option key={driver.id} value={String(driver.id)}>{driver.name}</option>)}
               </select>
             </div>
-            <div className="md:col-span-3">
+            <div className="md:col-span-3 lg:col-span-3">
               <label className="form-label">{t.fuelLogs.efficiency.vehicleReg}</label>
-              <select value={efficiencyFilters.vehicleReg} onChange={(event) => updateEfficiencyFilters((current) => ({ ...current, vehicleReg: event.target.value }))} className="form-input bg-white">
-                <option value="">{t.fuelLogs.efficiency.allVehicles}</option>
+              <select
+                value={efficiencyFilters.vehicleReg}
+                onChange={(event) => updateEfficiencyFilters((current) => ({ ...current, vehicleReg: event.target.value }))}
+                className={`form-input bg-white ${efficiencyCalculationMode === "trip_summary" && !efficiencyFilters.vehicleReg ? "border-amber-300 ring-2 ring-amber-100/70" : ""}`}
+              >
+                <option value="">
+                  {efficiencyCalculationMode === "trip_summary"
+                    ? (language === "th" ? "เลือกรถ — จำเป็นสำหรับการคำนวณ" : "Select vehicle — required")
+                    : t.fuelLogs.efficiency.allVehicles}
+                </option>
                 {vehicleOptions.map((vehicleReg) => <option key={vehicleReg} value={vehicleReg}>{vehicleReg}</option>)}
               </select>
+              {efficiencyCalculationMode === "trip_summary" && !efficiencyFilters.vehicleReg ? (
+                <p className="mt-1 text-xs font-medium text-amber-700">
+                  {language === "th" ? "ต้องเลือกรถหนึ่งคันเพื่อคำนวณจากเลขไมล์" : "One vehicle is required for mileage-based efficiency."}
+                </p>
+              ) : efficiencyFilters.driverId ? (
+                <p className="mt-1 text-xs text-slate-500">
+                  {language === "th" ? "ตัวกรองคนขับเป็นตัวเลือก รถคือข้อมูลหลักสำหรับการคำนวณเลขไมล์" : "Driver is an optional filter; the vehicle is the primary identity for odometer-based efficiency."}
+                </p>
+              ) : null}
             </div>
-            <div className="md:col-span-3">
+            <div className="md:col-span-3 lg:col-span-4">
               <label className="form-label">{t.fuelLogs.efficiency.dateRange}</label>
               <div className="grid grid-cols-2 gap-2">
                 <input type="date" value={efficiencyFilters.fromDate} onChange={(event) => updateEfficiencyFilters((current) => ({ ...current, fromDate: event.target.value, specificDate: "" }))} className="form-input bg-white" />
                 <input type="date" value={efficiencyFilters.toDate} onChange={(event) => updateEfficiencyFilters((current) => ({ ...current, toDate: event.target.value, specificDate: "" }))} className="form-input bg-white" />
               </div>
             </div>
-            {efficiencyCalculationMode === "per_fill" ? (
-              <div className="md:col-span-3">
-                <label className="form-label">{t.fuelLogs.efficiency.specificDate}</label>
-                <input type="date" value={efficiencyFilters.specificDate} onChange={(event) => updateEfficiencyFilters((current) => ({ ...current, specificDate: event.target.value, fromDate: event.target.value ? "" : current.fromDate, toDate: event.target.value ? "" : current.toDate }))} className="form-input bg-white" />
-              </div>
-            ) : null}
-            <div className="md:col-span-3">
+            <div className="md:col-span-3 lg:col-span-3">
               <label className="form-label">{t.fuelLogs.efficiency.receiptCheck}</label>
               <select value={efficiencyFilters.receiptCheckedStatus} onChange={(event) => updateEfficiencyFilters((current) => ({ ...current, receiptCheckedStatus: event.target.value as EfficiencyFilters["receiptCheckedStatus"] }))} className="form-input bg-white">
                 <option value="">{copy.all}</option>
@@ -2854,14 +3120,14 @@ export default function FuelLogsPage() {
         </div>
 
         <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
-          <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.averageKmPerLitre}</p><p className="mt-2 text-xl font-bold text-slate-950">{efficiencySummary.averageKmPerLitre != null ? formatNumber(efficiencySummary.averageKmPerLitre, language, 2) : "-"}</p></div>
-          <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.bestKmPerLitre}</p><p className="mt-2 text-xl font-bold text-emerald-700">{efficiencySummary.bestKmPerLitre != null ? formatNumber(efficiencySummary.bestKmPerLitre, language, 2) : "-"}</p></div>
-          <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.worstKmPerLitre}</p><p className="mt-2 text-xl font-bold text-amber-700">{efficiencySummary.worstKmPerLitre != null ? formatNumber(efficiencySummary.worstKmPerLitre, language, 2) : "-"}</p></div>
-          <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.totalKmCalculated}</p><p className="mt-2 text-xl font-bold text-slate-950">{formatNumber(efficiencySummary.totalKm, language, 0)}</p></div>
-          <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.totalLitresUsed}</p><p className="mt-2 text-xl font-bold text-slate-950">{formatNumber(efficiencySummary.totalLitres, language, 2)}</p></div>
-          <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.missingMileageEntries}</p><p className="mt-2 text-xl font-bold text-rose-700">{formatNumber(efficiencySummary.missingMileageEntries, language)}</p></div>
-          <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.mileageCompliance}</p><p className="mt-2 text-xl font-bold text-brand-700">{efficiencySummary.mileageCompliance != null ? `${formatNumber(efficiencySummary.mileageCompliance, language, 0)}%` : "โ€”"}</p><p className="mt-1 text-xs font-medium text-slate-500">{t.fuelLogs.efficiency.mileageProvided}</p></div>
-          <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.reviewNeeded}</p><p className="mt-2 text-xl font-bold text-amber-700">{formatNumber(efficiencySummary.reviewNeededEntries, language)}</p></div>
+          <div className="subtle-panel p-3"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.averageKmPerLitre}</p><p className="mt-2 text-xl font-bold text-slate-950">{efficiencySummary.averageKmPerLitre != null ? formatNumber(efficiencySummary.averageKmPerLitre, language, 2) : "-"}</p></div>
+          <div className="subtle-panel p-3"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.bestKmPerLitre}</p><p className="mt-2 text-xl font-bold text-emerald-700">{efficiencySummary.bestKmPerLitre != null ? formatNumber(efficiencySummary.bestKmPerLitre, language, 2) : "-"}</p></div>
+          <div className="subtle-panel p-3"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.worstKmPerLitre}</p><p className="mt-2 text-xl font-bold text-amber-700">{efficiencySummary.worstKmPerLitre != null ? formatNumber(efficiencySummary.worstKmPerLitre, language, 2) : "-"}</p></div>
+          <div className="subtle-panel p-3"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.totalKmCalculated}</p><p className="mt-2 text-xl font-bold text-slate-950">{formatNumber(efficiencySummary.totalKm, language, 0)}</p></div>
+          <div className="subtle-panel p-3"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.totalLitresUsed}</p><p className="mt-2 text-xl font-bold text-slate-950">{formatNumber(efficiencySummary.totalLitres, language, 2)}</p></div>
+          <div className="subtle-panel p-3"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.missingMileageEntries}</p><p className="mt-2 text-xl font-bold text-rose-700">{formatNumber(efficiencySummary.missingMileageEntries, language)}</p></div>
+          <div className="subtle-panel p-3"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.mileageCompliance}</p><p className="mt-2 text-xl font-bold text-brand-700">{efficiencySummary.mileageCompliance != null ? `${formatNumber(efficiencySummary.mileageCompliance, language, 0)}%` : "โ€”"}</p><p className="mt-1 text-xs font-medium text-slate-500">{t.fuelLogs.efficiency.mileageProvided}</p></div>
+          <div className="subtle-panel p-3"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.reviewNeeded}</p><p className="mt-2 text-xl font-bold text-amber-700">{formatNumber(efficiencySummary.reviewNeededEntries, language)}</p></div>
         </div>
 
         {missingMileageRows.length > 0 ? (
@@ -2936,100 +3202,143 @@ export default function FuelLogsPage() {
           </>
         ) : (
           <>
-            <div className="mt-5 rounded-2xl border border-brand-100 bg-brand-50/50 p-3">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">{language === "th" ? "วิธีคำนวณทริป" : "Trip calculation method"}</p>
-              <div className="grid grid-cols-2 gap-2 rounded-xl bg-white p-1 sm:inline-grid sm:min-w-[300px]">
-                {(["automatic", "custom"] as TripSummaryMethod[]).map((method) => <button key={method} type="button" onClick={() => setTripSummaryMethod(method)} className={`rounded-lg px-4 py-2 text-sm font-semibold ${tripSummaryMethod === method ? "bg-brand-700 text-white" : "text-slate-600 hover:bg-slate-50"}`}>{method === "automatic" ? (language === "th" ? "อัตโนมัติ" : "Automatic") : (language === "th" ? "กำหนดเอง" : "Custom")}</button>)}
+            {!efficiencyFilters.vehicleReg ? (
+              <div className="mt-5 overflow-hidden rounded-[1.5rem] border border-amber-200 bg-gradient-to-r from-amber-50 to-orange-50/50">
+                <div className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex items-start gap-3">
+                    <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+                      <AlertTriangle className="h-5 w-5" />
+                    </span>
+                    <div>
+                      <p className="font-semibold text-amber-950">{language === "th" ? "เลือกรถหนึ่งคันก่อนคำนวณ" : "Choose one vehicle to calculate efficiency"}</p>
+                      <p className="mt-1 max-w-3xl text-sm leading-6 text-amber-800">{language === "th" ? "ประสิทธิภาพจากเลขไมล์ต้องใช้รถคันเดียว ระบบจะไม่รวมเลขไมล์หรือน้ำมันจากรถหลายคันเข้าด้วยกัน" : "Mileage-based efficiency must stay within one vehicle. The system will not combine fuel or odometer readings from different vehicles."}</p>
+                    </div>
+                  </div>
+                  {vehicleOptions.length > 0 && vehicleOptions.length <= 6 ? (
+                    <div className="flex flex-wrap gap-2 lg:justify-end">
+                      {vehicleOptions.map((vehicleReg) => (
+                        <button
+                          key={vehicleReg}
+                          type="button"
+                          onClick={() => updateEfficiencyFilters((current) => ({ ...current, vehicleReg }))}
+                          className="rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-amber-300 hover:bg-amber-50"
+                        >
+                          {vehicleReg}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
               </div>
-              <p className="mt-2 text-sm text-slate-600">{tripSummaryMethod === "automatic" ? (language === "th" ? "ใช้เลขไมล์แรก เลขไมล์สุดท้าย และน้ำมันทั้งหมดในช่วงที่เลือก" : "Uses the first mileage, last mileage, and all fuel in the selected period.") : (language === "th" ? "เลือกเลขไมล์และบันทึกน้ำมันที่เป็นของทริปนี้โดยอิสระ" : "Select the mileage readings and fuel logs that belong to this calculation independently.")}</p>
+            ) : null}
+            <div className="mt-5 overflow-hidden rounded-[1.35rem] border border-brand-100 bg-gradient-to-r from-brand-50/80 via-white to-white shadow-[0_8px_24px_rgba(91,33,182,0.05)]">
+              <div className="flex flex-col gap-3 px-4 py-3.5 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-700">{language === "th" ? "วิธีคำนวณตามช่วง" : "Period calculation method"}</p>
+                  <p className="mt-1 text-sm text-slate-600">{tripSummaryMethod === "automatic" ? (language === "th" ? "ใช้เลขไมล์แรก เลขไมล์สุดท้าย และน้ำมันทั้งหมดในช่วงที่เลือก" : "Uses the first and last odometer readings plus all fuel recorded for the selected vehicle in the period.") : (language === "th" ? "เลือกเลขไมล์และบันทึกน้ำมันที่เป็นของทริปนี้โดยอิสระ" : "Choose exactly which fuel and mileage records should count in this result.")}</p>
+                </div>
+                <div className="grid min-w-[280px] grid-cols-2 gap-1 rounded-xl border border-brand-100 bg-white p-1 shadow-sm">
+                  {(["automatic", "custom"] as TripSummaryMethod[]).map((method) => <button key={method} type="button" onClick={() => setTripSummaryMethod(method)} className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${tripSummaryMethod === method ? "bg-brand-700 text-white shadow-sm" : "text-slate-600 hover:bg-brand-50 hover:text-brand-800"}`}>{method === "automatic" ? (language === "th" ? "อัตโนมัติ" : "Automatic") : (language === "th" ? "กำหนดเอง" : "Custom")}</button>)}
+                </div>
+              </div>
             </div>
 
             {tripSummaryMethod === "custom" ? (
-              efficiencyFilters.driverId && efficiencyFilters.vehicleReg ? <CustomTripCalculation
-                calculations={customTripCalculations}
-                driverId={efficiencyFilters.driverId}
-                driverName={selectedEfficiencyDriverLabel}
-                language={language}
-                logs={tripSummaryLogs}
-                onSaved={reloadCustomTripCalculations}
-                onSnapshotChange={setCustomTripSnapshot}
-                vehicleReg={efficiencyFilters.vehicleReg}
-              /> : <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">{language === "th" ? "เลือกพนักงานขับรถและรถหนึ่งคันเพื่อกำหนดการคำนวณ" : "Select one driver and one vehicle to configure a custom calculation."}</div>
+              efficiencyFilters.vehicleReg ? (
+                <div className="mt-4 overflow-hidden rounded-[1.35rem] border border-slate-200 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.045)]">
+                  <div className="flex flex-col gap-2 border-b border-brand-100 bg-gradient-to-r from-brand-50/70 via-white to-white px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="font-semibold text-slate-950">{language === "th" ? "เลือกรายการที่ใช้ในการคำนวณ" : "Choose what counts in this calculation"}</p>
+                      <p className="mt-0.5 text-xs text-slate-500">{language === "th" ? "น้ำมันและเลขไมล์เลือกแยกจากกันได้ ระบบจะใช้เฉพาะรายการที่ติ๊กไว้" : "Fuel and mileage can be included independently. Only checked records affect the result."}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-xs font-semibold">
+                      <span className="rounded-full border border-brand-100 bg-brand-50 px-3 py-1 text-brand-700">{customFuelLogIds.size} {language === "th" ? "รายการน้ำมัน" : "fuel entries"}</span>
+                      <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-700">{customMileageLogIds.size} {language === "th" ? "เลขไมล์" : "mileage readings"}</span>
+                    </div>
+                  </div>
+                  {tripSummaryLogs.length ? (
+                    <div className="max-h-[300px] overflow-y-auto">
+                      <div className="sticky top-0 z-10 grid grid-cols-[minmax(110px,0.9fr)_minmax(90px,0.7fr)_minmax(90px,0.8fr)_minmax(95px,0.8fr)_86px_92px] gap-3 border-b border-brand-100 bg-white/95 px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500 backdrop-blur">
+                        <span>{language === "th" ? "วันที่" : "Date"}</span>
+                        <span>{language === "th" ? "คนขับ" : "Driver"}</span>
+                        <span>{language === "th" ? "ลิตร / ราคา" : "Litres / cost"}</span>
+                        <span>{language === "th" ? "เลขไมล์" : "Mileage"}</span>
+                        <span className="text-center">{language === "th" ? "ใช้น้ำมัน" : "Fuel"}</span>
+                        <span className="text-center">{language === "th" ? "ใช้เลขไมล์" : "Mileage"}</span>
+                      </div>
+                      {tripSummaryLogs.map((log) => {
+                        const logId = String(log.id);
+                        const mileage = getMileageValue(log.mileage);
+                        const fuelSelected = customFuelLogIds.has(logId);
+                        const mileageSelected = customMileageLogIds.has(logId);
+                        return (
+                          <div key={logId} className={`grid grid-cols-[minmax(110px,0.9fr)_minmax(90px,0.7fr)_minmax(90px,0.8fr)_minmax(95px,0.8fr)_86px_92px] items-center gap-3 border-b border-slate-100 px-4 py-2.5 text-sm transition last:border-b-0 ${fuelSelected || mileageSelected ? "bg-brand-50/20" : "hover:bg-slate-50/70"}`}>
+                            <span className="font-medium text-slate-900">{formatDate(log.date, language)}</span>
+                            <span className="truncate text-slate-600">{log.driver || "-"}</span>
+                            <span className="text-slate-700"><span className="font-semibold">{formatNumber(getNumericValue(log.litres), language, 2)} L</span><br/><span className="text-xs text-slate-500">{formatCurrency(getNumericValue(log.total_cost), language)}</span></span>
+                            <span className={mileage == null ? "text-amber-700" : "font-medium text-slate-800"}>{mileage == null ? (language === "th" ? "ไม่มีเลขไมล์" : "No mileage") : `${formatNumber(mileage, language, 0)} km`}</span>
+                            <label className="flex justify-center"><input type="checkbox" checked={fuelSelected} onChange={() => setCustomFuelLogIds((current) => { const next = new Set(current); next.has(logId) ? next.delete(logId) : next.add(logId); return next; })} className="h-4 w-4 rounded border-slate-300 text-brand-700 focus:ring-brand-500" /></label>
+                            <label className="flex justify-center"><input type="checkbox" disabled={mileage == null} checked={mileage != null && mileageSelected} onChange={() => setCustomMileageLogIds((current) => { const next = new Set(current); next.has(logId) ? next.delete(logId) : next.add(logId); return next; })} className="h-4 w-4 rounded border-slate-300 text-brand-700 focus:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-30" /></label>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="px-4 py-8 text-center text-sm text-slate-500">{language === "th" ? "ไม่พบบันทึกน้ำมันในช่วงที่เลือก" : "No fuel entries found for the selected vehicle and date range."}</div>
+                  )}
+                  <div className="grid gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-3 text-xs sm:grid-cols-2">
+                    <p className={customMileageLogIds.size >= 2 ? "text-emerald-700" : "font-medium text-amber-700"}>{customMileageLogIds.size >= 2 ? (language === "th" ? "✓ มีเลขไมล์เพียงพอสำหรับคำนวณระยะทาง" : "✓ Enough mileage readings to calculate distance") : (language === "th" ? "ต้องเลือกเลขไมล์อย่างน้อย 2 รายการ" : "Select at least 2 mileage readings for distance")}</p>
+                    <p className={customFuelLogIds.size >= 1 ? "text-emerald-700" : "font-medium text-amber-700"}>{customFuelLogIds.size >= 1 ? (language === "th" ? "✓ มีรายการน้ำมันสำหรับคำนวณ KM/L" : "✓ Fuel selected for KM/L") : (language === "th" ? "ต้องเลือกน้ำมันอย่างน้อย 1 รายการเพื่อคำนวณ KM/L" : "Select at least 1 fuel entry for KM/L")}</p>
+                  </div>
+                </div>
+              ) : <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">{language === "th" ? "เลือกรถหนึ่งคันเพื่อกำหนดการคำนวณ" : "Select one vehicle to configure a custom calculation."}</div>
             ) : null}
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
-              <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{distanceTravelledLabel}</p><p className="mt-2 text-xl font-bold text-slate-950">{tripSummary.tripKm != null ? formatNumber(tripSummary.tripKm, language, 0) : "-"}</p></div>
-              <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.totalLitres}</p><p className="mt-2 text-xl font-bold text-slate-950">{formatNumber(tripSummary.totalLitres, language, 2)}</p></div>
-              <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{fuelEfficiencyLabel}</p><p className="mt-2 text-xl font-bold text-brand-700">{tripSummary.tripKmPerLitre != null ? formatNumber(tripSummary.tripKmPerLitre, language, 2) : "-"}</p></div>
-              <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.totalFuelCost}</p><p className="mt-2 text-xl font-bold text-slate-950">{formatCurrency(tripSummary.totalFuelCost, language)}</p></div>
-              <div className="subtle-panel p-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.averagePricePerLitre}</p><p className="mt-2 text-xl font-bold text-slate-950">{tripSummary.averagePricePerLitre != null ? formatCurrency(tripSummary.averagePricePerLitre, language) : "-"}</p></div>
-              <div className="subtle-panel p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.receiptsChecked}</p>
-                <p className="mt-2 text-lg font-bold text-emerald-700">{receiptsSummaryLabel}</p>
-                <p className="mt-1 text-xs text-slate-500">{tripSummary.receiptUncheckedCount === 0 ? t.fuelLogs.efficiency.allReceiptsChecked : t.fuelLogs.efficiency.tripReceiptsTooltip}</p>
+            <div className="mt-4 grid gap-3 lg:grid-cols-[1.15fr_2.85fr]">
+              <div className="overflow-hidden rounded-[1.35rem] bg-gradient-to-br from-[#21113f] via-[#3b1d69] to-brand-700 p-4 text-white shadow-[0_16px_34px_rgba(76,29,149,0.16)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-200">{fuelEfficiencyLabel}</p>
+                <div className="mt-3 flex items-end gap-2">
+                  <p className="text-4xl font-semibold tracking-tight">{tripSummary.tripKmPerLitre != null ? formatNumber(tripSummary.tripKmPerLitre, language, 2) : "-"}</p>
+                  <p className="pb-1 text-sm font-semibold text-violet-200">KM/L</p>
+                </div>
+                <p className="mt-3 text-xs leading-5 text-violet-100/80">{tripSummary.tripKmPerLitre != null && tripSummary.tripKm != null ? `${formatNumber(tripSummary.tripKm, language, 0)} km ÷ ${formatNumber(tripSummary.totalLitres, language, 2)} L` : (language === "th" ? "เลือกรถ ช่วงเวลา และข้อมูลที่ต้องการใช้" : "Select a vehicle, period and the records that should count.")}</p>
               </div>
-              <div className="subtle-panel p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.missingMileage}</p>
-                <p className="mt-2 text-lg font-bold text-amber-700">{missingMileageSummaryLabel}</p>
-                <p className="mt-1 text-xs text-slate-500">{mileageClarityMessage}</p>
-              </div>
-            </div>
-
-            <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.04)]">
-              <div className="flex items-start gap-3">
-                <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand-700" />
-                <div>
-                  <p className="font-semibold text-slate-950">{t.fuelLogs.efficiency.tripSummaryCalculation}</p>
-                  <p className="mt-1 max-w-4xl text-sm text-slate-600">{t.fuelLogs.efficiency.tripSummaryCalculationDescription}</p>
-                </div>
-              </div>
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.step} 1</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-900">{t.fuelLogs.efficiency.startMileage} {"->"} {t.fuelLogs.efficiency.endMileage}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.step} 2</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-900">{t.fuelLogs.efficiency.endMileage} - {t.fuelLogs.efficiency.startMileage} = {distanceTravelledLabel}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.step} 3</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-900">{distanceTravelledLabel} {divideSymbol} {t.fuelLogs.efficiency.totalLitres} = {fuelEfficiencyLabel}</p>
-                </div>
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="subtle-panel p-3"><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{distanceTravelledLabel}</p><p className="mt-1.5 text-lg font-bold text-slate-950">{tripSummary.tripKm != null ? `${formatNumber(tripSummary.tripKm, language, 0)} km` : "-"}</p></div>
+                <div className="subtle-panel p-3"><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.totalLitres}</p><p className="mt-1.5 text-lg font-bold text-slate-950">{formatNumber(tripSummary.totalLitres, language, 2)} L</p></div>
+                <div className="subtle-panel p-3"><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.totalFuelCost}</p><p className="mt-1.5 text-lg font-bold text-slate-950">{formatCurrency(tripSummary.totalFuelCost, language)}</p></div>
+                <div className="subtle-panel p-3"><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.averagePricePerLitre}</p><p className="mt-1.5 text-lg font-bold text-slate-950">{tripSummary.averagePricePerLitre != null ? `${formatCurrency(tripSummary.averagePricePerLitre, language)}/L` : "-"}</p></div>
+                <div className="subtle-panel p-3"><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.receiptsChecked}</p><p className={`mt-1.5 text-lg font-bold ${tripSummary.receiptUncheckedCount === 0 ? "text-emerald-700" : "text-amber-700"}`}>{receiptsSummaryLabel}</p><p className="mt-0.5 text-[11px] text-slate-500">{tripSummary.receiptUncheckedCount === 0 ? t.fuelLogs.efficiency.allReceiptsChecked : (language === "th" ? "ยังมีใบเสร็จที่ต้องตรวจ" : "Some receipts still need checking")}</p></div>
+                <div className="subtle-panel p-3"><p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.missingMileage}</p><p className={`mt-1.5 text-lg font-bold ${tripSummary.missingMileageCount > 0 ? "text-amber-700" : "text-emerald-700"}`}>{missingMileageSummaryLabel}</p><p className="mt-0.5 text-[11px] text-slate-500">{mileageClarityMessage}</p></div>
               </div>
             </div>
 
-            <div className="mt-5 rounded-2xl border border-brand-100 bg-brand-50/60 p-4 text-sm text-slate-700">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="mt-3 overflow-hidden rounded-[1.35rem] border border-brand-100 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.035)]">
+              <div className="grid gap-3 px-4 py-3.5 lg:grid-cols-[1fr_auto] lg:items-center">
                 <div className="flex items-start gap-3">
-                  <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand-700" />
+                  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-700"><Info className="h-4 w-4" /></span>
                   <div className="min-w-0">
-                    <p className="font-semibold text-slate-950">{t.fuelLogs.efficiency.tripFormulaTitle}</p>
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                      <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{selectedPeriodLabel}</p><p className="mt-1 font-semibold text-slate-900">{tripPeriodLabel}</p>{tripPeriodDays != null ? <p className="mt-0.5 text-xs text-slate-500">{t.fuelLogs.efficiency.numberOfDays}: {formatNumber(tripPeriodDays, language)} {t.fuelLogs.efficiency.days}</p> : null}</div>
-                      <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.mileage}</p><p className="mt-1 font-semibold text-slate-900">{tripSummary.startMileage != null ? formatNumber(tripSummary.startMileage, language, 0) : "-"} {"->"} {tripSummary.endMileage != null ? formatNumber(tripSummary.endMileage, language, 0) : "-"}</p></div>
-                      <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.tripDistance}</p><p className="mt-1 font-semibold text-slate-900">{tripSummary.endMileage != null ? formatNumber(tripSummary.endMileage, language, 0) : "-"} - {tripSummary.startMileage != null ? formatNumber(tripSummary.startMileage, language, 0) : "-"} = {tripSummary.tripKm != null ? formatNumber(tripSummary.tripKm, language, 0) : "-"} km</p></div>
-                      <div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">{t.fuelLogs.efficiency.fuelUsed}</p><p className="mt-1 font-semibold text-slate-900">{formatNumber(tripSummary.totalLitres, language, 2)} {t.fuelLogs.efficiency.litres}</p></div>
-                    </div>
-                    <div className="mt-4 rounded-2xl border border-brand-100 bg-white/80 px-4 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">{t.fuelLogs.efficiency.finalResult}</p>
-                      <p className="mt-2 text-lg font-bold text-slate-950">{tripSummary.tripKm != null ? formatNumber(tripSummary.tripKm, language, 0) : "-"} km {divideSymbol} {formatNumber(tripSummary.totalLitres, language, 2)} L = {tripSummary.tripKmPerLitre != null ? formatNumber(tripSummary.tripKmPerLitre, language, 2) : "-"} KM/L</p>
-                      {tripSummary.tripKmPerLitre != null ? <p className="mt-2 text-sm text-slate-600">{t.fuelLogs.efficiency.thisMeansVehicleTravelled} {formatNumber(tripSummary.tripKmPerLitre, language, 2)} km {t.fuelLogs.efficiency.forEveryOneLitre}</p> : null}
+                    <p className="font-semibold text-slate-950">{language === "th" ? "การคำนวณประสิทธิภาพตามช่วง" : "Period efficiency calculation"}</p>
+                    <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+                      <div><span className="text-slate-400">{selectedPeriodLabel}</span><span className="ml-2 font-semibold text-slate-800">{tripPeriodLabel}</span></div>
+                      <div><span className="text-slate-400">{t.fuelLogs.efficiency.mileage}</span><span className="ml-2 font-semibold text-slate-800">{tripSummary.startMileage != null ? formatNumber(tripSummary.startMileage, language, 0) : "-"} → {tripSummary.endMileage != null ? formatNumber(tripSummary.endMileage, language, 0) : "-"}</span></div>
+                      <div><span className="text-slate-400">{t.fuelLogs.efficiency.fuelUsed}</span><span className="ml-2 font-semibold text-slate-800">{formatNumber(tripSummary.totalLitres, language, 2)} L</span></div>
                     </div>
                   </div>
                 </div>
-                <button type="button" title={tripStatusTooltips[tripSummary.status]} className={`inline-flex w-fit shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold ${getTripStatusClass(tripSummary.status)}`}>
-                  {tripStatusLabels[tripSummary.status]}
-                </button>
+                <div className="rounded-xl border border-brand-100 bg-brand-50/70 px-4 py-2.5 text-right">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-brand-700">{t.fuelLogs.efficiency.finalResult}</p>
+                  <p className="mt-1 text-base font-bold text-slate-950">{tripSummary.tripKm != null ? formatNumber(tripSummary.tripKm, language, 0) : "-"} km {divideSymbol} {formatNumber(tripSummary.totalLitres, language, 2)} L = {tripSummary.tripKmPerLitre != null ? formatNumber(tripSummary.tripKmPerLitre, language, 2) : "-"} KM/L</p>
+                </div>
               </div>
             </div>
 
-            <div className="mt-5 grid gap-3 lg:grid-cols-2">
-              <div className={`flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm ${tripSummary.receiptUncheckedCount > 0 ? "border-amber-200 bg-amber-50 text-amber-900" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>
+            <div className="mt-3 grid gap-2 lg:grid-cols-2">
+              <div className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 text-sm ${tripSummary.receiptUncheckedCount > 0 ? "border-amber-200 bg-amber-50 text-amber-900" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>
                 {tripSummary.receiptUncheckedCount > 0 ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> : <ReceiptText className="mt-0.5 h-4 w-4 shrink-0" />}
                 <div><p className="font-semibold">{tripSummary.receiptUncheckedCount > 0 ? t.fuelLogs.efficiency.statusCheckReceipts : t.fuelLogs.efficiency.allReceiptsChecked}</p><p className="mt-1">{tripSummary.receiptUncheckedCount > 0 ? t.fuelLogs.efficiency.tripReceiptsTooltip : t.fuelLogs.efficiency.allReceiptsChecked}</p></div>
               </div>
-              <div className={`flex items-start gap-3 rounded-2xl border px-4 py-3 text-sm ${tripSummary.mileageRecordCount < 2 || tripSummary.missingMileageCount > 0 ? "border-amber-200 bg-amber-50 text-amber-900" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>
+              <div className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 text-sm ${tripSummary.mileageRecordCount < 2 || tripSummary.missingMileageCount > 0 ? "border-amber-200 bg-amber-50 text-amber-900" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>
                 {tripSummary.mileageRecordCount < 2 || tripSummary.missingMileageCount > 0 ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> : <Gauge className="mt-0.5 h-4 w-4 shrink-0" />}
                 <div><p className="font-semibold">{tripSummary.mileageRecordCount < 2 ? t.fuelLogs.efficiency.statusNotEnoughData : tripSummary.missingMileageCount > 0 ? t.fuelLogs.efficiency.statusMissingMileage : t.fuelLogs.efficiency.tripAllKeyMileageAvailable}</p><p className="mt-1">{mileageClarityMessage}</p></div>
               </div>
@@ -3041,67 +3350,143 @@ export default function FuelLogsPage() {
           </>
         ) : null}
       </section>
+      ) : null}
 
-      <section className="surface-card mb-4.5 p-4 sm:p-5">
-        <div className="mb-3.5">
-          <h3 className="text-base font-semibold text-slate-900">{t.fuelLogs.spendByDayTitle}</h3>
-          <p className="mt-1 text-sm text-slate-500">{t.fuelLogs.spendByDayDescription}</p>
+      {activeFuelView === "overview" ? (
+      <>
+      <section className="surface-card mb-4.5 overflow-hidden p-0">
+        <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-6">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-600">{language === "th" ? "การควบคุมน้ำมันรายเดือน" : "MONTHLY FUEL CONTROL"}</p>
+            <h3 className="mt-1 text-xl font-semibold text-slate-950">{language === "th" ? "ค่าใช้จ่ายน้ำมันรายเดือน" : "Fuel spend by month"}</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              {language === "th" ? "ดูยอดรวมรายเดือนและการเปลี่ยนแปลงเทียบกับเดือนก่อน" : "Monthly fuel totals with spend movement compared with the previous month."}
+            </p>
+          </div>
+          <button type="button" onClick={() => setActiveFuelView("entries")} className="inline-flex items-center gap-1 text-sm font-semibold text-brand-700 hover:text-brand-800">
+            {language === "th" ? "ดูรายการน้ำมัน" : "View fuel entries"}<ChevronRight className="h-4 w-4" />
+          </button>
         </div>
-        <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          <div className="subtle-panel p-3"><p className="text-xs font-semibold text-slate-500">{uxCopy.totalSpend}</p><p className="mt-1 text-lg font-bold text-slate-950">{formatCurrency(last7DaysSummary.totalSpend, language)}</p></div>
-          <div className="subtle-panel p-3"><p className="text-xs font-semibold text-slate-500">{uxCopy.totalLitres}</p><p className="mt-1 text-lg font-bold text-slate-950">{formatNumber(last7DaysSummary.totalLitres, language, 2)}</p></div>
-          <div className="subtle-panel p-3"><p className="text-xs font-semibold text-slate-500">{uxCopy.averagePriceLitre}</p><p className="mt-1 text-lg font-bold text-slate-950">{last7DaysSummary.averagePricePerLitre != null ? formatCurrency(last7DaysSummary.averagePricePerLitre, language) : "-"}</p></div>
-          <div className="subtle-panel p-3"><p className="text-xs font-semibold text-slate-500">{uxCopy.highestDay}</p><p className="mt-1 text-lg font-bold text-slate-950">{last7DaysSummary.highestDay ? formatDate(last7DaysSummary.highestDay.date, language) : "-"}</p></div>
-          <div className="subtle-panel p-3"><p className="text-xs font-semibold text-slate-500">{t.common.entries}</p><p className="mt-1 text-lg font-bold text-slate-950">{formatNumber(last7DaysSummary.totalEntries, language)}</p></div>
+
+        <div className="grid border-b border-slate-100 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="px-5 py-3.5 border-b border-slate-100 xl:border-b-0 xl:border-r">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">{language === "th" ? "ค่าใช้จ่ายเดือนนี้" : "Month spend"}</p>
+            <p className="mt-1.5 text-lg font-semibold text-slate-950">{formatCurrency(currentMonthSummary.totalSpend, language)}</p>
+          </div>
+          <div className="px-5 py-3.5 border-b border-slate-100 xl:border-b-0 xl:border-r">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">{language === "th" ? "ลิตรเดือนนี้" : "Month litres"}</p>
+            <p className="mt-1.5 text-lg font-semibold text-slate-950">{formatNumber(currentMonthSummary.totalLitres, language, 2)}</p>
+          </div>
+          <div className="px-5 py-3.5 border-b border-slate-100 xl:border-b-0 xl:border-r">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">{language === "th" ? "ราคาเฉลี่ย/ลิตร" : "Average price/L"}</p>
+            <p className="mt-1.5 text-lg font-semibold text-slate-950">{currentMonthSummary.averagePricePerLitre != null ? formatCurrency(currentMonthSummary.averagePricePerLitre, language) : "-"}</p>
+          </div>
+          <div className="px-5 py-3.5 border-b border-slate-100 xl:border-b-0 xl:border-r">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">{language === "th" ? "รายการเดือนนี้" : "Fuel entries"}</p>
+            <p className="mt-1.5 text-lg font-semibold text-slate-950">{formatNumber(currentMonthSummary.totalEntries, language)}</p>
+          </div>
+          <div className="px-5 py-3.5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">{language === "th" ? "รถที่เติม" : "Vehicles fuelled"}</p>
+            <p className="mt-1.5 text-lg font-semibold text-slate-950">{formatNumber(currentMonthSummary.vehicleCount, language)}</p>
+          </div>
         </div>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {last7DayRows.map((row) => (
-            <div key={row.date} className="subtle-panel p-4">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-semibold text-slate-700">{formatDate(row.date, language)}</p>
-                <Clock3 className="h-4 w-4 text-slate-400" />
+
+        <div className="flex flex-col gap-2 border-b border-slate-100 bg-slate-50/55 px-5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+            {language === "th" ? "สัดส่วนสถานีเดือนนี้" : "Station mix this month"}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(currentMonthSummary.stationCounts).length ? Object.entries(currentMonthSummary.stationCounts).map(([station, count]) => (
+              <FuelStationBadge key={station} station={station} count={count} compact />
+            )) : <span className="text-xs text-slate-400">—</span>}
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left">
+            <thead className="bg-brand-50/55 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+              <tr>
+                <th className="px-5 py-3">{language === "th" ? "เดือน" : "Month"}</th>
+                <th className="px-5 py-3">{language === "th" ? "ค่าใช้จ่าย" : "Spend"}</th>
+                <th className="px-5 py-3">{language === "th" ? "เปลี่ยนแปลง" : "Change"}</th>
+                <th className="px-5 py-3">{language === "th" ? "ลิตร" : "Litres"}</th>
+                <th className="px-5 py-3">{language === "th" ? "ราคาเฉลี่ย/ลิตร" : "Avg THB/L"}</th>
+                <th className="px-5 py-3">{language === "th" ? "รายการ" : "Entries"}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {monthlyFuelHistory.map((month) => (
+                <tr key={month.key} className="transition hover:bg-slate-50/70">
+                  <td className="px-5 py-3.5">
+                    <p className="font-semibold text-slate-950">{month.label}</p>
+                    {month.isCurrentMonth ? <p className="mt-0.5 text-xs text-slate-400">{language === "th" ? "เดือนปัจจุบัน" : "Month to date"}</p> : null}
+                  </td>
+                  <td className="px-5 py-3.5 font-semibold text-slate-950">{formatCurrency(month.totalSpend, language)}</td>
+                  <td className="px-5 py-3.5">
+                    {month.spendDelta == null ? <span className="text-sm text-slate-400">—</span> : (
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${month.spendDelta > 0 ? "bg-amber-50 text-amber-700" : month.spendDelta < 0 ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
+                        {month.spendDelta > 0 ? "+" : ""}{formatNumber(month.spendDelta, language, 1)}%
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-5 py-3.5 text-slate-700">{formatNumber(month.totalLitres, language, 2)}</td>
+                  <td className="px-5 py-3.5 text-slate-700">{month.averagePricePerLitre != null ? formatCurrency(month.averagePricePerLitre, language) : "-"}</td>
+                  <td className="px-5 py-3.5 text-slate-700">{formatNumber(month.entries, language)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="surface-card mb-4.5 overflow-hidden p-0">
+        <div className="grid divide-y divide-slate-100 lg:grid-cols-3 lg:divide-x lg:divide-y-0">
+          <button type="button" onClick={() => { setFilters((current) => ({ ...current, receiptCheckedStatus: "checked" })); setActiveFuelView("entries"); }} className="group px-5 py-4 text-left transition hover:bg-slate-50">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">{language === "th" ? "สถานะใบเสร็จ" : "Receipt control"}</p>
+            <div className="mt-2 flex items-end justify-between gap-4">
+              <div><p className="text-2xl font-semibold text-slate-950">{receiptControlRate}% <span className="text-sm font-medium text-slate-500">{language === "th" ? "ตรวจแล้ว" : "checked"}</span></p><p className="mt-1 text-xs text-slate-500">{language === "th" ? "จากรายการน้ำมันทั้งหมด" : "of fuel records checked"}</p></div>
+              <ReceiptText className="h-5 w-5 text-brand-600" />
+            </div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${receiptControlRate}%` }} /></div>
+          </button>
+          <button type="button" onClick={() => { setFilters((current) => ({ ...current, receiptCheckedStatus: "checked" })); setActiveFuelView("entries"); }} className="group px-5 py-4 text-left transition hover:bg-slate-50">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700">{language === "th" ? "ตรวจแล้ว" : "Checked"}</p>
+            <p className="mt-2 text-2xl font-semibold text-slate-950">{formatNumber(receiptSummary.checked, language)}</p>
+            <p className="mt-1 text-xs text-slate-500">{language === "th" ? "พร้อมสำหรับรายงาน" : "Ready for reporting"}</p>
+          </button>
+          <button type="button" onClick={() => { setFilters((current) => ({ ...current, receiptCheckedStatus: "not_checked" })); setActiveFuelView("entries"); }} className="group px-5 py-4 text-left transition hover:bg-amber-50/40">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-amber-700">{language === "th" ? "รอตรวจใบเสร็จ" : "Pending receipt checks"}</p>
+                <p className="mt-2 text-2xl font-semibold text-slate-950">{formatNumber(receiptSummary.notChecked, language)}</p>
+                <p className="mt-1 text-xs text-slate-500">{language === "th" ? "รายการที่ยังต้องตรวจ" : "Open records still needing review"}</p>
               </div>
-              <p className="mt-2.5 text-base font-semibold text-slate-950">{formatCurrency(row.spend, language)}</p>
-              <div className="mt-2 flex items-center justify-between gap-3 text-sm text-slate-500">
-                <span>{formatNumber(row.litres, language, 2)} {t.fuelLogs.litres}</span>
-                <span>{formatNumber(row.entries, language)} {t.common.entries}</span>
+              <ChevronRight className="h-5 w-5 text-amber-600 transition group-hover:translate-x-0.5" />
+            </div>
+          </button>
+        </div>
+      </section>
+      </>
+      ) : null}
+
+            {activeFuelView === "entries" ? (
+      <>
+      {entryModalOpen ? (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/45 p-3 backdrop-blur-[2px] sm:p-6">
+          <div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-[1.75rem] border border-white/70 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.30)]">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 sm:px-6">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-600">FUEL ENTRY</p>
+                <h3 className="mt-1 text-xl font-semibold text-slate-950">{isEditing ? t.fuelLogs.editFuelEntry : t.fuelLogs.addFuelEntry}</h3>
               </div>
-              <button type="button" onClick={() => updateFilters((current) => ({ ...current, fromDate: row.date, toDate: row.date }))} className="btn-secondary mt-3 min-h-8 px-3 py-1 text-xs">
-                {uxCopy.viewDay}
+              <button type="button" onClick={() => { setEntryModalOpen(false); resetForm(); }} className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-900" aria-label="Close fuel entry">
+                <X className="h-5 w-5" />
               </button>
             </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="mb-4.5 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard
-          label={receiptCopy.totalCount}
-          value={formatNumber(receiptSummary.total, language)}
-          helper={language === "th" ? "เธฃเธงเธกเธ•เธฒเธกเธ•เธฑเธงเธเธฃเธญเธเธเธฑเธเธเธธเธเธฑเธ" : "Based on the current filters."}
-          icon={<ReceiptText className="h-5 w-5" />}
-        />
-        <StatCard
-          label={receiptCopy.checkedCount}
-          value={formatNumber(receiptSummary.checked, language)}
-          helper={language === "th" ? "เธ•เธฃเธงเธเน€เธ—เธตเธขเธเนเธเน€เธชเธฃเนเธเนเธฅเนเธง" : "Marked as checked against receipt."}
-          icon={<TrendingUp className="h-5 w-5" />}
-        />
-        <StatCard
-          label={receiptCopy.notCheckedCount}
-          value={formatNumber(receiptSummary.notChecked, language)}
-          helper={language === "th" ? "เธขเธฑเธเธฃเธญเธ•เธฃเธงเธเน€เธ—เธตเธขเธเนเธเน€เธชเธฃเนเธ" : "Still pending receipt check."}
-          icon={<AlertTriangle className="h-5 w-5" />}
-        />
-      </section>
-
-      <section className="mt-5 grid gap-5">
+            <div className="overflow-y-auto p-4 sm:p-6">
+      <section className="grid gap-5">
         <section className="surface-card p-3 sm:p-4">
           <form onSubmit={handleSubmit} className="space-y-3">
-            <div>
-              <h3 className="section-title">{isEditing ? t.fuelLogs.editFuelEntry : t.fuelLogs.addFuelEntry}</h3>
-              <p className="section-subtitle">{t.fuelLogs.description}</p>
-            </div>
             {error ? <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}
             {successMessage ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{successMessage}</div> : null}
             {duplicateMatches.length > 0 && pendingDraft ? (
@@ -3119,7 +3504,10 @@ export default function FuelLogsPage() {
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                           <p className="font-semibold text-slate-900">{log.vehicle_reg}</p>
-                          <p className="mt-1 text-slate-500">{formatDate(log.date, language)}{copy.entrySeparator}{log.driver || "-"}{copy.entrySeparator}{log.location || "-"}</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-2 text-slate-500">
+                            <span>{formatDate(log.date, language)}{copy.entrySeparator}{log.driver || "-"}</span>
+                            <FuelStationBadge station={log.location} compact />
+                          </div>
                         </div>
                         <div className="text-left sm:text-right">
                           <p className="font-semibold text-slate-950">{formatCurrency(Number(log.total_cost || 0), language)}</p>
@@ -3174,7 +3562,9 @@ export default function FuelLogsPage() {
                 <label className="form-label form-label-required">{t.fuelLogs.fuelStationLocation}</label>
                 <div className="flex flex-wrap items-center gap-1.5">
                   {["Shell", "Bangchak"].map((station) => (
-                    <button key={station} type="button" onClick={() => setForm((current) => ({ ...current, location: station }))} className={`min-h-8 rounded-full border px-3 py-1 text-xs font-semibold transition ${form.location.trim().toLowerCase() === station.toLowerCase() ? "border-sky-300 bg-sky-50 text-sky-800" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}>{station}</button>
+                    <button key={station} type="button" onClick={() => setForm((current) => ({ ...current, location: station }))} className={`min-h-9 rounded-full border px-1.5 py-1 text-xs font-semibold transition ${form.location.trim().toLowerCase() === station.toLowerCase() ? "border-brand-300 bg-brand-50 text-brand-800 shadow-sm" : "border-slate-200 bg-white text-slate-600 hover:border-brand-200 hover:bg-brand-50/60"}`}>
+                      <FuelStationBadge station={station} compact className="border-0 bg-transparent px-1 py-0 shadow-none" />
+                    </button>
                   ))}
                   <input required value={form.location} onInvalid={handleInvalid} onInput={clearValidationMessage} onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))} placeholder="Custom location" autoComplete="off" className="form-input min-w-[180px] flex-1 bg-white" />
                 </div>
@@ -3196,7 +3586,7 @@ export default function FuelLogsPage() {
                 <option key={vehicleReg} value={vehicleReg} />
               ))}
             </datalist>
-            <div className="sticky bottom-2 z-10 flex flex-col gap-2 rounded-lg border border-slate-200/80 bg-white/95 p-2.5 shadow-[0_8px_24px_rgba(15,23,42,0.08)] backdrop-blur sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:shadow-none sm:flex-row sm:items-center">
+            <div className="sticky bottom-0 z-20 -mx-4 -mb-4 mt-4 flex flex-col gap-2 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-8px_24px_rgba(15,23,42,0.06)] backdrop-blur sm:-mx-5 sm:-mb-5 sm:px-5 sm:flex-row sm:items-center">
               {!isEditing ? (
                 <label className="flex min-h-10 cursor-pointer items-center gap-2.5 text-sm font-medium text-slate-700 sm:mr-auto">
                   <input type="checkbox" checked={keepDetailsForNextEntry} onChange={(event) => setKeepDetailsForNextEntry(event.target.checked)} className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500" />
@@ -3205,11 +3595,15 @@ export default function FuelLogsPage() {
               ) : null}
               {!isEditing ? <button type="submit" disabled={saving} onClick={() => setSubmitMode("addAnother")} className="btn-secondary min-w-[180px] flex-1 sm:flex-none disabled:opacity-70">{saving && submitMode === "addAnother" ? t.common.saving : t.fuelLogs.saveAndAddAnother}</button> : null}
               <button type="submit" disabled={saving} onClick={() => setSubmitMode("save")} className="btn-primary min-w-[180px] flex-1 sm:flex-none disabled:opacity-70">{saving && submitMode === "save" ? t.common.saving : isEditing ? t.fuelLogs.updateFuelEntry : t.fuelLogs.saveFuelEntry}</button>
-              {isEditing ? <button type="button" onClick={resetForm} className="btn-secondary w-full sm:w-auto">{t.common.cancel}</button> : null}
+              {isEditing ? <button type="button" onClick={() => { resetForm(); setEntryModalOpen(false); }} className="btn-secondary w-full sm:w-auto">{t.common.cancel}</button> : null}
             </div>
           </form>
         </section>
       </section>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <section className="mt-5">
         <section className="surface-card min-w-0 p-4 sm:p-5">
@@ -3221,6 +3615,7 @@ export default function FuelLogsPage() {
               </div>
               <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
                 <div className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">{formatNumber(totalCount, language)} {copy.matches}</div>
+                <button type="button" onClick={() => { resetForm(); setEntryModalOpen(true); }} className="btn-primary w-full gap-2 whitespace-nowrap sm:w-auto">+ {language === "th" ? "เพิ่มรายการน้ำมัน" : "Add fuel entry"}</button>
                 <FuelStatementImporter drivers={drivers} existingLogs={efficiencySourceLogs} onImported={() => refreshCurrentPage(1)} />
                 <button type="button" onClick={() => void handleExportFuelLogs()} disabled={!totalCount || exporting || loading} className="btn-secondary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"><Download className="h-4 w-4" />{exporting ? exportButtonLabel : t.common.export}</button>
               </div>
@@ -3252,16 +3647,18 @@ export default function FuelLogsPage() {
                     onClick={() => applyQuickFilter(key as Parameters<typeof applyQuickFilter>[0])}
                     className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
                   >
-                    {label}
+                    {key === "shell" || key === "bangchak" ? (
+                      <FuelStationBadge station={label} compact className="border-0 bg-transparent px-0 py-0 shadow-none" />
+                    ) : label}
                   </button>
                 ))}
               </div>
             </div>
             <div className="space-y-3.5">
               <div className="grid gap-3 md:grid-cols-12">
-                <div className="md:col-span-5 lg:col-span-4"><label className="form-label">{copy.dateRange}</label><div className="grid grid-cols-2 gap-2"><input type="date" value={filters.fromDate ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, fromDate: event.target.value }))} className="form-input bg-white" /><input type="date" value={filters.toDate ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, toDate: event.target.value }))} className="form-input bg-white" /></div></div>
-                <div className="md:col-span-3 lg:col-span-4"><label className="form-label">{copy.driver}</label><select value={filters.driverId ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, driverId: event.target.value }))} className="form-input bg-white"><option value="">{copy.all}</option>{drivers.map((driver) => <option key={driver.id} value={String(driver.id)}>{driver.name}</option>)}</select></div>
-                <div className="md:col-span-4 lg:col-span-4"><label className="form-label">{copy.vehicle}</label><select value={filters.vehicleReg ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, vehicleReg: event.target.value }))} className="form-input bg-white"><option value="">{copy.all}</option>{vehicleOptions.map((vehicleReg) => <option key={vehicleReg} value={vehicleReg}>{vehicleReg}</option>)}</select></div>
+                <div className="md:col-span-6 lg:col-span-4"><label className="form-label">{copy.dateRange}</label><div className="grid grid-cols-2 gap-2"><input type="date" value={filters.fromDate ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, fromDate: event.target.value }))} className="form-input bg-white" /><input type="date" value={filters.toDate ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, toDate: event.target.value }))} className="form-input bg-white" /></div></div>
+                <div className="md:col-span-3 lg:col-span-2"><label className="form-label">{copy.driver}</label><select value={filters.driverId ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, driverId: event.target.value }))} className="form-input bg-white"><option value="">{copy.all}</option>{drivers.map((driver) => <option key={driver.id} value={String(driver.id)}>{driver.name}</option>)}</select></div>
+                <div className="md:col-span-3 lg:col-span-3"><label className="form-label">{copy.vehicle}</label><select value={filters.vehicleReg ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, vehicleReg: event.target.value }))} className="form-input bg-white"><option value="">{copy.all}</option>{vehicleOptions.map((vehicleReg) => <option key={vehicleReg} value={vehicleReg}>{vehicleReg}</option>)}</select></div>
                 <div className="md:col-span-4 lg:col-span-3"><label className="form-label">{receiptCopy.filterLabel}</label><select value={filters.receiptCheckedStatus ?? ""} onChange={(event) => updateFilters((current) => ({ ...current, receiptCheckedStatus: event.target.value as FuelLogFilters["receiptCheckedStatus"] }))} className="form-input bg-white"><option value="">{copy.all}</option><option value="checked">{receiptCopy.checked}</option><option value="not_checked">{receiptCopy.notChecked}</option></select></div>
               </div>
               <button type="button" onClick={() => setAdvancedFiltersOpen((current) => !current)} className="btn-secondary min-h-9 px-3 py-1.5 text-xs">
@@ -3339,7 +3736,8 @@ export default function FuelLogsPage() {
                                   <div className="min-w-0">
                                     <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{formatDate(log.date, language)}</p>
                                     <p className="mt-1 truncate text-sm font-bold text-slate-950">{log.driver || "-"}</p>
-                                    <p className="truncate text-xs font-semibold text-slate-500">{log.vehicle_reg || "-"} | {log.location || log.station || "-"}</p>
+                                    <p className="truncate text-xs font-semibold text-slate-500">{log.vehicle_reg || "-"}</p>
+                                    <FuelStationBadge station={log.location || log.station} compact className="mt-1" />
                                   </div>
                                   <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${getReceiptCheckBadgeClass(log.receipt_checked)}`}>{getReceiptCheckLabel(log.receipt_checked, language)}</span>
                                 </div>
@@ -3489,14 +3887,14 @@ export default function FuelLogsPage() {
                                         </span>
                                       ) : formatMileageValue(log.mileage, language)}
                                     </td>
-                                    <td className="booking-desktop-cell max-w-[220px] py-2 text-slate-400" title={log.location || ""}>
-                                      <span className="block truncate">{log.location || "-"}</span>
+                                    <td className="booking-desktop-cell max-w-[220px] py-2 text-slate-500" title={log.location || ""}>
+                                      <FuelStationBadge station={log.location} compact />
                                     </td>
                                     <td className="booking-desktop-cell whitespace-nowrap py-2">
                                       <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${getReceiptCheckBadgeClass(log.receipt_checked)}`}>{getReceiptCheckLabel(log.receipt_checked, language)}</span>
                                     </td>
                                     <td className="booking-desktop-cell py-2 text-right">
-                                      <div className="flex items-center justify-end gap-px whitespace-nowrap">
+                                      <div className="flex items-center justify-end gap-1 whitespace-nowrap">
                                         <button type="button" onClick={() => void handleReceiptToggle(log, !log.receipt_checked)} disabled={togglingReceiptId === String(log.id)} className="table-action-secondary min-h-6 px-1.5 text-[10px] disabled:opacity-50">{togglingReceiptId === String(log.id) ? t.common.saving : receiptCopy.markShort}</button>
                                         <button type="button" onClick={() => populateForm(log)} className="table-action-secondary min-h-6 px-1.5 text-[10px]">{t.common.edit}</button>
                                         <button type="button" onClick={() => void handleDelete(String(log.id))} disabled={deletingId === String(log.id)} className="table-action-danger min-h-6 px-1.5 text-[10px] disabled:opacity-50">{deletingId === String(log.id) ? t.common.deleting : t.common.delete}</button>
@@ -3547,6 +3945,8 @@ export default function FuelLogsPage() {
           )}
         </section>
       </section>
+      </>
+      ) : null}
     </>
   );
 }

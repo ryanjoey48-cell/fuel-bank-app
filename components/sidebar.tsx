@@ -22,10 +22,10 @@ import {
   X,
   type LucideIcon
 } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { EESLogo } from "@/components/ees-logo";
 import { fetchSupportTicketNotificationCount } from "@/lib/data";
 import { useLanguage } from "@/lib/language-provider";
 import { safeLocalStorage } from "@/lib/safe-browser-storage";
@@ -302,15 +302,13 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                   "min-[1367px]:h-12 min-[1367px]:rounded-[0.9rem]"
               )}
             >
-              <Image
-                src="/logo.png"
+              <EESLogo
                 alt={t.common.appName}
-                width={228}
-                height={90}
+                size={48}
                 className={clsx(
-                  "h-full w-auto max-w-[min(100%,188px)] object-contain brightness-110 drop-shadow-[0_8px_18px_rgba(8,7,24,0.28)] transition-all duration-300 md:max-w-[198px]",
+                  "h-12 w-12 object-contain drop-shadow-[0_8px_18px_rgba(8,7,24,0.28)] transition-all duration-300",
                   !desktopExpanded &&
-                    "min-[1367px]:max-w-[52px]"
+                    "min-[1367px]:h-9 min-[1367px]:w-9"
                 )}
                 priority
               />
