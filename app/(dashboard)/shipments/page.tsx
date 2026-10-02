@@ -1,5 +1,7 @@
 "use client";
 
+import { VERIFIED_DEPOT_LOCATION } from "@/lib/ees-depot";
+
 import {
   CalendarClock,
   CheckCircle2,
@@ -55,16 +57,6 @@ const EMPTY_VALUE = "—";
 const STORAGE_KEYS = {
   kmPerLitre: "fuel-bank:shipments:last-km-per-litre",
   fuelPrice: "fuel-bank:shipments:last-fuel-price"
-} as const;
-const VERIFIED_DEPOT_LOCATION = {
-  name: "Expert Express Sender co., ltd.",
-  label: "Expert Express Sender depot / lorry park",
-  address:
-    "88 Happy Place, Khwaeng Khlong Sam Prawet, Khet Lat Krabang, Krung Thep Maha Nakhon 10520, Thailand",
-  placeId: "ChIJ8fXnGABnHTERYQ4KR0ZGF-E",
-  mapsReference: "0x0:0xe1174646470a0e61",
-  lat: 13.7688008,
-  lng: 100.7657385
 } as const;
 const DEFAULT_DEPOT_NAME =
   process.env.NEXT_PUBLIC_DEFAULT_DEPOT_NAME ||

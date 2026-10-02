@@ -123,6 +123,9 @@ function adminSupabaseConfig() {
 export function createServerSupabaseAdmin() {
   const { url, serviceKey } = adminSupabaseConfig();
   return createClient(url, serviceKey, {
+    // Administrative access decisions and pending requests must always read
+    // current data, never Next.js' persistent fetch cache.
+    global: { fetch: (input, init) => fetch(input, { ...init, cache: "no-store" }) },
     auth: {
       autoRefreshToken: false,
       persistSession: false
@@ -174,12 +177,15 @@ export function logAdminAuthDiagnostics(request: Request, details: {
 }
 
 function authVerificationStatus(error: unknown) {
+  // Let route guards distinguish a verification outage from an invalid token.
+  if ((error instanceof TypeError && /fetch failed|network/i.test(error.message)) ||
+      (error as { name?: string } | null)?.name === "AuthRetryableFetchError") return 503;
   const status = typeof (error as { status?: unknown } | null)?.status === "number"
     ? (error as { status: number }).status
     : null;
 
   if (status === 429 || (status !== null && status >= 500)) return 503;
-  return 401;
+  return status !== null && [400, 401, 403, 422].includes(status) ? 401 : 500;
 }
 
 function getUserDisplayName(user: Pick<User, "email" | "user_metadata"> | null | undefined, accessName?: string | null) {
@@ -202,7 +208,16 @@ export async function requireVerifiedUser(request: Request) {
   }
 
   const supabase = createServerSupabasePublic();
-  const { data, error } = await supabase.auth.getUser(token);
+  let result: Awaited<ReturnType<typeof supabase.auth.getUser>>;
+  try {
+    result = await supabase.auth.getUser(token);
+  } catch (error) {
+    const status = authVerificationStatus(error);
+    throw new AdminApiError(status, status === 503
+      ? "Unable to verify account while the data service is unavailable."
+      : "Unable to verify account.");
+  }
+  const { data, error } = result;
   if (error || !data.user) {
     const status = error ? authVerificationStatus(error) : 401;
     logAdminAuthDiagnostics(request, {
@@ -214,7 +229,7 @@ export async function requireVerifiedUser(request: Request) {
       status,
       status === 503
         ? "Unable to verify account while the data service is unavailable."
-        : "Authentication required."
+        : status === 401 ? "Authentication required." : "Unable to verify account."
     );
   }
 
@@ -290,8 +305,8 @@ export async function resolveAccountAccess(admin: SupabaseClient, user: User): P
 }
 
 export async function requireAdminAccess(request: Request) {
-  const admin = createServerSupabaseAdmin();
   const user = await requireVerifiedUser(request);
+  const admin = createServerSupabaseAdmin();
   const access = await resolveAccountAccess(admin, user);
 
   if (!isActiveAdmin(access)) {

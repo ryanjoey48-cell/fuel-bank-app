@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  AdminApiError,
   createServerSupabaseAdmin,
   findActiveDriverAccount,
   findDriverAccessRequest,
@@ -7,6 +8,7 @@ import {
   resolveAccountAccess
 } from "@/lib/admin-user-management-server";
 import {
+  DriverPortalError,
   DRIVER_SESSION_COOKIE,
   DRIVER_SESSION_MAX_AGE_SECONDS,
   createDriverPortalSessionForAuthUser
@@ -45,8 +47,9 @@ export async function POST(request: Request) {
     await resolveAccountAccess(admin, user);
     return NextResponse.json({ accountType: "office", destination: "/dashboard" });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to determine account access.";
-    const status = /not authorised|not authorized/i.test(message) ? 403 : 401;
-    return NextResponse.json({ error: message }, { status });
+    if (error instanceof AdminApiError || error instanceof DriverPortalError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    return NextResponse.json({ error: "Unable to determine account access." }, { status: 500 });
   }
 }

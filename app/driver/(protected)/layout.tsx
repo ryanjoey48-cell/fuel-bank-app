@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { DriverPortalHeader } from "@/components/driver/driver-portal-header";
 import { getDriverPortalSession } from "@/lib/driver-portal-server";
+import { DriverNavigation } from "@/components/driver/driver-navigation";
 
 export default async function ProtectedDriverLayout({ children }: { children: React.ReactNode }) {
   const session = await getDriverPortalSession();
@@ -9,7 +10,8 @@ export default async function ProtectedDriverLayout({ children }: { children: Re
   return (
     <>
       <DriverPortalHeader driverName={session.driverName} />
-      {children}
+      <DriverNavigation />
+      <div className="pb-[calc(4.5rem+env(safe-area-inset-bottom))] sm:pb-0">{children}</div>
     </>
   );
 }

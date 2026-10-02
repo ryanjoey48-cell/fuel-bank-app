@@ -4,6 +4,7 @@ import { CheckCircle2, Clock3, RefreshCw, XCircle } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import {
   fetchDriverAccessRequests,
+  fetchAccessRequestDrivers,
   reviewDriverAccessRequest,
   type DriverAccessDriverOption,
   type DriverAccessRequest
@@ -20,26 +21,43 @@ export function PendingDriverRequests() {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [driverError, setDriverError] = useState<string | null>(null);
+  const [driversLoading, setDriversLoading] = useState(true);
+  const [success, setSuccess] = useState<string | null>(null);
   const copy = language === "th"
     ? { eyebrow: "คำขอสิทธิ์เข้าใช้งาน", title: "คำขอสิทธิ์ที่รออนุมัติ", empty: "ไม่มีคำขอที่รออนุมัติ", driver: "คนขับ", office: "พนักงานสำนักงาน", role: "ประเภทที่ขอ", status: "รออนุมัติ", link: "เชื่อมกับข้อมูลคนขับเดิม", choose: "เลือกคนขับ", approve: "อนุมัติ", reject: "ปฏิเสธ", reason: "เหตุผลในการปฏิเสธ (ไม่บังคับ)", refresh: "รีเฟรช", restricted: "เฉพาะ Joey Ryan เท่านั้นที่สามารถอนุมัติหรือปฏิเสธคำขอได้" }
     : { eyebrow: "Access requests", title: "Pending access requests", empty: "No pending access requests", driver: "Driver", office: "Office Staff", role: "Requested type", status: "Pending", link: "Link to existing driver", choose: "Select driver", approve: "Approve", reject: "Reject", reason: "Rejection reason (optional)", refresh: "Refresh", restricted: "Only Joey Ryan can approve or reject access requests." };
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError(null);
+    setRequestError(null);
     try {
       const result = await fetchDriverAccessRequests();
       setRequests(result.requests);
-      setDrivers(result.drivers);
       setCanReview(result.canReview);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to load driver requests.");
+      setRequestError(caught instanceof Error ? caught.message : "Unable to load access requests.");
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  const loadDrivers = useCallback(async () => {
+    setDriversLoading(true);
+    setDriverError(null);
+    setDrivers([]);
+    try {
+      const result = await fetchAccessRequestDrivers();
+      setDrivers(result.drivers);
+    } catch (caught) {
+      setDriverError(caught instanceof Error ? caught.message : "Unable to load active drivers.");
+    } finally {
+      setDriversLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void load(); void loadDrivers(); }, [load, loadDrivers]);
 
   const review = async (request: DriverAccessRequest, decision: "approved" | "rejected") => {
     const driverId = driverByRequest[request.id];
@@ -47,12 +65,13 @@ export function PendingDriverRequests() {
       setError(copy.restricted);
       return;
     }
-    if (decision === "approved" && request.requestedAccountType === "driver" && !driverId) {
+    if (decision === "approved" && request.requestedAccountType === "driver" && (driversLoading || driverError || !drivers.some((driver) => driver.id === driverId))) {
       setError(language === "th" ? "กรุณาเลือกข้อมูลคนขับเดิม" : "Select an existing driver before approval.");
       return;
     }
     setSavingId(request.id);
     setError(null);
+    setSuccess(null);
     try {
       await reviewDriverAccessRequest(request.id, {
         decision,
@@ -60,6 +79,10 @@ export function PendingDriverRequests() {
         rejectionReason: rejectionReason[request.id]
       });
       setRequests((current) => current.filter((item) => item.id !== request.id));
+      setSuccess(language === "th" ? `${request.fullName}: ${decision === "approved" ? "อนุมัติแล้ว" : "ปฏิเสธแล้ว"}` : `${request.fullName}: request ${decision}.`);
+      window.dispatchEvent(new Event("fuel-bank:user-updated"));
+      void load();
+      void loadDrivers();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to review driver request.");
     } finally {
@@ -74,15 +97,17 @@ export function PendingDriverRequests() {
           <p className="text-xs font-bold uppercase tracking-[0.14em] text-amber-700">{copy.eyebrow}</p>
           <h2 className="mt-1 text-xl font-semibold text-slate-950">{copy.title}</h2>
         </div>
-        <button type="button" onClick={() => void load()} className="btn-secondary gap-2">
+        <button type="button" onClick={() => { void load(); void loadDrivers(); }} className="btn-secondary gap-2">
           <RefreshCw className="h-4 w-4" /> {copy.refresh}
         </button>
       </div>
       {!loading && !canReview ? <p className="mx-4 mt-4 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 sm:mx-5">{copy.restricted}</p> : null}
       {error ? <p className="mx-4 mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-800 sm:mx-5">{error}</p> : null}
+      {requestError ? <p role="alert" className="mx-4 mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800 sm:mx-5">{language === "th" ? "โหลดคำขอไม่สำเร็จ กรุณารีเฟรช" : "Could not load access requests. Please refresh."} {requestError}</p> : null}
+      {success ? <p role="status" className="mx-4 mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 sm:mx-5">{success}</p> : null}
       <div className="grid gap-3 p-4 sm:p-5 xl:grid-cols-2">
         {loading ? <p className="text-sm text-slate-500">Loading…</p> : null}
-        {!loading && requests.length === 0 ? (
+        {!loading && !requestError && requests.length === 0 ? (
           <div className="xl:col-span-2 rounded-xl border border-dashed border-slate-200 px-4 py-7 text-center text-sm font-semibold text-slate-500">{copy.empty}</div>
         ) : null}
         {requests.map((request) => (
@@ -101,7 +126,9 @@ export function PendingDriverRequests() {
             {request.requestedAccountType === "driver" ? (
               <label className="mt-4 block">
                 <span className="form-label">{copy.link}</span>
-                <select disabled={!canReview} className="form-input bg-white disabled:cursor-not-allowed disabled:opacity-60" value={driverByRequest[request.id] ?? ""} onChange={(event) => setDriverByRequest((current) => ({ ...current, [request.id]: event.target.value }))}>
+                {driverError ? <span role="alert" className="block text-sm text-rose-700">{driverError}</span> : null}
+                {driversLoading ? <span className="block text-sm text-slate-500">{language === "th" ? "กำลังโหลดคนขับ…" : "Loading active drivers…"}</span> : null}
+                <select disabled={!canReview || driversLoading || Boolean(driverError)} className="form-input bg-white disabled:cursor-not-allowed disabled:opacity-60" value={driverByRequest[request.id] ?? ""} onChange={(event) => setDriverByRequest((current) => ({ ...current, [request.id]: event.target.value }))}>
                   <option value="">{copy.choose}</option>
                   {drivers.map((driver) => <option key={driver.id} value={driver.id}>{driver.name} — ID {driver.id}{driver.vehicleRegistration ? ` — ${driver.vehicleRegistration}` : ""}</option>)}
                 </select>

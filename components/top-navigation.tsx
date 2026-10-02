@@ -50,7 +50,7 @@ function routeIsActive(pathname: string, href: string) {
 
 export function TopNavigation() {
   const pathname = usePathname();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { can } = useAccountAccess();
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -69,6 +69,7 @@ export function TopNavigation() {
     }
 
     if (can("admin:user_management")) {
+      adminItems.push({ href: "/admin/driver-operations", label: language === "th" ? "ปฏิบัติการคนขับ" : "Driver Operations", icon: Truck });
       adminItems.push({
         href: "/admin/users",
         label: t.adminUsers.title,
@@ -187,7 +188,7 @@ export function TopNavigation() {
           ]
         : [])
     ];
-  }, [can, copy, t]);
+  }, [can, copy, t, language]);
 
   useEffect(() => {
     setOpenGroup(null);

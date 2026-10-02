@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PendingDriverRequests } from "@/components/admin/pending-driver-requests";
+import { DriverAccounts } from "@/components/admin/driver-accounts";
 import {
   fetchManagedAccounts,
   sendManagedAccountPasswordReset,
@@ -389,6 +390,8 @@ export default function AdminUsersPage() {
           </div>
         </div>
       </section>
+
+      <DriverAccounts />
 
       {managedUser ? (
         <div className="fixed inset-0 z-[var(--z-modal)] overflow-y-auto bg-slate-950/45 p-3 sm:p-6">

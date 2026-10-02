@@ -229,7 +229,7 @@ export function bangkokDateKey(date = new Date()) {
   }).format(date);
 }
 
-const DRIVER_JOB_SELECT = [
+export const DRIVER_JOB_SELECT = [
   "id",
   "booking_date",
   "pickup_time",
@@ -247,6 +247,7 @@ const DRIVER_JOB_SELECT = [
   "vehicle_registration",
   "trailer_registration",
   "job_order_number",
+  "map_resolution_status",
   "client:clients(name)"
 ].join(",");
 
@@ -263,7 +264,7 @@ function clientName(value: unknown) {
   return typeof name === "string" && name.trim() ? name.trim() : null;
 }
 
-function toDriverJob(row: Record<string, unknown>, identity: DriverPortalIdentity): DriverPortalJob {
+export function toDriverJob(row: Record<string, unknown>, identity: DriverPortalIdentity): DriverPortalJob {
   return {
     id: String(row.id),
     bookingDate: String(row.booking_date),
@@ -288,7 +289,8 @@ function toDriverJob(row: Record<string, unknown>, identity: DriverPortalIdentit
     vehicleType: typeof row.vehicle === "string" && row.vehicle.trim() ? row.vehicle.trim() : identity.vehicleType,
     jobOrderNumber: typeof row.job_order_number === "string" && row.job_order_number.trim()
       ? row.job_order_number.trim()
-      : null
+      : null,
+    locationsVerified: row.map_resolution_status === "resolved"
   };
 }
 

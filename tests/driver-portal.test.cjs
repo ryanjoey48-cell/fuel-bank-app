@@ -70,7 +70,7 @@ test("linked driver accounts are blocked from the office account resolver", () =
 test("normal login resolves driver precedence before choosing an office route", () => {
   const form = read("components/auth-form.tsx");
   const route = read("app/api/auth/login-routing/route.ts");
-  assert.match(form, /resolveLoginRouting\(verifiedSession\.access_token\)/);
+  assert.match(form, /resolveLoginRouting\(\s*verifiedSession\.access_token\s*\)/);
   assert.match(form, /routing\.accountType === "driver"/);
   assert.match(form, /router\.replace\("\/driver"\)/);
   assert.match(route, /findActiveDriverAccount\(admin, user\.id\)/);
@@ -102,10 +102,12 @@ test("driver cookie blocks direct office-route navigation before React renders",
   assert.match(middleware, /NextResponse\.redirect\(new URL\("\/driver"/);
 });
 
-test("phase 1 contains no job progress, tracking, or proof-of-delivery controls", () => {
+test("driver workflow still excludes live tracking and proof-of-delivery controls", () => {
   const components = [
     read("components/driver/driver-home.tsx"),
     read("components/driver/driver-job-detail.tsx")
   ].join("\n");
-  assert.doesNotMatch(components, /start job|complete job|upload pod|proof of delivery|live tracking/i);
+  // Sequential progress is now intentionally supported; POD and live tracking remain out of scope.
+  assert.match(components, /Complete job/);
+  assert.doesNotMatch(components, /upload pod|proof of delivery|live tracking/i);
 });

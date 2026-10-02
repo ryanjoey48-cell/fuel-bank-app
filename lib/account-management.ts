@@ -60,6 +60,30 @@ export type DriverAccessDriverOption = {
   vehicleRegistration: string | null;
 };
 
+export type ManagedDriverAccount = {
+  driverId: string;
+  name: string;
+  vehicleRegistration: string | null;
+  vehicleType: string | null;
+  driverActive: boolean;
+  accountId: string | null;
+  authUserId: string | null;
+  accountActive: boolean | null;
+  email: string | null;
+  emailConfirmedAt: string | null;
+  lastSignInAt: string | null;
+  accountCreatedAt: string | null;
+};
+
+export type ManagedDriverAccountResult = {
+  drivers: ManagedDriverAccount[];
+  summary: { total: number; activeDrivers: number; withAccount: number; withoutAccount: number; activeAccounts: number };
+};
+
+export async function fetchDriverAccounts() {
+  return adminFetch<ManagedDriverAccountResult>("/api/admin/driver-accounts", { cache: "no-store" });
+}
+
 export async function getAccessToken() {
   const { data, error } = await supabase.auth.getSession();
   if (error) throw new Error(error.message);
@@ -160,7 +184,11 @@ export async function sendManagedAccountPasswordReset(userId: string) {
 }
 
 export async function fetchDriverAccessRequests() {
-  return adminFetch<{ canReview: boolean; requests: DriverAccessRequest[]; drivers: DriverAccessDriverOption[] }>("/api/admin/driver-access-requests");
+  return adminFetch<{ canReview: boolean; requests: DriverAccessRequest[] }>("/api/admin/driver-access-requests", { cache: "no-store" });
+}
+
+export async function fetchAccessRequestDrivers() {
+  return adminFetch<{ drivers: DriverAccessDriverOption[] }>("/api/admin/driver-access-requests/drivers", { cache: "no-store" });
 }
 
 export async function reviewDriverAccessRequest(requestId: string, payload: {

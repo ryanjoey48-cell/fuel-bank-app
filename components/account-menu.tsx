@@ -29,6 +29,7 @@ import { buildOilChangeAlertRows } from "@/lib/operations";
 import { supabase } from "@/lib/supabase";
 import { roleDisplayKey } from "@/lib/authorization";
 import { useAccountAccess } from "@/lib/use-account-access";
+import { DriverNotificationList, useDriverNotifications } from "@/components/admin/driver-notifications";
 
 type AccountUser = {
   id: string;
@@ -126,6 +127,7 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
   const [supportTicketCount, setSupportTicketCount] = useState(0);
   const { access, can, error: accessError } = useAccountAccess();
   const isAdmin = can("admin:support_tickets");
+  const driverNotifications = useDriverNotifications(isAdmin);
 
   useEffect(() => {
     let active = true;
@@ -238,7 +240,8 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
   const initials = useMemo(() => getInitials(displayName, email), [displayName, email]);
   const accessRole = access?.role ? t.adminUsers.roles[roleDisplayKey(access.role)] : null;
   const normalizedRole = accessRole ?? (accessError ? "USER MANAGEMENT SETUP REQUIRED" : role.toUpperCase() === "USER" ? "ACCESS PENDING" : role.toUpperCase());
-  const unreadNotificationCount = notifications.reduce((total, item) => total + (Number(item.value) || 0), 0);
+  const unreadNotificationCount = notifications.reduce((total, item) => total + (Number(item.value) || 0), 0) + (driverNotifications.data?.unreadCount || 0);
+  const bellCount = supportTicketCount + (driverNotifications.data?.unreadCount || 0);
 
   const routeItems: AccountRouteItem[] = [
     { label: t.support.menu.myProfile, icon: UserCircle, href: "/profile" },
@@ -347,6 +350,7 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
                 </p>
               </div>
               <div className="grid max-h-[min(28rem,calc(100vh-7rem))] gap-1 overflow-y-auto p-2.5">
+                {isAdmin ? <DriverNotificationList state={driverNotifications} onOpen={navigateTo} /> : null}
                 {notificationsLoading ? (
                   <p className="rounded-2xl bg-slate-50 px-3 py-4 text-sm font-medium text-slate-500">{t.support.notifications.loading}</p>
                 ) : notifications.length ? notifications.map((item) => {
@@ -379,7 +383,7 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
                       </span>
                     </button>
                   );
-                }) : (
+                }) : driverNotifications.data?.items.length || driverNotifications.error ? null : (
                   <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-6 text-center">
                     <Bell className="mx-auto h-5 w-5 text-slate-400" />
                     <p className="mt-2 text-sm font-semibold text-slate-700">{t.support.notifications.noNotifications}</p>
@@ -490,9 +494,9 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
         aria-expanded={notificationsOpen}
       >
         <Bell className="h-4.5 w-4.5" />
-        {supportTicketCount ? (
+        {bellCount ? (
           <span className="absolute -right-1 -top-1 flex min-h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-black leading-none text-white shadow-[0_0_0_2px_white]">
-            {supportTicketCount > 99 ? "99+" : supportTicketCount}
+            {bellCount > 99 ? "99+" : bellCount}
           </span>
         ) : null}
       </button>
