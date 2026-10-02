@@ -349,7 +349,7 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
                     : t.support.notifications.caughtUp}
                 </p>
               </div>
-              <div className="grid max-h-[min(28rem,calc(100vh-7rem))] gap-1 overflow-y-auto p-2.5">
+              <div className="grid max-h-[min(28rem,calc(100dvh-10rem-env(safe-area-inset-bottom)))] gap-1 overflow-y-auto overscroll-contain p-2.5">
                 {isAdmin ? <DriverNotificationList state={driverNotifications} onOpen={navigateTo} /> : null}
                 {notificationsLoading ? (
                   <p className="rounded-2xl bg-slate-50 px-3 py-4 text-sm font-medium text-slate-500">{t.support.notifications.loading}</p>

@@ -38,6 +38,7 @@ import {
 } from "@/lib/driver-operations";
 import { DriverProfileBrowser } from "@/components/admin/driver-profile-browser";
 import { DriverOperationsHistory } from "@/components/admin/driver-operations-history";
+import { useModalScrollLock } from "@/lib/use-modal-scroll-lock";
 
 type MainView = "operations" | "history" | "drivers";
 type JobView = "active" | "attention" | "completed";
@@ -390,9 +391,9 @@ export function DriverOperationsPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-[1700px] p-4 sm:p-6 lg:p-8">
+    <main className="driver-operations mx-auto w-full max-w-[1700px] p-0 sm:p-6 lg:p-8">
       {/* PAGE HEADER */}
-      <section className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm">
+      <section className="operations-header overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm">
         <div className="px-5 py-5 sm:px-6">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
             <div>
@@ -411,12 +412,13 @@ export function DriverOperationsPage() {
                 {l.title}
               </h1>
 
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 hidden text-sm text-slate-500 sm:block">
                 {l.intro}
                 {data?.date ? ` · ${data.date}` : ""}
               </p>
 
-              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
+              <p className="mt-1 text-xs text-slate-500 sm:hidden">{data?.date || "—"}{data ? ` · ${l.updated} ${new Intl.DateTimeFormat(language === "th" ? "th-TH" : "en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" }).format(new Date(data.fetchedAt))}` : ""}</p>
+              <div className="mt-3 hidden flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400 sm:flex">
                 <span>{l.auto}</span>
 
                 {data ? (
@@ -497,7 +499,7 @@ export function DriverOperationsPage() {
       {data && mainView === "operations" ? (
         <>
           {/* KPIs */}
-          <section className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-5">
+          <section className="operations-metrics mt-3 flex gap-2 overflow-x-auto pb-1 sm:mt-4 sm:grid sm:grid-cols-2 md:grid-cols-5">
             <Metric
               label={l.driversToday}
               value={driversToday}
@@ -533,7 +535,7 @@ export function DriverOperationsPage() {
           </section>
 
           {/* OPERATIONS BOARD */}
-          <section className="mt-4 overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm">
+          <section className="operations-board mt-4 overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                 <div>
@@ -618,7 +620,7 @@ export function DriverOperationsPage() {
             </div>
 
             {/* MOBILE / TABLET */}
-            <div className="grid gap-3 p-4 min-[1050px]:hidden">
+            <div className="grid gap-2 p-3 sm:gap-3 sm:p-4 min-[1050px]:hidden">
               {visibleRows.map((row) => (
                 <MobileJobCard
                   key={row.job.id}
@@ -631,7 +633,7 @@ export function DriverOperationsPage() {
             </div>
 
             {visibleRows.length === 0 ? (
-              <div className="px-5 py-10 text-center text-sm font-semibold text-slate-500">
+              <div className="px-4 py-5 text-center text-sm font-semibold text-slate-500 sm:px-5 sm:py-10">
                 {jobView === "active"
                   ? l.emptyActive
                   : jobView === "attention"
@@ -767,10 +769,7 @@ function OperationsTableRow({
 }
 
 function MobileJobCard({
-  row,
-  language,
-  formatDateTime,
-  onOpen
+  row, language, formatDateTime, onOpen
 }: {
   row: OperationsRow;
   language: "en" | "th";
@@ -781,71 +780,25 @@ function MobileJobCard({
   const status = jobStatus(row.events);
   const theme = statusStyle(status);
   const last = row.events.at(-1);
+  const waiting = (row.waitingMinutes ?? -1) >= 30;
+  const arrived = row.events.find((event) => event.eventType === "pickup_arrived");
 
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-brand-200"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 font-black text-brand-700">
-            {row.driverName.slice(0, 1).toUpperCase()}
-          </span>
-
-          <div className="min-w-0">
-            <p className="truncate font-black text-slate-950">
-              {row.driverName}
-            </p>
-
-            <p className="mt-0.5 text-xs text-slate-500">
-              {row.job.vehicleRegistration || "—"} ·{" "}
-              {row.job.pickupTime?.slice(0, 5) || "—"}
-            </p>
-          </div>
+    <button type="button" onClick={onOpen}
+      className={`w-full rounded-2xl border p-3 text-left shadow-sm transition hover:border-brand-300 sm:p-4 ${waiting ? "border-amber-200 bg-amber-50/40" : status === "completed" ? "border-emerald-100 bg-emerald-50/20" : "border-slate-200 bg-white"}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          {row.profile?.avatarUrl ? <Image unoptimized src={row.profile.avatarUrl} width={36} height={36} alt={row.driverName} className="h-9 w-9 shrink-0 rounded-xl object-cover" /> : <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-sm font-black text-brand-700">{row.driverName.slice(0, 1).toUpperCase()}</span>}
+          <div className="min-w-0"><p className="break-words text-sm font-black text-slate-950">{row.driverName}</p><p className="mt-0.5 text-xs text-slate-500">{row.job.vehicleRegistration || "—"} · {row.job.pickupTime?.slice(0, 5) || "—"}</p></div>
         </div>
-
-        <span
-          className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-black ${theme.badge}`}
-        >
-          {statusCopy[language][status]}
-        </span>
+        <span className={`rounded-full border px-2 py-1 text-xs font-bold ${theme.badge}`}>{statusCopy[language][status]}</span>
       </div>
-
-      <p className="mt-4 text-xs font-black uppercase tracking-[0.1em] text-slate-400">
-        {row.job.clientName || "—"}
-      </p>
-      {(row.waitingMinutes ?? -1) >= 30 ? <p className="mt-2 rounded-xl bg-amber-50 p-2 text-xs font-black text-amber-800">{language === "th" ? `รอ ${row.waitingMinutes} นาที` : `WAITING ${row.waitingMinutes} MIN`}</p> : null}
-
-      <p className="mt-2 text-sm font-semibold text-slate-800">
-        {row.job.pickupName}
-      </p>
-
-      <p className="my-1 text-xs text-brand-400">↓</p>
-
-      <p className="text-sm font-semibold text-slate-800">
-        {row.job.dropoffName}
-      </p>
-
-      <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">
-            {l.lastUpdate}
-          </p>
-
-          <p className="mt-1 text-xs font-semibold text-slate-600">
-            {last ? l.steps[last.eventType] : l.noEvents}
-          </p>
-
-          {last ? (
-            <p className="mt-0.5 text-[11px] text-slate-400">
-              {formatDateTime(last.eventTime)}
-            </p>
-          ) : null}
-        </div>
-
-        <ChevronRight className="h-5 w-5 text-brand-600" />
+      {waiting ? <p className="mt-2 text-xs font-black text-amber-800">{language === "th" ? `รอ ${row.waitingMinutes} นาที` : `WAITING ${row.waitingMinutes} MIN`}{arrived ? <span className="ml-2 font-medium">{l.steps.pickup_arrived} {formatDateTime(arrived.eventTime)}</span> : null}</p> : null}
+      <p className="mt-2 break-words text-sm font-bold text-slate-900">{row.job.clientName || "—"}</p>
+      <p className="mt-1 break-words text-sm leading-5 text-slate-600">{row.job.pickupName} <span className="text-brand-500">→</span> {row.job.dropoffName}</p>
+      <div className="mt-2 flex items-center justify-between gap-2 text-xs text-slate-500">
+        <p className="min-w-0">{last ? <>{l.steps[last.eventType]} · {formatDateTime(last.eventTime)}</> : l.noEvents}</p>
+        <ChevronRight className="h-4 w-4 shrink-0 text-brand-600" />
       </div>
     </button>
   );
@@ -865,6 +818,7 @@ export function JobDrawer({
   const l = copy[language];
   const status = jobStatus(row.events);
   const theme = statusStyle(status);
+  useModalScrollLock(true);
 
   return (
     <div
@@ -872,7 +826,8 @@ export function JobDrawer({
       onClick={onClose}
     >
       <aside
-        className="max-h-[94vh] w-full overflow-y-auto rounded-t-[2rem] bg-[#fffdf9] shadow-2xl sm:max-h-none sm:w-[520px] sm:rounded-none sm:rounded-l-[2rem]"
+        role="dialog" aria-modal="true" aria-labelledby="operations-job-title"
+        className="operations-job-drawer max-h-[calc(100dvh-1rem)] w-full overflow-y-auto overscroll-contain rounded-t-[2rem] bg-[#fffdf9] shadow-2xl sm:max-h-none sm:w-[520px] sm:rounded-none sm:rounded-l-[2rem]"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="sticky top-0 z-10 border-b border-slate-200 bg-[#fffdf9]/95 px-5 py-4 backdrop-blur sm:px-6">
@@ -884,7 +839,7 @@ export function JobDrawer({
                 {statusCopy[language][status]}
               </span>
 
-              <h2 className="mt-2 text-xl font-black text-slate-950">
+              <h2 id="operations-job-title" className="mt-2 break-words text-xl font-black text-slate-950">
                 {row.job.clientName || "—"}
               </h2>
 
@@ -1084,7 +1039,7 @@ function Metric({
   }[tone];
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
+    <div className="operations-metric min-w-[108px] flex-1 rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm sm:min-w-0 sm:p-3.5">
       <div className="flex items-center justify-between gap-2">
         <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-500">
           {label}
@@ -1097,7 +1052,7 @@ function Metric({
         </span>
       </div>
 
-      <p className="mt-2 text-2xl font-black text-slate-950">{value}</p>
+      <p className="mt-1 text-xl font-black text-slate-950 sm:mt-2 sm:text-2xl">{value}</p>
     </div>
   );
 }
@@ -1127,7 +1082,7 @@ function FilterButton({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-xl border px-3 py-2 text-xs font-bold transition ${
+      className={`min-h-11 rounded-xl border px-3 py-2 text-xs font-bold transition ${
         active
           ? activeClass
           : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
@@ -1167,7 +1122,7 @@ function Info({
   icon?: ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
+    <div className="operations-driver-info flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
       {icon ? <span className="text-brand-600">{icon}</span> : null}
 
       <div className="min-w-0 flex-1">

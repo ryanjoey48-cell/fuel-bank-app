@@ -36,8 +36,8 @@ export function DriverPortalHeader({ driverName }: { driverName: string }) {
   };
 
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-200 bg-[#fffbf2]/95 shadow-[0_5px_18px_rgba(57,40,24,0.07)] backdrop-blur-xl">
-      <div className="mx-auto flex min-h-[68px] max-w-3xl items-center gap-2 px-4 sm:gap-3 sm:px-6">
+    <header className="driver-portal-header sticky top-0 z-30 border-b border-slate-200 bg-[#fffbf2]/95 shadow-[0_5px_18px_rgba(57,40,24,0.07)] backdrop-blur-xl">
+      <div className="mx-auto flex min-h-14 max-w-3xl items-center gap-2 px-3 sm:min-h-[68px] sm:gap-3 sm:px-6">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#211336]">
           <EESLogo alt="EES" size={40} className="h-10 w-10 max-w-none scale-[1.8]" priority />
         </span>

@@ -29,6 +29,7 @@ import {
 } from "@/lib/account-management";
 import type { DriverProfile } from "@/lib/driver-operations";
 import { useLanguage } from "@/lib/language-provider";
+import { useModalScrollLock } from "@/lib/use-modal-scroll-lock";
 
 type Filter = "all" | "active" | "none" | "inactive";
 
@@ -52,6 +53,7 @@ export function DriverProfileBrowser() {
     active: boolean;
   } | null>(null);
 
+  useModalScrollLock(selectedAccountId !== null);
   const requestId = useRef(0);
   const [avatars, setAvatars] = useState<Record<string, string>>({});
 
@@ -218,7 +220,7 @@ export function DriverProfileBrowser() {
 
   return (
     <>
-      <section className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm">
+      <section className="driver-directory overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 px-5 py-5 sm:px-6">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
             <div>
@@ -262,7 +264,7 @@ export function DriverProfileBrowser() {
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-3 flex gap-2 overflow-x-auto pb-1 sm:mt-4 sm:flex-wrap">
             <DirectoryFilter
               label={t.all}
               count={drivers.length}
@@ -407,7 +409,7 @@ export function DriverProfileBrowser() {
             </div>
 
             {/* MOBILE */}
-            <div className="grid gap-3 p-4 min-[1000px]:hidden">
+            <div className="directory-mobile-rows grid gap-2 p-3 sm:gap-3 sm:p-4 min-[1000px]:hidden">
               {rows.map((driver) => {
                 const active =
                   Boolean(driver.accountId) &&
@@ -452,9 +454,7 @@ export function DriverProfileBrowser() {
                       </p>
                     ) : null}
 
-                    <p className="mt-2 text-xs text-slate-400">
-                      {t.lastLogin}: {format(driver.lastSignInAt)}
-                    </p>
+                    {driver.accountId ? <div className="mt-1.5 flex items-center justify-between gap-2 text-xs text-slate-400"><span>{t.lastLogin}: {format(driver.lastSignInAt)}</span><ChevronRight className="h-4 w-4 shrink-0 text-brand-600" /></div> : null}
                   </button>
                 );
               })}
@@ -478,7 +478,8 @@ export function DriverProfileBrowser() {
           }}
         >
           <aside
-            className="max-h-[94vh] w-full overflow-y-auto rounded-t-[2rem] bg-[#fffdf9] shadow-2xl sm:max-h-none sm:w-[500px] sm:rounded-none sm:rounded-l-[2rem]"
+            role="dialog" aria-modal="true" aria-labelledby="directory-profile-title"
+            className="directory-profile-drawer max-h-[calc(100dvh-1rem)] w-full overflow-y-auto overscroll-contain rounded-t-[2rem] bg-[#fffdf9] shadow-2xl sm:max-h-none sm:w-[500px] sm:rounded-none sm:rounded-l-[2rem]"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-[#fffdf9]/95 px-5 py-4 backdrop-blur">
@@ -487,7 +488,7 @@ export function DriverProfileBrowser() {
                   {t.profile}
                 </p>
 
-                <h2 className="mt-1 text-xl font-black text-slate-950">
+                <h2 id="directory-profile-title" className="mt-1 break-words text-xl font-black text-slate-950">
                   {detail?.profile.officialName || "…"}
                 </h2>
               </div>
@@ -697,7 +698,7 @@ function ProfileInfo({
   value: string;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
+    <div className="operations-driver-info flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
       {icon ? <span className="text-brand-600">{icon}</span> : null}
 
       <div className="min-w-0 flex-1">

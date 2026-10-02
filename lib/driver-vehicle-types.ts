@@ -25,6 +25,18 @@ export function getDriverVehicleTypeLabel(vehicleType: DriverVehicleType | null 
   return getLogisticsVehicleTypeLabel(vehicleType);
 }
 
+/** Portal presentation only: never expose stored enum keys to drivers. */
+export function getPortalVehicleTypeLabel(vehicleType: string | null | undefined, language: "en" | "th") {
+  const labels: Record<DriverVehicleType, { en: string; th: string }> = {
+    EIGHTEEN_WHEELER: { en: "18-Wheel Truck", th: "รถบรรทุก 18 ล้อ" },
+    SIX_PLUS_SIX_WHEELER: { en: "6 + 6-Wheel Truck", th: "รถบรรทุก 6 + 6 ล้อ" },
+    SIX_WHEEL_TRUCK: { en: "6-Wheel Truck", th: "รถบรรทุก 6 ล้อ" },
+    FOUR_WHEEL_TRUCK: { en: "4-Wheel Truck", th: "รถบรรทุก 4 ล้อ" }
+  };
+  const option = DRIVER_VEHICLE_TYPE_OPTIONS.find((entry) => entry.value === vehicleType);
+  return option ? labels[option.value][language] : "";
+}
+
 export function getKmPerLitre(vehicleType: DriverVehicleType | null | undefined) {
   return vehicleType ? DRIVER_VEHICLE_TYPE_KM_PER_LITRE[vehicleType] ?? null : null;
 }

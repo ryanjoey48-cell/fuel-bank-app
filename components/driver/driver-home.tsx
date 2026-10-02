@@ -84,7 +84,7 @@ function EmptyState({
   text: string;
 }) {
   return (
-    <div className="rounded-[1.5rem] border border-dashed border-slate-300 bg-white/70 px-6 py-10 text-center shadow-sm">
+    <div className="rounded-[1.5rem] border border-dashed border-slate-300 bg-white/70 px-4 py-5 text-center shadow-sm sm:px-6 sm:py-10">
       <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-700">
         <PackageCheck className="h-6 w-6" />
       </div>
@@ -111,7 +111,24 @@ function JobCard({
   const status = jobStatus(events);
   const completed = status === "completed";
   return (
-    <article className={`overflow-hidden rounded-[1.25rem] border shadow-sm ${completed ? "border-emerald-100 bg-slate-50 text-slate-600" : next ? "border-brand-400 bg-white ring-1 ring-brand-200" : "border-slate-200 bg-white"}`}>
+    <>
+    <Link href={`/driver/jobs/${job.id}`} className={`block overflow-hidden rounded-[1.25rem] border shadow-sm sm:hidden ${completed ? "border-emerald-100 bg-emerald-50/40" : next ? "border-brand-400 bg-white ring-1 ring-brand-200" : "border-slate-200 bg-white"}`}>
+      {next ? <p className="bg-brand-700 px-3 py-1.5 text-xs font-bold tracking-wide text-white">{status !== "ready" ? language === "th" ? "งานที่กำลังดำเนินการ" : "CURRENT JOB" : language === "th" ? "งานถัดไป" : "NEXT JOB"}</p> : null}
+      <div className="p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="inline-flex items-center gap-1.5 text-sm font-black text-brand-800"><Clock3 className="h-4 w-4" />{formatTime(job.pickupTime, labels.timePending)}</span>
+          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-bold ${completed ? "bg-emerald-100 text-emerald-800" : "bg-brand-50 text-brand-800"}`}>{completed ? <PackageCheck className="h-3.5 w-3.5" /> : null}{statusCopy[language][status]}</span>
+        </div>
+        <p className="mt-1.5 break-words text-sm font-black text-slate-950">{job.clientName || job.jobOrderNumber || labels.job}</p>
+        {job.clientName && job.jobOrderNumber ? <p className="mt-0.5 break-words text-xs text-slate-500">{labels.job} {job.jobOrderNumber}</p> : null}
+        <p className="mt-1.5 break-words text-sm font-semibold leading-5 text-slate-700">{job.pickupName} <span className="text-brand-500">→</span> {job.dropoffName}</p>
+        <div className="mt-2 flex items-center justify-between gap-2 text-xs">
+          <span className="inline-flex min-w-0 items-center gap-1.5 font-semibold text-slate-500"><Truck className="h-4 w-4 shrink-0" /><span className="break-words">{job.vehicleRegistration || "—"}</span></span>
+          <span className={`inline-flex min-h-7 items-center gap-1 font-bold ${completed ? "text-emerald-800" : "text-brand-800"}`}>{completed ? null : labels.view}<ChevronRight className="h-4 w-4" /></span>
+        </div>
+      </div>
+    </Link>
+    <article className={`hidden overflow-hidden rounded-[1.25rem] border shadow-sm sm:block ${completed ? "border-emerald-100 bg-slate-50 text-slate-600" : next ? "border-brand-400 bg-white ring-1 ring-brand-200" : "border-slate-200 bg-white"}`}>
       {next ? <p className="bg-brand-700 px-4 py-2 text-xs font-bold tracking-wide text-white">{status !== "ready" ? language === "th" ? "งานที่กำลังดำเนินการ" : "CURRENT JOB" : language === "th" ? "งานถัดไป" : "NEXT JOB"}</p> : null}
       <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-4 py-2">
         <div className="inline-flex items-center gap-2 rounded-xl bg-brand-50 px-3 py-1.5 text-base font-black text-brand-800">
@@ -193,6 +210,7 @@ function JobCard({
         </Link>
       </div>
     </article>
+    </>
   );
 }
 
@@ -252,20 +270,20 @@ export function DriverHome({
   };
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-4 sm:px-6 sm:py-6">
+    <main className="driver-home mx-auto w-full max-w-3xl px-3 py-3 sm:px-6 sm:py-6">
       <section className="overflow-hidden rounded-[1.8rem] border border-brand-100 bg-gradient-to-br from-white via-[#fffdf9] to-brand-50/60 shadow-[0_18px_50px_rgba(57,40,24,0.08)]">
-        <div className="p-4 sm:p-5">
+        <div className="p-3 sm:p-5">
           <div className="flex gap-3 items-start justify-between">
-            <div>
+            <div className="min-w-0">
               <p className="text-sm font-bold text-brand-700">
                 {labels.greeting},
               </p>
 
-              <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-950">
+              <h1 className="mt-0.5 break-words text-lg font-black tracking-tight text-slate-950 sm:mt-1 sm:text-2xl">
                 {profile?.displayName || driverName}
               </h1>
 
-              <p className="mt-1 max-w-xl text-xs leading-5 text-slate-600">
+              <p className="mt-1 hidden max-w-xl text-xs leading-5 text-slate-600 sm:block">
                 {labels.intro}
               </p>
             </div>
@@ -288,32 +306,32 @@ export function DriverHome({
             ) : null}
           </div>
 
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <div className="rounded-xl border border-slate-200 bg-white p-2">
+          <div className="driver-summary-metrics mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-brand-100 pt-2 sm:grid-cols-4 sm:gap-2 sm:border-0 sm:pt-0">
+            <div className="flex items-center justify-between gap-2 sm:block sm:rounded-xl sm:border sm:border-slate-200 sm:bg-white sm:p-2">
               <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
                 {labels.jobsToday}
               </p>
-              <p className="mt-1 text-xl font-black text-brand-800">
+              <p className="text-lg font-black text-brand-800 sm:mt-1 sm:text-xl">
                 {todayJobs.length}
               </p>
             </div>
 
-            <div className="rounded-xl border border-slate-200 bg-white p-2"><p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{language === "th" ? "งานที่เหลือวันนี้" : "Remaining today"}</p><p className="mt-1 text-xl font-black text-brand-800">{todayJobs.filter((job) => jobStatus(eventsByJob[job.id] || []) !== "completed").length}</p></div>
+            <div className="flex items-center justify-between gap-2 sm:block sm:rounded-xl sm:border sm:border-slate-200 sm:bg-white sm:p-2"><p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{language === "th" ? "งานที่เหลือวันนี้" : "Remaining today"}</p><p className="text-lg font-black text-brand-800 sm:mt-1 sm:text-xl">{todayJobs.filter((job) => jobStatus(eventsByJob[job.id] || []) !== "completed").length}</p></div>
 
-            <div className="rounded-xl border border-slate-200 bg-white p-2">
+            <div className="flex items-center justify-between gap-2 sm:block sm:rounded-xl sm:border sm:border-slate-200 sm:bg-white sm:p-2">
               <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
                 {labels.upcomingJobs}
               </p>
-              <p className="mt-1 text-xl font-black text-brand-800">
+              <p className="text-lg font-black text-brand-800 sm:mt-1 sm:text-xl">
                 {upcomingCount}
               </p>
             </div>
 
-            <div className="rounded-xl border border-slate-200 bg-white p-2">
+            <div className="flex items-center justify-between gap-2 sm:block sm:rounded-xl sm:border sm:border-slate-200 sm:bg-white sm:p-2">
               <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
                 {labels.nextPickup}
               </p>
-              <p className="mt-1 text-sm font-black text-slate-950">
+              <p className="text-right text-xs font-black text-slate-950 sm:mt-1 sm:text-left sm:text-sm">
                 {nextJob
                   ? formatTime(nextJob.pickupTime, labels.timePending)
                   : jobs.some((job) => jobStatus(eventsByJob[job.id] || []) !== "completed") ? labels.timePending : labels.allClear}
@@ -337,7 +355,7 @@ export function DriverHome({
         </div>
 
         {todayJobs.length ? (
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-2 sm:gap-4 lg:grid-cols-2">
             {todayJobs.filter((job) => job.id !== nextJob?.id).map((job) => (
               <JobCard key={job.id} job={job} labels={labels} events={eventsByJob[job.id] || []} language={language} next={job.id === nextJob?.id && jobStatus(eventsByJob[job.id] || []) !== "completed"} />
             ))}
@@ -373,7 +391,7 @@ export function DriverHome({
                   </span>
                 </div>
 
-                <div className="grid gap-4 lg:grid-cols-2">
+                <div className="grid gap-2 sm:gap-4 lg:grid-cols-2">
                   {dateJobs.filter((job) => job.id !== nextJob?.id).map((job) => (
                     <JobCard key={job.id} job={job} labels={labels} events={eventsByJob[job.id] || []} language={language} />
                   ))}

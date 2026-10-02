@@ -148,13 +148,18 @@ function ShortcutCard({ shortcut, compact = false }: { shortcut: Shortcut; compa
   );
 }
 
+function HomeSummaryValue({ value }: { value: string }) {
+  const { t } = useLanguage();
+  return value === "—" ? <span role="status" className="inline-flex items-center"><span className="h-5 w-16 animate-pulse rounded bg-slate-100" aria-hidden="true" /><span className="sr-only">{t.common.loading}</span></span> : <>{value}</>;
+}
+
 function SummaryCard({ icon: Icon, label, value, detail }: { icon: LucideIcon; label: string; value: string; detail: string }) {
   return (
-    <article className="h-full rounded-2xl border border-slate-300/80 bg-white p-4 shadow-[0_9px_24px_rgba(15,23,42,0.065)]">
+    <article className="office-summary h-full rounded-2xl border border-slate-300/80 bg-white p-4 shadow-[0_9px_24px_rgba(15,23,42,0.065)]">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.1em] text-slate-500">{label}</p>
-          <p className="mt-1.5 text-2xl font-black tracking-tight text-slate-950 sm:text-[1.7rem]">{value}</p>
+          <p className="mt-1.5 text-2xl font-black tracking-tight text-slate-950 sm:text-[1.7rem]"><HomeSummaryValue value={value} /></p>
         </div>
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-700">
           <Icon className="h-5 w-5" />
@@ -183,12 +188,12 @@ function ReviewSummaryCard({
     : { fuel: "Fuel", trips: "Trip journeys", maintenance: "Maintenance", open: "View breakdown" };
 
   return (
-    <details className="group h-full rounded-2xl border border-slate-300/80 bg-white p-4 shadow-[0_9px_24px_rgba(15,23,42,0.065)]">
+    <details className="office-summary group h-full rounded-2xl border border-slate-300/80 bg-white p-4 shadow-[0_9px_24px_rgba(15,23,42,0.065)]">
       <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.1em] text-slate-500">{label}</p>
-            <p className="mt-1.5 text-2xl font-black tracking-tight text-slate-950 sm:text-[1.7rem]">{value}</p>
+            <p className="mt-1.5 text-2xl font-black tracking-tight text-slate-950 sm:text-[1.7rem]"><HomeSummaryValue value={value} /></p>
           </div>
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-700">
             <Activity className="h-5 w-5" />
@@ -352,7 +357,7 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="w-full space-y-3.5 pb-4 sm:space-y-4 lg:-mx-3 lg:w-[calc(100%+1.5rem)] xl:-mx-4 xl:w-[calc(100%+2rem)]">
+    <div className="office-home w-full space-y-3.5 pb-4 sm:space-y-4 lg:-mx-3 lg:w-[calc(100%+1.5rem)] xl:-mx-4 xl:w-[calc(100%+2rem)]">
       <section className="overflow-hidden rounded-[1.35rem] border border-violet-100/80 shadow-[0_16px_42px_rgba(42,32,72,0.11)]">
         <div className="relative hidden aspect-[31/8.8] md:block">
           <h1 className="sr-only">{home.title}</h1>
@@ -367,18 +372,18 @@ export default function DashboardPage() {
           />
         </div>
         <div className="md:hidden">
-          <div className="relative overflow-hidden bg-[linear-gradient(138deg,#faf8ff_0%,#ffffff_58%,#f5f1ff_100%)] px-5 py-7 sm:px-8">
+          <div className="relative overflow-hidden bg-[linear-gradient(138deg,#faf8ff_0%,#ffffff_58%,#f5f1ff_100%)] px-4 py-4 sm:px-8 sm:py-7">
             <span className="absolute -left-16 -top-20 h-48 w-48 rounded-full bg-violet-100/70 blur-3xl" aria-hidden="true" />
             <div className="relative">
-              <EESLogo alt="EES" size={48} className="h-12 w-12" priority />
-              <h1 className="mt-5 text-3xl font-black tracking-[-0.035em]">
+              <EESLogo alt="EES" size={48} className="hidden h-12 w-12 sm:block" priority />
+              <h1 className="text-2xl font-black sm:mt-5 sm:text-3xl tracking-[-0.035em]">
                 <span className="text-slate-950">{home.titlePrimary}</span>{" "}
                 <span className="text-violet-700">{home.titleAccent}</span>
               </h1>
-              <p className="mt-3 max-w-md text-sm leading-6 text-slate-600">{home.subtitle}</p>
+              <p className="mt-1.5 max-w-md text-sm leading-5 text-slate-600 sm:mt-3 sm:leading-6">{home.subtitle}</p>
             </div>
           </div>
-          <div className="relative min-h-[210px] overflow-hidden bg-violet-50 sm:min-h-[260px]">
+          <div className="relative min-h-[144px] overflow-hidden bg-violet-50 sm:min-h-[260px]">
             <Image src="/ees-truck.png" alt={home.truckAlt} fill sizes="100vw" className="object-cover object-right" priority />
           </div>
         </div>

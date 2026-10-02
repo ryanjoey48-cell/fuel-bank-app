@@ -234,13 +234,13 @@ export function TopNavigation() {
       ref={rootRef}
       className="top-navigation sticky top-0 z-40 border-b border-slate-200/80 bg-[#fffbf2]/95 shadow-[0_8px_24px_rgba(57,40,24,0.065)] backdrop-blur-xl"
     >
-      <div className="mx-auto flex min-h-[72px] w-full items-center gap-3 px-5 sm:px-6 lg:px-8 xl:grid xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] xl:gap-6 xl:px-10">
+      <div className="mx-auto flex min-h-[60px] w-full items-center gap-2 px-3 sm:min-h-[72px] sm:gap-3 sm:px-6 lg:px-8 xl:grid xl:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] xl:gap-6 xl:px-10">
         <Link
           href="/dashboard"
           className="flex min-w-0 shrink-0 items-center gap-3.5 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-brand-300 xl:justify-self-start"
         >
-          <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[1.05rem] bg-[#211336] shadow-[0_7px_18px_rgba(33,19,54,0.16)] ring-1 ring-brand-900/10">
-            <EESLogo alt={t.common.appName} size={56} className="h-14 w-14 max-w-none scale-[1.8]" priority />
+          <span className="flex h-11 w-11 shrink-0 sm:h-14 sm:w-14 items-center justify-center overflow-hidden rounded-[1.05rem] bg-[#211336] shadow-[0_7px_18px_rgba(33,19,54,0.16)] ring-1 ring-brand-900/10">
+            <EESLogo alt={t.common.appName} size={56} className="h-11 w-11 max-w-none scale-[1.8] sm:h-14 sm:w-14" priority />
           </span>
 
           <span className="hidden xl:block">

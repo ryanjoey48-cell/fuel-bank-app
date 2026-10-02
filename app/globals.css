@@ -2,6 +2,122 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Mobile density is intentionally scoped: keep the approved desktop system. */
+@media (max-width: 639px) {
+  .driver-portal-header,
+  .top-navigation { padding-top: env(safe-area-inset-top); }
+  .driver-portal-header button { min-height: 44px; }
+  .driver-portal-header button[aria-label] { min-width: 44px; }
+  .driver-summary-metrics > div > p:first-child {
+    font-size: 0.75rem;
+    line-height: 1rem;
+    letter-spacing: 0;
+    text-transform: none;
+    color: #64748b;
+  }
+
+  .driver-profile > section,
+  .driver-profile > form,
+  .driver-history > header {
+    padding: 0.75rem;
+  }
+  .driver-profile > section > h2 { margin-bottom: 0.5rem; }
+  .driver-profile > section > div > img,
+  .driver-profile > section > div > div:first-child {
+    width: 4rem;
+    height: 4rem;
+  }
+  .driver-profile dl { margin-top: 0.75rem; }
+  .driver-profile dl > div { padding-block: 0.375rem; }
+  .driver-profile > form > button { min-height: 44px; }
+  .driver-profile > section > label {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .driver-profile > section > label > select { margin-top: 0; }
+  .driver-history > header > h1 { margin-top: 0.25rem; font-size: 1.25rem; }
+  .driver-history > a { padding: 0.75rem; }
+  .driver-history > a > p { margin-top: 0.5rem; line-height: 1.25rem; }
+  .driver-history > a > div:last-child { margin-top: 0.5rem; padding-top: 0.5rem; }
+
+  .operations-header > div,
+  .operations-board > div:first-child,
+  .driver-directory > div:first-child { padding: 0.75rem; }
+  .operations-header > div > div:first-child,
+  .operations-board > div:first-child > div:first-child,
+  .driver-directory > div:first-child > div:first-child { gap: 0.625rem; }
+  .operations-header h1 { margin-top: 0.375rem; font-size: 1.375rem; }
+  .operations-header > div > div:first-child > div:first-child > div:last-child { margin-top: 0.375rem; }
+  .operations-header > div > div:last-child {
+    display: flex;
+    width: 100%;
+    margin-top: 0.75rem;
+  }
+  .operations-header > div > div:last-child > button {
+    flex: 1;
+    min-height: 44px;
+    padding-inline: 0.375rem;
+  }
+  .operations-header > div > div:last-child > button > svg { display: none; }
+  .operations-header .btn-primary,
+  .operations-header .btn-secondary { min-height: 44px; padding-block: 0.5rem; }
+  .operations-board > div:first-child > div:last-child { margin-top: 0.625rem; }
+  .operations-metric > div > span { width: 1.5rem; height: 1.5rem; }
+  .operations-metric > div > p { font-size: 0.6875rem; letter-spacing: 0; text-transform: none; }
+  .operations-history input { width: 100%; min-width: 0; font-size: 1rem; }
+  .operations-history-row { position: relative; padding-right: 0.375rem; }
+  .operations-history-row > div:last-child { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+  .operations-history-row > div:last-child > p { margin-top: 0; }
+  .operations-history .btn-primary,
+  .operations-history .btn-secondary { padding-inline: 0.75rem; }
+  .driver-directory > div:first-child > div:first-child > div:last-child {
+    flex-direction: row;
+    align-items: center;
+  }
+  .driver-directory > div:first-child > div:first-child > div:last-child > div { min-width: 0; flex: 1; }
+  .driver-directory > div:first-child > div:last-child > button { flex-shrink: 0; min-height: 44px; }
+  .directory-mobile-rows > button { padding: 0.75rem; }
+  .directory-mobile-rows > button > p { margin-top: 0.5rem; }
+  .directory-mobile-rows > button > div:first-child { flex-wrap: wrap; gap: 0.5rem; }
+
+  .operations-job-drawer,
+  .directory-profile-drawer { padding-bottom: env(safe-area-inset-bottom); }
+  .operations-job-drawer > div:first-child,
+  .directory-profile-drawer > div:first-child { padding: 0.75rem; }
+  .operations-job-drawer button[aria-label],
+  .directory-profile-drawer button[aria-label] { min-width: 44px; min-height: 44px; }
+  .operations-job-drawer > div:last-child,
+  .directory-profile-drawer > div:last-child { padding: 0.75rem; }
+  .operations-job-drawer section,
+  .directory-profile-drawer section { padding: 0.75rem; }
+  .operations-job-drawer section > div,
+  .operations-job-drawer section > dl,
+  .operations-job-drawer section > ol { margin-top: 0.75rem; }
+  .operations-job-drawer section > div > div:last-child > div + div { margin-top: 0.75rem; }
+  .operations-job-drawer ol > li + li { margin-top: 0.75rem; }
+  .operations-job-drawer a { display: inline-flex; min-height: 44px; align-items: center; }
+  .operations-driver-info { padding: 0.375rem 0; background: transparent; border-radius: 0; border-bottom: 1px solid #f1f5f9; }
+  .operations-driver-info > div { display: grid; grid-template-columns: 5rem minmax(0, 1fr); align-items: baseline; gap: 0.5rem; }
+  .operations-driver-info > div > p:first-child { font-size: 0.75rem; text-transform: none; letter-spacing: 0; }
+  .operations-driver-info > div > p:last-child { margin-top: 0; text-align: right; }
+
+  .office-summary { padding: 0.75rem; }
+  .office-summary > div:first-child,
+  .office-summary > summary > div:first-child { position: relative; display: block; padding-top: 0.125rem; }
+  .office-summary > div:first-child > div,
+  .office-summary > summary > div:first-child > div { min-width: 0; }
+  .office-summary > div:first-child > span,
+  .office-summary > summary > div:first-child > span { position: absolute; top: 0; right: 0; width: 1.5rem; height: 1.5rem; border-radius: 0.5rem; }
+  .office-summary svg { width: 1rem; height: 1rem; }
+  .office-summary > div:first-child > div > p:first-child,
+  .office-summary > summary > div:first-child > div > p:first-child { padding-right: 1.75rem; text-transform: none; letter-spacing: 0; }
+  .office-summary > div:first-child > div > p:last-child,
+  .office-summary > summary > div:first-child > div > p:last-child { font-size: 1.25rem; overflow-wrap: anywhere; }
+  .office-summary > p,
+  .office-summary > summary > p { line-height: 1rem; }
+}
+
 @font-face {
   font-family: "BossPdfThai";
   src: url("/fonts/boss-pdf-thai.ttf") format("truetype");
