@@ -1,133 +1,122 @@
 "use client";
 
-import {
-  CalendarDays,
-  ChevronRight,
-  Clock3,
-  PackageCheck,
-  Truck
-} from "lucide-react";
+import { CalendarDays, ChevronRight, Clock3, Truck } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useLanguage } from "@/lib/language-provider";
 import type { DriverJobEvent, DriverPortalJob } from "@/lib/driver-portal";
 import { jobStatus, nextDriverJob, type DriverProfile } from "@/lib/driver-operations";
-
 import { DriverStatusBadge, driverJobAction } from "./driver-ui";
 
 const copy = {
   en: {
-    greeting: "Hello",
-    intro: "Your assigned work, in pickup order.",
+    hello: "Hello",
     today: "Today",
     upcoming: "Upcoming",
-    noTodayTitle: "No jobs assigned today",
-    noTodayText: "New work assigned by the office will appear here.",
-    noUpcomingTitle: "Nothing upcoming yet",
-    noUpcomingText: "Future bookings will appear here once they are assigned.",
     vehicle: "Vehicle",
-    job: "Job",
-    view: "Open job",
-    timePending: "Time not set",
+    jobsToday: "jobs today",
+    remaining: "remaining",
+    noToday: "No jobs today",
+    noUpcoming: "No upcoming jobs",
     tomorrow: "Tomorrow",
-    jobsToday: "Jobs today",
-    upcomingJobs: "Upcoming jobs",
-    nextPickup: "Next pickup",
-    allClear: "You're all clear for now",
-    ready: "Ready",
-    pickup: "Pickup",
-    delivery: "Delivery"
+    timePending: "Time not set",
+    job: "Job",
+    current: "CURRENT JOB",
+    next: "NEXT JOB"
   },
   th: {
-    greeting: "สวัสดี",
-    intro: "งานที่ได้รับมอบหมาย เรียงตามเวลารับสินค้า",
+    hello: "สวัสดี",
     today: "วันนี้",
     upcoming: "งานถัดไป",
-    noTodayTitle: "วันนี้ยังไม่มีงาน",
-    noTodayText: "งานใหม่ที่สำนักงานมอบหมายจะแสดงที่นี่",
-    noUpcomingTitle: "ยังไม่มีงานล่วงหน้า",
-    noUpcomingText: "งานในอนาคตจะแสดงที่นี่เมื่อได้รับมอบหมาย",
     vehicle: "รถ",
-    job: "เลขงาน",
-    view: "เปิดงาน",
-    timePending: "ยังไม่กำหนดเวลา",
-    tomorrow: "พรุ่งนี้",
     jobsToday: "งานวันนี้",
-    upcomingJobs: "งานล่วงหน้า",
-    nextPickup: "รับสินค้าถัดไป",
-    allClear: "ตอนนี้ยังไม่มีงานเพิ่มเติม",
-    ready: "พร้อม",
-    pickup: "จุดรับ",
-    delivery: "จุดส่ง"
+    remaining: "งานที่เหลือ",
+    noToday: "วันนี้ไม่มีงาน",
+    noUpcoming: "ยังไม่มีงานล่วงหน้า",
+    tomorrow: "พรุ่งนี้",
+    timePending: "ยังไม่กำหนดเวลา",
+    job: "งาน",
+    current: "งานปัจจุบัน",
+    next: "งานถัดไป"
   }
 } as const;
 
 function formatTime(value: string | null, fallback: string) {
-  if (!value) return fallback;
-  return value.slice(0, 5);
+  return value ? value.slice(0, 5) : fallback;
 }
 
 function addDays(dateKey: string, days: number) {
   const date = new Date(`${dateKey}T12:00:00+07:00`);
   date.setUTCDate(date.getUTCDate() + days);
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Bangkok"
-  }).format(date);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(date);
 }
 
-function EmptyState({
-  title,
-  text
-}: {
-  title: string;
-  text: string;
+function CurrentJobCard({ job, events, language, labels }: {
+  job: DriverPortalJob;
+  events: DriverJobEvent[];
+  language: "en" | "th";
+  labels: (typeof copy)[keyof typeof copy];
 }) {
+  const status = jobStatus(events);
   return (
-    <div className="rounded-[1.5rem] border border-dashed border-slate-300 bg-white/70 px-4 py-5 text-center shadow-sm sm:px-6 sm:py-10">
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-[#152638]">
-        <PackageCheck className="h-6 w-6" />
+    <Link href={`/driver/jobs/${job.id}`} className="block overflow-hidden rounded-2xl bg-[#152638] text-white shadow-md transition active:scale-[0.995]">
+      <div className="flex items-center justify-between border-b border-white/10 px-4 py-2.5">
+        <p className="text-xs font-black tracking-[0.14em] text-orange-300">{status === "ready" ? labels.next : labels.current}</p>
+        <DriverStatusBadge language={language} status={status} />
       </div>
-
-      <h3 className="mt-4 text-base font-black text-slate-900">
-        {title}
-      </h3>
-
-      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
-        {text}
-      </p>
-    </div>
+      <div className="p-4">
+        <div className="flex items-center justify-between gap-3">
+          <span className="inline-flex items-center gap-2 text-base font-bold text-white/90">
+            <Clock3 className="h-5 w-5" />
+            {formatTime(job.pickupTime, labels.timePending)}
+          </span>
+          <span className="inline-flex items-center gap-1.5 text-sm text-white/70">
+            <Truck className="h-4 w-4" />{job.vehicleRegistration || "—"}
+          </span>
+        </div>
+        <h2 className="mt-4 text-xl font-black">{job.clientName || job.jobOrderNumber || labels.job}</h2>
+        <p className="mt-2 text-base font-semibold leading-6 text-white/90">
+          {job.pickupName} <span className="px-1 text-orange-300">→</span> {job.dropoffName}
+        </p>
+        <div className="mt-4 flex justify-end">
+          <span className="inline-flex min-h-11 items-center gap-1 rounded-xl bg-orange-600 px-4 text-sm font-black text-white">
+            {driverJobAction(language, status)} <ChevronRight className="h-4 w-4" />
+          </span>
+        </div>
+      </div>
+    </Link>
   );
 }
 
-function JobCard({ job, labels, events, language, next }: {
-  job: DriverPortalJob; labels: (typeof copy)[keyof typeof copy];
-  events: DriverJobEvent[]; language: "en" | "th"; next?: boolean;
+function CompactJobRow({ job, events, language, labels }: {
+  job: DriverPortalJob;
+  events: DriverJobEvent[];
+  language: "en" | "th";
+  labels: (typeof copy)[keyof typeof copy];
 }) {
   const status = jobStatus(events);
   const completed = status === "completed";
-  return <Link href={`/driver/jobs/${job.id}`} className={`group block overflow-hidden rounded-2xl border transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600 ${next ? "border-[#152638] bg-[#152638] text-white shadow-md" : completed ? "border-emerald-100 bg-white/70" : "border-slate-200 bg-white shadow-sm hover:border-slate-400"}`}>
-    {next ? <p className="border-b border-white/10 px-4 py-2 text-xs font-bold tracking-wide text-orange-300">{status !== "ready" ? language === "th" ? "งานที่กำลังดำเนินการ" : "CURRENT JOB" : language === "th" ? "งานถัดไป" : "NEXT JOB"}</p> : null}
-    <div className={next ? "p-4 sm:p-5" : "p-3 sm:p-4"}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className={`inline-flex items-center gap-1.5 text-sm font-bold ${next ? "text-white/80" : "text-slate-500"}`}><Clock3 className="h-4 w-4" />{formatTime(job.pickupTime, labels.timePending)}</span>
-        <DriverStatusBadge language={language} status={status} />
+  return (
+    <Link href={`/driver/jobs/${job.id}`} className={`block rounded-2xl border px-4 py-3 shadow-sm transition active:scale-[0.995] ${completed ? "border-emerald-100 bg-emerald-50/40" : "border-slate-200 bg-white"}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 text-sm text-slate-500">
+            <Clock3 className="h-4 w-4 shrink-0" />
+            <span className="font-semibold">{formatTime(job.pickupTime, labels.timePending)}</span>
+          </div>
+          <p className="mt-1 truncate font-black text-[#152638]">{job.clientName || job.jobOrderNumber || labels.job}</p>
+          <p className="mt-1 truncate text-sm text-slate-700">{job.pickupName} <span className="text-orange-500">→</span> {job.dropoffName}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <DriverStatusBadge language={language} status={status} />
+          <ChevronRight className="h-4 w-4 text-slate-400" />
+        </div>
       </div>
-      <h3 className={`mt-2 break-words font-bold ${next ? "text-xl text-white" : "text-sm text-[#152638]"}`}>{job.clientName || job.jobOrderNumber || labels.job}</h3>
-      {job.clientName && job.jobOrderNumber ? <p className={`mt-0.5 break-words text-xs ${next ? "text-white/60" : "text-slate-500"}`}>{labels.job} {job.jobOrderNumber}</p> : null}
-      <p className={`mt-2 break-words font-semibold leading-6 ${next ? "text-base text-white" : "text-sm text-slate-700"}`}>{job.pickupName} <span className="text-orange-500">→</span> {job.dropoffName}</p>
-      <div className={`mt-3 flex flex-wrap items-center justify-between gap-2 ${next ? "border-t border-white/10 pt-3" : ""}`}>
-        <span className={`inline-flex items-center gap-1.5 text-xs ${next ? "text-white/70" : "text-slate-500"}`}><Truck className="h-4 w-4 shrink-0" />{job.vehicleRegistration || "—"}</span>
-        <span className={`inline-flex items-center gap-1 text-xs font-bold ${next ? "min-h-11 rounded-xl bg-orange-600 px-4 text-sm text-white group-hover:bg-orange-700" : completed ? "min-h-8 text-emerald-800" : "min-h-8 text-[#152638]"}`}>{driverJobAction(language, status)}<ChevronRight className="h-4 w-4" /></span>
-      </div>
-    </div>
-  </Link>;
+    </Link>
+  );
 }
 
-export function DriverHome({
-  driverName,
-  jobs,
-  today, eventsByJob = {}
-}: {
+export function DriverHome({ driverName, jobs, today, eventsByJob = {} }: {
   driverName: string;
   jobs: DriverPortalJob[];
   today: string;
@@ -136,184 +125,102 @@ export function DriverHome({
   const { language } = useLanguage();
   const labels = copy[language];
   const [profile, setProfile] = useState<DriverProfile | null>(null);
-  useEffect(() => { let active = true; void fetch("/api/driver/profile", { cache: "no-store" }).then(async (r) => { if (r.ok && active) setProfile(await r.json()); }).catch(() => undefined); return () => { active = false; }; }, []);
 
-  const todayJobs = jobs.filter((job) => job.bookingDate === today).sort((a, b) => Number(jobStatus(eventsByJob[a.id] || []) === "completed") - Number(jobStatus(eventsByJob[b.id] || []) === "completed"));
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/driver/profile", { cache: "no-store" })
+      .then(async (r) => { if (r.ok && active) setProfile(await r.json()); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  const todayJobs = useMemo(() => jobs
+    .filter((job) => job.bookingDate === today)
+    .sort((a, b) => (a.pickupTime || "99:99").localeCompare(b.pickupTime || "99:99")), [jobs, today]);
+
+  const remainingToday = todayJobs.filter((job) => jobStatus(eventsByJob[job.id] || []) !== "completed");
+  const nextJob = nextDriverJob(jobs, eventsByJob);
+  const vehicleRegistration = nextJob?.vehicleRegistration ?? profile?.vehicle ?? jobs[0]?.vehicleRegistration ?? null;
 
   const upcomingGroups = useMemo(() => {
     const groups = new Map<string, DriverPortalJob[]>();
-
     for (const job of jobs) {
-      if (job.bookingDate <= today) continue;
-
+      if (job.bookingDate <= today || job.id === nextJob?.id) continue;
       const entries = groups.get(job.bookingDate) ?? [];
       entries.push(job);
       groups.set(job.bookingDate, entries);
     }
-
-    return [...groups.entries()];
-  }, [jobs, today]);
-
-  const upcomingCount = useMemo(
-    () => upcomingGroups.reduce((total, [, dateJobs]) => total + dateJobs.length, 0),
-    [upcomingGroups]
-  );
-
-  const nextJob = nextDriverJob(jobs, eventsByJob);
-
-  const vehicleRegistration =
-    nextJob?.vehicleRegistration ?? profile?.vehicle ?? jobs[0]?.vehicleRegistration ?? null;
+    return [...groups.entries()].map(([date, entries]) => [date, entries.sort((a, b) => (a.pickupTime || "99:99").localeCompare(b.pickupTime || "99:99"))] as const);
+  }, [jobs, today, nextJob?.id]);
 
   const formatDate = (dateKey: string) => {
     if (dateKey === addDays(today, 1)) return labels.tomorrow;
-
-    return new Intl.DateTimeFormat(
-      language === "th" ? "th-TH" : "en-GB",
-      {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-        timeZone: "Asia/Bangkok"
-      }
-    ).format(new Date(`${dateKey}T12:00:00+07:00`));
+    return new Intl.DateTimeFormat(language === "th" ? "th-TH" : "en-GB", {
+      day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Bangkok"
+    }).format(new Date(`${dateKey}T12:00:00+07:00`));
   };
 
   return (
-    <main className="driver-home mx-auto w-full max-w-3xl px-3 py-3 sm:px-6 sm:py-6">
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="p-3 sm:p-5">
-          <div className="flex gap-3 items-start justify-between">
-            <div className="min-w-0">
-              <p className="text-sm font-bold text-[#152638]">
-                {labels.greeting},
-              </p>
-
-              <h1 className="mt-0.5 break-words text-lg font-black tracking-tight text-slate-950 sm:mt-1 sm:text-2xl">
-                {profile?.displayName || driverName}
-              </h1>
-
-              <p className="mt-1 hidden max-w-xl text-xs leading-5 text-slate-600 sm:block">
-                {labels.intro}
-              </p>
-            </div>
-
-            {vehicleRegistration ? (
-              <div className="inline-flex items-center gap-2 self-start rounded-xl border border-brand-100 bg-white px-2 py-2">
-                <div className="hidden sm:flex h-8 w-8 items-center justify-center rounded-xl bg-brand-50 text-[#152638]">
-                  <Truck className="h-5 w-5" />
-                </div>
-
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
-                    {labels.vehicle}
-                  </p>
-                  <p className="text-sm font-black text-slate-950">
-                    {vehicleRegistration}
-                  </p>
-                </div>
-              </div>
-            ) : null}
+    <main className="mx-auto w-full max-w-3xl px-3 py-3 sm:px-6 sm:py-6">
+      <section className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-slate-500">{labels.hello},</p>
+            <h1 className="mt-0.5 truncate text-xl font-black text-[#152638]">{profile?.displayName || driverName}</h1>
+            <p className="mt-2 text-sm text-slate-600">
+              <strong className="text-[#152638]">{todayJobs.length}</strong> {labels.jobsToday}
+              <span className="mx-2 text-slate-300">•</span>
+              <strong className="text-[#152638]">{remainingToday.length}</strong> {labels.remaining}
+            </p>
           </div>
-
-          <div className="driver-summary-metrics mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-brand-100 pt-2 sm:grid-cols-4 sm:gap-2 sm:pt-2">
-            <div className="flex items-center justify-between gap-2 sm:flex">
-              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
-                {labels.jobsToday}
-              </p>
-              <p className="text-lg font-black text-[#152638] sm:mt-1 sm:text-xl">
-                {todayJobs.length}
-              </p>
+          {vehicleRegistration ? (
+            <div className="shrink-0 rounded-xl bg-slate-50 px-3 py-2 text-right">
+              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{labels.vehicle}</p>
+              <p className="text-base font-black text-[#152638]">{vehicleRegistration}</p>
             </div>
-
-            <div className="flex items-center justify-between gap-2 sm:flex"><p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{language === "th" ? "งานที่เหลือวันนี้" : "Remaining today"}</p><p className="text-lg font-black text-[#152638] sm:mt-1 sm:text-xl">{todayJobs.filter((job) => jobStatus(eventsByJob[job.id] || []) !== "completed").length}</p></div>
-
-            <div className="flex items-center justify-between gap-2 sm:flex">
-              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
-                {labels.upcomingJobs}
-              </p>
-              <p className="text-lg font-black text-[#152638] sm:mt-1 sm:text-xl">
-                {upcomingCount}
-              </p>
-            </div>
-
-            <div className="flex items-center justify-between gap-2 sm:flex">
-              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">
-                {labels.nextPickup}
-              </p>
-              <p className="text-right text-xs font-black text-slate-950 sm:mt-1 sm:text-left sm:text-sm">
-                {nextJob
-                  ? formatTime(nextJob.pickupTime, labels.timePending)
-                  : jobs.some((job) => jobStatus(eventsByJob[job.id] || []) !== "completed") ? labels.timePending : labels.allClear}
-              </p>
-            </div>
-          </div>
+          ) : null}
         </div>
       </section>
 
-      {nextJob ? <section className="mt-5" aria-label={language === "th" ? "งานถัดไป" : "Next job"}><p className="mb-2 text-xs font-bold text-slate-500">{nextJob.bookingDate === today ? labels.today : formatDate(nextJob.bookingDate)}</p><JobCard job={nextJob} labels={labels} events={eventsByJob[nextJob.id] || []} language={language} next /></section> : null}
+      {nextJob ? (
+        <section className="mt-4">
+          <CurrentJobCard job={nextJob} events={eventsByJob[nextJob.id] || []} language={language} labels={labels} />
+        </section>
+      ) : null}
 
-      {todayJobs.length === 1 && todayJobs[0].id === nextJob?.id ? null : <section className="mt-5">
-        <div className="mb-3 flex items-center gap-2">
-          <CalendarDays className="h-4 w-4 text-[#152638]" />
-          <h2 className="text-xs font-black uppercase tracking-[0.16em] text-slate-700">
-            {labels.today}
-          </h2>
-          <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-black text-[#152638]">
-            {todayJobs.length}
-          </span>
+      <section className="mt-5">
+        <div className="mb-2 flex items-center gap-2">
+          <CalendarDays className="h-4 w-4 text-slate-500" />
+          <h2 className="text-sm font-black uppercase tracking-[0.14em] text-slate-700">{labels.today}</h2>
         </div>
-
-        {todayJobs.length ? (
-          <div className="grid gap-2 sm:gap-4 lg:grid-cols-2">
-            {todayJobs.filter((job) => job.id !== nextJob?.id).map((job) => (
-              <JobCard key={job.id} job={job} labels={labels} events={eventsByJob[job.id] || []} language={language} next={job.id === nextJob?.id && jobStatus(eventsByJob[job.id] || []) !== "completed"} />
-            ))}
-          </div>
-        ) : (
-          <EmptyState
-            title={labels.noTodayTitle}
-            text={labels.noTodayText}
-          />
-        )}
+        <div className="space-y-2">
+          {todayJobs.filter((job) => job.id !== nextJob?.id).map((job) => (
+            <CompactJobRow key={job.id} job={job} events={eventsByJob[job.id] || []} language={language} labels={labels} />
+          ))}
+          {!todayJobs.length ? <p className="rounded-xl border border-dashed border-slate-300 bg-white/70 p-4 text-center text-sm text-slate-500">{labels.noToday}</p> : null}
+        </div>
       </section>
 
-      }
       <section className="mt-6 pb-6">
         <div className="mb-3 flex items-center gap-2">
           <CalendarDays className="h-4 w-4 text-slate-500" />
-          <h2 className="text-xs font-black uppercase tracking-[0.16em] text-slate-700">
-            {labels.upcoming}
-          </h2>
+          <h2 className="text-sm font-black uppercase tracking-[0.14em] text-slate-700">{labels.upcoming}</h2>
         </div>
 
         {upcomingGroups.length ? (
           <div className="space-y-5">
-            {upcomingGroups.filter(([, dateJobs]) => dateJobs.some((job) => job.id !== nextJob?.id)).map(([date, dateJobs]) => (
+            {upcomingGroups.map(([date, dateJobs]) => (
               <div key={date}>
-                <div className="mb-3 flex items-center justify-between">
-                  <h3 className="text-sm font-black text-[#152638]">
-                    {formatDate(date)}
-                  </h3>
-
-                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-600">
-                    {dateJobs.length}
-                  </span>
-                </div>
-
-                <div className="grid gap-2 sm:gap-4 lg:grid-cols-2">
-                  {dateJobs.filter((job) => job.id !== nextJob?.id).map((job) => (
-                    <JobCard key={job.id} job={job} labels={labels} events={eventsByJob[job.id] || []} language={language} />
+                <h3 className="mb-2 text-sm font-black text-[#152638]">{formatDate(date)}</h3>
+                <div className="space-y-2">
+                  {dateJobs.map((job) => (
+                    <CompactJobRow key={job.id} job={job} events={eventsByJob[job.id] || []} language={language} labels={labels} />
                   ))}
                 </div>
               </div>
             ))}
           </div>
-        ) : (
-          <EmptyState
-            title={labels.noUpcomingTitle}
-            text={labels.noUpcomingText}
-          />
-        )}
+        ) : <p className="rounded-xl border border-dashed border-slate-300 bg-white/70 p-4 text-center text-sm text-slate-500">{labels.noUpcoming}</p>}
       </section>
     </main>
   );

@@ -1,10 +1,56 @@
 "use client";
+
 import Link from "next/link";
-import { CheckCircle2, ChevronRight, Clock3, Truck } from "lucide-react";
+import { CheckCircle2, ChevronRight } from "lucide-react";
 import { useLanguage } from "@/lib/language-provider";
 import type { DriverWork } from "@/lib/driver-operations";
+
 export function DriverHistory({ rows, page, hasMore }: { rows: DriverWork[]; page: number; hasMore: boolean }) {
-  const { language } = useLanguage(); const th = language === "th";
-  const format = (value: string) => new Intl.DateTimeFormat(th ? "th-TH" : "en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok" }).format(new Date(value));
-  return <main className="driver-history mx-auto max-w-3xl space-y-3 px-3 py-3 sm:space-y-4 sm:px-4 sm:py-5"><header className="px-1 py-2"><h1 className="text-2xl font-black">{th ? "ประวัติงาน" : "Job history"}</h1><p className="mt-1 text-sm text-slate-500">{th ? "งานที่จบแล้วของคุณ เรียงจากล่าสุด" : "Your completed jobs, newest first"}</p></header>{!rows.length ? <p className="rounded-2xl border border-dashed bg-white p-6 text-center text-slate-500">{th ? "ยังไม่มีงานที่จบแล้ว" : "No completed jobs yet"}</p> : rows.map(({ job, events }) => { const completed = events.find((e) => e.eventType === "job_completed"); if (!completed) return null; return <Link href={`/driver/jobs/${job.id}`} key={job.id} className="block rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-emerald-300"><div className="flex items-start justify-between gap-2"><div><p className="text-xs text-slate-500">{format(completed.eventTime)}</p><h2 className="mt-1 font-black text-slate-900">{job.clientName || (th ? "งาน" : "Job")}</h2></div><span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700"><CheckCircle2 className="h-3 w-3" />{th ? "จบงานแล้ว" : "Completed"}</span></div><p className="mt-3 text-sm font-semibold leading-6">{job.pickupName} <span className="text-brand-400">→</span> {job.dropoffName}</p><div className="mt-3 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-3 text-xs text-slate-500"><span className="inline-flex items-center gap-1"><Truck className="h-4 w-4" />{job.vehicleRegistration || "—"}</span><span className="inline-flex items-center gap-1"><Clock3 className="h-4 w-4" />{th ? "เวลารับ" : "Pickup"} {job.pickupTime?.slice(0, 5) || "—"}</span><ChevronRight className="ml-auto h-4 w-4 text-brand-600" /></div></Link>; })}<div className="flex justify-between">{page > 0 ? <Link className="btn-secondary" href={`/driver/history?page=${page - 1}`}>{th ? "ก่อนหน้า" : "Previous"}</Link> : <span />}{hasMore ? <Link className="btn-secondary" href={`/driver/history?page=${page + 1}`}>{th ? "ถัดไป" : "Next"}</Link> : null}</div></main>;
+  const { language } = useLanguage();
+  const th = language === "th";
+  const format = (value: string) => new Intl.DateTimeFormat(th ? "th-TH" : "en-GB", {
+    dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok"
+  }).format(new Date(value));
+
+  return (
+    <main className="mx-auto max-w-3xl px-3 py-4 sm:px-4 sm:py-5">
+      <header className="mb-4 px-1">
+        <h1 className="text-2xl font-black text-[#152638]">{th ? "ประวัติงาน" : "History"}</h1>
+        <p className="mt-1 text-sm text-slate-500">{rows.length} {th ? "งานที่แสดง" : "completed jobs shown"}</p>
+      </header>
+
+      {!rows.length ? (
+        <p className="rounded-xl border border-dashed border-slate-300 bg-white/70 p-5 text-center text-sm text-slate-500">{th ? "ยังไม่มีงานที่จบแล้ว" : "No completed jobs yet"}</p>
+      ) : (
+        <div className="space-y-2">
+          {rows.map(({ job, events }) => {
+            const completed = events.find((e) => e.eventType === "job_completed");
+            if (!completed) return null;
+            return (
+              <Link href={`/driver/jobs/${job.id}`} key={job.id} className="block rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition active:scale-[0.995]">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs text-slate-500">{format(completed.eventTime)}</p>
+                    <h2 className="mt-1 truncate font-black text-[#152638]">{job.clientName || (th ? "งาน" : "Job")}</h2>
+                    <p className="mt-1 truncate text-sm text-slate-700">{job.pickupName} <span className="text-orange-500">→</span> {job.dropoffName}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">
+                      <CheckCircle2 className="h-3 w-3" />{th ? "จบแล้ว" : "Done"}
+                    </span>
+                    <ChevronRight className="h-4 w-4 text-slate-400" />
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="mt-4 flex justify-between">
+        {page > 0 ? <Link className="btn-secondary" href={`/driver/history?page=${page - 1}`}>{th ? "ก่อนหน้า" : "Previous"}</Link> : <span />}
+        {hasMore ? <Link className="btn-secondary" href={`/driver/history?page=${page + 1}`}>{th ? "ถัดไป" : "Next"}</Link> : null}
+      </div>
+    </main>
+  );
 }
