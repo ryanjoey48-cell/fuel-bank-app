@@ -8,10 +8,10 @@ export default async function ProtectedDriverLayout({ children }: { children: Re
   if (!session) redirect("/driver/login");
 
   return (
-    <>
+    <div className="min-h-[100dvh] bg-[#f7f4ed] text-[#152638]">
       <DriverPortalHeader driverName={session.driverName} />
       <DriverNavigation />
       <div className="pb-[calc(4.5rem+env(safe-area-inset-bottom))] sm:pb-0">{children}</div>
-    </>
+    </div>
   );
 }

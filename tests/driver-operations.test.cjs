@@ -96,14 +96,14 @@ test('history rechecks booking ownership and scopes completion events by driver 
 });
 test('completed home cards render Completed and next unfinished job first', () => {
   const React = require('react'); const icons = Object.fromEntries(['ArrowDown','CalendarDays','ChevronRight','Clock3','MapPin','PackageCheck','Route','Truck'].map((name) => [name, () => null]));
-  const home = load('components/driver/driver-home.tsx', { 'react/jsx-runtime': require('react/jsx-runtime'), react: React, 'lucide-react': icons, 'next/link': ({ href, children, ...props }) => React.createElement('a', { href, ...props }, children), '@/lib/language-provider': { useLanguage: () => ({ language: 'en' }) }, '@/lib/driver-operations': ops });
+  const home = load('components/driver/driver-home.tsx', { 'react/jsx-runtime': require('react/jsx-runtime'), react: React, 'lucide-react': icons, 'next/link': ({ href, children, ...props }) => React.createElement('a', { href, ...props }, children), '@/lib/language-provider': { useLanguage: () => ({ language: 'en' }) }, '@/lib/driver-operations': ops, './driver-ui': load('components/driver/driver-ui.tsx', { react: React, 'react/jsx-runtime': require('react/jsx-runtime'), 'next/image': () => null }) });
   const jobs = ['done', 'next'].map((id) => ({ id, bookingDate: '2026-10-02', pickupTime: '10:00', pickupName: 'Pickup', dropoffName: 'Dropoff', clientName: id }));
   const html = require('react-dom/server').renderToStaticMarkup(React.createElement(home.DriverHome, { driverName: 'Test', jobs, today: '2026-10-02', eventsByJob: { done: [{ eventType: 'job_completed', eventTime: '2026-10-02T05:00:00Z' }] } }));
-  assert.ok(html.includes('Completed')); assert.ok(html.includes('bg-emerald-100')); assert.ok(html.indexOf('/driver/jobs/next') < html.indexOf('/driver/jobs/done')); // Exactly one next job in each mutually exclusive responsive presentation.
-  assert.equal((html.match(/NEXT JOB/g) || []).length, 2);
-  assert.equal((html.match(/href="\/driver\/jobs\/next"/g) || []).length, 2);
-  assert.equal((html.match(/href="\/driver\/jobs\/done"/g) || []).length, 2);
-  assert.ok(html.includes('sm:hidden')); assert.ok(html.includes('hidden overflow-hidden')); assert.ok(html.includes('sm:block'));
+  assert.ok(html.includes('Completed')); assert.ok(html.includes('bg-emerald-50')); assert.ok(html.indexOf('/driver/jobs/next') < html.indexOf('/driver/jobs/done')); // One shared responsive card per job; the next unfinished job remains first.
+  assert.equal((html.match(/NEXT JOB/g) || []).length, 1);
+  assert.equal((html.match(/href="\/driver\/jobs\/next"/g) || []).length, 1);
+  assert.equal((html.match(/href="\/driver\/jobs\/done"/g) || []).length, 1);
+  assert.ok(html.includes('Start job')); assert.ok(html.includes('View completed job'));
 });
 test('mobile action retains one secure save button and full timeline', () => {
   const source = read('components/driver/driver-job-detail.tsx'); assert.ok(source.includes('bottom-[calc(52px+env(safe-area-inset-bottom))]')); assert.ok(source.includes('DRIVER_JOB_EVENT_TYPES.map')); assert.equal((source.match(/labels.actions\[stage\]/g) || []).length, 1);
