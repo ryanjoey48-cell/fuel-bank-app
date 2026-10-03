@@ -66,14 +66,21 @@ function VehiclePlate({
   labels: (typeof copy)[keyof typeof copy];
 }) {
   return (
-    <div className="w-[138px] shrink-0">
-      <p className="mb-1 text-center text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+    <div className="w-[154px] shrink-0">
+      <p className="mb-1.5 text-center text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
         {labels.vehicle}
       </p>
-      <div className="rounded-xl border-2 border-slate-800 bg-white px-2 py-2 text-center shadow-sm">
-        <div className="text-[10px] font-bold tracking-[0.12em] text-slate-500">{labels.thailand}</div>
-        <div className="mt-0.5 truncate text-xl font-black tracking-[0.08em] text-[#152638]">
+      <div className="relative overflow-hidden rounded-[10px] border-[3px] border-[#252525] bg-[#f4cf35] px-2 py-1.5 text-center shadow-[0_2px_0_rgba(0,0,0,0.18)]">
+        <span className="absolute left-2 top-2 h-1.5 w-1.5 rounded-full bg-[#252525]/35" />
+        <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-[#252525]/35" />
+        <div className="text-[9px] font-black tracking-[0.18em] text-[#202020]">
+          {labels.thailand}
+        </div>
+        <div className="my-0.5 truncate text-[26px] font-black leading-none tracking-[0.04em] text-[#111] drop-shadow-[0_1px_0_rgba(255,255,255,0.35)]">
           {registration}
+        </div>
+        <div className="text-[9px] font-bold tracking-[0.08em] text-[#252525]">
+          {language === "th" ? "ประเทศไทย" : "THAILAND"}
         </div>
       </div>
       {vehicleType ? (
@@ -97,13 +104,19 @@ function CurrentJobCard({
   labels: (typeof copy)[keyof typeof copy];
 }) {
   const status = jobStatus(events);
+  const formattedDate = new Intl.DateTimeFormat(language === "th" ? "th-TH" : "en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Bangkok"
+  }).format(new Date(`${job.bookingDate}T12:00:00+07:00`));
 
   return (
     <Link
       href={`/driver/jobs/${job.id}`}
-      className="block overflow-hidden rounded-[22px] bg-[#152638] text-white shadow-lg transition active:scale-[0.995]"
+      className="block overflow-hidden rounded-[24px] bg-[#152638] text-white shadow-[0_10px_28px_rgba(21,38,56,0.16)] transition active:scale-[0.995]"
     >
-      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3.5">
         <p className="text-xs font-black tracking-[0.16em] text-orange-300">
           {status === "ready" ? labels.next : labels.current}
         </p>
@@ -111,39 +124,46 @@ function CurrentJobCard({
       </div>
 
       <div className="p-4">
-        <div className="flex items-center justify-between gap-3">
-          <span className="inline-flex items-center gap-2 text-lg font-black text-white">
-            <Clock3 className="h-5 w-5 text-orange-300" />
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-white/75">
+          <span className="inline-flex items-center gap-1.5 font-semibold">
+            <CalendarDays className="h-4 w-4 text-orange-300" />
+            {formattedDate}
+          </span>
+          <span className="inline-flex items-center gap-1.5 font-semibold">
+            <Clock3 className="h-4 w-4 text-orange-300" />
             {formatTime(job.pickupTime, labels.timePending)}
           </span>
-          <span className="inline-flex items-center gap-1.5 text-sm font-bold text-white/70">
+          <span className="ml-auto inline-flex items-center gap-1.5 font-bold">
             <Truck className="h-4 w-4" />
             {job.vehicleRegistration || "—"}
           </span>
         </div>
 
-        <h2 className="mt-4 text-2xl font-black">
+        <h2 className="mt-4 text-[26px] font-black leading-tight">
           {job.clientName || job.jobOrderNumber || labels.job}
         </h2>
 
-        <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-xl bg-white/5 px-3 py-3">
+        <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-2xl bg-white/[0.06] px-3.5 py-3.5">
           <div className="min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/45">
+            <p className="text-[10px] font-black uppercase tracking-[0.13em] text-white/45">
               {labels.pickup}
             </p>
-            <p className="mt-1 truncate text-sm font-bold text-white">{job.pickupName || "—"}</p>
+            <p className="mt-1 truncate text-[15px] font-bold text-white">{job.pickupName || "—"}</p>
           </div>
-          <span className="text-lg font-black text-orange-300">→</span>
+          <span className="text-xl font-black text-orange-300">→</span>
           <div className="min-w-0 text-right">
-            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/45">
+            <p className="text-[10px] font-black uppercase tracking-[0.13em] text-white/45">
               {labels.dropoff}
             </p>
-            <p className="mt-1 truncate text-sm font-bold text-white">{job.dropoffName || "—"}</p>
+            <p className="mt-1 truncate text-[15px] font-bold text-white">{job.dropoffName || "—"}</p>
           </div>
         </div>
 
-        <div className="mt-4 flex justify-end">
-          <span className="inline-flex min-h-11 items-center gap-1 rounded-xl bg-orange-600 px-5 text-sm font-black text-white shadow-sm">
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <p className="text-xs text-white/50">
+            {language === "th" ? "แตะเพื่อดูรายละเอียดงาน" : "Open for route and progress"}
+          </p>
+          <span className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-xl bg-orange-600 px-5 text-sm font-black text-white shadow-sm">
             {driverJobAction(language, status)}
             <ChevronRight className="h-4 w-4" />
           </span>
@@ -169,7 +189,7 @@ function UpcomingJobRow({
   return (
     <Link
       href={`/driver/jobs/${job.id}`}
-      className="group block border-b border-slate-200 bg-white px-4 py-3.5 first:rounded-t-2xl last:rounded-b-2xl last:border-b-0 active:bg-slate-50"
+      className="group block border-b border-slate-200 bg-white px-4 py-4 first:rounded-t-2xl last:rounded-b-2xl last:border-b-0 active:bg-slate-50"
     >
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
@@ -186,7 +206,7 @@ function UpcomingJobRow({
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <DriverStatusBadge language={language} status={status} />
-          <ChevronRight className="h-4 w-4 text-slate-400" />
+          <ChevronRight className="h-5 w-5 text-slate-400" />
         </div>
       </div>
     </Link>
@@ -276,7 +296,7 @@ export function DriverHome({
 
   return (
     <main className="mx-auto w-full max-w-3xl px-3 py-3 sm:px-6 sm:py-6">
-      <section className="rounded-[22px] border border-slate-200 bg-white px-4 py-4 shadow-sm">
+      <section className="rounded-[24px] border border-slate-200 bg-white px-4 py-4 shadow-sm">
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-slate-500">{labels.hello},</p>

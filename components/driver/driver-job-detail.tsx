@@ -285,7 +285,7 @@ export function DriverJobDetail({
   const pickupToDropoffUrl = buildDriverDirectionsUrl(job, "pickup-to-dropoff", depot);
   const pickupUrl = buildDriverDirectionsUrl(job, "pickup", depot);
 
-  const panel = "rounded-[22px] border border-slate-200 bg-white p-4 shadow-sm";
+  const panel = "rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm";
 
   return (
     <main
@@ -301,7 +301,7 @@ export function DriverJobDetail({
         {labels.back}
       </Link>
 
-      <header className="rounded-[22px] bg-[#152638] p-4 text-white shadow-md">
+      <header className="rounded-[24px] bg-[#152638] p-4 text-white shadow-[0_10px_28px_rgba(21,38,56,0.16)]">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-orange-300">
@@ -316,7 +316,7 @@ export function DriverJobDetail({
           </span>
         </div>
 
-        <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-xl bg-white/5 px-3 py-3">
+        <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-2xl bg-white/[0.06] px-3.5 py-3.5">
           <div className="min-w-0">
             <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/45">{labels.pickup}</p>
             <p className="mt-1 truncate text-sm font-bold">{job.pickupName || labels.notAssigned}</p>
@@ -341,7 +341,7 @@ export function DriverJobDetail({
         </div>
       </header>
 
-      <section className={panel} aria-labelledby="job-route">
+      <section className={`${panel} border-slate-200`} aria-labelledby="job-route">
         <div className="flex items-center justify-between gap-2">
           <h2 id="job-route" className="text-lg font-black text-[#152638]">{labels.route}</h2>
           <Navigation2 className="h-5 w-5 text-slate-300" />
@@ -378,16 +378,30 @@ export function DriverJobDetail({
         </div>
       </section>
 
-      <section className="rounded-[22px] border border-orange-200 bg-orange-50 p-4">
-        <p className="text-xs font-black uppercase tracking-[0.15em] text-orange-700">{labels.next}</p>
+      <section
+        className={`rounded-[24px] border p-4 ${
+          !loading && !loadError && stage >= 4
+            ? "border-emerald-200 bg-emerald-50"
+            : "border-orange-200 bg-orange-50"
+        }`}
+      >
+        <p
+          className={`text-xs font-black uppercase tracking-[0.15em] ${
+            !loading && !loadError && stage >= 4 ? "text-emerald-700" : "text-orange-700"
+          }`}
+        >
+          {labels.next}
+        </p>
 
         {loading ? (
           <p className="mt-2 text-sm text-slate-500">{labels.loading}</p>
         ) : loadError ? (
           <p className="mt-2 text-sm text-rose-700">{labels.unavailable}</p>
         ) : stage >= 4 ? (
-          <p className="mt-3 flex items-center gap-2 rounded-xl bg-emerald-50 p-3 font-bold text-emerald-800">
-            <Check className="h-5 w-5" />
+          <p className="mt-3 flex items-center gap-2 font-bold text-emerald-800">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100">
+              <Check className="h-5 w-5" />
+            </span>
             {labels.completed}
           </p>
         ) : (
@@ -396,7 +410,7 @@ export function DriverJobDetail({
               type="button"
               disabled={!!saving}
               onClick={() => (stage === 3 ? setConfirmComplete(true) : void save())}
-              className="mt-3 min-h-12 w-full rounded-xl bg-orange-600 px-4 text-base font-black text-white shadow-sm disabled:opacity-60"
+              className="mt-3 min-h-14 w-full rounded-2xl bg-orange-600 px-4 text-lg font-black text-white shadow-sm active:bg-orange-700 disabled:opacity-60"
             >
               {saving ? (saving === "location" ? labels.locating : labels.saving) : labels.actions[stage]}
             </button>
@@ -413,7 +427,7 @@ export function DriverJobDetail({
 
         {pickupToDropoffUrl ? (
           <a
-            className="mt-3 flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#152638] px-4 font-black text-white shadow-sm"
+            className="mt-3 flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-[#152638] px-4 text-base font-black text-white shadow-sm active:bg-[#0f1d2a]"
             href={pickupToDropoffUrl}
             target="_blank"
             rel="noreferrer"
@@ -425,7 +439,7 @@ export function DriverJobDetail({
           <p className="mt-2 text-sm text-amber-800">{labels.missingRoute}</p>
         )}
 
-        <details className="mt-2 rounded-xl border border-slate-200 px-3">
+        <details className="mt-3 rounded-2xl border border-slate-200 px-3">
           <summary className="cursor-pointer py-3 text-sm font-bold text-[#152638]">{labels.moreNav}</summary>
           <div className="grid grid-cols-2 gap-2 pb-3">
             {depotUrl ? <a className="min-h-10 rounded-lg border border-slate-200 px-2 py-2 text-center text-sm font-semibold" href={depotUrl} target="_blank" rel="noreferrer">{labels.depot}</a> : null}
@@ -461,14 +475,14 @@ export function DriverJobDetail({
                 <li key={type} className="relative flex gap-3 pb-4 last:pb-0">
                   {index < DRIVER_JOB_EVENT_TYPES.length - 1 ? (
                     <span
-                      className={`absolute left-[15px] top-8 h-[calc(100%-1rem)] w-px ${
+                      className={`absolute left-[17px] top-9 h-[calc(100%-1rem)] w-px ${
                         complete ? "bg-emerald-200" : "bg-slate-200"
                       }`}
                     />
                   ) : null}
 
                   <span
-                    className={`relative z-10 mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                    className={`relative z-10 mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
                       complete
                         ? "bg-emerald-100 text-emerald-700"
                         : current
@@ -476,7 +490,7 @@ export function DriverJobDetail({
                           : "bg-slate-100 text-slate-400"
                     }`}
                   >
-                    {complete ? <Check className="h-4 w-4" /> : index + 1}
+                    {complete ? <Check className="h-5 w-5" /> : index + 1}
                   </span>
 
                   <div className="min-w-0 flex-1">
@@ -513,7 +527,7 @@ export function DriverJobDetail({
         ) : null}
       </section>
 
-      <section className="rounded-[22px] border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <section className="rounded-[24px] border border-slate-200 bg-white px-4 py-3 shadow-sm">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="font-black text-[#152638]">{labels.help}</h2>
