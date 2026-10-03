@@ -300,27 +300,64 @@ export function DriverHome({
 
   return (
     <main className="mx-auto w-full max-w-3xl px-3 py-3 sm:px-6 sm:py-6">
-      <section className="rounded-[22px] border border-slate-200 bg-white px-4 py-4 shadow-sm">
-        <div className="flex items-center justify-between gap-4">
+      <section className="relative overflow-hidden rounded-[22px] border border-[#d8d1c7] bg-[linear-gradient(135deg,#fffdf8_0%,#f8f3e9_58%,#f2eadc_100%)] px-4 py-4 shadow-[0_8px_24px_rgba(21,38,56,0.07)]">
+        <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+          <div className="absolute -right-10 -top-16 h-40 w-40 rounded-full border border-[#152638]/[0.05]" />
+          <div className="absolute -right-3 -top-9 h-28 w-28 rounded-full border border-[#152638]/[0.05]" />
+
+          <div className="absolute bottom-5 left-5 right-[184px] hidden sm:block">
+            <div className="relative h-px bg-[#152638]/10">
+              <span className="absolute -left-0 -top-1.5 h-3 w-3 rounded-full border-2 border-orange-400/60 bg-[#fffaf1]" />
+              <span className="absolute left-[46%] -top-1 h-2 w-2 rounded-full bg-[#152638]/20" />
+              <span className="absolute right-0 -top-1.5 h-3 w-3 rounded-full border-2 border-[#152638]/30 bg-[#fffaf1]" />
+            </div>
+          </div>
+
+          <Truck className="absolute -bottom-4 left-[43%] hidden h-20 w-20 text-[#152638]/[0.035] sm:block" strokeWidth={1.2} />
+        </div>
+
+        <div className="relative z-10 flex items-center justify-between gap-4">
           <div className="min-w-0 flex-1">
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-[#152638]/10 bg-white/65 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.15em] text-[#152638]/55">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              {language === "th" ? "EES คนขับรถ" : "EES DRIVER"}
+            </div>
+
             <p className="text-sm font-semibold text-slate-500">{labels.hello},</p>
             <h1 className="mt-0.5 truncate text-2xl font-black text-[#152638]">
               {profile?.displayName || driverName}
             </h1>
-            {remainingToday.length > 0 ? (
-              <p className="mt-2 text-sm font-semibold text-slate-600">
-                <strong className="text-[#152638]">{remainingToday.length}</strong> {remainingLabel}
-              </p>
-            ) : null}
+
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-semibold text-slate-600">
+              {remainingToday.length > 0 ? (
+                <span>
+                  <strong className="text-[#152638]">{remainingToday.length}</strong> {remainingLabel}
+                </span>
+              ) : (
+                <span className="text-emerald-700">
+                  {language === "th" ? "ไม่มีงานค้างวันนี้" : "No jobs remaining today"}
+                </span>
+              )}
+              {vehicleRegistration ? (
+                <span className="hidden text-slate-400 sm:inline">•</span>
+              ) : null}
+              {vehicleRegistration ? (
+                <span className="hidden sm:inline">
+                  {language === "th" ? "รถประจำ" : "Assigned vehicle"} {vehicleRegistration}
+                </span>
+              ) : null}
+            </div>
           </div>
 
           {vehicleRegistration ? (
-            <VehiclePlate
-              registration={vehicleRegistration}
-              vehicleType={vehicleType}
-              language={language}
-              labels={labels}
-            />
+            <div className="rounded-2xl border border-white/80 bg-white/70 p-2 shadow-[0_6px_18px_rgba(21,38,56,0.08)] backdrop-blur-sm">
+              <VehiclePlate
+                registration={vehicleRegistration}
+                vehicleType={vehicleType}
+                language={language}
+                labels={labels}
+              />
+            </div>
           ) : null}
         </div>
       </section>
