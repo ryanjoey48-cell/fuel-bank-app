@@ -24,7 +24,8 @@ const copy = {
     next: "NEXT JOB",
     pickup: "PICKUP",
     dropoff: "DELIVERY",
-    thailand: "THAILAND"
+    thailand: "THAILAND",
+    thailandThai: "ประเทศไทย"
   },
   th: {
     hello: "สวัสดี",
@@ -40,7 +41,8 @@ const copy = {
     next: "งานถัดไป",
     pickup: "จุดรับ",
     dropoff: "จุดส่ง",
-    thailand: "ประเทศไทย"
+    thailand: "THAILAND",
+    thailandThai: "ประเทศไทย"
   }
 } as const;
 
@@ -66,23 +68,28 @@ function VehiclePlate({
   labels: (typeof copy)[keyof typeof copy];
 }) {
   return (
-    <div className="w-[154px] shrink-0">
+    <div className="w-[158px] shrink-0">
       <p className="mb-1.5 text-center text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">
         {labels.vehicle}
       </p>
-      <div className="relative overflow-hidden rounded-[10px] border-[3px] border-[#252525] bg-[#f4cf35] px-2 py-1.5 text-center shadow-[0_2px_0_rgba(0,0,0,0.18)]">
-        <span className="absolute left-2 top-2 h-1.5 w-1.5 rounded-full bg-[#252525]/35" />
-        <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-[#252525]/35" />
+
+      <div className="relative overflow-hidden rounded-[8px] border-[3px] border-[#27272a] bg-[#f1ca2c] px-2 py-1.5 text-center shadow-[inset_0_0_0_1px_rgba(255,255,255,0.35),0_2px_0_rgba(0,0,0,0.2)]">
+        <span className="absolute left-2 top-2 h-1.5 w-1.5 rounded-full bg-black/30" />
+        <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-black/30" />
+
         <div className="text-[9px] font-black tracking-[0.18em] text-[#202020]">
           {labels.thailand}
         </div>
-        <div className="my-0.5 truncate text-[26px] font-black leading-none tracking-[0.04em] text-[#111] drop-shadow-[0_1px_0_rgba(255,255,255,0.35)]">
+
+        <div className="my-0.5 truncate text-[28px] font-black leading-none tracking-[0.025em] text-[#111]">
           {registration}
         </div>
-        <div className="text-[9px] font-bold tracking-[0.08em] text-[#252525]">
-          {language === "th" ? "ประเทศไทย" : "THAILAND"}
+
+        <div className="text-[9px] font-black tracking-[0.06em] text-[#252525]">
+          {labels.thailandThai}
         </div>
       </div>
+
       {vehicleType ? (
         <p className="mt-1.5 truncate text-center text-[11px] font-semibold text-slate-500">
           {getPortalVehicleTypeLabel(vehicleType, language)}
@@ -159,10 +166,7 @@ function CurrentJobCard({
           </div>
         </div>
 
-        <div className="mt-4 flex items-center justify-between gap-3">
-          <p className="text-xs text-white/50">
-            {language === "th" ? "แตะเพื่อดูรายละเอียดงาน" : "Open for route and progress"}
-          </p>
+        <div className="mt-4 flex items-center justify-end">
           <span className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-xl bg-orange-600 px-5 text-sm font-black text-white shadow-sm">
             {driverJobAction(language, status)}
             <ChevronRight className="h-4 w-4" />
@@ -189,7 +193,7 @@ function UpcomingJobRow({
   return (
     <Link
       href={`/driver/jobs/${job.id}`}
-      className="group block border-b border-slate-200 bg-white px-4 py-4 first:rounded-t-2xl last:rounded-b-2xl last:border-b-0 active:bg-slate-50"
+      className="group block border-b border-slate-200 bg-white px-4 py-3.5 first:rounded-t-2xl last:rounded-b-2xl last:border-b-0 active:bg-slate-50"
     >
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
@@ -296,16 +300,18 @@ export function DriverHome({
 
   return (
     <main className="mx-auto w-full max-w-3xl px-3 py-3 sm:px-6 sm:py-6">
-      <section className="rounded-[24px] border border-slate-200 bg-white px-4 py-4 shadow-sm">
+      <section className="rounded-[22px] border border-slate-200 bg-white px-4 py-4 shadow-sm">
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-slate-500">{labels.hello},</p>
             <h1 className="mt-0.5 truncate text-2xl font-black text-[#152638]">
               {profile?.displayName || driverName}
             </h1>
-            <p className="mt-2 text-sm font-semibold text-slate-600">
-              <strong className="text-[#152638]">{remainingToday.length}</strong> {remainingLabel}
-            </p>
+            {remainingToday.length > 0 ? (
+              <p className="mt-2 text-sm font-semibold text-slate-600">
+                <strong className="text-[#152638]">{remainingToday.length}</strong> {remainingLabel}
+              </p>
+            ) : null}
           </div>
 
           {vehicleRegistration ? (

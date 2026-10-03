@@ -26,7 +26,7 @@ import { getPortalVehicleTypeLabel } from "@/lib/driver-vehicle-types";
 const copy = {
   en: {
     back: "Back to jobs",
-    title: "Your job",
+    title: "Job",
     pickup: "Pickup",
     dropoff: "Drop-off",
     timePending: "Time not set",
@@ -37,14 +37,14 @@ const copy = {
     customer: "Customer",
     notAssigned: "—",
     route: "Route",
-    navigation: "Google Maps",
+    navigation: "Route",
     moreNav: "More navigation options",
     depot: "From depot",
     current: "From my location",
-    pickupToDropoff: "Open full route",
+    pickupToDropoff: "Open in Google Maps",
     pickupDirections: "To pickup",
     delivery: "To drop-off",
-    progress: "Progress",
+    progress: "Job progress",
     details: "Job details",
     help: "Need help?",
     call: "Call Atip",
@@ -59,11 +59,11 @@ const copy = {
     saving: "Saving…",
     locating: "Checking location…",
     locationMissing: "Saved without GPS.",
-    gps: "GPS optional",
+    gps: "Location will be added if available.",
     completed: "Job completed",
     refresh: "Refresh",
     missingRoute: "Route locations are missing. Contact operations.",
-    next: "Next step",
+    next: "Next action",
     confirm: "Complete this job?",
     confirmHelp: "This records the final completion time.",
     cancel: "Cancel",
@@ -71,7 +71,7 @@ const copy = {
   },
   th: {
     back: "กลับไปยังงาน",
-    title: "งานของคุณ",
+    title: "งาน",
     pickup: "จุดรับ",
     dropoff: "จุดส่ง",
     timePending: "ยังไม่กำหนดเวลา",
@@ -82,14 +82,14 @@ const copy = {
     customer: "ลูกค้า",
     notAssigned: "—",
     route: "เส้นทาง",
-    navigation: "Google Maps",
+    navigation: "Route",
     moreNav: "ตัวเลือกนำทางเพิ่มเติม",
     depot: "จากคลัง",
     current: "จากตำแหน่งฉัน",
-    pickupToDropoff: "เปิดเส้นทางทั้งหมด",
+    pickupToDropoff: "เปิดใน Google Maps",
     pickupDirections: "ไปจุดรับ",
     delivery: "ไปจุดส่ง",
-    progress: "ความคืบหน้า",
+    progress: "สถานะงาน",
     details: "รายละเอียดงาน",
     help: "ต้องการความช่วยเหลือ?",
     call: "โทรหา Atip",
@@ -104,11 +104,11 @@ const copy = {
     saving: "กำลังบันทึก…",
     locating: "กำลังตรวจสอบตำแหน่ง…",
     locationMissing: "บันทึกโดยไม่มี GPS แล้ว",
-    gps: "GPS ไม่บังคับ",
+    gps: "ระบบจะบันทึกตำแหน่งถ้าสามารถใช้งานได้",
     completed: "จบงานแล้ว",
     refresh: "รีเฟรช",
     missingRoute: "ข้อมูลเส้นทางไม่ครบ กรุณาติดต่อฝ่ายปฏิบัติการ",
-    next: "ขั้นตอนถัดไป",
+    next: "ทำต่อไป",
     confirm: "ยืนยันจบงาน?",
     confirmHelp: "ระบบจะบันทึกเวลาจบงาน",
     cancel: "ยกเลิก",
@@ -285,7 +285,7 @@ export function DriverJobDetail({
   const pickupToDropoffUrl = buildDriverDirectionsUrl(job, "pickup-to-dropoff", depot);
   const pickupUrl = buildDriverDirectionsUrl(job, "pickup", depot);
 
-  const panel = "rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm";
+  const panel = "rounded-[20px] border border-slate-200 bg-white p-4 shadow-[0_4px_14px_rgba(15,23,42,0.05)]";
 
   return (
     <main
@@ -301,34 +301,39 @@ export function DriverJobDetail({
         {labels.back}
       </Link>
 
-      <header className="rounded-[24px] bg-[#152638] p-4 text-white shadow-[0_10px_28px_rgba(21,38,56,0.16)]">
-        <div className="flex items-start justify-between gap-3">
+      <header className="overflow-hidden rounded-[22px] bg-[#152638] text-white shadow-[0_10px_26px_rgba(21,38,56,0.14)]">
+        <div className="flex items-start justify-between gap-3 px-4 pt-4">
           <div className="min-w-0">
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-orange-300">
-              EES · {labels.title}
+            <p className="text-[11px] font-black uppercase tracking-[0.16em] text-orange-300">
+              {labels.title}
             </p>
-            <h1 className="mt-2 break-words text-2xl font-black">
+            <h1 className="mt-1 break-words text-[28px] font-black leading-tight">
               {job.clientName || job.jobOrderNumber || labels.title}
             </h1>
           </div>
-          <span className="shrink-0 rounded-full bg-white/15 px-3 py-1 text-xs font-bold">
+
+          <span className="shrink-0 rounded-full bg-white/12 px-3 py-1.5 text-xs font-bold text-white">
             {loading || loadError ? "—" : labels.statuses[stage]}
           </span>
         </div>
 
-        <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-2xl bg-white/[0.06] px-3.5 py-3.5">
+        <div className="mx-4 mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-2xl bg-white/[0.06] px-3.5 py-3.5">
           <div className="min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/45">{labels.pickup}</p>
-            <p className="mt-1 truncate text-sm font-bold">{job.pickupName || labels.notAssigned}</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/45">
+              {labels.pickup}
+            </p>
+            <p className="mt-1 truncate text-[15px] font-bold">{job.pickupName || labels.notAssigned}</p>
           </div>
-          <span className="text-lg font-black text-orange-300">→</span>
+          <span className="text-xl font-black text-orange-300">→</span>
           <div className="min-w-0 text-right">
-            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/45">{labels.dropoff}</p>
-            <p className="mt-1 truncate text-sm font-bold">{job.dropoffName || labels.notAssigned}</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.12em] text-white/45">
+              {labels.dropoff}
+            </p>
+            <p className="mt-1 truncate text-[15px] font-bold">{job.dropoffName || labels.notAssigned}</p>
           </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-white/75">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-4 text-sm font-semibold text-white/72">
           <span>{formattedDate}</span>
           <span className="inline-flex items-center gap-1.5">
             <Clock3 className="h-4 w-4 text-orange-300" />
@@ -341,52 +346,15 @@ export function DriverJobDetail({
         </div>
       </header>
 
-      <section className={`${panel} border-slate-200`} aria-labelledby="job-route">
-        <div className="flex items-center justify-between gap-2">
-          <h2 id="job-route" className="text-lg font-black text-[#152638]">{labels.route}</h2>
-          <Navigation2 className="h-5 w-5 text-slate-300" />
-        </div>
-
-        <div className="mt-4 grid grid-cols-[32px_1fr]">
-          <div className="relative flex flex-col items-center">
-            <span className="z-10 flex h-8 w-8 items-center justify-center rounded-full bg-orange-50 text-orange-600">
-              <MapPin className="h-5 w-5" />
-            </span>
-            <span className="my-1 h-full min-h-12 w-px bg-slate-200" />
-            <span className="z-10 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-[#152638]">
-              <MapPin className="h-5 w-5" />
-            </span>
-          </div>
-
-          <div className="min-w-0 pl-3">
-            <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.12em] text-orange-600">{labels.pickup}</p>
-              <p className="mt-0.5 font-black text-slate-900">{job.pickupName || labels.notAssigned}</p>
-              {job.pickupAddress && job.pickupAddress !== job.pickupName ? (
-                <p className="mt-1 break-words text-sm leading-5 text-slate-500">{job.pickupAddress}</p>
-              ) : null}
-            </div>
-
-            <div className="mt-5">
-              <p className="text-[11px] font-black uppercase tracking-[0.12em] text-slate-500">{labels.dropoff}</p>
-              <p className="mt-0.5 font-black text-slate-900">{job.dropoffName || labels.notAssigned}</p>
-              {job.dropoffAddress && job.dropoffAddress !== job.dropoffName ? (
-                <p className="mt-1 break-words text-sm leading-5 text-slate-500">{job.dropoffAddress}</p>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      </section>
-
       <section
-        className={`rounded-[24px] border p-4 ${
+        className={`rounded-[20px] border p-4 ${
           !loading && !loadError && stage >= 4
             ? "border-emerald-200 bg-emerald-50"
             : "border-orange-200 bg-orange-50"
         }`}
       >
         <p
-          className={`text-xs font-black uppercase tracking-[0.15em] ${
+          className={`text-[11px] font-black uppercase tracking-[0.15em] ${
             !loading && !loadError && stage >= 4 ? "text-emerald-700" : "text-orange-700"
           }`}
         >
@@ -398,12 +366,12 @@ export function DriverJobDetail({
         ) : loadError ? (
           <p className="mt-2 text-sm text-rose-700">{labels.unavailable}</p>
         ) : stage >= 4 ? (
-          <p className="mt-3 flex items-center gap-2 font-bold text-emerald-800">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100">
+          <div className="mt-3 flex items-center gap-3 rounded-2xl bg-white/70 px-3 py-3 font-bold text-emerald-800">
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100">
               <Check className="h-5 w-5" />
             </span>
             {labels.completed}
-          </p>
+          </div>
         ) : (
           <>
             <button
@@ -417,6 +385,43 @@ export function DriverJobDetail({
             <p className="mt-2 text-xs text-slate-500">{labels.gps}</p>
           </>
         )}
+      </section>
+
+      <section className={panel} aria-labelledby="job-route">
+        <div className="flex items-center justify-between gap-2">
+          <h2 id="job-route" className="text-lg font-black text-[#152638]">{labels.route}</h2>
+          <Navigation2 className="h-5 w-5 text-slate-300" />
+        </div>
+
+        <div className="mt-4 grid grid-cols-[30px_1fr]">
+          <div className="relative flex flex-col items-center">
+            <span className="z-10 flex h-8 w-8 items-center justify-center rounded-full bg-orange-50 text-orange-600">
+              <MapPin className="h-5 w-5" />
+            </span>
+            <span className="my-1 h-full min-h-12 w-px bg-slate-200" />
+            <span className="z-10 flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-[#152638]">
+              <MapPin className="h-5 w-5" />
+            </span>
+          </div>
+
+          <div className="min-w-0 pl-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-orange-600">{labels.pickup}</p>
+              <p className="mt-0.5 text-base font-black text-slate-900">{job.pickupName || labels.notAssigned}</p>
+              {job.pickupAddress && job.pickupAddress !== job.pickupName ? (
+                <p className="mt-1 break-words text-sm leading-5 text-slate-500">{job.pickupAddress}</p>
+              ) : null}
+            </div>
+
+            <div className="mt-5">
+              <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-500">{labels.dropoff}</p>
+              <p className="mt-0.5 text-base font-black text-slate-900">{job.dropoffName || labels.notAssigned}</p>
+              {job.dropoffAddress && job.dropoffAddress !== job.dropoffName ? (
+                <p className="mt-1 break-words text-sm leading-5 text-slate-500">{job.dropoffAddress}</p>
+              ) : null}
+            </div>
+          </div>
+        </div>
       </section>
 
       <section className={panel} aria-labelledby="job-navigation">
@@ -442,10 +447,10 @@ export function DriverJobDetail({
         <details className="mt-3 rounded-2xl border border-slate-200 px-3">
           <summary className="cursor-pointer py-3 text-sm font-bold text-[#152638]">{labels.moreNav}</summary>
           <div className="grid grid-cols-2 gap-2 pb-3">
-            {depotUrl ? <a className="min-h-10 rounded-lg border border-slate-200 px-2 py-2 text-center text-sm font-semibold" href={depotUrl} target="_blank" rel="noreferrer">{labels.depot}</a> : null}
-            {currentUrl ? <a className="min-h-10 rounded-lg border border-slate-200 px-2 py-2 text-center text-sm font-semibold" href={currentUrl} target="_blank" rel="noreferrer">{labels.current}</a> : null}
-            {pickupUrl ? <a className="min-h-10 rounded-lg border border-slate-200 px-2 py-2 text-center text-sm font-semibold" href={pickupUrl} target="_blank" rel="noreferrer">{labels.pickupDirections}</a> : null}
-            {deliveryUrl ? <a className="min-h-10 rounded-lg border border-slate-200 px-2 py-2 text-center text-sm font-semibold" href={deliveryUrl} target="_blank" rel="noreferrer">{labels.delivery}</a> : null}
+            {depotUrl ? <a className="min-h-11 rounded-xl border border-slate-200 px-2 py-2.5 text-center text-sm font-semibold" href={depotUrl} target="_blank" rel="noreferrer">{labels.depot}</a> : null}
+            {currentUrl ? <a className="min-h-11 rounded-xl border border-slate-200 px-2 py-2.5 text-center text-sm font-semibold" href={currentUrl} target="_blank" rel="noreferrer">{labels.current}</a> : null}
+            {pickupUrl ? <a className="min-h-11 rounded-xl border border-slate-200 px-2 py-2.5 text-center text-sm font-semibold" href={pickupUrl} target="_blank" rel="noreferrer">{labels.pickupDirections}</a> : null}
+            {deliveryUrl ? <a className="min-h-11 rounded-xl border border-slate-200 px-2 py-2.5 text-center text-sm font-semibold" href={deliveryUrl} target="_blank" rel="noreferrer">{labels.delivery}</a> : null}
           </div>
         </details>
       </section>
@@ -493,7 +498,7 @@ export function DriverJobDetail({
                     {complete ? <Check className="h-5 w-5" /> : index + 1}
                   </span>
 
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 pt-1">
                     <div className="flex items-center gap-2">
                       <p className={`text-sm font-bold ${complete || current ? "text-slate-900" : "text-slate-400"}`}>
                         {labels.steps[index]}
@@ -527,7 +532,7 @@ export function DriverJobDetail({
         ) : null}
       </section>
 
-      <section className="rounded-[24px] border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <section className="rounded-[20px] border border-slate-200 bg-white px-4 py-3 shadow-[0_4px_14px_rgba(15,23,42,0.05)]">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="font-black text-[#152638]">{labels.help}</h2>
