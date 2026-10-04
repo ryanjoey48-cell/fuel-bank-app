@@ -29,26 +29,28 @@
   body:has(.driver-jobs-home) .driver-portal-header > div { min-height: 48px; }
   body:has(.driver-jobs-home) nav[aria-label] a { min-height: 48px; }
   .driver-jobs-home { padding-block: 8px; }
-  .driver-jobs-home .driver-home-hero { min-height: 148px; padding-block: 8px; }
-  .driver-jobs-home .driver-home-hero > img { object-position: 62% 72%; }
-  .driver-jobs-home .driver-home-hero > div:last-child { min-height: 130px; gap: 4px; }
-  .driver-jobs-home .driver-home-hero > div:last-child > div:first-child > div:first-child { margin-bottom: 3px; padding-block: 2px; }
+  .driver-jobs-home .driver-home-hero { min-height: 128px; padding-block: 8px; }
+  .driver-jobs-home .driver-home-hero > div[aria-hidden="true"] { background: rgba(255,251,243,.76); }
+  .driver-jobs-home .driver-home-hero > img { object-position: 62% 76%; }
+  .driver-jobs-home .driver-home-hero > div:last-child { min-height: 110px; gap: 3px; }
   .driver-jobs-home .driver-home-hero h1 { margin-top: 0; font-size: 22px; line-height: 1.15; }
   .driver-jobs-home .driver-home-hero h1 + div { margin-top: 3px; font-size: 13px; line-height: 18px; }
-  .driver-jobs-home .driver-home-hero > div:last-child > div:last-child[aria-label] { padding: 3px 10px; }
+  .driver-jobs-home .driver-home-hero > div:last-child > div:last-child[aria-label] { padding: 2px 9px; }
   .driver-jobs-home > section + section { margin-top: 8px; }
-  .driver-next-job > div:first-child { padding-block: 4px; }
-  .driver-next-job > div:last-child { padding-block: 6px; }
-  .driver-next-job > div:last-child > div:first-child { gap: 4px 10px; font-size: 13px; line-height: 18px; }
-  .driver-next-job h2 { margin-top: 4px; font-size: 22px; line-height: 26px; }
-  .driver-next-job h2 + div { margin-top: 4px; padding: 4px 10px; gap: 8px; }
-  .driver-next-job h2 + div p:first-child { font-size: 9px; line-height: 12px; }
-  .driver-next-job h2 + div p:last-child { margin-top: 0; font-size: 14px; line-height: 18px; }
-  .driver-next-job > div:last-child > div:last-child { margin-top: 4px; }
-  .driver-next-job > div:last-child > div:last-child > span { padding-inline: 16px; }
+  .driver-next-job > div:first-child { padding-block: 6px; }
+  .driver-next-job > div:last-child { padding-block: 10px; }
+  .driver-next-job > div:last-child > div:first-child { gap: 4px 12px; font-size: 14px; line-height: 20px; }
+  .driver-next-job h2 { margin-top: 8px; font-size: 24px; line-height: 29px; }
+  .driver-next-job h2 + div { margin-top: 8px; padding: 8px 12px; gap: 12px; }
+  .driver-next-job h2 + div p:first-child { font-size: 10px; line-height: 14px; letter-spacing: .1em; color: #b7c2cc; }
+  .driver-next-job h2 + div p:last-child { margin-top: 2px; font-size: 15px; line-height: 20px; }
+  .driver-next-job h2 + div > span { align-self: center; font-size: 24px; line-height: 24px; color: #e2e8f0; }
+  .driver-next-job > div:last-child > div:last-child { margin-top: 8px; }
+  .driver-next-job > div:last-child > div:last-child > span { min-height: 46px; padding-inline: 20px; }
   .driver-jobs-home > section:last-child > div:first-child { margin-bottom: 4px; }
-  .driver-jobs-home > section:last-child > div:nth-child(2) > div + div { margin-top: 8px; }
-  .driver-jobs-home > section:last-child > div:nth-child(2) > div > div:first-child { margin-bottom: 3px; }
+  .driver-jobs-home > section:last-child > div:nth-child(2) > div + div { margin-top: 6px; }
+  .driver-jobs-home > section:last-child > div:nth-child(2) > div > div:first-child { margin-bottom: 2px; }
+  .driver-jobs-home > section:last-child > div:nth-child(2) > div > div:first-child > h3 { font-size: 13px; line-height: 18px; }
   .driver-jobs-home > section:last-child > div:nth-child(2) > div > div:first-child > span { padding-block: 2px; }
   .driver-upcoming-job { padding-block: 7px; }
   .driver-upcoming-job > div { gap: 8px; }

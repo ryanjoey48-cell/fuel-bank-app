@@ -327,11 +327,6 @@ export function DriverHome({
 
         <div className="relative z-10 flex min-h-[176px] flex-col items-start justify-between gap-3 sm:min-h-[248px] sm:flex-row sm:items-center sm:gap-4 lg:min-h-[272px] lg:gap-8">
           <div className="min-w-0 w-full sm:w-auto sm:flex-1">
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-[#152638]/10 bg-white/65 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.15em] text-[#152638]/55 lg:mb-4 lg:px-3 lg:text-xs">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#152638]" />
-              {language === "th" ? "EES คนขับรถ" : "EES DRIVER"}
-            </div>
-
             <p className="text-sm font-semibold text-slate-500 lg:text-2xl lg:text-[#152638]">{labels.hello},</p>
             <h1 className="mt-0.5 break-words text-2xl font-black text-[#152638] sm:truncate lg:mt-1 lg:text-[48px] lg:leading-tight">
               {profile?.displayName || driverName}
