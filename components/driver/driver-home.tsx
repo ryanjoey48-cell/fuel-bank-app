@@ -334,7 +334,7 @@ export function DriverHome({
 
             <div className="mt-2 flex flex-col items-start gap-y-1 text-sm font-semibold text-[#152638] sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 lg:mt-7 lg:gap-x-5 lg:text-lg">
               {remainingToday.length > 0 ? (
-                <span className="text-[#152638]">
+                <span className="text-emerald-700">
                   <strong>{remainingToday.length}</strong> {remainingLabel}{language === "th" ? "วันนี้" : " today"}
                 </span>
               ) : (
@@ -364,10 +364,10 @@ export function DriverHome({
             </div>
           ) : null}
           {vehicleRegistration ? (
-            <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-[#152638]/10 bg-white/75 px-3 py-1.5 text-xs font-semibold text-[#152638] sm:hidden" aria-label={labels.vehicle}>
+            <div className="driver-vehicle-badge inline-flex max-w-full items-center gap-2 rounded-xl border border-[#152638]/10 bg-white/90 px-3 py-1.5 text-xs font-semibold text-[#152638] sm:hidden" aria-label={labels.vehicle}>
               <Truck className="h-4 w-4 shrink-0" aria-hidden="true" />
               <span className="min-w-0 break-words">
-                {vehicleRegistration}{vehicleType ? ` · ${getPortalVehicleTypeLabel(vehicleType, language)}` : ""}
+                <span className="block font-bold">{vehicleRegistration}</span>{vehicleType ? <span className="block text-[10px] font-medium text-slate-500">{getPortalVehicleTypeLabel(vehicleType, language)}</span> : null}
               </span>
             </div>
           ) : null}

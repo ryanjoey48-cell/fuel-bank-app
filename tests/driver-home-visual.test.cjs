@@ -54,14 +54,14 @@ test('current status still selects Continue job without changing the next job ro
   assert.ok(html.includes('CURRENT JOB')); assert.ok(html.includes('Continue job')); assert.ok(html.includes('At pickup'));
   assert.ok(html.indexOf('/driver/jobs/next') < html.indexOf('/driver/jobs/upcoming'));
 });
-for (const language of ['en', 'th']) test('mobile density keeps live vehicle chip, desktop plate and comfortable job action: ' + language, () => {
+for (const language of ['en', 'th']) test('mobile density keeps live vehicle badge, desktop plate and comfortable job action: ' + language, () => {
   const html = home(language);
   assert.ok(html.includes('min-h-[176px]'));
   assert.ok(html.includes('sm:min-h-[248px]'));
   assert.ok(html.includes('lg:min-h-[272px]'));
   assert.ok(html.includes('hidden sm:block sm:self-auto'));
-  const chip = html.match(/<div class="inline-flex max-w-full[^>]*sm:hidden"[^>]*>(.*?)<\/div>/s);
-  assert.ok(chip, 'mobile-only chip exists');
+  const chip = html.match(/<div class="driver-vehicle-badge inline-flex max-w-full[^>]*sm:hidden"[^>]*>(.*?)<\/div>/s);
+  assert.ok(chip, 'mobile-only vehicle badge exists');
   assert.ok(chip[1].includes('1998'));
   assert.ok(chip[1].includes(vehicles.getPortalVehicleTypeLabel('FOUR_WHEEL_TRUCK', language)));
   assert.ok(chip[1].includes('min-w-0 break-words'));
