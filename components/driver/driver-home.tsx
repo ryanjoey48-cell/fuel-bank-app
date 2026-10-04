@@ -124,15 +124,15 @@ function CurrentJobCard({
       href={`/driver/jobs/${job.id}`}
       className="driver-next-job block overflow-hidden rounded-2xl bg-[#152638] text-white shadow-sm transition active:scale-[0.995]"
     >
-      <div className="flex items-center justify-between border-b border-white/10 px-4 py-2 sm:py-3.5 lg:px-8 lg:py-4">
+      <div className="driver-next-job-heading flex items-center justify-between border-b border-white/10 px-4 py-2 sm:py-3.5 lg:px-8 lg:py-4">
         <p className="text-xs lg:text-lg font-black tracking-[0.16em] text-slate-300">
           {status === "ready" ? labels.next : labels.current}
         </p>
         <DriverStatusBadge language={language} status={status} />
       </div>
 
-      <div className="px-4 py-2.5 sm:p-4 lg:px-8 lg:py-5">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white/75 sm:gap-x-4 sm:gap-y-2 lg:gap-x-6 lg:text-lg">
+      <div className="driver-next-job-body px-4 py-2.5 sm:p-4 lg:px-8 lg:py-5">
+        <div className="driver-next-job-info flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white/75 sm:gap-x-4 sm:gap-y-2 lg:gap-x-6 lg:text-lg">
           <span className="inline-flex items-center gap-1.5 font-semibold">
             <CalendarDays className="h-4 w-4 text-slate-300 lg:h-5 lg:w-5" />
             {formattedDate}
@@ -147,30 +147,22 @@ function CurrentJobCard({
           </span>
         </div>
 
-        <h2 className="mt-1.5 break-words text-[24px] font-black leading-tight sm:mt-4 lg:text-[40px]">
+        <h2 className="driver-next-job-customer mt-1.5 break-words text-[24px] font-black leading-tight sm:mt-4 lg:text-[40px]">
           {job.clientName || job.jobOrderNumber || labels.job}
         </h2>
 
-        <div className="mt-1.5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-2xl bg-[#203649] px-3.5 py-2 sm:mt-4 sm:py-3.5 lg:mt-3 lg:px-6 lg:py-4">
-          <div className="min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-[0.13em] text-white/45 lg:text-xs">
-              {labels.pickup}
-            </p>
-            <p className="mt-1 break-words text-[15px] font-bold text-white lg:text-xl">{job.pickupName || "—"}</p>
-          </div>
-          <span className="text-xl lg:text-4xl font-black text-slate-300">→</span>
-          <div className="min-w-0 text-right">
-            <p className="text-[10px] font-black uppercase tracking-[0.13em] text-white/45 lg:text-xs">
-              {labels.dropoff}
-            </p>
-            <p className="mt-1 break-words text-[15px] font-bold text-white lg:text-xl">{job.dropoffName || "—"}</p>
-          </div>
+        <div className="driver-next-job-route mt-1.5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-x-3 rounded-2xl bg-[#203649] px-3.5 py-2 sm:mt-4 sm:gap-y-1 sm:py-3.5 lg:mt-3 lg:px-6 lg:py-4">
+          <p className="col-start-1 row-start-1 text-[10px] font-black uppercase tracking-[0.13em] text-white/60 lg:text-xs">{labels.pickup}</p>
+          <p className="col-start-3 row-start-1 text-right text-[10px] font-black uppercase tracking-[0.13em] text-white/60 lg:text-xs">{labels.dropoff}</p>
+          <p className="col-start-1 row-start-2 min-w-0 break-words text-[15px] font-bold text-white lg:text-xl">{job.pickupName || "—"}</p>
+          <span aria-hidden="true" className="col-start-2 row-start-2 self-center text-center text-xl font-medium text-slate-300 lg:text-4xl">→</span>
+          <p className="col-start-3 row-start-2 min-w-0 break-words text-right text-[15px] font-bold text-white lg:text-xl">{job.dropoffName || "—"}</p>
         </div>
 
-        <div className="mt-1.5 flex items-center justify-end sm:mt-4">
+        <div className="driver-next-job-action mt-1.5 flex items-center justify-end sm:mt-4">
           <span className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-xl bg-orange-600 px-5 text-sm font-black text-white shadow-sm lg:min-h-14 lg:px-8 lg:text-lg">
             {driverJobAction(language, status)}
-            <ChevronRight className="h-4 w-4" />
+            <span aria-hidden="true" className="text-lg font-medium">→</span>
           </span>
         </div>
       </div>
