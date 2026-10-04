@@ -16,7 +16,7 @@ export function driverJobAction(language: "en" | "th", status: OperationStatus) 
 }
 
 export function DriverStatusBadge({ language, status }: { language: "en" | "th"; status: OperationStatus }) {
-  return <span className={`inline-flex shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${status === "completed" ? "bg-emerald-50 text-emerald-800" : status === "ready" ? "bg-orange-50 text-orange-800" : "bg-slate-100 text-[#152638]"}`}>{driverStatusCopy[language][status]}</span>;
+  return <span className={`inline-flex shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${status === "completed" ? "bg-emerald-50 text-emerald-800" : status === "ready" ? "bg-slate-100 text-[#152638]" : "bg-slate-100 text-[#152638]"}`}>{driverStatusCopy[language][status]}</span>;
 }
 
 function AvatarImage({ src, name }: { src: string; name: string }) {

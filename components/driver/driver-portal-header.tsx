@@ -36,8 +36,8 @@ export function DriverPortalHeader({ driverName }: { driverName: string }) {
   };
 
   return (
-    <header className="driver-portal-header sticky top-0 z-30 border-b border-slate-200 bg-[#fffbf2]/95 shadow-[0_5px_18px_rgba(57,40,24,0.07)] backdrop-blur-xl">
-      <div className="mx-auto flex min-h-14 max-w-3xl items-center gap-2 px-3 sm:min-h-[68px] sm:gap-3 sm:px-6 lg:min-h-[88px] lg:max-w-[1152px] lg:gap-4 lg:[&_[role=group]_button]:min-h-10 lg:[&_[role=group]_button]:min-w-12 lg:[&_[role=group]_button]:text-sm">
+    <header className="driver-portal-header sticky top-0 z-30 border-b border-slate-200 bg-[#fffbf2]/95 shadow-sm backdrop-blur-xl">
+      <div className="mx-auto flex min-h-[50px] max-w-3xl items-center gap-2 px-3 sm:min-h-[68px] sm:gap-3 sm:px-6 lg:min-h-[88px] lg:max-w-[1152px] lg:gap-4 lg:[&_[role=group]_button]:min-h-10 lg:[&_[role=group]_button]:min-w-12 lg:[&_[role=group]_button]:text-sm">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#152638] lg:h-14 lg:w-14 lg:rounded-2xl">
           <EESLogo alt="EES" size={40} className="h-10 w-10 max-w-none scale-[1.8] lg:h-14 lg:w-14" priority />
         </span>
@@ -45,7 +45,7 @@ export function DriverPortalHeader({ driverName }: { driverName: string }) {
           <p className="whitespace-nowrap text-[9px] font-black uppercase tracking-[0.12em] text-[#152638] lg:text-xs">EES Driver</p>
           <p className="mt-0.5 truncate text-sm font-bold text-slate-950 lg:text-xl">{profile?.displayName || driverName}</p>
         </div>
-        <DriverAvatar src={profile?.avatarUrl} name={profile?.displayName || driverName} className="h-9 w-9 rounded-full lg:h-12 lg:w-12 lg:text-lg" />
+        <DriverAvatar src={profile?.avatarUrl} name={profile?.displayName || driverName} className="h-8 w-8 rounded-full lg:h-12 lg:w-12 lg:text-lg" />
         <LanguageSwitcher compact />
         <button
           type="button"

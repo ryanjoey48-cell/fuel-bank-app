@@ -2,6 +2,28 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Driver-only polish: neutral language control and readable photographic hero. */
+.driver-portal-header [role="group"] button[aria-pressed="true"] {
+  background: #152638;
+  box-shadow: none;
+}
+.driver-portal-header button:focus-visible,
+.driver-home-hero ~ section a:focus-visible {
+  outline: 2px solid #64748b;
+  outline-offset: 3px;
+}
+@media (max-width: 639px) {
+  .driver-portal-header [role="group"] { padding: 0; }
+  .driver-portal-header [role="group"] button { min-width: 32px; padding-inline: 6px; }
+  .driver-home-hero { min-height: 200px; padding-block: 12px; box-shadow: none; }
+  .driver-home-hero > div[aria-hidden="true"] {
+    background: linear-gradient(90deg, rgba(255,251,243,.97), rgba(255,251,243,.90) 48%, rgba(255,251,243,.25));
+  }
+  .driver-home-hero h1 { font-size: 24px; line-height: 1.15; overflow-wrap: anywhere; }
+  .driver-home-hero > div:last-child { gap: 8px; }
+  .driver-home-hero > div:last-child > div:first-child { padding-right: 24px; }
+}
+
 /* Mobile density is intentionally scoped: keep the approved desktop system. */
 @media (max-width: 639px) {
   .driver-portal-header,

@@ -79,7 +79,7 @@ export function DriverProfilePage() {
     form.reset();
   }
 
-  const field = "mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-base focus:border-[#152638] focus:outline-none focus:ring-2 focus:ring-slate-200";
+  const field = "mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-base focus:border-[#152638] focus:outline-none focus:ring-2 focus:ring-slate-200";
 
   return (
     <main className="mx-auto max-w-3xl space-y-3 px-3 py-4 sm:px-4 sm:py-5">
@@ -88,12 +88,12 @@ export function DriverProfilePage() {
       {message ? <p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{l.saved}</p> : null}
       {!profile ? <p>{l.loading}</p> : <>
         <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center gap-4">
-            <DriverAvatar src={profile.avatarUrl} name={profile.displayName} className="h-16 w-16 rounded-2xl text-xl" />
+          <div className="flex items-center gap-3">
+            <DriverAvatar src={profile.avatarUrl} name={profile.displayName} className="h-14 w-14 rounded-2xl text-lg" />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-xl font-black text-[#152638]">{profile.displayName}</p>
-              <p className="mt-1 text-sm text-slate-500">{l.driver} {profile.driverId} · {l.vehicle} {profile.vehicle || "—"}</p>
-              <label className="mt-3 inline-flex min-h-10 cursor-pointer items-center rounded-xl border border-slate-200 px-3 text-sm font-bold text-[#152638] hover:bg-slate-50">
+              <p className="break-words text-lg font-black text-[#152638]">{profile.displayName}</p>
+              <p className="mt-0.5 break-words text-xs text-slate-500">{l.driver} {profile.driverId}</p><p className="mt-1 break-words text-sm font-semibold text-[#152638]">{l.vehicle} {profile.vehicle || "—"}</p>
+              <label className="mt-1 inline-flex min-h-11 cursor-pointer items-center rounded-xl border border-slate-200 px-3 text-sm font-bold text-[#152638] hover:bg-slate-50">
                 {uploading ? (language === "th" ? "กำลังอัปโหลด…" : "Uploading…") : l.photo}
                 <input aria-label={l.photo} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" disabled={busy}
                   onChange={(event) => {
@@ -106,7 +106,7 @@ export function DriverProfilePage() {
               </label>
             </div>
           </div>
-          <p className="mt-3 text-xs text-slate-400">{l.photoHelp}</p>
+          <p className="mt-2 text-xs text-slate-500">{l.photoHelp}</p>
         </section>
 
         <form className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" onSubmit={(e) => {
@@ -114,7 +114,7 @@ export function DriverProfilePage() {
           void request("/api/driver/profile", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ displayName: name, phone }) });
         }}>
           <h2 className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">{l.personal}</h2>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
             <label className="block text-sm font-semibold">{l.name}<input className={field} value={name} maxLength={100} required disabled={busy} onChange={(e) => setName(e.target.value)} /></label>
             <label className="block text-sm font-semibold">{l.phone}<input type="tel" className={field} value={phone} maxLength={30} disabled={busy} onChange={(e) => setPhone(e.target.value)} /></label>
           </div>
@@ -123,7 +123,7 @@ export function DriverProfilePage() {
 
         <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <h2 className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">{l.preferences}</h2>
-          <label className="mt-3 flex items-center justify-between gap-3 text-sm font-semibold">
+          <label className="mt-2 flex items-center justify-between gap-3 text-sm font-semibold">
             <span>{l.language}</span>
             <select className="min-h-10 rounded-xl border border-slate-200 bg-white px-3" value={language} onChange={(e) => setLanguage(e.target.value as "en" | "th")}>
               <option value="en">English</option><option value="th">ไทย</option>

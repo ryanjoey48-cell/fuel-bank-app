@@ -56,7 +56,7 @@ test('current status still selects Continue job without changing the next job ro
 });
 for (const language of ['en', 'th']) test('mobile density keeps live vehicle chip, desktop plate and comfortable job action: ' + language, () => {
   const html = home(language);
-  assert.ok(html.includes('min-h-[204px]'));
+  assert.ok(html.includes('min-h-[176px]'));
   assert.ok(html.includes('sm:min-h-[248px]'));
   assert.ok(html.includes('lg:min-h-[272px]'));
   assert.ok(html.includes('hidden sm:block sm:self-auto'));

@@ -122,10 +122,10 @@ function CurrentJobCard({
   return (
     <Link
       href={`/driver/jobs/${job.id}`}
-      className="block overflow-hidden rounded-[24px] bg-[#152638] text-white shadow-[0_10px_28px_rgba(21,38,56,0.16)] transition active:scale-[0.995]"
+      className="block overflow-hidden rounded-2xl bg-[#152638] text-white shadow-sm transition active:scale-[0.995]"
     >
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-2 sm:py-3.5 lg:px-8 lg:py-4">
-        <p className="text-xs lg:text-lg font-black tracking-[0.16em] text-orange-300">
+        <p className="text-xs lg:text-lg font-black tracking-[0.16em] text-slate-300">
           {status === "ready" ? labels.next : labels.current}
         </p>
         <DriverStatusBadge language={language} status={status} />
@@ -134,11 +134,11 @@ function CurrentJobCard({
       <div className="px-4 py-2.5 sm:p-4 lg:px-8 lg:py-5">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white/75 sm:gap-x-4 sm:gap-y-2 lg:gap-x-6 lg:text-lg">
           <span className="inline-flex items-center gap-1.5 font-semibold">
-            <CalendarDays className="h-4 w-4 text-orange-300 lg:h-5 lg:w-5" />
+            <CalendarDays className="h-4 w-4 text-slate-300 lg:h-5 lg:w-5" />
             {formattedDate}
           </span>
           <span className="inline-flex items-center gap-1.5 font-semibold">
-            <Clock3 className="h-4 w-4 text-orange-300 lg:h-5 lg:w-5" />
+            <Clock3 className="h-4 w-4 text-slate-300 lg:h-5 lg:w-5" />
             {formatTime(job.pickupTime, labels.timePending)}
           </span>
           <span className="ml-auto inline-flex items-center gap-1.5 font-bold">
@@ -147,7 +147,7 @@ function CurrentJobCard({
           </span>
         </div>
 
-        <h2 className="mt-1.5 break-words text-[26px] font-black leading-tight sm:mt-4 lg:text-[40px]">
+        <h2 className="mt-1.5 break-words text-[24px] font-black leading-tight sm:mt-4 lg:text-[40px]">
           {job.clientName || job.jobOrderNumber || labels.job}
         </h2>
 
@@ -156,14 +156,14 @@ function CurrentJobCard({
             <p className="text-[10px] font-black uppercase tracking-[0.13em] text-white/45 lg:text-xs">
               {labels.pickup}
             </p>
-            <p className="mt-1 truncate text-[15px] font-bold text-white lg:text-xl">{job.pickupName || "—"}</p>
+            <p className="mt-1 break-words text-[15px] font-bold text-white lg:text-xl">{job.pickupName || "—"}</p>
           </div>
-          <span className="text-xl lg:text-4xl font-black text-orange-300">→</span>
+          <span className="text-xl lg:text-4xl font-black text-slate-300">→</span>
           <div className="min-w-0 text-right">
             <p className="text-[10px] font-black uppercase tracking-[0.13em] text-white/45 lg:text-xs">
               {labels.dropoff}
             </p>
-            <p className="mt-1 truncate text-[15px] font-bold text-white lg:text-xl">{job.dropoffName || "—"}</p>
+            <p className="mt-1 break-words text-[15px] font-bold text-white lg:text-xl">{job.dropoffName || "—"}</p>
           </div>
         </div>
 
@@ -209,13 +209,13 @@ function UpcomingJobRow({
           <p className="mt-1.5 truncate font-black text-[#152638] lg:mt-0 lg:text-base">
             {job.clientName || job.jobOrderNumber || labels.job}
           </p>
-          <p className="mt-1 truncate text-sm text-slate-600 lg:hidden">
-            {job.pickupName} <span className="px-1 text-orange-500">→</span> {job.dropoffName}
+          <p className="mt-1 line-clamp-2 break-words text-sm text-slate-600 lg:hidden">
+            {job.pickupName} <span className="px-1 text-slate-400">→</span> {job.dropoffName}
           </p>
           <div className="mt-1 hidden grid-cols-[minmax(0,1fr)_24px_minmax(0,1fr)] items-start gap-3 lg:grid">
             {[job.pickupName, job.dropoffName].map((name, index) => <div key={index} className="contents">
-              {index ? <span aria-hidden="true" className="pt-0.5 text-xl text-orange-500">→</span> : null}
-              <div className="flex min-w-0 gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-orange-600" /><div className="min-w-0"><p className="truncate text-sm text-[#152638]" title={name || undefined}>{name || "—"}</p><p className="text-[10px] tracking-wide text-slate-500">{index ? labels.dropoff : labels.pickup}</p></div></div>
+              {index ? <span aria-hidden="true" className="pt-0.5 text-xl text-slate-400">→</span> : null}
+              <div className="flex min-w-0 gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" /><div className="min-w-0"><p className="truncate text-sm text-[#152638]" title={name || undefined}>{name || "—"}</p><p className="text-[10px] tracking-wide text-slate-500">{index ? labels.dropoff : labels.pickup}</p></div></div>
             </div>)}
           </div>
         </div>
@@ -313,7 +313,7 @@ export function DriverHome({
 
   return (
     <main className="mx-auto w-full max-w-3xl px-3 py-3 sm:px-6 sm:py-6 lg:max-w-[1280px]">
-      <section className="relative isolate overflow-hidden rounded-[22px] border border-[#d8d1c7] bg-[#f8f3e9] px-4 py-3 sm:py-4 shadow-[0_8px_24px_rgba(21,38,56,0.07)] lg:min-h-[320px] lg:px-7 lg:py-6">
+      <section className="driver-home-hero relative isolate overflow-hidden rounded-[22px] border border-[#d8d1c7] bg-[#f8f3e9] px-4 py-3 sm:py-4 shadow-[0_8px_24px_rgba(21,38,56,0.07)] lg:min-h-[320px] lg:px-7 lg:py-6">
         <Image
           src="/driver-hero-bg.png"
           alt=""
@@ -321,14 +321,14 @@ export function DriverHome({
           fill
           priority
           sizes="(min-width: 1280px) 1232px, (min-width: 1024px) calc(100vw - 48px), (min-width: 640px) 720px, calc(100vw - 24px)"
-          className="pointer-events-none object-cover object-[62%_50%] sm:object-[center_52%]"
+          className="pointer-events-none object-cover object-[62%_62%] sm:object-[center_52%]"
         />
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,251,243,0.96)_0%,rgba(255,251,243,0.75)_32%,rgba(255,251,243,0)_55%,rgba(255,251,243,0.12)_66%,rgba(255,251,243,0.88)_100%)] sm:bg-[linear-gradient(90deg,rgba(255,251,243,0.97)_0%,rgba(255,251,243,0.90)_24%,rgba(255,251,243,0.18)_52%,rgba(255,251,243,0.08)_70%,rgba(255,251,243,0.82)_100%)]" />
 
-        <div className="relative z-10 flex min-h-[204px] flex-col items-start justify-between gap-3 sm:min-h-[248px] sm:flex-row sm:items-center sm:gap-4 lg:min-h-[272px] lg:gap-8">
+        <div className="relative z-10 flex min-h-[176px] flex-col items-start justify-between gap-3 sm:min-h-[248px] sm:flex-row sm:items-center sm:gap-4 lg:min-h-[272px] lg:gap-8">
           <div className="min-w-0 w-full sm:w-auto sm:flex-1">
             <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-[#152638]/10 bg-white/65 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.15em] text-[#152638]/55 lg:mb-4 lg:px-3 lg:text-xs">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              <span className="h-1.5 w-1.5 rounded-full bg-[#152638]" />
               {language === "th" ? "EES คนขับรถ" : "EES DRIVER"}
             </div>
 
@@ -339,8 +339,8 @@ export function DriverHome({
 
             <div className="mt-2 flex flex-col items-start gap-y-1 text-sm font-semibold text-[#152638] sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 lg:mt-7 lg:gap-x-5 lg:text-lg">
               {remainingToday.length > 0 ? (
-                <span className="text-emerald-700">
-                  <strong>{remainingToday.length}</strong> {remainingLabel}
+                <span className="text-[#152638]">
+                  <strong>{remainingToday.length}</strong> {remainingLabel}{language === "th" ? "วันนี้" : " today"}
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-2 text-emerald-700"><span className="hidden h-8 w-8 items-center justify-center rounded-full bg-emerald-500 text-white lg:inline-flex"><Check className="h-5 w-5" /></span>

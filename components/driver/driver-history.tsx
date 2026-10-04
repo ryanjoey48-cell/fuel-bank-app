@@ -16,7 +16,7 @@ export function DriverHistory({ rows, page, hasMore }: { rows: DriverWork[]; pag
     <main className="mx-auto max-w-3xl px-3 py-4 sm:px-4 sm:py-5">
       <header className="mb-4 px-1">
         <h1 className="text-2xl font-black text-[#152638]">{th ? "ประวัติงาน" : "History"}</h1>
-        <p className="mt-1 text-sm text-slate-500">{rows.length} {th ? "งานที่แสดง" : "completed jobs shown"}</p>
+        <div className="mt-1 flex items-center gap-2 text-sm text-slate-500"><p>{th ? "งานที่จบแล้ว" : "Completed jobs"}</p><span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-[#152638]" aria-label={th ? "จำนวนงานในหน้านี้" : "Jobs on this page"}>{rows.length}</span></div>
       </header>
 
       {!rows.length ? (
@@ -32,7 +32,7 @@ export function DriverHistory({ rows, page, hasMore }: { rows: DriverWork[]; pag
                   <div className="min-w-0 flex-1">
                     <p className="text-xs text-slate-500">{format(completed.eventTime)}</p>
                     <h2 className="mt-1 truncate font-black text-[#152638]">{job.clientName || (th ? "งาน" : "Job")}</h2>
-                    <p className="mt-1 truncate text-sm text-slate-700">{job.pickupName} <span className="text-orange-500">→</span> {job.dropoffName}</p>
+                    <p className="mt-1 line-clamp-2 break-words text-sm text-slate-600">{job.pickupName} <span className="text-slate-400">→</span> {job.dropoffName}</p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">
