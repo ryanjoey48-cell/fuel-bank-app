@@ -54,6 +54,24 @@ test('current status still selects Continue job without changing the next job ro
   assert.ok(html.includes('CURRENT JOB')); assert.ok(html.includes('Continue job')); assert.ok(html.includes('At pickup'));
   assert.ok(html.indexOf('/driver/jobs/next') < html.indexOf('/driver/jobs/upcoming'));
 });
+for (const language of ['en', 'th']) test('mobile density keeps live vehicle chip, desktop plate and comfortable job action: ' + language, () => {
+  const html = home(language);
+  assert.ok(html.includes('min-h-[204px]'));
+  assert.ok(html.includes('sm:min-h-[248px]'));
+  assert.ok(html.includes('lg:min-h-[272px]'));
+  assert.ok(html.includes('hidden sm:block sm:self-auto'));
+  const chip = html.match(/<div class="inline-flex max-w-full[^>]*sm:hidden"[^>]*>(.*?)<\/div>/s);
+  assert.ok(chip, 'mobile-only chip exists');
+  assert.ok(chip[1].includes('1998'));
+  assert.ok(chip[1].includes(vehicles.getPortalVehicleTypeLabel('FOUR_WHEEL_TRUCK', language)));
+  assert.ok(chip[1].includes('min-w-0 break-words'));
+  assert.ok(html.includes('inline-flex min-h-11 shrink-0'), 'job action retains 44px minimum height');
+  assert.ok(html.includes('grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]'), 'route columns can shrink without overflow');
+  assert.ok(html.includes('mt-3 pb-6 sm:mt-6'), 'Upcoming moves closer on mobile only');
+  assert.ok(html.includes('px-4 py-2.5 sm:py-3.5'), 'upcoming rows retain tablet spacing');
+  const layout = fs.readFileSync(path.join(__dirname, '..', 'app/driver/(protected)/layout.tsx'), 'utf8');
+  assert.ok(layout.includes('pb-[calc(4.5rem+env(safe-area-inset-bottom))]'), 'bottom navigation clearance stays in protected layout');
+});
 test('inline artwork is inaccessible decoration with collision-free SVG gradient IDs', () => {
   const html = renderToStaticMarkup(React.createElement(React.Fragment, null, React.createElement(art.DriverLogisticsArt), React.createElement(art.DriverLogisticsArt)));
   assert.equal((html.match(/aria-hidden="true"/g) || []).length, 2);
