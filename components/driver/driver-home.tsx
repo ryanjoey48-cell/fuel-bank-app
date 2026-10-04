@@ -122,7 +122,7 @@ function CurrentJobCard({
   return (
     <Link
       href={`/driver/jobs/${job.id}`}
-      className="block overflow-hidden rounded-2xl bg-[#152638] text-white shadow-sm transition active:scale-[0.995]"
+      className="driver-next-job block overflow-hidden rounded-2xl bg-[#152638] text-white shadow-sm transition active:scale-[0.995]"
     >
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-2 sm:py-3.5 lg:px-8 lg:py-4">
         <p className="text-xs lg:text-lg font-black tracking-[0.16em] text-slate-300">
@@ -194,7 +194,7 @@ function UpcomingJobRow({
   return (
     <Link
       href={`/driver/jobs/${job.id}`}
-      className="group block border-b border-slate-200 bg-white px-4 py-2.5 sm:py-3.5 first:rounded-t-2xl last:rounded-b-2xl last:border-b-0 active:bg-slate-50"
+      className="driver-upcoming-job group block border-b border-slate-200 bg-white px-4 py-2.5 sm:py-3.5 first:rounded-t-2xl last:rounded-b-2xl last:border-b-0 active:bg-slate-50"
     >
       <div className="flex items-center gap-3 lg:grid lg:grid-cols-[160px_minmax(0,1fr)_90px_auto_20px] lg:gap-5">
         <div className="hidden border-r border-slate-200 pr-5 lg:block">
@@ -312,7 +312,7 @@ export function DriverHome({
     remainingToday.length === 1 ? labels.remaining : labels.remainingPlural;
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-3 py-3 sm:px-6 sm:py-6 lg:max-w-[1280px]">
+    <main className="driver-jobs-home mx-auto w-full max-w-3xl px-3 py-3 sm:px-6 sm:py-6 lg:max-w-[1280px]">
       <section className="driver-home-hero relative isolate overflow-hidden rounded-[22px] border border-[#d8d1c7] bg-[#f8f3e9] px-4 py-3 sm:py-4 shadow-[0_8px_24px_rgba(21,38,56,0.07)] lg:min-h-[320px] lg:px-7 lg:py-6">
         <Image
           src="/driver-hero-bg.png"
