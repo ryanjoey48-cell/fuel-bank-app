@@ -10,7 +10,9 @@ import {
   Navigation2,
   Phone,
   RefreshCw,
-  Truck
+  Truck,
+  Warehouse,
+  Route
 } from "lucide-react";
 import Link from "next/link";
 import { DriverDisclosure } from "./driver-disclosure";
@@ -63,7 +65,11 @@ const copy = {
     whenReadyToLeave: "When ready to leave",
     atDelivery: "At delivery",
     finishJob: "Finish job",
-    fullRouteMaps: "View full route in Google Maps",
+    fullRouteMaps: "Full job route",
+    quickRoutes: "Quick routes",
+    fromDepot: "From EES depot",
+    pickupDelivery: "Pickup → delivery",
+    fromHere: "From my location",
     saved: "Progress saved.",
     saving: "Saving…",
     locating: "Checking location…",
@@ -119,7 +125,11 @@ const copy = {
     whenReadyToLeave: "เมื่อพร้อมออกจากจุดรับ",
     atDelivery: "เมื่อถึงจุดส่ง",
     finishJob: "จบงาน",
-    fullRouteMaps: "ดูเส้นทางทั้งหมดใน Google Maps",
+    fullRouteMaps: "เส้นทางงานทั้งหมด",
+    quickRoutes: "เส้นทางด่วน",
+    fromDepot: "จากคลัง EES",
+    pickupDelivery: "จุดรับ → จุดส่ง",
+    fromHere: "จากตำแหน่งของฉัน",
     saved: "บันทึกแล้ว",
     saving: "กำลังบันทึก…",
     locating: "กำลังตรวจสอบตำแหน่ง…",
@@ -217,7 +227,7 @@ export function DriverJobDetail({
   const [events, setEvents] = useState<DriverJobEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
-  const [saveError, setSaveError] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState<"location" | "save" | null>(null);
   const [feedback, setFeedback] = useState<"saved" | "locationMissing" | null>(null);
   const [confirmComplete, setConfirmComplete] = useState(false);
@@ -257,7 +267,7 @@ export function DriverJobDetail({
 
     busy.current = true;
     setConfirmComplete(false);
-    setSaveError(false);
+    setSaveError(null);
     setFeedback(null);
     setSaving("location");
 
@@ -274,12 +284,17 @@ export function DriverJobDetail({
       });
       const payload = await response.json();
 
-      if (!response.ok || !payload.event) throw new Error("Save failed");
+      if (!response.ok || !payload.event) {
+        const message = typeof payload?.error === "string" && payload.error.trim()
+          ? payload.error
+          : labels.saveError;
+        throw new Error(message);
+      }
 
       setEvents((current) => [...current, payload.event]);
       setFeedback(location.latitude === null ? "locationMissing" : "saved");
-    } catch {
-      setSaveError(true);
+    } catch (error) {
+      setSaveError(error instanceof Error && error.message ? error.message : labels.saveError);
       await load();
     } finally {
       busy.current = false;
@@ -303,6 +318,8 @@ export function DriverJobDetail({
     timeZone: "Asia/Bangkok"
   }).format(new Date(`${job.bookingDate}T12:00:00+07:00`));
 
+  const depotUrl = buildDriverDirectionsUrl(job, "depot", depot);
+  const currentUrl = buildDriverDirectionsUrl(job, "current", depot);
   const deliveryUrl = buildDriverDirectionsUrl(job, "delivery", depot);
   const pickupToDropoffUrl = buildDriverDirectionsUrl(job, "pickup-to-dropoff", depot);
   const pickupUrl = buildDriverDirectionsUrl(job, "pickup", depot);
@@ -351,9 +368,16 @@ export function DriverJobDetail({
               <button type="button" disabled={!!saving} onClick={() => (stage === 3 ? setConfirmComplete(true) : void save())} className="driver-primary-action min-h-12 w-full rounded-xl px-3 text-base font-bold text-white disabled:opacity-60">{saving ? (saving === "location" ? labels.locating : labels.saving) : labels.actions[stage]}</button>
               <p className="mt-1.5 text-center text-[10px] leading-4 text-slate-500">{labels.gps}</p>
             </div>
-            {pickupToDropoffUrl ? <a href={pickupToDropoffUrl} target="_blank" rel="noreferrer" className="mt-2 flex min-h-10 items-center justify-center gap-1.5 text-xs font-semibold text-slate-500"><span>{labels.fullRouteMaps}</span><ExternalLink className="h-3.5 w-3.5" /></a> : null}
+            <div className="mt-3 border-t border-[var(--driver-border)] pt-3">
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">{labels.quickRoutes}</p>
+              <div className="grid grid-cols-3 gap-2">
+                {depotUrl ? <a href={depotUrl} target="_blank" rel="noreferrer" className="flex min-h-[76px] flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-2 text-center shadow-sm active:bg-slate-50"><Warehouse className="h-5 w-5 text-slate-500"/><span className="text-[11px] font-bold leading-4 text-[#152638]">{labels.fromDepot}</span></a> : null}
+                {pickupToDropoffUrl ? <a href={pickupToDropoffUrl} target="_blank" rel="noreferrer" className="flex min-h-[76px] flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-2 text-center shadow-sm active:bg-slate-50"><MapPin className="h-5 w-5 text-violet-600"/><span className="text-[11px] font-bold leading-4 text-[#152638]">{labels.pickupDelivery}</span></a> : null}
+                {currentUrl ? <a href={currentUrl} target="_blank" rel="noreferrer" className="flex min-h-[76px] flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2 py-2 text-center shadow-sm active:bg-slate-50"><Route className="h-5 w-5 text-slate-500"/><span className="text-[11px] font-bold leading-4 text-[#152638]">{labels.fromHere}</span></a> : null}
+              </div>
+            </div>
           </>}
-          {saveError ? <div role="alert" className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-rose-50 p-3"><p className="text-sm font-semibold text-rose-700">{labels.saveError}</p><button type="button" disabled={!!saving} onClick={() => void save()} className="shrink-0 rounded-lg bg-white px-3 py-2 text-xs font-bold text-rose-700 shadow-sm disabled:opacity-60">{labels.retry}</button></div> : null}
+          {saveError ? <div role="alert" className="mt-3 rounded-xl border border-rose-100 bg-rose-50 p-3"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-rose-500">{labels.saveError}</p><p className="mt-1 break-words text-sm font-semibold leading-5 text-rose-700">{saveError}</p></div><button type="button" disabled={!!saving} onClick={() => void save()} className="shrink-0 rounded-lg bg-white px-3 py-2 text-xs font-bold text-rose-700 shadow-sm disabled:opacity-60">{labels.retry}</button></div></div> : null}
           {feedback ? <p role="status" className="mt-2 text-center text-xs font-semibold text-emerald-700">{labels.saved}{feedback === "locationMissing" ? ` ${labels.locationMissing}` : ""}</p> : null}
         </div>
       </section>
