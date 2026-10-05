@@ -10,7 +10,7 @@ function load(file, deps = {}) {
   const module = { exports: {} };
   const source = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
   const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
-  new Function('require', 'module', 'exports', js)((name) => { assert.ok(name in deps, name); return deps[name]; }, module, module.exports);
+  new Function('require', 'module', 'exports', js)((name) => { if (name === './driver-disclosure') return load('components/driver/driver-disclosure.tsx', { 'react/jsx-runtime': require('react/jsx-runtime'), 'lucide-react': require('lucide-react') }); assert.ok(name in deps, name); return deps[name]; }, module, module.exports);
   return module.exports;
 }
 const ui = load('components/driver/driver-ui.tsx', { react: React, 'react/jsx-runtime': runtime, 'next/image': () => null });
@@ -20,6 +20,7 @@ const vehicleLabels = load('lib/driver-vehicle-types.ts');
 function nodes(tree) {
   if (!tree || typeof tree !== 'object') return [];
   if (Array.isArray(tree)) return tree.flatMap(nodes);
+  if (tree.type?.name === 'DriverDisclosure') return nodes(tree.type(tree.props));
   return [tree, ...nodes(tree.props?.children)];
 }
 function hooks(seed = []) {
@@ -32,7 +33,7 @@ function hooks(seed = []) {
 }
 test('detail places next action before route and preserves sequential event buttons and final confirmation', async () => {
   const oldFetch = global.fetch;
-  const icons = Object.fromEntries(['ArrowDown', 'ArrowLeft', 'Check', 'Clock3', 'ExternalLink', 'MapPin', 'Phone', 'RefreshCw', 'Truck'].map((name) => [name, () => null]));
+  const icons = Object.fromEntries(['ArrowDown', 'ArrowLeft', 'ChevronRight', 'Check', 'Clock3', 'ExternalLink', 'MapPin', 'Navigation2', 'Phone', 'RefreshCw', 'Truck'].map((name) => [name, () => null]));
   try {
     for (let stage = 0; stage < 4; stage++) {
       const events = portal.DRIVER_JOB_EVENT_TYPES.slice(0, stage).map((eventType) => ({ eventType, eventTime: '2026-10-02T03:00:00Z', latitude: null, longitude: null }));
@@ -48,7 +49,7 @@ test('detail places next action before route and preserves sequential event butt
       const tree = DriverJobDetail({ job: { id: 'own-job', bookingDate: '2026-10-02', pickupName: 'Pickup', dropoffName: 'Delivery' }, depot: { name: 'Depot', address: 'Depot' } });
       const action = nodes(tree).find((node) => node.type === 'section' && node.props['aria-labelledby'] === 'job-next-action');
       const button = nodes(action).find((node) => node.type === 'button');
-      assert.equal(button.props.children, ['Arrived at pickup', 'Leaving pickup', 'Arrived at delivery', 'Complete job'][stage]);
+      assert.equal(button.props.children, ['Arrived at pickup', 'Leave pickup', 'Arrived at delivery', 'Complete job'][stage]);
       const html = renderToStaticMarkup(tree);
       assert.ok(html.indexOf('id="job-next-action"') < html.indexOf('id="job-route"'));
       button.props.onClick();
@@ -121,7 +122,7 @@ test('profile keeps password controls collapsed, identity visible and language s
   for (const language of ['en', 'th']) {
     const p = profileHarness(language);
     const tree = nodes(p.render());
-    const details = tree.find((node) => node.type === 'details');
+    const details = tree.find((node) => node.type === 'details' && nodes(node).some(child => child.type === 'input' && child.props.type === 'password'));
     assert.ok(details); assert.equal(details.props.open, undefined);
     assert.equal(nodes(details).filter((node) => node.type === 'input' && node.props.type === 'password').length, 3);
     tree.find((node) => node.type === 'select').props.onChange({ target: { value: language === 'en' ? 'th' : 'en' } });
@@ -164,7 +165,7 @@ test('collapsed password form still validates and submits the same password payl
   global.fetch = async (url, init) => { p.calls.push({ url, init }); return { ok: true, json: async () => profile }; };
   try {
     const tree = nodes(p.render());
-    const form = nodes(tree.find((node) => node.type === 'details')).find((node) => node.type === 'form');
+    const form = tree.find((node) => node.type === 'form' && nodes(node).some(child => child.type === 'input' && child.props.type === 'password'));
     const event = { preventDefault() {}, currentTarget: { ...body, reset() { reset = true; } } };
     form.props.onSubmit(event);
     await new Promise(setImmediate);
@@ -176,3 +177,33 @@ test('collapsed password form still validates and submits the same password payl
     assert.equal(p.calls.length, count); assert.equal(p.state[3], true);
   } finally { global.fetch = oldFetch; global.window = oldWindow; global.FormData = oldFormData; }
 });
+test('Edit profile opens the existing personal details editor and focuses the name input', () => {
+  for (const language of ['en', 'th']) {
+    const p = profileHarness(language);
+    const tree = nodes(p.render());
+    let focused = false;
+    const personal = tree.find(node => node.type === 'details' && nodes(node).some(child => child.type === 'input' && child.props.type === 'file'));
+    assert.ok(personal); assert.equal(personal.props.open, undefined);
+    const target = { open: false, querySelector: () => ({ focus() { focused = true; } }) };
+    personal.props.ref.current = target;
+    tree.find(node => node.type === 'button' && node.props.className.includes('driver-accent')).props.onClick();
+    assert.ok(target.open); assert.ok(focused);
+    const identity = tree.find(node => node.type === 'section');
+    assert.equal(nodes(identity).filter(node => node.type === 'input').length, 0);
+  }
+});
+for (const language of ['en','th']) for (const pathname of ['/driver','/driver/jobs/test','/driver/history','/driver/profile']) {
+  test(`bottom navigation has one purple selection on a continuous surface: ${language} ${pathname}`, () => {
+    const { DriverNavigation } = load('components/driver/driver-navigation.tsx', {
+      react: React, 'react/jsx-runtime': runtime, 'lucide-react': require('lucide-react'),
+      'next/link': ({children,...props}) => React.createElement('a',props,children),
+      'next/navigation': {usePathname:()=>pathname},
+      '@/lib/language-provider': {useLanguage:()=>({language})}
+    });
+    const html=renderToStaticMarkup(React.createElement(DriverNavigation));
+    assert.equal((html.match(/aria-current="page"/g)||[]).length,1);
+    assert.equal((html.match(/driver-accent/g)||[]).length,1);
+    assert.ok(!html.includes('bg-[#152638]')); assert.ok(html.includes('pb-[env(safe-area-inset-bottom)]'));
+    assert.equal((html.match(/href="/g)||[]).length,3);
+  });
+}

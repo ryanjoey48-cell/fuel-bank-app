@@ -70,7 +70,7 @@ for (const language of ['en', 'th']) test('mobile density keeps live vehicle bad
   assert.ok(html.includes('mt-3 pb-6 sm:mt-6'), 'Upcoming moves closer on mobile only');
   assert.ok(html.includes('px-4 py-2.5 sm:py-3.5'), 'upcoming rows retain tablet spacing');
   const layout = fs.readFileSync(path.join(__dirname, '..', 'app/driver/(protected)/layout.tsx'), 'utf8');
-  assert.ok(layout.includes('pb-[calc(4.5rem+env(safe-area-inset-bottom))]'), 'bottom navigation clearance stays in protected layout');
+  assert.ok(layout.includes('pb-[calc(3.5rem+env(safe-area-inset-bottom))]'), 'bottom navigation clearance stays in protected layout');
 });
 test('inline artwork is inaccessible decoration with collision-free SVG gradient IDs', () => {
   const html = renderToStaticMarkup(React.createElement(React.Fragment, null, React.createElement(art.DriverLogisticsArt), React.createElement(art.DriverLogisticsArt)));

@@ -36,8 +36,6 @@ a:hover .driver-primary-action { background-color: var(--driver-primary-hover, #
 
 /* Jobs home density only; shared chrome stays unchanged on other driver pages. */
 @media (max-width: 639px) {
-  body:has(.driver-jobs-home) .driver-portal-header > div { min-height: 48px; }
-  body:has(.driver-jobs-home) nav[aria-label] a { min-height: 48px; }
   .driver-jobs-home { padding-block: 8px; }
   .driver-jobs-home .driver-home-hero { min-height: 92px; padding-block: 8px; }
   .driver-jobs-home .driver-home-hero > div[aria-hidden="true"] { background: rgba(255,251,243,.76); }
@@ -64,7 +62,7 @@ a:hover .driver-primary-action { background-color: var(--driver-primary-hover, #
   .driver-next-job-route > p:nth-child(n+3) { font-size: 16px; line-height: 22px; font-weight: 700; }
   .driver-next-job-route > span { display: flex; align-items: center; justify-content: center; font-size: 24px; line-height: 22px; color: #e2e8f0; }
   .driver-next-job-action { margin-top: 12px; }
-  .driver-next-job-action > span { min-height: 48px; min-width: 156px; justify-content: space-between; gap: 16px; padding-inline: 20px; font-size: 15px; font-weight: 700; }
+  .driver-next-job-action > span { min-height: 48px; min-width: 144px; justify-content: space-between; gap: 12px; padding-inline: 18px; font-size: 15px; font-weight: 700; }
   .driver-jobs-home > section:last-child > div:first-child { margin-bottom: 4px; }
   .driver-jobs-home > section:last-child > div:nth-child(2) > div + div { margin-top: 6px; }
   .driver-jobs-home > section:last-child > div:nth-child(2) > div > div:first-child { margin-bottom: 2px; }

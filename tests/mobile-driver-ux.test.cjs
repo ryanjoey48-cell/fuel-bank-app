@@ -9,7 +9,7 @@ const read = (file) => fs.readFileSync(path.join(__dirname, '..', file), 'utf8')
 function load(file, deps = {}) {
   const module = { exports: {} };
   const js = ts.transpileModule(read(file), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
-  new Function('require', 'module', 'exports', js)((name) => { assert.ok(name in deps, `Missing dependency ${name}`); return deps[name]; }, module, module.exports);
+  new Function('require', 'module', 'exports', js)((name) => { if (name === './driver-disclosure') return load('components/driver/driver-disclosure.tsx', { 'react/jsx-runtime': require('react/jsx-runtime'), 'lucide-react': require('lucide-react') }); assert.ok(name in deps, `Missing dependency ${name}`); return deps[name]; }, module, module.exports);
   return module.exports;
 }
 const vehicleLabels = load('lib/driver-vehicle-types.ts');
@@ -32,7 +32,7 @@ function detailMarkup(language, stage) {
   let stateIndex = 0;
   const events = portal.DRIVER_JOB_EVENT_TYPES.slice(0, stage).map((eventType, index) => ({ id: String(index), eventType, eventTime: '2026-10-02T03:00:00Z', latitude: index === 0 ? 13 : null, longitude: index === 0 ? 100 : null }));
   const hooks = { ...React, useState(initial) { const index = stateIndex++; return [index === 0 ? events : index === 1 ? false : initial, () => {}]; }, useCallback: (fn) => fn, useEffect: () => {}, useRef: (value) => ({ current: value }) };
-  const icons = Object.fromEntries(['ArrowDown', 'ArrowLeft', 'Check', 'Clock3', 'ExternalLink', 'MapPin', 'Navigation2', 'Phone', 'RefreshCw', 'Truck'].map((name) => [name, () => null]));
+  const icons = Object.fromEntries(['ArrowDown', 'ArrowLeft', 'ChevronRight', 'Check', 'Clock3', 'ExternalLink', 'MapPin', 'Navigation2', 'Phone', 'RefreshCw', 'Truck'].map((name) => [name, () => null]));
   const { DriverJobDetail } = load('components/driver/driver-job-detail.tsx', {
     react: hooks, 'react/jsx-runtime': require('react/jsx-runtime'), 'lucide-react': icons,
     'next/link': ({ children, ...props }) => React.createElement('a', props, children),
@@ -82,8 +82,8 @@ test('mobile refinements stay scoped and navigation preserves safe-area padding'
   const css = read('app/globals.css');
   assert.ok(css.includes('@media (max-width: 639px)'));
   for (const scope of ['.driver-summary-metrics', '.driver-profile', '.driver-history', '.operations-header', '.operations-job-drawer', '.office-summary']) assert.ok(css.includes(scope));
-  assert.ok(read('components/driver/driver-navigation.tsx').includes('min-h-[52px]'));
+  assert.ok(read('components/driver/driver-navigation.tsx').includes('min-h-[48px]'));
   assert.ok(read('components/driver/driver-navigation.tsx').includes('pb-[env(safe-area-inset-bottom)]'));
-  assert.ok(read('app/driver/(protected)/layout.tsx').includes('pb-[calc(4.5rem+env(safe-area-inset-bottom))]'));
+  assert.ok(read('app/driver/(protected)/layout.tsx').includes('pb-[calc(3.5rem+env(safe-area-inset-bottom))]'));
   assert.ok(read('components/admin/driver-operations-history.tsx').includes('{page + 1}'));
 });

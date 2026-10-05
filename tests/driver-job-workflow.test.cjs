@@ -64,7 +64,7 @@ test('directions to pickup uses current origin and works without a drop-off', ()
 test('all five additional navigation options remain available without stage gating', () => {
   const source = read('components/driver/driver-job-detail.tsx');
   for (const option of ['[depotUrl, labels.depot]', '[currentUrl, labels.current]', '[pickupUrl, labels.pickupDirections]', '[deliveryUrl, labels.delivery]', '[pickupToDropoffUrl, labels.pickupToDropoff]']) assert.ok(source.includes(option));
-  const navigation = source.slice(source.indexOf('<details className="mt-1">'), source.indexOf('{saveError ?'));
+  const navigation = source.slice(source.indexOf('<details className="group mt-1">'), source.indexOf('{saveError ?'));
   assert.ok(navigation.includes('labels.moreNav')); assert.equal(navigation.includes('stage'), false);
 });
 

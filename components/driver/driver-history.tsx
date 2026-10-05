@@ -27,11 +27,11 @@ export function DriverHistory({ rows, page, hasMore }: { rows: DriverWork[]; pag
             const completed = events.find((e) => e.eventType === "job_completed");
             if (!completed) return null;
             return (
-              <Link href={`/driver/jobs/${job.id}`} key={job.id} className="block rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition active:scale-[0.995]">
+              <Link href={`/driver/jobs/${job.id}`} key={job.id} className="block rounded-2xl border border-slate-200/80 bg-white px-4 py-2.5 shadow-sm sm:py-3 transition active:scale-[0.995]">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="text-xs text-slate-500">{format(completed.eventTime)}</p>
-                    <h2 className="mt-1 truncate font-black text-[#152638]">{job.clientName || (th ? "งาน" : "Job")}</h2>
+                    <h2 className="mt-1 truncate font-bold text-[#152638]">{job.clientName || (th ? "งาน" : "Job")}</h2>
                     <p className="mt-1 line-clamp-2 break-words text-sm text-slate-600">{job.pickupName} <span className="text-slate-400">→</span> {job.dropoffName}</p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
