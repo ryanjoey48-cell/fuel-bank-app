@@ -12,12 +12,10 @@ export function jobStatus(events: Pick<DriverJobEvent, "eventType" | "eventTime"
   return latest ? statuses[latest.eventType] : "ready";
 }
 export type DriverWork = { job: DriverPortalJob; events: DriverJobEvent[] };
-export function nextDriverJob(jobs: DriverPortalJob[], events: Record<string, DriverJobEvent[]>) {
-  const unfinished = jobs.filter((j) => jobStatus(events[j.id] || []) !== "completed")
-    .sort((a, b) => a.bookingDate.localeCompare(b.bookingDate) || (a.pickupTime || "99:99").localeCompare(b.pickupTime || "99:99"));
-  const first = unfinished[0];
-  if (!first || unfinished.filter((j) => j.bookingDate === first.bookingDate && j.pickupTime === first.pickupTime).length > 1) return null;
-  return first;
+export function nextDriverJob(jobs: DriverPortalJob[], events: Record<string, DriverJobEvent[]>, today?: string) {
+  const unfinished = jobs.filter((j) => (!today || j.bookingDate >= today) && jobStatus(events[j.id] || []) !== "completed")
+    .sort((a, b) => a.bookingDate.localeCompare(b.bookingDate) || (a.pickupTime || "99:99").localeCompare(b.pickupTime || "99:99") || a.id.localeCompare(b.id));
+  return unfinished[0] ?? null;
 }
 export type DriverProfile = {
   displayName: string; officialName: string; email: string; phone: string;

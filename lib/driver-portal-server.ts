@@ -297,17 +297,22 @@ export function toDriverJob(row: Record<string, unknown>, identity: DriverPortal
 export async function listAssignedDriverJobs(session: DriverPortalSession) {
   const admin = createServerSupabaseAdmin();
   const today = bangkokDateKey();
-  const { data, error } = await admin
-    .from("booking_diary")
-    .select(DRIVER_JOB_SELECT)
-    .eq("driver_id", session.driverId)
-    .gte("booking_date", today)
-    .order("booking_date", { ascending: true })
-    .order("pickup_time", { ascending: true, nullsFirst: false })
-    .limit(100);
+  const jobs: DriverPortalJob[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const { data, error } = await admin
+      .from("booking_diary")
+      .select(DRIVER_JOB_SELECT)
+      .eq("driver_id", session.driverId)
+      .gte("booking_date", today)
+      .order("booking_date", { ascending: true })
+      .order("pickup_time", { ascending: true, nullsFirst: false })
+      .order("id", { ascending: true })
+      .range(offset, offset + 499);
 
-  if (error) throw new DriverPortalError(503, "Unable to load assigned jobs.");
-  return (data ?? []).map((row) => toDriverJob(row as unknown as Record<string, unknown>, session));
+    if (error) throw new DriverPortalError(503, "Unable to load assigned jobs.");
+    jobs.push(...(data ?? []).map((row) => toDriverJob(row as unknown as Record<string, unknown>, session)));
+    if (!data || data.length < 500) return jobs;
+  }
 }
 
 export async function getAssignedDriverJob(session: DriverPortalSession, bookingId: string) {

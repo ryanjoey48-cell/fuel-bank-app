@@ -20,7 +20,6 @@ const copy = {
     noMoreToday: "No jobs remaining today",
     noUpcoming: "No upcoming jobs",
     tomorrow: "Tomorrow",
-    nextJobDate: "Next job",
     timePending: "Time not set",
     job: "Job",
     current: "CURRENT JOB",
@@ -39,7 +38,6 @@ const copy = {
     noMoreToday: "วันนี้ไม่มีงานเหลือแล้ว",
     noUpcoming: "ยังไม่มีงานล่วงหน้า",
     tomorrow: "พรุ่งนี้",
-    nextJobDate: "งานถัดไป",
     timePending: "ยังไม่กำหนดเวลา",
     job: "งาน",
     current: "งานปัจจุบัน",
@@ -87,7 +85,7 @@ function CurrentJobCard({
   return (
     <Link
       href={`/driver/jobs/${job.id}`}
-      className="block overflow-hidden rounded-[24px] bg-[#102a43] text-white shadow-[0_14px_34px_rgba(16,42,67,0.18)] transition active:scale-[0.995]"
+      className="driver-home-next-job block overflow-hidden rounded-[24px] bg-[#102a43] text-white shadow-[0_14px_34px_rgba(16,42,67,0.18)] transition active:scale-[0.995]"
     >
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
         <p className="text-[12px] font-black uppercase tracking-[0.14em] text-white/85">
@@ -101,7 +99,7 @@ function CurrentJobCard({
           {job.clientName || job.jobOrderNumber || labels.job}
         </h2>
 
-        <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-[18px] bg-[#1f4667] px-4 py-4">
+        <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-[18px] bg-[#1f4667] px-4 py-4">
           <div className="min-w-0">
             <p className="text-[9px] font-black uppercase tracking-[0.16em] text-white/60">
               {labels.pickup}
@@ -165,10 +163,10 @@ function UpcomingJobRow({
   return (
     <Link
       href={`/driver/jobs/${job.id}`}
-      className="block border-b border-slate-100 bg-white px-4 py-3.5 last:border-b-0 active:bg-slate-50"
+      className="driver-home-upcoming-job block border-b border-slate-100 bg-white px-4 py-2 last:border-b-0 active:bg-slate-50"
     >
       <div className="flex items-center gap-3">
-        <div className="min-w-0 flex-1">
+        <div className="grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-1">
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <Clock3 className="h-3.5 w-3.5 shrink-0" />
             <span className="font-semibold">
@@ -176,11 +174,11 @@ function UpcomingJobRow({
             </span>
           </div>
 
-          <p className="mt-1.5 break-words font-black leading-5 text-[#152638]">
+          <p className="break-words font-bold leading-5 text-[#152638]">
             {job.clientName || job.jobOrderNumber || labels.job}
           </p>
 
-          <p className="mt-1 break-words text-[13px] leading-5 text-slate-600">
+          <p className="col-span-2 break-words text-[13px] leading-5 text-slate-600">
             {job.pickupName || "—"}
             <span className="px-1.5 text-orange-500">→</span>
             {job.dropoffName || "—"}
@@ -255,7 +253,7 @@ export function DriverHome({
     (job) => jobStatus(eventsByJob[job.id] || []) !== "completed"
   );
 
-  const nextJob = nextDriverJob(jobs, eventsByJob);
+  const nextJob = nextDriverJob(jobs, eventsByJob, today);
 
   const vehicleRegistration =
     nextJob?.vehicleRegistration ??
@@ -309,30 +307,26 @@ export function DriverHome({
   const remainingLabel =
     remainingToday.length === 1 ? labels.remaining : labels.remainingPlural;
 
-  const nextJobDate =
-    nextJob && nextJob.bookingDate > today
-      ? formatGroupDate(nextJob.bookingDate)
-      : null;
-
   return (
-    <main className="mx-auto w-full max-w-3xl px-3 py-3 sm:px-6 sm:py-5">
-      <section className="relative h-[172px] overflow-hidden rounded-[26px] border border-[#d8d0c5] bg-[#f6f0e6] shadow-sm sm:h-[184px]">
+    <main className="driver-home-restored mx-auto w-full max-w-3xl px-3 py-3 sm:px-6 sm:py-5">
+      <section className="driver-home-banner relative min-h-[176px] overflow-hidden rounded-[26px] border border-[#d8d0c5] bg-[#f6f0e6] shadow-sm sm:min-h-[184px]">
         <Image
-          src="/ees-truck.png"
+          src="/driver-hero-bg.png"
           alt=""
+          aria-hidden="true"
           fill
           sizes="(max-width: 768px) 100vw, 768px"
-          className="object-cover object-center opacity-95"
+          className="object-cover object-[center_55%]"
           priority
         />
 
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-[linear-gradient(90deg,rgba(248,241,231,0.92)_0%,rgba(248,241,231,0.82)_30%,rgba(248,241,231,0.45)_56%,rgba(248,241,231,0.24)_72%,rgba(248,241,231,0.38)_100%)]"
+          className="absolute inset-0 bg-[linear-gradient(90deg,rgba(248,241,231,0.88)_0%,rgba(248,241,231,0.78)_30%,rgba(248,241,231,0.40)_56%,rgba(248,241,231,0.16)_100%)]"
         />
 
-        <div className="relative z-10 h-full px-4 py-4 sm:px-5">
-          <div className="absolute left-4 top-8 max-w-[48%] sm:left-5 sm:top-9">
+        <div className="relative z-10 min-h-[174px] px-4 py-6 sm:min-h-[182px] sm:px-5">
+          <div className="max-w-[calc(100%-128px)]">
             <p className="text-[15px] font-medium text-slate-600">
               {labels.hello},
             </p>
@@ -352,23 +346,16 @@ export function DriverHome({
                   {labels.noMoreToday}
                 </p>
 
-                {nextJobDate ? (
-                  <p className="mt-1 text-xs font-medium text-slate-600">
-                    {labels.nextJobDate} · {nextJobDate}
-                  </p>
-                ) : null}
               </div>
             )}
           </div>
 
           {vehicleRegistration ? (
-            <div className="absolute right-4 top-4 w-[160px] rounded-[18px] border border-white/90 bg-white/88 px-3 py-3 shadow-[0_6px_18px_rgba(21,38,56,0.12)] backdrop-blur-sm">
-              <div className="flex items-start gap-2.5">
-                <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#f3f6f8]">
-                  <Truck className="h-5 w-5 text-[#152638]" />
-                </div>
+            <div className="driver-home-vehicle-badge absolute right-4 top-4 w-[116px] rounded-xl border border-[#ded8cd] bg-white/90 px-2 py-2 shadow-sm">
+              <div className="flex items-start gap-2">
+                  <Truck aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-[#152638]" />
                 <div className="min-w-0">
-                  <p className="truncate text-[18px] font-semibold leading-5 text-[#152638]">
+                  <p className="break-words text-sm font-semibold leading-5 text-[#152638]">
                     {vehicleRegistration}
                   </p>
                   {vehicleType ? (

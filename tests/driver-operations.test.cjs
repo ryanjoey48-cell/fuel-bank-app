@@ -18,9 +18,9 @@ for (const [eventType, status] of [['pickup_arrived', 'pickup'], ['pickup_depart
   assert.equal(ops.jobStatus([{ eventType, eventTime: '2026-10-02T05:00:00Z' }, { eventType: 'pickup_arrived', eventTime: '2026-10-02T04:00:00Z' }]), status);
 });
 test('no events means Ready without mutating events', () => { const events = []; assert.equal(ops.jobStatus(events), 'ready'); assert.deepEqual(events, []); });
-test('next job excludes completed bookings and refuses equally timed ambiguous jobs', () => {
+test('next job excludes completed bookings and consistently selects an equally timed job', () => {
   const jobs = ['a', 'b'].map((id) => ({ id, bookingDate: '2026-10-02', pickupTime: '10:00' }));
-  assert.equal(ops.nextDriverJob(jobs, {}), null);
+  assert.equal(ops.nextDriverJob(jobs, {}).id, 'a');
   assert.equal(ops.nextDriverJob(jobs, { a: [{ eventType: 'job_completed', eventTime: 'time' }] }).id, 'b');
   assert.equal(ops.nextDriverJob(jobs, Object.fromEntries(jobs.map((j) => [j.id, [{ eventType: 'job_completed', eventTime: 'time' }]]))), null);
 });
