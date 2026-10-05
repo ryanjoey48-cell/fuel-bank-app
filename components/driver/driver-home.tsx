@@ -308,26 +308,25 @@ export function DriverHome({
     remainingToday.length === 1 ? labels.remaining : labels.remainingPlural;
 
   return (
-    <main className="driver-home-restored mx-auto w-full max-w-3xl px-3 py-3 sm:px-6 sm:py-5">
-      <section className="driver-home-banner relative min-h-[160px] overflow-hidden rounded-[24px] border border-[#d8d0c5] bg-[#f6f0e6] shadow-sm sm:min-h-[176px]">
-        <div aria-hidden="true" className="driver-home-photograph absolute inset-y-0 right-0 w-[58%]">
+    <main className="driver-home-restored mx-auto w-full max-w-3xl px-3 pb-3 pt-2 sm:px-6 sm:py-5">
+      <section className="driver-home-banner relative min-h-[136px] overflow-hidden rounded-[24px] border border-[#d8d0c5] bg-[#f6f0e6] shadow-sm sm:min-h-[176px]">
         <Image
-          src="/ees-truck.png"
+          src="/driver-hero-bg.png"
           alt=""
           aria-hidden="true"
           fill
           sizes="(max-width: 768px) 100vw, 768px"
-          className="object-cover object-[43%_55%]"
+          className="object-cover object-[left_55%]"
+          style={{ width: "118%", left: "-18%", maxWidth: "none" }}
           priority
         />
-        </div>
 
         <div
           aria-hidden="true"
           className="absolute inset-0 bg-[linear-gradient(90deg,rgba(248,241,231,0.88)_0%,rgba(248,241,231,0.78)_30%,rgba(248,241,231,0.40)_56%,rgba(248,241,231,0.16)_100%)]"
         />
 
-        <div className="relative z-10 min-h-[158px] px-4 py-5 sm:min-h-[174px] sm:px-5">
+        <div className="relative z-10 min-h-[134px] px-4 py-4 sm:min-h-[174px] sm:px-5">
           <div className="max-w-[calc(100%-128px)]">
             <p className="text-[15px] font-medium text-slate-600">
               {labels.hello},
@@ -338,12 +337,12 @@ export function DriverHome({
             </h1>
 
             {remainingToday.length > 0 ? (
-              <p className="mt-3 text-[13px] font-semibold text-slate-700">
+              <p className="mt-2 text-[13px] font-semibold text-slate-700">
                 <strong className="text-[#152638]">{remainingToday.length}</strong>{" "}
                 {remainingLabel}
               </p>
             ) : (
-              <div className="mt-3 text-sm">
+              <div className="mt-2 text-sm">
                 <p className="font-medium text-emerald-700">
                   {labels.noMoreToday}
                 </p>
@@ -373,7 +372,7 @@ export function DriverHome({
       </section>
 
       {nextJob ? (
-        <section className="mt-3">
+        <section className="mt-2">
           <CurrentJobCard
             job={nextJob}
             events={eventsByJob[nextJob.id] || []}

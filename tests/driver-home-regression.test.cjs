@@ -51,8 +51,8 @@ for (const language of ['en', 'th']) test(`home keeps future Next Job unique, ex
   assert.ok(html.indexOf('/driver/jobs/a') < html.indexOf('/driver/jobs/b'));
   assert.ok(html.includes(language === 'en' ? 'No jobs remaining today' : 'วันนี้ไม่มีงานเหลือแล้ว'));
   assert.ok(html.includes(ui.driverJobAction(language, 'ready')));
-  assert.ok(html.includes('/ees-truck.png')); assert.ok(html.includes('driver-home-photograph'));
-  assert.ok(html.includes('min-h-[160px]')); assert.ok(html.includes('rounded-[24px]'));
+  assert.ok(html.includes('/driver-hero-bg.png')); assert.ok(!html.includes('/ees-truck.png'));
+  assert.ok(html.includes('min-h-[136px]')); assert.ok(html.includes('rounded-[24px]'));
 });
 test('underway future job keeps Continue job and original booking link', () => {
   const html = home('en', [job('active', '2026-10-12')], { active: [{ eventType: 'pickup_arrived', eventTime: '2026-10-05T04:00:00Z' }] });

@@ -35,7 +35,7 @@ for (const language of ['en', 'th']) for (let stage = 0; stage <= 4; stage++) te
   assert.equal((html.match(/id="job-progress"/g)||[]).length, 1);
   assert.ok(html.indexOf('id="job-progress"')<html.indexOf('id="job-next-action"'));
   assert.equal((html.match(/aria-current="step"/g) || []).length, stage < 4 ? 1 : 0);
-  assert.equal((html.match(/<details/g) || []).length, 4); assert.ok(!html.includes('<details open'));
+  assert.equal((html.match(/<details/g) || []).length, 3); assert.ok(!html.includes('<details open'));
   assert.ok(!html.includes(language === 'en' ? '>Job order<' : '>เลขงาน<'));
   assert.ok(!html.includes(language === 'en' ? '>Trailer<' : '>หางพ่วง<'));
   if (stage < 4) assert.ok(html.includes(language === 'en' ? `STEP ${stage + 1} OF 4` : `ขั้นตอน ${stage + 1} จาก 4`));
@@ -61,3 +61,5 @@ test('a cached photo stays visible after loading; changed photo URLs get fresh i
   assert.equal(DriverAvatar({ src: 'signed-photo-2', name: 'Joey Ryan' }).props.children.find(child => child && typeof child.type === 'function').key, 'signed-photo-2');
   assert.equal(DriverAvatar({ src: null, name: 'Joey Ryan' }).props.children[1], null);
 });
+
+test('three visible icon shortcuts follow Navigate only during travel; other route capabilities stay available', () => {for(const stage of [0,1,2,3,4]){const html=render('en',stage);const task=html.match(/<section class="driver-surface[\s\S]*?<\/section>/)[0];const shortcuts=task.match(/aria-label="Route options"[\s\S]*?<\/div>/);assert.equal(Boolean(shortcuts),stage===0||stage===2);if(shortcuts){assert.equal((shortcuts[0].match(/target="_blank"/g)||[]).length,3);assert.ok(task.indexOf('Navigate to')<task.indexOf('aria-label="Route options"'));assert.ok(task.indexOf('aria-label="Route options"')<task.indexOf('driver-primary-action'));}for(const mode of ['depot','current','pickup','delivery','pickup-to-dropoff']){const url=portal.buildDriverDirectionsUrl(job,mode,{name:'Depot',address:'Bangkok'}).replaceAll('&','&amp;');assert.ok(html.includes(url),'Missing '+mode+' at stage '+stage);}assert.ok(!html.includes('<span>Route options</span>'));}});
