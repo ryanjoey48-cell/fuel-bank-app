@@ -17,7 +17,7 @@ const portal = load('lib/driver-portal.ts');
 const vehicles = load('lib/driver-vehicle-types.ts');
 const job = { id: 'own-job', bookingDate: '2026-10-06', pickupTime: null, clientName: 'PIONEERS', pickupName: 'GLOBAL', dropoffName: 'ท่าเรือ', pickupAddress: 'JM4H+MVF ตำบลบางพลีใหญ่ สมุทรปราการ', dropoffAddress: 'ท่าเรือคลองเตย กรุงเทพมหานคร', vehicleRegistration: '1998', vehicleType: 'FOUR_WHEEL_TRUCK', jobOrderNumber: 'EES-123', trailerRegistration: '456' };
 const depot = { name: 'Depot', address: 'Depot address' };
-const { selectedDriverRoute } = load('components/driver/driver-route-options.tsx', { react: React, 'react/jsx-runtime': runtime, 'lucide-react': require('lucide-react') });
+const { selectedDriverRoute, driverNavigationRoutes, DriverRouteOptions } = load('components/driver/driver-route-options.tsx', { react: React, 'react/jsx-runtime': runtime, 'lucide-react': require('lucide-react') });
 test('intent selections preserve all five existing Maps routes and verified place IDs', () => {
   const verified = { ...job, locationsVerified: true, pickupLat: 13.1, pickupLng: 100.1, dropoffLat: 13.2, dropoffLng: 100.2, pickupPlaceId: 'places/pickup-id', dropoffPlaceId: 'places/delivery-id' };
   const base = { ...depot, latitude: 13, longitude: 100, placeId: 'places/depot-id' };
@@ -108,4 +108,10 @@ test('completion sends the final event only after confirmation and rejects dupli
     assert.deepEqual(JSON.parse(calls[0].init.body), {eventType:'job_completed',latitude:null,longitude:null});
     assert.equal(states[0].length, 4); assert.equal(states[6], false);
   } finally { global.fetch = previous; }
+});
+
+test('one-tap navigation preserves all routes, sorts current destination first and has no configuration controls', () => {
+const urls = {pickup:portal.buildDriverDirectionsUrl(job,'pickup',depot),delivery:portal.buildDriverDirectionsUrl(job,'delivery',depot),current:portal.buildDriverDirectionsUrl(job,'current',depot),depot:portal.buildDriverDirectionsUrl(job,'depot',depot),pickupToDropoff:portal.buildDriverDirectionsUrl(job,'pickup-to-dropoff',depot)};
+for(const destination of ['pickup','delivery']){const options=driverNavigationRoutes(urls,destination);assert.equal(options.length,6);assert.equal(options[0].href,urls[destination]);for(const href of Object.values(urls))assert.ok(options.some(option=>option.href===href));for(const language of ['en','th']){const html=renderToStaticMarkup(React.createElement(DriverRouteOptions,{language,pickupName:job.pickupName,deliveryName:job.dropoffName,defaultDestination:destination,urls}));assert.equal((html.match(/target="_blank"/g)||[]).length,6);assert.ok(!html.includes('<button'));assert.ok(!html.includes('<input'));assert.ok(!html.includes('<fieldset'));assert.ok(!html.includes('aria-pressed'));}}
+assert.deepEqual(driverNavigationRoutes({pickup:null,delivery:null,current:null,depot:null,pickupToDropoff:null},'pickup'),[]);
 });

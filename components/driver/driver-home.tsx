@@ -125,7 +125,7 @@ function CurrentJobCard({
       className="driver-next-job block overflow-hidden rounded-[var(--driver-radius)] bg-[#152638] text-white shadow-sm"
     >
       <div className="driver-next-job-heading flex items-center justify-between border-b border-white/10 px-4 py-2 sm:py-3.5 lg:px-8 lg:py-4">
-        <p className="text-xs lg:text-lg font-black tracking-[0.16em] text-slate-300">
+        <p className="driver-eyebrow driver-eyebrow-on-navy">
           {status === "ready" ? labels.next : labels.current}
         </p>
         <DriverStatusBadge language={language} status={status} />
@@ -152,8 +152,8 @@ function CurrentJobCard({
         </h2>
 
         <div className="driver-next-job-route mt-1.5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-x-3 rounded-2xl bg-[#203649] px-3.5 py-2 sm:mt-4 sm:gap-y-1 sm:py-3.5 lg:mt-3 lg:px-6 lg:py-4">
-          <p className="col-start-1 row-start-1 text-[10px] font-black uppercase tracking-[0.13em] text-white/60 lg:text-xs">{labels.pickup}</p>
-          <p className="col-start-3 row-start-1 text-right text-[10px] font-black uppercase tracking-[0.13em] text-white/60 lg:text-xs">{labels.dropoff}</p>
+          <p className="driver-eyebrow driver-eyebrow-on-navy col-start-1 row-start-1">{labels.pickup}</p>
+          <p className="driver-eyebrow driver-eyebrow-on-navy col-start-3 row-start-1 text-right">{labels.dropoff}</p>
           <p className="col-start-1 row-start-2 min-w-0 break-words text-[15px] font-bold text-white lg:text-xl">{job.pickupName || "—"}</p>
           <span aria-hidden="true" className="col-start-2 row-start-2 self-center text-center text-xl font-medium text-slate-300 lg:text-4xl">→</span>
           <p className="col-start-3 row-start-2 min-w-0 break-words text-right text-[15px] font-bold text-white lg:text-xl">{job.dropoffName || "—"}</p>

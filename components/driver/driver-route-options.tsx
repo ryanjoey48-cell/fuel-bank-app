@@ -1,7 +1,6 @@
 "use client";
 
 import { ExternalLink } from "lucide-react";
-import { useState } from "react";
 import { DriverDisclosure } from "./driver-disclosure";
 
 type RouteStart = "current" | "depot" | "pickup";
@@ -9,8 +8,8 @@ type RouteDestination = "pickup" | "delivery";
 type RouteUrls = { current: string | null; depot: string | null; pickup: string | null; delivery: string | null; pickupToDropoff: string | null };
 
 const copy = {
-  en: { more: "More route options", start: "Start from", go: "Go to", current: "My location", depot: "EES depot", pickup: "Pickup", delivery: "Delivery", via: "Via pickup", open: "Open route in Google Maps", missing: "Route unavailable", depotHelp: "Delivery routes from the depot include the pickup stop." },
-  th: { more: "ตัวเลือกเส้นทางเพิ่มเติม", start: "เริ่มจาก", go: "ไปที่", current: "ตำแหน่งฉัน", depot: "คลัง EES", pickup: "จุดรับ", delivery: "จุดส่ง", via: "ผ่านจุดรับ", open: "เปิดเส้นทางใน Google Maps", missing: "ไม่มีข้อมูลเส้นทาง", depotHelp: "เส้นทางจากคลังไปจุดส่งจะแวะจุดรับก่อน" }
+  en: { more: "More navigation options", options: "Navigation options", current: "From my location", depot: "EES depot", pickup: "Pickup", delivery: "Delivery", full: "Full job route", missing: "Route unavailable" },
+  th: { more: "ตัวเลือกนำทางเพิ่มเติม", options: "ตัวเลือกการนำทาง", current: "จากตำแหน่งฉัน", depot: "คลัง EES", pickup: "จุดรับ", delivery: "จุดส่ง", full: "เส้นทางงานทั้งหมด", missing: "ไม่มีข้อมูลเส้นทาง" }
 };
 
 // Reuse the existing Maps URLs, including their verified place IDs and waypoints.
@@ -29,6 +28,19 @@ export function selectedDriverRoute(urls: RouteUrls, start: RouteStart, destinat
   return route.toString();
 }
 
+export function driverNavigationRoutes(urls: RouteUrls, destination: RouteDestination) {
+  const pickup = { id: "pickup", href: urls.pickup };
+  const delivery = { id: "delivery", href: urls.delivery };
+  return [
+    destination === "pickup" ? pickup : delivery,
+    { id: "depotPickup", href: selectedDriverRoute(urls, "depot", "pickup", false) },
+    { id: "pickupDelivery", href: urls.pickupToDropoff },
+    destination === "pickup" ? delivery : pickup,
+    { id: "fullCurrent", href: urls.current },
+    { id: "fullDepot", href: urls.depot }
+  ].filter(route => route.href);
+}
+
 export function DriverRouteOptions({ language, pickupName, deliveryName, defaultDestination, urls }: {
   language: "en" | "th";
   pickupName: string | null;
@@ -37,29 +49,28 @@ export function DriverRouteOptions({ language, pickupName, deliveryName, default
   urls: RouteUrls;
 }) {
   const l = copy[language];
-  const [start, setStart] = useState<RouteStart>("current");
-  const [destination, setDestination] = useState<RouteDestination>(defaultDestination);
-  const [viaPickup, setViaPickup] = useState(false);
-  const href = selectedDriverRoute(urls, start, destination, viaPickup);
-  const option = "driver-route-option min-h-11 min-w-0 rounded-lg border px-2 py-1.5 text-xs font-semibold";
+  const pickup = pickupName || l.pickup;
+  const delivery = deliveryName || l.delivery;
+  const labels: Record<string, { from: string; to: string; detail?: string }> = {
+    pickup: { from: l.current, to: pickup },
+    delivery: { from: l.current, to: delivery },
+    depotPickup: { from: l.depot, to: pickup },
+    pickupDelivery: { from: pickup, to: delivery },
+    fullCurrent: { from: l.current, to: l.full, detail: pickup + " → " + delivery },
+    fullDepot: { from: l.depot, to: l.full, detail: pickup + " → " + delivery }
+  };
+  const routes = driverNavigationRoutes(urls, defaultDestination);
 
   return <DriverDisclosure title={l.more} compact>
-    <div className="driver-route-options space-y-2 border-t border-[var(--driver-border)] pb-2 pt-3">
-      <fieldset>
-        <legend className="driver-eyebrow mb-1">{l.start}</legend>
-        <div className="grid grid-cols-3 gap-1.5">
-          {(["current", "depot", "pickup"] as const).map(value => <button key={value} type="button" className={option} aria-pressed={start === value} disabled={value === "depot" ? !urls.depot : value === "pickup" ? !urls.pickupToDropoff : !urls.pickup && !urls.delivery} onClick={() => { setStart(value); if (value === "pickup") setDestination("delivery"); }}>{l[value]}</button>)}
-        </div>
-      </fieldset>
-      <fieldset>
-        <legend className="driver-eyebrow mb-1">{l.go}</legend>
-        <div className="grid grid-cols-2 gap-1.5">
-          {(["pickup", "delivery"] as const).map(value => <button key={value} type="button" className={option} aria-pressed={destination === value} disabled={value === "pickup" ? !urls.pickup || start === "pickup" : !urls.delivery} onClick={() => setDestination(value)}><span className="block break-words text-sm">{(value === "pickup" ? pickupName : deliveryName) || "—"}</span><span className="block text-[11px] font-normal">{l[value]}</span></button>)}
-        </div>
-      </fieldset>
-      {destination === "delivery" && start === "current" ? <label className="flex min-h-11 cursor-pointer items-center gap-2 text-xs text-slate-600"><input type="checkbox" className="h-4 w-4 accent-[var(--driver-primary)]" checked={viaPickup} disabled={!urls.current} onChange={e => setViaPickup(e.target.checked)} />{l.via} · {pickupName || "—"}</label> : null}
-      {destination === "delivery" && start === "depot" ? <p className="text-xs leading-4 text-slate-500">{l.depotHelp}</p> : null}
-      {href ? <a href={href} target="_blank" rel="noreferrer" className="driver-route-open flex min-h-11 items-center justify-center gap-2 rounded-lg border border-[var(--driver-border)] bg-slate-50 px-3 text-center text-xs font-semibold text-[#152638]">{l.open}<ExternalLink aria-hidden="true" className="h-3.5 w-3.5 shrink-0" /></a> : <p role="status" className="text-xs text-slate-500">{l.missing}</p>}
+    <div className="driver-navigation-options border-t border-[var(--driver-border)] pb-1 pt-2">
+      <p className="driver-eyebrow mb-1">{l.options}</p>
+      <div className="divide-y divide-[var(--driver-border)]">
+        {routes.map(({ id, href }) => <a key={id} href={href!} target="_blank" rel="noreferrer" className="driver-navigation-row flex min-h-11 items-center justify-between gap-3 py-2 text-sm text-[#152638]">
+          <span className="min-w-0 break-words"><span>{labels[id].from}</span><span aria-hidden="true" className="px-1 text-slate-400">→</span><span className="font-semibold">{labels[id].to}</span>{labels[id].detail ? <span className="mt-0.5 block text-xs text-slate-500">{labels[id].detail}</span> : null}</span>
+          <ExternalLink aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-400" />
+        </a>)}
+      </div>
+      {!routes.length ? <p role="status" className="py-2 text-xs text-slate-500">{l.missing}</p> : null}
     </div>
   </DriverDisclosure>;
 }

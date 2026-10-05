@@ -12,6 +12,7 @@ function load(file, deps = {}) {
   new Function('require', 'module', 'exports', js)((name) => { if (name === './driver-route-options') return load('components/driver/driver-route-options.tsx', { react: require('react'), 'react/jsx-runtime': require('react/jsx-runtime'), 'lucide-react': require('lucide-react') }); if (name === './driver-disclosure') return load('components/driver/driver-disclosure.tsx', { 'react/jsx-runtime': require('react/jsx-runtime'), 'lucide-react': require('lucide-react') }); assert.ok(name in deps, `Missing dependency ${name}`); return deps[name]; }, module, module.exports);
   return module.exports;
 }
+const routes = load('components/driver/driver-route-options.tsx', { 'react/jsx-runtime': require('react/jsx-runtime'), 'lucide-react': require('lucide-react') });
 const vehicleLabels = load('lib/driver-vehicle-types.ts');
 test('portal vehicle labels translate every supported enum without changing the existing option values', () => {
   for (const option of vehicleLabels.DRIVER_VEHICLE_TYPE_OPTIONS) {
@@ -45,8 +46,8 @@ for (const language of ['en', 'th']) {
   test(`detail retains original Maps URLs plus smart navigation, full addresses and Atip contact in ${language}`, () => {
     const html = detailMarkup(language, 0);
     const actual = [...html.matchAll(/href="(https:\/\/www\.google\.com\/maps[^\"]+)"/g)].map((match) => match[1].replace(/&amp;/g, '&'));
-    assert.deepEqual(actual, ['pickup', 'pickup'].map((mode) => portal.buildDriverDirectionsUrl(job, mode, depot)));
-    assert.ok(html.includes('Start from') || html.includes('เริ่มจาก')); assert.ok(html.includes('aria-pressed="true"'));
+    const urls = {pickup:portal.buildDriverDirectionsUrl(job,'pickup',depot),delivery:portal.buildDriverDirectionsUrl(job,'delivery',depot),current:portal.buildDriverDirectionsUrl(job,'current',depot),depot:portal.buildDriverDirectionsUrl(job,'depot',depot),pickupToDropoff:portal.buildDriverDirectionsUrl(job,'pickup-to-dropoff',depot)}; assert.deepEqual(actual, [urls.pickup,...routes.driverNavigationRoutes(urls,'pickup').map(route=>route.href)]);
+    assert.ok(html.includes('Navigation options') || html.includes('ตัวเลือกการนำทาง')); assert.ok(!html.includes('<fieldset')); assert.ok(!html.includes('aria-pressed'));
     assert.ok(html.includes(job.pickupAddress)); assert.ok(html.includes(job.dropoffAddress));
     assert.ok(html.includes('tel:+66657896654')); assert.ok(html.includes('Atip Punpanung'));
     assert.ok(html.includes(vehicleLabels.getPortalVehicleTypeLabel(job.vehicleType, language)));
@@ -65,7 +66,7 @@ test('completed detail retains all events and Maps but never renders a fixed nex
   assert.ok(!html.includes('bottom-[calc(52px+env(safe-area-inset-bottom))]'));
   assert.ok(!html.includes('aria-current="step"')); assert.ok(html.includes('bg-emerald-100'));
   assert.equal((html.match(/<time /g) || []).length, 4);
-  assert.equal((html.match(/target="_blank"/g) || []).length, 1);
+  assert.equal((html.match(/target="_blank"/g) || []).length, 6);
 });
 test('responsive drawer lock restores the exact previous page overflow when closed', () => {
   let cleanup;
