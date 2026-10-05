@@ -17,7 +17,7 @@ const copy = {
     vehicle: "Your vehicle",
     remaining: "job remaining today",
     remainingPlural: "jobs remaining today",
-    noMoreToday: "No more jobs today",
+    noMoreToday: "No jobs remaining today",
     noUpcoming: "No upcoming jobs",
     tomorrow: "Tomorrow",
     nextJobDate: "Next job",
@@ -87,61 +87,61 @@ function CurrentJobCard({
   return (
     <Link
       href={`/driver/jobs/${job.id}`}
-      className="block overflow-hidden rounded-[22px] bg-[#152638] text-white shadow-[0_10px_28px_rgba(21,38,56,0.16)] transition active:scale-[0.995]"
+      className="block overflow-hidden rounded-[24px] bg-[#102a43] text-white shadow-[0_14px_34px_rgba(16,42,67,0.18)] transition active:scale-[0.995]"
     >
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-        <p className="text-[11px] font-black tracking-[0.16em] text-orange-300">
+        <p className="text-[12px] font-black uppercase tracking-[0.14em] text-white/85">
           {status === "ready" ? labels.next : labels.current}
         </p>
         <DriverStatusBadge language={language} status={status} />
       </div>
 
       <div className="p-4">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-white/70">
-          <span className="inline-flex items-center gap-1.5 font-semibold">
-            <CalendarDays className="h-4 w-4 text-orange-300" />
-            {formattedDate}
-          </span>
-          <span className="inline-flex items-center gap-1.5 font-semibold">
-            <Clock3 className="h-4 w-4 text-orange-300" />
-            {formatTime(job.pickupTime, labels.timePending)}
-          </span>
-          <span className="ml-auto inline-flex items-center gap-1.5 font-bold">
-            <Truck className="h-4 w-4" />
-            {job.vehicleRegistration || "—"}
-          </span>
-        </div>
-
-        <h2 className="mt-3 break-words text-[24px] font-black leading-tight">
+        <h2 className="break-words text-[28px] font-black leading-none tracking-[-0.03em] text-white">
           {job.clientName || job.jobOrderNumber || labels.job}
         </h2>
 
-        <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-start gap-3 rounded-2xl bg-white/[0.06] px-3.5 py-3">
+        <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-[18px] bg-[#1f4667] px-4 py-4">
           <div className="min-w-0">
-            <p className="text-[9px] font-black uppercase tracking-[0.13em] text-white/45">
+            <p className="text-[9px] font-black uppercase tracking-[0.16em] text-white/60">
               {labels.pickup}
             </p>
-            <p className="mt-1 break-words text-sm font-bold leading-5 text-white">
+            <p className="mt-2 break-words text-[18px] font-semibold leading-6 text-white">
               {job.pickupName || "—"}
             </p>
           </div>
 
-          <span className="pt-4 text-xl font-black text-orange-300">→</span>
+          <span className="self-center text-[34px] font-light text-white/90">→</span>
 
           <div className="min-w-0 text-right">
-            <p className="text-[9px] font-black uppercase tracking-[0.13em] text-white/45">
+            <p className="text-[9px] font-black uppercase tracking-[0.16em] text-white/60">
               {labels.dropoff}
             </p>
-            <p className="mt-1 break-words text-sm font-bold leading-5 text-white">
+            <p className="mt-2 break-words text-[18px] font-semibold leading-6 text-white">
               {job.dropoffName || "—"}
             </p>
           </div>
         </div>
 
-        <div className="mt-3 flex justify-end">
-          <span className="inline-flex min-h-10 items-center gap-1 rounded-xl bg-orange-600 px-4 text-sm font-black text-white shadow-sm">
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-white/80">
+          <span className="inline-flex items-center gap-1.5 font-medium">
+            <CalendarDays className="h-4 w-4 shrink-0 text-white/85" />
+            {formattedDate}
+          </span>
+          <span className="inline-flex items-center gap-1.5 font-medium">
+            <Clock3 className="h-4 w-4 shrink-0 text-white/85" />
+            {formatTime(job.pickupTime, labels.timePending)}
+          </span>
+          <span className="ml-auto inline-flex items-center gap-1.5 font-medium">
+            <Truck className="h-4 w-4 shrink-0 text-white/85" />
+            {job.vehicleRegistration || "—"}
+          </span>
+        </div>
+
+        <div className="mt-5 flex justify-end">
+          <span className="inline-flex min-h-[52px] items-center gap-3 rounded-[18px] bg-[#5a35de] px-7 text-[18px] font-semibold text-white shadow-[0_10px_20px_rgba(90,53,222,0.28)]">
             {driverJobAction(language, status)}
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-5 w-5" />
           </span>
         </div>
       </div>
@@ -316,41 +316,63 @@ export function DriverHome({
 
   return (
     <main className="mx-auto w-full max-w-3xl px-3 py-3 sm:px-6 sm:py-5">
-      <section className="relative h-[158px] overflow-hidden rounded-[24px] border border-[#ded5c8] bg-[#f4eee5] shadow-[0_8px_22px_rgba(21,38,56,0.10)] sm:h-[176px]">
+      <section className="relative h-[172px] overflow-hidden rounded-[26px] border border-[#d8d0c5] bg-[#f6f0e6] shadow-sm sm:h-[184px]">
         <Image
           src="/ees-truck.png"
           alt=""
           fill
           sizes="(max-width: 768px) 100vw, 768px"
-          className="object-cover object-[62%_50%] sm:object-center"
+          className="object-cover object-center opacity-95"
           priority
         />
 
-        {/* Keep the truck crisp. Only soften the left side so the greeting stays readable. */}
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,249,239,0.96)_0%,rgba(255,249,239,0.86)_32%,rgba(255,249,239,0.38)_58%,rgba(255,249,239,0.06)_78%)]"
-        />
-        <div
-          aria-hidden="true"
-          className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#fff9ef]/75 to-transparent"
+          className="absolute inset-0 bg-[linear-gradient(90deg,rgba(248,241,231,0.92)_0%,rgba(248,241,231,0.82)_30%,rgba(248,241,231,0.45)_56%,rgba(248,241,231,0.24)_72%,rgba(248,241,231,0.38)_100%)]"
         />
 
         <div className="relative z-10 h-full px-4 py-4 sm:px-5">
-          {vehicleRegistration ? (
-            <div className="absolute right-3 top-3 max-w-[158px] rounded-[18px] border border-white/90 bg-white/94 px-3 py-2.5 shadow-[0_6px_18px_rgba(21,38,56,0.12)] backdrop-blur-md sm:right-4 sm:top-4 sm:max-w-[178px]">
-              <div className="flex items-start gap-2.5">
-                <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#f2f5f7]">
-                  <Truck className="h-4.5 w-4.5 text-[#152638]" />
-                </div>
+          <div className="absolute left-4 top-8 max-w-[48%] sm:left-5 sm:top-9">
+            <p className="text-[15px] font-medium text-slate-600">
+              {labels.hello},
+            </p>
 
+            <h1 className="mt-1 break-words text-[28px] font-semibold leading-8 tracking-[-0.03em] text-[#152638] sm:text-[30px]">
+              {profile?.displayName || driverName}
+            </h1>
+
+            {remainingToday.length > 0 ? (
+              <p className="mt-3 text-[13px] font-semibold text-slate-700">
+                <strong className="text-[#152638]">{remainingToday.length}</strong>{" "}
+                {remainingLabel}
+              </p>
+            ) : (
+              <div className="mt-3 text-sm">
+                <p className="font-medium text-emerald-700">
+                  {labels.noMoreToday}
+                </p>
+
+                {nextJobDate ? (
+                  <p className="mt-1 text-xs font-medium text-slate-600">
+                    {labels.nextJobDate} · {nextJobDate}
+                  </p>
+                ) : null}
+              </div>
+            )}
+          </div>
+
+          {vehicleRegistration ? (
+            <div className="absolute right-4 top-4 w-[160px] rounded-[18px] border border-white/90 bg-white/88 px-3 py-3 shadow-[0_6px_18px_rgba(21,38,56,0.12)] backdrop-blur-sm">
+              <div className="flex items-start gap-2.5">
+                <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#f3f6f8]">
+                  <Truck className="h-5 w-5 text-[#152638]" />
+                </div>
                 <div className="min-w-0">
-                  <p className="text-[19px] font-black leading-5 tracking-[-0.02em] text-[#152638]">
+                  <p className="truncate text-[18px] font-semibold leading-5 text-[#152638]">
                     {vehicleRegistration}
                   </p>
-
                   {vehicleType ? (
-                    <p className="mt-1 line-clamp-2 text-[11px] font-semibold leading-4 text-slate-500">
+                    <p className="mt-1 line-clamp-2 text-[11px] font-medium leading-4 text-slate-500">
                       {getPortalVehicleTypeLabel(vehicleType, language)}
                     </p>
                   ) : null}
@@ -358,35 +380,6 @@ export function DriverHome({
               </div>
             </div>
           ) : null}
-
-          <div className="absolute bottom-4 left-4 right-[150px] min-w-0 sm:bottom-5 sm:left-5 sm:right-[188px]">
-            <p className="text-[13px] font-semibold text-slate-500">
-              {labels.hello},
-            </p>
-
-            <h1 className="mt-0.5 truncate text-[27px] font-black leading-8 tracking-[-0.035em] text-[#152638] sm:text-[30px]">
-              {profile?.displayName || driverName}
-            </h1>
-
-            {remainingToday.length > 0 ? (
-              <div className="mt-2 inline-flex items-center rounded-full bg-white/88 px-2.5 py-1 text-[12px] font-bold text-[#152638] shadow-sm backdrop-blur-sm">
-                <strong className="mr-1">{remainingToday.length}</strong>
-                {remainingLabel}
-              </div>
-            ) : (
-              <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                <span className="inline-flex rounded-full bg-emerald-50/95 px-2.5 py-1 text-[12px] font-bold text-emerald-700 shadow-sm">
-                  {labels.noMoreToday}
-                </span>
-
-                {nextJobDate ? (
-                  <span className="inline-flex rounded-full bg-white/88 px-2.5 py-1 text-[11px] font-bold text-slate-600 shadow-sm backdrop-blur-sm">
-                    {labels.nextJobDate} · {nextJobDate}
-                  </span>
-                ) : null}
-              </div>
-            )}
-          </div>
         </div>
       </section>
 
@@ -403,8 +396,8 @@ export function DriverHome({
 
       <section className="mt-4 pb-6">
         <div className="mb-2.5 flex items-center gap-2">
-          <CalendarDays className="h-4 w-4 text-slate-500" />
-          <h2 className="text-xs font-black uppercase tracking-[0.14em] text-slate-700">
+          <CalendarDays className="h-5 w-5 text-slate-500" />
+          <h2 className="text-[16px] font-medium text-[#3c4050]">
             {labels.upcoming}
           </h2>
         </div>
