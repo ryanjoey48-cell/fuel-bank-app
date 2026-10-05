@@ -74,7 +74,8 @@ const copy = {
     confirm: "Complete this job?",
     confirmHelp: "This records the final completion time.",
     cancel: "Cancel",
-    nextStep: "Next"
+    nextStep: "Next",
+    takeMeThere: "Take me there"
   },
   th: {
     back: "กลับไปยังงาน",
@@ -123,7 +124,8 @@ const copy = {
     confirm: "ยืนยันจบงาน?",
     confirmHelp: "ระบบจะบันทึกเวลาจบงาน",
     cancel: "ยกเลิก",
-    nextStep: "ถัดไป"
+    nextStep: "ถัดไป",
+    takeMeThere: "นำทาง"
   }
 } as const;
 
@@ -318,12 +320,12 @@ export function DriverJobDetail({
         {!loading && !loadError && stage < 4 ? <p className="mt-1 text-[15px] font-semibold leading-5 text-[#152638]">{labels.focus[stage]}</p> : null}
         {loading ? <p role="status" className="py-3 text-sm text-slate-500">{labels.loading}</p> : loadError ? <p role="alert" className="py-3 text-sm text-rose-700">{labels.unavailable}</p> : stage >= 4 ? <p role="status" className="mt-2 flex items-center gap-2 rounded-xl bg-emerald-50 p-3 font-bold text-emerald-800"><Check className="h-5 w-5" />{labels.completed}</p> : <>
           <div className="mt-2 flex gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" /><div className="min-w-0"><p className="break-words text-base font-bold leading-5 text-[#152638]">{destinationName || labels.notAssigned}</p>{destinationAddress && destinationAddress !== destinationName ? <p className="mt-1 break-words text-xs leading-4 text-slate-500">{destinationAddress}</p> : null}</div></div>
-          <button type="button" disabled={!!saving} onClick={() => (stage === 3 ? setConfirmComplete(true) : void save())} className="driver-primary-action mt-2 min-h-12 w-full rounded-xl px-3 text-base font-bold text-white disabled:opacity-60">{saving ? (saving === "location" ? labels.locating : labels.saving) : labels.actions[stage]}</button>
-          <p className="mt-1 text-[10px] leading-4 text-slate-500">{labels.gps}</p>
-          <div className="mt-2 border-t border-[var(--driver-border)] pt-1">
-            <p className="driver-eyebrow mb-1">{labels.navigation}</p>
-            {navigationUrl ? <a className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#152638] px-3 py-2 text-center text-sm font-semibold text-white" href={navigationUrl} target="_blank" rel="noreferrer"><Navigation2 aria-hidden="true" className="h-4 w-4 shrink-0" /><span className="min-w-0 break-words">{labels.navigateTo} {destinationName || (destinationIsPickup ? labels.pickup : labels.dropoff)}</span><ExternalLink aria-hidden="true" className="h-3.5 w-3.5 shrink-0" /></a> : <p className="text-sm text-amber-800">{labels.missingRoute}</p>}
+          <div className="mt-3 border-t border-[var(--driver-border)] pt-3">
+            <p className="driver-eyebrow mb-1.5">{labels.takeMeThere}</p>
+            {navigationUrl ? <a className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#152638] px-3 py-2.5 text-center text-sm font-bold text-white transition-opacity active:opacity-90" href={navigationUrl} target="_blank" rel="noreferrer"><Navigation2 aria-hidden="true" className="h-4 w-4 shrink-0" /><span className="min-w-0 break-words">{labels.navigateTo} {destinationName || (destinationIsPickup ? labels.pickup : labels.dropoff)}</span><ExternalLink aria-hidden="true" className="h-3.5 w-3.5 shrink-0 opacity-70" /></a> : <p className="text-sm text-amber-800">{labels.missingRoute}</p>}
           </div>
+          <button type="button" disabled={!!saving} onClick={() => (stage === 3 ? setConfirmComplete(true) : void save())} className="driver-primary-action mt-2 min-h-12 w-full rounded-xl px-3 text-base font-bold text-white disabled:opacity-60">{saving ? (saving === "location" ? labels.locating : labels.saving) : labels.actions[stage]}</button>
+          <p className="mt-1 text-center text-[10px] leading-4 text-slate-500">{labels.gps}</p>
         </>}
         <DriverRouteOptions key={destinationIsPickup ? "pickup" : "delivery"} language={language} pickupName={job.pickupName} deliveryName={job.dropoffName} defaultDestination={destinationIsPickup ? "pickup" : "delivery"} urls={{ depot: depotUrl, current: currentUrl, pickup: pickupUrl, delivery: deliveryUrl, pickupToDropoff: pickupToDropoffUrl }} />
         {saveError ? <p role="alert" className="mt-2 text-sm font-semibold text-rose-700">{labels.saveError}</p> : null}
