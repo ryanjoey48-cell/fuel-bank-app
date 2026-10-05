@@ -77,6 +77,7 @@ const copy = {
     gps: "Location will be added if available.",
     completed: "Job completed",
     refresh: "Refresh",
+    syncing: "Updating…",
     missingRoute: "Route locations are missing. Contact operations.",
     next: "Next step",
     focus: ["Arrive at pickup", "Leave pickup", "Arrive at delivery", "Complete job"],
@@ -137,6 +138,7 @@ const copy = {
     gps: "ระบบจะบันทึกตำแหน่งถ้าสามารถใช้งานได้",
     completed: "จบงานแล้ว",
     refresh: "รีเฟรช",
+    syncing: "กำลังอัปเดต…",
     missingRoute: "ข้อมูลเส้นทางไม่ครบ กรุณาติดต่อฝ่ายปฏิบัติการ",
     next: "ขั้นตอนถัดไป",
     focus: ["ไปจุดรับสินค้า", "ออกจากจุดรับสินค้า", "ไปจุดส่งสินค้า", "จบงาน"],
@@ -226,6 +228,7 @@ export function DriverJobDetail({
   const labels = copy[language];
   const [events, setEvents] = useState<DriverJobEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState<"location" | "save" | null>(null);
@@ -235,28 +238,54 @@ export function DriverJobDetail({
   const generation = useRef(0);
   const endpoint = `/api/driver/jobs/${encodeURIComponent(job.id)}/events`;
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (silent = false) => {
     const id = ++generation.current;
-    setLoading(true);
+    if (silent) setSyncing(true);
+    else setLoading(true);
     setLoadError(false);
 
     try {
-      const response = await fetch(endpoint, { cache: "no-store" });
+      // The timestamp plus no-store prevents iOS/PWA/WebKit from reusing an old GET response.
+      const separator = endpoint.includes("?") ? "&" : "?";
+      const response = await fetch(`${endpoint}${separator}_=${Date.now()}`, {
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { "Cache-Control": "no-cache", Pragma: "no-cache" }
+      });
       const payload = await response.json();
       if (!response.ok || !Array.isArray(payload.events)) throw new Error("Progress unavailable");
-      if (id === generation.current) setEvents(payload.events);
+      if (id === generation.current) {
+        setEvents(payload.events);
+        setSaveError(null);
+      }
     } catch {
-      if (id === generation.current) setLoadError(true);
+      if (id === generation.current && !silent) setLoadError(true);
     } finally {
-      if (id === generation.current) setLoading(false);
+      if (id === generation.current) {
+        if (silent) setSyncing(false);
+        else setLoading(false);
+      }
     }
   }, [endpoint]);
 
   useEffect(() => {
     const counter = generation;
     void load();
+
+    const sync = () => void load(true);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") sync();
+    };
+
+    window.addEventListener("focus", sync);
+    window.addEventListener("pageshow", sync);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
     return () => {
       counter.current++;
+      window.removeEventListener("focus", sync);
+      window.removeEventListener("pageshow", sync);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [load]);
 
@@ -276,7 +305,9 @@ export function DriverJobDetail({
       setSaving("save");
       const response = await fetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-cache" },
         body: JSON.stringify({
           eventType: DRIVER_JOB_EVENT_TYPES[stage],
           ...location
@@ -291,11 +322,15 @@ export function DriverJobDetail({
         throw new Error(message);
       }
 
+      // Optimistically advance, then immediately reconcile with the authoritative server state.
       setEvents((current) => [...current, payload.event]);
       setFeedback(location.latitude === null ? "locationMissing" : "saved");
+      await load(true);
     } catch (error) {
-      setSaveError(error instanceof Error && error.message ? error.message : labels.saveError);
-      await load();
+      // A 409 normally means another device already advanced the job. Re-sync first.
+      await load(true);
+      const message = error instanceof Error && error.message ? error.message : labels.saveError;
+      if (!message.toLowerCase().includes("progress already changed")) setSaveError(message);
     } finally {
       busy.current = false;
       setSaving(null);
@@ -382,7 +417,7 @@ export function DriverJobDetail({
         </div>
       </section>
       <section className="driver-job-progress px-3 pb-2" aria-labelledby="job-progress">
-        <div className="flex items-center justify-between gap-2"><h2 id="job-progress" className="text-xs font-bold text-[#152638]">{labels.progress}</h2><button type="button" disabled={loading || !!saving} onClick={() => void load()} aria-label={labels.refresh} title={labels.refresh} className="inline-flex h-11 w-11 shrink-0 items-center justify-center text-slate-400 disabled:opacity-50"><RefreshCw className="h-3.5 w-3.5" /></button></div>
+        <div className="flex items-center justify-between gap-2"><h2 id="job-progress" className="text-xs font-bold text-[#152638]">{labels.progress}</h2><div className="flex items-center gap-1.5">{syncing ? <span className="text-[10px] font-semibold text-slate-400">{labels.syncing}</span> : null}<button type="button" disabled={loading || syncing || !!saving} onClick={() => void load(true)} aria-label={labels.refresh} title={labels.refresh} className="inline-flex h-9 w-9 shrink-0 items-center justify-center text-slate-400 disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`} /></button></div></div>
         {!loading && !loadError ? <ol className="grid grid-cols-4">{DRIVER_JOB_EVENT_TYPES.map((type, index) => {
           const event = events.find((entry) => entry.eventType === type);
           const current = !event && index === stage;
