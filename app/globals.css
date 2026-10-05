@@ -16,6 +16,7 @@
   --driver-button-height: 44px;
   --driver-icon-size: 16px;
   --driver-metadata-size: 12px;
+  --driver-header-size: 53px;
   color: var(--driver-navy);
 }
 .driver-surface { border: 1px solid var(--driver-border); border-radius: var(--driver-radius); background: #fff; box-shadow: var(--driver-shadow); }
@@ -30,34 +31,37 @@
 .driver-disclosure[open] > .driver-disclosure-content { animation: driver-reveal 150ms ease-out; }
 .driver-disclosure summary:hover { background: rgba(21,38,56,.025); }
 .driver-navigation-row:hover { background: #faf9f6; }
-.driver-header-slot { height: calc(49px + env(safe-area-inset-top)); }
+.driver-header-slot { height: calc(var(--driver-header-size) + env(safe-area-inset-top)); }
 .driver-portal-header { padding-top: env(safe-area-inset-top); }
+.driver-home-photograph { mask-image: linear-gradient(90deg, transparent, #000 12%); -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%); }
+/* Crop the source's left-hand dashboard artwork, retaining the truck photograph. */
+.driver-home-photograph > img { width: 175% !important; max-width: none; left: -75% !important; }
+.driver-profile-toast { top: calc(var(--driver-header-size) + env(safe-area-inset-top) + 8px); max-width: calc(100vw - 24px); }
 .driver-portal-shell button, .driver-portal-shell a, .driver-portal-shell summary { transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease, opacity 150ms ease; }
 .driver-portal-shell button:active:not(:disabled), .driver-portal-shell a:active { opacity: .78; }
-.driver-portal-shell button.driver-primary-action, .driver-navigation-row { min-height: var(--driver-button-height); }
+.driver-navigation-row { min-height: var(--driver-button-height); }
 .driver-portal-shell input:focus-visible, .driver-portal-shell select:focus-visible { outline: 2px solid var(--driver-primary); outline-offset: 2px; }
 .driver-field { margin-top: 4px; min-height: var(--driver-button-height); width: 100%; border: 1px solid var(--driver-border); border-radius: 8px; background: #fcfbf8; padding: 6px 12px; font-size: 16px; box-shadow: none; }
 .driver-profile select { width: auto; border: 0; border-radius: 0; background: transparent; box-shadow: none; padding-block: 6px; }
 .driver-disclosure summary > svg { width: var(--driver-icon-size); height: var(--driver-icon-size); }
 .driver-job-summary > div:last-child { font-size: var(--driver-metadata-size); }
-.driver-active-job > section[aria-labelledby="job-next-action"] { padding: var(--driver-card-space); }
 .driver-job-progress { border-bottom: 1px solid var(--driver-border); }
 .driver-job-summary { border-radius: var(--driver-radius); }
 .driver-tab-bar { border-color: var(--driver-border); box-shadow: 0 -2px 8px rgba(21,38,56,.025); }
 .driver-tab { font-size: 11px; line-height: 14px; font-weight: 600; }
 .driver-tab svg { width: 20px; height: 20px; stroke-width: 1.75; }
+.driver-tab[aria-current="page"] { font-weight: 700; }
+.driver-tab[aria-current="page"] svg { stroke-width: 2; }
 @keyframes driver-reveal { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) {
   .driver-portal-shell *, .driver-portal-shell *::before, .driver-portal-shell *::after { animation: none !important; transition: none !important; }
 }
 @media (min-width: 640px) {
-  .driver-header-slot { height: calc(69px + env(safe-area-inset-top)); }
-  .driver-tab-bar { top: calc(69px + env(safe-area-inset-top)); }
+  .driver-portal-shell { --driver-header-size: 61px; }
+  .driver-tab-bar { top: calc(var(--driver-header-size) + env(safe-area-inset-top)); }
   .driver-tab { font-size: 14px; line-height: 20px; }
 }
 @media (min-width: 1024px) {
-  .driver-header-slot { height: calc(89px + env(safe-area-inset-top)); }
-  .driver-tab-bar { top: calc(89px + env(safe-area-inset-top)); }
   .driver-tab { font-size: 16px; }
   .driver-tab svg { width: 24px; height: 24px; }
 }

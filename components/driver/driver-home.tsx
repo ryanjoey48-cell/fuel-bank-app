@@ -55,7 +55,7 @@ function formatTime(value: string | null, fallback: string) {
 
 function addDays(dateKey: string, days: number) {
   const date = new Date(`${dateKey}T12:00:00+07:00`);
-  date.setDate(date.getDate() + days);
+  date.setUTCDate(date.getUTCDate() + days);
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(date);
 }
 
@@ -85,10 +85,10 @@ function CurrentJobCard({
   return (
     <Link
       href={`/driver/jobs/${job.id}`}
-      className="driver-home-next-job block overflow-hidden rounded-[24px] bg-[#102a43] text-white shadow-[0_14px_34px_rgba(16,42,67,0.18)] transition active:scale-[0.995]"
+      className="driver-home-next-job block overflow-hidden rounded-[24px] bg-[#102a43] text-white shadow-[0_6px_18px_rgba(16,42,67,0.12)] transition active:scale-[0.995]"
     >
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-        <p className="text-[12px] font-black uppercase tracking-[0.14em] text-white/85">
+        <p className="driver-eyebrow driver-eyebrow-on-navy">
           {status === "ready" ? labels.next : labels.current}
         </p>
         <DriverStatusBadge language={language} status={status} />
@@ -99,9 +99,9 @@ function CurrentJobCard({
           {job.clientName || job.jobOrderNumber || labels.job}
         </h2>
 
-        <div className="mt-4 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-[18px] bg-[#1f4667] px-4 py-4">
+        <div className="mt-3 grid grid-cols-[minmax(0,1fr)_24px_minmax(0,1fr)] items-center gap-3 rounded-2xl bg-[#1f4667] px-3 py-3">
           <div className="min-w-0">
-            <p className="text-[9px] font-black uppercase tracking-[0.16em] text-white/60">
+            <p className="driver-eyebrow driver-eyebrow-on-navy">
               {labels.pickup}
             </p>
             <p className="mt-2 break-words text-[18px] font-semibold leading-6 text-white">
@@ -109,10 +109,10 @@ function CurrentJobCard({
             </p>
           </div>
 
-          <span className="self-center text-[34px] font-light text-white/90">→</span>
+          <span aria-hidden="true" className="self-center text-center text-2xl font-light text-white/90">→</span>
 
           <div className="min-w-0 text-right">
-            <p className="text-[9px] font-black uppercase tracking-[0.16em] text-white/60">
+            <p className="driver-eyebrow driver-eyebrow-on-navy">
               {labels.dropoff}
             </p>
             <p className="mt-2 break-words text-[18px] font-semibold leading-6 text-white">
@@ -136,8 +136,8 @@ function CurrentJobCard({
           </span>
         </div>
 
-        <div className="mt-5 flex justify-end">
-          <span className="inline-flex min-h-[52px] items-center gap-3 rounded-[18px] bg-[#5a35de] px-7 text-[18px] font-semibold text-white shadow-[0_10px_20px_rgba(90,53,222,0.28)]">
+        <div className="mt-4 flex justify-end">
+          <span className="driver-primary-action inline-flex min-h-12 items-center gap-3 rounded-xl px-6 text-base font-semibold text-white shadow-sm">
             {driverJobAction(language, status)}
             <ChevronRight className="h-5 w-5" />
           </span>
@@ -180,7 +180,7 @@ function UpcomingJobRow({
 
           <p className="col-span-2 break-words text-[13px] leading-5 text-slate-600">
             {job.pickupName || "—"}
-            <span className="px-1.5 text-orange-500">→</span>
+            <span className="px-1.5 text-slate-400">→</span>
             {job.dropoffName || "—"}
           </p>
         </div>
@@ -309,23 +309,25 @@ export function DriverHome({
 
   return (
     <main className="driver-home-restored mx-auto w-full max-w-3xl px-3 py-3 sm:px-6 sm:py-5">
-      <section className="driver-home-banner relative min-h-[176px] overflow-hidden rounded-[26px] border border-[#d8d0c5] bg-[#f6f0e6] shadow-sm sm:min-h-[184px]">
+      <section className="driver-home-banner relative min-h-[160px] overflow-hidden rounded-[24px] border border-[#d8d0c5] bg-[#f6f0e6] shadow-sm sm:min-h-[176px]">
+        <div aria-hidden="true" className="driver-home-photograph absolute inset-y-0 right-0 w-[58%]">
         <Image
-          src="/driver-hero-bg.png"
+          src="/ees-truck.png"
           alt=""
           aria-hidden="true"
           fill
           sizes="(max-width: 768px) 100vw, 768px"
-          className="object-cover object-[center_55%]"
+          className="object-cover object-[43%_55%]"
           priority
         />
+        </div>
 
         <div
           aria-hidden="true"
           className="absolute inset-0 bg-[linear-gradient(90deg,rgba(248,241,231,0.88)_0%,rgba(248,241,231,0.78)_30%,rgba(248,241,231,0.40)_56%,rgba(248,241,231,0.16)_100%)]"
         />
 
-        <div className="relative z-10 min-h-[174px] px-4 py-6 sm:min-h-[182px] sm:px-5">
+        <div className="relative z-10 min-h-[158px] px-4 py-5 sm:min-h-[174px] sm:px-5">
           <div className="max-w-[calc(100%-128px)]">
             <p className="text-[15px] font-medium text-slate-600">
               {labels.hello},

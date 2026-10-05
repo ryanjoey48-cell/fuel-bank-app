@@ -86,7 +86,7 @@ export function DriverProfilePage() {
   const [uploading, setUploading] = useState(false);
   const [editing, setEditing] = useState(false);
 
-  const personalDetails = useRef<HTMLDetailsElement>(null);
+  const personalDetails = useRef<HTMLFormElement>(null);
   const field = "driver-field";
 
   const applyProfile = useCallback((p: DriverProfile) => {
@@ -221,7 +221,7 @@ export function DriverProfilePage() {
       {message ? (
         <div
           role="status"
-          className="fixed left-1/2 top-[62px] z-[70] -translate-x-1/2 rounded-full border border-emerald-200 bg-white px-4 py-2 text-sm font-semibold text-emerald-800 shadow-lg sm:top-[82px]"
+          className="driver-profile-toast fixed left-1/2 z-[70] -translate-x-1/2 rounded-full border border-emerald-200 bg-white px-4 py-2 text-sm font-semibold text-emerald-800 shadow-sm"
         >
           ✓ {l.saved}
         </div>
@@ -234,15 +234,15 @@ export function DriverProfilePage() {
       ) : (
         <>
           <section className="driver-surface overflow-hidden">
-            <div className="flex items-center gap-3 p-4">
+            <div className="flex items-center gap-3 p-3">
               <DriverAvatar
                 src={profile.avatarUrl}
                 name={profile.displayName}
-                className="h-16 w-16 rounded-2xl text-xl sm:h-[72px] sm:w-[72px]"
+                className="h-14 w-14 rounded-2xl text-lg"
               />
 
               <div className="min-w-0 flex-1">
-                <p className="truncate text-xl font-bold text-[#152638]">
+                <p className="break-words text-xl font-bold text-[#152638]">
                   {profile.displayName}
                 </p>
 
@@ -260,22 +260,22 @@ export function DriverProfilePage() {
                     </strong>
                   </span>
                 </div>
-              </div>
-
               {!editing ? (
                 <button
                   type="button"
-                  className="min-h-10 shrink-0 rounded-xl border border-[var(--driver-border)] bg-[#fcfbf8] px-3 text-xs font-bold text-[#152638]"
+                  className="mt-2 min-h-11 rounded-lg border border-[var(--driver-border)] bg-[#fcfbf8] px-3 text-xs font-semibold text-[#152638]"
                   onClick={openEditor}
                 >
                   {l.edit}
                 </button>
               ) : null}
+              </div>
             </div>
 
             {editing ? (
               <form
-                className="border-t border-slate-100 bg-[#fffdf9] p-4"
+                ref={personalDetails}
+                className="border-t border-slate-100 bg-[#fffdf9] p-3"
                 onSubmit={(e) => {
                   e.preventDefault();
                   void request(
@@ -300,7 +300,7 @@ export function DriverProfilePage() {
                   />
 
                   <div className="min-w-0 flex-1">
-                    <label className="inline-flex min-h-10 cursor-pointer items-center rounded-xl border border-[var(--driver-border)] bg-white px-3 text-sm font-bold text-[#152638] hover:bg-slate-50">
+                    <label className="inline-flex min-h-11 cursor-pointer items-center rounded-lg border border-[var(--driver-border)] bg-white px-3 text-sm font-semibold text-[#152638] hover:bg-slate-50 focus-within:outline focus-within:outline-2 focus-within:outline-[var(--driver-primary)]">
                       {uploading ? l.photoUpdating : l.photo}
                       <input
                         aria-label={l.photo}

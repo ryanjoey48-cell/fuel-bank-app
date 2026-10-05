@@ -372,13 +372,13 @@ export function DriverJobDetail({
   const actionContext = [labels.whenYouArrive, labels.whenReadyToLeave, labels.atDelivery, labels.finishJob][stage];
   const lastEvent = events[events.length - 1];
 
-  const ProgressStrip = () => (
-    <div className="mt-3 border-t border-[var(--driver-border)] pt-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">{labels.progress}</p>
+  const progressStrip = (
+    <div className="mt-2 border-t border-[var(--driver-border)] pt-2">
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <p className="driver-eyebrow">{labels.progress}</p>
         <div className="flex items-center gap-1">
           {syncing ? <span className="text-[10px] font-semibold text-slate-400">{labels.syncing}</span> : null}
-          <button type="button" disabled={loading || syncing || !!saving} onClick={() => void load(true)} aria-label={labels.refresh} title={labels.refresh} className="inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-400 active:bg-slate-100 disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`} /></button>
+          <button type="button" disabled={loading || syncing || !!saving} onClick={() => void load(true)} aria-label={labels.refresh} title={labels.refresh} className="inline-flex h-11 w-11 items-center justify-center rounded-full text-slate-400 active:bg-slate-100 disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`} /></button>
         </div>
       </div>
       <ol className="grid grid-cols-4">
@@ -389,8 +389,8 @@ export function DriverJobDetail({
           return <li key={type} aria-current={current ? "step" : undefined} className="relative min-w-0 px-0.5 text-center" aria-label={labels.steps[index]}>
             {index < 3 ? <span aria-hidden="true" className={`absolute left-1/2 top-2.5 h-px w-full ${complete ? "bg-emerald-200" : "bg-slate-200"}`} /> : null}
             <span className={`relative z-10 mx-auto flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${complete ? "bg-emerald-100 text-emerald-700" : current ? "driver-primary-action text-white" : "bg-slate-100 text-slate-400"}`}>{complete ? <Check className="h-3 w-3" /> : index + 1}</span>
-            <p className={`mt-1 truncate text-[10px] font-semibold ${current ? "driver-accent" : complete ? "text-[#152638]" : "text-slate-400"}`}>{labels.progressShort[index]}</p>
-            {event ? <time dateTime={event.eventTime} className="mt-0.5 block text-[9px] leading-3 text-slate-400">{new Intl.DateTimeFormat(language === "th" ? "th-TH" : "en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" }).format(new Date(event.eventTime))}</time> : null}
+            <p className={`mt-1 break-words text-[11px] font-semibold ${current ? "driver-accent" : complete ? "text-[#152638]" : "text-slate-400"}`}>{labels.progressShort[index]}</p>
+            {event ? <time dateTime={event.eventTime} className="mt-0.5 block text-[11px] leading-4 text-slate-500">{new Intl.DateTimeFormat(language === "th" ? "th-TH" : "en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" }).format(new Date(event.eventTime))}</time> : null}
           </li>;
         })}
       </ol>
@@ -399,13 +399,13 @@ export function DriverJobDetail({
 
   return (
     <main className="driver-active-job mx-auto w-full max-w-3xl space-y-2 px-3 pb-4 pt-1 sm:px-6 sm:py-5">
-      <Link href="/driver" className="inline-flex min-h-10 items-center gap-2 text-sm font-semibold text-[#152638]"><ArrowLeft className="h-4 w-4" />{labels.back}</Link>
+      <Link href="/driver" className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[#152638]"><ArrowLeft className="h-4 w-4" />{labels.back}</Link>
 
       <header className="driver-job-summary rounded-2xl bg-[#152638] px-4 py-3 text-white shadow-sm">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-xl font-bold leading-6">{job.clientName || job.jobOrderNumber || labels.title}</h1>
-            <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-sm font-semibold leading-5">
+          <div className="min-w-0 flex-1">
+            <h1 className="break-words text-xl font-bold leading-6">{job.clientName || job.jobOrderNumber || labels.title}</h1>
+            <div className="mt-2 grid grid-cols-[minmax(0,1fr)_20px_minmax(0,1fr)] items-center gap-2 text-sm font-semibold leading-5">
               <span className="min-w-0 break-words">{job.pickupName || labels.notAssigned}</span>
               <span className="text-slate-400">→</span>
               <span className="min-w-0 break-words text-right">{job.dropoffName || labels.notAssigned}</span>
@@ -413,39 +413,38 @@ export function DriverJobDetail({
           </div>
           <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${!loading && !loadError && stage >= 4 ? "bg-emerald-100 text-emerald-800" : "bg-white/10 text-white"}`}>{loading || loadError ? "—" : labels.statuses[stage]}</span>
         </div>
-        <div className="mt-2 flex items-center gap-3 border-t border-white/10 pt-2 text-[11px] text-slate-300"><span>{formattedDate}</span><span className="inline-flex items-center gap-1"><Clock3 className="h-3 w-3" />{job.pickupTime?.slice(0, 5) || labels.timePending}</span><span className="ml-auto inline-flex items-center gap-1 font-semibold"><Truck className="h-3 w-3" />{job.vehicleRegistration || "—"}</span></div>
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-white/10 pt-2 text-[11px] text-slate-300"><span>{formattedDate}</span><span className="inline-flex items-center gap-1"><Clock3 className="h-3 w-3" />{job.pickupTime?.slice(0, 5) || labels.timePending}</span><span className="ml-auto inline-flex items-center gap-1 font-semibold"><Truck className="h-3 w-3" />{job.vehicleRegistration || "—"}</span></div>
       </header>
 
       <section className={`${panel} overflow-hidden`} aria-labelledby="job-next-action">
-        <div className="p-3.5">
-          {loading ? <p role="status" className="py-4 text-sm text-slate-500">{labels.loading}</p> : loadError ? (
-            <div className="rounded-xl bg-rose-50 p-3"><p role="alert" className="text-sm font-semibold text-rose-700">{labels.unavailable}</p><button type="button" onClick={() => void load()} className="mt-2 inline-flex min-h-10 items-center gap-2 rounded-lg bg-white px-3 text-sm font-bold text-[#152638] shadow-sm"><RefreshCw className="h-4 w-4" />{labels.retry}</button></div>
+        <div className="p-3">
+          {loading ? <p role="status" id="job-next-action" className="py-4 text-sm text-slate-500">{labels.loading}</p> : loadError ? (
+            <div className="rounded-xl bg-rose-50 p-3"><p id="job-next-action" role="alert" className="text-sm font-semibold text-rose-700">{labels.unavailable}</p><button type="button" onClick={() => void load()} className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-lg bg-white px-3 text-sm font-bold text-[#152638] shadow-sm"><RefreshCw className="h-4 w-4" />{labels.retry}</button></div>
           ) : stage >= 4 ? (
             <>
               <div className="rounded-2xl bg-emerald-50 px-3.5 py-3 text-emerald-800">
                 <div className="flex items-center gap-3">
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100"><Check className="h-5 w-5" /></span>
-                  <div className="min-w-0 flex-1"><p className="font-bold">{labels.completed}</p>{lastEvent ? <p className="mt-0.5 text-xs text-emerald-700">{formatTimestamp(lastEvent.eventTime)}{lastEvent.latitude !== null && lastEvent.longitude !== null ? " · GPS" : ""}</p> : null}</div>
+                  <div className="min-w-0 flex-1"><p id="job-next-action" className="font-bold">{labels.completed}</p>{lastEvent ? <p className="mt-0.5 text-xs text-emerald-700">{formatTimestamp(lastEvent.eventTime)}{lastEvent.latitude !== null && lastEvent.longitude !== null ? " · GPS" : ""}</p> : null}</div>
                 </div>
-                <Link href="/driver" className="mt-3 flex min-h-10 items-center justify-center rounded-xl bg-white px-3 text-sm font-bold text-emerald-800 shadow-sm">{labels.back}</Link>
+                <Link href="/driver" className="mt-3 flex min-h-11 items-center justify-center rounded-xl bg-white px-3 text-sm font-bold text-emerald-800 shadow-sm">{labels.back}</Link>
               </div>
-              <ProgressStrip />
+              {progressStrip}
             </>
           ) : (
             <>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-violet-600">
+                  <p className="driver-eyebrow driver-accent">
                     {language === "th" ? `ขั้นตอน ${stage + 1} จาก 4` : `STEP ${stage + 1} OF 4`}
                   </p>
-                  <h2 id="job-next-action" className="mt-1 text-[22px] font-bold leading-7 text-[#152638]">{labels.focus[stage]}</h2>
+                  <h2 id="job-next-action" className="mt-1 text-xl font-bold leading-6 text-[#152638]">{labels.focus[stage]}</h2>
                 </div>
-                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-50 text-xs font-bold text-violet-700">{stage + 1}</span>
               </div>
 
-              <div className="mt-3 rounded-2xl border border-[#eee8de] bg-[#faf8f4] p-3.5">
+              <div className="mt-2 rounded-xl bg-[#faf8f4] p-3">
                 <div className="flex items-start gap-2.5">
-                  <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-violet-600" />
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
                   <div className="min-w-0">
                     <p className="break-words text-base font-bold leading-5 text-[#152638]">{destinationName || labels.notAssigned}</p>
                     {destinationAddress && destinationAddress !== destinationName ? <p className="mt-1 break-words text-xs leading-5 text-slate-500">{destinationAddress}</p> : null}
@@ -457,18 +456,18 @@ export function DriverJobDetail({
 
               <div className="mt-3">
                 <p className="mb-1.5 text-[11px] font-semibold text-slate-500">{actionContext}</p>
-                <button type="button" disabled={!!saving} onClick={() => (stage === 3 ? setConfirmComplete(true) : void save())} className="driver-primary-action min-h-[50px] w-full rounded-xl px-3 text-base font-bold text-white shadow-sm disabled:opacity-60">{saving ? (saving === "location" ? labels.locating : labels.saving) : labels.actions[stage]}</button>
-                <p className="mt-1.5 text-center text-[9px] leading-3 text-slate-400">{labels.gps}</p>
+                <button type="button" disabled={!!saving} onClick={() => (stage === 3 ? setConfirmComplete(true) : void save())} className="driver-primary-action min-h-12 w-full rounded-xl px-3 text-base font-bold text-white shadow-sm disabled:opacity-60">{saving ? (saving === "location" ? labels.locating : labels.saving) : labels.actions[stage]}</button>
+                <p className="mt-1 text-center text-[11px] leading-4 text-slate-500">{labels.gps}</p>
               </div>
-              <ProgressStrip />
+              {progressStrip}
               <div className="mt-3 border-t border-[var(--driver-border)] pt-2.5">
                 <div className="mb-1.5 flex items-center justify-between">
-                  <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400">{labels.quickRoutes}</p>
+                  <p className="driver-eyebrow">{labels.quickRoutes}</p>
                 </div>
                 <div className="grid grid-cols-3 gap-1.5">
-                  {depotUrl ? <a href={depotUrl} target="_blank" rel="noreferrer" className="flex min-h-11 items-center justify-center gap-1 rounded-lg bg-slate-50 px-1.5 text-center active:bg-slate-100"><Warehouse className="h-3.5 w-3.5 shrink-0 text-slate-500"/><span className="text-[9px] font-bold leading-3 text-[#152638]">{labels.fromDepot}</span></a> : null}
-                  {pickupToDropoffUrl ? <a href={pickupToDropoffUrl} target="_blank" rel="noreferrer" className="flex min-h-11 items-center justify-center gap-1 rounded-lg bg-slate-50 px-1.5 text-center active:bg-slate-100"><MapPin className="h-3.5 w-3.5 shrink-0 text-violet-600"/><span className="text-[9px] font-bold leading-3 text-[#152638]">{labels.pickupDelivery}</span></a> : null}
-                  {currentUrl ? <a href={currentUrl} target="_blank" rel="noreferrer" className="flex min-h-11 items-center justify-center gap-1 rounded-lg bg-slate-50 px-1.5 text-center active:bg-slate-100"><Route className="h-3.5 w-3.5 shrink-0 text-slate-500"/><span className="text-[9px] font-bold leading-3 text-[#152638]">{labels.fromHere}</span></a> : null}
+                  {depotUrl ? <a href={depotUrl} target="_blank" rel="noreferrer" className="flex min-h-11 items-center justify-center gap-1 rounded-lg bg-slate-50 px-1.5 text-center active:bg-slate-100"><Warehouse className="h-3.5 w-3.5 shrink-0 text-slate-500"/><span className="text-[11px] font-semibold leading-4 text-[#152638]">{labels.fromDepot}</span></a> : null}
+                  {pickupToDropoffUrl ? <a href={pickupToDropoffUrl} target="_blank" rel="noreferrer" className="flex min-h-11 items-center justify-center gap-1 rounded-lg bg-slate-50 px-1.5 text-center active:bg-slate-100"><MapPin className="h-3.5 w-3.5 shrink-0 text-slate-500"/><span className="text-[11px] font-semibold leading-4 text-[#152638]">{labels.pickupDelivery}</span></a> : null}
+                  {currentUrl ? <a href={currentUrl} target="_blank" rel="noreferrer" className="flex min-h-11 items-center justify-center gap-1 rounded-lg bg-slate-50 px-1.5 text-center active:bg-slate-100"><Route className="h-3.5 w-3.5 shrink-0 text-slate-500"/><span className="text-[11px] font-semibold leading-4 text-[#152638]">{labels.fromHere}</span></a> : null}
                 </div>
               </div>
             </>
@@ -502,10 +501,10 @@ export function DriverJobDetail({
               [labels.customer, job.clientName],
               [labels.jobReference, job.jobOrderNumber],
               [labels.trailer, job.trailerRegistration]
-            ].filter(([, value]) => value && value !== labels.notAssigned).map(([label, value]) => (
+            ].filter(([, value], index) => index < 3 || (typeof value === "string" && value.trim() && value !== labels.notAssigned)).map(([label, value]) => (
               <div key={label} className="flex justify-between gap-4 border-b border-slate-100 py-2.5 last:border-0">
                 <dt className="text-slate-500">{label}</dt>
-                <dd className="max-w-[65%] break-words text-right font-semibold text-[#152638]">{value}</dd>
+                <dd className="max-w-[65%] break-words text-right font-semibold text-[#152638]">{value || labels.notAssigned}</dd>
               </div>
             ))}
           </dl>

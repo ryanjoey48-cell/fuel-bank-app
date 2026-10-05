@@ -19,7 +19,7 @@ const ui = load('components/driver/driver-ui.tsx', { react: React, 'react/jsx-ru
 const today = '2026-10-05';
 const job = (id, date, time = null) => ({ id, bookingDate: date, pickupTime: time, clientName: id, pickupName: 'ท่าเรือ', dropoffName: 'Asia Mag', vehicleRegistration: '1998', vehicleType: 'FOUR_WHEEL_TRUCK' });
 const done = { eventType: 'job_completed', eventTime: '2026-10-05T04:00:00Z' };
-function home(language, jobs, eventsByJob = {}) {
+function home(language, jobs, eventsByJob = {}, date = today) {
   const { DriverHome } = load('components/driver/driver-home.tsx', {
     react: { ...React, useState: () => [null, () => {}] }, 'react/jsx-runtime': runtime, 'lucide-react': require('lucide-react'),
     'next/link': ({ children, ...props }) => React.createElement('a', props, children),
@@ -27,7 +27,7 @@ function home(language, jobs, eventsByJob = {}) {
     '@/lib/language-provider': { useLanguage: () => ({ language }) }, '@/lib/driver-operations': ops,
     '@/lib/driver-vehicle-types': vehicleLabels, './driver-ui': ui
   });
-  return renderToStaticMarkup(React.createElement(DriverHome, { driverName: 'Joey Ryan', jobs, eventsByJob, today }));
+  return renderToStaticMarkup(React.createElement(DriverHome, { driverName: 'Joey Ryan', jobs, eventsByJob, today: date }));
 }
 for (const date of ['2026-10-08', '2026-10-12', '2027-10-12']) test(`next unfinished job has no future-date cutoff: ${date}`, () => {
   const jobs = [job('past', '2026-10-04'), job('today-done', today), job('tomorrow-done', '2026-10-06'), job('next', date)];
@@ -51,8 +51,8 @@ for (const language of ['en', 'th']) test(`home keeps future Next Job unique, ex
   assert.ok(html.indexOf('/driver/jobs/a') < html.indexOf('/driver/jobs/b'));
   assert.ok(html.includes(language === 'en' ? 'No jobs remaining today' : 'วันนี้ไม่มีงานเหลือแล้ว'));
   assert.ok(html.includes(ui.driverJobAction(language, 'ready')));
-  assert.ok(html.includes('/driver-hero-bg.png')); assert.ok(!html.includes('/ees-truck.png'));
-  assert.ok(html.includes('min-h-[176px]')); assert.ok(html.includes('rounded-[26px]'));
+  assert.ok(html.includes('/ees-truck.png')); assert.ok(html.includes('driver-home-photograph'));
+  assert.ok(html.includes('min-h-[160px]')); assert.ok(html.includes('rounded-[24px]'));
 });
 test('underway future job keeps Continue job and original booking link', () => {
   const html = home('en', [job('active', '2026-10-12')], { active: [{ eventType: 'pickup_arrived', eventTime: '2026-10-05T04:00:00Z' }] });
@@ -74,3 +74,5 @@ test('a later page failure reports unavailable instead of returning a misleading
   const q = { select() { return q; }, eq() { return q; }, gte() { return q; }, order() { return q; }, async range(start) { return start ? { data: null, error: new Error('failed') } : { data: Array.from({ length: 500 }, (_, i) => ({ id: String(i), booking_date: '2026-10-12' })), error: null }; } };
   await assert.rejects(server({ from: () => q }).listAssignedDriverJobs({ driverId: '26' }), { status: 503 });
 });
+
+for (const zone of ['Asia/Bangkok','America/Los_Angeles','Pacific/Auckland']) test('Tomorrow uses the Bangkok booking date independently of device timezone: '+zone, () => {const previous=process.env.TZ;try{process.env.TZ=zone;const html=home('en',[job('now','2026-11-01'),job('tomorrow','2026-11-02'),job('later','2026-11-03')],{},'2026-11-01');assert.equal((html.match(/>Tomorrow</g)||[]).length,1);assert.ok(html.includes('3 Nov 2026'));}finally{if(previous===undefined)delete process.env.TZ;else process.env.TZ=previous;}});

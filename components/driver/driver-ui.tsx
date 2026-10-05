@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { OperationStatus } from "@/lib/driver-operations";
 
 export const driverStatusCopy = {
@@ -65,19 +65,11 @@ function AvatarImage({
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
 
-  /*
-   * A Supabase signed URL changes after a new avatar is uploaded.
-   * Reset the local image state whenever that URL changes so a previous
-   * failed/loading state can never leave the initials stuck on screen.
-   */
-  useEffect(() => {
-    setLoaded(false);
-    setFailed(false);
-  }, [src]);
-
   if (failed) return null;
 
   return (
+    // Signed avatar URLs load directly; the parent URL key resets image state.
+    // eslint-disable-next-line @next/next/no-img-element
     <img
       src={src}
       alt={name}
