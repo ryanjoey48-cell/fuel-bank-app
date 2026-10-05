@@ -29,9 +29,13 @@ function render(language, stage, extra = {}) {
 for (const language of ['en', 'th']) for (let stage = 0; stage <= 4; stage++) test(`workflow polish retains stage, recorded times, full route names and collapsed utilities: ${language} ${stage}`, () => {
   const html = render(language, stage);
   assert.ok(html.includes(job.pickupName)); assert.ok(html.includes(job.dropoffName));
-  assert.ok(!html.includes('truncate')); assert.equal((html.match(/<time /g) || []).length, stage);
+  assert.ok(!html.includes('truncate'));
+  const progress = html.match(/<section aria-labelledby="job-progress"[\s\S]*?<\/section>/)[0];
+  assert.equal((progress.match(/<time /g) || []).length, stage);
+  assert.equal((html.match(/id="job-progress"/g)||[]).length, 1);
+  assert.ok(html.indexOf('id="job-progress"')<html.indexOf('id="job-next-action"'));
   assert.equal((html.match(/aria-current="step"/g) || []).length, stage < 4 ? 1 : 0);
-  assert.equal((html.match(/<details/g) || []).length, 3); assert.ok(!html.includes('<details open'));
+  assert.equal((html.match(/<details/g) || []).length, 4); assert.ok(!html.includes('<details open'));
   assert.ok(!html.includes(language === 'en' ? '>Job order<' : '>เลขงาน<'));
   assert.ok(!html.includes(language === 'en' ? '>Trailer<' : '>หางพ่วง<'));
   if (stage < 4) assert.ok(html.includes(language === 'en' ? `STEP ${stage + 1} OF 4` : `ขั้นตอน ${stage + 1} จาก 4`));
