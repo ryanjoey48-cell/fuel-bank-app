@@ -61,11 +61,11 @@ test('directions to pickup uses current origin and works without a drop-off', ()
   assert.equal(url.searchParams.get('destination'), '13.6,100.6');
   assert.equal(url.searchParams.get('destination_place_id'), 'pickup-place');
 });
-test('all five additional navigation options remain available without stage gating', () => {
+test('all existing navigation routes remain supplied to the intent controls without stage gating', () => {
   const source = read('components/driver/driver-job-detail.tsx');
-  for (const option of ['[depotUrl, labels.depot]', '[currentUrl, labels.current]', '[pickupUrl, labels.pickupDirections]', '[deliveryUrl, labels.delivery]', '[pickupToDropoffUrl, labels.pickupToDropoff]']) assert.ok(source.includes(option));
-  const navigation = source.slice(source.indexOf('<details className="group mt-1">'), source.indexOf('{saveError ?'));
-  assert.ok(navigation.includes('labels.moreNav')); assert.equal(navigation.includes('stage'), false);
+  for (const value of ['depot: depotUrl', 'current: currentUrl', 'pickup: pickupUrl', 'delivery: deliveryUrl', 'pickupToDropoff: pickupToDropoffUrl']) assert.ok(source.includes(value));
+  const navigation = source.slice(source.indexOf('<DriverRouteOptions'), source.indexOf('{saveError ?'));
+  assert.ok(navigation.includes('defaultDestination')); assert.equal(navigation.includes('stage'), false);
 });
 
 function gps(navigator, timers = { setTimeout, clearTimeout }) {

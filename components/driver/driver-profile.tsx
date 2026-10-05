@@ -82,21 +82,21 @@ export function DriverProfilePage() {
 
   const personalDetails = useRef<HTMLDetailsElement>(null);
 
-  const field = "mt-1 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-base focus:border-[#152638] focus:outline-none focus:ring-2 focus:ring-slate-200";
+  const field = "driver-field";
 
   return (
-    <main className="mx-auto max-w-3xl space-y-2 px-3 py-3 sm:px-4 sm:py-5">
-      <h1 className="text-2xl font-black text-[#152638]">{l.title}</h1>
+    <main className="driver-profile mx-auto max-w-3xl space-y-2 px-3 py-3 sm:px-4 sm:py-5">
+      <h1 className="driver-page-title">{l.title}</h1>
       {error ? <div role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-800">{l.error}<button onClick={() => void load()} className="ml-3 underline">{l.retry}</button></div> : null}
       {message ? <p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{l.saved}</p> : null}
       {!profile ? <p>{l.loading}</p> : <>
-        <section className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm">
+        <section className="driver-surface p-3">
           <div className="flex items-center gap-3">
             <DriverAvatar src={profile.avatarUrl} name={profile.displayName} className="h-14 w-14 rounded-2xl text-lg" />
             <div className="min-w-0 flex-1">
               <p className="break-words text-xl font-bold text-[#152638]">{profile.displayName}</p>
               <p className="mt-0.5 break-words text-xs text-slate-500">{l.driver} {profile.driverId}</p><p className="mt-1 break-words text-sm font-semibold text-[#152638]">{l.vehicle} {profile.vehicle || "—"}</p>
-              <button type="button" className="driver-accent mt-1 inline-flex min-h-11 items-center text-sm font-semibold" onClick={() => {
+              <button type="button" className="driver-accent mt-1 inline-flex min-h-11 items-center gap-2 rounded-lg border border-[var(--driver-border)] bg-[#fcfbf8] px-3 text-xs font-semibold" onClick={() => {
                 const details = personalDetails.current;
                 if (!details) return;
                 details.open = true;
@@ -106,12 +106,13 @@ export function DriverProfilePage() {
           </div>
         </section>
 
+        <div className="driver-information-group driver-surface">
         <DriverDisclosure title={l.personal} detailsRef={personalDetails}>
         <form className="border-t border-slate-100 p-3 sm:p-4" onSubmit={(e) => {
           e.preventDefault();
           void request("/api/driver/profile", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ displayName: name, phone }) });
         }}>
-                        <label className="inline-flex min-h-11 cursor-pointer items-center rounded-xl border border-slate-200 px-3 text-sm font-bold text-[#152638] hover:bg-slate-50 focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--driver-primary)]">
+              <label className="inline-flex min-h-11 cursor-pointer items-center rounded-lg border border-[var(--driver-border)] px-3 text-sm font-semibold text-[#152638] hover:bg-slate-50 focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--driver-primary)]">
                 {uploading ? (language === "th" ? "กำลังอัปโหลด…" : "Uploading…") : l.photo}
                 <input aria-label={l.photo} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" disabled={busy}
                   onChange={(event) => {
@@ -127,11 +128,11 @@ export function DriverProfilePage() {
             <label className="block text-sm font-semibold">{l.name}<input className={field} value={name} maxLength={100} required disabled={busy} onChange={(e) => setName(e.target.value)} /></label>
             <label className="block text-sm font-semibold">{l.phone}<input type="tel" className={field} value={phone} maxLength={30} disabled={busy} onChange={(e) => setPhone(e.target.value)} /></label>
           </div>
-          <button className="mt-3 min-h-11 w-full rounded-xl driver-primary-action px-4 font-bold text-white disabled:opacity-50" disabled={busy}>{busy ? l.working : l.save}</button>
+          <button className="mt-2 min-h-11 w-full rounded-lg driver-primary-action px-4 font-semibold text-white disabled:opacity-50" disabled={busy}>{busy ? l.working : l.save}</button>
         </form>
         </DriverDisclosure>
 
-        <label className="flex min-h-12 items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white px-4 shadow-sm">
+        <label className="flex min-h-11 items-center justify-between gap-3 bg-white px-4">
           <span className="text-sm font-semibold text-[#152638]">{l.language}</span>
           <select aria-label={l.language} className="min-h-11 max-w-[60%] cursor-pointer bg-transparent pl-2 text-right text-sm text-slate-500" value={language} onChange={(e) => setLanguage(e.target.value as "en" | "th")}>
             <option value="en">English</option><option value="th">ไทย</option>
@@ -148,7 +149,7 @@ export function DriverProfilePage() {
         </div></DriverDisclosure>
 
         <DriverDisclosure title={l.password}><div className="border-t border-slate-100 px-4 pb-3">
-          <form className="mt-2 space-y-3" onSubmit={(e) => void password(e)}>
+          <form className="mt-2 space-y-2" onSubmit={(e) => void password(e)}>
             <p className="text-xs leading-5 text-slate-500">{l.passwordHelp}</p>
             {[["currentPassword", l.current, "current-password"], ["password", l.new, "new-password"], ["confirmPassword", l.confirm, "new-password"]].map(([key, label, autocomplete]) =>
               <label key={key} className="block text-sm font-semibold">{label}<input name={key} type="password" autoComplete={autocomplete} minLength={key === "currentPassword" ? 1 : 12} maxLength={128} required disabled={busy} className={field} /></label>
@@ -156,6 +157,7 @@ export function DriverProfilePage() {
             <button className="btn-secondary min-h-11 w-full" disabled={busy}>{busy ? l.working : l.password}</button>
           </form>
         </div></DriverDisclosure>
+        </div>
       </>}
     </main>
   );

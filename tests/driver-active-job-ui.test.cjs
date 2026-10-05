@@ -10,13 +10,32 @@ function load(file, deps = {}) {
   const module = { exports: {} };
   const source = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
   const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
-  new Function('require', 'module', 'exports', js)((name) => { if (name === './driver-disclosure') return load('components/driver/driver-disclosure.tsx', { 'react/jsx-runtime': require('react/jsx-runtime'), 'lucide-react': require('lucide-react') }); assert.ok(name in deps, name); return deps[name]; }, module, module.exports);
+  new Function('require', 'module', 'exports', js)((name) => { if (name === './driver-route-options') return load('components/driver/driver-route-options.tsx', { react: require('react'), 'react/jsx-runtime': require('react/jsx-runtime'), 'lucide-react': require('lucide-react') }); if (name === './driver-disclosure') return load('components/driver/driver-disclosure.tsx', { 'react/jsx-runtime': require('react/jsx-runtime'), 'lucide-react': require('lucide-react') }); assert.ok(name in deps, name); return deps[name]; }, module, module.exports);
   return module.exports;
 }
 const portal = load('lib/driver-portal.ts');
 const vehicles = load('lib/driver-vehicle-types.ts');
 const job = { id: 'own-job', bookingDate: '2026-10-06', pickupTime: null, clientName: 'PIONEERS', pickupName: 'GLOBAL', dropoffName: 'ท่าเรือ', pickupAddress: 'JM4H+MVF ตำบลบางพลีใหญ่ สมุทรปราการ', dropoffAddress: 'ท่าเรือคลองเตย กรุงเทพมหานคร', vehicleRegistration: '1998', vehicleType: 'FOUR_WHEEL_TRUCK', jobOrderNumber: 'EES-123', trailerRegistration: '456' };
 const depot = { name: 'Depot', address: 'Depot address' };
+const { selectedDriverRoute } = load('components/driver/driver-route-options.tsx', { react: React, 'react/jsx-runtime': runtime, 'lucide-react': require('lucide-react') });
+test('intent selections preserve all five existing Maps routes and verified place IDs', () => {
+  const verified = { ...job, locationsVerified: true, pickupLat: 13.1, pickupLng: 100.1, dropoffLat: 13.2, dropoffLng: 100.2, pickupPlaceId: 'places/pickup-id', dropoffPlaceId: 'places/delivery-id' };
+  const base = { ...depot, latitude: 13, longitude: 100, placeId: 'places/depot-id' };
+  const urls = Object.fromEntries(['current', 'depot', 'pickup', 'delivery', 'pickupToDropoff'].map(key => [key, portal.buildDriverDirectionsUrl(verified, key === 'pickupToDropoff' ? 'pickup-to-dropoff' : key, base)]));
+  for (const [start, destination, via, key] of [['current','pickup',false,'pickup'], ['current','delivery',false,'delivery'], ['current','delivery',true,'current'], ['depot','delivery',false,'depot'], ['pickup','delivery',false,'pickupToDropoff']]) assert.equal(selectedDriverRoute(urls,start,destination,via),urls[key]);
+  const selected = new URL(selectedDriverRoute(urls,'depot','pickup',false));
+  assert.equal(selected.searchParams.get('origin'),'13,100');
+  assert.equal(selected.searchParams.get('origin_place_id'),'depot-id');
+  assert.equal(selected.searchParams.get('destination'),'13.1,100.1');
+  assert.equal(selected.searchParams.get('destination_place_id'),'pickup-id');
+  assert.equal(selected.searchParams.has('waypoints'),false);
+  assert.equal(new URL(selectedDriverRoute(urls,'current','delivery',false)).searchParams.has('origin'),false);
+});
+test('missing routes cannot invent a destination or loop pickup back to itself', () => {
+  const empty = {current:null,depot:null,pickup:null,delivery:null,pickupToDropoff:null};
+  for (const start of ['current','depot','pickup']) for (const destination of ['pickup','delivery']) assert.equal(selectedDriverRoute(empty,start,destination,false),null);
+  assert.equal(selectedDriverRoute({...empty,pickupToDropoff:'https://www.google.com/maps/dir/?destination=delivery'},'pickup','pickup',false),null);
+});
 function render(language, stage, overrides = {}) {
   const states = [portal.DRIVER_JOB_EVENT_TYPES.slice(0, stage).map((eventType, i) => ({ eventType, eventTime: `2026-10-06T0${i + 1}:00:00Z`, latitude: i ? null : 13, longitude: i ? null : 100 })), false, false, false, null, null, false];
   for (const [key, value] of Object.entries(overrides)) states[Number(key)] = value;
@@ -35,7 +54,7 @@ for (const language of ['en', 'th']) for (let stage = 0; stage <= 4; stage++) {
     assert.ok(html.includes('tel:+66657896654')); assert.ok(html.includes('Atip Punpanung'));
     const links = nodes(tree).filter(n => n.type === 'a' && n.props.target === '_blank');
     const extra = ['depot', 'current', 'pickup', 'delivery', 'pickup-to-dropoff'].map(mode => portal.buildDriverDirectionsUrl(job, mode, depot));
-    assert.deepEqual(links.slice(stage < 4 ? 1 : 0).map(n => n.props.href), extra);
+    const options = nodes(tree).find(n => n.props?.urls); assert.deepEqual(Object.values(options.props.urls), extra); assert.equal(options.props.defaultDestination, stage < 2 ? 'pickup' : 'delivery');
     assert.equal((html.match(/aria-current="step"/g) || []).length, stage < 4 ? 1 : 0);
     assert.equal((html.match(/<time /g) || []).length, stage);
     assert.equal((html.match(/<details/g) || []).length, 4);
@@ -54,7 +73,7 @@ test('loading/error states hide actions and primary navigation, retaining refres
     const { tree } = render('en', 0, overrides);
     const section = nodes(tree).find(n => n.type === 'section' && n.props['aria-labelledby'] === 'job-next-action');
     assert.equal(nodes(section).filter(n => n.type === 'button').length, 0);
-    assert.equal(nodes(tree).filter(n => n.type === 'a' && n.props.target === '_blank').length, 5);
+    assert.equal(nodes(tree).filter(n => n.type === 'a' && n.props.target === '_blank').length, 0); assert.ok(nodes(tree).some(n => n.props?.urls));
   }
 });
 test('sequential save payload, timestamp update and completion confirmation remain intact', async () => {

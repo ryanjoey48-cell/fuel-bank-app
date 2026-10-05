@@ -10,7 +10,7 @@ function load(file, deps = {}) {
   const module = { exports: {} };
   const source = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
   const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
-  new Function('require', 'module', 'exports', js)((name) => { if (name === './driver-disclosure') return load('components/driver/driver-disclosure.tsx', { 'react/jsx-runtime': require('react/jsx-runtime'), 'lucide-react': require('lucide-react') }); assert.ok(name in deps, name); return deps[name]; }, module, module.exports);
+  new Function('require', 'module', 'exports', js)((name) => { if (name === './driver-route-options') return load('components/driver/driver-route-options.tsx', { react: require('react'), 'react/jsx-runtime': require('react/jsx-runtime'), 'lucide-react': require('lucide-react') }); if (name === './driver-disclosure') return load('components/driver/driver-disclosure.tsx', { 'react/jsx-runtime': require('react/jsx-runtime'), 'lucide-react': require('lucide-react') }); assert.ok(name in deps, name); return deps[name]; }, module, module.exports);
   return module.exports;
 }
 const ui = load('components/driver/driver-ui.tsx', { react: React, 'react/jsx-runtime': runtime, 'next/image': () => null });

@@ -122,7 +122,7 @@ function CurrentJobCard({
   return (
     <Link
       href={`/driver/jobs/${job.id}`}
-      className="driver-next-job block overflow-hidden rounded-2xl bg-[#152638] text-white shadow-sm transition active:scale-[0.995]"
+      className="driver-next-job block overflow-hidden rounded-[var(--driver-radius)] bg-[#152638] text-white shadow-sm"
     >
       <div className="driver-next-job-heading flex items-center justify-between border-b border-white/10 px-4 py-2 sm:py-3.5 lg:px-8 lg:py-4">
         <p className="text-xs lg:text-lg font-black tracking-[0.16em] text-slate-300">
@@ -198,7 +198,7 @@ function UpcomingJobRow({
             <Clock3 className="h-4 w-4 shrink-0" />
             <span className="font-semibold">{formatTime(job.pickupTime, labels.timePending)}</span>
           </div>
-          <p className="mt-1.5 truncate font-black text-[#152638] lg:mt-0 lg:text-base">
+          <p className="mt-1.5 truncate font-bold text-[#152638] lg:mt-0 lg:text-base">
             {job.clientName || job.jobOrderNumber || labels.job}
           </p>
           <p className="mt-1 line-clamp-2 break-words text-sm text-slate-600 lg:hidden">
@@ -305,7 +305,7 @@ export function DriverHome({
 
   return (
     <main className="driver-jobs-home mx-auto w-full max-w-3xl px-3 py-3 sm:px-6 sm:py-6 lg:max-w-[1280px]">
-      <section className="driver-home-hero relative isolate overflow-hidden rounded-[22px] border border-[#d8d1c7] bg-[#f8f3e9] px-4 py-3 sm:py-4 shadow-[0_8px_24px_rgba(21,38,56,0.07)] lg:min-h-[320px] lg:px-7 lg:py-6">
+      <section className="driver-home-hero relative isolate overflow-hidden rounded-[var(--driver-radius)] border border-[#d8d1c7] bg-[#f8f3e9] px-4 py-3 sm:py-4 lg:min-h-[320px] lg:px-7 lg:py-6">
         <Image
           src="/driver-hero-bg.png"
           alt=""
@@ -320,7 +320,7 @@ export function DriverHome({
         <div className="relative z-10 flex min-h-[176px] flex-col items-start justify-between gap-3 sm:min-h-[248px] sm:flex-row sm:items-center sm:gap-4 lg:min-h-[272px] lg:gap-8">
           <div className="min-w-0 w-full sm:w-auto sm:flex-1">
             <p className="text-sm font-semibold text-slate-500 lg:text-2xl lg:text-[#152638]">{labels.hello},</p>
-            <h1 className="mt-0.5 break-words text-2xl font-black text-[#152638] sm:truncate lg:mt-1 lg:text-[48px] lg:leading-tight">
+            <h1 className="mt-0.5 break-words text-2xl font-bold text-[#152638] sm:truncate lg:mt-1 lg:text-[48px] lg:leading-tight">
               {profile?.displayName || driverName}
             </h1>
 
@@ -380,7 +380,7 @@ export function DriverHome({
       <section className="mt-3 pb-6 sm:mt-6">
         <div className="mb-2 flex items-center gap-2 sm:mb-3">
           <CalendarDays className="h-4 w-4 text-slate-500" />
-          <h2 className="text-sm font-black uppercase tracking-[0.14em] text-slate-700">
+          <h2 className="text-sm font-semibold text-slate-700">
             {labels.upcoming}
           </h2>
         </div>
@@ -390,13 +390,13 @@ export function DriverHome({
             {upcomingGroups.map(([date, dateJobs]) => (
               <div key={date} className="lg:border-b lg:border-slate-200 lg:last:border-b-0">
                 <div className="mb-1 flex items-center justify-between sm:mb-2 lg:hidden">
-                  <h3 className="text-sm font-black text-[#152638]">{formatDate(date)}</h3>
-                  <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-slate-500 shadow-sm">
+                  <h3 className="text-sm font-semibold text-[#152638]">{formatDate(date)}</h3>
+                  <span className="px-2 py-1 text-xs font-medium text-slate-500">
                     {dateJobs.length}
                   </span>
                 </div>
 
-                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:rounded-none lg:border-0 lg:shadow-none">
+                <div className="driver-surface overflow-hidden lg:rounded-none lg:border-0 lg:shadow-none">
                   {dateJobs.map((job) => (
                     <UpcomingJobRow
                       key={job.id}

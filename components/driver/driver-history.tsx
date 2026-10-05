@@ -13,9 +13,9 @@ export function DriverHistory({ rows, page, hasMore }: { rows: DriverWork[]; pag
   }).format(new Date(value));
 
   return (
-    <main className="mx-auto max-w-3xl px-3 py-4 sm:px-4 sm:py-5">
-      <header className="mb-4 px-1">
-        <h1 className="text-2xl font-black text-[#152638]">{th ? "ประวัติงาน" : "History"}</h1>
+    <main className="driver-history mx-auto max-w-3xl px-3 py-3 sm:px-4 sm:py-5">
+      <header className="mb-3 px-1">
+        <h1 className="driver-page-title">{th ? "ประวัติงาน" : "History"}</h1>
         <div className="mt-1 flex items-center gap-2 text-sm text-slate-500"><p>{th ? "งานที่จบแล้ว" : "Completed jobs"}</p><span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-[#152638]" aria-label={th ? "จำนวนงานในหน้านี้" : "Jobs on this page"}>{rows.length}</span></div>
       </header>
 
@@ -27,15 +27,15 @@ export function DriverHistory({ rows, page, hasMore }: { rows: DriverWork[]; pag
             const completed = events.find((e) => e.eventType === "job_completed");
             if (!completed) return null;
             return (
-              <Link href={`/driver/jobs/${job.id}`} key={job.id} className="block rounded-2xl border border-slate-200/80 bg-white px-4 py-2.5 shadow-sm sm:py-3 transition active:scale-[0.995]">
-                <div className="flex items-start justify-between gap-3">
+              <Link href={`/driver/jobs/${job.id}`} key={job.id} className="driver-surface block px-4 py-2.5 sm:py-3">
+                <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="text-xs text-slate-500">{format(completed.eventTime)}</p>
-                    <h2 className="mt-1 truncate font-bold text-[#152638]">{job.clientName || (th ? "งาน" : "Job")}</h2>
+                    <h2 className="mt-1 break-words font-bold text-[#152638]">{job.clientName || (th ? "งาน" : "Job")}</h2>
                     <p className="mt-1 line-clamp-2 break-words text-sm text-slate-600">{job.pickupName} <span className="text-slate-400">→</span> {job.dropoffName}</p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-700">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
                       <CheckCircle2 className="h-3 w-3" />{th ? "จบแล้ว" : "Done"}
                     </span>
                     <ChevronRight className="h-4 w-4 text-slate-400" />
