@@ -316,63 +316,41 @@ export function DriverHome({
 
   return (
     <main className="mx-auto w-full max-w-3xl px-3 py-3 sm:px-6 sm:py-5">
-      <section className="relative min-h-[174px] overflow-hidden rounded-[26px] border border-[#ded5c8] shadow-sm sm:min-h-[190px]">
+      <section className="relative h-[158px] overflow-hidden rounded-[24px] border border-[#ded5c8] bg-[#f4eee5] shadow-[0_8px_22px_rgba(21,38,56,0.10)] sm:h-[176px]">
         <Image
           src="/ees-truck.png"
           alt=""
           fill
           sizes="(max-width: 768px) 100vw, 768px"
-          className="object-cover object-center"
+          className="object-cover object-[62%_50%] sm:object-center"
           priority
         />
 
+        {/* Keep the truck crisp. Only soften the left side so the greeting stays readable. */}
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,248,236,0.88)_0%,rgba(255,248,236,0.68)_45%,rgba(255,248,236,0.38)_72%,rgba(255,248,236,0.52)_100%)]"
+          className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,249,239,0.96)_0%,rgba(255,249,239,0.86)_32%,rgba(255,249,239,0.38)_58%,rgba(255,249,239,0.06)_78%)]"
+        />
+        <div
+          aria-hidden="true"
+          className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#fff9ef]/75 to-transparent"
         />
 
-        <div className="relative z-10 flex min-h-[174px] items-center justify-between gap-3 px-4 py-4 sm:min-h-[190px] sm:px-5">
-          <div className="min-w-0 flex-1">
-            <p className="text-base font-medium text-slate-500">
-              {labels.hello},
-            </p>
-
-            <h1 className="mt-0.5 break-words text-[30px] font-medium leading-9 tracking-[-0.03em] text-[#152638]">
-              {profile?.displayName || driverName}
-            </h1>
-
-            {remainingToday.length > 0 ? (
-              <p className="mt-2 text-sm font-semibold text-slate-700">
-                <strong className="text-[#152638]">
-                  {remainingToday.length}
-                </strong>{" "}
-                {remainingLabel}
-              </p>
-            ) : (
-              <div className="mt-2 text-sm">
-                <p className="font-medium text-emerald-700">
-                  {labels.noMoreToday}
-                </p>
-
-                {nextJobDate ? (
-                  <p className="mt-1 text-xs font-semibold text-slate-600">
-                    {labels.nextJobDate} · {nextJobDate}
-                  </p>
-                ) : null}
-              </div>
-            )}
-          </div>
-
+        <div className="relative z-10 h-full px-4 py-4 sm:px-5">
           {vehicleRegistration ? (
-            <div className="w-[128px] shrink-0 rounded-2xl border border-white/80 bg-white/90 px-3 py-3 shadow-[0_4px_16px_rgba(21,38,56,0.10)] backdrop-blur-sm sm:w-[146px]">
-              <div className="flex items-center gap-2">
-                <Truck className="h-5 w-5 shrink-0 text-[#152638]" />
+            <div className="absolute right-3 top-3 max-w-[158px] rounded-[18px] border border-white/90 bg-white/94 px-3 py-2.5 shadow-[0_6px_18px_rgba(21,38,56,0.12)] backdrop-blur-md sm:right-4 sm:top-4 sm:max-w-[178px]">
+              <div className="flex items-start gap-2.5">
+                <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#f2f5f7]">
+                  <Truck className="h-4.5 w-4.5 text-[#152638]" />
+                </div>
+
                 <div className="min-w-0">
-                  <p className="truncate text-xl font-medium leading-6 text-[#152638]">
+                  <p className="text-[19px] font-black leading-5 tracking-[-0.02em] text-[#152638]">
                     {vehicleRegistration}
                   </p>
+
                   {vehicleType ? (
-                    <p className="mt-0.5 truncate text-xs font-medium text-slate-500">
+                    <p className="mt-1 line-clamp-2 text-[11px] font-semibold leading-4 text-slate-500">
                       {getPortalVehicleTypeLabel(vehicleType, language)}
                     </p>
                   ) : null}
@@ -380,6 +358,35 @@ export function DriverHome({
               </div>
             </div>
           ) : null}
+
+          <div className="absolute bottom-4 left-4 right-[150px] min-w-0 sm:bottom-5 sm:left-5 sm:right-[188px]">
+            <p className="text-[13px] font-semibold text-slate-500">
+              {labels.hello},
+            </p>
+
+            <h1 className="mt-0.5 truncate text-[27px] font-black leading-8 tracking-[-0.035em] text-[#152638] sm:text-[30px]">
+              {profile?.displayName || driverName}
+            </h1>
+
+            {remainingToday.length > 0 ? (
+              <div className="mt-2 inline-flex items-center rounded-full bg-white/88 px-2.5 py-1 text-[12px] font-bold text-[#152638] shadow-sm backdrop-blur-sm">
+                <strong className="mr-1">{remainingToday.length}</strong>
+                {remainingLabel}
+              </div>
+            ) : (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <span className="inline-flex rounded-full bg-emerald-50/95 px-2.5 py-1 text-[12px] font-bold text-emerald-700 shadow-sm">
+                  {labels.noMoreToday}
+                </span>
+
+                {nextJobDate ? (
+                  <span className="inline-flex rounded-full bg-white/88 px-2.5 py-1 text-[11px] font-bold text-slate-600 shadow-sm backdrop-blur-sm">
+                    {labels.nextJobDate} · {nextJobDate}
+                  </span>
+                ) : null}
+              </div>
+            )}
+          </div>
         </div>
       </section>
 
@@ -394,7 +401,7 @@ export function DriverHome({
         </section>
       ) : null}
 
-      <section className="mt-5 pb-6">
+      <section className="mt-4 pb-6">
         <div className="mb-2.5 flex items-center gap-2">
           <CalendarDays className="h-4 w-4 text-slate-500" />
           <h2 className="text-xs font-black uppercase tracking-[0.14em] text-slate-700">
