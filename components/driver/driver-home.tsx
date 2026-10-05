@@ -2,6 +2,7 @@
 
 import { CalendarDays, ChevronRight, Clock3, Truck } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useLanguage } from "@/lib/language-provider";
 import type { DriverJobEvent, DriverPortalJob } from "@/lib/driver-portal";
@@ -67,49 +68,6 @@ function formatDateKey(dateKey: string, language: "en" | "th") {
     year: "numeric",
     timeZone: "Asia/Bangkok"
   }).format(new Date(`${dateKey}T12:00:00+07:00`));
-}
-
-function VehiclePlate({
-  registration,
-  vehicleType,
-  language,
-  labels
-}: {
-  registration: string;
-  vehicleType: string | null;
-  language: "en" | "th";
-  labels: (typeof copy)[keyof typeof copy];
-}) {
-  return (
-    <div className="w-[146px] shrink-0 sm:w-[158px]">
-      <p className="mb-1 text-center text-[9px] font-black uppercase tracking-[0.15em] text-slate-400">
-        {labels.vehicle}
-      </p>
-
-      <div className="relative overflow-hidden rounded-[8px] border-[3px] border-[#27272a] bg-[#f1ca2c] px-2 py-1.5 text-center shadow-[inset_0_0_0_1px_rgba(255,255,255,0.35),0_2px_0_rgba(0,0,0,0.2)]">
-        <span className="absolute left-2 top-2 h-1.5 w-1.5 rounded-full bg-black/30" />
-        <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-black/30" />
-
-        <div className="text-[8px] font-black tracking-[0.18em] text-[#202020]">
-          {labels.thailand}
-        </div>
-
-        <div className="my-0.5 truncate text-[25px] font-black leading-none tracking-[0.025em] text-[#111] sm:text-[28px]">
-          {registration}
-        </div>
-
-        <div className="text-[8px] font-black tracking-[0.06em] text-[#252525]">
-          {labels.thailandThai}
-        </div>
-      </div>
-
-      {vehicleType ? (
-        <p className="mt-1 truncate text-center text-[10px] font-semibold text-slate-500">
-          {getPortalVehicleTypeLabel(vehicleType, language)}
-        </p>
-      ) : null}
-    </div>
-  );
 }
 
 function CurrentJobCard({
@@ -358,31 +316,46 @@ export function DriverHome({
 
   return (
     <main className="mx-auto w-full max-w-3xl px-3 py-3 sm:px-6 sm:py-5">
-      <section className="rounded-[20px] border border-slate-200 bg-white px-4 py-3.5 shadow-sm">
-        <div className="flex items-center justify-between gap-3">
+      <section className="relative min-h-[174px] overflow-hidden rounded-[26px] border border-[#ded5c8] shadow-sm sm:min-h-[190px]">
+        <Image
+          src="/ees-truck.png"
+          alt=""
+          fill
+          sizes="(max-width: 768px) 100vw, 768px"
+          className="object-cover object-center"
+          priority
+        />
+
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,248,236,0.88)_0%,rgba(255,248,236,0.68)_45%,rgba(255,248,236,0.38)_72%,rgba(255,248,236,0.52)_100%)]"
+        />
+
+        <div className="relative z-10 flex min-h-[174px] items-center justify-between gap-3 px-4 py-4 sm:min-h-[190px] sm:px-5">
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-semibold text-slate-500">
+            <p className="text-base font-medium text-slate-500">
               {labels.hello},
             </p>
 
-            <h1 className="mt-0.5 truncate text-[22px] font-black leading-7 text-[#152638]">
+            <h1 className="mt-0.5 break-words text-[30px] font-medium leading-9 tracking-[-0.03em] text-[#152638]">
               {profile?.displayName || driverName}
             </h1>
 
             {remainingToday.length > 0 ? (
-              <p className="mt-1.5 text-xs font-semibold text-slate-600">
+              <p className="mt-2 text-sm font-semibold text-slate-700">
                 <strong className="text-[#152638]">
                   {remainingToday.length}
                 </strong>{" "}
                 {remainingLabel}
               </p>
             ) : (
-              <div className="mt-1.5 text-xs">
-                <p className="font-semibold text-emerald-700">
-                  ✓ {labels.noMoreToday}
+              <div className="mt-2 text-sm">
+                <p className="font-medium text-emerald-700">
+                  {labels.noMoreToday}
                 </p>
+
                 {nextJobDate ? (
-                  <p className="mt-0.5 font-semibold text-slate-500">
+                  <p className="mt-1 text-xs font-semibold text-slate-600">
                     {labels.nextJobDate} · {nextJobDate}
                   </p>
                 ) : null}
@@ -391,12 +364,21 @@ export function DriverHome({
           </div>
 
           {vehicleRegistration ? (
-            <VehiclePlate
-              registration={vehicleRegistration}
-              vehicleType={vehicleType}
-              language={language}
-              labels={labels}
-            />
+            <div className="w-[128px] shrink-0 rounded-2xl border border-white/80 bg-white/90 px-3 py-3 shadow-[0_4px_16px_rgba(21,38,56,0.10)] backdrop-blur-sm sm:w-[146px]">
+              <div className="flex items-center gap-2">
+                <Truck className="h-5 w-5 shrink-0 text-[#152638]" />
+                <div className="min-w-0">
+                  <p className="truncate text-xl font-medium leading-6 text-[#152638]">
+                    {vehicleRegistration}
+                  </p>
+                  {vehicleType ? (
+                    <p className="mt-0.5 truncate text-xs font-medium text-slate-500">
+                      {getPortalVehicleTypeLabel(vehicleType, language)}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            </div>
           ) : null}
         </div>
       </section>
