@@ -2,6 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Semantic driver accent: independent of office branding and warning colors. */
+.driver-portal-shell { --driver-primary: #6340ec; --driver-primary-hover: #5332ce; }
+.driver-accent { color: var(--driver-primary, #6340ec); }
+.driver-primary-action { background-color: var(--driver-primary, #6340ec); }
+button.driver-primary-action:hover:not(:disabled),
+a:hover .driver-primary-action { background-color: var(--driver-primary-hover, #5332ce); }
+.driver-portal-shell button:focus-visible,
+.driver-portal-shell a:focus-visible,
+.driver-portal-shell summary:focus-visible { outline: 2px solid var(--driver-primary); outline-offset: 3px; }
+
 /* Driver-only polish: neutral language control and readable photographic hero. */
 .driver-portal-header [role="group"] button[aria-pressed="true"] {
   background: #152638;
@@ -48,8 +58,8 @@
   .driver-next-job-info > span { min-width: 0; gap: 5px; align-items: flex-start; overflow-wrap: anywhere; }
   .driver-next-job-info > span:last-child { margin-left: 0; justify-self: end; color: #dce4eb; }
   .driver-next-job-info svg { width: 14px; height: 14px; margin-top: 2px; flex-shrink: 0; }
-  .driver-next-job-customer { margin-top: 10px; font-size: 30px; line-height: 34px; letter-spacing: -.025em; }
-  .driver-next-job-route { margin-top: 12px; padding: 10px 12px; grid-template-columns: minmax(0,1fr) 28px minmax(0,1fr); gap: 4px 8px; border-radius: 12px; background: #22394c; }
+  .driver-next-job-customer { margin-top: 8px; font-size: 28px; line-height: 32px; letter-spacing: -.025em; }
+  .driver-next-job-route { margin-top: 10px; padding: 10px 12px; grid-template-columns: minmax(0,1fr) 28px minmax(0,1fr); gap: 4px 8px; border-radius: 12px; background: #22394c; }
   .driver-next-job-route > p:nth-child(-n+2) { font-size: 10px; line-height: 14px; letter-spacing: .1em; font-weight: 600; color: #b6c5d2; }
   .driver-next-job-route > p:nth-child(n+3) { font-size: 16px; line-height: 22px; font-weight: 700; }
   .driver-next-job-route > span { display: flex; align-items: center; justify-content: center; font-size: 24px; line-height: 22px; color: #e2e8f0; }

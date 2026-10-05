@@ -160,7 +160,7 @@ function CurrentJobCard({
         </div>
 
         <div className="driver-next-job-action mt-1.5 flex items-center justify-end sm:mt-4">
-          <span className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-xl bg-orange-600 px-5 text-sm font-black text-white shadow-sm lg:min-h-14 lg:px-8 lg:text-lg">
+          <span className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-xl driver-primary-action px-5 text-sm font-black text-white shadow-sm lg:min-h-14 lg:px-8 lg:text-lg">
             {driverJobAction(language, status)}
             <span aria-hidden="true" className="text-lg font-medium">→</span>
           </span>
@@ -326,7 +326,7 @@ export function DriverHome({
 
             <div className="mt-2 flex flex-col items-start gap-y-1 text-sm font-semibold text-[#152638] sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 lg:mt-7 lg:gap-x-5 lg:text-lg">
               {remainingToday.length > 0 ? (
-                <span className="text-emerald-700">
+                <span className="text-[#152638]">
                   <strong>{remainingToday.length}</strong> {remainingLabel}{language === "th" ? "วันนี้" : " today"}
                 </span>
               ) : (

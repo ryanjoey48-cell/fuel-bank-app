@@ -61,12 +61,11 @@ test('directions to pickup uses current origin and works without a drop-off', ()
   assert.equal(url.searchParams.get('destination'), '13.6,100.6');
   assert.equal(url.searchParams.get('destination_place_id'), 'pickup-place');
 });
-test('all five navigation labels are present without progress-stage gating', () => {
+test('all five additional navigation options remain available without stage gating', () => {
   const source = read('components/driver/driver-job-detail.tsx');
-  for (const label of ['Pickup → Drop-off', 'Start from depot', 'Start from current location', 'Directions to pickup', 'Directions to drop-off']) assert.ok(source.includes(label));
-  const navigation = source.slice(source.indexOf('<section className={panel} aria-labelledby="job-navigation"'), source.indexOf('<section className={panel} aria-labelledby="job-progress"'));
-  assert.equal((navigation.match(/<a /g) || []).length, 5);
-  assert.equal(navigation.includes('stage'), false);
+  for (const option of ['[depotUrl, labels.depot]', '[currentUrl, labels.current]', '[pickupUrl, labels.pickupDirections]', '[deliveryUrl, labels.delivery]', '[pickupToDropoffUrl, labels.pickupToDropoff]']) assert.ok(source.includes(option));
+  const navigation = source.slice(source.indexOf('<details className="mt-1">'), source.indexOf('{saveError ?'));
+  assert.ok(navigation.includes('labels.moreNav')); assert.equal(navigation.includes('stage'), false);
 });
 
 function gps(navigator, timers = { setTimeout, clearTimeout }) {
@@ -235,5 +234,5 @@ test('driver UI has bilingual sequential controls, optional GPS, timestamps and 
   assert.match(source, /dateTime=\{event.eventTime\}/);
   assert.match(source, /tel:\+66657896654/);
   assert.match(source, /Atip Punpanung/);
-  for (const label of ['ถึงจุดรับสินค้า', 'ออกจากจุดรับสินค้า', 'ถึงจุดส่งสินค้า', 'จบงาน', 'เริ่มจากสำนักงาน/คลัง', 'เริ่มจากตำแหน่งปัจจุบัน']) assert.ok(source.includes(label));
+  for (const label of ['ถึงจุดรับ', 'ออกจากจุดรับ', 'ถึงจุดส่ง', 'จบงาน', 'จากคลัง', 'จากตำแหน่งฉัน']) assert.ok(source.includes(label));
 });

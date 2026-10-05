@@ -32,7 +32,7 @@ function detailMarkup(language, stage) {
   let stateIndex = 0;
   const events = portal.DRIVER_JOB_EVENT_TYPES.slice(0, stage).map((eventType, index) => ({ id: String(index), eventType, eventTime: '2026-10-02T03:00:00Z', latitude: index === 0 ? 13 : null, longitude: index === 0 ? 100 : null }));
   const hooks = { ...React, useState(initial) { const index = stateIndex++; return [index === 0 ? events : index === 1 ? false : initial, () => {}]; }, useCallback: (fn) => fn, useEffect: () => {}, useRef: (value) => ({ current: value }) };
-  const icons = Object.fromEntries(['ArrowDown', 'ArrowLeft', 'Check', 'Clock3', 'ExternalLink', 'MapPin', 'Phone', 'RefreshCw', 'Truck'].map((name) => [name, () => null]));
+  const icons = Object.fromEntries(['ArrowDown', 'ArrowLeft', 'Check', 'Clock3', 'ExternalLink', 'MapPin', 'Navigation2', 'Phone', 'RefreshCw', 'Truck'].map((name) => [name, () => null]));
   const { DriverJobDetail } = load('components/driver/driver-job-detail.tsx', {
     react: hooks, 'react/jsx-runtime': require('react/jsx-runtime'), 'lucide-react': icons,
     'next/link': ({ children, ...props }) => React.createElement('a', props, children),
@@ -42,10 +42,10 @@ function detailMarkup(language, stage) {
   return renderToStaticMarkup(React.createElement(DriverJobDetail, { job, depot }));
 }
 for (const language of ['en', 'th']) {
-  test(`detail retains five exact Maps URLs, full addresses and Atip contact in ${language}`, () => {
+  test(`detail retains original Maps URLs plus smart navigation, full addresses and Atip contact in ${language}`, () => {
     const html = detailMarkup(language, 0);
     const actual = [...html.matchAll(/href="(https:\/\/www\.google\.com\/maps[^\"]+)"/g)].map((match) => match[1].replace(/&amp;/g, '&'));
-    assert.deepEqual(actual, ['pickup-to-dropoff', 'depot', 'current', 'pickup', 'delivery'].map((mode) => portal.buildDriverDirectionsUrl(job, mode, depot)));
+    assert.deepEqual(actual, ['pickup', 'depot', 'current', 'pickup', 'delivery', 'pickup-to-dropoff'].map((mode) => portal.buildDriverDirectionsUrl(job, mode, depot)));
     assert.ok(html.includes('grid grid-cols-2')); assert.ok(html.includes('col-span-2'));
     assert.ok(html.includes(job.pickupAddress)); assert.ok(html.includes(job.dropoffAddress));
     assert.ok(html.includes('tel:+66657896654')); assert.ok(html.includes('Atip Punpanung'));
@@ -53,17 +53,17 @@ for (const language of ['en', 'th']) {
     assert.ok(!html.includes('FOUR_WHEEL_TRUCK'));
   });
 }
-test('active detail shows one next-action button above navigation and connected current/future steps', () => {
+test('active detail places one next action before horizontal progress and retains timestamps', () => {
   const html = detailMarkup('en', 1);
-  assert.ok(html.includes('bottom-[calc(52px+env(safe-area-inset-bottom))]'));
+  assert.ok(html.includes('id="job-next-action"')); assert.ok(html.indexOf('id="job-next-action"') < html.indexOf('id="job-progress"'));
   assert.equal((html.match(/aria-current="step"/g) || []).length, 1);
   assert.ok(html.includes('GPS')); assert.ok(html.includes('dateTime="2026-10-02T03:00:00Z"'));
-  assert.ok(html.includes('Leaving pickup')); assert.ok(html.includes('bg-slate-200'));
+  assert.ok(html.includes('Leave pickup')); assert.ok(html.includes('bg-slate-200'));
 });
 test('completed detail retains all events and Maps but never renders a fixed next-action CTA', () => {
   const html = detailMarkup('en', 4);
   assert.ok(!html.includes('bottom-[calc(52px+env(safe-area-inset-bottom))]'));
-  assert.ok(!html.includes('aria-current="step"')); assert.ok(html.includes('bg-emerald-300'));
+  assert.ok(!html.includes('aria-current="step"')); assert.ok(html.includes('bg-emerald-100'));
   assert.equal((html.match(/<time /g) || []).length, 4);
   assert.equal((html.match(/target="_blank"/g) || []).length, 5);
 });
