@@ -1,8 +1,7 @@
 "use client";
 
-import { CalendarDays, ChevronRight, Clock3, Truck, MapPin, Check } from "lucide-react";
+import { CalendarDays, ChevronRight, Clock3, Truck } from "lucide-react";
 import Link from "next/link";
-import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useLanguage } from "@/lib/language-provider";
 import type { DriverJobEvent, DriverPortalJob } from "@/lib/driver-portal";
@@ -15,10 +14,12 @@ const copy = {
     hello: "Hello",
     upcoming: "Upcoming",
     vehicle: "Your vehicle",
-    remaining: "job remaining",
-    remainingPlural: "jobs remaining",
+    remaining: "job remaining today",
+    remainingPlural: "jobs remaining today",
+    noMoreToday: "No more jobs today",
     noUpcoming: "No upcoming jobs",
     tomorrow: "Tomorrow",
+    nextJobDate: "Next job",
     timePending: "Time not set",
     job: "Job",
     current: "CURRENT JOB",
@@ -32,10 +33,12 @@ const copy = {
     hello: "สวัสดี",
     upcoming: "งานถัดไป",
     vehicle: "รถของคุณ",
-    remaining: "งานที่เหลือ",
-    remainingPlural: "งานที่เหลือ",
+    remaining: "งานที่เหลือวันนี้",
+    remainingPlural: "งานที่เหลือวันนี้",
+    noMoreToday: "วันนี้ไม่มีงานเหลือแล้ว",
     noUpcoming: "ยังไม่มีงานล่วงหน้า",
     tomorrow: "พรุ่งนี้",
+    nextJobDate: "งานถัดไป",
     timePending: "ยังไม่กำหนดเวลา",
     job: "งาน",
     current: "งานปัจจุบัน",
@@ -53,8 +56,17 @@ function formatTime(value: string | null, fallback: string) {
 
 function addDays(dateKey: string, days: number) {
   const date = new Date(`${dateKey}T12:00:00+07:00`);
-  date.setUTCDate(date.getUTCDate() + days);
+  date.setDate(date.getDate() + days);
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(date);
+}
+
+function formatDateKey(dateKey: string, language: "en" | "th") {
+  return new Intl.DateTimeFormat(language === "th" ? "th-TH" : "en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Bangkok"
+  }).format(new Date(`${dateKey}T12:00:00+07:00`));
 }
 
 function VehiclePlate({
@@ -69,30 +81,30 @@ function VehiclePlate({
   labels: (typeof copy)[keyof typeof copy];
 }) {
   return (
-    <div className="w-[158px] shrink-0 lg:w-[220px]">
-      <p className="mb-1.5 text-center text-[10px] font-black uppercase tracking-[0.16em] text-[#152638] lg:mb-2 lg:text-sm">
+    <div className="w-[146px] shrink-0 sm:w-[158px]">
+      <p className="mb-1 text-center text-[9px] font-black uppercase tracking-[0.15em] text-slate-400">
         {labels.vehicle}
       </p>
 
-      <div className="relative overflow-hidden rounded-[8px] border-[3px] border-[#27272a] bg-[#f1ca2c] px-2 py-1.5 text-center lg:py-2 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.35),0_2px_0_rgba(0,0,0,0.2)]">
+      <div className="relative overflow-hidden rounded-[8px] border-[3px] border-[#27272a] bg-[#f1ca2c] px-2 py-1.5 text-center shadow-[inset_0_0_0_1px_rgba(255,255,255,0.35),0_2px_0_rgba(0,0,0,0.2)]">
         <span className="absolute left-2 top-2 h-1.5 w-1.5 rounded-full bg-black/30" />
         <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-black/30" />
 
-        <div className="text-[9px] font-black lg:text-xs tracking-[0.18em] text-[#202020]">
+        <div className="text-[8px] font-black tracking-[0.18em] text-[#202020]">
           {labels.thailand}
         </div>
 
-        <div className="my-0.5 truncate text-[28px] lg:text-[44px] font-black leading-none tracking-[0.025em] text-[#111]">
+        <div className="my-0.5 truncate text-[25px] font-black leading-none tracking-[0.025em] text-[#111] sm:text-[28px]">
           {registration}
         </div>
 
-        <div className="text-[9px] lg:text-xs font-black tracking-[0.06em] text-[#252525]">
+        <div className="text-[8px] font-black tracking-[0.06em] text-[#252525]">
           {labels.thailandThai}
         </div>
       </div>
 
       {vehicleType ? (
-        <p className="mt-1.5 truncate text-center text-[11px] font-semibold text-[#152638] lg:mt-2 lg:text-base">
+        <p className="mt-1 truncate text-center text-[10px] font-semibold text-slate-500">
           {getPortalVehicleTypeLabel(vehicleType, language)}
         </p>
       ) : null}
@@ -112,57 +124,66 @@ function CurrentJobCard({
   labels: (typeof copy)[keyof typeof copy];
 }) {
   const status = jobStatus(events);
-  const formattedDate = new Intl.DateTimeFormat(language === "th" ? "th-TH" : "en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "Asia/Bangkok"
-  }).format(new Date(`${job.bookingDate}T12:00:00+07:00`));
+  const formattedDate = formatDateKey(job.bookingDate, language);
 
   return (
     <Link
       href={`/driver/jobs/${job.id}`}
-      className="driver-next-job block overflow-hidden rounded-[var(--driver-radius)] bg-[#152638] text-white shadow-sm"
+      className="block overflow-hidden rounded-[22px] bg-[#152638] text-white shadow-[0_10px_28px_rgba(21,38,56,0.16)] transition active:scale-[0.995]"
     >
-      <div className="driver-next-job-heading flex items-center justify-between border-b border-white/10 px-4 py-2 sm:py-3.5 lg:px-8 lg:py-4">
-        <p className="driver-eyebrow driver-eyebrow-on-navy">
+      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+        <p className="text-[11px] font-black tracking-[0.16em] text-orange-300">
           {status === "ready" ? labels.next : labels.current}
         </p>
         <DriverStatusBadge language={language} status={status} />
       </div>
 
-      <div className="driver-next-job-body px-4 py-2.5 sm:p-4 lg:px-8 lg:py-5">
-        <div className="driver-next-job-info flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-white/75 sm:gap-x-4 sm:gap-y-2 lg:gap-x-6 lg:text-lg">
+      <div className="p-4">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-white/70">
           <span className="inline-flex items-center gap-1.5 font-semibold">
-            <CalendarDays className="h-4 w-4 text-slate-300 lg:h-5 lg:w-5" />
+            <CalendarDays className="h-4 w-4 text-orange-300" />
             {formattedDate}
           </span>
           <span className="inline-flex items-center gap-1.5 font-semibold">
-            <Clock3 className="h-4 w-4 text-slate-300 lg:h-5 lg:w-5" />
+            <Clock3 className="h-4 w-4 text-orange-300" />
             {formatTime(job.pickupTime, labels.timePending)}
           </span>
           <span className="ml-auto inline-flex items-center gap-1.5 font-bold">
-            <Truck className="h-4 w-4 lg:h-5 lg:w-5" />
+            <Truck className="h-4 w-4" />
             {job.vehicleRegistration || "—"}
           </span>
         </div>
 
-        <h2 className="driver-next-job-customer mt-1.5 break-words text-[24px] font-black leading-tight sm:mt-4 lg:text-[40px]">
+        <h2 className="mt-3 break-words text-[24px] font-black leading-tight">
           {job.clientName || job.jobOrderNumber || labels.job}
         </h2>
 
-        <div className="driver-next-job-route mt-1.5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-x-3 rounded-2xl bg-[#203649] px-3.5 py-2 sm:mt-4 sm:gap-y-1 sm:py-3.5 lg:mt-3 lg:px-6 lg:py-4">
-          <p className="driver-eyebrow driver-eyebrow-on-navy col-start-1 row-start-1">{labels.pickup}</p>
-          <p className="driver-eyebrow driver-eyebrow-on-navy col-start-3 row-start-1 text-right">{labels.dropoff}</p>
-          <p className="col-start-1 row-start-2 min-w-0 break-words text-[15px] font-bold text-white lg:text-xl">{job.pickupName || "—"}</p>
-          <span aria-hidden="true" className="col-start-2 row-start-2 self-center text-center text-xl font-medium text-slate-300 lg:text-4xl">→</span>
-          <p className="col-start-3 row-start-2 min-w-0 break-words text-right text-[15px] font-bold text-white lg:text-xl">{job.dropoffName || "—"}</p>
+        <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-start gap-3 rounded-2xl bg-white/[0.06] px-3.5 py-3">
+          <div className="min-w-0">
+            <p className="text-[9px] font-black uppercase tracking-[0.13em] text-white/45">
+              {labels.pickup}
+            </p>
+            <p className="mt-1 break-words text-sm font-bold leading-5 text-white">
+              {job.pickupName || "—"}
+            </p>
+          </div>
+
+          <span className="pt-4 text-xl font-black text-orange-300">→</span>
+
+          <div className="min-w-0 text-right">
+            <p className="text-[9px] font-black uppercase tracking-[0.13em] text-white/45">
+              {labels.dropoff}
+            </p>
+            <p className="mt-1 break-words text-sm font-bold leading-5 text-white">
+              {job.dropoffName || "—"}
+            </p>
+          </div>
         </div>
 
-        <div className="driver-next-job-action mt-1.5 flex items-center justify-end sm:mt-4">
-          <span className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-xl driver-primary-action px-5 text-sm font-black text-white shadow-sm lg:min-h-14 lg:px-8 lg:text-lg">
+        <div className="mt-3 flex justify-end">
+          <span className="inline-flex min-h-10 items-center gap-1 rounded-xl bg-orange-600 px-4 text-sm font-black text-white shadow-sm">
             {driverJobAction(language, status)}
-            <span aria-hidden="true" className="text-lg font-medium">→</span>
+            <ChevronRight className="h-4 w-4" />
           </span>
         </div>
       </div>
@@ -186,37 +207,32 @@ function UpcomingJobRow({
   return (
     <Link
       href={`/driver/jobs/${job.id}`}
-      className="driver-upcoming-job group block border-b border-slate-200 bg-white px-4 py-2.5 sm:py-3.5 first:rounded-t-2xl last:rounded-b-2xl last:border-b-0 active:bg-slate-50"
+      className="block border-b border-slate-100 bg-white px-4 py-3.5 last:border-b-0 active:bg-slate-50"
     >
-      <div className="flex items-center gap-3 lg:grid lg:grid-cols-[160px_minmax(0,1fr)_90px_auto_20px] lg:gap-5">
-        <div className="hidden border-r border-slate-200 pr-5 lg:block">
-          <p className="text-sm font-semibold text-[#152638]">{new Intl.DateTimeFormat(language === "th" ? "th-TH" : "en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Bangkok" }).format(new Date(`${job.bookingDate}T12:00:00+07:00`))}</p>
-          <p className="mt-1 text-xs text-slate-500">{new Intl.DateTimeFormat(language === "th" ? "th-TH" : "en-GB", { weekday: "short", timeZone: "Asia/Bangkok" }).format(new Date(`${job.bookingDate}T12:00:00+07:00`))} · {formatTime(job.pickupTime, labels.timePending)}</p>
-        </div>
+      <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 text-sm text-slate-500 lg:hidden">
-            <Clock3 className="h-4 w-4 shrink-0" />
-            <span className="font-semibold">{formatTime(job.pickupTime, labels.timePending)}</span>
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <Clock3 className="h-3.5 w-3.5 shrink-0" />
+            <span className="font-semibold">
+              {formatTime(job.pickupTime, labels.timePending)}
+            </span>
           </div>
-          <p className="mt-1.5 truncate font-bold text-[#152638] lg:mt-0 lg:text-base">
+
+          <p className="mt-1.5 break-words font-black leading-5 text-[#152638]">
             {job.clientName || job.jobOrderNumber || labels.job}
           </p>
-          <p className="mt-1 line-clamp-2 break-words text-sm text-slate-600 lg:hidden">
-            {job.pickupName} <span className="px-1 text-slate-400">→</span> {job.dropoffName}
+
+          <p className="mt-1 break-words text-[13px] leading-5 text-slate-600">
+            {job.pickupName || "—"}
+            <span className="px-1.5 text-orange-500">→</span>
+            {job.dropoffName || "—"}
           </p>
-          <div className="mt-1 hidden grid-cols-[minmax(0,1fr)_24px_minmax(0,1fr)] items-start gap-3 lg:grid">
-            {[job.pickupName, job.dropoffName].map((name, index) => <div key={index} className="contents">
-              {index ? <span aria-hidden="true" className="pt-0.5 text-xl text-slate-400">→</span> : null}
-              <div className="flex min-w-0 gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" /><div className="min-w-0"><p className="truncate text-sm text-[#152638]" title={name || undefined}>{name || "—"}</p><p className="text-[10px] tracking-wide text-slate-500">{index ? labels.dropoff : labels.pickup}</p></div></div>
-            </div>)}
-          </div>
         </div>
-        <span className="hidden items-center gap-2 text-sm text-slate-600 lg:inline-flex"><Truck className="h-5 w-5 shrink-0" />{job.vehicleRegistration || "—"}</span>
-        <div className="flex shrink-0 items-center gap-2 lg:justify-center lg:border-l lg:border-slate-200 lg:pl-5">
+
+        <div className="flex shrink-0 items-center gap-1.5">
           <DriverStatusBadge language={language} status={status} />
-          <ChevronRight className="h-5 w-5 text-slate-400 lg:hidden" />
+          <ChevronRight className="h-5 w-5 text-slate-300" />
         </div>
-        <ChevronRight className="hidden h-5 w-5 text-slate-500 lg:block" />
       </div>
     </Link>
   );
@@ -239,13 +255,31 @@ export function DriverHome({
 
   useEffect(() => {
     let active = true;
-    void fetch("/api/driver/profile", { cache: "no-store" })
-      .then(async (r) => {
-        if (r.ok && active) setProfile(await r.json());
-      })
-      .catch(() => undefined);
+
+    const load = async () => {
+      try {
+        const response = await fetch(`/api/driver/profile?_=${Date.now()}`, {
+          cache: "no-store",
+          credentials: "same-origin",
+          headers: { "Cache-Control": "no-cache", Pragma: "no-cache" }
+        });
+
+        if (response.ok && active) setProfile(await response.json());
+      } catch {
+        // Keep server-provided driver identity if profile is unavailable.
+      }
+    };
+
+    const updated = (event: Event) => {
+      setProfile((event as CustomEvent<DriverProfile>).detail);
+    };
+
+    window.addEventListener("ees-driver-profile-updated", updated);
+    void load();
+
     return () => {
       active = false;
+      window.removeEventListener("ees-driver-profile-updated", updated);
     };
   }, []);
 
@@ -253,7 +287,9 @@ export function DriverHome({
     () =>
       jobs
         .filter((job) => job.bookingDate === today)
-        .sort((a, b) => (a.pickupTime || "99:99").localeCompare(b.pickupTime || "99:99")),
+        .sort((a, b) =>
+          (a.pickupTime || "99:99").localeCompare(b.pickupTime || "99:99")
+        ),
     [jobs, today]
   );
 
@@ -262,112 +298,111 @@ export function DriverHome({
   );
 
   const nextJob = nextDriverJob(jobs, eventsByJob);
+
   const vehicleRegistration =
-    nextJob?.vehicleRegistration ?? profile?.vehicle ?? jobs[0]?.vehicleRegistration ?? null;
+    nextJob?.vehicleRegistration ??
+    profile?.vehicle ??
+    jobs[0]?.vehicleRegistration ??
+    null;
+
   const vehicleType =
     nextJob?.vehicleType ??
     jobs.find((job) => job.vehicleRegistration === vehicleRegistration)?.vehicleType ??
     null;
 
+  /*
+   * Upcoming means future + unfinished only.
+   * Completed test/early-completed jobs belong in History, never Upcoming.
+   * The large NEXT JOB card is also removed from this list to avoid duplication.
+   */
   const upcomingGroups = useMemo(() => {
     const groups = new Map<string, DriverPortalJob[]>();
 
     for (const job of jobs) {
-      if (job.bookingDate <= today || job.id === nextJob?.id) continue;
+      if (job.bookingDate <= today) continue;
+      if (job.id === nextJob?.id) continue;
+      if (jobStatus(eventsByJob[job.id] || []) === "completed") continue;
+
       const entries = groups.get(job.bookingDate) ?? [];
       entries.push(job);
       groups.set(job.bookingDate, entries);
     }
 
-    return [...groups.entries()].map(
-      ([date, entries]) =>
-        [
-          date,
-          entries.sort((a, b) =>
-            (a.pickupTime || "99:99").localeCompare(b.pickupTime || "99:99")
-          )
-        ] as const
-    );
-  }, [jobs, today, nextJob?.id]);
+    return [...groups.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(
+        ([date, entries]) =>
+          [
+            date,
+            entries.sort((a, b) =>
+              (a.pickupTime || "99:99").localeCompare(
+                b.pickupTime || "99:99"
+              )
+            )
+          ] as const
+      );
+  }, [jobs, today, nextJob?.id, eventsByJob]);
 
-  const formatDate = (dateKey: string) => {
+  const formatGroupDate = (dateKey: string) => {
     if (dateKey === addDays(today, 1)) return labels.tomorrow;
-    return new Intl.DateTimeFormat(language === "th" ? "th-TH" : "en-GB", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-      timeZone: "Asia/Bangkok"
-    }).format(new Date(`${dateKey}T12:00:00+07:00`));
+    return formatDateKey(dateKey, language);
   };
 
   const remainingLabel =
     remainingToday.length === 1 ? labels.remaining : labels.remainingPlural;
 
-  return (
-    <main className="driver-jobs-home mx-auto w-full max-w-3xl px-3 py-3 sm:px-6 sm:py-6 lg:max-w-[1280px]">
-      <section className="driver-home-hero relative isolate overflow-hidden rounded-[var(--driver-radius)] border border-[#d8d1c7] bg-[#f8f3e9] px-4 py-3 sm:py-4 lg:min-h-[320px] lg:px-7 lg:py-6">
-        <Image
-          src="/driver-hero-bg.png"
-          alt=""
-          aria-hidden="true"
-          fill
-          priority
-          sizes="(min-width: 1280px) 1232px, (min-width: 1024px) calc(100vw - 48px), (min-width: 640px) 720px, calc(100vw - 24px)"
-          className="pointer-events-none object-cover object-[62%_62%] sm:object-[center_52%]"
-        />
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,251,243,0.96)_0%,rgba(255,251,243,0.75)_32%,rgba(255,251,243,0)_55%,rgba(255,251,243,0.12)_66%,rgba(255,251,243,0.88)_100%)] sm:bg-[linear-gradient(90deg,rgba(255,251,243,0.97)_0%,rgba(255,251,243,0.90)_24%,rgba(255,251,243,0.18)_52%,rgba(255,251,243,0.08)_70%,rgba(255,251,243,0.82)_100%)]" />
+  const nextJobDate =
+    nextJob && nextJob.bookingDate > today
+      ? formatGroupDate(nextJob.bookingDate)
+      : null;
 
-        <div className="relative z-10 flex min-h-[176px] flex-col items-start justify-between gap-3 sm:min-h-[248px] sm:flex-row sm:items-center sm:gap-4 lg:min-h-[272px] lg:gap-8">
-          <div className="min-w-0 w-full sm:w-auto sm:flex-1">
-            <p className="text-sm font-semibold text-slate-500 lg:text-2xl lg:text-[#152638]">{labels.hello},</p>
-            <h1 className="mt-0.5 break-words text-2xl font-bold text-[#152638] sm:truncate lg:mt-1 lg:text-[48px] lg:leading-tight">
+  return (
+    <main className="mx-auto w-full max-w-3xl px-3 py-3 sm:px-6 sm:py-5">
+      <section className="rounded-[20px] border border-slate-200 bg-white px-4 py-3.5 shadow-sm">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold text-slate-500">
+              {labels.hello},
+            </p>
+
+            <h1 className="mt-0.5 truncate text-[22px] font-black leading-7 text-[#152638]">
               {profile?.displayName || driverName}
             </h1>
 
-            <div className="mt-2 flex flex-col items-start gap-y-1 text-sm font-semibold text-[#152638] sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 lg:mt-7 lg:gap-x-5 lg:text-lg">
-              {remainingToday.length > 0 ? (
-                <span className="text-[#152638]">
-                  <strong>{remainingToday.length}</strong> {remainingLabel}{language === "th" ? "วันนี้" : " today"}
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-2 text-emerald-700"><span className="hidden h-8 w-8 items-center justify-center rounded-full bg-emerald-500 text-white lg:inline-flex"><Check className="h-5 w-5" /></span>
-                  {language === "th" ? "ไม่มีงานค้างวันนี้" : "No jobs remaining today"}
-                </span>
-              )}
-              {vehicleRegistration ? (
-                <span aria-hidden="true" className="hidden h-6 border-l border-slate-400/60 sm:inline" />
-              ) : null}
-              {vehicleRegistration ? (
-                <span className="hidden items-center gap-2 text-xs sm:inline-flex sm:text-sm lg:text-base"><Truck className="h-4 w-4 shrink-0 lg:h-5 lg:w-5" />
-                  {language === "th" ? "รถประจำ" : "Assigned vehicle"} {vehicleRegistration}
-                </span>
-              ) : null}
-            </div>
+            {remainingToday.length > 0 ? (
+              <p className="mt-1.5 text-xs font-semibold text-slate-600">
+                <strong className="text-[#152638]">
+                  {remainingToday.length}
+                </strong>{" "}
+                {remainingLabel}
+              </p>
+            ) : (
+              <div className="mt-1.5 text-xs">
+                <p className="font-semibold text-emerald-700">
+                  ✓ {labels.noMoreToday}
+                </p>
+                {nextJobDate ? (
+                  <p className="mt-0.5 font-semibold text-slate-500">
+                    {labels.nextJobDate} · {nextJobDate}
+                  </p>
+                ) : null}
+              </div>
+            )}
           </div>
 
           {vehicleRegistration ? (
-            <div className="hidden sm:block sm:self-auto">
             <VehiclePlate
               registration={vehicleRegistration}
               vehicleType={vehicleType}
               language={language}
               labels={labels}
             />
-            </div>
-          ) : null}
-          {vehicleRegistration ? (
-            <div className="driver-vehicle-badge inline-flex max-w-full items-center gap-2 rounded-xl border border-[#152638]/10 bg-white/90 px-3 py-1.5 text-xs font-semibold text-[#152638] sm:hidden" aria-label={labels.vehicle}>
-              <Truck className="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span className="min-w-0 break-words">
-                <span className="block font-bold">{vehicleRegistration}</span>{vehicleType ? <span className="block text-[10px] font-medium text-slate-500">{getPortalVehicleTypeLabel(vehicleType, language)}</span> : null}
-              </span>
-            </div>
           ) : null}
         </div>
       </section>
 
       {nextJob ? (
-        <section className="mt-3 sm:mt-4">
+        <section className="mt-3">
           <CurrentJobCard
             job={nextJob}
             events={eventsByJob[nextJob.id] || []}
@@ -377,26 +412,29 @@ export function DriverHome({
         </section>
       ) : null}
 
-      <section className="mt-3 pb-6 sm:mt-6">
-        <div className="mb-2 flex items-center gap-2 sm:mb-3">
+      <section className="mt-5 pb-6">
+        <div className="mb-2.5 flex items-center gap-2">
           <CalendarDays className="h-4 w-4 text-slate-500" />
-          <h2 className="text-sm font-semibold text-slate-700">
+          <h2 className="text-xs font-black uppercase tracking-[0.14em] text-slate-700">
             {labels.upcoming}
           </h2>
         </div>
 
         {upcomingGroups.length ? (
-          <div className="space-y-3 sm:space-y-5 lg:space-y-0 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-slate-200">
+          <div className="space-y-4">
             {upcomingGroups.map(([date, dateJobs]) => (
-              <div key={date} className="lg:border-b lg:border-slate-200 lg:last:border-b-0">
-                <div className="mb-1 flex items-center justify-between sm:mb-2 lg:hidden">
-                  <h3 className="text-sm font-semibold text-[#152638]">{formatDate(date)}</h3>
-                  <span className="px-2 py-1 text-xs font-medium text-slate-500">
+              <div key={date}>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <h3 className="text-sm font-black text-[#152638]">
+                    {formatGroupDate(date)}
+                  </h3>
+
+                  <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-slate-500 shadow-sm">
                     {dateJobs.length}
                   </span>
                 </div>
 
-                <div className="driver-surface overflow-hidden lg:rounded-none lg:border-0 lg:shadow-none">
+                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                   {dateJobs.map((job) => (
                     <UpcomingJobRow
                       key={job.id}
