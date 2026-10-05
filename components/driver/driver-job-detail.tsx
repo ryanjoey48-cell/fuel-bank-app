@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { DriverDisclosure } from "./driver-disclosure";
-import { DriverRouteOptions } from "./driver-route-options";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLanguage } from "@/lib/language-provider";
 import {
@@ -58,7 +57,13 @@ const copy = {
     statuses: ["Ready", "At pickup", "En route", "At delivery", "Completed"],
     loading: "Loading progress…",
     unavailable: "Unable to load progress. Refresh to try again.",
-    saveError: "Unable to save progress. Refresh before trying again.",
+    saveError: "Couldn’t save this update.",
+    retry: "Try again",
+    whenYouArrive: "When you arrive",
+    whenReadyToLeave: "When ready to leave",
+    atDelivery: "At delivery",
+    finishJob: "Finish job",
+    fullRouteMaps: "View full route in Google Maps",
     saved: "Progress saved.",
     saving: "Saving…",
     locating: "Checking location…",
@@ -108,7 +113,13 @@ const copy = {
     statuses: ["พร้อม", "ถึงจุดรับ", "กำลังไปจุดส่ง", "ถึงจุดส่ง", "จบงานแล้ว"],
     loading: "กำลังโหลด…",
     unavailable: "โหลดความคืบหน้าไม่ได้ กรุณารีเฟรช",
-    saveError: "บันทึกไม่สำเร็จ กรุณารีเฟรชก่อนลองอีกครั้ง",
+    saveError: "บันทึกการอัปเดตไม่สำเร็จ",
+    retry: "ลองอีกครั้ง",
+    whenYouArrive: "เมื่อถึงจุดหมาย",
+    whenReadyToLeave: "เมื่อพร้อมออกจากจุดรับ",
+    atDelivery: "เมื่อถึงจุดส่ง",
+    finishJob: "จบงาน",
+    fullRouteMaps: "ดูเส้นทางทั้งหมดใน Google Maps",
     saved: "บันทึกแล้ว",
     saving: "กำลังบันทึก…",
     locating: "กำลังตรวจสอบตำแหน่ง…",
@@ -292,8 +303,6 @@ export function DriverJobDetail({
     timeZone: "Asia/Bangkok"
   }).format(new Date(`${job.bookingDate}T12:00:00+07:00`));
 
-  const depotUrl = buildDriverDirectionsUrl(job, "depot", depot);
-  const currentUrl = buildDriverDirectionsUrl(job, "current", depot);
   const deliveryUrl = buildDriverDirectionsUrl(job, "delivery", depot);
   const pickupToDropoffUrl = buildDriverDirectionsUrl(job, "pickup-to-dropoff", depot);
   const pickupUrl = buildDriverDirectionsUrl(job, "pickup", depot);
@@ -303,6 +312,7 @@ export function DriverJobDetail({
   const destinationName = destinationIsPickup ? job.pickupName : job.dropoffName;
   const destinationAddress = destinationIsPickup ? job.pickupAddress : job.dropoffAddress;
   const navigationUrl = destinationIsPickup ? pickupUrl : deliveryUrl;
+  const actionContext = [labels.whenYouArrive, labels.whenReadyToLeave, labels.atDelivery, labels.finishJob][stage];
 
   return (
     <main className="driver-active-job mx-auto w-full max-w-3xl space-y-1.5 px-3 pb-4 pt-1 sm:px-6 sm:py-5">
@@ -315,21 +325,37 @@ export function DriverJobDetail({
         <div className="mt-2 grid grid-cols-[minmax(0,1fr)_24px_minmax(0,1fr)] items-center gap-2 text-[15px] font-semibold"><p className="min-w-0 break-words">{job.pickupName || labels.notAssigned}</p><span aria-hidden="true" className="text-center text-slate-400">→</span><p className="min-w-0 break-words text-right">{job.dropoffName || labels.notAssigned}</p></div>
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-white/10 pt-2 text-xs text-slate-300"><span>{formattedDate}</span><span className="inline-flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" />{job.pickupTime?.slice(0, 5) || labels.timePending}</span><span className="ml-auto inline-flex items-center gap-1 font-semibold"><Truck className="h-3.5 w-3.5" />{job.vehicleRegistration || "—"}</span></div>
       </header>
-      <section className={`${panel} p-3 sm:p-4`} aria-labelledby="job-next-action">
-        <h2 id="job-next-action" className="driver-eyebrow driver-accent">{labels.next}</h2>
-        {!loading && !loadError && stage < 4 ? <p className="mt-1 text-[15px] font-semibold leading-5 text-[#152638]">{labels.focus[stage]}</p> : null}
-        {loading ? <p role="status" className="py-3 text-sm text-slate-500">{labels.loading}</p> : loadError ? <p role="alert" className="py-3 text-sm text-rose-700">{labels.unavailable}</p> : stage >= 4 ? <p role="status" className="mt-2 flex items-center gap-2 rounded-xl bg-emerald-50 p-3 font-bold text-emerald-800"><Check className="h-5 w-5" />{labels.completed}</p> : <>
-          <div className="mt-2 flex gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" /><div className="min-w-0"><p className="break-words text-base font-bold leading-5 text-[#152638]">{destinationName || labels.notAssigned}</p>{destinationAddress && destinationAddress !== destinationName ? <p className="mt-1 break-words text-xs leading-4 text-slate-500">{destinationAddress}</p> : null}</div></div>
-          <div className="mt-3 border-t border-[var(--driver-border)] pt-3">
-            <p className="driver-eyebrow mb-1.5">{labels.takeMeThere}</p>
-            {navigationUrl ? <a className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#152638] px-3 py-2.5 text-center text-sm font-bold text-white transition-opacity active:opacity-90" href={navigationUrl} target="_blank" rel="noreferrer"><Navigation2 aria-hidden="true" className="h-4 w-4 shrink-0" /><span className="min-w-0 break-words">{labels.navigateTo} {destinationName || (destinationIsPickup ? labels.pickup : labels.dropoff)}</span><ExternalLink aria-hidden="true" className="h-3.5 w-3.5 shrink-0 opacity-70" /></a> : <p className="text-sm text-amber-800">{labels.missingRoute}</p>}
+      <section className={`${panel} overflow-hidden`} aria-labelledby="job-next-action">
+        <div className="p-3 sm:p-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 id="job-next-action" className="driver-eyebrow driver-accent">{labels.next}</h2>
+            {!loading && !loadError && stage < 4 ? <span className="rounded-full bg-violet-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-violet-700">{stage + 1} / 4</span> : null}
           </div>
-          <button type="button" disabled={!!saving} onClick={() => (stage === 3 ? setConfirmComplete(true) : void save())} className="driver-primary-action mt-2 min-h-12 w-full rounded-xl px-3 text-base font-bold text-white disabled:opacity-60">{saving ? (saving === "location" ? labels.locating : labels.saving) : labels.actions[stage]}</button>
-          <p className="mt-1 text-center text-[10px] leading-4 text-slate-500">{labels.gps}</p>
-        </>}
-        <DriverRouteOptions key={destinationIsPickup ? "pickup" : "delivery"} language={language} pickupName={job.pickupName} deliveryName={job.dropoffName} defaultDestination={destinationIsPickup ? "pickup" : "delivery"} urls={{ depot: depotUrl, current: currentUrl, pickup: pickupUrl, delivery: deliveryUrl, pickupToDropoff: pickupToDropoffUrl }} />
-        {saveError ? <p role="alert" className="mt-2 text-sm font-semibold text-rose-700">{labels.saveError}</p> : null}
-        {feedback ? <p role="status" className="mt-2 text-xs font-semibold text-emerald-700">{labels.saved}{feedback === "locationMissing" ? ` ${labels.locationMissing}` : ""}</p> : null}
+          {loading ? <p role="status" className="py-4 text-sm text-slate-500">{labels.loading}</p> : loadError ? (
+            <div className="mt-3 rounded-xl bg-rose-50 p-3">
+              <p role="alert" className="text-sm font-semibold text-rose-700">{labels.unavailable}</p>
+              <button type="button" onClick={() => void load()} className="mt-2 inline-flex min-h-10 items-center gap-2 rounded-lg bg-white px-3 text-sm font-bold text-[#152638] shadow-sm"><RefreshCw className="h-4 w-4" />{labels.retry}</button>
+            </div>
+          ) : stage >= 4 ? <p role="status" className="mt-2 flex items-center gap-2 rounded-xl bg-emerald-50 p-3 font-bold text-emerald-800"><Check className="h-5 w-5" />{labels.completed}</p> : <>
+            <p className="mt-1 text-lg font-bold leading-6 text-[#152638]">{labels.focus[stage]}</p>
+            <div className="mt-3 flex gap-2.5 rounded-xl bg-slate-50 p-3">
+              <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-violet-600" />
+              <div className="min-w-0">
+                <p className="break-words text-base font-bold leading-5 text-[#152638]">{destinationName || labels.notAssigned}</p>
+                {destinationAddress && destinationAddress !== destinationName ? <p className="mt-1 break-words text-xs leading-4 text-slate-500">{destinationAddress}</p> : null}
+              </div>
+            </div>
+            {navigationUrl ? <a className="mt-3 flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#152638] px-3 py-2.5 text-center text-sm font-bold text-white transition-opacity active:opacity-90" href={navigationUrl} target="_blank" rel="noreferrer"><Navigation2 aria-hidden="true" className="h-4 w-4 shrink-0" /><span className="min-w-0 break-words">{labels.navigateTo} {destinationName || (destinationIsPickup ? labels.pickup : labels.dropoff)}</span><ExternalLink aria-hidden="true" className="h-3.5 w-3.5 shrink-0 opacity-70" /></a> : <p className="mt-3 text-sm text-amber-800">{labels.missingRoute}</p>}
+            <div className="mt-3 border-t border-[var(--driver-border)] pt-3">
+              <p className="mb-1.5 text-xs font-semibold text-slate-500">{actionContext}</p>
+              <button type="button" disabled={!!saving} onClick={() => (stage === 3 ? setConfirmComplete(true) : void save())} className="driver-primary-action min-h-12 w-full rounded-xl px-3 text-base font-bold text-white disabled:opacity-60">{saving ? (saving === "location" ? labels.locating : labels.saving) : labels.actions[stage]}</button>
+              <p className="mt-1.5 text-center text-[10px] leading-4 text-slate-500">{labels.gps}</p>
+            </div>
+            {pickupToDropoffUrl ? <a href={pickupToDropoffUrl} target="_blank" rel="noreferrer" className="mt-2 flex min-h-10 items-center justify-center gap-1.5 text-xs font-semibold text-slate-500"><span>{labels.fullRouteMaps}</span><ExternalLink className="h-3.5 w-3.5" /></a> : null}
+          </>}
+          {saveError ? <div role="alert" className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-rose-50 p-3"><p className="text-sm font-semibold text-rose-700">{labels.saveError}</p><button type="button" disabled={!!saving} onClick={() => void save()} className="shrink-0 rounded-lg bg-white px-3 py-2 text-xs font-bold text-rose-700 shadow-sm disabled:opacity-60">{labels.retry}</button></div> : null}
+          {feedback ? <p role="status" className="mt-2 text-center text-xs font-semibold text-emerald-700">{labels.saved}{feedback === "locationMissing" ? ` ${labels.locationMissing}` : ""}</p> : null}
+        </div>
       </section>
       <section className="driver-job-progress px-3 pb-2" aria-labelledby="job-progress">
         <div className="flex items-center justify-between gap-2"><h2 id="job-progress" className="text-xs font-bold text-[#152638]">{labels.progress}</h2><button type="button" disabled={loading || !!saving} onClick={() => void load()} aria-label={labels.refresh} title={labels.refresh} className="inline-flex h-11 w-11 shrink-0 items-center justify-center text-slate-400 disabled:opacity-50"><RefreshCw className="h-3.5 w-3.5" /></button></div>
