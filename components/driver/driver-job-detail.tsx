@@ -400,7 +400,7 @@ export function DriverJobDetail({
   })();
 
   const progressStrip = (
-    <section aria-labelledby="job-progress" className="rounded-xl bg-[#f3ede4] px-2 py-1">
+    <section aria-labelledby="job-progress" className="rounded-xl border border-[#e2d9ce] bg-[#eee7dd] px-2 py-1">
       <h2 id="job-progress" className="sr-only">{labels.progress}</h2>
       <ol className="grid min-w-0 flex-1 grid-cols-4">
         {DRIVER_JOB_EVENT_TYPES.map((type, index) => {
@@ -442,7 +442,7 @@ export function DriverJobDetail({
       {progressStrip}
 
 
-      <section className={`${panel} overflow-hidden border border-[#ddd4c7] bg-[#fbf7f0] shadow-[0_5px_18px_rgba(21,38,56,0.07)]`} aria-labelledby="job-next-action">
+      <section className={`${panel} overflow-hidden border border-[#ddd4c7] bg-[#f3ede3] shadow-[0_5px_18px_rgba(21,38,56,0.07)]`} aria-labelledby="job-next-action">
         <div className="px-3 py-2">
           {loading ? <p role="status" id="job-next-action" className="py-4 text-sm text-slate-500">{labels.loading}</p> : loadError ? (
             <div className="rounded-xl bg-rose-50 p-3"><p id="job-next-action" role="alert" className="text-sm font-semibold text-rose-700">{labels.unavailable}</p><button type="button" onClick={() => void load()} className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-lg bg-white px-3 text-sm font-bold text-[#152638] shadow-sm"><RefreshCw className="h-4 w-4" />{labels.retry}</button></div>
@@ -467,7 +467,7 @@ export function DriverJobDetail({
                 </div>
               </div>
 
-              <div className="mt-1.5 rounded-2xl border border-[#e2dbd0] bg-[#f2eee8] p-2.5">
+              <div className="mt-1.5 rounded-2xl border border-[#e2dbd0] bg-[#e9edf0] p-2.5">
                 <div className="flex items-start gap-2.5">
                   <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
                   <div className="min-w-0">
@@ -478,7 +478,7 @@ export function DriverJobDetail({
 
                 {(stage === 0 || stage === 2) && navigationUrl ? <a className="driver-navigate-action mt-2 flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#152638] px-3 text-center text-sm font-bold text-white active:opacity-90" href={navigationUrl} target="_blank" rel="noreferrer"><Navigation2 className="h-4 w-4" /><span className="break-words">{labels.navigateTo} {destinationName || (destinationIsPickup ? labels.pickup : labels.dropoff)}</span><ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-70" /></a> : (stage === 0 || stage === 2) ? <p className="mt-3 text-sm text-amber-800">{labels.missingRoute}</p> : null}
                 {(stage === 0 || stage === 2) ? <div className="mt-1 grid grid-cols-3 gap-1.5" aria-label={labels.quickRoutes}>
-                  {([[depotShortcutUrl, labels.fromDepot, Warehouse], [pickupToDropoffUrl, labels.pickupDelivery, MapPin], [navigationUrl, destinationIsPickup ? labels.herePickup : labels.hereDelivery, Route]] as const).map(([url, title, Icon]) => url ? <a key={title} href={url} target="_blank" rel="noreferrer" className="flex min-h-11 min-w-0 items-center justify-center gap-1 rounded-xl border border-[#d9e0e6] bg-[#eaf0f4] px-1.5 py-1 text-center text-[11px] font-semibold leading-4 text-[#152638] transition-colors active:bg-[#dde6ec]"><Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-600" /><span className="min-w-0 break-words">{title}</span></a> : null)}
+                  {([[depotShortcutUrl, labels.fromDepot, Warehouse], [pickupToDropoffUrl, labels.pickupDelivery, MapPin], [navigationUrl, destinationIsPickup ? labels.herePickup : labels.hereDelivery, Route]] as const).map(([url, title, Icon]) => url ? <a key={title} href={url} target="_blank" rel="noreferrer" className="flex min-h-11 min-w-0 items-center justify-center gap-1 rounded-xl border border-[#d9e0e6] bg-[#dde7ee] px-1.5 py-1 text-center text-[11px] font-semibold leading-4 text-[#152638] transition-colors active:bg-[#cfdae2]"><Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-600" /><span className="min-w-0 break-words">{title}</span></a> : null)}
                 </div> : null}
               </div>
 
@@ -496,9 +496,9 @@ export function DriverJobDetail({
         </div>
       </section>
 
-      <div className="driver-information-group driver-surface overflow-hidden border border-[#d9d1c5] bg-[#f3eee6] shadow-[0_4px_14px_rgba(21,38,56,0.055)]">
+      <div className="driver-information-group driver-surface overflow-hidden border border-[#d9d1c5] bg-[#ebe4da] shadow-[0_4px_14px_rgba(21,38,56,0.055)]">
         <DriverDisclosure title={labels.fullRoute} id="job-route">
-          <div className="border-t border-[#ddd5c9] bg-[#f8f3eb] px-4 py-3">
+          <div className="border-t border-[#ddd5c9] bg-[#f3ede4] px-4 py-3">
             {[[labels.pickup, job.pickupName, job.pickupAddress], [labels.dropoff, job.dropoffName, job.dropoffAddress]].map(([label, name, address], index) => (
               <div key={label} className={`relative grid grid-cols-[32px_1fr] gap-2.5 ${index ? "pt-4" : "pb-4"}`}>
                 {index === 0 ? <span aria-hidden="true" className="absolute left-[15px] top-8 h-[calc(100%-8px)] w-px bg-slate-200" /> : null}
@@ -515,7 +515,7 @@ export function DriverJobDetail({
           </div>
         </DriverDisclosure>
         <DriverDisclosure title={labels.details}>
-          <dl className="border-t border-[#ddd5c9] bg-[#f8f3eb] px-4 pb-3 text-sm">
+          <dl className="border-t border-[#ddd5c9] bg-[#f3ede4] px-4 pb-3 text-sm">
             {[
               [labels.vehicle, job.vehicleRegistration],
               [labels.vehicleType, getPortalVehicleTypeLabel(job.vehicleType, language)],
@@ -531,9 +531,9 @@ export function DriverJobDetail({
             ))}
           </dl>
         </DriverDisclosure>
-        <div className="driver-operations-support flex flex-wrap items-center justify-between gap-2 border-t border-[#d5dce2] bg-[#eaf0f4] px-4 py-2.5">
+        <div className="driver-operations-support flex flex-wrap items-center justify-between gap-2 border-t border-[#cbd6de] bg-[#dfe8ee] px-4 py-2.5">
           <div className="min-w-0"><p className="break-words text-sm font-semibold text-[#152638]">{operationsContact.name || labels.operations}</p>{operationsContact.name ? <p className="text-xs text-slate-500">{labels.operations}</p> : null}</div>
-          {operationsContact.phone ? <a href={"tel:" + operationsContact.phone} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#cfd8df] bg-[#f4f7f9] px-3 text-sm font-semibold text-[#152638] transition-colors active:bg-[#e2e9ee]"><Phone aria-hidden="true" className="h-4 w-4 text-slate-600" />{labels.call}</a> : <p className="text-xs text-slate-500">{labels.contactUnavailable}</p>}
+          {operationsContact.phone ? <a href={"tel:" + operationsContact.phone} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#cfd8df] bg-[#e7eef3] px-3 text-sm font-semibold text-[#152638] transition-colors active:bg-[#d6e0e7]"><Phone aria-hidden="true" className="h-4 w-4 text-slate-600" />{labels.call}</a> : <p className="text-xs text-slate-500">{labels.contactUnavailable}</p>}
         </div>
       </div>
       {confirmComplete ? <CompletionConfirmation labels={labels} onCancel={() => setConfirmComplete(false)} onConfirm={() => void save()} /> : null}

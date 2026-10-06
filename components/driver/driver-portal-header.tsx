@@ -71,35 +71,35 @@ export function DriverPortalHeader({ driverName }: { driverName: string }) {
   return (
     <div className="driver-header-slot">
       <header className="driver-portal-header fixed inset-x-0 top-0 z-50 border-b border-[var(--driver-border)] bg-[#fffbf2]/95 backdrop-blur">
-        <div className="mx-auto flex min-h-11 max-w-3xl items-center gap-2 px-3 sm:min-h-[60px] sm:px-4 lg:max-w-[1152px]">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <span className="driver-header-logo relative h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-[var(--driver-border)] bg-[#f3eee5] sm:h-10 sm:w-11">
+        <div className="mx-auto flex min-h-10 max-w-3xl items-center gap-1.5 px-3 sm:min-h-[52px] sm:px-4 lg:max-w-[1152px]">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+            <span className="driver-header-logo relative h-8 w-8 shrink-0 overflow-hidden rounded-lg border border-[#d8d0c4] bg-[#efe7da] sm:h-9 sm:w-10">
               <Image
                 src="/ees-logo.png"
                 alt="EES"
                 width={1536}
                 height={1024}
                 sizes="96px"
-                className="absolute left-1/2 top-[55%] h-auto w-[82px] max-w-none -translate-x-1/2 -translate-y-1/2 object-contain sm:w-[96px]"
+                className="absolute left-1/2 top-[55%] h-auto w-[74px] max-w-none -translate-x-1/2 -translate-y-1/2 object-contain sm:w-[86px]"
                 priority
               />
             </span>
 
             <div className="min-w-0 flex-1">
-              <p className="whitespace-nowrap text-[8px] font-bold uppercase tracking-[0.14em] text-slate-400 sm:text-[9px]">
+              <p className="whitespace-nowrap text-[7px] font-bold uppercase tracking-[0.16em] text-slate-400 sm:text-[8px]">
                 EES Driver
               </p>
-              <p className="truncate text-[13px] font-bold leading-4 text-[#152638] sm:text-sm">
+              <p className="truncate text-[12px] font-bold leading-[15px] text-[#152638] sm:text-[13px]">
                 {profile?.displayName || driverName}
               </p>
             </div>
           </div>
 
-          <div className="driver-header-controls flex shrink-0 items-center gap-1">
+          <div className="driver-header-controls flex shrink-0 items-center gap-0.5">
             <DriverAvatar
               src={profile?.avatarUrl}
               name={profile?.displayName || driverName}
-              className="h-8 w-8 rounded-full"
+              className="h-7 w-7 rounded-full"
             />
 
             <LanguageSwitcher compact />
@@ -108,10 +108,10 @@ export function DriverPortalHeader({ driverName }: { driverName: string }) {
               type="button"
               onClick={() => void signOut()}
               disabled={signingOut}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--driver-border)] bg-[#fffdf8] text-slate-500 active:bg-slate-100 disabled:opacity-50"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#d8d0c4] bg-[#f8f2e9] text-slate-500 transition-colors active:bg-[#eee6dc] disabled:opacity-50"
               aria-label={language === "th" ? "ออกจากระบบ" : "Sign out"}
             >
-              <LogOut className="h-4 w-4" />
+              <LogOut className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>

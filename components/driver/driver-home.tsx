@@ -85,26 +85,26 @@ function CurrentJobCard({
   return (
     <Link
       href={`/driver/jobs/${job.id}`}
-      className="driver-home-next-job block overflow-hidden rounded-[24px] bg-[#102a43] text-white shadow-[0_6px_18px_rgba(16,42,67,0.12)] transition active:scale-[0.995]"
+      className="driver-home-next-job block overflow-hidden rounded-[26px] border border-[#173a58] bg-[#102a43] text-white shadow-[0_10px_28px_rgba(16,42,67,0.16)] transition active:scale-[0.995]"
     >
-      <div className="flex items-center justify-between border-b border-white/10 px-4 py-1">
+      <div className="flex items-center justify-between border-b border-white/10 px-4 py-1.5">
         <p className="driver-eyebrow driver-eyebrow-on-navy">
           {status === "ready" ? labels.next : labels.current}
         </p>
         <DriverStatusBadge language={language} status={status} />
       </div>
 
-      <div className="px-4 py-3">
-        <h2 className="break-words text-[28px] font-black leading-none tracking-[-0.03em] text-white">
+      <div className="px-4 py-3.5">
+        <h2 className="break-words text-[29px] font-black leading-none tracking-[-0.035em] text-white">
           {job.clientName || job.jobOrderNumber || labels.job}
         </h2>
 
-        <div className="driver-home-route mt-2 grid grid-cols-[minmax(0,1fr)_24px_minmax(0,1fr)] items-center gap-3 rounded-2xl bg-[#1f4667] px-3 py-2">
+        <div className="driver-home-route mt-2.5 grid grid-cols-[minmax(0,1fr)_28px_minmax(0,1fr)] items-center gap-3 rounded-2xl border border-white/10 bg-[#214d70] px-3.5 py-2.5 shadow-inner shadow-black/5">
           <div className="min-w-0">
             <p className="driver-eyebrow driver-eyebrow-on-navy">
               {labels.pickup}
             </p>
-            <p className="mt-1 break-words text-[18px] font-semibold leading-6 text-white">
+            <p className="mt-1 break-words text-[18px] font-bold leading-6 text-white">
               {job.pickupName || "—"}
             </p>
           </div>
@@ -115,13 +115,13 @@ function CurrentJobCard({
             <p className="driver-eyebrow driver-eyebrow-on-navy">
               {labels.dropoff}
             </p>
-            <p className="mt-1 break-words text-[18px] font-semibold leading-6 text-white">
+            <p className="mt-1 break-words text-[18px] font-bold leading-6 text-white">
               {job.dropoffName || "—"}
             </p>
           </div>
         </div>
 
-        <div className="driver-job-metadata mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-white/80">
+        <div className="driver-job-metadata mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-white/82">
           <span className="inline-flex items-center gap-1.5 font-medium">
             <CalendarDays className="h-4 w-4 shrink-0 text-white/85" />
             {formattedDate}
@@ -136,8 +136,8 @@ function CurrentJobCard({
           </span>
         </div>
 
-        <div className="mt-3 flex justify-end">
-          <span className="driver-primary-action inline-flex min-h-12 items-center gap-3 rounded-xl px-6 text-base font-semibold text-white shadow-sm">
+        <div className="mt-3.5 flex justify-end">
+          <span className="driver-primary-action inline-flex min-h-12 items-center gap-3 rounded-2xl px-6 text-base font-bold text-white shadow-[0_8px_18px_rgba(99,62,241,0.22)]">
             {driverJobAction(language, status)}
             <ChevronRight className="h-5 w-5" />
           </span>
@@ -163,7 +163,7 @@ function UpcomingJobRow({
   return (
     <Link
       href={`/driver/jobs/${job.id}`}
-      className="driver-home-upcoming-job block border-b border-[#ddd5c9] bg-[#fbf7f0] px-4 py-2 last:border-b-0 transition-colors active:bg-[#f3ede4]"
+      className="driver-home-upcoming-job block border-b border-[#ddd5c9] bg-[#f3ede3] px-4 py-2 last:border-b-0 transition-colors active:bg-[#e9e0d4]"
     >
       <div className="flex items-center gap-3">
         <div className="grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-1">
@@ -399,12 +399,12 @@ export function DriverHome({
                     {formatGroupDate(date)}
                   </h3>
 
-                  <span className="driver-upcoming-count rounded-full border border-[#e4dccf] bg-[#f6f0e7] px-2 py-0.5 text-[11px] font-bold text-slate-500">
+                  <span className="driver-upcoming-count rounded-full border border-[#e4dccf] bg-[#efe7dc] px-2 py-0.5 text-[11px] font-bold text-slate-500">
                     {dateJobs.length}
                   </span>
                 </div>
 
-                <div className="driver-home-upcoming-group overflow-hidden rounded-2xl border border-[#ddd5c9] bg-[#fbf7f0] shadow-[0_4px_14px_rgba(21,38,56,0.06)]">
+                <div className="driver-home-upcoming-group overflow-hidden rounded-2xl border border-[#ddd5c9] bg-[#f3ede3] shadow-[0_4px_14px_rgba(21,38,56,0.06)]">
                   {dateJobs.map((job) => (
                     <UpcomingJobRow
                       key={job.id}
@@ -419,7 +419,7 @@ export function DriverHome({
             ))}
           </div>
         ) : (
-          <p className="rounded-xl border border-dashed border-[#d8d0c5] bg-[#f8f3eb] p-4 text-center text-sm text-slate-500">
+          <p className="rounded-xl border border-dashed border-[#d8d0c5] bg-[#efe8df] p-4 text-center text-sm text-slate-500">
             {labels.noUpcoming}
           </p>
         )}

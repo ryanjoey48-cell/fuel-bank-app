@@ -83,7 +83,7 @@ export function DriverRouteOptions({ language, pickupName, deliveryName, default
 
   return (
     <DriverDisclosure title={l.more} compact>
-      <div className="border-t border-[#ddd5c9] bg-[#f8f3eb] px-1 py-1">
+      <div className="border-t border-[#ddd5c9] bg-[#f1ebe2] px-1 py-1">
         {routes.length ? (
           <div className="divide-y divide-[var(--driver-border)]">
             {routes.map(({ id, title, detail, href, Icon }) => (
@@ -92,9 +92,9 @@ export function DriverRouteOptions({ language, pickupName, deliveryName, default
                 href={href!}
                 target="_blank"
                 rel="noreferrer"
-                className="group flex min-h-14 items-center gap-3 rounded-xl px-2 py-2.5 text-[#152638] transition-colors hover:bg-[#eef2f5] active:bg-[#e3e9ed]"
+                className="group flex min-h-14 items-center gap-3 rounded-xl px-2 py-2.5 text-[#152638] transition-colors hover:bg-[#e5ebef] active:bg-[#d8e1e7]"
               >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#d9e0e6] bg-[#eaf0f4] text-slate-600">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#d9e0e6] bg-[#dde7ee] text-slate-600">
                   <Icon aria-hidden="true" className="h-4 w-4" />
                 </span>
                 <span className="min-w-0 flex-1">
