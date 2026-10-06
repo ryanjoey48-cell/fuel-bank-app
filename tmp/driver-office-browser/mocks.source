@@ -1,0 +1,10 @@
+import React,{createContext,useContext} from 'react';
+export const RouterContext=createContext<any>(null),LanguageContext=createContext<any>(null);
+export function useRouter(){return useContext(RouterContext)}
+export function usePathname(){return useRouter().path}
+export function useLanguage(){return useContext(LanguageContext)}
+export function Link({children,href,...p}:any){const r=useRouter();return <a {...p} href={href} onClick={e=>{e.preventDefault();r.push(href)}}>{children}</a>}
+export function Image({fill,priority,unoptimized,sizes,...p}:any){return <img {...p} style={{...p.style,...(fill?{position:'absolute',height:'100%',top:0}:{})}}/>}
+export function useAccountAccess(){return {can:()=>true}}
+export async function getAccessToken(){return 'fixture-office-token'}
+export function useModalScrollLock(){ }

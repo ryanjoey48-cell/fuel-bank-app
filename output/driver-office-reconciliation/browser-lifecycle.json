@@ -1,0 +1,117 @@
+{
+  "date": "2026-10-06",
+  "homeDocumentRequests": 5,
+  "historyDocumentRequests": 3,
+  "officeRequests": 4,
+  "postCalls": [
+    {
+      "eventType": "pickup_arrived",
+      "latitude": 13.1,
+      "longitude": 100.1
+    },
+    {
+      "eventType": "pickup_departed",
+      "latitude": 13.1,
+      "longitude": 100.1
+    },
+    {
+      "eventType": "delivery_arrived",
+      "latitude": 13.1,
+      "longitude": 100.1
+    },
+    {
+      "eventType": "job_completed",
+      "latitude": 13.1,
+      "longitude": 100.1
+    },
+    {
+      "eventType": "pickup_arrived",
+      "latitude": null,
+      "longitude": null
+    },
+    {
+      "eventType": "pickup_departed",
+      "latitude": null,
+      "longitude": null
+    },
+    {
+      "eventType": "delivery_arrived",
+      "latitude": null,
+      "longitude": null
+    },
+    {
+      "eventType": "job_completed",
+      "latitude": null,
+      "longitude": null
+    }
+  ],
+  "cacheChecks": {
+    "home": {
+      "marker": "fresh",
+      "remaining": 0
+    },
+    "history": {
+      "marker": "fresh",
+      "completed": 2
+    },
+    "events": {
+      "events": [
+        {
+          "id": "A-0",
+          "eventType": "pickup_arrived",
+          "latitude": 13.1,
+          "longitude": 100.1,
+          "eventTime": "2026-10-06T14:53:00+07:00"
+        },
+        {
+          "id": "A-1",
+          "eventType": "pickup_departed",
+          "latitude": 13.1,
+          "longitude": 100.1,
+          "eventTime": "2026-10-06T14:54:00+07:00"
+        },
+        {
+          "id": "A-2",
+          "eventType": "delivery_arrived",
+          "latitude": 13.1,
+          "longitude": 100.1,
+          "eventTime": "2026-10-06T14:55:00+07:00"
+        },
+        {
+          "id": "A-3",
+          "eventType": "job_completed",
+          "latitude": 13.1,
+          "longitude": 100.1,
+          "eventTime": "2026-10-06T14:56:00+07:00"
+        }
+      ]
+    }
+  },
+  "mobile": [
+    {
+      "width": 375,
+      "overflow": false,
+      "bg": "rgb(17, 21, 28)",
+      "avatar": 0
+    },
+    {
+      "width": 390,
+      "overflow": false,
+      "bg": "rgb(17, 21, 28)",
+      "avatar": 0
+    },
+    {
+      "width": 393,
+      "overflow": false,
+      "bg": "rgb(17, 21, 28)",
+      "avatar": 0
+    },
+    {
+      "width": 430,
+      "overflow": false,
+      "bg": "rgb(17, 21, 28)",
+      "avatar": 0
+    }
+  ],
+  "errors": []
+}

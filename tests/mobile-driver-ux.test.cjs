@@ -86,5 +86,5 @@ test('mobile refinements stay scoped and navigation preserves safe-area padding'
   assert.ok(read('components/driver/driver-navigation.tsx').includes('min-h-[48px]'));
   assert.ok(read('components/driver/driver-navigation.tsx').includes('pb-[env(safe-area-inset-bottom)]'));
   assert.ok(read('app/driver/(protected)/layout.tsx').includes('pb-[calc(3.5rem+env(safe-area-inset-bottom))]'));
-  assert.ok(read('components/admin/driver-operations-history.tsx').includes('{page + 1}'));
+  assert.ok(read('components/admin/driver-operations-history.tsx').includes('data.page+1'));
 });

@@ -20,6 +20,7 @@ export type DriverPortalJob = {
   locationsVerified?: boolean;
   driverId?: string | null;
   bookingStatus?: string | null;
+  notes?: string | null;
 };
 
 export const DRIVER_JOB_EVENT_TYPES = ["pickup_arrived", "pickup_departed", "delivery_arrived", "job_completed"] as const;

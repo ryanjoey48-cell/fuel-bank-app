@@ -1,0 +1,12 @@
+import React,{useState,useEffect} from 'react';
+import {createRoot} from 'react-dom/client';
+import {RouterContext,LanguageContext} from './mocks';
+import {DriverHome} from '@/components/driver/driver-home';
+import {DriverHistory} from '@/components/driver/driver-history';
+import {DriverJobDetail} from '@/components/driver/driver-job-detail';
+import {DriverPortalHeader} from '@/components/driver/driver-portal-header';
+import {DriverNavigation} from '@/components/driver/driver-navigation';
+import {DriverOperationsPage} from '@/components/admin/driver-operations';
+const boot=(window as any).bootstrap;
+function App(){const [path,setPath]=useState(location.pathname),[language,setLanguage]=useState('en'),[revision,setRevision]=useState(0);const navigate=(url)=>{history.pushState({},'',url);setPath(url)};useEffect(()=>{const pop=()=>setPath(location.pathname);addEventListener('popstate',pop);return()=>removeEventListener('popstate',pop)},[]);const router={path,push:navigate,replace:navigate,refresh:()=>setRevision(x=>x+1)};(window as any).qa={boot,setLanguage,navigate};const office=path.startsWith('/admin/');let content;if(office)content=<DriverOperationsPage/>;else if(path==='/driver/history')content=<DriverHistory rows={boot.jobs.filter(j=>boot.events[j.id]?.some(e=>e.eventType==='job_completed')).map(job=>({job,events:boot.events[job.id]}))} page={0} hasMore={false}/>;else if(path.startsWith('/driver/jobs/'))content=<DriverJobDetail key={path} job={boot.jobs.find(j=>j.id===path.split('/').at(-1))} depot={{name:'EES Depot',address:'EES depot address',placeId:'places/depot-id',latitude:13,longitude:100}}/>;else content=<DriverHome driverName="Joey Test" driverId="26" jobs={boot.jobs} eventsByJob={boot.events} today={boot.today}/>;return <LanguageContext.Provider value={{language,setLanguage,t:{common:{language:language==='th'?'ภาษา':'Language'}}}}><RouterContext.Provider value={router}><div className={office?'min-h-screen bg-[#fffbf2] p-4':'driver-portal-shell min-h-[100dvh] bg-[var(--driver-bg)] text-[var(--driver-text)]'}>{office?null:<><DriverPortalHeader driverName="Joey Test"/><DriverNavigation/></>}<div className={office?'':'driver-portal-content pb-[calc(3.5rem+env(safe-area-inset-bottom))] sm:pb-0'}>{content}</div></div></RouterContext.Provider></LanguageContext.Provider>}
+createRoot(document.getElementById('root')!).render(<App/>);

@@ -298,7 +298,7 @@ export function toDriverJob(row: Record<string, unknown>, identity: DriverPortal
   };
 }
 
-export async function listAssignedDriverJobs(session: DriverPortalSession, today = bangkokDateKey()) {
+export async function listAssignedDriverJobs(session: DriverPortalIdentity, today = bangkokDateKey()) {
   const admin = createServerSupabaseAdmin();
   const jobs: DriverPortalJob[] = [];
   for (let offset = 0; ; offset += 500) {
@@ -332,3 +332,17 @@ export async function getAssignedDriverJob(session: DriverPortalSession, booking
   return data ? toDriverJob(data as unknown as Record<string, unknown>, session) : null;
 }
 
+
+/** A completion recorded by this driver authorizes historical read access only. */
+export async function getDriverVisibleJob(session: DriverPortalSession, bookingId: string) {
+  const assigned = await getAssignedDriverJob(session, bookingId);
+  if (assigned || !/^[0-9a-f-]{36}$/i.test(bookingId)) return assigned;
+  const admin = createServerSupabaseAdmin();
+  const completion = await admin.from("driver_job_events").select("booking_id")
+    .eq("booking_id", bookingId).eq("driver_id", session.driverId).eq("event_type", "job_completed").maybeSingle();
+  if (completion.error) throw new DriverPortalError(503, "History unavailable.");
+  if (!completion.data) return null;
+  const booking = await admin.from("booking_diary").select(DRIVER_JOB_SELECT).eq("id", bookingId).maybeSingle();
+  if (booking.error) throw new DriverPortalError(503, "Historical job unavailable.");
+  return booking.data ? toDriverJob(booking.data as unknown as Record<string, unknown>, { ...session, vehicleRegistration: null, vehicleType: null }) : null;
+}

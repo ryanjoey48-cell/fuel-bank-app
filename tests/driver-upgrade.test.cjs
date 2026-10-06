@@ -69,14 +69,14 @@ test('admin History authorizes before historical data access', async () => {
   const route = load('app/api/admin/driver-operations/history/route.ts', { '@/lib/admin-user-management-server': { AdminApiError, requireAdminAccess: async () => { throw new AdminApiError(403); } }, '@/lib/driver-portal-server': { DriverPortalError }, '@/lib/driver-work-server': { operationsHistory: () => { throw new Error('Must not read'); } } });
   assert.equal((await route.GET(new Request('http://localhost/api?page=0'))).status, 403);
 });
-test('historical query is bounded, completed-only and separate from live Today', async () => {
+test('historical query includes today and has counted, bounded pagination', async () => {
   const calls = [];
-  const query = { select(v) { calls.push(['select', v]); return this; }, eq(...v) { calls.push(['eq', ...v]); return this; }, lt(...v) { calls.push(['lt', ...v]); return this; }, order() { return this; }, async range(...v) { calls.push(['range', ...v]); return { data: [], error: null }; } };
+  const query = { select(v) { calls.push(['select', v]); return this; }, eq(...v) { calls.push(['eq', ...v]); return this; }, lt(...v) { calls.push(['lt', ...v]); return this; }, order() { return this; }, async range(...v) { calls.push(['range', ...v]); return { data: [], count: 0, error: null }; } };
   const work = load('lib/driver-work-server.ts', { 'server-only': {}, '@/lib/admin-user-management-server': {}, '@/lib/driver-portal-server': { DriverPortalError, bangkokDateKey: () => '2026-10-02', DRIVER_JOB_SELECT: 'id' }, '@/lib/driver-profile-server': {}, '@/lib/driver-operations': ops });
-  assert.deepEqual(await work.operationsHistory({ from: () => query }, new URLSearchParams('page=2')), { rows: [], hasMore: false });
+  assert.deepEqual(await work.operationsHistory({ from: () => query }, new URLSearchParams('page=2')), { rows: [], total: 0, page: 2, pageSize: 25, hasMore: false });
   assert.ok(calls.some((c) => c[0] === 'eq' && c[1] === 'event_type' && c[2] === 'job_completed'));
-  assert.ok(calls.some((c) => c[0] === 'lt' && c[1] === 'event_time' && c[2] === '2026-10-02T00:00:00+07:00'));
-  assert.ok(calls.some((c) => c[0] === 'range' && c[1] === 40 && c[2] === 60));
+  assert.ok(!calls.some((c) => c[0] === 'lt' && c[1] === 'event_time'));
+  assert.ok(calls.some((c) => c[0] === 'range' && c[1] === 50 && c[2] === 74));
 });
 test('avatar response returns newly signed canonical profile, not a blind success flag', async () => {
   let uploaded = false;

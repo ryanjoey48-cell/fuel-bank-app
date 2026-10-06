@@ -70,7 +70,8 @@ export type OperationsRow = DriverWork & {
   profile: DriverProfile | null;
   waitingMinutes?: number | null;
 };
-export type OperationsResult = { date: string; fetchedAt: string; rows: OperationsRow[] };
+export type OperationsSummary = { driversToday: number; jobsToday: number; activeNow: number; attention: number; completedToday: number };
+export type OperationsResult = { date: string; fetchedAt: string; rows: OperationsRow[]; summary: OperationsSummary; driverActivity: Record<string, { jobsToday: number; status: OperationStatus | null }> };
 export function pickupWaitMinutes(events: DriverJobEvent[], serverTime: string): number | null {
   if (events.some((event) => event.eventType === "pickup_departed" || event.eventType === "job_completed")) return null;
   const arrived = events.find((event) => event.eventType === "pickup_arrived");
@@ -78,6 +79,41 @@ export function pickupWaitMinutes(events: DriverJobEvent[], serverTime: string):
   const elapsed = Date.parse(serverTime) - Date.parse(arrived.eventTime);
   return Number.isFinite(elapsed) && elapsed >= 0 ? Math.floor(elapsed / 60000) : null;
 }
-export type OperationsHistoryResult = { rows: OperationsRow[]; hasMore: boolean };
+export type OperationsHistoryResult = { rows: OperationsRow[]; hasMore: boolean; total: number; page: number; pageSize: number };
+export type OperationsDriverDetail = { driverId: string; driverName: string; currentVehicle: string | null; portalActive: boolean | null; profile: DriverProfile | null; date: string; stats: { jobsToday: number; activeNow: number; completedToday: number; completedLast7Days: number; totalCompleted: number }; recentCompleted: OperationsRow[]; recentAssigned: DriverPortalJob[] };
 export type OperationalNotification = { id: string; bookingId: string; driverId: string; driverName: string; vehicle: string | null; customer: string | null; pickup: string; arrivedAt: string; createdAt: string; readAt: string | null; resolvedAt: string | null };
 export type OperationalNotificationsResult = { items: OperationalNotification[]; unreadCount: number; fetchedAt: string };
+
+/** The completion event, rather than planned booking date, owns completion KPIs. */
+export function completedDriverEvent(events: DriverJobEvent[]) {
+  return events.find(event => event.eventType === "job_completed") ?? null;
+}
+export function bangkokOperationalDate(value: Date | string = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(typeof value === "string" ? new Date(value) : value);
+}
+export function shiftBangkokDate(dateKey: string, days: number) {
+  const date = new Date(dateKey + "T12:00:00+07:00");
+  date.setUTCDate(date.getUTCDate() + days);
+  return bangkokOperationalDate(date);
+}
+export function driverCompletedOn(events: DriverJobEvent[], date: string) {
+  const completed = completedDriverEvent(events);
+  return !!completed && bangkokOperationalDate(completed.eventTime) === date;
+}
+export function driverDurationMinutes(events: DriverJobEvent[]) {
+  const start = events.find(event => event.eventType === "pickup_arrived");
+  const completed = completedDriverEvent(events);
+  if (!start || !completed) return null;
+  const minutes = (Date.parse(completed.eventTime) - Date.parse(start.eventTime)) / 60000;
+  return Number.isFinite(minutes) && minutes >= 0 ? Math.round(minutes) : null;
+}
+export function hasOperationalAttention(row: OperationsRow, fetchedAt: string) {
+  if (jobStatus(row.events) === "completed") return false;
+  if (["cancelled", "canceled", "rejected"].includes(row.job.bookingStatus?.trim().toLowerCase() || "")) return false;
+  if (!row.job.pickupName.trim() || !row.job.dropoffName.trim() || row.accountActive === false || (row.waitingMinutes ?? -1) >= 30) return true;
+  if (row.job.bookingStatus?.trim().toLowerCase() === "completed") return true;
+  if (jobStatus(row.events) === "ready" && row.job.pickupTime && /^\d{2}:\d{2}/.test(row.job.pickupTime)) {
+    return Date.parse(row.job.bookingDate + "T" + row.job.pickupTime.slice(0, 5) + ":00+07:00") < Date.parse(fetchedAt);
+  }
+  return false;
+}

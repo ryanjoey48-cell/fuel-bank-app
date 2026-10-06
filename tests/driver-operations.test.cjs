@@ -86,13 +86,13 @@ test('admin operations denies unauthorised caller before any data query', async 
   const route = load('app/api/admin/driver-operations/route.ts', { '@/lib/admin-user-management-server': { AdminApiError, requireAdminAccess: async () => { throw new AdminApiError(403); } }, '@/lib/driver-work-server': { driverOperations: async () => { queried = true; } }, '@/lib/driver-portal-server': { DriverPortalError }, '@/lib/driver-notifications-server': { evaluatePickupWaits: async () => { throw new Error('Must not evaluate before authorization'); } } });
   const response = await route.GET(new Request('http://localhost/api')); assert.equal(response.status, 403); assert.equal(queried, false);
 });
-test('history rechecks booking ownership and scopes completion events by driver id', async () => {
+test('history uses canonical completion ownership even after reassignment', async () => {
   const calls = [];
   const admin = { from(table) { calls.push(table); return { select() { return this; }, eq(key, value) { calls.push([table, key, value]); return this; }, order() { return this; }, async range() { return { data: [{ booking_id: 'own', event_time: 'time' }], error: null }; }, async in(key, values) { calls.push([table, key, values]); return { data: [], error: null }; } }; } };
   const work = load('lib/driver-work-server.ts', { 'server-only': {}, '@/lib/admin-user-management-server': { createServerSupabaseAdmin: () => admin }, '@/lib/driver-portal-server': { DriverPortalError, DRIVER_JOB_SELECT: 'id', toDriverJob: () => { throw new Error('No owned bookings'); } }, '@/lib/driver-profile-server': {}, '@/lib/driver-operations': ops });
   assert.deepEqual(await work.driverHistoryWork(session), { rows: [], hasMore: false });
   assert.ok(calls.some(([table, key, value]) => table === 'driver_job_events' && key === 'driver_id' && value === '26'));
-  assert.ok(calls.some(([table, key, value]) => table === 'booking_diary' && key === 'driver_id' && value === '26'));
+  assert.ok(!calls.some(([table, key]) => table === 'booking_diary' && key === 'driver_id'));
 });
 test('completed home cards render Completed and next unfinished job first', () => {
   const React = require('react'); const icons = Object.fromEntries(['ArrowDown','CalendarDays','ChevronRight','Clock3','MapPin','PackageCheck','Route','Truck'].map((name) => [name, () => null]));

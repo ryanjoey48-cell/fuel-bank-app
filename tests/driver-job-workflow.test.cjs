@@ -105,7 +105,7 @@ function helpers({ owned = true, rpcError = null, rows = [], queryError = null }
   const result = load('lib/driver-job-events-server.ts', {
     'server-only': {}, '@/lib/driver-portal': portal,
     '@/lib/admin-user-management-server': { createServerSupabaseAdmin: () => admin },
-    '@/lib/driver-portal-server': { DriverPortalError, getAssignedDriverJob: async () => owned ? { id: 'booking' } : null }
+    '@/lib/driver-portal-server': { DriverPortalError, getAssignedDriverJob: async () => owned ? { id: 'booking' } : null, getDriverVisibleJob: async () => owned ? { id: 'booking' } : null }
   });
   return { ...result, calls };
 }

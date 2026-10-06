@@ -251,6 +251,7 @@ export function DriverJobDetail({
   const [confirmComplete, setConfirmComplete] = useState(false);
   const busy = useRef(false);
   const generation = useRef(0);
+  const progressLoaded = useRef(false);
   const endpoint = `/api/driver/jobs/${encodeURIComponent(job.id)}/events`;
 
   const load = useCallback(async (silent = false) => {
@@ -270,21 +271,25 @@ export function DriverJobDetail({
       const payload = await response.json();
       if (!response.ok || !Array.isArray(payload.events)) throw new Error("Progress unavailable");
       if (id === generation.current) {
+        progressLoaded.current = true;
         setEvents(payload.events);
         setSaveError(null);
       }
     } catch {
-      if (id === generation.current && !silent) setLoadError(true);
+      if (id === generation.current && (!silent || !progressLoaded.current)) setLoadError(true);
     } finally {
       if (id === generation.current) {
-        if (silent) setSyncing(false);
-        else setLoading(false);
+        // A page-show/focus refresh may supersede the initial read. The latest
+        // request must settle both indicators, including the initial loading UI.
+        setSyncing(false);
+        setLoading(false);
       }
     }
   }, [endpoint]);
 
   useEffect(() => {
     const counter = generation;
+    progressLoaded.current = false;
     void load();
 
     const sync = () => void load(true);

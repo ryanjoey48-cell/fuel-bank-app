@@ -1,6 +1,6 @@
 import "server-only";
 import { createServerSupabaseAdmin } from "@/lib/admin-user-management-server";
-import { DriverPortalError, getAssignedDriverJob, type DriverPortalSession } from "@/lib/driver-portal-server";
+import { DriverPortalError, getAssignedDriverJob, getDriverVisibleJob, type DriverPortalSession } from "@/lib/driver-portal-server";
 import { DRIVER_JOB_EVENT_TYPES, type DriverJobEvent, type DriverJobEventType } from "@/lib/driver-portal";
 
 export const DRIVER_EVENT_SELECT = "id,event_type,event_time,latitude,longitude";
@@ -21,7 +21,7 @@ export async function readDriverJobEvents(bookingId: string) {
 }
 
 export async function getAssignedDriverJobEvents(session: DriverPortalSession, bookingId: string) {
-  if (!await getAssignedDriverJob(session, bookingId)) throw new DriverPortalError(404, "Job not found.");
+  if (!await getDriverVisibleJob(session, bookingId)) throw new DriverPortalError(404, "Job not found.");
   return readDriverJobEvents(bookingId);
 }
 

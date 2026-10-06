@@ -1,0 +1,26 @@
+{
+  "bangkokDate": "2026-10-06",
+  "drivers": [
+    {
+      "driverId": "26",
+      "name": "Joey Test",
+      "portalAccounts": 1,
+      "active": true,
+      "completedCount": 8,
+      "completedToday": 1,
+      "legacyPortalVisible": 8,
+      "legacyOfficeVisible": 7,
+      "reassignedCompletedJobIds": [],
+      "completionBookingIds": [
+        "a2a09fd5-c9b4-4610-8c1e-f52361936e69",
+        "2ae88a4b-09e0-4bd4-a3b0-07250bac118b",
+        "c90631da-24ec-4643-ad9d-a9f949eaec5d",
+        "cafbcaed-b28e-4155-9cf6-745e7c2f5f27",
+        "f1ee9b33-8b6c-4b4f-855c-39728de58d82",
+        "ffe3d014-393e-4b50-8cc7-1232c50b7e00",
+        "3e93497c-4cae-432d-bb6e-1dfe69e8cd19",
+        "cffeb085-9b4a-4349-97a0-0521dce5ca06"
+      ]
+    }
+  ]
+}

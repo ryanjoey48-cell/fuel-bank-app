@@ -32,16 +32,20 @@ import { useLanguage } from "@/lib/language-provider";
 import {
   jobStatus,
   statusCopy,
+  driverCompletedOn,
+  driverDurationMinutes,
+  hasOperationalAttention,
   type OperationStatus,
   type OperationsResult,
   type OperationsRow
 } from "@/lib/driver-operations";
-import { DriverProfileBrowser } from "@/components/admin/driver-profile-browser";
+import { DriverOperationsDirectory } from "@/components/admin/driver-operations-directory";
+import { getPortalVehicleTypeLabel } from "@/lib/driver-vehicle-types";
 import { DriverOperationsHistory } from "@/components/admin/driver-operations-history";
 import { useModalScrollLock } from "@/lib/use-modal-scroll-lock";
 
 type MainView = "operations" | "history" | "drivers";
-type JobView = "active" | "attention" | "completed";
+type JobView = "all" | "active" | "attention" | "completed";
 
 const copy = {
   en: {
@@ -56,30 +60,33 @@ const copy = {
     auto: "Auto-refresh every 60 seconds",
     updated: "Updated",
     loading: "Loading driver operations…",
-    error: "Unable to refresh. Displayed information may be out of date.",
+    error: "Unable to load Driver Operations. Previous successful data is retained; please retry.",
     denied: "Administrator access required",
 
     driversToday: "Drivers today",
     jobsToday: "Jobs today",
-    activeJobs: "Active jobs",
+    activeJobs: "Active now",
+    allJobs: "All activity",
     attention: "Attention",
-    completed: "Completed",
+    completed: "Completed today",
 
     active: "Active",
-    completedTab: "Completed",
+    completedTab: "Completed today",
     attentionTab: "Attention",
 
     search: "Search today's operations",
-    searchPlaceholder: "Driver, customer, vehicle or location",
+    searchPlaceholder: "Driver, customer, vehicle, location or job reference",
 
-    assignedWork: "Today's operations",
-    activeHelp: "Jobs still in progress or waiting to start",
+    assignedWork: "Current operations",
+    activeHelp: "Started jobs that have not completed",
+    allHelp: "Today's assignments, current work and completions",
+    noMatch: "No jobs match this search.",
     attentionHelp: "Jobs that may need office attention",
     completedHelp: "Jobs completed today",
 
     emptyActive: "No active jobs right now.",
     emptyAttention: "Nothing needs attention.",
-    emptyCompleted: "No completed jobs yet.",
+    emptyCompleted: "No jobs completed today.",
 
     driver: "Driver",
     job: "Job",
@@ -136,19 +143,22 @@ const copy = {
 
     driversToday: "คนขับวันนี้",
     jobsToday: "งานวันนี้",
-    activeJobs: "งานที่กำลังดำเนินการ",
+    activeJobs: "กำลังดำเนินการขณะนี้",
+    allJobs: "กิจกรรมทั้งหมด",
     attention: "ต้องตรวจสอบ",
-    completed: "เสร็จแล้ว",
+    completed: "เสร็จวันนี้",
 
     active: "กำลังดำเนินการ",
-    completedTab: "เสร็จแล้ว",
+    completedTab: "เสร็จวันนี้",
     attentionTab: "ต้องตรวจสอบ",
 
     search: "ค้นหางานวันนี้",
     searchPlaceholder: "คนขับ ลูกค้า รถ หรือสถานที่",
 
     assignedWork: "ปฏิบัติการวันนี้",
-    activeHelp: "งานที่ยังไม่เสร็จหรือรอเริ่ม",
+    activeHelp: "งานที่เริ่มแล้วและยังไม่เสร็จ",
+    allHelp: "งานที่มอบหมายวันนี้ งานปัจจุบัน และงานที่เสร็จ",
+    noMatch: "ไม่พบงานที่ตรงกับคำค้นหา",
     attentionHelp: "งานที่สำนักงานอาจต้องตรวจสอบ",
     completedHelp: "งานที่เสร็จสิ้นวันนี้",
 
@@ -241,7 +251,7 @@ export function DriverOperationsPage() {
   const [busy, setBusy] = useState(false);
 
   const [mainView, setMainView] = useState<MainView>("operations");
-  const [jobView, setJobView] = useState<JobView>("active");
+  const [jobView, setJobView] = useState<JobView>("all");
   const [search, setSearch] = useState("");
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [historySelection, setHistorySelection] = useState<OperationsRow | null>(null);
@@ -258,9 +268,9 @@ export function DriverOperationsPage() {
     try {
       const token = await getAccessToken();
 
-      const response = await fetch("/api/admin/driver-operations", {
+      const response = await fetch(`/api/admin/driver-operations?_=${Date.now()}`, {
         headers: {
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`, "Cache-Control": "no-cache"
         },
         cache: "no-store"
       });
@@ -268,18 +278,20 @@ export function DriverOperationsPage() {
       if (!response.ok) throw new Error();
 
       const payload = await response.json() as OperationsResult;
+      if (!Array.isArray(payload.rows) || !payload.summary || ![payload.summary.driversToday, payload.summary.jobsToday, payload.summary.activeNow, payload.summary.attention, payload.summary.completedToday].every(value => Number.isInteger(value) && value >= 0) || !payload.driverActivity) throw new Error("Invalid operations response");
       setData(payload);
       if (!openedLink.current) {
         openedLink.current = true;
         const jobId = new URLSearchParams(window.location.search).get("job");
         if (jobId && /^[0-9a-f-]{36}$/i.test(jobId)) {
-          const detail = await fetch(`/api/admin/driver-operations/jobs/${jobId}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+          const detail = await fetch(`/api/admin/driver-operations/jobs/${jobId}?_=${Date.now()}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
           if (!detail.ok) throw new Error();
           setHistorySelection(await detail.json());
         }
       }
       setError(false);
-    } catch {
+    } catch (failure) {
+      console.error("Driver Operations refresh failed", failure);
       setError(true);
     } finally {
       setBusy(false);
@@ -311,39 +323,16 @@ export function DriverOperationsPage() {
 
   const rows = useMemo(() => data?.rows ?? [], [data]);
 
-  const hasAttention = useCallback(
-    (row: OperationsRow) => {
-      const status = jobStatus(row.events);
-
-      if (row.accountActive !== true) return true;
-      if ((row.waitingMinutes ?? -1) >= 30) return true;
-
-      if (
-        status === "ready" &&
-        row.job.pickupTime &&
-        /^\d{2}:\d{2}/.test(row.job.pickupTime) &&
-        data
-      ) {
-        const pickup = new Date(
-          `${row.job.bookingDate}T${row.job.pickupTime.slice(0, 5)}:00+07:00`
-        );
-
-        return pickup.getTime() < new Date(data.fetchedAt).getTime();
-      }
-
-      return false;
-    },
-    [data]
-  );
+  const hasAttention = useCallback((row: OperationsRow) => data ? hasOperationalAttention(row, data.fetchedAt) : false, [data]);
 
   const activeRows = useMemo(
-    () => rows.filter((row) => jobStatus(row.events) !== "completed"),
+    () => rows.filter((row) => !["ready", "completed"].includes(jobStatus(row.events))),
     [rows]
   );
 
   const completedRows = useMemo(
-    () => rows.filter((row) => jobStatus(row.events) === "completed"),
-    [rows]
+    () => rows.filter((row) => data ? driverCompletedOn(row.events, data.date) : false),
+    [rows, data]
   );
 
   const attentionRows = useMemo(
@@ -351,16 +340,11 @@ export function DriverOperationsPage() {
     [rows, hasAttention]
   );
 
-  const driversToday = useMemo(
-    () => new Set(rows.map((row) => row.driverId)).size,
-    [rows]
-  );
-
   const selectedRow =
     historySelection ?? rows.find((row) => row.job.id === selectedJobId) ?? null;
 
   const baseRows =
-    jobView === "completed"
+    jobView === "all" ? rows : jobView === "completed"
       ? completedRows
       : jobView === "attention"
         ? attentionRows
@@ -373,10 +357,12 @@ export function DriverOperationsPage() {
 
     return [
       row.driverName,
+      row.driverId,
       row.job.clientName,
       row.job.vehicleRegistration,
       row.job.pickupName,
-      row.job.dropoffName
+      row.job.dropoffName,
+      row.job.jobOrderNumber
     ]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(searchTerm));
@@ -484,15 +470,17 @@ export function DriverOperationsPage() {
       </section>
 
       {error ? (
-        <div className="mt-4 flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+        <div role="alert" className="mt-4 flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
           {l.error}
+          <button type="button" className="ml-auto font-bold underline" onClick={() => void load()}>{language === "th" ? "ลองอีกครั้ง" : "Retry"}</button>
         </div>
       ) : null}
 
       {!data && !error ? (
         <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
           {l.loading}
+          <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5" aria-busy="true">{[1,2,3,4,5].map(value => <div key={value} className="h-24 animate-pulse rounded-xl bg-slate-100" />)}</div>
         </div>
       ) : null}
 
@@ -502,33 +490,33 @@ export function DriverOperationsPage() {
           <section className="operations-metrics mt-3 flex gap-2 overflow-x-auto pb-1 sm:mt-4 sm:grid sm:grid-cols-2 md:grid-cols-5">
             <Metric
               label={l.driversToday}
-              value={driversToday}
+              value={data.summary.driversToday}
               icon={<UsersRound className="h-4 w-4" />}
             />
 
             <Metric
               label={l.jobsToday}
-              value={rows.length}
+              value={data.summary.jobsToday}
               icon={<Route className="h-4 w-4" />}
             />
 
             <Metric
               label={l.activeJobs}
-              value={activeRows.length}
+              value={data.summary.activeNow}
               icon={<Navigation className="h-4 w-4" />}
               tone="blue"
             />
 
             <Metric
               label={l.attention}
-              value={attentionRows.length}
+              value={data.summary.attention}
               icon={<AlertTriangle className="h-4 w-4" />}
               tone="amber"
             />
 
             <Metric
               label={l.completed}
-              value={completedRows.length}
+              value={data.summary.completedToday}
               icon={<CheckCircle2 className="h-4 w-4" />}
               tone="green"
             />
@@ -544,7 +532,7 @@ export function DriverOperationsPage() {
                   </p>
 
                   <p className="mt-1 text-sm text-slate-500">
-                    {jobView === "active"
+                    {jobView === "all" ? l.allHelp : jobView === "active"
                       ? l.activeHelp
                       : jobView === "attention"
                         ? l.attentionHelp
@@ -566,6 +554,7 @@ export function DriverOperationsPage() {
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
+                <FilterButton active={jobView === "all"} onClick={() => setJobView("all")} label={l.allJobs} count={rows.length} />
                 <FilterButton
                   active={jobView === "active"}
                   onClick={() => setJobView("active")}
@@ -599,8 +588,9 @@ export function DriverOperationsPage() {
                     <TableHead className="w-[12%]">{l.status}</TableHead>
                     <TableHead className="w-[15%]">{l.driver}</TableHead>
                     <TableHead className="w-[20%]">{l.job}</TableHead>
-                    <TableHead className="w-[27%]">{l.route}</TableHead>
-                    <TableHead className="w-[10%]">{l.pickup}</TableHead>
+                    <TableHead className="w-[20%]">{l.route}</TableHead>
+                    <TableHead className="w-[8%]">{l.vehicle}</TableHead>
+                    <TableHead className="w-[9%]">{language === "th" ? "เวลารับสินค้า" : "Pickup time"}</TableHead>
                     <TableHead className="w-[16%]">{l.lastUpdate}</TableHead>
                   </tr>
                 </thead>
@@ -634,7 +624,7 @@ export function DriverOperationsPage() {
 
             {visibleRows.length === 0 ? (
               <div className="px-4 py-5 text-center text-sm font-semibold text-slate-500 sm:px-5 sm:py-10">
-                {jobView === "active"
+                {searchTerm ? l.noMatch : jobView === "all" ? (language === "th" ? "ยังไม่มีงานที่มอบหมาย" : "No assigned activity yet.") : jobView === "active"
                   ? l.emptyActive
                   : jobView === "attention"
                     ? l.emptyAttention
@@ -650,10 +640,10 @@ export function DriverOperationsPage() {
         </>
       ) : null}
 
-      {mainView === "history" ? <DriverOperationsHistory onOpen={(row) => setHistorySelection(row)} /> : null}
-      {data && mainView === "drivers" ? (
+      {mainView === "history" ? <DriverOperationsHistory refreshKey={data?.fetchedAt} onOpen={(row) => setHistorySelection(row)} /> : null}
+      {mainView === "drivers" ? (
         <div className="mt-4">
-          <DriverProfileBrowser />
+          <DriverOperationsDirectory operations={data} onOpenJob={row => setHistorySelection(row)} />
         </div>
       ) : null}
 
@@ -723,7 +713,7 @@ function OperationsTableRow({
             </p>
 
             <p className="mt-0.5 text-[11px] text-slate-500">
-              {row.job.vehicleRegistration || "—"}
+              ID {row.driverId}
             </p>
           </div>
         </div>
@@ -731,8 +721,9 @@ function OperationsTableRow({
 
       <td className="px-5 py-3">
         <p className="truncate font-semibold text-slate-900">
-          {row.job.clientName || "—"}
+          {row.job.clientName || row.job.jobOrderNumber || "—"}
         </p>
+        {row.job.jobOrderNumber ? <p className="mt-1 text-xs text-slate-500">{row.job.jobOrderNumber}</p> : null}
       </td>
 
       <td className="px-5 py-3">
@@ -745,8 +736,9 @@ function OperationsTableRow({
         </p>
       </td>
 
+      <td className="px-5 py-3 font-semibold text-slate-700">{row.job.vehicleRegistration || "—"}</td>
       <td className="px-5 py-3 font-bold text-slate-700">
-        {row.job.pickupTime?.slice(0, 5) || "—"}
+        {row.job.pickupTime?.slice(0, 5) || (language === "th" ? "ยังไม่กำหนดเวลา" : "Time not set")}
       </td>
 
       <td className="px-5 py-3">
@@ -988,12 +980,19 @@ export function JobDrawer({
             </div>
 
             <dl className="mt-4 grid gap-2">
+              <Info label={language === "th" ? "วันที่จอง" : "Booking date"} value={row.job.bookingDate} />
+              <Info label={language === "th" ? "เวลารับตามกำหนด" : "Scheduled pickup"} value={row.job.pickupTime?.slice(0, 5) || (language === "th" ? "ยังไม่กำหนดเวลา" : "Time not set")} />
+              <Info label={language === "th" ? "เลขงาน" : "Job/order reference"} value={row.job.jobOrderNumber || "—"} />
+              <Info label={language === "th" ? "ประเภทรถ" : "Vehicle type"} value={getPortalVehicleTypeLabel(row.job.vehicleType, language)} />
+              <Info label={language === "th" ? "ระยะเวลาปฏิบัติงาน" : "Duration"} value={driverDurationMinutes(row.events) === null ? "—" : `${driverDurationMinutes(row.events)} ${language === "th" ? "นาที" : "min"}`} />
+              {row.job.notes ? <Info label={language === "th" ? "หมายเหตุ / คำแนะนำ" : "Notes / instructions"} value={row.job.notes} /> : null}
               <Info
                 icon={<Truck className="h-4 w-4" />}
                 label={l.vehicle}
                 value={row.job.vehicleRegistration || "—"}
               />
 
+              {row.profile ? <>
               <Info
                 label={l.email}
                 value={row.profile?.email || "—"}
@@ -1012,6 +1011,7 @@ export function JobDrawer({
                     : "—"
                 }
               />
+              </> : null}
             </dl>
           </section>
         </div>

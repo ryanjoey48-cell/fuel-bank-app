@@ -26,7 +26,8 @@ test("driver session uses an opaque HttpOnly cookie instead of exposing Supabase
 
 test("driver jobs are scoped by relational driver id for list and detail queries", () => {
   const server = read("lib/driver-portal-server.ts");
-  const matches = server.match(/\.eq\("driver_id", session\.driverId\)/g) ?? [];
+  const assignmentQueries = server.slice(server.indexOf("export async function listAssignedDriverJobs"), server.indexOf("export async function getDriverVisibleJob"));
+  const matches = assignmentQueries.match(/\.eq\("driver_id", session\.driverId\)/g) ?? [];
   assert.equal(matches.length, 2);
   assert.match(server, /\.eq\("id", bookingId\)[\s\S]*?\.eq\("driver_id", session\.driverId\)/);
 });
