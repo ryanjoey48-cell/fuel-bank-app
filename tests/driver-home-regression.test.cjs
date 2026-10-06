@@ -76,3 +76,5 @@ test('a later page failure reports unavailable instead of returning a misleading
 });
 
 for (const zone of ['Asia/Bangkok','America/Los_Angeles','Pacific/Auckland']) test('Tomorrow uses the Bangkok booking date independently of device timezone: '+zone, () => {const previous=process.env.TZ;try{process.env.TZ=zone;const html=home('en',[job('now','2026-11-01'),job('tomorrow','2026-11-02'),job('later','2026-11-03')],{},'2026-11-01');assert.equal((html.match(/>Tomorrow</g)||[]).length,1);assert.ok(html.includes('3 Nov 2026'));}finally{if(previous===undefined)delete process.env.TZ;else process.env.TZ=previous;}});
+
+for(const count of [0,1,2,3])test('today job-count grammar: '+count,()=>{const jobs=Array.from({length:count},(_,i)=>job('today-'+i,today));jobs.push(job('future','2026-10-12'));const html=home('en',jobs);const expected=count===0?'No jobs remaining today':count===1?'job remaining today':'jobs remaining today';assert.ok(html.includes(expected));if(count===1)assert.ok(!html.includes('jobs remaining today'));assert.ok(html.includes(count?'today-0':'future'));});

@@ -70,6 +70,8 @@ const copy = {
     fromDepot: "From EES depot",
     pickupDelivery: "Pickup → delivery",
     fromHere: "From my location",
+    depotPickup: "Depot → Pickup", depotDelivery: "Depot → Delivery",
+    herePickup: "My location → Pickup", hereDelivery: "My location → Delivery",
     saved: "Progress saved.",
     saving: "Saving…",
     locating: "Checking location…",
@@ -132,6 +134,8 @@ const copy = {
     fromDepot: "จากคลัง EES",
     pickupDelivery: "จุดรับ → จุดส่ง",
     fromHere: "จากตำแหน่งของฉัน",
+    depotPickup: "คลัง → จุดรับ", depotDelivery: "คลัง → จุดส่ง",
+    herePickup: "ตำแหน่งฉัน → จุดรับ", hereDelivery: "ตำแหน่งฉัน → จุดส่ง",
     saved: "บันทึกแล้ว",
     saving: "กำลังบันทึก…",
     locating: "กำลังตรวจสอบตำแหน่ง…",
@@ -374,8 +378,21 @@ export function DriverJobDetail({
   const actionContext = [labels.whenYouArrive, labels.whenReadyToLeave, labels.atDelivery, labels.finishJob][stage];
   const lastEvent = events[events.length - 1];
 
+  // Compose the shortcut from the existing verified destination and depot origin.
+  // The original full-job routes remain available in Full route.
+  const depotShortcutUrl = (() => {
+    if (!depotUrl || !navigationUrl) return null;
+    const route = new URL(navigationUrl);
+    const depotRoute = new URL(depotUrl);
+    for (const key of ["origin", "origin_place_id"]) {
+      const value = depotRoute.searchParams.get(key);
+      if (value) route.searchParams.set(key, value);
+    }
+    return route.toString();
+  })();
+
   const progressStrip = (
-    <section aria-labelledby="job-progress" className="flex items-center gap-2 px-1 py-1">
+    <section aria-labelledby="job-progress" className="px-1 py-0.5">
       <h2 id="job-progress" className="sr-only">{labels.progress}</h2>
       <ol className="grid min-w-0 flex-1 grid-cols-4">
         {DRIVER_JOB_EVENT_TYPES.map((type, index) => {
@@ -390,13 +407,12 @@ export function DriverJobDetail({
           </li>;
         })}
       </ol>
-      <div className="shrink-0 border-l border-[var(--driver-border)] pl-1">
-        <button type="button" disabled={loading || syncing || !!saving} onClick={() => void load(true)} aria-label={labels.refresh} title={labels.refresh} className="inline-flex h-11 w-11 items-center justify-center rounded-full text-slate-400 active:bg-slate-100 disabled:opacity-50"><RefreshCw className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`} /></button>{syncing ? <span role="status" className="sr-only">{labels.syncing}</span> : null}</div>
+      {syncing ? <span role="status" className="sr-only">{labels.syncing}</span> : null}
     </section>
   );
 
   return (
-    <main className="driver-active-job mx-auto w-full max-w-3xl space-y-1.5 px-3 pb-4 pt-1 sm:px-6 sm:py-5">
+    <main className="driver-active-job mx-auto w-full max-w-3xl space-y-1 px-3 pb-4 pt-0 sm:px-6 sm:py-5">
       <Link href="/driver" className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[#152638]"><ArrowLeft className="h-4 w-4" />{labels.back}</Link>
 
       <header className="driver-job-summary rounded-2xl bg-[#152638] px-4 py-2 text-white shadow-sm">
@@ -454,7 +470,7 @@ export function DriverJobDetail({
 
                 {(stage === 0 || stage === 2) && navigationUrl ? <a className="mt-3 flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#152638] px-3 text-center text-sm font-bold text-white active:opacity-90" href={navigationUrl} target="_blank" rel="noreferrer"><Navigation2 className="h-4 w-4" /><span className="break-words">{labels.navigateTo} {destinationName || (destinationIsPickup ? labels.pickup : labels.dropoff)}</span><ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-70" /></a> : (stage === 0 || stage === 2) ? <p className="mt-3 text-sm text-amber-800">{labels.missingRoute}</p> : null}
                 {(stage === 0 || stage === 2) ? <div className="mt-2 grid grid-cols-3 gap-1.5" aria-label={labels.quickRoutes}>
-                  {([[depotUrl, labels.fromDepot, Warehouse], [pickupToDropoffUrl, labels.pickupDelivery, MapPin], [currentUrl, labels.fromHere, Route]] as const).map(([url, title, Icon]) => url ? <a key={title} href={url} target="_blank" rel="noreferrer" className="flex min-h-11 min-w-0 items-center justify-center gap-1 rounded-lg bg-[#faf8f4] px-1.5 py-1 text-center text-[11px] font-semibold leading-4 text-[#152638]"><Icon className="h-3.5 w-3.5 shrink-0 text-slate-500" /><span className="min-w-0 break-words">{title}</span></a> : null)}
+                  {([[depotShortcutUrl, destinationIsPickup ? labels.depotPickup : labels.depotDelivery, Warehouse], [pickupToDropoffUrl, labels.pickupDelivery, MapPin], [navigationUrl, destinationIsPickup ? labels.herePickup : labels.hereDelivery, Route]] as const).map(([url, title, Icon]) => url ? <a key={title} href={url} target="_blank" rel="noreferrer" className="flex min-h-11 min-w-0 items-center justify-center gap-1 rounded-lg bg-[#faf8f4] px-1.5 py-1 text-center text-[11px] font-semibold leading-4 text-[#152638]"><Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-600" /><span className="min-w-0 break-words">{title}</span></a> : null)}
                 </div> : null}
               </div>
 
@@ -487,7 +503,7 @@ export function DriverJobDetail({
                 </div>
               </div>
             ))}
-            {stage !== 0 && stage !== 2 ? <div className="mt-2 border-t border-[var(--driver-border)] pt-2">{[[depotUrl,labels.fromDepot],[pickupToDropoffUrl,labels.pickupDelivery],[currentUrl,labels.fromHere]].map(([url,title])=>url?<a key={title} href={url} target="_blank" rel="noreferrer" className="flex min-h-11 items-center justify-between gap-2 text-xs font-semibold text-[#152638]">{title}<ExternalLink aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-slate-400" /></a>:null)}</div>:null}
+            <div className="mt-2 border-t border-[var(--driver-border)] pt-2">{([[depotUrl,labels.fromDepot],[pickupToDropoffUrl,labels.pickupDelivery],[currentUrl,labels.fromHere]] as const).map(([url,title])=>url?<a key={title} href={url} target="_blank" rel="noreferrer" className="flex min-h-11 items-center justify-between gap-2 text-xs font-semibold text-[#152638]"><span>{labels.fullRouteMaps} · {title}</span><ExternalLink aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-slate-400" /></a>:null)}</div>
           </div>
         </DriverDisclosure>
         <DriverDisclosure title={labels.details}>
