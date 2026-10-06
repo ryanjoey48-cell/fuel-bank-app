@@ -6,7 +6,7 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useLanguage } from "@/lib/language-provider";
 import type { DriverJobEvent, DriverPortalJob } from "@/lib/driver-portal";
-import { jobStatus, nextDriverJob, type DriverProfile } from "@/lib/driver-operations";
+import { jobStatus, driverHomeJobs, nextBangkokDate, type DriverProfile } from "@/lib/driver-operations";
 import { getPortalVehicleTypeLabel } from "@/lib/driver-vehicle-types";
 import { DriverStatusBadge, driverJobAction } from "./driver-ui";
 
@@ -17,8 +17,9 @@ const copy = {
     vehicle: "Your vehicle",
     remaining: "job remaining today",
     remainingPlural: "jobs remaining today",
-    noMoreToday: "No jobs remaining today",
+    noMoreToday: "No more jobs today",
     noUpcoming: "No upcoming jobs",
+    today: "Today",
     tomorrow: "Tomorrow",
     timePending: "Time not set",
     job: "Job",
@@ -37,6 +38,7 @@ const copy = {
     remainingPlural: "งานที่เหลือวันนี้",
     noMoreToday: "วันนี้ไม่มีงานเหลือแล้ว",
     noUpcoming: "ยังไม่มีงานล่วงหน้า",
+    today: "วันนี้",
     tomorrow: "พรุ่งนี้",
     timePending: "ยังไม่กำหนดเวลา",
     job: "งาน",
@@ -53,12 +55,6 @@ function formatTime(value: string | null, fallback: string) {
   return value ? value.slice(0, 5) : fallback;
 }
 
-function addDays(dateKey: string, days: number) {
-  const date = new Date(`${dateKey}T12:00:00+07:00`);
-  date.setUTCDate(date.getUTCDate() + days);
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(date);
-}
-
 function formatDateKey(dateKey: string, language: "en" | "th") {
   return new Intl.DateTimeFormat(language === "th" ? "th-TH" : "en-GB", {
     day: "numeric",
@@ -72,12 +68,14 @@ function CurrentJobCard({
   job,
   events,
   language,
-  labels
+  labels,
+  dateContext
 }: {
   job: DriverPortalJob;
   events: DriverJobEvent[];
   language: "en" | "th";
   labels: (typeof copy)[keyof typeof copy];
+  dateContext?: string;
 }) {
   const status = jobStatus(events);
   const formattedDate = formatDateKey(job.bookingDate, language);
@@ -90,6 +88,7 @@ function CurrentJobCard({
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-1.5">
         <p className="driver-eyebrow driver-eyebrow-on-navy">
           {status === "ready" ? labels.next : labels.current}
+          {dateContext ? <span className="ml-2 normal-case tracking-normal text-[var(--driver-text-secondary)]">· {dateContext}</span> : null}
         </p>
         <DriverStatusBadge language={language} status={status} />
       </div>
@@ -196,11 +195,13 @@ function UpcomingJobRow({
 
 export function DriverHome({
   driverName,
+  driverId,
   jobs,
   today,
   eventsByJob = {}
 }: {
   driverName: string;
+  driverId?: string;
   jobs: DriverPortalJob[];
   today: string;
   eventsByJob?: Record<string, DriverJobEvent[]>;
@@ -239,73 +240,32 @@ export function DriverHome({
     };
   }, []);
 
-  const todayJobs = useMemo(
-    () =>
-      jobs
-        .filter((job) => job.bookingDate === today)
-        .sort((a, b) =>
-          (a.pickupTime || "99:99").localeCompare(b.pickupTime || "99:99")
-        ),
-    [jobs, today]
+  const { normalizedJobs, nextJob, remainingTodayCount, upcomingGroups } = useMemo(
+    () => driverHomeJobs(jobs, eventsByJob, today, driverId),
+    [jobs, eventsByJob, today, driverId]
   );
-
-  const remainingToday = todayJobs.filter(
-    (job) => jobStatus(eventsByJob[job.id] || []) !== "completed"
-  );
-
-  const nextJob = nextDriverJob(jobs, eventsByJob, today);
 
   const vehicleRegistration =
     nextJob?.vehicleRegistration ??
     profile?.vehicle ??
-    jobs[0]?.vehicleRegistration ??
+    normalizedJobs[0]?.vehicleRegistration ??
     null;
 
   const vehicleType =
     nextJob?.vehicleType ??
-    jobs.find((job) => job.vehicleRegistration === vehicleRegistration)?.vehicleType ??
+    normalizedJobs.find((job) => job.vehicleRegistration === vehicleRegistration)?.vehicleType ??
     null;
 
-  /*
-   * Upcoming means future + unfinished only.
-   * Completed test/early-completed jobs belong in History, never Upcoming.
-   * The large NEXT JOB card is also removed from this list to avoid duplication.
-   */
-  const upcomingGroups = useMemo(() => {
-    const groups = new Map<string, DriverPortalJob[]>();
-
-    for (const job of jobs) {
-      if (job.bookingDate <= today) continue;
-      if (job.id === nextJob?.id) continue;
-      if (jobStatus(eventsByJob[job.id] || []) === "completed") continue;
-
-      const entries = groups.get(job.bookingDate) ?? [];
-      entries.push(job);
-      groups.set(job.bookingDate, entries);
-    }
-
-    return [...groups.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(
-        ([date, entries]) =>
-          [
-            date,
-            entries.sort((a, b) =>
-              (a.pickupTime || "99:99").localeCompare(
-                b.pickupTime || "99:99"
-              )
-            )
-          ] as const
-      );
-  }, [jobs, today, nextJob?.id, eventsByJob]);
-
   const formatGroupDate = (dateKey: string) => {
-    if (dateKey === addDays(today, 1)) return labels.tomorrow;
-    return formatDateKey(dateKey, language);
+    if (dateKey === today) return labels.today;
+    if (dateKey === nextBangkokDate(today)) return labels.tomorrow;
+    return new Intl.DateTimeFormat(language === "th" ? "th-TH" : "en-GB", {
+      weekday: "short", day: "numeric", month: "short", timeZone: "Asia/Bangkok"
+    }).format(new Date(dateKey + "T12:00:00+07:00"));
   };
 
   const remainingLabel =
-    remainingToday.length === 1 ? labels.remaining : labels.remainingPlural;
+    remainingTodayCount === 1 ? labels.remaining : labels.remainingPlural;
 
   return (
     <main className="driver-home-restored mx-auto w-full max-w-3xl px-3 pb-3 pt-2 sm:px-6 sm:py-5">
@@ -336,9 +296,9 @@ export function DriverHome({
               {profile?.displayName || driverName}
             </h1>
 
-            {remainingToday.length > 0 ? (
+            {remainingTodayCount > 0 ? (
               <p className="mt-2 text-[13px] font-semibold text-[var(--driver-text-muted)]">
-                <strong className="text-[var(--driver-text)]">{remainingToday.length}</strong>{" "}
+                <strong className="text-[var(--driver-text)]">{remainingTodayCount}</strong>{" "}
                 {remainingLabel}
               </p>
             ) : (
@@ -378,6 +338,7 @@ export function DriverHome({
             events={eventsByJob[nextJob.id] || []}
             language={language}
             labels={labels}
+            dateContext={nextJob.bookingDate > today ? formatGroupDate(nextJob.bookingDate) : undefined}
           />
         </section>
       ) : null}

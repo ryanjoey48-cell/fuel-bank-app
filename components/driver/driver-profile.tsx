@@ -1,7 +1,6 @@
 "use client";
 
 import { DriverDisclosure } from "./driver-disclosure";
-import { DriverAvatar } from "./driver-ui";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { useLanguage } from "@/lib/language-provider";
@@ -18,8 +17,6 @@ const copy = {
     vehicle: "Vehicle",
     language: "Language",
     save: "Save changes",
-    photo: "Change photo",
-    photoHelp: "JPEG, PNG or WebP · up to 5 MB",
     locked: "Official details are managed by the office.",
     password: "Change password",
     current: "Current password",
@@ -37,7 +34,6 @@ const copy = {
     personal: "Personal details",
     preferences: "Preferences",
     officialDetails: "Official details",
-    photoUpdating: "Updating photo…",
   },
   th: {
     title: "โปรไฟล์",
@@ -49,8 +45,6 @@ const copy = {
     vehicle: "รถ",
     language: "ภาษา",
     save: "บันทึกการเปลี่ยนแปลง",
-    photo: "เปลี่ยนรูป",
-    photoHelp: "JPEG, PNG หรือ WebP · ไม่เกิน 5 MB",
     locked: "สำนักงานเป็นผู้ดูแลข้อมูลทางการ",
     password: "เปลี่ยนรหัสผ่าน",
     current: "รหัสผ่านปัจจุบัน",
@@ -68,7 +62,6 @@ const copy = {
     personal: "ข้อมูลส่วนตัว",
     preferences: "การตั้งค่า",
     officialDetails: "ข้อมูลทางการ",
-    photoUpdating: "กำลังอัปเดตรูป…",
   },
 };
 
@@ -83,7 +76,6 @@ export function DriverProfilePage() {
   const [error, setError] = useState(false);
   const [message, setMessage] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [editing, setEditing] = useState(false);
 
   const personalDetails = useRef<HTMLFormElement>(null);
@@ -135,11 +127,7 @@ export function DriverProfilePage() {
       const r = await fetch(url, init);
       if (!r.ok) throw new Error();
 
-      if (url.endsWith("/avatar")) {
-        applyProfile((await r.json()) as DriverProfile);
-      } else if (!(await load())) {
-        throw new Error();
-      }
+      if (!(await load())) throw new Error();
 
       if (options?.closeEditor) setEditing(false);
       setMessage(true);
@@ -148,7 +136,6 @@ export function DriverProfilePage() {
       setError(true);
     } finally {
       setBusy(false);
-      setUploading(false);
     }
   }
 
@@ -183,7 +170,7 @@ export function DriverProfilePage() {
     setEditing(true);
     requestAnimationFrame(() => {
       personalDetails.current?.querySelector<HTMLInputElement>(
-        'input:not([type="file"])',
+        'input',
       )?.focus();
     });
   }
@@ -235,12 +222,6 @@ export function DriverProfilePage() {
         <>
           <section className="driver-surface overflow-hidden">
             <div className="flex items-center gap-3 p-3">
-              <DriverAvatar
-                src={profile.avatarUrl}
-                name={profile.displayName}
-                className="h-14 w-14 rounded-2xl text-lg"
-              />
-
               <div className="min-w-0 flex-1">
                 <p className="break-words text-xl font-bold text-[var(--driver-text)]">
                   {profile.displayName}
@@ -292,59 +273,7 @@ export function DriverProfilePage() {
                   );
                 }}
               >
-                <div className="flex items-center gap-3 rounded-xl bg-[var(--driver-surface)] p-3">
-                  <DriverAvatar
-                    src={profile.avatarUrl}
-                    name={profile.displayName}
-                    className="h-12 w-12 rounded-xl text-base"
-                  />
-
-                  <div className="min-w-0 flex-1">
-                    <label className="inline-flex min-h-11 cursor-pointer items-center rounded-lg border border-[var(--driver-border)] bg-[var(--driver-surface-soft)] px-3 text-sm font-semibold text-[var(--driver-text)] hover:bg-[var(--driver-surface-soft)] focus-within:outline focus-within:outline-2 focus-within:outline-[var(--driver-primary)]">
-                      {uploading ? l.photoUpdating : l.photo}
-                      <input
-                        aria-label={l.photo}
-                        className="sr-only"
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        disabled={busy}
-                        onChange={(event) => {
-                          const file = event.target.files?.[0];
-                          event.target.value = "";
-                          if (!file) return;
-
-                          if (
-                            !file.size ||
-                            file.size > 5242880 ||
-                            ![
-                              "image/jpeg",
-                              "image/png",
-                              "image/webp",
-                            ].includes(file.type)
-                          ) {
-                            setError(true);
-                            setMessage(false);
-                            return;
-                          }
-
-                          const body = new FormData();
-                          body.append("avatar", file);
-                          setUploading(true);
-
-                          void request("/api/driver/profile/avatar", {
-                            method: "POST",
-                            body,
-                          });
-                        }}
-                      />
-                    </label>
-                    <p className="mt-1 text-[11px] leading-4 text-[var(--driver-text-muted)]">
-                      {l.photoHelp}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-2">
                   <label className="block text-sm font-semibold text-[var(--driver-text)]">
                     {l.name}
                     <input

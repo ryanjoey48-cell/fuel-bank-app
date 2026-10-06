@@ -12,10 +12,54 @@ export function jobStatus(events: Pick<DriverJobEvent, "eventType" | "eventTime"
   return latest ? statuses[latest.eventType] : "ready";
 }
 export type DriverWork = { job: DriverPortalJob; events: DriverJobEvent[] };
+/** Booking dates are Bangkok calendar keys; compare them without UTC conversion. */
+export function compareDriverJobs(a: DriverPortalJob, b: DriverPortalJob) {
+  return a.bookingDate.localeCompare(b.bookingDate)
+    || (a.pickupTime?.trim().slice(0, 5) || "99:99").localeCompare(b.pickupTime?.trim().slice(0, 5) || "99:99")
+    || a.id.localeCompare(b.id);
+}
+
+export function driverHomeJobs(jobs: DriverPortalJob[], events: Record<string, DriverJobEvent[]>, today?: string, driverId?: string) {
+  // The server enforces assignment. Retain that identity in the model so every
+  // Home section also derives from the same eligible, unique collection.
+  const unique = new Map<string, DriverPortalJob>();
+  for (const job of jobs) {
+    if (driverId && job.driverId && job.driverId !== driverId) continue;
+    const bookingStatus = job.bookingStatus?.trim().toLowerCase();
+    if (["completed", "cancelled", "canceled", "rejected"].includes(bookingStatus || "")) continue;
+    const status = jobStatus(events[job.id] || []);
+    if (status === "completed") continue;
+    if (today && job.bookingDate < today && status === "ready") continue;
+    if (!unique.has(job.id)) unique.set(job.id, job);
+  }
+  const normalizedJobs = [...unique.values()].sort(compareDriverJobs);
+  const currentJob = normalizedJobs.find(job => jobStatus(events[job.id] || []) !== "ready") ?? null;
+  const todayJobs = normalizedJobs.filter(job => job.bookingDate === today);
+  const futureJobs = normalizedJobs.filter(job => !today || job.bookingDate > today);
+  const nextJob = currentJob ?? todayJobs[0] ?? futureJobs[0] ?? null;
+  const additionalTodayJobs = todayJobs.filter(job => job.id !== nextJob?.id);
+  const tomorrow = today ? nextBangkokDate(today) : null;
+  const tomorrowJobs = futureJobs.filter(job => job.bookingDate === tomorrow && job.id !== nextJob?.id);
+  const laterJobs = futureJobs.filter(job => job.bookingDate !== tomorrow && job.id !== nextJob?.id);
+  const groups = new Map<string, DriverPortalJob[]>();
+  for (const job of normalizedJobs) {
+    if (job.id === nextJob?.id || (today && job.bookingDate < today)) continue;
+    const group = groups.get(job.bookingDate) ?? [];
+    group.push(job);
+    groups.set(job.bookingDate, group);
+  }
+  return { normalizedJobs, currentJob, nextJob, remainingTodayCount: todayJobs.length,
+    additionalTodayJobs, tomorrowJobs, laterJobs, upcomingGroups: [...groups.entries()] };
+}
+
+export function nextBangkokDate(dateKey: string) {
+  const date = new Date(dateKey + "T12:00:00+07:00");
+  date.setUTCDate(date.getUTCDate() + 1);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(date);
+}
+
 export function nextDriverJob(jobs: DriverPortalJob[], events: Record<string, DriverJobEvent[]>, today?: string) {
-  const unfinished = jobs.filter((j) => (!today || j.bookingDate >= today) && jobStatus(events[j.id] || []) !== "completed")
-    .sort((a, b) => a.bookingDate.localeCompare(b.bookingDate) || (a.pickupTime || "99:99").localeCompare(b.pickupTime || "99:99") || a.id.localeCompare(b.id));
-  return unfinished[0] ?? null;
+  return driverHomeJobs(jobs, events, today).nextJob;
 }
 export type DriverProfile = {
   displayName: string; officialName: string; email: string; phone: string;

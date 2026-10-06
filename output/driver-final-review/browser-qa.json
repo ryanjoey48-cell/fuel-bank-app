@@ -1,0 +1,159 @@
+{
+  "checks": [
+    {
+      "width": 375,
+      "path": "/driver",
+      "overflow": false,
+      "bg": "rgb(17, 21, 28)",
+      "header": 45,
+      "hero": 112,
+      "light": 0
+    },
+    {
+      "width": 375,
+      "path": "/driver/jobs/B",
+      "overflow": false,
+      "bg": "rgb(17, 21, 28)",
+      "header": 45,
+      "light": 0
+    },
+    {
+      "width": 375,
+      "path": "/driver/history",
+      "overflow": false,
+      "bg": "rgb(17, 21, 28)",
+      "header": 45,
+      "light": 0
+    },
+    {
+      "width": 375,
+      "path": "/driver/profile",
+      "overflow": false,
+      "bg": "rgb(17, 21, 28)",
+      "header": 45,
+      "light": 0
+    },
+    {
+      "width": 390,
+      "path": "/driver",
+      "overflow": false,
+      "bg": "rgb(17, 21, 28)",
+      "header": 45,
+      "hero": 112,
+      "light": 0
+    },
+    {
+      "width": 390,
+      "path": "/driver/jobs/B",
+      "overflow": false,
+      "bg": "rgb(17, 21, 28)",
+      "header": 45,
+      "light": 0
+    },
+    {
+      "width": 390,
+      "path": "/driver/history",
+      "overflow": false,
+      "bg": "rgb(17, 21, 28)",
+      "header": 45,
+      "light": 0
+    },
+    {
+      "width": 390,
+      "path": "/driver/profile",
+      "overflow": false,
+      "bg": "rgb(17, 21, 28)",
+      "header": 45,
+      "light": 0
+    },
+    {
+      "width": 393,
+      "path": "/driver",
+      "overflow": false,
+      "bg": "rgb(17, 21, 28)",
+      "header": 45,
+      "hero": 112,
+      "light": 0
+    },
+    {
+      "width": 393,
+      "path": "/driver/jobs/B",
+      "overflow": false,
+      "bg": "rgb(17, 21, 28)",
+      "header": 45,
+      "light": 0
+    },
+    {
+      "width": 393,
+      "path": "/driver/history",
+      "overflow": false,
+      "bg": "rgb(17, 21, 28)",
+      "header": 45,
+      "light": 0
+    },
+    {
+      "width": 393,
+      "path": "/driver/profile",
+      "overflow": false,
+      "bg": "rgb(17, 21, 28)",
+      "header": 45,
+      "light": 0
+    },
+    {
+      "width": 430,
+      "path": "/driver",
+      "overflow": false,
+      "bg": "rgb(17, 21, 28)",
+      "header": 45,
+      "hero": 112,
+      "light": 0
+    },
+    {
+      "width": 430,
+      "path": "/driver/jobs/B",
+      "overflow": false,
+      "bg": "rgb(17, 21, 28)",
+      "header": 45,
+      "light": 0
+    },
+    {
+      "width": 430,
+      "path": "/driver/history",
+      "overflow": false,
+      "bg": "rgb(17, 21, 28)",
+      "header": 45,
+      "light": 0
+    },
+    {
+      "width": 430,
+      "path": "/driver/profile",
+      "overflow": false,
+      "bg": "rgb(17, 21, 28)",
+      "header": 45,
+      "light": 0
+    }
+  ],
+  "workflowCalls": [
+    {
+      "eventType": "pickup_arrived",
+      "latitude": null,
+      "longitude": null
+    },
+    {
+      "eventType": "pickup_departed",
+      "latitude": null,
+      "longitude": null
+    },
+    {
+      "eventType": "delivery_arrived",
+      "latitude": null,
+      "longitude": null
+    },
+    {
+      "eventType": "job_completed",
+      "latitude": null,
+      "longitude": null
+    }
+  ],
+  "errors": []
+}

@@ -7,6 +7,7 @@ import { DriverAutoRefresh } from "@/components/driver/driver-navigation";
 export default async function DriverHomePage() {
   const session = await getDriverPortalSession();
   if (!session) redirect("/driver/login");
-  const work = await driverHomeWork(session);
-  return <><DriverAutoRefresh /><DriverHome driverName={session.driverName} jobs={work.map((w) => w.job)} eventsByJob={Object.fromEntries(work.map((w) => [w.job.id, w.events]))} today={bangkokDateKey()} /></>;
+  const today = bangkokDateKey();
+  const work = await driverHomeWork(session, today);
+  return <><DriverAutoRefresh /><DriverHome driverId={session.driverId} driverName={session.driverName} jobs={work.map((w) => w.job)} eventsByJob={Object.fromEntries(work.map((w) => [w.job.id, w.events]))} today={today} /></>;
 }

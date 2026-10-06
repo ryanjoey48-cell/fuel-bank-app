@@ -10,6 +10,7 @@ function load(file, deps = {}) {
   const m = { exports: {} };
   const js = ts.transpileModule(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
   new Function('require', 'module', 'exports', js)(name => {
+    if (name === './driver-route-options') return load('components/driver/driver-route-options.tsx', { 'react/jsx-runtime': runtime, 'lucide-react': require('lucide-react') });
     if (name === './driver-disclosure') return load('components/driver/driver-disclosure.tsx', { 'react/jsx-runtime': runtime, 'lucide-react': require('lucide-react') });
     assert.ok(name in deps, name); return deps[name];
   }, m, m.exports);
@@ -35,7 +36,7 @@ for (const language of ['en', 'th']) for (let stage = 0; stage <= 4; stage++) te
   assert.equal((html.match(/id="job-progress"/g)||[]).length, 1);
   assert.ok(html.indexOf('id="job-progress"')<html.indexOf('id="job-next-action"'));
   assert.equal((html.match(/aria-current="step"/g) || []).length, stage < 4 ? 1 : 0);
-  assert.equal((html.match(/<details/g) || []).length, 2); assert.ok(!html.includes('<details open'));
+  assert.equal((html.match(/<details/g) || []).length, stage === 0 || stage === 2 ? 4 : 3); assert.ok(!html.includes('<details open'));
   assert.ok(!html.includes(language === 'en' ? '>Job order<' : '>เลขงาน<'));
   assert.ok(!html.includes(language === 'en' ? '>Trailer<' : '>หางพ่วง<'));
   if (stage < 4) assert.ok(html.includes(language === 'en' ? `STEP ${stage + 1} OF 4` : `ขั้นตอน ${stage + 1} จาก 4`));
@@ -62,8 +63,31 @@ test('a cached photo stays visible after loading; changed photo URLs get fresh i
   assert.equal(DriverAvatar({ src: null, name: 'Joey Ryan' }).props.children[1], null);
 });
 
-test('three visible icon shortcuts follow Navigate only during travel; other route capabilities stay available', () => {for(const stage of [0,1,2,3,4]){const html=render('en',stage);const task=html.match(/<section class="driver-surface[\s\S]*?<\/section>/)[0];const shortcuts=task.match(/aria-label="Route options"[\s\S]*?<\/div>/);assert.equal(Boolean(shortcuts),stage===0||stage===2);if(shortcuts){assert.equal((shortcuts[0].match(/target="_blank"/g)||[]).length,3);assert.ok(task.indexOf('Navigate to')<task.indexOf('aria-label="Route options"'));assert.ok(task.indexOf('aria-label="Route options"')<task.indexOf('driver-primary-action'));}for(const mode of ['depot','current','pickup','delivery','pickup-to-dropoff']){const url=portal.buildDriverDirectionsUrl(job,mode,{name:'Depot',address:'Bangkok'}).replaceAll('&','&amp;');assert.ok(html.includes(url),'Missing '+mode+' at stage '+stage);}assert.ok(!html.includes('<span>Route options</span>'));}});
-
-test('tracker contains only four stages and context-aware shortcut destinations match their labels', () => {for(const [stage,destination] of [[0,'pickup'],[2,'delivery']]){const html=render('en',stage),progress=html.match(/<section aria-labelledby="job-progress"[\s\S]*?<\/section>/)[0];assert.equal((progress.match(/<li /g)||[]).length,4);assert.ok(!progress.includes('<button'));const shortcuts=html.match(/aria-label="Route options"[\s\S]*?<\/div>/)[0];const urls=[...shortcuts.matchAll(/href="([^"]+)"/g)].map(match=>new URL(match[1].replaceAll('&amp;','&')));const expected=new URL(portal.buildDriverDirectionsUrl(job,destination,{name:'Depot',address:'Bangkok'}));assert.equal(urls.length,3);assert.equal(urls[0].searchParams.get('origin'),'Bangkok');const full=new URL(portal.buildDriverDirectionsUrl(job,'depot',{name:'Depot',address:'Bangkok'}));assert.equal(urls[0].toString(),full.toString());assert.ok(urls[0].searchParams.has('waypoints'));assert.ok(shortcuts.includes('aria-label="EES Depot → Pickup → Drop-off"'));assert.equal(urls[2].toString(),expected.toString());assert.ok(shortcuts.includes('From EES depot'));assert.ok(shortcuts.includes(stage===0?'My location → Pickup':'My location → Delivery'));}});
+test('one collapsed Route options row preserves every original route at every stage', () => {
+  for (let stage=0;stage<=4;stage++) {
+    const html=render('en',stage);
+    assert.ok(!html.includes('grid-cols-3'));
+    assert.equal((html.match(/id="job-route-options"/g)||[]).length,1);
+    assert.ok(html.includes('<span>Route options</span>'));
+    assert.ok(!html.includes('<details open'));
+    for(const mode of ['depot','current','pickup','delivery','pickup-to-dropoff']) {
+      const url=portal.buildDriverDirectionsUrl(job,mode,{name:'Depot',address:'Bangkok'}).replaceAll('&','&amp;');
+      assert.ok(html.includes(url),'Missing '+mode+' at stage '+stage);
+    }
+    assert.ok(html.indexOf('id="job-next-action"')<html.indexOf('id="job-route-options"'));
+  }
+});
+test('slim four-stage tracker and collapsed routes use the correct active destination', () => {
+  for(const [stage,destination]of [[0,'pickup'],[2,'delivery']]) {
+    const html=render('en',stage),progress=html.match(/<section aria-labelledby="job-progress"[\s\S]*?<\/section>/)[0];
+    assert.equal((progress.match(/<li /g)||[]).length,4);assert.ok(!progress.includes('<button'));
+    const options=html.slice(html.indexOf('id="job-route-options"'),html.indexOf('id="job-route"'));
+    const urls=[...options.matchAll(/href="([^"]+)"/g)].map(m=>new URL(m[1].replaceAll('&amp;','&')));
+    assert.equal(urls.length,4);
+    assert.equal(urls[2].toString(),portal.buildDriverDirectionsUrl(job,destination,{name:'Depot',address:'Bangkok'}));
+    assert.equal(urls[3].toString(),portal.buildDriverDirectionsUrl(job,'depot',{name:'Depot',address:'Bangkok'}));
+    assert.ok(options.includes(stage===0?'My location → Pickup':'My location → Delivery'));
+  }
+});
 
 test('Operations contact and call are permanently visible outside the two remaining disclosures', () => {for(const language of ['en','th'])for(let stage=0;stage<=4;stage++){const html=render(language,stage);const support=html.match(/<div class="driver-operations-support[\s\S]*?<\/a>/)[0];assert.ok(support.includes('Atip Punpanung'));assert.ok(support.includes('tel:+66657896654'));assert.ok(!support.includes('<summary'));assert.ok(!html.includes(language==='en'?'<span>Need help?</span>':'<span>ต้องการความช่วยเหลือ?</span>'));}});

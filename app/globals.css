@@ -4,20 +4,22 @@
 
 /* Semantic driver accent: independent of office branding and warning colors. */
 .driver-portal-shell {
-  --driver-bg: #0B0F14;
-  --driver-surface: #121820;
-  --driver-surface-soft: #202832;
-  --driver-card: #18212A;
-  --driver-text: #F5F1EA;
-  --driver-text-muted: #9AA3AD;
-  --driver-accent: #6D2F8F;
-  --driver-accent-hover: #7B3FA3;
+  --driver-bg: #11151C;
+  --driver-surface: #181E27;
+  --driver-surface-soft: #27313E;
+  --driver-card: #202833;
+  --driver-text: #F5F3F7;
+  --driver-text-secondary: #B2BAC6;
+  --driver-text-muted: #858F9E;
+  --driver-accent: #8035A5;
+  --driver-accent-soft: #B978D0;
+  --driver-accent-hover: #9444B6;
   --driver-primary: var(--driver-accent);
   --driver-primary-hover: var(--driver-accent-hover);
   --driver-navy: var(--driver-text);
-  --driver-border: rgba(255,255,255,.08);
+  --driver-border: rgba(255,255,255,.06);
   --driver-radius: 14px;
-  --driver-shadow: 0 8px 24px rgba(0,0,0,.22);
+  --driver-shadow: 0 4px 14px rgba(0,0,0,.16);
   --driver-page-space: 12px;
   --driver-card-space: 12px;
   --driver-section-space: 8px;
@@ -3281,7 +3283,7 @@ td {
 .driver-portal-shell [aria-labelledby="job-progress"],
 .driver-portal-shell .driver-location-panel,
 .driver-portal-shell .driver-operations-support { background: var(--driver-card); }
-.driver-portal-shell .driver-home-vehicle-badge { background: rgba(18,24,32,.94); }
+.driver-portal-shell .driver-home-vehicle-badge { background: rgba(24,30,39,.94); }
 .driver-portal-shell .driver-home-upcoming-group,
 .driver-portal-shell .driver-home-upcoming-job { background: var(--driver-surface); }
 .driver-portal-shell .driver-status-badge { background: var(--driver-surface-soft); color: var(--driver-text-muted); }
@@ -3293,11 +3295,11 @@ td {
 .driver-portal-shell textarea::placeholder { color: var(--driver-text-muted); }
 .driver-portal-shell .driver-primary-action { background: var(--driver-accent); color: var(--driver-text); }
 .driver-portal-shell .driver-primary-action:hover { background: var(--driver-accent-hover); }
-.driver-portal-shell .driver-navigate-action { background: var(--driver-bg); color: var(--driver-text); border: 1px solid rgba(140,78,184,.3); }
+.driver-portal-shell .driver-navigate-action { background: var(--driver-surface-soft); color: var(--driver-text); border: 0; }
 .driver-portal-shell .driver-navigate-action svg,
-.driver-portal-shell .driver-operations-support svg { color: #b68bcc; }
+.driver-portal-shell .driver-operations-support svg { color: var(--driver-accent-soft); }
 .driver-portal-shell .driver-tab { color: var(--driver-text-muted); }
-.driver-portal-shell .driver-tab[aria-current="page"] { color: #b68bcc; background: rgba(109,47,143,.14); }
+.driver-portal-shell .driver-tab[aria-current="page"] { color: var(--driver-accent-soft); background: rgba(128,53,165,.14); }
 .driver-portal-shell .driver-portal-header [role="group"] button[aria-pressed="true"] { background: var(--driver-accent); color: var(--driver-text); }
 .driver-portal-shell .btn-secondary { background: var(--driver-surface-soft); color: var(--driver-text); border-color: var(--driver-border); box-shadow: none; }
 .driver-portal-shell .driver-disclosure summary:hover,
@@ -3309,9 +3311,22 @@ td {
 .driver-portal-shell .driver-header-controls [role="group"] { background: var(--driver-surface); }
 .driver-portal-shell .driver-header-controls [role="group"] button[aria-pressed="false"] { color: var(--driver-text-muted); background: transparent; }
 .driver-portal-shell .driver-header-controls [role="group"] button:hover { background: var(--driver-surface-soft); }
-.driver-portal-shell [aria-labelledby="job-progress"] li > p.driver-accent { color: #c399da; }
+.driver-portal-shell [aria-labelledby="job-progress"] li > p.driver-accent { color: var(--driver-accent-soft); }
 .driver-portal-shell .driver-home-next-job > div:last-child { background: var(--driver-surface); }
-.driver-portal-shell .driver-accent { color: #c399da; }
+.driver-portal-shell .driver-accent { color: var(--driver-accent-soft); }
 .driver-portal-shell input:focus-visible,
 .driver-portal-shell select:focus-visible,
 .driver-portal-shell textarea:focus-visible { outline: 2px solid var(--driver-accent); outline-offset: 2px; box-shadow: 0 0 0 3px rgba(109,47,143,.18); }
+
+.driver-portal-shell .driver-address-details .driver-address-hide { display: none; }
+.driver-portal-shell .driver-address-details[open] .driver-address-preview,
+.driver-portal-shell .driver-address-details[open] .driver-address-show { display: none; }
+.driver-portal-shell .driver-address-details[open] .driver-address-hide { display: inline-flex; }
+.driver-portal-shell .driver-address-details > summary:focus-visible { outline: 2px solid var(--driver-accent); outline-offset: 2px; border-radius: 4px; }
+.driver-portal-shell .driver-header-controls button:hover { background: var(--driver-surface-soft); }
+.driver-portal-shell .driver-job-progress { border: 0; }
+.driver-portal-shell .driver-job-summary .driver-job-metadata { color: var(--driver-text-secondary); }
+
+.driver-portal-shell [role="group"][aria-label] { background: var(--driver-surface); border-color: var(--driver-border); box-shadow: none; }
+.driver-portal-shell [role="group"][aria-label] button[aria-pressed="true"] { background: var(--driver-accent); color: var(--driver-text); box-shadow: none; }
+.driver-portal-shell [role="group"][aria-label] button[aria-pressed="false"] { color: var(--driver-text-secondary); }

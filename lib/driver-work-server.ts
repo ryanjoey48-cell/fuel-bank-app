@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServerSupabaseAdmin } from "@/lib/admin-user-management-server";
 import { bangkokDateKey, DRIVER_JOB_SELECT, DriverPortalError, listAssignedDriverJobs, toDriverJob, type DriverPortalSession } from "@/lib/driver-portal-server";
-import type { DriverJobEvent, DriverJobEventType } from "@/lib/driver-portal";
+import type { DriverJobEvent, DriverJobEventType, DriverPortalJob } from "@/lib/driver-portal";
 import type { DriverWork, OperationsResult } from "@/lib/driver-operations";
 import { readDriverProfile } from "@/lib/driver-profile-server";
 import { pickupWaitMinutes } from "@/lib/driver-operations";
@@ -25,10 +25,30 @@ export async function eventsForJobs(admin: SupabaseClient, ids: string[], driver
   }
   return result;
 }
-export async function driverHomeWork(session: DriverPortalSession): Promise<DriverWork[]> {
-  const jobs = await listAssignedDriverJobs(session);
-  const events = await eventsForJobs(createServerSupabaseAdmin(), jobs.map((j) => j.id), session.driverId);
-  return jobs.map((job) => ({ job, events: events.get(job.id) || [] }));
+/** Keep a started, unfinished assignment visible after its Bangkok booking day. */
+export async function pastActiveDriverJobs(admin: SupabaseClient, session: DriverPortalSession, today = bangkokDateKey()) {
+  const jobs: DriverPortalJob[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const { data, error } = await admin.from("booking_diary")
+      .select(DRIVER_JOB_SELECT + ",started:driver_job_events!inner(id),finished:driver_job_events(id)")
+      .eq("driver_id", session.driverId).lt("booking_date", today)
+      .eq("started.driver_id", session.driverId).eq("started.event_type", "pickup_arrived")
+      .eq("finished.event_type", "job_completed").is("finished", null)
+      .order("booking_date").order("id").range(offset, offset + 499);
+    if (error || !data) throw new DriverPortalError(503, "Active jobs unavailable.");
+    jobs.push(...data.map(row => toDriverJob(row as unknown as Record<string, unknown>, session)));
+    if (data.length < 500) return jobs;
+  }
+}
+
+export async function driverHomeWork(session: DriverPortalSession, today = bangkokDateKey()): Promise<DriverWork[]> {
+  const admin = createServerSupabaseAdmin();
+  const [scheduled, active] = await Promise.all([
+    listAssignedDriverJobs(session, today), pastActiveDriverJobs(admin, session, today)
+  ]);
+  const jobs = [...new Map([...scheduled, ...active].map(job => [job.id, job])).values()];
+  const events = await eventsForJobs(admin, jobs.map(job => job.id), session.driverId);
+  return jobs.map(job => ({ job, events: events.get(job.id) || [] }));
 }
 export async function driverHistoryWork(session: DriverPortalSession, page = 0) {
   const admin = createServerSupabaseAdmin();

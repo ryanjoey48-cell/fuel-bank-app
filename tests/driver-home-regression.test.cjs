@@ -49,7 +49,7 @@ for (const language of ['en', 'th']) test(`home keeps future Next Job unique, ex
   for (const id of ['a', 'b', 'c']) assert.equal((html.match(new RegExp(`href="/driver/jobs/${id}"`, 'g')) || []).length, 1);
   assert.ok(!html.includes('/driver/jobs/done-today')); assert.ok(!html.includes('/driver/jobs/done-future'));
   assert.ok(html.indexOf('/driver/jobs/a') < html.indexOf('/driver/jobs/b'));
-  assert.ok(html.includes(language === 'en' ? 'No jobs remaining today' : 'วันนี้ไม่มีงานเหลือแล้ว'));
+  assert.ok(html.includes(language === 'en' ? 'No more jobs today' : 'วันนี้ไม่มีงานเหลือแล้ว'));
   assert.ok(html.includes(ui.driverJobAction(language, 'ready')));
   assert.ok(html.includes('/driver-hero-bg.png')); assert.ok(!html.includes('/ees-truck.png'));
   assert.ok(html.includes('min-h-[112px]')); assert.ok(html.includes('rounded-[24px]'));
@@ -75,6 +75,6 @@ test('a later page failure reports unavailable instead of returning a misleading
   await assert.rejects(server({ from: () => q }).listAssignedDriverJobs({ driverId: '26' }), { status: 503 });
 });
 
-for (const zone of ['Asia/Bangkok','America/Los_Angeles','Pacific/Auckland']) test('Tomorrow uses the Bangkok booking date independently of device timezone: '+zone, () => {const previous=process.env.TZ;try{process.env.TZ=zone;const html=home('en',[job('now','2026-11-01'),job('tomorrow','2026-11-02'),job('later','2026-11-03')],{},'2026-11-01');assert.equal((html.match(/>Tomorrow</g)||[]).length,1);assert.ok(html.includes('3 Nov 2026'));}finally{if(previous===undefined)delete process.env.TZ;else process.env.TZ=previous;}});
+for (const zone of ['Asia/Bangkok','America/Los_Angeles','Pacific/Auckland']) test('Tomorrow uses the Bangkok booking date independently of device timezone: '+zone, () => {const previous=process.env.TZ;try{process.env.TZ=zone;const html=home('en',[job('now','2026-11-01'),job('tomorrow','2026-11-02'),job('later','2026-11-03')],{},'2026-11-01');assert.equal((html.match(/>Tomorrow</g)||[]).length,1);assert.ok(html.includes('3 Nov'));}finally{if(previous===undefined)delete process.env.TZ;else process.env.TZ=previous;}});
 
-for(const count of [0,1,2,3])test('today job-count grammar: '+count,()=>{const jobs=Array.from({length:count},(_,i)=>job('today-'+i,today));jobs.push(job('future','2026-10-12'));const html=home('en',jobs);const expected=count===0?'No jobs remaining today':count===1?'job remaining today':'jobs remaining today';assert.ok(html.includes(expected));if(count===1)assert.ok(!html.includes('jobs remaining today'));assert.ok(html.includes(count?'today-0':'future'));});
+for(const count of [0,1,2,3])test('today job-count grammar: '+count,()=>{const jobs=Array.from({length:count},(_,i)=>job('today-'+i,today));jobs.push(job('future','2026-10-12'));const html=home('en',jobs);const expected=count===0?'No more jobs today':count===1?'job remaining today':'jobs remaining today';assert.ok(html.includes(expected));if(count===1)assert.ok(!html.includes('jobs remaining today'));assert.ok(html.includes(count?'today-0':'future'));});

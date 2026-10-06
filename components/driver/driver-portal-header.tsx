@@ -4,7 +4,6 @@ import Image from "next/image";
 import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { DriverAvatar } from "./driver-ui";
 import type { DriverProfile } from "@/lib/driver-operations";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { useLanguage } from "@/lib/language-provider";
@@ -86,22 +85,16 @@ export function DriverPortalHeader({ driverName }: { driverName: string }) {
             </span>
 
             <div className="min-w-0 flex-1">
-              <p className="whitespace-nowrap text-[7px] font-bold uppercase tracking-[0.16em] text-[var(--driver-text-muted)] sm:text-[8px]">
+              <p className="whitespace-nowrap text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--driver-text-muted)] sm:text-[10px]">
                 EES Driver
               </p>
-              <p className="truncate text-[12px] font-bold leading-[15px] text-[var(--driver-text)] sm:text-[13px]">
+              <p className="truncate text-[13px] font-bold leading-4 text-[var(--driver-text)] sm:text-[13px]">
                 {profile?.displayName || driverName}
               </p>
             </div>
           </div>
 
-          <div className="driver-header-controls flex shrink-0 items-center gap-0.5">
-            <DriverAvatar
-              src={profile?.avatarUrl}
-              name={profile?.displayName || driverName}
-              className="h-7 w-7 rounded-full"
-            />
-
+          <div className="driver-header-controls flex shrink-0 items-center gap-1.5">
             <LanguageSwitcher compact />
 
             <button

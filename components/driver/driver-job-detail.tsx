@@ -10,11 +10,10 @@ import {
   Phone,
   RefreshCw,
   Truck,
-  Warehouse,
-  Route
 } from "lucide-react";
 import Link from "next/link";
 import { DriverDisclosure } from "./driver-disclosure";
+import { DriverRouteOptions } from "./driver-route-options";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLanguage } from "@/lib/language-provider";
 import {
@@ -50,7 +49,9 @@ const copy = {
     navigation: "Navigation",
     navigateTo: "Navigate to",
     moreNav: "More navigation options",
-    depot: "From depot",
+    depot: "EES Depot",
+    fullAddress: "View full address",
+    hideAddress: "Hide full address",
     current: "From my location",
     pickupToDropoff: "Open in Google Maps",
     pickupDirections: "To pickup",
@@ -61,7 +62,7 @@ const copy = {
     call: "Call Operations",
     operations: "Operations",
     contactUnavailable: "Contact unavailable",
-    actions: ["Arrived at pickup", "Leave pickup", "Arrived at delivery", "Complete job"],
+    actions: ["Arrived at pickup", "Left pickup", "Arrived at delivery", "Complete job"],
     steps: ["Arrived at pickup", "Left pickup", "Arrived at delivery", "Job completed"],
     statuses: ["Ready", "At pickup", "En route", "At delivery", "Completed"],
     loading: "Loading progress…",
@@ -89,7 +90,7 @@ const copy = {
     syncing: "Updating…",
     missingRoute: "Route locations are missing. Contact operations.",
     next: "Next step",
-    focus: ["Arrive at pickup", "Ready to leave pickup", "Drive to delivery", "Complete job"],
+    focus: ["Arrive at pickup", "Ready to leave pickup", "Arrive at delivery", "Complete job"],
     navigatePickup: "Navigate to pickup", navigateDelivery: "Navigate to delivery", fullRoute: "Full route",
     progressShort: ["Pickup", "Leave", "Delivery", "Done"],
     confirm: "Complete this job?",
@@ -115,7 +116,9 @@ const copy = {
     navigation: "การนำทาง",
     navigateTo: "นำทางไป",
     moreNav: "ตัวเลือกนำทางเพิ่มเติม",
-    depot: "จากคลัง",
+    depot: "คลัง EES",
+    fullAddress: "ดูที่อยู่ทั้งหมด",
+    hideAddress: "ซ่อนที่อยู่ทั้งหมด",
     current: "จากตำแหน่งฉัน",
     pickupToDropoff: "เปิดใน Google Maps",
     pickupDirections: "ไปจุดรับ",
@@ -386,11 +389,8 @@ export function DriverJobDetail({
   const actionContext = [labels.whenYouArrive, labels.whenReadyToLeave, labels.atDelivery, labels.finishJob][stage];
   const lastEvent = events[events.length - 1];
 
-  // Preserve the verified depot origin, pickup waypoint and drop-off destination.
-  const depotShortcutUrl = depotUrl;
-
   const progressStrip = (
-    <section aria-labelledby="job-progress" className="rounded-xl border border-[var(--driver-border)] bg-[var(--driver-surface)] px-2 py-1">
+    <section aria-labelledby="job-progress" className="driver-job-progress rounded-xl bg-[var(--driver-card)] px-2 py-2">
       <h2 id="job-progress" className="sr-only">{labels.progress}</h2>
       <ol className="grid min-w-0 flex-1 grid-cols-4">
         {DRIVER_JOB_EVENT_TYPES.map((type, index) => {
@@ -398,9 +398,10 @@ export function DriverJobDetail({
           const current = !loading && !loadError && !event && index === stage;
           const complete = !!event;
           return <li key={type} aria-current={current ? "step" : undefined} className="relative min-w-0 px-0.5 text-center" aria-label={labels.steps[index]}>
-            {index < 3 ? <span aria-hidden="true" className={`absolute left-1/2 top-[9.5px] h-px w-full ${complete ? "bg-[var(--driver-surface-soft)]" : "bg-[var(--driver-surface-soft)]"}`} /> : null}
-            <span className={`relative z-10 mx-auto flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${complete ? "bg-[rgba(109,47,143,0.24)] text-[#d0addf]" : current ? "driver-primary-action text-white" : "bg-[var(--driver-surface-soft)] text-[var(--driver-text-muted)]"}`}>{complete ? <Check className="h-3 w-3" /> : index + 1}</span>
-            <p className={`mt-1 break-words text-[11px] font-semibold ${current ? "driver-accent" : complete ? "text-[var(--driver-text)]" : "text-[var(--driver-text-muted)]"}`}>{labels.progressShort[index]}</p>
+            <div className="flex items-center justify-center gap-1.5">
+              <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${complete ? "bg-[rgba(128,53,165,0.24)] text-[var(--driver-accent-soft)]" : current ? "driver-primary-action text-white" : "bg-[var(--driver-surface-soft)] text-[var(--driver-text-muted)]"}`}>{complete ? <Check className="h-3 w-3" /> : index + 1}</span>
+              <span className={`text-xs font-semibold ${current || complete ? "driver-accent" : "text-[var(--driver-text-muted)]"}`}>{labels.progressShort[index]}</span>
+            </div>
             {event ? <time dateTime={event.eventTime} className="mt-0.5 block text-[11px] leading-4 text-[var(--driver-text-muted)]">{new Intl.DateTimeFormat(language === "th" ? "th-TH" : "en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" }).format(new Date(event.eventTime))}</time> : null}
           </li>;
         })}
@@ -426,7 +427,7 @@ export function DriverJobDetail({
               <span className="text-[var(--driver-text-muted)]">→</span>
               <span className="min-w-0 break-words text-right">{job.dropoffName || labels.notAssigned}</span>
             </div>
-        <div className="driver-job-metadata mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-white/10 pt-1 text-[11px] text-[var(--driver-text-muted)]"><span>{formattedDate}</span><span className="inline-flex items-center gap-1"><Clock3 className="h-3 w-3" />{job.pickupTime?.slice(0, 5) || labels.timePending}</span><span className="ml-auto inline-flex items-center gap-1 font-semibold"><Truck className="h-3 w-3" />{job.vehicleRegistration || "—"}</span></div>
+        <div className="driver-job-metadata mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-white/10 pt-1 text-xs text-[var(--driver-text-muted)]"><span>{formattedDate}</span><span className="inline-flex items-center gap-1"><Clock3 className="h-3 w-3" />{job.pickupTime?.slice(0, 5) || labels.timePending}</span><span className="ml-auto inline-flex items-center gap-1 font-semibold"><Truck className="h-3 w-3" />{job.vehicleRegistration || "—"}</span></div>
       </header>
 
       {progressStrip}
@@ -457,26 +458,31 @@ export function DriverJobDetail({
                 </div>
               </div>
 
-              <div className="driver-location-panel mt-1.5 rounded-2xl border border-[var(--driver-border)] bg-[var(--driver-surface)] p-2.5">
+              <div className="driver-location-panel mt-2 rounded-xl bg-[var(--driver-card)] p-3">
                 <div className="flex items-start gap-2.5">
                   <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[var(--driver-text-muted)]" />
-                  <div className="min-w-0">
-                    <p className="break-words text-base font-bold leading-5 text-[var(--driver-text)]">{destinationName || labels.notAssigned}</p>
-                    {(stage === 0 || stage === 2) && destinationAddress && destinationAddress !== destinationName ? <p className="mt-0.5 break-words text-xs leading-5 text-[var(--driver-text-muted)]">{destinationAddress}</p> : null}
+                  <div className="min-w-0 flex-1">
+                    <p className="break-words text-lg font-bold leading-5 text-[var(--driver-text)]">{destinationName || labels.notAssigned}</p>
+                    {(stage === 0 || stage === 2) && destinationAddress && destinationAddress !== destinationName ? <details className="driver-address-details mt-1">
+                      <summary className="list-none cursor-pointer text-sm leading-5 text-[var(--driver-text-secondary)] [&::-webkit-details-marker]:hidden">
+                        <span className="driver-address-preview line-clamp-2 break-words">{destinationAddress}</span>
+                        <span className="driver-address-show inline-flex min-h-11 items-center text-xs font-semibold driver-accent">{labels.fullAddress}</span>
+                        <span className="driver-address-hide min-h-11 items-center text-xs font-semibold driver-accent">{labels.hideAddress}</span>
+                      </summary>
+                      <p className="pb-2 break-words text-sm leading-5 text-[var(--driver-text-secondary)]">{destinationAddress}</p>
+                    </details> : null}
                   </div>
                 </div>
 
                 {(stage === 0 || stage === 2) && navigationUrl ? <a className="driver-navigate-action mt-2 flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[var(--driver-surface)] px-3 text-center text-sm font-bold text-white active:opacity-90" href={navigationUrl} target="_blank" rel="noreferrer"><Navigation2 className="h-4 w-4" /><span className="break-words">{labels.navigateTo} {destinationName || (destinationIsPickup ? labels.pickup : labels.dropoff)}</span><ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-70" /></a> : (stage === 0 || stage === 2) ? <p className="mt-3 text-sm text-[var(--driver-text-muted)]">{labels.missingRoute}</p> : null}
-                {(stage === 0 || stage === 2) ? <div className="mt-1 grid grid-cols-3 gap-1.5" aria-label={labels.quickRoutes}>
-                  {([[depotShortcutUrl, labels.fromDepot, Warehouse], [pickupToDropoffUrl, labels.pickupDelivery, MapPin], [navigationUrl, destinationIsPickup ? labels.herePickup : labels.hereDelivery, Route]] as const).map(([url, title, Icon]) => url ? <a key={title} href={url} aria-label={title === labels.fromDepot ? (language === "th" ? "คลัง EES → จุดรับ → จุดส่ง" : "EES Depot → Pickup → Drop-off") : title} target="_blank" rel="noreferrer" className="flex min-h-11 min-w-0 items-center justify-center gap-1 rounded-xl border border-[var(--driver-border)] bg-[var(--driver-surface)] px-1.5 py-1 text-center text-[11px] font-semibold leading-4 text-[var(--driver-text)] transition-colors active:bg-[var(--driver-surface)]"><Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-[var(--driver-text-muted)]" /><span className="min-w-0 break-words">{title}</span></a> : null)}
-                </div> : null}
+
               </div>
 
               {(stage === 1 || stage === 3) && lastEvent ? <p className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-[var(--driver-text-muted)]"><Check aria-hidden="true" className="h-3.5 w-3.5" />{labels.steps[stage === 1 ? 0 : 2]} · <time dateTime={lastEvent.eventTime}>{formatTimestamp(lastEvent.eventTime)}</time>{lastEvent.latitude !== null && lastEvent.longitude !== null ? " · GPS" : ""}</p> : null}
               <div className="mt-2 border-t border-[var(--driver-border)] pt-2">
-                <p className="mb-0.5 text-[11px] font-semibold text-[var(--driver-text-muted)]">{actionContext}</p>
+                <p className="mb-1 text-xs font-semibold text-[var(--driver-text-muted)]">{actionContext}</p>
                 <button type="button" disabled={!!saving} onClick={() => (stage === 3 ? setConfirmComplete(true) : void save())} className="driver-primary-action min-h-12 w-full rounded-xl px-3 text-base font-bold text-white shadow-sm disabled:opacity-60">{saving ? (saving === "location" ? labels.locating : labels.saving) : labels.actions[stage]}</button>
-                <p className="mt-0.5 text-center text-[11px] leading-4 text-[var(--driver-text-muted)]">{labels.gps}</p>
+                <p className="mt-1 text-center text-xs leading-4 text-[var(--driver-text-muted)]">{labels.gps}</p>
               </div>
 
             </>
@@ -486,18 +492,19 @@ export function DriverJobDetail({
         </div>
       </section>
 
-      <div className="driver-information-group driver-surface overflow-hidden border border-[var(--driver-border)] bg-[var(--driver-surface)] shadow-[0_4px_14px_rgba(21,38,56,0.055)]">
+      <div className="driver-information-group driver-surface overflow-hidden">
+        <DriverRouteOptions language={language} pickupName={job.pickupName} deliveryName={job.dropoffName} defaultDestination={destinationIsPickup ? "pickup" : "delivery"} urls={{ current: currentUrl, depot: depotUrl, pickup: pickupUrl, delivery: deliveryUrl, pickupToDropoff: pickupToDropoffUrl }} />
         <DriverDisclosure title={labels.fullRoute} id="job-route">
           <div className="border-t border-[var(--driver-border)] bg-[var(--driver-surface)] px-4 py-3">
-            {[[labels.pickup, job.pickupName, job.pickupAddress], [labels.dropoff, job.dropoffName, job.dropoffAddress]].map(([label, name, address], index) => (
+            {[[labels.depot, depot.name, depot.address], [labels.pickup, job.pickupName, job.pickupAddress], [labels.dropoff, job.dropoffName, job.dropoffAddress]].map(([label, name, address], index) => (
               <div key={label} className={`relative grid grid-cols-[32px_1fr] gap-2.5 ${index ? "pt-4" : "pb-4"}`}>
-                {index === 0 ? <span aria-hidden="true" className="absolute left-[15px] top-8 h-[calc(100%-8px)] w-px bg-[var(--driver-surface-soft)]" /> : null}
-                <span className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${index === 0 ? "bg-[var(--driver-surface-soft)] text-[var(--driver-text-muted)]" : "bg-[var(--driver-surface)] text-white"}`}>{index === 0 ? "A" : "B"}</span>
+                {index < 2 ? <span aria-hidden="true" className="absolute left-[15px] top-8 h-[calc(100%-8px)] w-px bg-[var(--driver-surface-soft)]" /> : null}
+                <span className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${index === 0 ? "bg-[var(--driver-surface-soft)] text-[var(--driver-text-muted)]" : "bg-[var(--driver-surface)] text-white"}`}>{["A", "B", "C"][index]}</span>
                 <div className="min-w-0">
                   <p className="driver-eyebrow">{label}</p>
                   <p className="mt-0.5 break-words text-sm font-bold text-[var(--driver-text)]">{name || labels.notAssigned}</p>
                   {address && address !== name ? <p className="mt-0.5 break-words text-xs leading-5 text-[var(--driver-text-muted)]">{address}</p> : null}
-                  {(index === 0 ? pickupUrl : deliveryUrl) ? <a href={(index === 0 ? pickupUrl : deliveryUrl) || undefined} target="_blank" rel="noreferrer" className="mt-1 inline-flex min-h-11 items-center gap-2 text-xs font-semibold text-[var(--driver-text)]"><Navigation2 aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />{labels.navigateTo} {name || label}<ExternalLink aria-hidden="true" className="h-3 w-3 shrink-0 text-[var(--driver-text-muted)]" /></a> : null}
+                  {(index === 0 ? depotUrl : index === 1 ? pickupUrl : deliveryUrl) ? <a href={(index === 0 ? depotUrl : index === 1 ? pickupUrl : deliveryUrl) || undefined} target="_blank" rel="noreferrer" className="mt-1 inline-flex min-h-11 items-center gap-2 text-xs font-semibold text-[var(--driver-text)]"><Navigation2 aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />{index === 0 ? labels.fullRouteMaps : labels.navigateTo + " " + (name || label)}<ExternalLink aria-hidden="true" className="h-3 w-3 shrink-0 text-[var(--driver-text-muted)]" /></a> : null}
                 </div>
               </div>
             ))}

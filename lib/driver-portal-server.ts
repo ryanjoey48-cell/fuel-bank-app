@@ -232,6 +232,8 @@ export function bangkokDateKey(date = new Date()) {
 export const DRIVER_JOB_SELECT = [
   "id",
   "booking_date",
+  "driver_id",
+  "status",
   "pickup_time",
   "pickup",
   "pickup_address",
@@ -268,6 +270,8 @@ export function toDriverJob(row: Record<string, unknown>, identity: DriverPortal
   return {
     id: String(row.id),
     bookingDate: String(row.booking_date),
+    driverId: row.driver_id == null ? identity.driverId : String(row.driver_id),
+    bookingStatus: typeof row.status === "string" ? row.status : null,
     pickupTime: typeof row.pickup_time === "string" ? row.pickup_time : null,
     clientName: clientName(row.client),
     pickupName: String(row.pickup ?? ""),
@@ -294,9 +298,8 @@ export function toDriverJob(row: Record<string, unknown>, identity: DriverPortal
   };
 }
 
-export async function listAssignedDriverJobs(session: DriverPortalSession) {
+export async function listAssignedDriverJobs(session: DriverPortalSession, today = bangkokDateKey()) {
   const admin = createServerSupabaseAdmin();
-  const today = bangkokDateKey();
   const jobs: DriverPortalJob[] = [];
   for (let offset = 0; ; offset += 500) {
     const { data, error } = await admin

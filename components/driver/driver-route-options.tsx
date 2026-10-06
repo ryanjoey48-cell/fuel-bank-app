@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, MapPin, Route, Warehouse } from "lucide-react";
+import { ExternalLink, MapPin, Navigation2, Route, Warehouse } from "lucide-react";
 import { DriverDisclosure } from "./driver-disclosure";
 
 type RouteStart = "current" | "depot" | "pickup";
@@ -9,21 +9,27 @@ type RouteUrls = { current: string | null; depot: string | null; pickup: string 
 
 const copy = {
   en: {
-    more: "More navigation options",
-    depotTo: "From EES depot",
+    more: "Route options",
+    depotTo: "EES Depot → Pickup",
     pickupToDelivery: "Pickup → Delivery",
-    fullRoute: "Full job route",
+    fullRoute: "Full Job Route",
     pickup: "Pickup",
     delivery: "Delivery",
+    depot: "EES Depot",
+    herePickup: "My location → Pickup",
+    hereDelivery: "My location → Delivery",
     missing: "No additional routes available"
   },
   th: {
-    more: "ตัวเลือกนำทางเพิ่มเติม",
-    depotTo: "จากคลัง EES",
+    more: "ตัวเลือกเส้นทาง",
+    depotTo: "คลัง EES → จุดรับ",
     pickupToDelivery: "จุดรับไปจุดส่ง",
     fullRoute: "เส้นทางงานทั้งหมด",
     pickup: "จุดรับ",
     delivery: "จุดส่ง",
+    depot: "คลัง EES",
+    herePickup: "ตำแหน่งฉัน → จุดรับ",
+    hereDelivery: "ตำแหน่งฉัน → จุดส่ง",
     missing: "ไม่มีเส้นทางเพิ่มเติม"
   }
 } as const;
@@ -46,32 +52,26 @@ export function DriverRouteOptions({ language, pickupName, deliveryName, default
   const pickup = pickupName || l.pickup;
   const delivery = deliveryName || l.delivery;
 
-  const routes = [
-    {
-      id: "depot",
-      title: l.depotTo,
-      detail: `EES Depot → ${pickup} → ${delivery}`,
-      href: urls.depot,
-      Icon: Warehouse
-    },
-    {
-      id: "pickupDelivery",
-      title: l.pickupToDelivery,
-      detail: `${pickup} → ${delivery}`,
-      href: urls.pickupToDropoff,
-      Icon: MapPin
-    },
-    {
-      id: "full",
-      title: l.fullRoute,
-      detail: `EES → ${pickup} → ${delivery}`,
-      href: urls.depot,
-      Icon: Route
+  // This is a labelled segment; Full Job Route below retains the whole journey.
+  const depotPickup = urls.depot && urls.pickup ? new URL(urls.pickup) : null;
+  if (depotPickup && urls.depot) {
+    const full = new URL(urls.depot);
+    for (const key of ["origin", "origin_place_id"]) {
+      const value = full.searchParams.get(key);
+      if (value) depotPickup.searchParams.set(key, value);
     }
-  ].filter((route) => route.href);
+  }
+  const destination = defaultDestination === "pickup" ? pickup : delivery;
+  const routes = [
+    { id: "depotPickup", title: l.depotTo, detail: l.depot + " → " + pickup, href: depotPickup?.toString(), Icon: Warehouse },
+    { id: "pickupDelivery", title: l.pickupToDelivery, detail: pickup + " → " + delivery, href: urls.pickupToDropoff, Icon: MapPin },
+    { id: "current", title: defaultDestination === "pickup" ? l.herePickup : l.hereDelivery, detail: destination,
+      href: defaultDestination === "pickup" ? urls.pickup : urls.delivery, Icon: Navigation2 },
+    { id: "full", title: l.fullRoute, detail: l.depot + " → " + pickup + " → " + delivery, href: urls.depot, Icon: Route }
+  ].filter(route => route.href);
 
   return (
-    <DriverDisclosure title={l.more} compact>
+    <DriverDisclosure title={l.more} id="job-route-options">
       <div className="border-t border-[var(--driver-border)] bg-[var(--driver-surface)] px-1 py-1">
         {routes.length ? (
           <div className="divide-y divide-[var(--driver-border)]">
@@ -83,12 +83,12 @@ export function DriverRouteOptions({ language, pickupName, deliveryName, default
                 rel="noreferrer"
                 className="group flex min-h-14 items-center gap-3 rounded-xl px-2 py-2.5 text-[var(--driver-text)] transition-colors hover:bg-[var(--driver-surface)] active:bg-[var(--driver-surface)]"
               >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--driver-border)] bg-[var(--driver-surface)] text-[var(--driver-text-muted)]">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--driver-border)] bg-[var(--driver-surface-soft)] driver-accent">
                   <Icon aria-hidden="true" className="h-4 w-4" />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-semibold leading-5">{title}</span>
-                  <span className="mt-0.5 block truncate text-xs text-[var(--driver-text-muted)]">{detail}</span>
+                  <span className="mt-0.5 block break-words text-xs text-[var(--driver-text-muted)]">{detail}</span>
                 </span>
                 <ExternalLink aria-hidden="true" className="h-4 w-4 shrink-0 text-[var(--driver-text-muted)]" />
               </a>

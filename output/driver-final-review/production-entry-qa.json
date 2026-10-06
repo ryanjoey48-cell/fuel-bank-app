@@ -1,0 +1,26 @@
+{
+  "checks": [
+    {
+      "requested": "/driver/login",
+      "final": "/driver/login"
+    },
+    {
+      "requested": "/driver",
+      "final": "/driver/login"
+    },
+    {
+      "requested": "/driver/profile",
+      "final": "/driver/login"
+    },
+    {
+      "requested": "/driver/history",
+      "final": "/driver/login"
+    },
+    {
+      "requested": "/driver/jobs/00000000-0000-0000-0000-000000000001",
+      "final": "/driver/login"
+    }
+  ],
+  "bg": "rgb(17, 21, 28)",
+  "errors": []
+}

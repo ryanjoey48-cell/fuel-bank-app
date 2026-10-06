@@ -13,6 +13,7 @@ const copy = {
   en: {
     eyebrow: "EES Driver",
     title: "Driver sign in",
+    subheading: "Logistics Control",
     description: "Use the account provided by the office to view your assigned jobs.",
     email: "Email",
     emailPlaceholder: "driver@example.com",
@@ -25,6 +26,7 @@ const copy = {
   th: {
     eyebrow: "EES DRIVER",
     title: "เข้าสู่ระบบคนขับ",
+    subheading: "ระบบงานขนส่ง",
     description: "ใช้บัญชีที่สำนักงานจัดให้เพื่อดูงานที่ได้รับมอบหมาย",
     email: "อีเมล",
     emailPlaceholder: "driver@example.com",
@@ -72,7 +74,7 @@ export function DriverLoginForm() {
   };
 
   return (
-    <main className="flex min-h-[100dvh] items-center justify-center bg-[var(--app-background)] px-4 py-8">
+    <main className="flex min-h-[100dvh] items-center justify-center bg-[var(--driver-bg)] px-4 py-8">
       <section className="w-full max-w-md rounded-[1.5rem] border border-[var(--driver-border)] bg-[var(--driver-surface)] p-5 shadow-[0_24px_70px_rgba(57,40,24,0.13)] sm:p-7">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -81,7 +83,7 @@ export function DriverLoginForm() {
             </span>
             <div>
               <p className="text-[11px] font-black uppercase tracking-[0.18em] driver-accent">{labels.eyebrow}</p>
-              <p className="mt-1 text-xs font-semibold text-[var(--driver-text-muted)]">Logistics Control</p>
+              <p className="mt-1 text-xs font-semibold text-[var(--driver-text-muted)]">{labels.subheading}</p>
             </div>
           </div>
           <LanguageSwitcher compact />
@@ -91,13 +93,13 @@ export function DriverLoginForm() {
           <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--driver-surface-soft)] driver-accent">
             <LockKeyhole className="h-5 w-5" />
           </span>
-          <h1 className="mt-4 text-2xl font-black tracking-[-0.035em] text-[var(--driver-text-muted)]">{labels.title}</h1>
+          <h1 className="mt-4 text-2xl font-black tracking-[-0.035em] text-[var(--driver-text)]">{labels.title}</h1>
           <p className="mt-2 text-sm leading-6 text-[var(--driver-text-muted)]">{labels.description}</p>
         </div>
 
         <form className="mt-7 space-y-5" onSubmit={submit}>
           <label className="block">
-            <span className="form-label">{labels.email}</span>
+            <span className="block text-sm font-semibold text-[var(--driver-text-secondary)]">{labels.email}</span>
             <input
               type="email"
               autoComplete="username"
@@ -105,7 +107,7 @@ export function DriverLoginForm() {
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               placeholder={labels.emailPlaceholder}
-              className="form-input"
+              className="driver-field"
             />
           </label>
 
