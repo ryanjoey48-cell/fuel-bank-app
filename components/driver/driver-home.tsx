@@ -87,24 +87,24 @@ function CurrentJobCard({
       href={`/driver/jobs/${job.id}`}
       className="driver-home-next-job block overflow-hidden rounded-[24px] bg-[#102a43] text-white shadow-[0_6px_18px_rgba(16,42,67,0.12)] transition active:scale-[0.995]"
     >
-      <div className="flex items-center justify-between border-b border-white/10 px-4 py-2">
+      <div className="flex items-center justify-between border-b border-white/10 px-4 py-1">
         <p className="driver-eyebrow driver-eyebrow-on-navy">
           {status === "ready" ? labels.next : labels.current}
         </p>
         <DriverStatusBadge language={language} status={status} />
       </div>
 
-      <div className="px-4 py-3">
+      <div className="px-4 py-2">
         <h2 className="break-words text-[28px] font-black leading-none tracking-[-0.03em] text-white">
           {job.clientName || job.jobOrderNumber || labels.job}
         </h2>
 
-        <div className="mt-3 grid grid-cols-[minmax(0,1fr)_24px_minmax(0,1fr)] items-center gap-3 rounded-2xl bg-[#1f4667] px-3 py-2">
+        <div className="mt-2 grid grid-cols-[minmax(0,1fr)_24px_minmax(0,1fr)] items-center gap-3 rounded-2xl bg-[#1f4667] px-3 py-1">
           <div className="min-w-0">
             <p className="driver-eyebrow driver-eyebrow-on-navy">
               {labels.pickup}
             </p>
-            <p className="mt-2 break-words text-[18px] font-semibold leading-6 text-white">
+            <p className="mt-1 break-words text-[18px] font-semibold leading-6 text-white">
               {job.pickupName || "—"}
             </p>
           </div>
@@ -115,13 +115,13 @@ function CurrentJobCard({
             <p className="driver-eyebrow driver-eyebrow-on-navy">
               {labels.dropoff}
             </p>
-            <p className="mt-2 break-words text-[18px] font-semibold leading-6 text-white">
+            <p className="mt-1 break-words text-[18px] font-semibold leading-6 text-white">
               {job.dropoffName || "—"}
             </p>
           </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-white/80">
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-white/80">
           <span className="inline-flex items-center gap-1.5 font-medium">
             <CalendarDays className="h-4 w-4 shrink-0 text-white/85" />
             {formattedDate}
@@ -136,7 +136,7 @@ function CurrentJobCard({
           </span>
         </div>
 
-        <div className="mt-3 flex justify-end">
+        <div className="mt-2 flex justify-end">
           <span className="driver-primary-action inline-flex min-h-12 items-center gap-3 rounded-xl px-6 text-base font-semibold text-white shadow-sm">
             {driverJobAction(language, status)}
             <ChevronRight className="h-5 w-5" />
