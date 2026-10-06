@@ -71,8 +71,8 @@ export function DriverPortalHeader({ driverName }: { driverName: string }) {
   return (
     <div className="driver-header-slot">
       <header className="driver-portal-header fixed inset-x-0 top-0 z-50 border-b border-[var(--driver-border)] bg-[#fffbf2]/95 backdrop-blur">
-        <div className="mx-auto flex min-h-[52px] max-w-3xl items-center gap-2 px-3 sm:min-h-[60px] sm:px-4 lg:max-w-[1152px]">
-          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+        <div className="mx-auto flex min-h-11 max-w-3xl items-center gap-2 px-3 sm:min-h-[60px] sm:px-4 lg:max-w-[1152px]">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             <span className="driver-header-logo relative h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-[var(--driver-border)] bg-[#f3eee5] sm:h-10 sm:w-11">
               <Image
                 src="/ees-logo.png"
@@ -95,7 +95,7 @@ export function DriverPortalHeader({ driverName }: { driverName: string }) {
             </div>
           </div>
 
-          <div className="driver-header-controls flex shrink-0 items-center gap-1.5">
+          <div className="driver-header-controls flex shrink-0 items-center gap-1">
             <DriverAvatar
               src={profile?.avatarUrl}
               name={profile?.displayName || driverName}

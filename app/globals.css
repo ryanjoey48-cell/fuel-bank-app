@@ -16,7 +16,7 @@
   --driver-button-height: 44px;
   --driver-icon-size: 16px;
   --driver-metadata-size: 12px;
-  --driver-header-size: 53px;
+  --driver-header-size: 45px;
   color: var(--driver-navy);
 }
 .driver-surface { border: 1px solid var(--driver-border); border-radius: var(--driver-radius); background: #fff; box-shadow: var(--driver-shadow); }
@@ -91,8 +91,8 @@ a:hover .driver-primary-action { background-color: var(--driver-primary-hover, #
   outline-offset: 3px;
 }
 @media (max-width: 639px) {
-  .driver-portal-header [role="group"] { padding: 0; }
-  .driver-portal-header [role="group"] button { min-width: 32px; padding-inline: 6px; }
+  .driver-portal-header [role="group"] { padding: 0; border-width: 0; background: transparent; }
+  .driver-portal-header [role="group"] button { min-width: 44px; padding-inline: 4px; }
 }
 
 /* Jobs home density only; shared chrome stays unchanged on other driver pages. */

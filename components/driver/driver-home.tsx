@@ -94,12 +94,12 @@ function CurrentJobCard({
         <DriverStatusBadge language={language} status={status} />
       </div>
 
-      <div className="px-4 py-2">
+      <div className="px-4 py-3">
         <h2 className="break-words text-[28px] font-black leading-none tracking-[-0.03em] text-white">
           {job.clientName || job.jobOrderNumber || labels.job}
         </h2>
 
-        <div className="mt-2 grid grid-cols-[minmax(0,1fr)_24px_minmax(0,1fr)] items-center gap-3 rounded-2xl bg-[#1f4667] px-3 py-1">
+        <div className="mt-2 grid grid-cols-[minmax(0,1fr)_24px_minmax(0,1fr)] items-center gap-3 rounded-2xl bg-[#1f4667] px-3 py-2">
           <div className="min-w-0">
             <p className="driver-eyebrow driver-eyebrow-on-navy">
               {labels.pickup}
@@ -136,7 +136,7 @@ function CurrentJobCard({
           </span>
         </div>
 
-        <div className="mt-2 flex justify-end">
+        <div className="mt-3 flex justify-end">
           <span className="driver-primary-action inline-flex min-h-12 items-center gap-3 rounded-xl px-6 text-base font-semibold text-white shadow-sm">
             {driverJobAction(language, status)}
             <ChevronRight className="h-5 w-5" />
