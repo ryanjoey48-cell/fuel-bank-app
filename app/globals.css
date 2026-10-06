@@ -84,6 +84,67 @@ a:hover .driver-primary-action { background-color: var(--driver-primary-hover, #
 }
 .driver-header-controls [role="group"] { border-color: var(--driver-border); border-radius: 8px; box-shadow: none; }
 .driver-header-controls [role="group"] button { border-radius: 7px; }
+
+/* Approved Jobs layouts: visual treatment only, isolated from other portal pages. */
+.driver-home-restored, .driver-active-job {
+  --driver-job-radius: 24px;
+  --driver-job-control-radius: 18px;
+  --driver-job-small-radius: 10px;
+  --driver-job-shadow: 0 2px 8px rgba(21,38,56,.05);
+}
+.driver-portal-header { background: #fffbf2; backdrop-filter: none; }
+.driver-portal-header p:first-child { color: #64748b; }
+.driver-header-controls [role="group"] button,
+.driver-header-controls > button { border-radius: 10px; }
+.driver-home-restored .driver-home-next-job,
+.driver-active-job .driver-job-summary,
+.driver-active-job > .driver-surface,
+.driver-active-job > .driver-information-group {
+  border-radius: var(--driver-job-radius);
+  box-shadow: var(--driver-job-shadow);
+}
+.driver-home-next-job h2 { font-weight: 700; }
+.driver-home-next-job > div:first-child { border-color: rgba(255,255,255,.12); }
+.driver-home-route { border-radius: var(--driver-job-control-radius); row-gap: 4px; }
+.driver-home-route > div { display: contents; }
+.driver-home-route > div:first-child > p:first-child { grid-column: 1; grid-row: 1; }
+.driver-home-route > div:first-child > p:last-child { grid-column: 1; grid-row: 2; margin-top: 0; }
+.driver-home-route > div:last-child > p:first-child { grid-column: 3; grid-row: 1; }
+.driver-home-route > div:last-child > p:last-child { grid-column: 3; grid-row: 2; margin-top: 0; }
+.driver-home-route > span { grid-column: 2; grid-row: 2; line-height: 24px; }
+.driver-home-restored .driver-primary-action,
+.driver-active-job button.driver-primary-action,
+.driver-active-job .driver-navigate-action {
+  border-radius: var(--driver-job-control-radius);
+  box-shadow: none;
+}
+.driver-active-job button.driver-primary-action { display: flex; align-items: center; justify-content: center; letter-spacing: .01em; }
+.driver-active-job .driver-navigate-action { font-weight: 600; }
+.driver-home-restored .driver-job-metadata svg,
+.driver-active-job .driver-job-metadata svg { width: 14px; height: 14px; flex-shrink: 0; stroke-width: 1.75; }
+.driver-active-job .driver-job-metadata { border-color: rgba(255,255,255,.12); }
+.driver-active-job .driver-jobs-back { font-weight: 500; }
+.driver-active-job .driver-jobs-back svg { stroke-width: 1.75; }
+.driver-active-job [aria-labelledby="job-progress"] li > .bg-slate-100 { background: #faf8f4; border: 1px solid var(--driver-border); }
+.driver-active-job [aria-labelledby="job-progress"] li > p.text-slate-400 { color: #64748b; }
+.driver-active-job [aria-labelledby="job-next-action"] p.text-base.font-bold { font-weight: 600; }
+.driver-active-job .driver-job-summary h1 { letter-spacing: -.015em; }
+.driver-active-job .driver-job-summary > div:first-child > span { padding: 2px 8px; line-height: 16px; }
+.driver-active-job [aria-labelledby="job-next-action"] [aria-label] > a {
+  border-radius: var(--driver-job-small-radius);
+  background: #faf8f4;
+  border: 1px solid var(--driver-border);
+}
+.driver-active-job [aria-labelledby="job-next-action"] [aria-label] > a svg { width: 16px; height: 16px; stroke-width: 1.75; }
+.driver-active-job .driver-operations-support a { border-radius: var(--driver-job-small-radius); border: 1px solid var(--driver-border); background: #faf8f4; }
+.driver-active-job .driver-operations-support svg { flex-shrink: 0; stroke-width: 1.75; }
+.driver-active-job .driver-information-group summary > svg { stroke-width: 1.75; }
+.driver-home-upcoming-group { border-color: var(--driver-border); border-radius: 18px; box-shadow: var(--driver-job-shadow); }
+.driver-home-upcoming-job { border-color: var(--driver-border); }
+.driver-home-upcoming-job svg { stroke-width: 1.75; }
+.driver-home-upcoming-job .driver-status-badge { font-weight: 500; }
+.driver-home-restored > section:last-child > div:first-child > svg { width: 16px; height: 16px; stroke-width: 1.75; }
+.driver-home-restored .driver-upcoming-count { font-weight: 600; box-shadow: none; background: #faf8f4; }
 .driver-profile .driver-information-group, .driver-history .driver-surface { margin-top: var(--driver-section-space); }
 .driver-portal-header button:focus-visible,
 .driver-home-hero ~ section a:focus-visible {

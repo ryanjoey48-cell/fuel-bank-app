@@ -99,7 +99,7 @@ function CurrentJobCard({
           {job.clientName || job.jobOrderNumber || labels.job}
         </h2>
 
-        <div className="mt-2 grid grid-cols-[minmax(0,1fr)_24px_minmax(0,1fr)] items-center gap-3 rounded-2xl bg-[#1f4667] px-3 py-2">
+        <div className="driver-home-route mt-2 grid grid-cols-[minmax(0,1fr)_24px_minmax(0,1fr)] items-center gap-3 rounded-2xl bg-[#1f4667] px-3 py-2">
           <div className="min-w-0">
             <p className="driver-eyebrow driver-eyebrow-on-navy">
               {labels.pickup}
@@ -121,7 +121,7 @@ function CurrentJobCard({
           </div>
         </div>
 
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-white/80">
+        <div className="driver-job-metadata mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-white/80">
           <span className="inline-flex items-center gap-1.5 font-medium">
             <CalendarDays className="h-4 w-4 shrink-0 text-white/85" />
             {formattedDate}
@@ -399,12 +399,12 @@ export function DriverHome({
                     {formatGroupDate(date)}
                   </h3>
 
-                  <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-slate-500 shadow-sm">
+                  <span className="driver-upcoming-count rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-slate-500 shadow-sm">
                     {dateJobs.length}
                   </span>
                 </div>
 
-                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div className="driver-home-upcoming-group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                   {dateJobs.map((job) => (
                     <UpcomingJobRow
                       key={job.id}

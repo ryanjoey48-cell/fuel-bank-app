@@ -421,7 +421,7 @@ export function DriverJobDetail({
 
   return (
     <main className="driver-active-job mx-auto w-full max-w-3xl space-y-1 px-3 pb-4 pt-0 sm:px-6 sm:py-5">
-      <Link href="/driver" className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[#152638]"><ArrowLeft className="h-4 w-4" />{labels.back}</Link>
+      <Link href="/driver" className="driver-jobs-back inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[#152638]"><ArrowLeft className="h-4 w-4" />{labels.back}</Link>
 
       <header className="driver-job-summary rounded-2xl bg-[#152638] px-4 py-2 text-white shadow-sm">
         <div className="flex items-start justify-between gap-3">
@@ -436,7 +436,7 @@ export function DriverJobDetail({
               <span className="text-slate-400">→</span>
               <span className="min-w-0 break-words text-right">{job.dropoffName || labels.notAssigned}</span>
             </div>
-        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-white/10 pt-1 text-[11px] text-slate-300"><span>{formattedDate}</span><span className="inline-flex items-center gap-1"><Clock3 className="h-3 w-3" />{job.pickupTime?.slice(0, 5) || labels.timePending}</span><span className="ml-auto inline-flex items-center gap-1 font-semibold"><Truck className="h-3 w-3" />{job.vehicleRegistration || "—"}</span></div>
+        <div className="driver-job-metadata mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-white/10 pt-1 text-[11px] text-slate-300"><span>{formattedDate}</span><span className="inline-flex items-center gap-1"><Clock3 className="h-3 w-3" />{job.pickupTime?.slice(0, 5) || labels.timePending}</span><span className="ml-auto inline-flex items-center gap-1 font-semibold"><Truck className="h-3 w-3" />{job.vehicleRegistration || "—"}</span></div>
       </header>
 
       {progressStrip}
@@ -476,7 +476,7 @@ export function DriverJobDetail({
                   </div>
                 </div>
 
-                {(stage === 0 || stage === 2) && navigationUrl ? <a className="mt-2 flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#152638] px-3 text-center text-sm font-bold text-white active:opacity-90" href={navigationUrl} target="_blank" rel="noreferrer"><Navigation2 className="h-4 w-4" /><span className="break-words">{labels.navigateTo} {destinationName || (destinationIsPickup ? labels.pickup : labels.dropoff)}</span><ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-70" /></a> : (stage === 0 || stage === 2) ? <p className="mt-3 text-sm text-amber-800">{labels.missingRoute}</p> : null}
+                {(stage === 0 || stage === 2) && navigationUrl ? <a className="driver-navigate-action mt-2 flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#152638] px-3 text-center text-sm font-bold text-white active:opacity-90" href={navigationUrl} target="_blank" rel="noreferrer"><Navigation2 className="h-4 w-4" /><span className="break-words">{labels.navigateTo} {destinationName || (destinationIsPickup ? labels.pickup : labels.dropoff)}</span><ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-70" /></a> : (stage === 0 || stage === 2) ? <p className="mt-3 text-sm text-amber-800">{labels.missingRoute}</p> : null}
                 {(stage === 0 || stage === 2) ? <div className="mt-1 grid grid-cols-3 gap-1.5" aria-label={labels.quickRoutes}>
                   {([[depotShortcutUrl, labels.fromDepot, Warehouse], [pickupToDropoffUrl, labels.pickupDelivery, MapPin], [navigationUrl, destinationIsPickup ? labels.herePickup : labels.hereDelivery, Route]] as const).map(([url, title, Icon]) => url ? <a key={title} href={url} target="_blank" rel="noreferrer" className="flex min-h-11 min-w-0 items-center justify-center gap-1 rounded-lg bg-[#faf8f4] px-1.5 py-1 text-center text-[11px] font-semibold leading-4 text-[#152638]"><Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-600" /><span className="min-w-0 break-words">{title}</span></a> : null)}
                 </div> : null}
