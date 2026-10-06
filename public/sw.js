@@ -37,6 +37,13 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Never serve cached Driver RSC pages or job/profile API data after a write.
+  // This also bypasses Driver responses stored by older versions of this worker.
+  if (url.pathname === "/driver" || url.pathname.startsWith("/driver/") || url.pathname.startsWith("/api/driver/")) {
+    event.respondWith(fetch(request, { cache: "no-store" }));
+    return;
+  }
+
   if (url.pathname.startsWith("/_next/")) {
     return;
   }

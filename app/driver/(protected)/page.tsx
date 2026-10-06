@@ -4,6 +4,9 @@ import { bangkokDateKey, getDriverPortalSession } from "@/lib/driver-portal-serv
 import { driverHomeWork } from "@/lib/driver-work-server";
 import { DriverAutoRefresh } from "@/components/driver/driver-navigation";
 
+// Driver work is always read from the current authenticated server request.
+export const dynamic = "force-dynamic";
+
 export default async function DriverHomePage() {
   const session = await getDriverPortalSession();
   if (!session) redirect("/driver/login");

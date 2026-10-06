@@ -11,7 +11,6 @@ import {
   RefreshCw,
   Truck,
 } from "lucide-react";
-import Link from "next/link";
 import { DriverDisclosure } from "./driver-disclosure";
 import { DriverRouteOptions } from "./driver-route-options";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -411,8 +410,9 @@ export function DriverJobDetail({
   );
 
   return (
-    <main className="driver-active-job mx-auto w-full max-w-3xl space-y-1 px-3 pb-4 pt-0 sm:px-6 sm:py-5">
-      <Link href="/driver" className="driver-jobs-back inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-[var(--driver-text)]"><ArrowLeft className="h-4 w-4" />{labels.back}</Link>
+    <main className={`driver-active-job mx-auto w-full max-w-3xl space-y-1 px-3 pb-4 pt-0 sm:px-6 ${stage >= 4 ? "driver-completed-job sm:pt-3 sm:pb-4" : "sm:py-5"}`}>
+      {/* A document navigation fetches a new Home snapshot instead of a cached RSC route. */}
+      <a href="/driver" className="driver-jobs-back inline-flex min-h-11 items-center gap-2 rounded-xl bg-[var(--driver-surface-soft)] px-3 text-sm font-semibold text-[var(--driver-text)]"><ArrowLeft className="h-4 w-4" />{labels.back}</a>
 
       <header className="driver-job-summary rounded-2xl bg-[var(--driver-surface)] px-4 py-2 text-white shadow-sm">
         <div className="flex items-start justify-between gap-3">
@@ -439,12 +439,15 @@ export function DriverJobDetail({
             <div className="rounded-xl bg-[var(--driver-surface-soft)] p-3"><p id="job-next-action" role="alert" className="text-sm font-semibold text-[var(--driver-text-muted)]">{labels.unavailable}</p><button type="button" onClick={() => void load()} className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--driver-surface-soft)] px-3 text-sm font-bold text-[var(--driver-text)] shadow-sm"><RefreshCw className="h-4 w-4" />{labels.retry}</button></div>
           ) : stage >= 4 ? (
             <>
-              <div className="rounded-2xl bg-[var(--driver-surface-soft)] px-3.5 py-3 text-[var(--driver-text-muted)]">
+              <div className="driver-job-completed rounded-xl bg-[var(--driver-card)] px-3 py-2.5">
                 <div className="flex items-center gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--driver-surface-soft)]"><Check className="h-5 w-5" /></span>
-                  <div className="min-w-0 flex-1"><p id="job-next-action" className="font-bold">{labels.completed}</p>{lastEvent ? <p className="mt-0.5 text-xs text-[var(--driver-text-muted)]">{formatTimestamp(lastEvent.eventTime)}{lastEvent.latitude !== null && lastEvent.longitude !== null ? " · GPS" : ""}</p> : null}</div>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--driver-accent)] text-[var(--driver-text)]"><Check aria-hidden="true" className="h-5 w-5" strokeWidth={2.5} /></span>
+                  <div className="min-w-0 flex-1">
+                    <h2 id="job-next-action" className="text-xl font-bold leading-6 text-[var(--driver-text)]">{labels.completed}</h2>
+                    {lastEvent ? <p className="mt-1 text-sm leading-5 text-[var(--driver-text-secondary)]"><time dateTime={lastEvent.eventTime}>{formatTimestamp(lastEvent.eventTime)}</time>{lastEvent.latitude !== null && lastEvent.longitude !== null ? " · GPS" : ""}</p> : null}
+                  </div>
                 </div>
-                <Link href="/driver" className="mt-2 flex min-h-11 items-center justify-center rounded-xl bg-[var(--driver-surface-soft)] px-3 text-sm font-bold text-[var(--driver-text-muted)] shadow-sm">{labels.back}</Link>
+                <a href="/driver" className="driver-completed-back driver-primary-action mt-3 flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-sm font-bold text-[var(--driver-text)]"><ArrowLeft aria-hidden="true" className="h-4 w-4" />{labels.back}</a>
               </div>
             </>
           ) : (
