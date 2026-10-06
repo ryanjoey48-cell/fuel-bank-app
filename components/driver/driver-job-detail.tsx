@@ -75,7 +75,7 @@ const copy = {
     fullRouteMaps: "Full job route",
     quickRoutes: "Route options",
     fromDepot: "From EES depot",
-    pickupDelivery: "Pickup → delivery",
+    pickupDelivery: "Pickup → Delivery",
     fromHere: "From my location",
     depotPickup: "Depot → Pickup", depotDelivery: "Depot → Delivery",
     herePickup: "My location → Pickup", hereDelivery: "My location → Delivery",
@@ -400,7 +400,7 @@ export function DriverJobDetail({
   })();
 
   const progressStrip = (
-    <section aria-labelledby="job-progress" className="px-1 py-0.5">
+    <section aria-labelledby="job-progress" className="rounded-xl bg-[#f3ede4] px-2 py-1">
       <h2 id="job-progress" className="sr-only">{labels.progress}</h2>
       <ol className="grid min-w-0 flex-1 grid-cols-4">
         {DRIVER_JOB_EVENT_TYPES.map((type, index) => {
@@ -442,7 +442,7 @@ export function DriverJobDetail({
       {progressStrip}
 
 
-      <section className={`${panel} overflow-hidden`} aria-labelledby="job-next-action">
+      <section className={`${panel} overflow-hidden border border-[#ddd4c7] bg-[#fbf7f0] shadow-[0_5px_18px_rgba(21,38,56,0.07)]`} aria-labelledby="job-next-action">
         <div className="px-3 py-2">
           {loading ? <p role="status" id="job-next-action" className="py-4 text-sm text-slate-500">{labels.loading}</p> : loadError ? (
             <div className="rounded-xl bg-rose-50 p-3"><p id="job-next-action" role="alert" className="text-sm font-semibold text-rose-700">{labels.unavailable}</p><button type="button" onClick={() => void load()} className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-lg bg-white px-3 text-sm font-bold text-[#152638] shadow-sm"><RefreshCw className="h-4 w-4" />{labels.retry}</button></div>
@@ -467,7 +467,7 @@ export function DriverJobDetail({
                 </div>
               </div>
 
-              <div className="mt-1.5 border-b border-[var(--driver-border)] pb-1">
+              <div className="mt-1.5 rounded-2xl border border-[#e2dbd0] bg-[#f2eee8] p-2.5">
                 <div className="flex items-start gap-2.5">
                   <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
                   <div className="min-w-0">
@@ -478,12 +478,12 @@ export function DriverJobDetail({
 
                 {(stage === 0 || stage === 2) && navigationUrl ? <a className="driver-navigate-action mt-2 flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#152638] px-3 text-center text-sm font-bold text-white active:opacity-90" href={navigationUrl} target="_blank" rel="noreferrer"><Navigation2 className="h-4 w-4" /><span className="break-words">{labels.navigateTo} {destinationName || (destinationIsPickup ? labels.pickup : labels.dropoff)}</span><ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-70" /></a> : (stage === 0 || stage === 2) ? <p className="mt-3 text-sm text-amber-800">{labels.missingRoute}</p> : null}
                 {(stage === 0 || stage === 2) ? <div className="mt-1 grid grid-cols-3 gap-1.5" aria-label={labels.quickRoutes}>
-                  {([[depotShortcutUrl, labels.fromDepot, Warehouse], [pickupToDropoffUrl, labels.pickupDelivery, MapPin], [navigationUrl, destinationIsPickup ? labels.herePickup : labels.hereDelivery, Route]] as const).map(([url, title, Icon]) => url ? <a key={title} href={url} target="_blank" rel="noreferrer" className="flex min-h-11 min-w-0 items-center justify-center gap-1 rounded-lg bg-[#faf8f4] px-1.5 py-1 text-center text-[11px] font-semibold leading-4 text-[#152638]"><Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-600" /><span className="min-w-0 break-words">{title}</span></a> : null)}
+                  {([[depotShortcutUrl, labels.fromDepot, Warehouse], [pickupToDropoffUrl, labels.pickupDelivery, MapPin], [navigationUrl, destinationIsPickup ? labels.herePickup : labels.hereDelivery, Route]] as const).map(([url, title, Icon]) => url ? <a key={title} href={url} target="_blank" rel="noreferrer" className="flex min-h-11 min-w-0 items-center justify-center gap-1 rounded-xl border border-[#d9e0e6] bg-[#eaf0f4] px-1.5 py-1 text-center text-[11px] font-semibold leading-4 text-[#152638] transition-colors active:bg-[#dde6ec]"><Icon aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-600" /><span className="min-w-0 break-words">{title}</span></a> : null)}
                 </div> : null}
               </div>
 
               {(stage === 1 || stage === 3) && lastEvent ? <p className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-emerald-700"><Check aria-hidden="true" className="h-3.5 w-3.5" />{labels.steps[stage === 1 ? 0 : 2]} · <time dateTime={lastEvent.eventTime}>{formatTimestamp(lastEvent.eventTime)}</time>{lastEvent.latitude !== null && lastEvent.longitude !== null ? " · GPS" : ""}</p> : null}
-              <div className="mt-1">
+              <div className="mt-2 border-t border-[#ded6ca] pt-2">
                 <p className="mb-0.5 text-[11px] font-semibold text-slate-500">{actionContext}</p>
                 <button type="button" disabled={!!saving} onClick={() => (stage === 3 ? setConfirmComplete(true) : void save())} className="driver-primary-action min-h-12 w-full rounded-xl px-3 text-base font-bold text-white shadow-sm disabled:opacity-60">{saving ? (saving === "location" ? labels.locating : labels.saving) : labels.actions[stage]}</button>
                 <p className="mt-0.5 text-center text-[11px] leading-4 text-slate-500">{labels.gps}</p>
@@ -496,9 +496,9 @@ export function DriverJobDetail({
         </div>
       </section>
 
-      <div className="driver-information-group driver-surface">
+      <div className="driver-information-group driver-surface overflow-hidden border border-[#d9d1c5] bg-[#f3eee6] shadow-[0_4px_14px_rgba(21,38,56,0.055)]">
         <DriverDisclosure title={labels.fullRoute} id="job-route">
-          <div className="border-t border-[var(--driver-border)] px-4 py-3">
+          <div className="border-t border-[#ddd5c9] bg-[#f8f3eb] px-4 py-3">
             {[[labels.pickup, job.pickupName, job.pickupAddress], [labels.dropoff, job.dropoffName, job.dropoffAddress]].map(([label, name, address], index) => (
               <div key={label} className={`relative grid grid-cols-[32px_1fr] gap-2.5 ${index ? "pt-4" : "pb-4"}`}>
                 {index === 0 ? <span aria-hidden="true" className="absolute left-[15px] top-8 h-[calc(100%-8px)] w-px bg-slate-200" /> : null}
@@ -515,7 +515,7 @@ export function DriverJobDetail({
           </div>
         </DriverDisclosure>
         <DriverDisclosure title={labels.details}>
-          <dl className="border-t border-slate-100 px-4 pb-3 text-sm">
+          <dl className="border-t border-[#ddd5c9] bg-[#f8f3eb] px-4 pb-3 text-sm">
             {[
               [labels.vehicle, job.vehicleRegistration],
               [labels.vehicleType, getPortalVehicleTypeLabel(job.vehicleType, language)],
@@ -524,16 +524,16 @@ export function DriverJobDetail({
               [labels.jobReference, job.jobOrderNumber],
               [labels.trailer, job.trailerRegistration]
             ].filter(([, value]) => typeof value === "string" && value.trim() && value !== labels.notAssigned).map(([label, value]) => (
-              <div key={label} className="flex justify-between gap-4 border-b border-slate-100 py-2.5 last:border-0">
+              <div key={label} className="flex justify-between gap-4 border-b border-[#e2dbd0] py-2.5 last:border-0">
                 <dt className="text-slate-500">{label}</dt>
                 <dd className="max-w-[65%] break-words text-right font-semibold text-[#152638]">{value || labels.notAssigned}</dd>
               </div>
             ))}
           </dl>
         </DriverDisclosure>
-        <div className="driver-operations-support flex flex-wrap items-center justify-between gap-2 px-4 py-2">
+        <div className="driver-operations-support flex flex-wrap items-center justify-between gap-2 border-t border-[#d5dce2] bg-[#eaf0f4] px-4 py-2.5">
           <div className="min-w-0"><p className="break-words text-sm font-semibold text-[#152638]">{operationsContact.name || labels.operations}</p>{operationsContact.name ? <p className="text-xs text-slate-500">{labels.operations}</p> : null}</div>
-          {operationsContact.phone ? <a href={"tel:" + operationsContact.phone} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-slate-50 px-3 text-sm font-semibold text-[#152638]"><Phone aria-hidden="true" className="h-4 w-4 text-slate-600" />{labels.call}</a> : <p className="text-xs text-slate-500">{labels.contactUnavailable}</p>}
+          {operationsContact.phone ? <a href={"tel:" + operationsContact.phone} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#cfd8df] bg-[#f4f7f9] px-3 text-sm font-semibold text-[#152638] transition-colors active:bg-[#e2e9ee]"><Phone aria-hidden="true" className="h-4 w-4 text-slate-600" />{labels.call}</a> : <p className="text-xs text-slate-500">{labels.contactUnavailable}</p>}
         </div>
       </div>
       {confirmComplete ? <CompletionConfirmation labels={labels} onCancel={() => setConfirmComplete(false)} onConfirm={() => void save()} /> : null}

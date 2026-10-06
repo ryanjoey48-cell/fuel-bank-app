@@ -163,7 +163,7 @@ function UpcomingJobRow({
   return (
     <Link
       href={`/driver/jobs/${job.id}`}
-      className="driver-home-upcoming-job block border-b border-slate-100 bg-white px-4 py-2 last:border-b-0 active:bg-slate-50"
+      className="driver-home-upcoming-job block border-b border-[#ddd5c9] bg-[#fbf7f0] px-4 py-2 last:border-b-0 transition-colors active:bg-[#f3ede4]"
     >
       <div className="flex items-center gap-3">
         <div className="grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-1">
@@ -399,12 +399,12 @@ export function DriverHome({
                     {formatGroupDate(date)}
                   </h3>
 
-                  <span className="driver-upcoming-count rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-slate-500 shadow-sm">
+                  <span className="driver-upcoming-count rounded-full border border-[#e4dccf] bg-[#f6f0e7] px-2 py-0.5 text-[11px] font-bold text-slate-500">
                     {dateJobs.length}
                   </span>
                 </div>
 
-                <div className="driver-home-upcoming-group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div className="driver-home-upcoming-group overflow-hidden rounded-2xl border border-[#ddd5c9] bg-[#fbf7f0] shadow-[0_4px_14px_rgba(21,38,56,0.06)]">
                   {dateJobs.map((job) => (
                     <UpcomingJobRow
                       key={job.id}
@@ -419,7 +419,7 @@ export function DriverHome({
             ))}
           </div>
         ) : (
-          <p className="rounded-xl border border-dashed border-slate-300 bg-white/70 p-4 text-center text-sm text-slate-500">
+          <p className="rounded-xl border border-dashed border-[#d8d0c5] bg-[#f8f3eb] p-4 text-center text-sm text-slate-500">
             {labels.noUpcoming}
           </p>
         )}
