@@ -206,7 +206,7 @@ export function DriverProfilePage() {
       {error ? (
         <div
           role="alert"
-          className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-2.5 text-sm text-rose-800"
+          className="rounded-xl border border-[var(--driver-border)] bg-[var(--driver-surface-soft)] px-3 py-2.5 text-sm text-[var(--driver-text-muted)]"
         >
           {l.error}
           <button
@@ -221,14 +221,14 @@ export function DriverProfilePage() {
       {message ? (
         <div
           role="status"
-          className="driver-profile-toast fixed left-1/2 z-[70] -translate-x-1/2 rounded-full border border-emerald-200 bg-white px-4 py-2 text-sm font-semibold text-emerald-800 shadow-sm"
+          className="driver-profile-toast fixed left-1/2 z-[70] -translate-x-1/2 rounded-full border border-[var(--driver-border)] bg-[var(--driver-surface-soft)] px-4 py-2 text-sm font-semibold text-[var(--driver-text-muted)] shadow-sm"
         >
           ✓ {l.saved}
         </div>
       ) : null}
 
       {!profile ? (
-        <div className="driver-surface p-5 text-sm text-slate-500">
+        <div className="driver-surface p-5 text-sm text-[var(--driver-text-muted)]">
           {l.loading}
         </div>
       ) : (
@@ -242,20 +242,20 @@ export function DriverProfilePage() {
               />
 
               <div className="min-w-0 flex-1">
-                <p className="break-words text-xl font-bold text-[#152638]">
+                <p className="break-words text-xl font-bold text-[var(--driver-text)]">
                   {profile.displayName}
                 </p>
 
-                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--driver-text-muted)]">
                   <span>
                     {l.driver}{" "}
-                    <strong className="font-semibold text-[#152638]">
+                    <strong className="font-semibold text-[var(--driver-text)]">
                       {profile.driverId}
                     </strong>
                   </span>
                   <span>
                     {l.vehicle}{" "}
-                    <strong className="font-semibold text-[#152638]">
+                    <strong className="font-semibold text-[var(--driver-text)]">
                       {profile.vehicle || "—"}
                     </strong>
                   </span>
@@ -263,7 +263,7 @@ export function DriverProfilePage() {
               {!editing ? (
                 <button
                   type="button"
-                  className="mt-2 min-h-11 rounded-lg border border-[var(--driver-border)] bg-[#fcfbf8] px-3 text-xs font-semibold text-[#152638]"
+                  className="mt-2 min-h-11 rounded-lg border border-[var(--driver-border)] bg-[var(--driver-surface)] px-3 text-xs font-semibold text-[var(--driver-text)]"
                   onClick={openEditor}
                 >
                   {l.edit}
@@ -275,7 +275,7 @@ export function DriverProfilePage() {
             {editing ? (
               <form
                 ref={personalDetails}
-                className="border-t border-slate-100 bg-[#fffdf9] p-3"
+                className="border-t border-[var(--driver-border)] bg-[var(--driver-surface)] p-3"
                 onSubmit={(e) => {
                   e.preventDefault();
                   void request(
@@ -292,7 +292,7 @@ export function DriverProfilePage() {
                   );
                 }}
               >
-                <div className="flex items-center gap-3 rounded-xl bg-[#f8f5ef] p-3">
+                <div className="flex items-center gap-3 rounded-xl bg-[var(--driver-surface)] p-3">
                   <DriverAvatar
                     src={profile.avatarUrl}
                     name={profile.displayName}
@@ -300,7 +300,7 @@ export function DriverProfilePage() {
                   />
 
                   <div className="min-w-0 flex-1">
-                    <label className="inline-flex min-h-11 cursor-pointer items-center rounded-lg border border-[var(--driver-border)] bg-white px-3 text-sm font-semibold text-[#152638] hover:bg-slate-50 focus-within:outline focus-within:outline-2 focus-within:outline-[var(--driver-primary)]">
+                    <label className="inline-flex min-h-11 cursor-pointer items-center rounded-lg border border-[var(--driver-border)] bg-[var(--driver-surface-soft)] px-3 text-sm font-semibold text-[var(--driver-text)] hover:bg-[var(--driver-surface-soft)] focus-within:outline focus-within:outline-2 focus-within:outline-[var(--driver-primary)]">
                       {uploading ? l.photoUpdating : l.photo}
                       <input
                         aria-label={l.photo}
@@ -338,14 +338,14 @@ export function DriverProfilePage() {
                         }}
                       />
                     </label>
-                    <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                    <p className="mt-1 text-[11px] leading-4 text-[var(--driver-text-muted)]">
                       {l.photoHelp}
                     </p>
                   </div>
                 </div>
 
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <label className="block text-sm font-semibold text-[#152638]">
+                  <label className="block text-sm font-semibold text-[var(--driver-text)]">
                     {l.name}
                     <input
                       className={field}
@@ -357,7 +357,7 @@ export function DriverProfilePage() {
                     />
                   </label>
 
-                  <label className="block text-sm font-semibold text-[#152638]">
+                  <label className="block text-sm font-semibold text-[var(--driver-text)]">
                     {l.phone}
                     <input
                       type="tel"
@@ -375,7 +375,7 @@ export function DriverProfilePage() {
                     type="button"
                     onClick={cancelEditor}
                     disabled={busy}
-                    className="min-h-11 rounded-xl border border-[var(--driver-border)] bg-white px-4 text-sm font-bold text-[#152638] disabled:opacity-50"
+                    className="min-h-11 rounded-xl border border-[var(--driver-border)] bg-[var(--driver-surface-soft)] px-4 text-sm font-bold text-[var(--driver-text)] disabled:opacity-50"
                   >
                     {l.cancel}
                   </button>
@@ -392,13 +392,13 @@ export function DriverProfilePage() {
           </section>
 
           <div className="driver-information-group driver-surface overflow-hidden">
-            <label className="flex min-h-12 items-center justify-between gap-3 bg-white px-4">
-              <span className="text-sm font-semibold text-[#152638]">
+            <label className="flex min-h-12 items-center justify-between gap-3 bg-[var(--driver-surface-soft)] px-4">
+              <span className="text-sm font-semibold text-[var(--driver-text)]">
                 {l.language}
               </span>
               <select
                 aria-label={l.language}
-                className="min-h-11 max-w-[60%] cursor-pointer bg-transparent pl-2 text-right text-sm font-medium text-slate-500"
+                className="min-h-11 max-w-[60%] cursor-pointer bg-transparent pl-2 text-right text-sm font-medium text-[var(--driver-text-muted)]"
                 value={language}
                 onChange={(e) => setLanguage(e.target.value as "en" | "th")}
               >
@@ -408,8 +408,8 @@ export function DriverProfilePage() {
             </label>
 
             <DriverDisclosure title={l.officialDetails}>
-              <div className="border-t border-slate-100 px-4 pb-3">
-                <dl className="mt-1 divide-y divide-slate-100 text-sm">
+              <div className="border-t border-[var(--driver-border)] px-4 pb-3">
+                <dl className="mt-1 divide-y divide-[var(--driver-border)] text-sm">
                   {[
                     [l.official, profile.officialName],
                     [l.email, profile.email],
@@ -420,26 +420,26 @@ export function DriverProfilePage() {
                       key={label}
                       className="flex justify-between gap-3 py-2.5"
                     >
-                      <dt className="text-slate-500">{label}</dt>
-                      <dd className="max-w-[65%] break-all text-right font-semibold text-[#152638]">
+                      <dt className="text-[var(--driver-text-muted)]">{label}</dt>
+                      <dd className="max-w-[65%] break-all text-right font-semibold text-[var(--driver-text)]">
                         {value}
                       </dd>
                     </div>
                   ))}
                 </dl>
-                <p className="mt-2 text-xs leading-5 text-slate-500">
+                <p className="mt-2 text-xs leading-5 text-[var(--driver-text-muted)]">
                   {l.locked}
                 </p>
               </div>
             </DriverDisclosure>
 
             <DriverDisclosure title={l.password}>
-              <div className="border-t border-slate-100 px-4 pb-3">
+              <div className="border-t border-[var(--driver-border)] px-4 pb-3">
                 <form
                   className="mt-2 space-y-2.5"
                   onSubmit={(e) => void password(e)}
                 >
-                  <p className="text-xs leading-5 text-slate-500">
+                  <p className="text-xs leading-5 text-[var(--driver-text-muted)]">
                     {l.passwordHelp}
                   </p>
 
@@ -450,7 +450,7 @@ export function DriverProfilePage() {
                   ].map(([key, label, autocomplete]) => (
                     <label
                       key={key}
-                      className="block text-sm font-semibold text-[#152638]"
+                      className="block text-sm font-semibold text-[var(--driver-text)]"
                     >
                       {label}
                       <input

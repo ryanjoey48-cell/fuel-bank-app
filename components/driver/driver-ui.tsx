@@ -46,8 +46,8 @@ export function DriverStatusBadge({
     <span
       className={`driver-status-badge inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
         status === "completed"
-          ? "bg-emerald-50 text-emerald-800"
-          : "bg-slate-100 text-[#152638]"
+          ? "bg-[var(--driver-surface-soft)] text-[var(--driver-text-muted)]"
+          : "bg-[var(--driver-surface-soft)] text-[var(--driver-text)]"
       }`}
     >
       {driverStatusCopy[language][status]}
@@ -106,7 +106,7 @@ export function DriverAvatar({
     <span
       role="img"
       aria-label={name}
-      className={`relative inline-flex shrink-0 items-center justify-center overflow-hidden bg-[#e8edf1] font-bold text-[#152638] ${className}`}
+      className={`relative inline-flex shrink-0 items-center justify-center overflow-hidden bg-[var(--driver-surface)] font-bold text-[var(--driver-text)] ${className}`}
     >
       <span aria-hidden="true">{initials}</span>
 

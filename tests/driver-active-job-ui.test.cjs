@@ -26,9 +26,10 @@ test('intent selections preserve all five existing Maps routes and verified plac
   const selected = new URL(selectedDriverRoute(urls,'depot','pickup',false));
   assert.equal(selected.searchParams.get('origin'),'13,100');
   assert.equal(selected.searchParams.get('origin_place_id'),'depot-id');
-  assert.equal(selected.searchParams.get('destination'),'13.1,100.1');
-  assert.equal(selected.searchParams.get('destination_place_id'),'pickup-id');
-  assert.equal(selected.searchParams.has('waypoints'),false);
+  assert.equal(selected.searchParams.get('destination'),'13.2,100.2');
+  assert.equal(selected.searchParams.get('destination_place_id'),'delivery-id');
+  assert.equal(selected.searchParams.get('waypoints'),'13.1,100.1');
+  assert.equal(selected.searchParams.get('waypoint_place_ids'),'pickup-id');
   assert.equal(new URL(selectedDriverRoute(urls,'current','delivery',false)).searchParams.has('origin'),false);
 });
 test('missing routes cannot invent a destination or loop pickup back to itself', () => {

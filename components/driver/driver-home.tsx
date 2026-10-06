@@ -85,7 +85,7 @@ function CurrentJobCard({
   return (
     <Link
       href={`/driver/jobs/${job.id}`}
-      className="driver-home-next-job block overflow-hidden rounded-[26px] border border-[#173a58] bg-[#102a43] text-white shadow-[0_10px_28px_rgba(16,42,67,0.16)] transition active:scale-[0.995]"
+      className="driver-home-next-job block overflow-hidden rounded-[26px] border border-[var(--driver-border)] bg-[var(--driver-surface)] text-white shadow-[0_10px_28px_rgba(16,42,67,0.16)] transition active:scale-[0.995]"
     >
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-1.5">
         <p className="driver-eyebrow driver-eyebrow-on-navy">
@@ -94,12 +94,12 @@ function CurrentJobCard({
         <DriverStatusBadge language={language} status={status} />
       </div>
 
-      <div className="px-4 py-3.5">
-        <h2 className="break-words text-[29px] font-black leading-none tracking-[-0.035em] text-white">
+      <div className="px-4 py-[18px]">
+        <h2 className="break-words text-[32px] font-black leading-none tracking-[-0.035em] text-white">
           {job.clientName || job.jobOrderNumber || labels.job}
         </h2>
 
-        <div className="driver-home-route mt-2.5 grid grid-cols-[minmax(0,1fr)_28px_minmax(0,1fr)] items-center gap-3 rounded-2xl border border-white/10 bg-[#214d70] px-3.5 py-2.5 shadow-inner shadow-black/5">
+        <div className="driver-home-route mt-3.5 grid grid-cols-[minmax(0,1fr)_28px_minmax(0,1fr)] items-center gap-3 rounded-2xl border border-white/10 bg-[var(--driver-surface)] px-3.5 py-3.5 shadow-inner shadow-black/5">
           <div className="min-w-0">
             <p className="driver-eyebrow driver-eyebrow-on-navy">
               {labels.pickup}
@@ -121,7 +121,7 @@ function CurrentJobCard({
           </div>
         </div>
 
-        <div className="driver-job-metadata mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-white/82">
+        <div className="driver-job-metadata mt-3.5 flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-white/82">
           <span className="inline-flex items-center gap-1.5 font-medium">
             <CalendarDays className="h-4 w-4 shrink-0 text-white/85" />
             {formattedDate}
@@ -163,31 +163,31 @@ function UpcomingJobRow({
   return (
     <Link
       href={`/driver/jobs/${job.id}`}
-      className="driver-home-upcoming-job block border-b border-[#ddd5c9] bg-[#f3ede3] px-4 py-2 last:border-b-0 transition-colors active:bg-[#e9e0d4]"
+      className="driver-home-upcoming-job block border-b border-[var(--driver-border)] bg-[var(--driver-surface)] px-4 py-2 last:border-b-0 transition-colors active:bg-[var(--driver-surface)]"
     >
       <div className="flex items-center gap-3">
         <div className="grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-1">
-          <div className="flex items-center gap-2 text-xs text-slate-500">
+          <div className="flex items-center gap-2 text-xs text-[var(--driver-text-muted)]">
             <Clock3 className="h-3.5 w-3.5 shrink-0" />
             <span className="font-semibold">
               {formatTime(job.pickupTime, labels.timePending)}
             </span>
           </div>
 
-          <p className="break-words font-bold leading-5 text-[#152638]">
+          <p className="break-words font-bold leading-5 text-[var(--driver-text)]">
             {job.clientName || job.jobOrderNumber || labels.job}
           </p>
 
-          <p className="col-span-2 break-words text-[13px] leading-5 text-slate-600">
+          <p className="col-span-2 break-words text-[13px] leading-5 text-[var(--driver-text-muted)]">
             {job.pickupName || "—"}
-            <span className="px-1.5 text-slate-400">→</span>
+            <span className="px-1.5 text-[var(--driver-text-muted)]">→</span>
             {job.dropoffName || "—"}
           </p>
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5">
           <DriverStatusBadge language={language} status={status} />
-          <ChevronRight className="h-5 w-5 text-slate-300" />
+          <ChevronRight className="h-5 w-5 text-[var(--driver-text-muted)]" />
         </div>
       </div>
     </Link>
@@ -309,7 +309,7 @@ export function DriverHome({
 
   return (
     <main className="driver-home-restored mx-auto w-full max-w-3xl px-3 pb-3 pt-2 sm:px-6 sm:py-5">
-      <section className="driver-home-banner relative min-h-[136px] overflow-hidden rounded-[24px] border border-[#d8d0c5] bg-[#f6f0e6] shadow-sm sm:min-h-[176px]">
+      <section className="driver-home-banner relative min-h-[112px] overflow-hidden rounded-[24px] border border-[var(--driver-border)] bg-[var(--driver-surface)] shadow-sm sm:min-h-[144px]">
         <Image
           src="/driver-hero-bg.png"
           alt=""
@@ -323,27 +323,27 @@ export function DriverHome({
 
         <div
           aria-hidden="true"
-          className="absolute inset-0 bg-[linear-gradient(90deg,rgba(248,241,231,0.88)_0%,rgba(248,241,231,0.78)_30%,rgba(248,241,231,0.40)_56%,rgba(248,241,231,0.16)_100%)]"
+          className="absolute inset-0 bg-[linear-gradient(90deg,rgba(11,15,20,0.92)_0%,rgba(11,15,20,0.80)_30%,rgba(11,15,20,0.44)_56%,rgba(11,15,20,0.20)_100%)]"
         />
 
-        <div className="relative z-10 min-h-[134px] px-4 py-4 sm:min-h-[174px] sm:px-5">
+        <div className="relative z-10 min-h-[110px] px-4 py-3 sm:min-h-[142px] sm:px-5">
           <div className="max-w-[calc(100%-128px)]">
-            <p className="text-[15px] font-medium text-slate-600">
+            <p className="text-[15px] font-medium text-[var(--driver-text-muted)]">
               {labels.hello},
             </p>
 
-            <h1 className="mt-1 break-words text-[28px] font-semibold leading-8 tracking-[-0.03em] text-[#152638] sm:text-[30px]">
+            <h1 className="mt-1 break-words text-[28px] font-semibold leading-8 tracking-[-0.03em] text-[var(--driver-text)] sm:text-[30px]">
               {profile?.displayName || driverName}
             </h1>
 
             {remainingToday.length > 0 ? (
-              <p className="mt-2 text-[13px] font-semibold text-slate-700">
-                <strong className="text-[#152638]">{remainingToday.length}</strong>{" "}
+              <p className="mt-2 text-[13px] font-semibold text-[var(--driver-text-muted)]">
+                <strong className="text-[var(--driver-text)]">{remainingToday.length}</strong>{" "}
                 {remainingLabel}
               </p>
             ) : (
               <div className="mt-2 text-sm">
-                <p className="font-medium text-emerald-700">
+                <p className="font-medium text-[var(--driver-text-muted)]">
                   {labels.noMoreToday}
                 </p>
 
@@ -352,15 +352,15 @@ export function DriverHome({
           </div>
 
           {vehicleRegistration ? (
-            <div className="driver-home-vehicle-badge absolute right-4 top-4 w-[116px] rounded-xl border border-[#ded8cd] bg-white/90 px-2 py-2 shadow-sm">
+            <div className="driver-home-vehicle-badge absolute right-4 top-4 w-[116px] rounded-xl border border-[var(--driver-border)] bg-[var(--driver-surface-soft)] px-2 py-2 shadow-sm">
               <div className="flex items-start gap-2">
-                  <Truck aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-[#152638]" />
+                  <Truck aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-[var(--driver-text)]" />
                 <div className="min-w-0">
-                  <p className="break-words text-sm font-semibold leading-5 text-[#152638]">
+                  <p className="break-words text-sm font-semibold leading-5 text-[var(--driver-text)]">
                     {vehicleRegistration}
                   </p>
                   {vehicleType ? (
-                    <p className="mt-1 line-clamp-2 text-[11px] font-medium leading-4 text-slate-500">
+                    <p className="mt-1 line-clamp-2 text-[11px] font-medium leading-4 text-[var(--driver-text-muted)]">
                       {getPortalVehicleTypeLabel(vehicleType, language)}
                     </p>
                   ) : null}
@@ -384,8 +384,8 @@ export function DriverHome({
 
       <section className="mt-4 pb-6">
         <div className="mb-2.5 flex items-center gap-2">
-          <CalendarDays className="h-5 w-5 text-slate-500" />
-          <h2 className="text-[16px] font-medium text-[#3c4050]">
+          <CalendarDays className="h-5 w-5 text-[var(--driver-text-muted)]" />
+          <h2 className="text-[16px] font-medium text-[var(--driver-text)]">
             {labels.upcoming}
           </h2>
         </div>
@@ -395,16 +395,16 @@ export function DriverHome({
             {upcomingGroups.map(([date, dateJobs]) => (
               <div key={date}>
                 <div className="mb-1.5 flex items-center justify-between">
-                  <h3 className="text-sm font-black text-[#152638]">
+                  <h3 className="text-sm font-black text-[var(--driver-text)]">
                     {formatGroupDate(date)}
                   </h3>
 
-                  <span className="driver-upcoming-count rounded-full border border-[#e4dccf] bg-[#efe7dc] px-2 py-0.5 text-[11px] font-bold text-slate-500">
+                  <span className="driver-upcoming-count rounded-full border border-[var(--driver-border)] bg-[var(--driver-surface)] px-2 py-0.5 text-[11px] font-bold text-[var(--driver-text-muted)]">
                     {dateJobs.length}
                   </span>
                 </div>
 
-                <div className="driver-home-upcoming-group overflow-hidden rounded-2xl border border-[#ddd5c9] bg-[#f3ede3] shadow-[0_4px_14px_rgba(21,38,56,0.06)]">
+                <div className="driver-home-upcoming-group overflow-hidden rounded-2xl border border-[var(--driver-border)] bg-[var(--driver-surface)] shadow-[0_4px_14px_rgba(21,38,56,0.06)]">
                   {dateJobs.map((job) => (
                     <UpcomingJobRow
                       key={job.id}
@@ -419,7 +419,7 @@ export function DriverHome({
             ))}
           </div>
         ) : (
-          <p className="rounded-xl border border-dashed border-[#d8d0c5] bg-[#efe8df] p-4 text-center text-sm text-slate-500">
+          <p className="rounded-xl border border-dashed border-[var(--driver-border)] bg-[var(--driver-surface)] p-4 text-center text-sm text-[var(--driver-text-muted)]">
             {labels.noUpcoming}
           </p>
         )}

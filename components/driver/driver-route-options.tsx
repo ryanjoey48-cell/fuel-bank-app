@@ -32,15 +32,7 @@ const copy = {
 export function selectedDriverRoute(urls: RouteUrls, start: RouteStart, destination: RouteDestination, viaPickup: boolean) {
   if (start === "pickup") return destination === "delivery" ? urls.pickupToDropoff : null;
   if (start === "current") return destination === "pickup" ? urls.pickup : viaPickup ? urls.current : urls.delivery;
-  if (destination === "delivery") return urls.depot;
-  if (!urls.depot || !urls.pickup) return null;
-  const route = new URL(urls.pickup);
-  const depot = new URL(urls.depot);
-  for (const key of ["origin", "origin_place_id"]) {
-    const value = depot.searchParams.get(key);
-    if (value) route.searchParams.set(key, value);
-  }
-  return route.toString();
+  return urls.depot;
 }
 
 export function DriverRouteOptions({ language, pickupName, deliveryName, defaultDestination, urls }: {
@@ -53,16 +45,13 @@ export function DriverRouteOptions({ language, pickupName, deliveryName, default
   const l = copy[language];
   const pickup = pickupName || l.pickup;
   const delivery = deliveryName || l.delivery;
-  const currentDestination = defaultDestination === "pickup" ? pickup : delivery;
 
   const routes = [
     {
       id: "depot",
       title: l.depotTo,
-      detail: `EES → ${currentDestination}`,
-      href: defaultDestination === "pickup"
-        ? selectedDriverRoute(urls, "depot", "pickup", false)
-        : urls.depot,
+      detail: `EES Depot → ${pickup} → ${delivery}`,
+      href: urls.depot,
       Icon: Warehouse
     },
     {
@@ -83,7 +72,7 @@ export function DriverRouteOptions({ language, pickupName, deliveryName, default
 
   return (
     <DriverDisclosure title={l.more} compact>
-      <div className="border-t border-[#ddd5c9] bg-[#f1ebe2] px-1 py-1">
+      <div className="border-t border-[var(--driver-border)] bg-[var(--driver-surface)] px-1 py-1">
         {routes.length ? (
           <div className="divide-y divide-[var(--driver-border)]">
             {routes.map(({ id, title, detail, href, Icon }) => (
@@ -92,21 +81,21 @@ export function DriverRouteOptions({ language, pickupName, deliveryName, default
                 href={href!}
                 target="_blank"
                 rel="noreferrer"
-                className="group flex min-h-14 items-center gap-3 rounded-xl px-2 py-2.5 text-[#152638] transition-colors hover:bg-[#e5ebef] active:bg-[#d8e1e7]"
+                className="group flex min-h-14 items-center gap-3 rounded-xl px-2 py-2.5 text-[var(--driver-text)] transition-colors hover:bg-[var(--driver-surface)] active:bg-[var(--driver-surface)]"
               >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#d9e0e6] bg-[#dde7ee] text-slate-600">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--driver-border)] bg-[var(--driver-surface)] text-[var(--driver-text-muted)]">
                   <Icon aria-hidden="true" className="h-4 w-4" />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-semibold leading-5">{title}</span>
-                  <span className="mt-0.5 block truncate text-xs text-slate-500">{detail}</span>
+                  <span className="mt-0.5 block truncate text-xs text-[var(--driver-text-muted)]">{detail}</span>
                 </span>
-                <ExternalLink aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-400" />
+                <ExternalLink aria-hidden="true" className="h-4 w-4 shrink-0 text-[var(--driver-text-muted)]" />
               </a>
             ))}
           </div>
         ) : (
-          <p role="status" className="px-2 py-3 text-xs text-slate-500">{l.missing}</p>
+          <p role="status" className="px-2 py-3 text-xs text-[var(--driver-text-muted)]">{l.missing}</p>
         )}
       </div>
     </DriverDisclosure>

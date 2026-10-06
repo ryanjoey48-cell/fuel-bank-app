@@ -73,26 +73,26 @@ export function DriverLoginForm() {
 
   return (
     <main className="flex min-h-[100dvh] items-center justify-center bg-[var(--app-background)] px-4 py-8">
-      <section className="w-full max-w-md rounded-[1.5rem] border border-slate-200 bg-[#fffdf8] p-5 shadow-[0_24px_70px_rgba(57,40,24,0.13)] sm:p-7">
+      <section className="w-full max-w-md rounded-[1.5rem] border border-[var(--driver-border)] bg-[var(--driver-surface)] p-5 shadow-[0_24px_70px_rgba(57,40,24,0.13)] sm:p-7">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
-            <span className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-[#211336] shadow-sm">
+            <span className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-[var(--driver-surface)] shadow-sm">
               <EESLogo alt="EES" size={56} className="h-14 w-14 max-w-none scale-[1.8]" priority />
             </span>
             <div>
-              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-brand-700">{labels.eyebrow}</p>
-              <p className="mt-1 text-xs font-semibold text-slate-500">Logistics Control</p>
+              <p className="text-[11px] font-black uppercase tracking-[0.18em] driver-accent">{labels.eyebrow}</p>
+              <p className="mt-1 text-xs font-semibold text-[var(--driver-text-muted)]">Logistics Control</p>
             </div>
           </div>
           <LanguageSwitcher compact />
         </div>
 
         <div className="mt-8">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-50 text-brand-700">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[var(--driver-surface-soft)] driver-accent">
             <LockKeyhole className="h-5 w-5" />
           </span>
-          <h1 className="mt-4 text-2xl font-black tracking-[-0.035em] text-slate-950">{labels.title}</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-600">{labels.description}</p>
+          <h1 className="mt-4 text-2xl font-black tracking-[-0.035em] text-[var(--driver-text-muted)]">{labels.title}</h1>
+          <p className="mt-2 text-sm leading-6 text-[var(--driver-text-muted)]">{labels.description}</p>
         </div>
 
         <form className="mt-7 space-y-5" onSubmit={submit}>
@@ -124,12 +124,12 @@ export function DriverLoginForm() {
           </label>
 
           {error ? (
-            <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-3 text-sm font-semibold text-rose-700">
+            <p role="alert" className="rounded-xl border border-[var(--driver-border)] bg-[var(--driver-surface-soft)] px-3.5 py-3 text-sm font-semibold text-[var(--driver-text-muted)]">
               {error}
             </p>
           ) : null}
 
-          <button type="submit" disabled={loading} className="btn-primary w-full gap-2 disabled:cursor-not-allowed disabled:opacity-60">
+          <button type="submit" disabled={loading} className="driver-primary-action flex min-h-11 w-full items-center justify-center gap-2 rounded-xl font-bold disabled:cursor-not-allowed disabled:opacity-60">
             {loading ? labels.loading : labels.submit}
             {!loading ? <ArrowRight className="h-4 w-4" /> : null}
           </button>

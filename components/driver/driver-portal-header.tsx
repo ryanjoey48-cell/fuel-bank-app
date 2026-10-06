@@ -70,10 +70,10 @@ export function DriverPortalHeader({ driverName }: { driverName: string }) {
 
   return (
     <div className="driver-header-slot">
-      <header className="driver-portal-header fixed inset-x-0 top-0 z-50 border-b border-[var(--driver-border)] bg-[#fffbf2]/95 backdrop-blur">
+      <header className="driver-portal-header fixed inset-x-0 top-0 z-50 border-b border-[var(--driver-border)] bg-[var(--driver-surface)] backdrop-blur">
         <div className="mx-auto flex min-h-10 max-w-3xl items-center gap-1.5 px-3 sm:min-h-[52px] sm:px-4 lg:max-w-[1152px]">
           <div className="flex min-w-0 flex-1 items-center gap-1.5">
-            <span className="driver-header-logo relative h-8 w-8 shrink-0 overflow-hidden rounded-lg border border-[#d8d0c4] bg-[#efe7da] sm:h-9 sm:w-10">
+            <span className="driver-header-logo relative h-8 w-8 shrink-0 overflow-hidden rounded-lg border border-[var(--driver-border)] bg-[var(--driver-surface)] sm:h-9 sm:w-10">
               <Image
                 src="/ees-logo.png"
                 alt="EES"
@@ -86,10 +86,10 @@ export function DriverPortalHeader({ driverName }: { driverName: string }) {
             </span>
 
             <div className="min-w-0 flex-1">
-              <p className="whitespace-nowrap text-[7px] font-bold uppercase tracking-[0.16em] text-slate-400 sm:text-[8px]">
+              <p className="whitespace-nowrap text-[7px] font-bold uppercase tracking-[0.16em] text-[var(--driver-text-muted)] sm:text-[8px]">
                 EES Driver
               </p>
-              <p className="truncate text-[12px] font-bold leading-[15px] text-[#152638] sm:text-[13px]">
+              <p className="truncate text-[12px] font-bold leading-[15px] text-[var(--driver-text)] sm:text-[13px]">
                 {profile?.displayName || driverName}
               </p>
             </div>
@@ -108,7 +108,7 @@ export function DriverPortalHeader({ driverName }: { driverName: string }) {
               type="button"
               onClick={() => void signOut()}
               disabled={signingOut}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#d8d0c4] bg-[#f8f2e9] text-slate-500 transition-colors active:bg-[#eee6dc] disabled:opacity-50"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--driver-border)] bg-[var(--driver-surface)] text-[var(--driver-text-muted)] transition-colors active:bg-[var(--driver-surface)] disabled:opacity-50"
               aria-label={language === "th" ? "ออกจากระบบ" : "Sign out"}
             >
               <LogOut className="h-3.5 w-3.5" />
