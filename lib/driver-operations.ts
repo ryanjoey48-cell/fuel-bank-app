@@ -6,10 +6,24 @@ export const statusCopy = {
   en: { ready: "Ready", pickup: "At pickup", en_route: "En route", delivery: "At delivery", completed: "Completed" },
   th: { ready: "พร้อม", pickup: "ถึงจุดรับ", en_route: "กำลังเดินทาง", delivery: "ถึงจุดส่ง", completed: "จบงานแล้ว" }
 };
+const progressStatus: Record<DriverJobEventType, OperationStatus> = {
+  pickup_arrived: "pickup", pickup_departed: "en_route", delivery_arrived: "delivery", job_completed: "completed"
+};
+/** The append-only workflow is ordered by event type, never by assignment or clock skew. */
+export function normalizeDriverJobProgress<T extends Pick<DriverJobEvent, "eventType" | "eventTime">>(events: readonly T[]) {
+  const ordered = [...events].sort((a, b) => a.eventTime.localeCompare(b.eventTime));
+  let stage = 0;
+  let lastEvent: T | null = null;
+  for (const event of ordered) {
+    const status = progressStatus[event.eventType];
+    if (typeof status !== "string") throw new Error("Invalid driver progress event.");
+    const next = operationStatuses.indexOf(status);
+    if (next >= stage) { stage = next; lastEvent = event; }
+  }
+  return { events: ordered, stage, status: operationStatuses[stage], completed: stage === 4, lastEvent };
+}
 export function jobStatus(events: Pick<DriverJobEvent, "eventType" | "eventTime">[]): OperationStatus {
-  const latest = [...events].sort((a, b) => a.eventTime.localeCompare(b.eventTime)).at(-1);
-  const statuses: Record<DriverJobEventType, OperationStatus> = { pickup_arrived: "pickup", pickup_departed: "en_route", delivery_arrived: "delivery", job_completed: "completed" };
-  return latest ? statuses[latest.eventType] : "ready";
+  return normalizeDriverJobProgress(events).status;
 }
 export type DriverWork = { job: DriverPortalJob; events: DriverJobEvent[] };
 /** Booking dates are Bangkok calendar keys; compare them without UTC conversion. */

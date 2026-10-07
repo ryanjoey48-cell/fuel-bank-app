@@ -58,7 +58,7 @@ for (const language of ['en', 'th']) for (let stage = 0; stage <= 4; stage++) te
   const saved = portal.DRIVER_JOB_EVENT_TYPES.slice(0, stage).map((eventType, i) => ({ eventType, eventTime: `2026-10-06T07:${53+i}:00Z`, latitude: 13.1, longitude: 100.1 }));
   const states = [saved, false, false, false, null, null, null, false];
   const hooks = { ...React, useState: initial => [index < states.length ? states[index++] : initial, () => {}], useEffect() {}, useCallback: fn => fn, useRef: current => ({ current }) };
-  const { DriverJobDetail } = load('components/driver/driver-job-detail.tsx', { ...languageDeps(language), react: hooks, '@/lib/driver-portal': portal, '@/lib/driver-vehicle-types': components['@/lib/driver-vehicle-types'] });
+  const { DriverJobDetail } = load('components/driver/driver-job-detail.tsx', { ...languageDeps(language), react: hooks, '@/lib/driver-operations': ops, 'next/navigation': { useRouter: () => ({ refresh() {} }) }, '@/lib/driver-portal': portal, '@/lib/driver-vehicle-types': components['@/lib/driver-vehicle-types'] });
   const html = renderToStaticMarkup(DriverJobDetail({ job: jobs[0], depot: { name: 'EES Depot', address: 'Depot address' } }));
   assert.equal((html.match(/id="job-route-options"/g)||[]).length,1); assert.ok(!html.includes('<details open')); assert.ok(!html.includes('grid-cols-3'));
   if(stage===4) { assert.ok(html.includes('dateTime="2026-10-06T07:56:00Z"')); assert.ok(html.includes('GPS'));assert.ok(html.includes(language==='en'?'Job completed':'จบงานแล้ว'));assert.ok(html.includes('driver-completed-back'));assert.ok(!html.includes('disabled=""'));assert.equal((html.match(/href="\/driver"/g)||[]).length,2); }

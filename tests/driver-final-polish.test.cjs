@@ -24,7 +24,7 @@ function render(language, stage, extra = {}) {
   let index = 0;
   const state = [events, false, false, false, null, null, null, false];
   const hooks = { ...React, useState: initial => [index < state.length ? state[index++] : initial, () => {}], useEffect: () => {}, useCallback: fn => fn, useRef: value => ({ current: value }) };
-  const { DriverJobDetail } = load('components/driver/driver-job-detail.tsx', { react: hooks, 'react/jsx-runtime': runtime, 'lucide-react': require('lucide-react'), 'next/link': ({ children, ...props }) => React.createElement('a', props, children), '@/lib/language-provider': { useLanguage: () => ({ language }) }, '@/lib/driver-portal': portal, '@/lib/driver-vehicle-types': vehicles });
+  const { DriverJobDetail } = load('components/driver/driver-job-detail.tsx', { react: hooks, 'react/jsx-runtime': runtime, 'lucide-react': require('lucide-react'), 'next/link': ({ children, ...props }) => React.createElement('a', props, children), '@/lib/language-provider': { useLanguage: () => ({ language }) }, '@/lib/driver-portal': portal, '@/lib/driver-operations': load('lib/driver-operations.ts'), 'next/navigation': { useRouter: () => ({ refresh() {} }) }, '@/lib/driver-vehicle-types': vehicles });
   return renderToStaticMarkup(DriverJobDetail({ job: { ...job, ...extra }, depot: { name: 'Depot', address: 'Bangkok' } }));
 }
 for (const language of ['en', 'th']) for (let stage = 0; stage <= 4; stage++) test(`workflow polish retains stage, recorded times, full route names and collapsed utilities: ${language} ${stage}`, () => {

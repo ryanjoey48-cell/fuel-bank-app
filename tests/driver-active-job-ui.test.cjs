@@ -42,7 +42,7 @@ function render(language, stage, overrides = {}) {
   for (const [key, value] of Object.entries(overrides)) states[Number(key)] = value;
   let index = 0;
   const hooks = { ...React, useState(initial) { const i = index++; return [i in states ? states[i] : initial, value => { states[i] = typeof value === 'function' ? value(states[i]) : value; }]; }, useEffect() {}, useCallback: fn => fn, useRef: value => ({ current: value }) };
-  const { DriverJobDetail } = load('components/driver/driver-job-detail.tsx', { react: hooks, 'react/jsx-runtime': runtime, 'lucide-react': require('lucide-react'), 'next/link': ({ children, ...props }) => React.createElement('a', props, children), '@/lib/language-provider': { useLanguage: () => ({ language }) }, '@/lib/driver-portal': portal, '@/lib/driver-vehicle-types': vehicles });
+  const { DriverJobDetail } = load('components/driver/driver-job-detail.tsx', { react: hooks, 'react/jsx-runtime': runtime, 'lucide-react': require('lucide-react'), 'next/link': ({ children, ...props }) => React.createElement('a', props, children), '@/lib/language-provider': { useLanguage: () => ({ language }) }, '@/lib/driver-portal': portal, '@/lib/driver-operations': load('lib/driver-operations.ts'), 'next/navigation': { useRouter: () => ({ refresh() {} }) }, '@/lib/driver-vehicle-types': vehicles });
   const tree = DriverJobDetail({ job, depot });
   return { tree, states, html: renderToStaticMarkup(tree) };
 }

@@ -14,6 +14,7 @@ import {
 import { DriverDisclosure } from "./driver-disclosure";
 import { DriverRouteOptions } from "./driver-route-options";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useLanguage } from "@/lib/language-provider";
 import {
   buildDriverDirectionsUrl,
@@ -22,6 +23,7 @@ import {
   type DriverPortalJob,
   type DriverRouteLocation
 } from "@/lib/driver-portal";
+import { normalizeDriverJobProgress } from "@/lib/driver-operations";
 import { getPortalVehicleTypeLabel } from "@/lib/driver-vehicle-types";
 
 // Existing Operations contact; no dynamic contact is supplied by the driver job model.
@@ -234,15 +236,19 @@ function CompletionConfirmation({
 
 export function DriverJobDetail({
   job,
-  depot
+  depot,
+  initialEvents
 }: {
   job: DriverPortalJob;
   depot: DriverRouteLocation;
+  initialEvents?: DriverJobEvent[];
 }) {
   const { language } = useLanguage();
   const labels = copy[language];
-  const [events, setEvents] = useState<DriverJobEvent[]>([]);
-  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  const initialProgress = normalizeDriverJobProgress(initialEvents ?? []);
+  const [events, setEvents] = useState<DriverJobEvent[]>(initialEvents ?? []);
+  const [loading, setLoading] = useState(initialEvents === undefined || !initialProgress.completed);
   const [syncing, setSyncing] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -251,14 +257,14 @@ export function DriverJobDetail({
   const [confirmComplete, setConfirmComplete] = useState(false);
   const busy = useRef(false);
   const generation = useRef(0);
-  const progressLoaded = useRef(false);
+  const progressLoaded = useRef(initialEvents !== undefined);
+  const confirmedStage = useRef(initialProgress.stage);
   const endpoint = `/api/driver/jobs/${encodeURIComponent(job.id)}/events`;
 
   const load = useCallback(async (silent = false) => {
     const id = ++generation.current;
     if (silent) setSyncing(true);
-    else setLoading(true);
-    setLoadError(false);
+    if (!silent || !progressLoaded.current) setLoading(true);
 
     try {
       // The timestamp plus no-store prevents iOS/PWA/WebKit from reusing an old GET response.
@@ -269,14 +275,18 @@ export function DriverJobDetail({
         headers: { "Cache-Control": "no-cache", Pragma: "no-cache" }
       });
       const payload = await response.json();
-      if (!response.ok || !Array.isArray(payload.events)) throw new Error("Progress unavailable");
+      if (!response.ok || !Array.isArray(payload.events) || payload.events.some((event: DriverJobEvent) => !event || !Number.isFinite(Date.parse(event.eventTime)))) throw new Error("Progress unavailable");
+      const progress = normalizeDriverJobProgress<DriverJobEvent>(payload.events);
+      if (progress.stage < confirmedStage.current) throw new Error("Progress read is older than the confirmed job state.");
       if (id === generation.current) {
+        confirmedStage.current = progress.stage;
         progressLoaded.current = true;
-        setEvents(payload.events);
+        setEvents(progress.events);
+        setLoadError(false);
         setSaveError(null);
       }
     } catch {
-      if (id === generation.current && (!silent || !progressLoaded.current)) setLoadError(true);
+      if (id === generation.current && (!progressLoaded.current || confirmedStage.current < 4)) setLoadError(true);
     } finally {
       if (id === generation.current) {
         // A page-show/focus refresh may supersede the initial read. The latest
@@ -289,8 +299,10 @@ export function DriverJobDetail({
 
   useEffect(() => {
     const counter = generation;
-    progressLoaded.current = false;
-    void load();
+    progressLoaded.current = initialEvents !== undefined;
+    // Fresh server-resolved completion is terminal and needs no hydration read.
+    // Non-terminal snapshots are checked before exposing workflow actions.
+    if (!normalizeDriverJobProgress(initialEvents ?? []).completed) void load(initialEvents !== undefined);
 
     const sync = () => void load(true);
     const onVisibilityChange = () => {
@@ -307,7 +319,7 @@ export function DriverJobDetail({
       window.removeEventListener("pageshow", sync);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [load]);
+  }, [load, initialEvents]);
 
   useEffect(() => {
     if (!feedback) return;
@@ -315,7 +327,8 @@ export function DriverJobDetail({
     return () => window.clearTimeout(timer);
   }, [feedback]);
 
-  const stage = Math.min(events.length, 4);
+  const progress = normalizeDriverJobProgress(events);
+  const stage = progress.stage;
 
   const save = async () => {
     if (busy.current || loading || loadError || stage >= 4) return;
@@ -349,9 +362,12 @@ export function DriverJobDetail({
       }
 
       // Optimistically advance, then immediately reconcile with the authoritative server state.
+      confirmedStage.current = Math.max(confirmedStage.current, normalizeDriverJobProgress([payload.event as DriverJobEvent]).stage);
+      progressLoaded.current = true;
       setEvents((current) => [...current, payload.event]);
       setFeedback(location.latitude === null ? "locationMissing" : "saved");
       await load(true);
+      if (payload.event.eventType === "job_completed") router.refresh();
     } catch (error) {
       // A 409 normally means another device already advanced the job. Re-sync first.
       await load(true);
@@ -391,7 +407,7 @@ export function DriverJobDetail({
   const destinationAddress = destinationIsPickup ? job.pickupAddress : job.dropoffAddress;
   const navigationUrl = destinationIsPickup ? pickupUrl : deliveryUrl;
   const actionContext = [labels.whenYouArrive, labels.whenReadyToLeave, labels.atDelivery, labels.finishJob][stage];
-  const lastEvent = events[events.length - 1];
+  const lastEvent = progress.lastEvent;
 
   const progressStrip = (
     <section aria-labelledby="job-progress" className="driver-job-progress rounded-xl bg-[var(--driver-card)] px-2 py-2">

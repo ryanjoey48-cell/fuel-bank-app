@@ -42,7 +42,7 @@ test('detail places next action before route and preserves sequential event butt
       global.fetch = async (url, init) => { calls.push({ url, init }); return { ok: true, json: async () => ({ event: { eventType: portal.DRIVER_JOB_EVENT_TYPES[stage], eventTime: '2026-10-02T04:00:00Z' } }) }; };
       const { DriverJobDetail } = load('components/driver/driver-job-detail.tsx', {
         react: h.react, 'react/jsx-runtime': runtime, 'lucide-react': icons,
-        'next/link': ({ children, ...props }) => React.createElement('a', props, children),
+        '@/lib/driver-operations': ops, 'next/navigation': { useRouter: () => ({ refresh() {} }) }, 'next/link': ({ children, ...props }) => React.createElement('a', props, children),
         '@/lib/language-provider': { useLanguage: () => ({ language: 'en' }) },
         '@/lib/driver-portal': portal, '@/lib/driver-vehicle-types': vehicleLabels
       });
