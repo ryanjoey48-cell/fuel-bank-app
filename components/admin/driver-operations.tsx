@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import {
   Activity,
@@ -239,6 +238,11 @@ function statusStyle(status: OperationStatus) {
   }
 }
 
+function driverInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return (parts.length > 1 ? `${parts[0][0]}${parts[parts.length - 1][0]}` : parts[0]?.slice(0, 2) || "?").toUpperCase();
+}
+
 export function DriverOperationsPage() {
   const { can } = useAccountAccess();
   const allowed = can("admin:user_management");
@@ -377,10 +381,10 @@ export function DriverOperationsPage() {
   }
 
   return (
-    <main className="driver-operations mx-auto w-full max-w-[1700px] p-0 sm:p-6 lg:p-8">
+    <main className="driver-operations mx-auto w-full max-w-[1580px] px-3 pb-6 pt-3 sm:px-5 sm:py-5 lg:px-6">
       {/* PAGE HEADER */}
-      <section className="operations-header overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm">
-        <div className="px-5 py-5 sm:px-6">
+      <section className="operations-header overflow-hidden rounded-2xl border border-[#e6ddd0] bg-[linear-gradient(135deg,#fffdf9_0%,#fbf7f1_62%,#f4eef9_100%)] shadow-[0_14px_34px_rgba(74,43,86,0.07)] sm:rounded-[1.35rem]">
+        <div className="px-4 py-3.5 sm:px-5 sm:py-4 lg:px-6">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
             <div>
               <div className="flex flex-wrap items-center gap-2">
@@ -394,7 +398,7 @@ export function DriverOperationsPage() {
                 </span>
               </div>
 
-              <h1 className="mt-2 text-2xl font-black tracking-[-0.04em] text-slate-950 sm:text-[2rem]">
+              <h1 className="mt-1.5 text-2xl font-black tracking-[-0.04em] text-slate-950 sm:text-[1.9rem]">
                 {l.title}
               </h1>
 
@@ -437,7 +441,7 @@ export function DriverOperationsPage() {
           </div>
 
           {/* PRIMARY VIEW TABS */}
-          <div className="mt-5 inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+          <div className="mt-3 grid w-full grid-cols-3 rounded-xl border border-[#e8dfd4] bg-[#f5efe7] p-1 sm:inline-grid sm:w-auto">
             <button
               type="button"
               onClick={() => setMainView("operations")}
@@ -487,7 +491,7 @@ export function DriverOperationsPage() {
       {data && mainView === "operations" ? (
         <>
           {/* KPIs */}
-          <section className="operations-metrics mt-3 flex gap-2 overflow-x-auto pb-1 sm:mt-4 sm:grid sm:grid-cols-2 md:grid-cols-5">
+          <section className="operations-metrics mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-5">
             <Metric
               label={l.driversToday}
               value={data.summary.driversToday}
@@ -523,8 +527,8 @@ export function DriverOperationsPage() {
           </section>
 
           {/* OPERATIONS BOARD */}
-          <section className="operations-board mt-4 overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
+          <section className="operations-board mt-3 overflow-hidden rounded-2xl border border-[#e6ddd0] bg-[#fffdf9] shadow-[0_14px_34px_rgba(74,43,86,0.06)] sm:rounded-[1.35rem]">
+            <div className="border-b border-[#ece3d8] bg-[linear-gradient(180deg,#fffdf9_0%,#fbf7f1_100%)] px-4 py-4 sm:px-5">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                 <div>
                   <p className="text-[11px] font-black uppercase tracking-[0.14em] text-brand-700">
@@ -546,7 +550,7 @@ export function DriverOperationsPage() {
                   <input
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
-                    className="form-input bg-white pl-9"
+                    className="form-input border-[#ded4c8] bg-white pl-9 shadow-sm focus:border-brand-300"
                     placeholder={l.searchPlaceholder}
                     aria-label={l.search}
                   />
@@ -583,7 +587,7 @@ export function DriverOperationsPage() {
             {/* DESKTOP TABLE */}
             <div className="hidden min-[1050px]:block">
               <table className="w-full table-fixed text-sm">
-                <thead className="bg-slate-50/80">
+                <thead className="bg-[#f4eee6]">
                   <tr>
                     <TableHead className="w-[12%]">{l.status}</TableHead>
                     <TableHead className="w-[15%]">{l.driver}</TableHead>
@@ -610,7 +614,7 @@ export function DriverOperationsPage() {
             </div>
 
             {/* MOBILE / TABLET */}
-            <div className="grid gap-2 p-3 sm:gap-3 sm:p-4 min-[1050px]:hidden">
+            <div className="grid gap-2.5 bg-[#fbf7f1] p-3 sm:gap-3 sm:p-4 min-[1050px]:hidden">
               {visibleRows.map((row) => (
                 <MobileJobCard
                   key={row.job.id}
@@ -677,7 +681,7 @@ function OperationsTableRow({
 
   return (
     <tr
-      className="cursor-pointer border-t border-slate-100 transition hover:bg-violet-50/30"
+      className="cursor-pointer border-t border-[#eee6dc] transition odd:bg-white even:bg-[#fdfaf6] hover:bg-[#f4eef9]"
       onClick={onOpen}
     >
       <td className="px-5 py-3">
@@ -692,20 +696,9 @@ function OperationsTableRow({
 
       <td className="px-5 py-3">
         <div className="flex items-center gap-2.5">
-          {row.profile?.avatarUrl ? (
-            <Image
-              unoptimized
-              src={row.profile.avatarUrl}
-              width={36}
-              height={36}
-              alt={row.driverName}
-              className="h-9 w-9 rounded-xl object-cover"
-            />
-          ) : (
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-50 text-xs font-black text-brand-700">
-              {row.driverName.slice(0, 1).toUpperCase()}
-            </span>
-          )}
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-xs font-black text-brand-700">
+            {driverInitials(row.driverName)}
+          </span>
 
           <div className="min-w-0">
             <p className="truncate font-bold text-slate-950">
@@ -780,7 +773,7 @@ function MobileJobCard({
       className={`w-full rounded-2xl border p-3 text-left shadow-sm transition hover:border-brand-300 sm:p-4 ${waiting ? "border-amber-200 bg-amber-50/40" : status === "completed" ? "border-emerald-100 bg-emerald-50/20" : "border-slate-200 bg-white"}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          {row.profile?.avatarUrl ? <Image unoptimized src={row.profile.avatarUrl} width={36} height={36} alt={row.driverName} className="h-9 w-9 shrink-0 rounded-xl object-cover" /> : <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-sm font-black text-brand-700">{row.driverName.slice(0, 1).toUpperCase()}</span>}
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-sm font-black text-brand-700">{driverInitials(row.driverName)}</span>
           <div className="min-w-0"><p className="break-words text-sm font-black text-slate-950">{row.driverName}</p><p className="mt-0.5 text-xs text-slate-500">{row.job.vehicleRegistration || "—"} · {row.job.pickupTime?.slice(0, 5) || "—"}</p></div>
         </div>
         <span className={`rounded-full border px-2 py-1 text-xs font-bold ${theme.badge}`}>{statusCopy[language][status]}</span>
@@ -814,15 +807,15 @@ export function JobDrawer({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-end justify-end bg-slate-950/35 backdrop-blur-[2px] sm:items-stretch"
+      className="fixed inset-0 z-[100] flex items-end justify-end bg-slate-950/45 backdrop-blur-[3px] sm:items-stretch"
       onClick={onClose}
     >
       <aside
         role="dialog" aria-modal="true" aria-labelledby="operations-job-title"
-        className="operations-job-drawer max-h-[calc(100dvh-1rem)] w-full overflow-y-auto overscroll-contain rounded-t-[2rem] bg-[#fffdf9] shadow-2xl sm:max-h-none sm:w-[520px] sm:rounded-none sm:rounded-l-[2rem]"
+        className="operations-job-drawer h-[calc(100dvh-0.35rem)] w-full overflow-y-auto overscroll-contain rounded-t-[1.5rem] bg-[#fbf8f3] shadow-2xl sm:h-full sm:max-h-none sm:w-[500px] sm:rounded-none sm:rounded-l-[1.75rem]"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="sticky top-0 z-10 border-b border-slate-200 bg-[#fffdf9]/95 px-5 py-4 backdrop-blur sm:px-6">
+        <div className="sticky top-0 z-10 border-b border-[#e6ddd0] bg-[#fffdf9]/95 px-4 py-3.5 backdrop-blur sm:px-5">
           <div className="flex items-start justify-between gap-3">
             <div>
               <span
@@ -851,8 +844,8 @@ export function JobDrawer({
           </div>
         </div>
 
-        <div className="space-y-4 p-5 sm:p-6">
-          <section className="rounded-2xl border border-slate-200 bg-white p-4">
+        <div className="space-y-3 p-3.5 sm:p-5">
+          <section className="rounded-2xl border border-[#e6ddd0] bg-white p-4 shadow-[0_8px_22px_rgba(74,43,86,0.04)]">
             <p className="text-[10px] font-black uppercase tracking-[0.12em] text-brand-700">
               {l.route}
             </p>
@@ -886,7 +879,7 @@ export function JobDrawer({
             </div>
           </section>
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-4">
+          <section className="rounded-2xl border border-[#e6ddd0] bg-white p-4 shadow-[0_8px_22px_rgba(74,43,86,0.04)]">
             <p className="text-[10px] font-black uppercase tracking-[0.12em] text-brand-700">
               {l.timeline}
             </p>
@@ -947,26 +940,15 @@ export function JobDrawer({
             )}
           </section>
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-4">
+          <section className="rounded-2xl border border-[#e6ddd0] bg-white p-4 shadow-[0_8px_22px_rgba(74,43,86,0.04)]">
             <p className="text-[10px] font-black uppercase tracking-[0.12em] text-brand-700">
               {l.driverDetails}
             </p>
 
             <div className="mt-4 flex items-center gap-3">
-              {row.profile?.avatarUrl ? (
-                <Image
-                  unoptimized
-                  src={row.profile.avatarUrl}
-                  width={52}
-                  height={52}
-                  alt={row.driverName}
-                  className="h-13 w-13 rounded-2xl object-cover"
-                />
-              ) : (
-                <span className="flex h-13 w-13 items-center justify-center rounded-2xl bg-brand-50 font-black text-brand-700">
-                  {row.driverName.slice(0, 1).toUpperCase()}
-                </span>
-              )}
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-sm font-black text-brand-700">
+                {driverInitials(row.driverName)}
+              </span>
 
               <div>
                 <p className="font-black text-slate-950">
@@ -1039,7 +1021,7 @@ function Metric({
   }[tone];
 
   return (
-    <div className="operations-metric min-w-[108px] flex-1 rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm sm:min-w-0 sm:p-3.5">
+    <div className="operations-metric rounded-2xl border border-[#e6ddd0] bg-[linear-gradient(180deg,#fffdf9_0%,#fbf7f1_100%)] p-3.5 shadow-[0_8px_22px_rgba(74,43,86,0.05)] sm:p-4">
       <div className="flex items-center justify-between gap-2">
         <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-500">
           {label}
@@ -1052,7 +1034,7 @@ function Metric({
         </span>
       </div>
 
-      <p className="mt-1 text-xl font-black text-slate-950 sm:mt-2 sm:text-2xl">{value}</p>
+      <p className="mt-1.5 text-2xl font-black tracking-[-0.03em] text-slate-950 sm:text-[1.7rem]">{value}</p>
     </div>
   );
 }
@@ -1122,7 +1104,7 @@ function Info({
   icon?: ReactNode;
 }) {
   return (
-    <div className="operations-driver-info flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
+    <div className="operations-driver-info flex items-center gap-3 rounded-xl border border-[#eee5da] bg-[#faf6f0] px-3 py-2.5">
       {icon ? <span className="text-brand-600">{icon}</span> : null}
 
       <div className="min-w-0 flex-1">

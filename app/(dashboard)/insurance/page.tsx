@@ -20,6 +20,7 @@ import {
   X
 } from "lucide-react";
 import { InsuranceProfileInsights } from "@/components/insurance-profile-insights";
+import { InsuranceQuoteCentre } from "@/components/insurance-quote-centre";
 import { supabase } from "@/lib/supabase";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-provider";
@@ -39,7 +40,7 @@ import {
 } from "@/lib/insurance-providers";
 
 type ViewMode = "review" | "renewals" | "all" | "verified";
-type WorkspaceTab = "overview" | "vehicles" | "renewals" | "analytics";
+type WorkspaceTab = "overview" | "vehicles" | "renewals" | "quotes" | "analytics";
 
 type InsuranceRecord = InsuranceAssetRecord;
 type InsuranceDocument = InsuranceDocumentRecord;
@@ -1263,6 +1264,7 @@ export default function InsurancePage() {
               ["overview", isThai ? "ภาพรวม" : "Overview"],
               ["vehicles", isThai ? "รถ" : "Vehicles"],
               ["renewals", isThai ? "ต่ออายุ" : "Renewals"],
+              ["quotes", isThai ? "เปรียบเทียบราคา" : "Quote Centre"],
               ["analytics", isThai ? "วิเคราะห์" : "Analytics"]
             ] as Array<[WorkspaceTab, string]>).map(([key, label]) => (
               <button
@@ -1455,6 +1457,14 @@ export default function InsurancePage() {
             <div className="flex flex-wrap items-center justify-between gap-2 px-1"><p className="text-xs font-semibold text-slate-500">{renewalRows.length} {isThai ? "รายการต่ออายุที่แสดง" : "renewals shown"}</p>{(renewalSearch || renewalInsurerFilter !== "all") && <button type="button" onClick={() => { setRenewalSearch(""); setRenewalInsurerFilter("all"); }} className="text-xs font-bold text-violet-700 hover:text-violet-900">{isThai ? "ล้างตัวกรอง" : "Clear filters"}</button>}</div>
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white"><div className="hidden grid-cols-[140px_1.25fr_170px_130px_150px_44px] gap-4 bg-[#f7f5fc] px-4 py-3 text-[10px] font-bold uppercase tracking-[.14em] text-slate-400 lg:grid"><div>{c.vehicle}</div><div>{c.insurer}</div><div>{c.insuranceExpiry}</div><div>{isThai ? "เหลือ" : "Days left"}</div><div>{c.premium}</div><div /></div><div className="divide-y divide-slate-100">{renewalRows.map((record) => (<button key={record.id} type="button" onClick={() => openRecord(record)} className={`grid w-full gap-3 border-l-2 px-4 py-4 text-left transition hover:bg-violet-50/30 lg:grid-cols-[140px_1.25fr_170px_130px_150px_44px] lg:items-center ${record.insurance_status === "expired" ? "border-l-rose-300 bg-rose-50/10" : record.insurance_status === "due_30" ? "border-l-rose-200" : ["due_60", "due_90"].includes(record.insurance_status) ? "border-l-amber-300 bg-amber-50/10" : "border-l-transparent"}`}><p className="font-bold text-slate-950">{record.vehicle_registration}</p><p className="truncate text-sm font-semibold text-slate-700">{canonicalInsurerName(record.insurer_en, record.insurer_th, language) || c.missing}</p><p className="text-sm text-slate-700">{record.insurance_expiry_date ? formatDate(record.insurance_expiry_date, language) : "—"}</p><p className="text-sm font-semibold text-slate-800">{record.days_to_insurance_expiry ?? "—"}</p><p className="text-sm font-bold text-slate-900">{premiumFor(record) ? formatCurrency(premiumFor(record), language) : "—"}</p><ChevronRight className="h-4 w-4 text-violet-500" /></button>))}{!renewalRows.length && <p className="p-10 text-center text-sm text-slate-400">{isThai ? "ไม่พบรายการต่ออายุตามตัวกรอง" : "No renewals match these filters."}</p>}</div></div>
           </div>
+        )}
+
+        {workspaceTab === "quotes" && (
+          <InsuranceQuoteCentre
+            records={insuranceWorkspace.required}
+            insuranceDocumentIds={Object.keys(insuranceDocs)}
+            isThai={isThai}
+          />
         )}
 
         {workspaceTab === "analytics" && (

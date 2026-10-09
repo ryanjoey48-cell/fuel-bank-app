@@ -45,7 +45,10 @@ type NavGroup = {
 };
 
 function routeIsActive(pathname: string, href: string) {
-  return pathname === href || (href !== "/dashboard" && pathname.startsWith(`${href}/`));
+  return (
+    pathname === href ||
+    (href !== "/dashboard" && pathname.startsWith(`${href}/`))
+  );
 }
 
 export function TopNavigation() {
@@ -69,7 +72,15 @@ export function TopNavigation() {
     }
 
     if (can("admin:user_management")) {
-      adminItems.push({ href: "/admin/driver-operations", label: language === "th" ? "ปฏิบัติการคนขับ" : "Driver Operations", icon: Truck });
+      adminItems.push({
+        href: "/admin/driver-operations",
+        label:
+          language === "th"
+            ? "ปฏิบัติการคนขับ"
+            : "Driver Operations",
+        icon: Truck
+      });
+
       adminItems.push({
         href: "/admin/users",
         label: t.adminUsers.title,
@@ -121,7 +132,10 @@ export function TopNavigation() {
         items: [
           {
             href: "/drivers",
-            label: "Drivers & Vehicles",
+            label:
+              language === "th"
+                ? "คนขับและยานพาหนะ"
+                : "Drivers & Vehicles",
             icon: Truck
           },
           {
@@ -138,6 +152,14 @@ export function TopNavigation() {
             href: "/insurance",
             label: t.dashboard.management.insurance.title,
             icon: ShieldCheck
+          },
+          {
+            href: "/safety",
+            label:
+              language === "th"
+                ? "ความปลอดภัยรถ"
+                : "Vehicle Safety",
+            icon: ClipboardCheck
           },
           {
             href: "/inventory",
@@ -239,8 +261,13 @@ export function TopNavigation() {
           href="/dashboard"
           className="flex min-w-0 shrink-0 items-center gap-3.5 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-brand-300 xl:justify-self-start"
         >
-          <span className="flex h-11 w-11 shrink-0 sm:h-14 sm:w-14 items-center justify-center overflow-hidden rounded-[1.05rem] bg-[#211336] shadow-[0_7px_18px_rgba(33,19,54,0.16)] ring-1 ring-brand-900/10">
-            <EESLogo alt={t.common.appName} size={56} className="h-11 w-11 max-w-none scale-[1.8] sm:h-14 sm:w-14" priority />
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[1.05rem] bg-[#211336] shadow-[0_7px_18px_rgba(33,19,54,0.16)] ring-1 ring-brand-900/10 sm:h-14 sm:w-14">
+            <EESLogo
+              alt={t.common.appName}
+              size={56}
+              className="h-11 w-11 max-w-none scale-[1.8] sm:h-14 sm:w-14"
+              priority
+            />
           </span>
 
           <span className="hidden xl:block">
