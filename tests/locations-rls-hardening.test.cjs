@@ -17,6 +17,8 @@ test("Locations RLS hardening alters only the existing Locations policies", () =
   ]);
   assert.doesNotMatch(sql, /\b(create|drop|alter)\s+table\b/i);
   assert.doesNotMatch(sql, /\b(create|drop)\s+policy\b/i);
+  assert.match(sql, /not\s+relations\.relrowsecurity/i);
+  assert.match(sql, /policyname\s+not\s+in\s*\([\s\S]*ees_location_activity_own/i);
   assert.match(sql, /begin\s*;/i);
   assert.match(sql, /commit\s*;/i);
 });

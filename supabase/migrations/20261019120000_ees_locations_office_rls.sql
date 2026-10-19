@@ -17,6 +17,17 @@ begin
     raise exception 'Expected public.is_office_account() to exist before applying the Locations RLS hardening migration.';
   end if;
 
+  if exists (
+    select 1
+    from pg_class relations
+    join pg_namespace namespaces on namespaces.oid = relations.relnamespace
+    where namespaces.nspname = 'public'
+      and relations.relname in ('ees_locations', 'ees_location_user_activity')
+      and not relations.relrowsecurity
+  ) then
+    raise exception 'Row level security must be enabled on both EES Locations tables before policy hardening.';
+  end if;
+
   if not exists (
     select 1 from pg_policies
     where schemaname = 'public' and tablename = 'ees_locations'
@@ -39,6 +50,21 @@ begin
       and policyname = 'ees_location_activity_own'
   ) then
     raise exception 'Expected existing EES Locations policies were not found; no policy changes were applied.';
+  end if;
+
+  if exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename in ('ees_locations', 'ees_location_user_activity')
+      and policyname not in (
+        'ees_locations_office_read',
+        'ees_locations_office_insert',
+        'ees_locations_office_update',
+        'ees_locations_office_delete',
+        'ees_location_activity_own'
+      )
+  ) then
+    raise exception 'Unexpected additional EES Locations policy found; review permissive policy interactions before hardening.';
   end if;
 end;
 $migration$;
