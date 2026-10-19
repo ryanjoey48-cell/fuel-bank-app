@@ -10,6 +10,7 @@ import {
   Fuel,
   Gauge,
   LayoutDashboard,
+  MapPin,
   MapPinned,
   Menu,
   Package,
@@ -123,6 +124,11 @@ export function TopNavigation() {
             href: "/trip-journey",
             label: t.nav.tripJourney,
             icon: MapPinned
+          },
+          {
+            href: "/locations",
+            label: "Locations",
+            icon: MapPin
           }
         ]
       },
