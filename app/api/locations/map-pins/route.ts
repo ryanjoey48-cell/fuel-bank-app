@@ -3,7 +3,7 @@ import { hasPermission } from "@/lib/authorization";
 import { AdminApiError, createServerSupabaseAdmin, requireVerifiedUser, resolveAccountAccess } from "@/lib/admin-user-management-server";
 import { isValidCoordinates, type LocationPinType } from "@/lib/locations-directory";
 
-const pinFields = "id,location_id,pin_type,latitude,longitude,pin_status,coordinate_source,source_reference,confirmed_by,confirmed_at,updated_at";
+const pinFields = "id,location_id,pin_type,latitude,longitude,pin_status,coordinate_source,source_reference,created_by,created_at,confirmed_by,confirmed_at,updated_by,updated_at";
 const pinTypes: readonly LocationPinType[] = ["destination", "truck_entrance"];
 
 function missingMapStorage(error: unknown) {

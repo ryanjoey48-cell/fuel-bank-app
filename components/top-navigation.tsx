@@ -125,11 +125,11 @@ export function TopNavigation() {
             label: t.nav.tripJourney,
             icon: MapPinned
           },
-          {
+          ...(can("business:read") ? [{
             href: "/locations",
-            label: "Locations",
+            label: language === "th" ? "สถานที่" : "Locations",
             icon: MapPin
-          }
+          }] : [])
         ]
       },
       {

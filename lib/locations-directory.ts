@@ -43,8 +43,11 @@ export type LocationPin = {
   pin_status: "manual_confirmed";
   coordinate_source: string;
   source_reference: string | null;
+  created_by: string;
+  created_at: string;
   confirmed_by: string;
   confirmed_at: string;
+  updated_by: string;
   updated_at: string;
 };
 

@@ -181,8 +181,10 @@ test("Locations UI is subscribed to the existing language provider without addin
 
 test("interactive map uses a Thailand default, clustered markers, OSM attribution and a confirm-before-save editor", () => {
   const map = fs.readFileSync(path.resolve("components/locations-map.tsx"), "utf8");
+  const directory = fs.readFileSync(path.resolve("components/locations-directory.tsx"), "utf8");
   const css = fs.readFileSync(path.resolve("components/locations-map.module.css"), "utf8");
-  assert.match(map, /center:\s*\[15,\s*101\]/);
+  assert.match(map, /THAILAND_BOUNDS:\s*\[\[number, number\], \[number, number\]\]/);
+  assert.match(map, /fitBounds\(THAILAND_BOUNDS/);
   assert.match(map, /markerClusterGroup/);
   assert.match(map, /tile\.openstreetmap\.org\/\{z\}\/\{x\}\/\{y\}\.png/);
   assert.match(map, /openstreetmap\.org\/copyright/);
@@ -194,6 +196,29 @@ test("interactive map uses a Thailand default, clustered markers, OSM attributio
   assert.match(map, /md:hidden/);
   assert.match(css, /@media\s*\(max-width:\s*639px\)/);
   assert.match(css, /\.ees-map-candidate/);
+  assert.match(directory, /function openPinEditor\(locationId: string\)/);
+  assert.match(directory, /setMapEditorLocationId\(locationId\)/);
+  assert.match(directory, /setView\("map"\)/);
+  assert.match(directory, /copy\.pinThisLocation/);
+  assert.match(map, /data-location-pin-select/);
+});
+
+test("Locations navigation is visible only to accounts with business read access and is translated", () => {
+  const nav = fs.readFileSync(path.resolve("components/top-navigation.tsx"), "utf8");
+  assert.match(nav, /can\("business:read"\)[\s\S]*?href: "\/locations"/);
+  assert.match(nav, /language === "th" \? "สถานที่" : "Locations"/);
+});
+
+test("Locations Directory and Map controls retain English and Thai labels", () => {
+  const translations = fs.readFileSync(path.resolve("lib/translations.ts"), "utf8");
+  for (const label of [
+    'directoryView: "Directory"', 'directoryView: "รายชื่อ"',
+    'mapView: "Map"', 'mapView: "แผนที่"',
+    'searchPlaceholder: "Search company, address or province"', 'searchPlaceholder: "ค้นหาบริษัท ที่อยู่ หรือจังหวัด"',
+    'favourites: "Favourites"', 'favourites: "รายการโปรด"',
+    'recentlyUsed: "Recently used"', 'recentlyUsed: "ใช้งานล่าสุด"',
+    'pinThisLocation: "Add a pin"', 'pinThisLocation: "เพิ่มหมุด"'
+  ]) assert.ok(translations.includes(label), `translation is present: ${label}`);
 });
 
 test("map pin API gates reads and confirmed writes through the existing EES permission model", () => {
@@ -207,6 +232,11 @@ test("map pin API gates reads and confirmed writes through the existing EES perm
   assert.match(api, /confirmed_by:\s*user\.id/);
   assert.match(api, /pin_status:\s*"manual_confirmed"/);
   assert.match(api, /storageReady:\s*false/);
+
+  const deleteApi = fs.readFileSync(path.resolve("app/api/locations/[id]/route.ts"), "utf8");
+  assert.match(deleteApi, /access\(request, "business:delete"\)/);
+  assert.match(deleteApi, /delete_ees_location_with_map_pin_audit_actor/);
+  assert.match(deleteApi, /p_actor_id:\s*user\.id/);
 });
 
 test("proposed map schema is additive, idempotent and leaves the historical destination rows unchanged", () => {
@@ -223,8 +253,8 @@ test("proposed map schema is additive, idempotent and leaves the historical dest
   assert.match(sql, /current_account_role\(\) in \('admin', 'office_staff', 'read_only'\)/i);
   assert.match(sql, /current_account_role\(\) in \('admin', 'office_staff'\)/i);
   assert.match(sql, /drop policy if exists[\s\S]*create policy/i);
-  assert.match(sql, /grant select, insert, update on public\.ees_location_map_pins to authenticated/i);
-  assert.match(sql, /revoke all on public\.ees_location_map_pins from anon, authenticated/i);
+  assert.match(sql, /grant select, insert, update on table public\.ees_location_map_pins to authenticated, service_role/i);
+  assert.match(sql, /revoke all on table public\.ees_location_map_pins from public, anon, authenticated, service_role/i);
   assert.doesNotMatch(sql, /alter\s+table\s+public\.ees_locations\b/i);
   assert.doesNotMatch(sql, /update\s+public\.ees_locations\b/i);
   assert.doesNotMatch(sql, /insert\s+into\s+public\.ees_locations\b/i);
@@ -235,15 +265,48 @@ test("proposed map schema is additive, idempotent and leaves the historical dest
   assert.match(readPolicy, /using\s*\([\s\S]*is_office_account\(\)[\s\S]*is_account_active\(\)[\s\S]*current_account_role\(\) in \('admin', 'office_staff', 'read_only'\)/);
   const insertPolicy = policyBlocks.get("ees_location_map_pins_office_insert");
   assert.match(insertPolicy, /for insert to authenticated/);
-  assert.match(insertPolicy, /with check\s*\([\s\S]*is_office_account\(\)[\s\S]*is_account_active\(\)[\s\S]*current_account_role\(\) in \('admin', 'office_staff'\)[\s\S]*confirmed_by = auth\.uid\(\)[\s\S]*updated_by = auth\.uid\(\)/);
+  assert.match(insertPolicy, /with check\s*\([\s\S]*is_office_account\(\)[\s\S]*is_account_active\(\)[\s\S]*current_account_role\(\) in \('admin', 'office_staff'\)[\s\S]*created_by = auth\.uid\(\)[\s\S]*confirmed_by = auth\.uid\(\)[\s\S]*updated_by = auth\.uid\(\)/);
   const updatePolicy = policyBlocks.get("ees_location_map_pins_office_update");
   assert.match(updatePolicy, /for update to authenticated[\s\S]*using\s*\([\s\S]*is_office_account\(\)[\s\S]*is_account_active\(\)[\s\S]*current_account_role\(\) in \('admin', 'office_staff'\)[\s\S]*?\)\s*with check\s*\(/);
-  assert.match(updatePolicy, /confirmed_by = auth\.uid\(\)[\s\S]*updated_by = auth\.uid\(\)/);
+  assert.match(updatePolicy, /updated_by = auth\.uid\(\)/);
+  assert.doesNotMatch(updatePolicy, /confirmed_by = auth\.uid\(\)|created_by = auth\.uid\(\)/);
   assert.doesNotMatch(sql, /for delete to authenticated/i);
+
+  const writeGuard = sql.match(/create or replace function public\.prepare_ees_location_map_pin_write\([\s\S]*?\$\$;/i)?.[0] ?? "";
+  assert.match(writeGuard, /security invoker|language plpgsql[\s\S]*set search_path = ''/i);
+  assert.match(writeGuard, /current_user = 'authenticated'[\s\S]*auth\.uid\(\)/);
+  assert.match(writeGuard, /current_user = 'service_role'[\s\S]*public\.account_access[\s\S]*public\.driver_accounts/);
+  assert.match(writeGuard, /new\.id is distinct from old\.id[\s\S]*new\.location_id is distinct from old\.location_id[\s\S]*new\.pin_type is distinct from old\.pin_type/);
+  assert.match(writeGuard, /new\.confirmed_by := old\.confirmed_by[\s\S]*new\.confirmed_at := old\.confirmed_at/);
+  assert.match(writeGuard, /new\.updated_by := v_actor/);
+  assert.match(writeGuard, /new\.confirmed_at := v_now/);
+
+  const audit = sql.match(/create or replace function ees_locations_internal\.audit_ees_location_map_pin\([\s\S]*?\$\$;/i)?.[0] ?? "";
+  assert.match(audit, /security definer[\s\S]*set search_path = ''/i);
+  assert.doesNotMatch(audit, /row_security\s*=\s*off/i);
+  assert.match(sql, /set local role ees_locations_map_pin_auditor[\s\S]*create or replace function ees_locations_internal\.audit_ees_location_map_pin/i);
+  assert.match(sql, /create role ees_locations_map_pin_auditor[\s\S]*nologin nosuperuser nocreatedb nocreaterole noinherit noreplication nobypassrls/i);
+  assert.match(sql, /grant usage, create on schema ees_locations_internal to ees_locations_map_pin_auditor/i);
+  assert.match(sql, /create policy ees_location_map_pin_history_auditor_insert[\s\S]*for insert to ees_locations_map_pin_auditor[\s\S]*with check \(true\)/i);
+  assert.match(sql, /grant insert on table public\.ees_location_map_pin_history\s+to ees_locations_map_pin_auditor/i);
+  assert.match(sql, /grant ees_locations_map_pin_auditor to %I with set true, inherit false/i);
+  assert.match(audit, /insert into public\.ees_location_map_pin_history[\s\S]*'insert'/);
+  assert.match(audit, /insert into public\.ees_location_map_pin_history[\s\S]*'update'/);
+  assert.match(audit, /insert into public\.ees_location_map_pin_history[\s\S]*'delete'/);
+  assert.match(audit, /current_setting\('ees\.map_pin_audit_actor', true\)/);
+  assert.match(sql, /after insert or update or delete on public\.ees_location_map_pins[\s\S]*execute function ees_locations_internal\.audit_ees_location_map_pin/i);
+  assert.match(sql, /before delete on public\.ees_locations[\s\S]*execute function public\.prepare_ees_location_delete_audit_context/i);
+  assert.match(sql, /revoke all on table public\.ees_location_map_pin_history\s+from public, anon, authenticated, service_role, ees_locations_map_pin_auditor/i);
+  assert.doesNotMatch(sql, /grant\s+(?:insert|update|delete|all)[^;]*ees_location_map_pin_history[^;]*\bto\s+(?:anon|authenticated|service_role)/i);
+  assert.match(sql, /on delete cascade/i);
+  assert.match(sql, /action in \('insert', 'update', 'delete'\)/i);
+  assert.match(sql, /obj_description\([\s\S]*map-pins schema v3/i);
+  assert.match(sql, /create or replace function public\.delete_ees_location_with_map_pin_audit_actor\([\s\S]*current_user <> 'service_role'[\s\S]*account_access[\s\S]*driver_accounts[\s\S]*set_config\('ees\.map_pin_audit_actor'/i);
+  assert.match(sql, /grant execute on function public\.delete_ees_location_with_map_pin_audit_actor\(uuid, uuid\)\s+to service_role/i);
 
   const api = fs.readFileSync(path.resolve("app/api/locations/map-pins/route.ts"), "utf8");
   const apiColumns = api.match(/const pinFields = "([^"]+)"/)?.[1].split(",") ?? [];
-  for (const column of ["id", "location_id", "pin_type", "latitude", "longitude", "pin_status", "coordinate_source", "source_reference", "confirmed_by", "confirmed_at", "updated_at"]) {
+  for (const column of ["id", "location_id", "pin_type", "latitude", "longitude", "pin_status", "coordinate_source", "source_reference", "created_by", "created_at", "confirmed_by", "confirmed_at", "updated_by", "updated_at"]) {
     assert.ok(apiColumns.includes(column), `${column} is selected by the map API`);
     assert.match(sql, new RegExp(`\\b${column}\\b`), `${column} exists in the proposed schema`);
   }

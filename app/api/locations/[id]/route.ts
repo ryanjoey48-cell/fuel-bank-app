@@ -91,9 +91,12 @@ export async function POST(request: Request, context: Context) {
 
 export async function DELETE(request: Request, context: Context) {
   try {
-    const { admin } = await access(request, "business:delete");
+    const { admin, user } = await access(request, "business:delete");
     const { id } = await context.params;
-    const { error } = await admin.from("ees_locations").delete().eq("id", id);
+    const { error } = await admin.rpc("delete_ees_location_with_map_pin_audit_actor", {
+      p_location_id: id,
+      p_actor_id: user.id
+    });
     if (error) throw error;
     return NextResponse.json({ ok: true });
   } catch (error) { return fail(error); }

@@ -59,6 +59,7 @@ type Props = {
 };
 
 const tileUrl = process.env.NEXT_PUBLIC_EES_MAP_TILE_URL || "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const THAILAND_BOUNDS: [[number, number], [number, number]] = [[5.6, 97.3], [20.5, 105.7]];
 
 function buildPopup(location: MapLocation, pinType: LocationPinType, language: "en" | "th", openLabel: string, truckEntranceLabel: string, onOpen: () => void) {
   const container = document.createElement("div");
@@ -179,8 +180,6 @@ export function LocationsMap({
         if (disposed || !mapNodeRef.current) return;
 
         const map = Leaflet.map(mapNodeRef.current, {
-          center: [15, 101],
-          zoom: 6,
           minZoom: 4,
           zoomControl: true,
           scrollWheelZoom: true
@@ -196,6 +195,7 @@ export function LocationsMap({
           updateWhenZooming: false,
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>'
         }).addTo(map);
+        map.fitBounds(THAILAND_BOUNDS, { padding: [18, 18], maxZoom: 8 });
 
         const cluster = Leaflet.markerClusterGroup({
           maxClusterRadius: 46,
@@ -373,7 +373,7 @@ export function LocationsMap({
       <div className="grid gap-3">
         <label className="grid gap-1.5 text-sm font-semibold text-slate-700">
           <span>{copy.pinLocationLabel}</span>
-          <select value={selectedLocationId} onChange={(event) => onSelectedLocationChange(event.target.value)} className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
+          <select data-location-pin-select value={selectedLocationId} onChange={(event) => onSelectedLocationChange(event.target.value)} className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
             <option value="">{copy.chooseLocation}</option>
             {locations.map((location) => <option key={location.id} value={location.id}>{getLocationDisplayName(location, language)} · {location.address}</option>)}
           </select>

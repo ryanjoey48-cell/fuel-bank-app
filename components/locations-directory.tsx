@@ -367,6 +367,17 @@ export function LocationsDirectory() {
     : buildGoogleMapsSearchUrl(form.address);
   const unpinnedLocationIds = useMemo(() => getUnpinnedLocationIds(locations, mapPins), [locations, mapPins]);
 
+  function openPinEditor(locationId: string) {
+    setMapEditorLocationId(locationId);
+    setMapEditorPinType("destination");
+    setView("map");
+    window.requestAnimationFrame(() => {
+      const editor = document.getElementById("location-pin-editor");
+      editor?.scrollIntoView({ behavior: "smooth", block: "center" });
+      editor?.querySelector<HTMLSelectElement>("[data-location-pin-select]")?.focus({ preventScroll: true });
+    });
+  }
+
   function openEditor(value: Location | "new", trigger: HTMLElement) {
     returnFocusRef.current = trigger;
     setEditing(value);
@@ -600,7 +611,7 @@ export function LocationsDirectory() {
                 {mapUrl && <a href={mapUrl} target="_blank" rel="noopener noreferrer" onClick={() => void markUsed(location)} aria-label={`${copy.map}: ${displayName}`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-700 px-3 text-sm font-bold text-white hover:bg-brand-800"><MapPin className="h-4 w-4" aria-hidden="true" />{copy.map}<ArrowUpRight className="h-4 w-4" aria-hidden="true" /></a>}
                 {truckUrl && <a href={truckUrl} target="_blank" rel="noopener noreferrer" onClick={() => void markUsed(location)} aria-label={`${copy.truckEntrance}: ${displayName}`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 text-sm font-semibold text-brand-800 hover:bg-brand-100"><MapPin className="h-4 w-4" aria-hidden="true" />{copy.truckEntrance}<ArrowUpRight className="h-4 w-4" aria-hidden="true" /></a>}
                 {canViewInternal && <button type="button" onClick={(event) => openDetails(location, event.currentTarget)} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"><Info className="h-4 w-4" aria-hidden="true" />{copy.details}</button>}
-                {canEdit && <button type="button" onClick={() => { setMapEditorLocationId(location.id); setMapEditorPinType("destination"); document.getElementById("location-pin-editor")?.scrollIntoView({ behavior: "smooth", block: "center" }); }} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 text-sm font-bold text-brand-800 hover:bg-brand-100"><MapPin className="h-4 w-4" aria-hidden="true" />{copy.pinThisLocation}</button>}
+                {canEdit && <button type="button" onClick={() => openPinEditor(location.id)} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 text-sm font-bold text-brand-800 hover:bg-brand-100"><MapPin className="h-4 w-4" aria-hidden="true" />{copy.pinThisLocation}</button>}
               </div>
             </li>;
           })}
@@ -645,6 +656,9 @@ export function LocationsDirectory() {
             {truckUrl && <a href={truckUrl} target="_blank" rel="noopener noreferrer" onClick={() => void markUsed(location)} aria-label={`${copy.truckEntrance}: ${displayName}`} className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 text-sm font-semibold text-brand-800 transition hover:bg-brand-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600">
               <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" /><span>{copy.truckEntrance}</span><ArrowUpRight className="h-4 w-4 shrink-0" aria-hidden="true" />
             </a>}
+            {canEdit && <button type="button" onClick={() => openPinEditor(location.id)} className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 text-sm font-semibold text-brand-800 transition hover:bg-brand-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600">
+              <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" /><span>{copy.pinThisLocation}</span>
+            </button>}
           </div>
 
           {canViewInternal && <button type="button" onClick={(event) => openDetails(location, event.currentTarget)} className="mt-2 inline-flex min-h-10 w-fit items-center gap-2 rounded-lg px-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-brand-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600">
