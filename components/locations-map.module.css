@@ -1,0 +1,157 @@
+.mapFrame {
+  position: relative;
+  isolation: isolate;
+  min-height: 350px;
+  height: min(66vh, 640px);
+  background: #f1f5f9;
+}
+
+.mapCanvas {
+  width: 100%;
+  height: 100%;
+  min-height: 350px;
+  background: #f1f5f9;
+}
+
+.mapCanvas :global(.leaflet-container) {
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 350px;
+  color: #1e293b;
+  font: inherit;
+  background: #f1f5f9;
+}
+
+.mapCanvas :global(.leaflet-control-attribution) {
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: 8px 0 0;
+  background: rgba(255, 255, 255, 0.94);
+  color: #334155;
+  font-size: 10px;
+}
+
+.mapCanvas :global(.leaflet-control-attribution a) {
+  color: #4c1d95;
+  font-weight: 700;
+}
+
+.mapCanvas :global(.leaflet-bar a) {
+  color: #4c1d95;
+}
+
+.mapCanvas :global(.marker-cluster-small),
+.mapCanvas :global(.marker-cluster-medium),
+.mapCanvas :global(.marker-cluster-large) {
+  background-color: rgba(91, 33, 182, 0.28);
+}
+
+.mapCanvas :global(.marker-cluster-small div),
+.mapCanvas :global(.marker-cluster-medium div),
+.mapCanvas :global(.marker-cluster-large div) {
+  background-color: #5b21b6;
+  color: #fff;
+  font-weight: 800;
+}
+
+.mapCanvas :global(.leaflet-popup-content-wrapper) {
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+}
+
+.mapCanvas :global(.leaflet-popup-content) {
+  margin: 13px 15px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.mapCanvas :global(.leaflet-popup-tip) {
+  box-shadow: 0 4px 8px rgba(15, 23, 42, 0.08);
+}
+
+.mapCanvas :global(.ees-map-popup) {
+  display: grid;
+  gap: 6px;
+  min-width: 160px;
+}
+
+.mapCanvas :global(.ees-map-popup strong) {
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.mapCanvas :global(.ees-map-popup p) {
+  margin: 0;
+  color: #475569;
+  overflow-wrap: anywhere;
+}
+
+.mapCanvas :global(.ees-map-popup .ees-map-popup__restriction) {
+  border-left: 3px solid #be123c;
+  padding-left: 8px;
+  color: #9f1239;
+  font-weight: 700;
+}
+
+.mapCanvas :global(.ees-map-popup .ees-map-popup__link) {
+  color: #5b21b6;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.mapCanvas :global(.ees-map-popup .ees-map-popup__type) {
+  color: #c2410c;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.mapCanvas :global(.ees-map-pin) {
+  display: grid;
+  width: 31px;
+  height: 31px;
+  place-items: center;
+  border: 3px solid white;
+  border-radius: 50% 50% 50% 4px;
+  background: #5b21b6;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.32);
+  transform: rotate(-45deg);
+}
+
+.mapCanvas :global(.ees-map-pin > span) {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: white;
+}
+
+.mapCanvas :global(.ees-map-pin--truck) {
+  background: #ea580c;
+}
+
+.mapCanvas :global(.ees-map-candidate) {
+  display: block;
+  width: 24px;
+  height: 24px;
+  border: 3px dashed #c2410c;
+  border-radius: 50%;
+  background: rgba(251, 146, 60, 0.25);
+  box-shadow: 0 0 0 5px rgba(251, 146, 60, 0.16);
+}
+
+@media (max-width: 639px) {
+  .mapFrame,
+  .mapCanvas,
+  .mapCanvas :global(.leaflet-container) {
+    min-height: 360px;
+    height: 56vh;
+    max-height: 520px;
+  }
+}
+
+@media (max-width: 767px) {
+  .mapCanvas :global(.leaflet-popup) {
+    display: none;
+  }
+}

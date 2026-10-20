@@ -33,8 +33,49 @@ export type LocationFormError =
   | "truckEntranceUrl"
   | "verificationEvidence";
 
+export type LocationPinType = "destination" | "truck_entrance";
+export type LocationPin = {
+  id: string;
+  location_id: string;
+  pin_type: LocationPinType;
+  latitude: number;
+  longitude: number;
+  pin_status: "manual_confirmed";
+  coordinate_source: string;
+  source_reference: string | null;
+  confirmed_by: string;
+  confirmed_at: string;
+  updated_at: string;
+};
+
+export type Coordinates = { latitude: number; longitude: number };
+
 const GOOGLE_MAPS_HOST = /^(maps\.google\.com|(?:www\.)?google\.(?:com|[a-z]{2,3}|co\.[a-z]{2}))$/i;
 const DISPATCH_RESTRICTION = /do\s+not\s+dispatch|do\s+not\s+send\s+(?:a\s+)?truck|no\s+dispatch|not\s+for\s+dispatch|ห้ามจัดส่ง|ห้ามส่งรถ|ห้ามใช้สำหรับจัดส่ง/i;
+
+export function isValidCoordinates(latitude: unknown, longitude: unknown): boolean {
+  return typeof latitude === "number" && Number.isFinite(latitude) && latitude >= -90 && latitude <= 90
+    && typeof longitude === "number" && Number.isFinite(longitude) && longitude >= -180 && longitude <= 180;
+}
+
+/** Accepts a pasted latitude, longitude pair without guessing or geocoding. */
+export function parseCoordinates(value: string): Coordinates | null {
+  const normalized = value.trim().replace(/^\(|\)$/g, "");
+  const match = normalized.match(/^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*[,;\s]\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+))$/);
+  if (!match) return null;
+  const latitude = Number(match[1]);
+  const longitude = Number(match[2]);
+  return isValidCoordinates(latitude, longitude) ? { latitude, longitude } : null;
+}
+
+export function formatCoordinates({ latitude, longitude }: Coordinates): string {
+  return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+}
+
+export function getUnpinnedLocationIds(locations: readonly { id: string }[], pins: readonly Pick<LocationPin, "location_id" | "pin_type">[]): Set<string> {
+  const destinationPins = new Set(pins.filter((pin) => pin.pin_type === "destination").map((pin) => pin.location_id));
+  return new Set(locations.filter((location) => !destinationPins.has(location.id)).map((location) => location.id));
+}
 
 /** Returns a canonical Google Maps URL, or null when the value is not safe to open. */
 export function safeGoogleMapsUrl(value: unknown): string | null {

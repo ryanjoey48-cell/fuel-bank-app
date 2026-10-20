@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { AlertTriangle, ArrowUpRight, ChevronDown, Heart, Info, List, LoaderCircle, Map as MapIcon, MapPin, Pencil, Plus, RefreshCw, Search, X } from "lucide-react";
 import { EESLogo } from "@/components/ees-logo";
+import { LocationsMap, type SaveLocationPinInput } from "@/components/locations-map";
 import { useAccountAccess } from "@/lib/use-account-access";
 import { useLanguage } from "@/lib/language-provider";
 import { supabase } from "@/lib/supabase";
@@ -11,12 +12,15 @@ import {
   getDispatchRestriction,
   getLocationDisplayName,
   getLocationMapUrl,
+  getUnpinnedLocationIds,
   matchesLocationFilter,
   matchesLocationSearch,
   parseAlternativeNames,
   safeGoogleMapsUrl,
   validateLocationForm,
-  type LocationFormError
+  type LocationFormError,
+  type LocationPin,
+  type LocationPinType
 } from "@/lib/locations-directory";
 import type { Translation } from "@/lib/translations";
 
@@ -159,6 +163,13 @@ export function LocationsDirectory() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [view, setView] = useState<"directory" | "map">("directory");
+  const [mapPins, setMapPins] = useState<LocationPin[]>([]);
+  const [mapPinsLoaded, setMapPinsLoaded] = useState(false);
+  const [mapStorageReady, setMapStorageReady] = useState(false);
+  const [mapStorageLoading, setMapStorageLoading] = useState(false);
+  const [mapRequestFailed, setMapRequestFailed] = useState(false);
+  const [mapEditorLocationId, setMapEditorLocationId] = useState("");
+  const [mapEditorPinType, setMapEditorPinType] = useState<LocationPinType>("destination");
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<ApiErrorKey | "">("");
   const [success, setSuccess] = useState<SuccessKey | "">("");
@@ -221,7 +232,40 @@ export function LocationsDirectory() {
     }
   }, [request]);
 
+  const loadMapPins = useCallback(async () => {
+    setMapStorageLoading(true);
+    setMapRequestFailed(false);
+    try {
+      const data = await request<{ pins: LocationPin[]; storageReady: boolean }>("/api/locations/map-pins");
+      setMapPins(Array.isArray(data.pins) ? data.pins : []);
+      setMapStorageReady(data.storageReady === true);
+      setMapPinsLoaded(true);
+    } catch {
+      setMapRequestFailed(true);
+    } finally {
+      setMapStorageLoading(false);
+    }
+  }, [request]);
+
+  const saveMapPin = useCallback(async (pin: SaveLocationPinInput) => {
+    const data = await request<{ pin: LocationPin }>("/api/locations/map-pins", {
+      method: "POST",
+      body: JSON.stringify({ ...pin, confirm: true })
+    });
+    setMapPins((current) => [
+      ...current.filter((item) => item.location_id !== data.pin.location_id || item.pin_type !== data.pin.pin_type),
+      data.pin
+    ]);
+    setMapStorageReady(true);
+    setMapPinsLoaded(true);
+    return data.pin;
+  }, [request]);
+
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    if (view === "map" && !mapPinsLoaded && !mapRequestFailed) void loadMapPins();
+  }, [view, mapPinsLoaded, mapRequestFailed, loadMapPins]);
 
   useEffect(() => {
     if (editing === false) return;
@@ -321,6 +365,7 @@ export function LocationsDirectory() {
   const mapPreviewUrl = form.google_maps_url.trim()
     ? safeGoogleMapsUrl(form.google_maps_url)
     : buildGoogleMapsSearchUrl(form.address);
+  const unpinnedLocationIds = useMemo(() => getUnpinnedLocationIds(locations, mapPins), [locations, mapPins]);
 
   function openEditor(value: Location | "new", trigger: HTMLElement) {
     returnFocusRef.current = trigger;
@@ -347,7 +392,7 @@ export function LocationsDirectory() {
     if (keyToClear) setFormErrors((current) => ({ ...current, [keyToClear]: undefined }));
   }
 
-  async function markUsed(location: Location) {
+  const markUsed = useCallback(async (location: Pick<Location, "id">) => {
     try {
       await request(`/api/locations/${location.id}`, { method: "POST", body: JSON.stringify({ action: "use" }) });
       setActivity((current) => [
@@ -357,7 +402,7 @@ export function LocationsDirectory() {
     } catch {
       // Keep the map link available if activity tracking is temporarily unavailable.
     }
-  }
+  }, [request, activityById]);
 
   async function toggleFavourite(location: Location) {
     if (pendingActivity.has(location.id)) return;
@@ -508,24 +553,34 @@ export function LocationsDirectory() {
 
     {loading ? <div className="grid gap-3 lg:grid-cols-2 lg:items-start" aria-label={copy.loading} aria-busy="true">
       {[1, 2, 3, 4].map((item) => <div key={item} className="h-56 animate-pulse rounded-2xl border border-slate-200 bg-white p-5"><div className="h-5 w-2/3 rounded bg-slate-100" /><div className="mt-4 h-4 w-full rounded bg-slate-100" /><div className="mt-2 h-4 w-4/5 rounded bg-slate-100" /><div className="mt-8 h-11 rounded-xl bg-slate-100" /></div>)}
-    </div> : view === "map" ? <section aria-labelledby="locations-map-title" className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-200 bg-gradient-to-br from-brand-50 via-white to-slate-50 px-5 py-6 sm:px-7 sm:py-8">
-        <div className="mx-auto flex max-w-2xl flex-col items-center text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-brand-100 bg-white text-brand-700 shadow-sm"><MapPin className="h-7 w-7" aria-hidden="true" /></div>
-          <h2 id="locations-map-title" className="mt-4 text-lg font-bold text-slate-950 sm:text-xl">{copy.mapUnavailableTitle}</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-600">{copy.mapUnavailableDescription}</p>
-        </div>
-      </div>
-      <div className="p-4 sm:p-6">
-        <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+    </div> : view === "map" ? <div className="space-y-4">
+      {mapRequestFailed && <div role="alert" className="flex items-center gap-3 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-sm text-rose-900"><Info className="h-4 w-4 shrink-0" aria-hidden="true" /><p className="min-w-0 flex-1">{copy.mapLoadError}</p><button type="button" onClick={() => void loadMapPins()} className="shrink-0 font-bold underline underline-offset-2">{copy.retry}</button></div>}
+      <LocationsMap
+        locations={locations}
+        visibleLocations={visibleLocations}
+        pins={mapPins}
+        storageReady={mapStorageReady}
+        storageLoading={mapStorageLoading}
+        canEdit={canEdit}
+        language={language}
+        copy={copy}
+        selectedLocationId={mapEditorLocationId}
+        onSelectedLocationChange={setMapEditorLocationId}
+        pinType={mapEditorPinType}
+        onPinTypeChange={setMapEditorPinType}
+        onMarkUsed={markUsed}
+        onSavePin={saveMapPin}
+      />
+      <section aria-labelledby="locations-map-title" className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-wrap items-end justify-between gap-2 border-b border-slate-100 px-4 py-4 sm:px-5">
           <div>
-            <h3 className="font-bold text-slate-900">{copy.unresolvedLocations}</h3>
+            <h2 id="locations-map-title" className="font-bold text-slate-900">{copy.unresolvedLocations}</h2>
             <p className="mt-0.5 text-sm text-slate-500">{copy.mapFollowsFilters}</p>
           </div>
-          <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-900">{resultCount} {visibleLocations.length === 1 ? copy.oneLocation : copy.manyLocations}</span>
+          <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-900">{visibleLocations.filter((location) => unpinnedLocationIds.has(location.id)).length} {copy.locationsWithoutCoordinates}</span>
         </div>
-        {visibleLocations.length > 0 ? <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
-          {visibleLocations.map((location) => {
+        {visibleLocations.some((location) => unpinnedLocationIds.has(location.id)) ? <ul className="divide-y divide-slate-100">
+          {visibleLocations.filter((location) => unpinnedLocationIds.has(location.id)).map((location) => {
             const item = activityById.get(location.id);
             const mapUrl = getLocationMapUrl(location);
             const truckUrl = safeGoogleMapsUrl(location.truck_entrance_url);
@@ -541,18 +596,17 @@ export function LocationsDirectory() {
                 {restriction && <p role="note" className="mt-2 flex items-start gap-1.5 text-sm font-semibold text-rose-800"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /><span>{restriction}</span></p>}
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
-                <button type="button" onClick={() => void toggleFavourite(location)} disabled={pendingActivity.has(location.id)} aria-pressed={item?.is_favourite === true} aria-label={item?.is_favourite ? copy.removeFavourite : copy.addFavourite} className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-60">
-                  <Heart className={`h-5 w-5 ${item?.is_favourite ? "fill-rose-500 text-rose-500" : ""}`} aria-hidden="true" />
-                </button>
-                {mapUrl && <a href={mapUrl} target="_blank" rel="noopener noreferrer" onClick={() => void markUsed(location)} aria-label={`${copy.map}: ${displayName}`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-700 px-3 text-sm font-bold text-white hover:bg-brand-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"><MapPin className="h-4 w-4" aria-hidden="true" />{copy.map}<ArrowUpRight className="h-4 w-4" aria-hidden="true" /></a>}
-                {truckUrl && <a href={truckUrl} target="_blank" rel="noopener noreferrer" onClick={() => void markUsed(location)} aria-label={`${copy.truckEntrance}: ${displayName}`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 text-sm font-semibold text-brand-800 hover:bg-brand-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"><MapPin className="h-4 w-4" aria-hidden="true" />{copy.truckEntrance}<ArrowUpRight className="h-4 w-4" aria-hidden="true" /></a>}
-                {canViewInternal && <button type="button" onClick={(event) => openDetails(location, event.currentTarget)} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"><Info className="h-4 w-4" aria-hidden="true" />{copy.details}</button>}
+                <button type="button" onClick={() => void toggleFavourite(location)} disabled={pendingActivity.has(location.id)} aria-pressed={item?.is_favourite === true} aria-label={item?.is_favourite ? copy.removeFavourite : copy.addFavourite} className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-60"><Heart className={`h-5 w-5 ${item?.is_favourite ? "fill-rose-500 text-rose-500" : ""}`} aria-hidden="true" /></button>
+                {mapUrl && <a href={mapUrl} target="_blank" rel="noopener noreferrer" onClick={() => void markUsed(location)} aria-label={`${copy.map}: ${displayName}`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-700 px-3 text-sm font-bold text-white hover:bg-brand-800"><MapPin className="h-4 w-4" aria-hidden="true" />{copy.map}<ArrowUpRight className="h-4 w-4" aria-hidden="true" /></a>}
+                {truckUrl && <a href={truckUrl} target="_blank" rel="noopener noreferrer" onClick={() => void markUsed(location)} aria-label={`${copy.truckEntrance}: ${displayName}`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 text-sm font-semibold text-brand-800 hover:bg-brand-100"><MapPin className="h-4 w-4" aria-hidden="true" />{copy.truckEntrance}<ArrowUpRight className="h-4 w-4" aria-hidden="true" /></a>}
+                {canViewInternal && <button type="button" onClick={(event) => openDetails(location, event.currentTarget)} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"><Info className="h-4 w-4" aria-hidden="true" />{copy.details}</button>}
+                {canEdit && <button type="button" onClick={() => { setMapEditorLocationId(location.id); setMapEditorPinType("destination"); document.getElementById("location-pin-editor")?.scrollIntoView({ behavior: "smooth", block: "center" }); }} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 text-sm font-bold text-brand-800 hover:bg-brand-100"><MapPin className="h-4 w-4" aria-hidden="true" />{copy.pinThisLocation}</button>}
               </div>
             </li>;
           })}
-        </ul> : <p className="rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500">{copy.noMatchesDescription}</p>}
-      </div>
-    </section> : visibleLocations.length > 0 ? <div className="grid gap-3 lg:grid-cols-2 lg:items-start lg:gap-4">
+        </ul> : <p className="px-4 py-8 text-center text-sm text-slate-500">{copy.allVisibleLocationsPinned}</p>}
+      </section>
+    </div> : visibleLocations.length > 0 ? <div className="grid gap-3 lg:grid-cols-2 lg:items-start lg:gap-4">
       {visibleLocations.map((location) => {
         const item = activityById.get(location.id);
         const mapUrl = getLocationMapUrl(location);

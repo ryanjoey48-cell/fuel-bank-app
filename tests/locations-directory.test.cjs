@@ -20,11 +20,15 @@ function loadTypeScriptModule(relativePath) {
 
 const {
   buildGoogleMapsSearchUrl,
+  formatCoordinates,
   getDispatchRestriction,
   getLocationDisplayName,
   getLocationMapUrl,
+  getUnpinnedLocationIds,
+  isValidCoordinates,
   matchesLocationFilter,
   matchesLocationSearch,
+  parseCoordinates,
   parseAlternativeNames,
   projectLocationForDirectory,
   safeGoogleMapsUrl,
@@ -118,6 +122,33 @@ test("alternative names retain distinct spellings and remove empty or duplicate 
   assert.deepEqual(parseAlternativeNames("Pacific Knit, PKF\nPacific Knit; PKF"), ["Pacific Knit", "PKF"]);
 });
 
+test("coordinate parsing accepts copied pairs and rejects malformed or out-of-range values", () => {
+  assert.deepEqual(parseCoordinates("13.7563, 100.5018"), { latitude: 13.7563, longitude: 100.5018 });
+  assert.deepEqual(parseCoordinates("(13.7563;100.5018)"), { latitude: 13.7563, longitude: 100.5018 });
+  assert.deepEqual(parseCoordinates("13.7563 100.5018"), { latitude: 13.7563, longitude: 100.5018 });
+  assert.equal(parseCoordinates("91, 100"), null);
+  assert.equal(parseCoordinates("13, 181"), null);
+  assert.equal(parseCoordinates("NaN, 100"), null);
+  assert.equal(parseCoordinates("13, Infinity"), null);
+  assert.equal(parseCoordinates("13.2, 100.3 trailing"), null);
+  assert.equal(isValidCoordinates(-90, 180), true);
+  assert.equal(isValidCoordinates(-90.001, 180), false);
+  assert.equal(isValidCoordinates(0, -180.001), false);
+  assert.equal(formatCoordinates({ latitude: 13.7563, longitude: 100.5018 }), "13.756300, 100.501800");
+});
+
+test("confirmed destination pins preserve separately named Pacific records and truck pins do not count as main pins", () => {
+  const pacificDestinations = [
+    { id: "knitting", company_name: "Pacific Knitting Factory" },
+    { id: "dyeing", company_name: "Pacific Dyeing & Finishing" }
+  ];
+  const unpinned = getUnpinnedLocationIds(pacificDestinations, [
+    { location_id: "knitting", pin_type: "destination" },
+    { location_id: "dyeing", pin_type: "truck_entrance" }
+  ]);
+  assert.deepEqual([...unpinned], ["dyeing"]);
+});
+
 test("Locations API keeps the existing read, write and delete permission gates", () => {
   const collectionApi = fs.readFileSync(path.resolve("app/api/locations/route.ts"), "utf8");
   const itemApi = fs.readFileSync(path.resolve("app/api/locations/[id]/route.ts"), "utf8");
@@ -146,4 +177,84 @@ test("Locations UI is subscribed to the existing language provider without addin
   const collectionApi = fs.readFileSync(path.resolve("app/api/locations/route.ts"), "utf8");
   assert.match(collectionApi, /projectLocationForDirectory\(location, includeInternal\)/);
   assert.match(collectionApi, /admin:user_management/);
+});
+
+test("interactive map uses a Thailand default, clustered markers, OSM attribution and a confirm-before-save editor", () => {
+  const map = fs.readFileSync(path.resolve("components/locations-map.tsx"), "utf8");
+  const css = fs.readFileSync(path.resolve("components/locations-map.module.css"), "utf8");
+  assert.match(map, /center:\s*\[15,\s*101\]/);
+  assert.match(map, /markerClusterGroup/);
+  assert.match(map, /tile\.openstreetmap\.org\/\{z\}\/\{x\}\/\{y\}\.png/);
+  assert.match(map, /openstreetmap\.org\/copyright/);
+  assert.match(map, /onSavePin\(/);
+  assert.match(map, /confirmAndSavePin/);
+  assert.match(map, /onClick=\{\(\)\s*=>\s*void\s+confirmAndSave\(\)\}/);
+  assert.match(map, /clickMapToChoose/);
+  assert.match(map, /role="application"/);
+  assert.match(map, /md:hidden/);
+  assert.match(css, /@media\s*\(max-width:\s*639px\)/);
+  assert.match(css, /\.ees-map-candidate/);
+});
+
+test("map pin API gates reads and confirmed writes through the existing EES permission model", () => {
+  const api = fs.readFileSync(path.resolve("app/api/locations/map-pins/route.ts"), "utf8");
+  assert.match(api, /requireVerifiedUser\(request\)/);
+  assert.match(api, /resolveAccountAccess\(admin, user\)/);
+  assert.match(api, /write \? "business:write" : "business:read"/);
+  assert.match(api, /body\.confirm !== true/);
+  assert.match(api, /isValidCoordinates\(body\.latitude, body\.longitude\)/);
+  assert.match(api, /onConflict:\s*"location_id,pin_type"/);
+  assert.match(api, /confirmed_by:\s*user\.id/);
+  assert.match(api, /pin_status:\s*"manual_confirmed"/);
+  assert.match(api, /storageReady:\s*false/);
+});
+
+test("proposed map schema is additive, idempotent and leaves the historical destination rows unchanged", () => {
+  const sql = fs.readFileSync(path.resolve("docs/ees-locations-map-pins-review-only.sql"), "utf8");
+  assert.match(sql, /REVIEW ONLY/i);
+  assert.match(sql, /create table if not exists public\.ees_location_map_pins/i);
+  assert.match(sql, /create table if not exists public\.ees_location_map_pin_history/i);
+  assert.match(sql, /unique \(location_id, pin_type\)/i);
+  assert.match(sql, /latitude between -90 and 90/i);
+  assert.match(sql, /longitude between -180 and 180/i);
+  assert.match(sql, /pin_status = 'manual_confirmed'/i);
+  assert.match(sql, /public\.is_office_account\(\)/i);
+  assert.match(sql, /public\.is_account_active\(\)/i);
+  assert.match(sql, /current_account_role\(\) in \('admin', 'office_staff', 'read_only'\)/i);
+  assert.match(sql, /current_account_role\(\) in \('admin', 'office_staff'\)/i);
+  assert.match(sql, /drop policy if exists[\s\S]*create policy/i);
+  assert.match(sql, /grant select, insert, update on public\.ees_location_map_pins to authenticated/i);
+  assert.match(sql, /revoke all on public\.ees_location_map_pins from anon, authenticated/i);
+  assert.doesNotMatch(sql, /alter\s+table\s+public\.ees_locations\b/i);
+  assert.doesNotMatch(sql, /update\s+public\.ees_locations\b/i);
+  assert.doesNotMatch(sql, /insert\s+into\s+public\.ees_locations\b/i);
+
+  const policyBlocks = new Map([...sql.matchAll(/create policy (\w+)[\s\S]*?\);/gi)].map((match) => [match[1], match[0].toLowerCase()]));
+  const readPolicy = policyBlocks.get("ees_location_map_pins_office_read");
+  assert.match(readPolicy, /for select to authenticated/);
+  assert.match(readPolicy, /using\s*\([\s\S]*is_office_account\(\)[\s\S]*is_account_active\(\)[\s\S]*current_account_role\(\) in \('admin', 'office_staff', 'read_only'\)/);
+  const insertPolicy = policyBlocks.get("ees_location_map_pins_office_insert");
+  assert.match(insertPolicy, /for insert to authenticated/);
+  assert.match(insertPolicy, /with check\s*\([\s\S]*is_office_account\(\)[\s\S]*is_account_active\(\)[\s\S]*current_account_role\(\) in \('admin', 'office_staff'\)[\s\S]*confirmed_by = auth\.uid\(\)[\s\S]*updated_by = auth\.uid\(\)/);
+  const updatePolicy = policyBlocks.get("ees_location_map_pins_office_update");
+  assert.match(updatePolicy, /for update to authenticated[\s\S]*using\s*\([\s\S]*is_office_account\(\)[\s\S]*is_account_active\(\)[\s\S]*current_account_role\(\) in \('admin', 'office_staff'\)[\s\S]*?\)\s*with check\s*\(/);
+  assert.match(updatePolicy, /confirmed_by = auth\.uid\(\)[\s\S]*updated_by = auth\.uid\(\)/);
+  assert.doesNotMatch(sql, /for delete to authenticated/i);
+
+  const api = fs.readFileSync(path.resolve("app/api/locations/map-pins/route.ts"), "utf8");
+  const apiColumns = api.match(/const pinFields = "([^"]+)"/)?.[1].split(",") ?? [];
+  for (const column of ["id", "location_id", "pin_type", "latitude", "longitude", "pin_status", "coordinate_source", "source_reference", "confirmed_by", "confirmed_at", "updated_at"]) {
+    assert.ok(apiColumns.includes(column), `${column} is selected by the map API`);
+    assert.match(sql, new RegExp(`\\b${column}\\b`), `${column} exists in the proposed schema`);
+  }
+});
+
+test("new map labels exist in English and Thai without translating stored company/address values", () => {
+  const source = fs.readFileSync(path.resolve("lib/translations.ts"), "utf8");
+  for (const key of ["confirmedPins", "candidatePins", "locationsWithoutCoordinates", "chooseOnMap", "coordinatesLabel", "invalidCoordinates", "confirmAndSavePin", "pinStorageUnavailable"]) {
+    assert.equal((source.match(new RegExp(`^\\s+${key}:`, "gm")) ?? []).length, 2, `${key} is translated in both languages`);
+  }
+  const map = fs.readFileSync(path.resolve("components/locations-map.tsx"), "utf8");
+  assert.match(map, /getLocationDisplayName\(location, language\)/);
+  assert.match(map, /location\.address/);
 });
