@@ -1,0 +1,13 @@
+
+> fuel-bank-app@0.1.0 lint
+> next lint
+
+
+./app/(dashboard)/inventory/page.tsx
+906:31  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+1151:23  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./components/admin/driver-accounts.tsx
+88:17  Warning: The ref value 'requestId.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'requestId.current' to a variable inside the effect, and use that variable in the cleanup function.  react-hooks/exhaustive-deps
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/app/api-reference/config/eslint#disabling-rules

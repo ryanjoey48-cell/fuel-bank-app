@@ -16,6 +16,7 @@ function loader(mocks = {}) {
     cache.set(filename, mod);
     mod.paths = Module._nodeModulePaths(path.dirname(filename));
     mod.require = request => {
+      if (request.endsWith(".module.css")) return {root:"maintenance-test-root"};
       if (request in mocks) return mocks[request];
       if (request.startsWith('.') || request.startsWith('@/')) {
         const base = request.startsWith('@/') ? path.resolve(request.slice(2)) : path.resolve(path.dirname(filename), request);
@@ -137,7 +138,7 @@ test('pages and Add Maintenance render with real bilingual translations and empt
 test('loader keeps zero-row results and reports the exact failed endpoint', async () => {
   let failed = null;
   const queried = [];
-  const api = loader({ '@/lib/supabase': { supabase: { from(table) {
+  const api = loader({ '@/lib/supabase': { supabase: { rpc(){return Promise.resolve({data:1,error:null})}, from(table) {
     queried.push(table);
     const query = { select() {return this}, order() {return this}, range() {return this}, abortSignal() {
       return Promise.resolve(table === failed ? { data: null, status: 404, error: { code: 'PGRST205', message: 'missing table' } } : { data: [], error: null, status: 200 });
@@ -152,7 +153,7 @@ test('loader keeps zero-row results and reports the exact failed endpoint', asyn
 });
 
 test('loaded empty pages and failed-query pages render without losing their retry action', () => {
-  for (const [file, errorIndex] of [['app/(dashboard)/maintenance/page.tsx', 2], ['app/(dashboard)/maintenance/analytics/page.tsx', 1]]) {
+  for (const [file, errorIndex] of [['app/(dashboard)/maintenance/page.tsx', 3], ['app/(dashboard)/maintenance/analytics/page.tsx', 1]]) {
     for (const failed of [false, true]) {
       let index = 0;
       const renderLoad = loader({
@@ -169,7 +170,9 @@ test('loaded empty pages and failed-query pages render without losing their retr
       });
       const html = renderToStaticMarkup(React.createElement(renderLoad(file).default));
       assert.ok(html.includes(translations.en.maintenance.refresh));
-      assert.ok(html.includes(failed ? 'maintenance_items (404, PGRST205)' : 'TEST'));
+      // A vehicle without confirmed service history belongs in onboarding,
+      // rather than the immediate mechanical action list.
+      assert.ok(html.includes(failed ? 'maintenance_items (404, PGRST205)' : file.includes('/analytics/') ? 'TEST' : 'First inspections &amp; record coverage'));
       if (failed) assert.ok(html.includes('role="alert"'));
     }
   }
@@ -219,13 +222,14 @@ test('compact history keeps full line items and actor identifiers inside hidden 
   for(const language of ['en','th']) {
     const renderLoad=loader({'@/lib/language-provider':{useLanguage:()=>({language,t:translations[language]})},'@/lib/use-account-access':{useAccountAccess:()=>({can:()=>false})},'@/lib/supabase':{supabase:{}}});
     const html=renderToStaticMarkup(React.createElement(renderLoad('components/maintenance-record-card.tsx').MaintenanceVisit,{record,data,reminders:[],onEdit(){},onChanged(){}}));
-    assert.ok(html.includes('aria-expanded="false"'));
-    const beforeDetails=html.slice(0,html.indexOf('hidden=""'));
-    assert.ok(!beforeDetails.includes('PRIVATE LINE'));
-    assert.ok(!beforeDetails.includes('private-actor-id'));
     assert.ok(html.includes('PRIVATE LINE 0'));
-    assert.ok(!html.includes(translations[language].maintenance.edit+'</button>'));
-    assert.ok(beforeDetails.includes('+2'));
+    assert.ok(!html.includes('PRIVATE LINE 2'));
+    assert.ok(!html.includes('private-actor-id'));
+    assert.ok(html.includes('+4'));
+    const expanded=renderToStaticMarkup(React.createElement(renderLoad('components/maintenance-record-card.tsx').MaintenanceVisit,{record,data,reminders:[],onEdit(){},onChanged(){},detailed:true}));
+    assert.ok(expanded.includes('role="dialog"'));
+    assert.ok(expanded.includes('PRIVATE LINE 0'));
+    assert.ok(expanded.includes('private-actor-id'));
   }
 });
 

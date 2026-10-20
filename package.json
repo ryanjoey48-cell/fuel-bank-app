@@ -6,12 +6,16 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
-    "test": "node --test tests/*.test.cjs"
+    "lint": "node scripts/lint.cjs",
+    "test": "node --test tests/*.test.cjs",
+    "test:hr": "node --test --test-concurrency=1 tests/hr-v7-*.test.cjs",
+    "test:hr:browser": "node tests/hr-v7-build.cjs && node tests/hr-v7-browser.cjs && node tests/hr-v7-people-layout.cjs && node tests/hr-v7-polish-browser.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",
     "clsx": "^2.1.1",
+    "leaflet": "^1.9.4",
+    "leaflet.markercluster": "^1.5.3",
     "lucide-react": "^0.511.0",
     "next": "^15.2.0",
     "pdfjs-dist": "^6.0.227",
@@ -19,9 +23,7 @@
     "react-dom": "^19.0.0",
     "sharp": "0.34.5",
     "tesseract.js": "^7.0.0",
-    "xlsx": "^0.18.5",
-    "leaflet": "^1.9.4",
-    "leaflet.markercluster": "^1.5.3"
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.9",

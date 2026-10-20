@@ -1,0 +1,5411 @@
+[
+  {
+    "url": "http://127.0.0.1:53204/api/hr/directory",
+    "status": 200,
+    "request": "{\"search\":\"\",\"status\":\"all\",\"vehicleType\":\"all\",\"sort\":\"name-asc\",\"page\":1,\"size\":25,\"kind\":\"all\",\"role\":\"all\"}",
+    "response": {
+      "rows": [
+        {
+          "id": "1",
+          "kind": "driver",
+          "name": "Synthetic Driver 01",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "1",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "2",
+          "kind": "driver",
+          "name": "Synthetic Driver 02",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "2",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "3",
+          "kind": "driver",
+          "name": "Synthetic Driver 03",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "3",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "4",
+          "kind": "driver",
+          "name": "Synthetic Driver 04",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "4",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "5",
+          "kind": "driver",
+          "name": "Synthetic Driver 05",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "5",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "6",
+          "kind": "driver",
+          "name": "Synthetic Driver 06",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "6",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "7",
+          "kind": "driver",
+          "name": "Synthetic Driver 07",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "7",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "8",
+          "kind": "driver",
+          "name": "Synthetic Driver 08",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "8",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "9",
+          "kind": "driver",
+          "name": "Synthetic Driver 09",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "9",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "10",
+          "kind": "driver",
+          "name": "Synthetic Driver 10",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "10",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "11",
+          "kind": "driver",
+          "name": "Synthetic Driver 11",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": {
+            "id": "10000000-0000-4000-8000-000000000001",
+            "name": "Synthetic fleet",
+            "type": "FOUR_WHEEL_TRUCK",
+            "model": null,
+            "registration": "FIXTURE-ONLY"
+          },
+          "driverId": "11",
+          "awayToday": false,
+          "startDate": "2026-01-01",
+          "department": null,
+          "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": {
+            "id": "10000000-0000-4000-8000-000000000001",
+            "name": "Synthetic fleet",
+            "type": "FOUR_WHEEL_TRUCK",
+            "model": null,
+            "registration": "FIXTURE-ONLY"
+          },
+          "employmentStatus": "active",
+          "operationalActive": true,
+          "personnelRecorded": true,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 4
+          }
+        },
+        {
+          "id": "12",
+          "kind": "driver",
+          "name": "Synthetic Driver 12",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "12",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "13",
+          "kind": "driver",
+          "name": "Synthetic Driver 13",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "13",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "14",
+          "kind": "driver",
+          "name": "Synthetic Driver 14",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "14",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "15",
+          "kind": "driver",
+          "name": "Synthetic Driver 15",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "15",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "16",
+          "kind": "driver",
+          "name": "Synthetic Driver 16",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "16",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "17",
+          "kind": "driver",
+          "name": "Synthetic Driver 17",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "17",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "18",
+          "kind": "driver",
+          "name": "Synthetic Driver 18",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "18",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "19",
+          "kind": "driver",
+          "name": "Synthetic Driver 19",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "19",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "20",
+          "kind": "driver",
+          "name": "Synthetic Driver 20",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "20",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "21",
+          "kind": "driver",
+          "name": "Synthetic Driver 21",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "21",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "22",
+          "kind": "driver",
+          "name": "Synthetic Driver 22",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "22",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "23",
+          "kind": "driver",
+          "name": "Synthetic Driver 23",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "23",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "24",
+          "kind": "driver",
+          "name": "Synthetic Driver 24",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "24",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "25",
+          "kind": "driver",
+          "name": "Synthetic Driver 25",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "25",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        }
+      ],
+      "roles": [],
+      "total": 32,
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "summary": {
+        "total": 32,
+        "awayToday": 0,
+        "actionsDue": 0,
+        "assignments": 1,
+        "followupsDue": 0,
+        "activeDrivers": 32,
+        "activeEmployees": 1,
+        "unrecordedEmployment": 31
+      },
+      "vehicleTypes": [
+        "FOUR_WHEEL_TRUCK"
+      ]
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/directory",
+    "status": 200,
+    "request": "{\"search\":\"\",\"status\":\"all\",\"vehicleType\":\"all\",\"sort\":\"name-asc\",\"page\":2,\"size\":25,\"kind\":\"all\",\"role\":\"all\"}",
+    "response": {
+      "rows": [
+        {
+          "id": "26",
+          "kind": "driver",
+          "name": "Synthetic Driver 26",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "26",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "27",
+          "kind": "driver",
+          "name": "Synthetic Driver 27",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "27",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "28",
+          "kind": "driver",
+          "name": "Synthetic Driver 28",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "28",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "29",
+          "kind": "driver",
+          "name": "Synthetic Driver 29",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "29",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "30",
+          "kind": "driver",
+          "name": "Synthetic Driver 30",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "30",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "31",
+          "kind": "driver",
+          "name": "Synthetic Driver 31",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "31",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "32",
+          "kind": "driver",
+          "name": "Synthetic Driver 32",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "32",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        }
+      ],
+      "roles": [],
+      "total": 32,
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "summary": {
+        "total": 32,
+        "awayToday": 0,
+        "actionsDue": 0,
+        "assignments": 1,
+        "followupsDue": 0,
+        "activeDrivers": 32,
+        "activeEmployees": 1,
+        "unrecordedEmployment": 31
+      },
+      "vehicleTypes": [
+        "FOUR_WHEEL_TRUCK"
+      ]
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/profile/driver/31?section=overview",
+    "status": 200,
+    "request": null,
+    "response": {
+      "data": {
+        "private": null,
+        "profile": null,
+        "timeline": []
+      },
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "section": "overview",
+      "employee": {
+        "id": "31",
+        "kind": "driver",
+        "name": "Synthetic Driver 31",
+        "jobRole": null,
+        "operate": true,
+        "vehicle": null,
+        "driverId": "31",
+        "awayToday": false,
+        "startDate": null,
+        "department": null,
+        "employeeId": null,
+        "nextFollowup": null,
+        "documentStatus": "not_recorded",
+        "employeeNumber": null,
+        "regularVehicle": null,
+        "employmentStatus": "not_recorded",
+        "operationalActive": true,
+        "personnelRecorded": false,
+        "profileCompleteness": {
+          "total": 8,
+          "recorded": 0
+        }
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/profile/driver/11?section=overview",
+    "status": 200,
+    "request": null,
+    "response": {
+      "data": {
+        "private": {
+          "english_name": null,
+          "legal_name_th": null
+        },
+        "profile": {
+          "id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "end_date": null,
+          "job_role": null,
+          "driver_id": "11",
+          "created_at": "2026-10-14T09:02:03.505+07:00",
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "department": null,
+          "start_date": "2026-01-01",
+          "updated_at": "2026-10-14T09:02:03.505+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "preferred_name": "Synthetic Driver 11",
+          "employee_number": null,
+          "employment_status": "active"
+        },
+        "timeline": [
+          {
+            "at": "2026-10-14T09:02:03.505+07:00",
+            "id": "0601bd21-32b7-40e3-9e78-805650359db4",
+            "type": "employment",
+            "status": "active"
+          }
+        ]
+      },
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "section": "overview",
+      "employee": {
+        "id": "11",
+        "kind": "driver",
+        "name": "Synthetic Driver 11",
+        "jobRole": null,
+        "operate": true,
+        "vehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "driverId": "11",
+        "awayToday": false,
+        "startDate": "2026-01-01",
+        "department": null,
+        "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+        "nextFollowup": null,
+        "documentStatus": "not_recorded",
+        "employeeNumber": null,
+        "regularVehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "employmentStatus": "active",
+        "operationalActive": true,
+        "personnelRecorded": true,
+        "profileCompleteness": {
+          "total": 8,
+          "recorded": 4
+        }
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/profile/driver/11?section=personnel",
+    "status": 200,
+    "request": null,
+    "response": {
+      "data": {
+        "private": {
+          "address": null,
+          "telephone": "0811111111",
+          "updated_at": "2026-10-14T09:02:03.505+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "english_name": null,
+          "legal_name_th": null,
+          "emergency_phone": null,
+          "employment_notes": null,
+          "emergency_contact": null
+        },
+        "profile": {
+          "id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "end_date": null,
+          "job_role": null,
+          "driver_id": "11",
+          "created_at": "2026-10-14T09:02:03.505+07:00",
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "department": null,
+          "start_date": "2026-01-01",
+          "updated_at": "2026-10-14T09:02:03.505+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "preferred_name": "Synthetic Driver 11",
+          "employee_number": null,
+          "employment_status": "active"
+        },
+        "compensation": [],
+        "employmentHistory": [
+          {
+            "id": "0601bd21-32b7-40e3-9e78-805650359db4",
+            "reason": "Synthetic initial record",
+            "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+            "recorded_at": "2026-10-14T09:02:03.505+07:00",
+            "recorded_by": "00000000-0000-4000-8000-000000000001",
+            "effective_on": "2026-01-01",
+            "employment_status": "active"
+          }
+        ]
+      },
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "section": "personnel",
+      "employee": {
+        "id": "11",
+        "kind": "driver",
+        "name": "Synthetic Driver 11",
+        "jobRole": null,
+        "operate": true,
+        "vehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "driverId": "11",
+        "awayToday": false,
+        "startDate": "2026-01-01",
+        "department": null,
+        "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+        "nextFollowup": null,
+        "documentStatus": "not_recorded",
+        "employeeNumber": null,
+        "regularVehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "employmentStatus": "active",
+        "operationalActive": true,
+        "personnelRecorded": true,
+        "profileCompleteness": {
+          "total": 8,
+          "recorded": 4
+        }
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/action",
+    "status": 200,
+    "request": "{\"action\":\"save_employee\",\"input\":{\"driverId\":\"11\",\"employeeId\":\"181d24d7-74d3-4b78-bc3a-d171612542c6\",\"telephone\":\"0899999999\"},\"requestId\":\"6e91491e-eede-4d65-91d2-58ed339c5206\"}",
+    "response": {
+      "id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+      "driverId": "11",
+      "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6"
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/profile/driver/11?section=personnel",
+    "status": 200,
+    "request": null,
+    "response": {
+      "data": {
+        "private": {
+          "address": null,
+          "telephone": "0899999999",
+          "updated_at": "2026-10-14T09:02:43.596+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "english_name": null,
+          "legal_name_th": null,
+          "emergency_phone": null,
+          "employment_notes": null,
+          "emergency_contact": null
+        },
+        "profile": {
+          "id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "end_date": null,
+          "job_role": null,
+          "driver_id": "11",
+          "created_at": "2026-10-14T09:02:03.505+07:00",
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "department": null,
+          "start_date": "2026-01-01",
+          "updated_at": "2026-10-14T09:02:43.596+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "preferred_name": "Synthetic Driver 11",
+          "employee_number": null,
+          "employment_status": "active"
+        },
+        "compensation": [],
+        "employmentHistory": [
+          {
+            "id": "0601bd21-32b7-40e3-9e78-805650359db4",
+            "reason": "Synthetic initial record",
+            "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+            "recorded_at": "2026-10-14T09:02:03.505+07:00",
+            "recorded_by": "00000000-0000-4000-8000-000000000001",
+            "effective_on": "2026-01-01",
+            "employment_status": "active"
+          }
+        ]
+      },
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "section": "personnel",
+      "employee": {
+        "id": "11",
+        "kind": "driver",
+        "name": "Synthetic Driver 11",
+        "jobRole": null,
+        "operate": true,
+        "vehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "driverId": "11",
+        "awayToday": false,
+        "startDate": "2026-01-01",
+        "department": null,
+        "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+        "nextFollowup": null,
+        "documentStatus": "not_recorded",
+        "employeeNumber": null,
+        "regularVehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "employmentStatus": "active",
+        "operationalActive": true,
+        "personnelRecorded": true,
+        "profileCompleteness": {
+          "total": 8,
+          "recorded": 4
+        }
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/profile/driver/11?section=personnel",
+    "status": 200,
+    "request": null,
+    "response": {
+      "data": {
+        "private": {
+          "address": null,
+          "telephone": "0899999999",
+          "updated_at": "2026-10-14T09:02:43.596+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "english_name": null,
+          "legal_name_th": null,
+          "emergency_phone": null,
+          "employment_notes": null,
+          "emergency_contact": null
+        },
+        "profile": {
+          "id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "end_date": null,
+          "job_role": null,
+          "driver_id": "11",
+          "created_at": "2026-10-14T09:02:03.505+07:00",
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "department": null,
+          "start_date": "2026-01-01",
+          "updated_at": "2026-10-14T09:02:43.596+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "preferred_name": "Synthetic Driver 11",
+          "employee_number": null,
+          "employment_status": "active"
+        },
+        "compensation": [],
+        "employmentHistory": [
+          {
+            "id": "0601bd21-32b7-40e3-9e78-805650359db4",
+            "reason": "Synthetic initial record",
+            "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+            "recorded_at": "2026-10-14T09:02:03.505+07:00",
+            "recorded_by": "00000000-0000-4000-8000-000000000001",
+            "effective_on": "2026-01-01",
+            "employment_status": "active"
+          }
+        ]
+      },
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "section": "personnel",
+      "employee": {
+        "id": "11",
+        "kind": "driver",
+        "name": "Synthetic Driver 11",
+        "jobRole": null,
+        "operate": true,
+        "vehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "driverId": "11",
+        "awayToday": false,
+        "startDate": "2026-01-01",
+        "department": null,
+        "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+        "nextFollowup": null,
+        "documentStatus": "not_recorded",
+        "employeeNumber": null,
+        "regularVehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "employmentStatus": "active",
+        "operationalActive": true,
+        "personnelRecorded": true,
+        "profileCompleteness": {
+          "total": 8,
+          "recorded": 4
+        }
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/profile/driver/11?section=overview",
+    "status": 200,
+    "request": null,
+    "response": {
+      "data": {
+        "private": {
+          "english_name": null,
+          "legal_name_th": null
+        },
+        "profile": {
+          "id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "end_date": null,
+          "job_role": null,
+          "driver_id": "11",
+          "created_at": "2026-10-14T09:02:03.505+07:00",
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "department": null,
+          "start_date": "2026-01-01",
+          "updated_at": "2026-10-14T09:02:43.596+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "preferred_name": "Synthetic Driver 11",
+          "employee_number": null,
+          "employment_status": "active"
+        },
+        "timeline": [
+          {
+            "at": "2026-10-14T09:02:03.505+07:00",
+            "id": "0601bd21-32b7-40e3-9e78-805650359db4",
+            "type": "employment",
+            "status": "active"
+          }
+        ]
+      },
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "section": "overview",
+      "employee": {
+        "id": "11",
+        "kind": "driver",
+        "name": "Synthetic Driver 11",
+        "jobRole": null,
+        "operate": true,
+        "vehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "driverId": "11",
+        "awayToday": false,
+        "startDate": "2026-01-01",
+        "department": null,
+        "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+        "nextFollowup": null,
+        "documentStatus": "not_recorded",
+        "employeeNumber": null,
+        "regularVehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "employmentStatus": "active",
+        "operationalActive": true,
+        "personnelRecorded": true,
+        "profileCompleteness": {
+          "total": 8,
+          "recorded": 4
+        }
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/profile/driver/11?section=personnel",
+    "status": 200,
+    "request": null,
+    "response": {
+      "data": {
+        "private": {
+          "address": null,
+          "telephone": "0899999999",
+          "updated_at": "2026-10-14T09:02:43.596+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "english_name": null,
+          "legal_name_th": null,
+          "emergency_phone": null,
+          "employment_notes": null,
+          "emergency_contact": null
+        },
+        "profile": {
+          "id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "end_date": null,
+          "job_role": null,
+          "driver_id": "11",
+          "created_at": "2026-10-14T09:02:03.505+07:00",
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "department": null,
+          "start_date": "2026-01-01",
+          "updated_at": "2026-10-14T09:02:43.596+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "preferred_name": "Synthetic Driver 11",
+          "employee_number": null,
+          "employment_status": "active"
+        },
+        "compensation": [],
+        "employmentHistory": [
+          {
+            "id": "0601bd21-32b7-40e3-9e78-805650359db4",
+            "reason": "Synthetic initial record",
+            "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+            "recorded_at": "2026-10-14T09:02:03.505+07:00",
+            "recorded_by": "00000000-0000-4000-8000-000000000001",
+            "effective_on": "2026-01-01",
+            "employment_status": "active"
+          }
+        ]
+      },
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "section": "personnel",
+      "employee": {
+        "id": "11",
+        "kind": "driver",
+        "name": "Synthetic Driver 11",
+        "jobRole": null,
+        "operate": true,
+        "vehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "driverId": "11",
+        "awayToday": false,
+        "startDate": "2026-01-01",
+        "department": null,
+        "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+        "nextFollowup": null,
+        "documentStatus": "not_recorded",
+        "employeeNumber": null,
+        "regularVehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "employmentStatus": "active",
+        "operationalActive": true,
+        "personnelRecorded": true,
+        "profileCompleteness": {
+          "total": 8,
+          "recorded": 4
+        }
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/directory",
+    "status": 200,
+    "request": "{\"search\":\"\",\"status\":\"all\",\"vehicleType\":\"all\",\"sort\":\"name-asc\",\"page\":1,\"size\":25,\"kind\":\"all\",\"role\":\"all\"}",
+    "response": {
+      "rows": [
+        {
+          "id": "1",
+          "kind": "driver",
+          "name": "Synthetic Driver 01",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "1",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "2",
+          "kind": "driver",
+          "name": "Synthetic Driver 02",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "2",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "3",
+          "kind": "driver",
+          "name": "Synthetic Driver 03",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "3",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "4",
+          "kind": "driver",
+          "name": "Synthetic Driver 04",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "4",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "5",
+          "kind": "driver",
+          "name": "Synthetic Driver 05",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "5",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "6",
+          "kind": "driver",
+          "name": "Synthetic Driver 06",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "6",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "7",
+          "kind": "driver",
+          "name": "Synthetic Driver 07",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "7",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "8",
+          "kind": "driver",
+          "name": "Synthetic Driver 08",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "8",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "9",
+          "kind": "driver",
+          "name": "Synthetic Driver 09",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "9",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "10",
+          "kind": "driver",
+          "name": "Synthetic Driver 10",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "10",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "11",
+          "kind": "driver",
+          "name": "Synthetic Driver 11",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": {
+            "id": "10000000-0000-4000-8000-000000000001",
+            "name": "Synthetic fleet",
+            "type": "FOUR_WHEEL_TRUCK",
+            "model": null,
+            "registration": "FIXTURE-ONLY"
+          },
+          "driverId": "11",
+          "awayToday": false,
+          "startDate": "2026-01-01",
+          "department": null,
+          "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": {
+            "id": "10000000-0000-4000-8000-000000000001",
+            "name": "Synthetic fleet",
+            "type": "FOUR_WHEEL_TRUCK",
+            "model": null,
+            "registration": "FIXTURE-ONLY"
+          },
+          "employmentStatus": "active",
+          "operationalActive": true,
+          "personnelRecorded": true,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 4
+          }
+        },
+        {
+          "id": "12",
+          "kind": "driver",
+          "name": "Synthetic Driver 12",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "12",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "13",
+          "kind": "driver",
+          "name": "Synthetic Driver 13",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "13",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "14",
+          "kind": "driver",
+          "name": "Synthetic Driver 14",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "14",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "15",
+          "kind": "driver",
+          "name": "Synthetic Driver 15",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "15",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "16",
+          "kind": "driver",
+          "name": "Synthetic Driver 16",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "16",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "17",
+          "kind": "driver",
+          "name": "Synthetic Driver 17",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "17",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "18",
+          "kind": "driver",
+          "name": "Synthetic Driver 18",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "18",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "19",
+          "kind": "driver",
+          "name": "Synthetic Driver 19",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "19",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "20",
+          "kind": "driver",
+          "name": "Synthetic Driver 20",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "20",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "21",
+          "kind": "driver",
+          "name": "Synthetic Driver 21",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "21",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "22",
+          "kind": "driver",
+          "name": "Synthetic Driver 22",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "22",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "23",
+          "kind": "driver",
+          "name": "Synthetic Driver 23",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "23",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "24",
+          "kind": "driver",
+          "name": "Synthetic Driver 24",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "24",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        },
+        {
+          "id": "25",
+          "kind": "driver",
+          "name": "Synthetic Driver 25",
+          "jobRole": null,
+          "operate": true,
+          "vehicle": null,
+          "driverId": "25",
+          "awayToday": false,
+          "startDate": null,
+          "department": null,
+          "employeeId": null,
+          "nextFollowup": null,
+          "documentStatus": "not_recorded",
+          "employeeNumber": null,
+          "regularVehicle": null,
+          "employmentStatus": "not_recorded",
+          "operationalActive": true,
+          "personnelRecorded": false,
+          "profileCompleteness": {
+            "total": 8,
+            "recorded": 0
+          }
+        }
+      ],
+      "roles": [],
+      "total": 32,
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "summary": {
+        "total": 32,
+        "awayToday": 0,
+        "actionsDue": 0,
+        "assignments": 1,
+        "followupsDue": 0,
+        "activeDrivers": 32,
+        "activeEmployees": 1,
+        "unrecordedEmployment": 31
+      },
+      "vehicleTypes": [
+        "FOUR_WHEEL_TRUCK"
+      ]
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/profile/driver/11?section=overview",
+    "status": 200,
+    "request": null,
+    "response": {
+      "data": {
+        "private": {
+          "english_name": null,
+          "legal_name_th": null
+        },
+        "profile": {
+          "id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "end_date": null,
+          "job_role": null,
+          "driver_id": "11",
+          "created_at": "2026-10-14T09:02:03.505+07:00",
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "department": null,
+          "start_date": "2026-01-01",
+          "updated_at": "2026-10-14T09:02:43.596+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "preferred_name": "Synthetic Driver 11",
+          "employee_number": null,
+          "employment_status": "active"
+        },
+        "timeline": [
+          {
+            "at": "2026-10-14T09:02:03.505+07:00",
+            "id": "0601bd21-32b7-40e3-9e78-805650359db4",
+            "type": "employment",
+            "status": "active"
+          }
+        ]
+      },
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "section": "overview",
+      "employee": {
+        "id": "11",
+        "kind": "driver",
+        "name": "Synthetic Driver 11",
+        "jobRole": null,
+        "operate": true,
+        "vehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "driverId": "11",
+        "awayToday": false,
+        "startDate": "2026-01-01",
+        "department": null,
+        "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+        "nextFollowup": null,
+        "documentStatus": "not_recorded",
+        "employeeNumber": null,
+        "regularVehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "employmentStatus": "active",
+        "operationalActive": true,
+        "personnelRecorded": true,
+        "profileCompleteness": {
+          "total": 8,
+          "recorded": 4
+        }
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/profile/driver/11?section=personnel",
+    "status": 200,
+    "request": null,
+    "response": {
+      "data": {
+        "private": {
+          "address": null,
+          "telephone": "0899999999",
+          "updated_at": "2026-10-14T09:02:43.596+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "english_name": null,
+          "legal_name_th": null,
+          "emergency_phone": null,
+          "employment_notes": null,
+          "emergency_contact": null
+        },
+        "profile": {
+          "id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "end_date": null,
+          "job_role": null,
+          "driver_id": "11",
+          "created_at": "2026-10-14T09:02:03.505+07:00",
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "department": null,
+          "start_date": "2026-01-01",
+          "updated_at": "2026-10-14T09:02:43.596+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "preferred_name": "Synthetic Driver 11",
+          "employee_number": null,
+          "employment_status": "active"
+        },
+        "compensation": [],
+        "employmentHistory": [
+          {
+            "id": "0601bd21-32b7-40e3-9e78-805650359db4",
+            "reason": "Synthetic initial record",
+            "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+            "recorded_at": "2026-10-14T09:02:03.505+07:00",
+            "recorded_by": "00000000-0000-4000-8000-000000000001",
+            "effective_on": "2026-01-01",
+            "employment_status": "active"
+          }
+        ]
+      },
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "section": "personnel",
+      "employee": {
+        "id": "11",
+        "kind": "driver",
+        "name": "Synthetic Driver 11",
+        "jobRole": null,
+        "operate": true,
+        "vehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "driverId": "11",
+        "awayToday": false,
+        "startDate": "2026-01-01",
+        "department": null,
+        "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+        "nextFollowup": null,
+        "documentStatus": "not_recorded",
+        "employeeNumber": null,
+        "regularVehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "employmentStatus": "active",
+        "operationalActive": true,
+        "personnelRecorded": true,
+        "profileCompleteness": {
+          "total": 8,
+          "recorded": 4
+        }
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/action",
+    "status": 200,
+    "request": "{\"action\":\"save_employee\",\"input\":{\"driverId\":\"11\",\"employeeId\":\"181d24d7-74d3-4b78-bc3a-d171612542c6\",\"telephone\":\"0877777777\"},\"requestId\":\"81613d8d-7dd5-4333-a46f-ac32ca27d42d\"}",
+    "response": {
+      "id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+      "driverId": "11",
+      "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6"
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/profile/driver/11?section=personnel",
+    "status": 200,
+    "request": null,
+    "response": {
+      "data": {
+        "private": {
+          "address": null,
+          "telephone": "0899999999",
+          "updated_at": "2026-10-14T09:02:46.832+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "english_name": null,
+          "legal_name_th": null,
+          "emergency_phone": null,
+          "employment_notes": null,
+          "emergency_contact": null
+        },
+        "profile": {
+          "id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "end_date": null,
+          "job_role": null,
+          "driver_id": "11",
+          "created_at": "2026-10-14T09:02:03.505+07:00",
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "department": null,
+          "start_date": "2026-01-01",
+          "updated_at": "2026-10-14T09:02:46.832+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "preferred_name": "Synthetic Driver 11",
+          "employee_number": null,
+          "employment_status": "active"
+        },
+        "compensation": [],
+        "employmentHistory": [
+          {
+            "id": "0601bd21-32b7-40e3-9e78-805650359db4",
+            "reason": "Synthetic initial record",
+            "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+            "recorded_at": "2026-10-14T09:02:03.505+07:00",
+            "recorded_by": "00000000-0000-4000-8000-000000000001",
+            "effective_on": "2026-01-01",
+            "employment_status": "active"
+          }
+        ]
+      },
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "section": "personnel",
+      "employee": {
+        "id": "11",
+        "kind": "driver",
+        "name": "Synthetic Driver 11",
+        "jobRole": null,
+        "operate": true,
+        "vehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "driverId": "11",
+        "awayToday": false,
+        "startDate": "2026-01-01",
+        "department": null,
+        "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+        "nextFollowup": null,
+        "documentStatus": "not_recorded",
+        "employeeNumber": null,
+        "regularVehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "employmentStatus": "active",
+        "operationalActive": true,
+        "personnelRecorded": true,
+        "profileCompleteness": {
+          "total": 8,
+          "recorded": 4
+        }
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/action",
+    "status": 200,
+    "request": "{\"action\":\"save_employee\",\"input\":{\"driverId\":\"11\",\"employeeId\":\"181d24d7-74d3-4b78-bc3a-d171612542c6\",\"telephone\":\"0877777777\"},\"requestId\":\"81613d8d-7dd5-4333-a46f-ac32ca27d42d\"}",
+    "response": {
+      "id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+      "driverId": "11",
+      "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6"
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/profile/driver/11?section=personnel",
+    "status": 200,
+    "request": null,
+    "response": {
+      "data": {
+        "private": {
+          "address": null,
+          "telephone": "0877777777",
+          "updated_at": "2026-10-14T09:02:46.832+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "english_name": null,
+          "legal_name_th": null,
+          "emergency_phone": null,
+          "employment_notes": null,
+          "emergency_contact": null
+        },
+        "profile": {
+          "id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "end_date": null,
+          "job_role": null,
+          "driver_id": "11",
+          "created_at": "2026-10-14T09:02:03.505+07:00",
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "department": null,
+          "start_date": "2026-01-01",
+          "updated_at": "2026-10-14T09:02:46.832+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "preferred_name": "Synthetic Driver 11",
+          "employee_number": null,
+          "employment_status": "active"
+        },
+        "compensation": [],
+        "employmentHistory": [
+          {
+            "id": "0601bd21-32b7-40e3-9e78-805650359db4",
+            "reason": "Synthetic initial record",
+            "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+            "recorded_at": "2026-10-14T09:02:03.505+07:00",
+            "recorded_by": "00000000-0000-4000-8000-000000000001",
+            "effective_on": "2026-01-01",
+            "employment_status": "active"
+          }
+        ]
+      },
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "section": "personnel",
+      "employee": {
+        "id": "11",
+        "kind": "driver",
+        "name": "Synthetic Driver 11",
+        "jobRole": null,
+        "operate": true,
+        "vehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "driverId": "11",
+        "awayToday": false,
+        "startDate": "2026-01-01",
+        "department": null,
+        "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+        "nextFollowup": null,
+        "documentStatus": "not_recorded",
+        "employeeNumber": null,
+        "regularVehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "employmentStatus": "active",
+        "operationalActive": true,
+        "personnelRecorded": true,
+        "profileCompleteness": {
+          "total": 8,
+          "recorded": 4
+        }
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/profile/driver/11?section=personnel",
+    "status": 200,
+    "request": null,
+    "response": {
+      "data": {
+        "private": {
+          "address": null,
+          "telephone": "0877777777",
+          "updated_at": "2026-10-14T09:02:46.832+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "english_name": null,
+          "legal_name_th": null,
+          "emergency_phone": null,
+          "employment_notes": null,
+          "emergency_contact": null
+        },
+        "profile": {
+          "id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "end_date": null,
+          "job_role": null,
+          "driver_id": "11",
+          "created_at": "2026-10-14T09:02:03.505+07:00",
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "department": null,
+          "start_date": "2026-01-01",
+          "updated_at": "2026-10-14T09:02:46.832+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "preferred_name": "Synthetic Driver 11",
+          "employee_number": null,
+          "employment_status": "active"
+        },
+        "compensation": [],
+        "employmentHistory": [
+          {
+            "id": "0601bd21-32b7-40e3-9e78-805650359db4",
+            "reason": "Synthetic initial record",
+            "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+            "recorded_at": "2026-10-14T09:02:03.505+07:00",
+            "recorded_by": "00000000-0000-4000-8000-000000000001",
+            "effective_on": "2026-01-01",
+            "employment_status": "active"
+          }
+        ]
+      },
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "section": "personnel",
+      "employee": {
+        "id": "11",
+        "kind": "driver",
+        "name": "Synthetic Driver 11",
+        "jobRole": null,
+        "operate": true,
+        "vehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "driverId": "11",
+        "awayToday": false,
+        "startDate": "2026-01-01",
+        "department": null,
+        "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+        "nextFollowup": null,
+        "documentStatus": "not_recorded",
+        "employeeNumber": null,
+        "regularVehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "employmentStatus": "active",
+        "operationalActive": true,
+        "personnelRecorded": true,
+        "profileCompleteness": {
+          "total": 8,
+          "recorded": 4
+        }
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/action",
+    "status": 200,
+    "request": "{\"action\":\"save_employee\",\"input\":{\"driverId\":\"11\",\"employeeId\":\"181d24d7-74d3-4b78-bc3a-d171612542c6\",\"telephone\":\"0866666666\"},\"requestId\":\"82d8f406-b2c9-4f31-9303-b16d9650db46\"}",
+    "response": {
+      "id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+      "driverId": "11",
+      "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6"
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/profile/driver/11?section=personnel",
+    "status": 200,
+    "request": null,
+    "response": {
+      "data": {
+        "private": {
+          "address": null,
+          "telephone": "0866666666",
+          "updated_at": "2026-10-14T09:02:47.86+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "english_name": null,
+          "legal_name_th": null,
+          "emergency_phone": null,
+          "employment_notes": null,
+          "emergency_contact": null
+        },
+        "profile": {
+          "id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "end_date": null,
+          "job_role": null,
+          "driver_id": "11",
+          "created_at": "2026-10-14T09:02:03.505+07:00",
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "department": null,
+          "start_date": "2026-01-01",
+          "updated_at": "2026-10-14T09:02:47.86+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "preferred_name": "Synthetic Driver 11",
+          "employee_number": null,
+          "employment_status": "active"
+        },
+        "compensation": [],
+        "employmentHistory": [
+          {
+            "id": "0601bd21-32b7-40e3-9e78-805650359db4",
+            "reason": "Synthetic initial record",
+            "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+            "recorded_at": "2026-10-14T09:02:03.505+07:00",
+            "recorded_by": "00000000-0000-4000-8000-000000000001",
+            "effective_on": "2026-01-01",
+            "employment_status": "active"
+          }
+        ]
+      },
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "section": "personnel",
+      "employee": {
+        "id": "11",
+        "kind": "driver",
+        "name": "Synthetic Driver 11",
+        "jobRole": null,
+        "operate": true,
+        "vehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "driverId": "11",
+        "awayToday": false,
+        "startDate": "2026-01-01",
+        "department": null,
+        "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+        "nextFollowup": null,
+        "documentStatus": "not_recorded",
+        "employeeNumber": null,
+        "regularVehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "employmentStatus": "active",
+        "operationalActive": true,
+        "personnelRecorded": true,
+        "profileCompleteness": {
+          "total": 8,
+          "recorded": 4
+        }
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/profile/driver/11?section=personnel",
+    "status": 200,
+    "request": null,
+    "response": {
+      "data": {
+        "private": {
+          "address": null,
+          "telephone": "0866666666",
+          "updated_at": "2026-10-14T09:02:47.86+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "english_name": null,
+          "legal_name_th": null,
+          "emergency_phone": null,
+          "employment_notes": null,
+          "emergency_contact": null
+        },
+        "profile": {
+          "id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "end_date": null,
+          "job_role": null,
+          "driver_id": "11",
+          "created_at": "2026-10-14T09:02:03.505+07:00",
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "department": null,
+          "start_date": "2026-01-01",
+          "updated_at": "2026-10-14T09:02:47.86+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "preferred_name": "Synthetic Driver 11",
+          "employee_number": null,
+          "employment_status": "active"
+        },
+        "compensation": [],
+        "employmentHistory": [
+          {
+            "id": "0601bd21-32b7-40e3-9e78-805650359db4",
+            "reason": "Synthetic initial record",
+            "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+            "recorded_at": "2026-10-14T09:02:03.505+07:00",
+            "recorded_by": "00000000-0000-4000-8000-000000000001",
+            "effective_on": "2026-01-01",
+            "employment_status": "active"
+          }
+        ]
+      },
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "section": "personnel",
+      "employee": {
+        "id": "11",
+        "kind": "driver",
+        "name": "Synthetic Driver 11",
+        "jobRole": null,
+        "operate": true,
+        "vehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "driverId": "11",
+        "awayToday": false,
+        "startDate": "2026-01-01",
+        "department": null,
+        "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+        "nextFollowup": null,
+        "documentStatus": "not_recorded",
+        "employeeNumber": null,
+        "regularVehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "employmentStatus": "active",
+        "operationalActive": true,
+        "personnelRecorded": true,
+        "profileCompleteness": {
+          "total": 8,
+          "recorded": 4
+        }
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/action",
+    "status": 200,
+    "request": "{\"action\":\"save_employee\",\"input\":{\"driverId\":\"11\",\"employeeId\":\"181d24d7-74d3-4b78-bc3a-d171612542c6\",\"telephone\":\"0855555555\"},\"requestId\":\"4561e93f-403b-4900-b1a5-3a001d1ee19d\"}",
+    "response": {
+      "id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+      "driverId": "11",
+      "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6"
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/profile/driver/11?section=personnel",
+    "status": 200,
+    "request": null,
+    "response": {
+      "data": {
+        "private": {
+          "address": null,
+          "telephone": "0855555555",
+          "updated_at": "2026-10-14T09:02:48.989+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "english_name": null,
+          "legal_name_th": null,
+          "emergency_phone": null,
+          "employment_notes": null,
+          "emergency_contact": null
+        },
+        "profile": {
+          "id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "end_date": null,
+          "job_role": null,
+          "driver_id": "11",
+          "created_at": "2026-10-14T09:02:03.505+07:00",
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "department": null,
+          "start_date": "2026-01-01",
+          "updated_at": "2026-10-14T09:02:48.989+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "preferred_name": "Synthetic Driver 11",
+          "employee_number": null,
+          "employment_status": "active"
+        },
+        "compensation": [],
+        "employmentHistory": [
+          {
+            "id": "0601bd21-32b7-40e3-9e78-805650359db4",
+            "reason": "Synthetic initial record",
+            "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+            "recorded_at": "2026-10-14T09:02:03.505+07:00",
+            "recorded_by": "00000000-0000-4000-8000-000000000001",
+            "effective_on": "2026-01-01",
+            "employment_status": "active"
+          }
+        ]
+      },
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "section": "personnel",
+      "employee": {
+        "id": "11",
+        "kind": "driver",
+        "name": "Synthetic Driver 11",
+        "jobRole": null,
+        "operate": true,
+        "vehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "driverId": "11",
+        "awayToday": false,
+        "startDate": "2026-01-01",
+        "department": null,
+        "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+        "nextFollowup": null,
+        "documentStatus": "not_recorded",
+        "employeeNumber": null,
+        "regularVehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "employmentStatus": "active",
+        "operationalActive": true,
+        "personnelRecorded": true,
+        "profileCompleteness": {
+          "total": 8,
+          "recorded": 4
+        }
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/profile/driver/11?section=personnel",
+    "status": 200,
+    "request": null,
+    "response": {
+      "data": {
+        "private": {
+          "address": null,
+          "telephone": "0855555555",
+          "updated_at": "2026-10-14T09:02:48.989+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "english_name": null,
+          "legal_name_th": null,
+          "emergency_phone": null,
+          "employment_notes": null,
+          "emergency_contact": null
+        },
+        "profile": {
+          "id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "end_date": null,
+          "job_role": null,
+          "driver_id": "11",
+          "created_at": "2026-10-14T09:02:03.505+07:00",
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "department": null,
+          "start_date": "2026-01-01",
+          "updated_at": "2026-10-14T09:02:48.989+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "preferred_name": "Synthetic Driver 11",
+          "employee_number": null,
+          "employment_status": "active"
+        },
+        "compensation": [],
+        "employmentHistory": [
+          {
+            "id": "0601bd21-32b7-40e3-9e78-805650359db4",
+            "reason": "Synthetic initial record",
+            "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+            "recorded_at": "2026-10-14T09:02:03.505+07:00",
+            "recorded_by": "00000000-0000-4000-8000-000000000001",
+            "effective_on": "2026-01-01",
+            "employment_status": "active"
+          }
+        ]
+      },
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "section": "personnel",
+      "employee": {
+        "id": "11",
+        "kind": "driver",
+        "name": "Synthetic Driver 11",
+        "jobRole": null,
+        "operate": true,
+        "vehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "driverId": "11",
+        "awayToday": false,
+        "startDate": "2026-01-01",
+        "department": null,
+        "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+        "nextFollowup": null,
+        "documentStatus": "not_recorded",
+        "employeeNumber": null,
+        "regularVehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "employmentStatus": "active",
+        "operationalActive": true,
+        "personnelRecorded": true,
+        "profileCompleteness": {
+          "total": 8,
+          "recorded": 4
+        }
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/profile/driver/11?section=personnel",
+    "status": 200,
+    "request": null,
+    "response": {
+      "data": {
+        "private": {
+          "address": null,
+          "telephone": "0866666666",
+          "updated_at": "2026-10-14T09:02:47.86+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "english_name": null,
+          "legal_name_th": null,
+          "emergency_phone": null,
+          "employment_notes": null,
+          "emergency_contact": null
+        },
+        "profile": {
+          "id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "end_date": null,
+          "job_role": null,
+          "driver_id": "11",
+          "created_at": "2026-10-14T09:02:03.505+07:00",
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "department": null,
+          "start_date": "2026-01-01",
+          "updated_at": "2026-10-14T09:02:47.86+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "preferred_name": "Synthetic Driver 11",
+          "employee_number": null,
+          "employment_status": "active"
+        },
+        "compensation": [],
+        "employmentHistory": [
+          {
+            "id": "0601bd21-32b7-40e3-9e78-805650359db4",
+            "reason": "Synthetic initial record",
+            "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+            "recorded_at": "2026-10-14T09:02:03.505+07:00",
+            "recorded_by": "00000000-0000-4000-8000-000000000001",
+            "effective_on": "2026-01-01",
+            "employment_status": "active"
+          }
+        ]
+      },
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "section": "personnel",
+      "employee": {
+        "id": "11",
+        "kind": "driver",
+        "name": "Synthetic Driver 11",
+        "jobRole": null,
+        "operate": true,
+        "vehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "driverId": "11",
+        "awayToday": false,
+        "startDate": "2026-01-01",
+        "department": null,
+        "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+        "nextFollowup": null,
+        "documentStatus": "not_recorded",
+        "employeeNumber": null,
+        "regularVehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "employmentStatus": "active",
+        "operationalActive": true,
+        "personnelRecorded": true,
+        "profileCompleteness": {
+          "total": 8,
+          "recorded": 4
+        }
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/profile/driver/11?section=absences",
+    "status": 200,
+    "request": null,
+    "response": {
+      "data": {
+        "rows": [],
+        "today": "2026-10-14",
+        "total": 0
+      },
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "section": "absences",
+      "employee": {
+        "id": "11",
+        "kind": "driver",
+        "name": "Synthetic Driver 11",
+        "jobRole": null,
+        "operate": true,
+        "vehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "driverId": "11",
+        "awayToday": false,
+        "startDate": "2026-01-01",
+        "department": null,
+        "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+        "nextFollowup": null,
+        "documentStatus": "not_recorded",
+        "employeeNumber": null,
+        "regularVehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "employmentStatus": "active",
+        "operationalActive": true,
+        "personnelRecorded": true,
+        "profileCompleteness": {
+          "total": 8,
+          "recorded": 4
+        }
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/people/absences?page=1&status=all&view=all&search=&employeeId=181d24d7-74d3-4b78-bc3a-d171612542c6",
+    "status": 200,
+    "request": null,
+    "response": {
+      "rows": [],
+      "today": "2026-10-14",
+      "total": 0
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/people/choices",
+    "status": 200,
+    "request": null,
+    "response": {
+      "vehicles": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "FIXTURE-ONLY"
+        }
+      ],
+      "employees": [
+        {
+          "id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "name": "Synthetic Driver 11"
+        }
+      ],
+      "responsible": [
+        {
+          "id": "00000000-0000-4000-8000-000000000001",
+          "name": "Synthetic HR"
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000002",
+          "name": "Synthetic Office"
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000003",
+          "name": "Synthetic Driver Account"
+        }
+      ]
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/profile/employee/181d24d7-74d3-4b78-bc3a-d171612542c6?section=documents",
+    "status": 200,
+    "request": null,
+    "response": {
+      "data": {
+        "licences": [],
+        "policies": [],
+        "documents": [],
+        "licenceRules": [],
+        "vehicleTypes": [
+          "FOUR_WHEEL_TRUCK"
+        ]
+      },
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "section": "documents",
+      "employee": {
+        "id": "11",
+        "kind": "driver",
+        "name": "Synthetic Driver 11",
+        "jobRole": null,
+        "operate": true,
+        "vehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "driverId": "11",
+        "awayToday": false,
+        "startDate": "2026-01-01",
+        "department": null,
+        "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+        "nextFollowup": null,
+        "documentStatus": "not_recorded",
+        "employeeNumber": null,
+        "regularVehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "employmentStatus": "active",
+        "operationalActive": true,
+        "personnelRecorded": true,
+        "profileCompleteness": {
+          "total": 8,
+          "recorded": 4
+        }
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/people/absences",
+    "status": 200,
+    "request": "{\"input\":{\"employeeId\":\"181d24d7-74d3-4b78-bc3a-d171612542c6\",\"category\":\"sick\",\"status\":\"requested\",\"documentIds\":[],\"startDate\":\"2026-10-14\",\"endDate\":\"2026-10-14\",\"returnStatus\":\"expected\",\"notes\":\"Synthetic absence browser note\"},\"requestId\":\"8ed4ce16-1137-44ed-b765-61ab181db3af\"}",
+    "response": {
+      "id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+      "version": 1
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/people/absences?employeeId=181d24d7-74d3-4b78-bc3a-d171612542c6&id=cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+    "status": 200,
+    "request": null,
+    "response": {
+      "rows": [
+        {
+          "id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+          "notes": "Synthetic absence browser note",
+          "events": [
+            {
+              "id": "d064fff5-b733-433b-b78a-accb326bf477",
+              "actor_id": "00000000-0000-4000-8000-000000000001",
+              "snapshot": {
+                "id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+                "notes": "Synthetic absence browser note",
+                "status": "requested",
+                "version": 1,
+                "category": "sick",
+                "end_date": "2026-10-14",
+                "created_at": "2026-10-14T09:02:50.304+07:00",
+                "created_by": "00000000-0000-4000-8000-000000000001",
+                "start_date": "2026-10-14",
+                "updated_at": "2026-10-14T09:02:50.304+07:00",
+                "updated_by": "00000000-0000-4000-8000-000000000001",
+                "approved_at": null,
+                "approved_by": null,
+                "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+                "return_date": null,
+                "document_ids": [],
+                "return_status": "expected"
+              },
+              "absence_id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+              "actor_name": "Synthetic HR",
+              "incident_id": null,
+              "recorded_at": "2026-10-14T09:02:50.304+07:00"
+            }
+          ],
+          "status": "requested",
+          "version": 1,
+          "category": "sick",
+          "duration": 1,
+          "end_date": "2026-10-14",
+          "driver_id": "11",
+          "away_today": false,
+          "created_at": "2026-10-14T09:02:50.304+07:00",
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "start_date": "2026-10-14",
+          "updated_at": "2026-10-14T09:02:50.304+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "approved_at": null,
+          "approved_by": null,
+          "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "return_date": null,
+          "document_ids": [],
+          "approved_name": null,
+          "employee_name": "Synthetic Driver 11",
+          "return_status": "expected"
+        }
+      ],
+      "today": "2026-10-14",
+      "total": 1
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/people/absences?page=1&status=all&view=all&search=&employeeId=181d24d7-74d3-4b78-bc3a-d171612542c6",
+    "status": 200,
+    "request": null,
+    "response": {
+      "rows": [
+        {
+          "id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+          "notes": "Synthetic absence browser note",
+          "events": [
+            {
+              "id": "d064fff5-b733-433b-b78a-accb326bf477",
+              "actor_id": "00000000-0000-4000-8000-000000000001",
+              "snapshot": {
+                "id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+                "notes": "Synthetic absence browser note",
+                "status": "requested",
+                "version": 1,
+                "category": "sick",
+                "end_date": "2026-10-14",
+                "created_at": "2026-10-14T09:02:50.304+07:00",
+                "created_by": "00000000-0000-4000-8000-000000000001",
+                "start_date": "2026-10-14",
+                "updated_at": "2026-10-14T09:02:50.304+07:00",
+                "updated_by": "00000000-0000-4000-8000-000000000001",
+                "approved_at": null,
+                "approved_by": null,
+                "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+                "return_date": null,
+                "document_ids": [],
+                "return_status": "expected"
+              },
+              "absence_id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+              "actor_name": "Synthetic HR",
+              "incident_id": null,
+              "recorded_at": "2026-10-14T09:02:50.304+07:00"
+            }
+          ],
+          "status": "requested",
+          "version": 1,
+          "category": "sick",
+          "duration": 1,
+          "end_date": "2026-10-14",
+          "driver_id": "11",
+          "away_today": false,
+          "created_at": "2026-10-14T09:02:50.304+07:00",
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "start_date": "2026-10-14",
+          "updated_at": "2026-10-14T09:02:50.304+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "approved_at": null,
+          "approved_by": null,
+          "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "return_date": null,
+          "document_ids": [],
+          "approved_name": null,
+          "employee_name": "Synthetic Driver 11",
+          "return_status": "expected"
+        }
+      ],
+      "today": "2026-10-14",
+      "total": 1
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/profile/driver/11?section=absences",
+    "status": 200,
+    "request": null,
+    "response": {
+      "data": {
+        "rows": [
+          {
+            "id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+            "notes": "Synthetic absence browser note",
+            "events": [
+              {
+                "id": "d064fff5-b733-433b-b78a-accb326bf477",
+                "actor_id": "00000000-0000-4000-8000-000000000001",
+                "snapshot": {
+                  "id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+                  "notes": "Synthetic absence browser note",
+                  "status": "requested",
+                  "version": 1,
+                  "category": "sick",
+                  "end_date": "2026-10-14",
+                  "created_at": "2026-10-14T09:02:50.304+07:00",
+                  "created_by": "00000000-0000-4000-8000-000000000001",
+                  "start_date": "2026-10-14",
+                  "updated_at": "2026-10-14T09:02:50.304+07:00",
+                  "updated_by": "00000000-0000-4000-8000-000000000001",
+                  "approved_at": null,
+                  "approved_by": null,
+                  "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+                  "return_date": null,
+                  "document_ids": [],
+                  "return_status": "expected"
+                },
+                "absence_id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+                "actor_name": "Synthetic HR",
+                "incident_id": null,
+                "recorded_at": "2026-10-14T09:02:50.304+07:00"
+              }
+            ],
+            "status": "requested",
+            "version": 1,
+            "category": "sick",
+            "duration": 1,
+            "end_date": "2026-10-14",
+            "driver_id": "11",
+            "away_today": false,
+            "created_at": "2026-10-14T09:02:50.304+07:00",
+            "created_by": "00000000-0000-4000-8000-000000000001",
+            "start_date": "2026-10-14",
+            "updated_at": "2026-10-14T09:02:50.304+07:00",
+            "updated_by": "00000000-0000-4000-8000-000000000001",
+            "approved_at": null,
+            "approved_by": null,
+            "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+            "return_date": null,
+            "document_ids": [],
+            "approved_name": null,
+            "employee_name": "Synthetic Driver 11",
+            "return_status": "expected"
+          }
+        ],
+        "today": "2026-10-14",
+        "total": 1
+      },
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "section": "absences",
+      "employee": {
+        "id": "11",
+        "kind": "driver",
+        "name": "Synthetic Driver 11",
+        "jobRole": null,
+        "operate": true,
+        "vehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "driverId": "11",
+        "awayToday": false,
+        "startDate": "2026-01-01",
+        "department": null,
+        "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+        "nextFollowup": null,
+        "documentStatus": "not_recorded",
+        "employeeNumber": null,
+        "regularVehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "employmentStatus": "active",
+        "operationalActive": true,
+        "personnelRecorded": true,
+        "profileCompleteness": {
+          "total": 8,
+          "recorded": 4
+        }
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/profile/employee/181d24d7-74d3-4b78-bc3a-d171612542c6?section=documents",
+    "status": 200,
+    "request": null,
+    "response": {
+      "data": {
+        "licences": [],
+        "policies": [],
+        "documents": [],
+        "licenceRules": [],
+        "vehicleTypes": [
+          "FOUR_WHEEL_TRUCK"
+        ]
+      },
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "section": "documents",
+      "employee": {
+        "id": "11",
+        "kind": "driver",
+        "name": "Synthetic Driver 11",
+        "jobRole": null,
+        "operate": true,
+        "vehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "driverId": "11",
+        "awayToday": false,
+        "startDate": "2026-01-01",
+        "department": null,
+        "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+        "nextFollowup": null,
+        "documentStatus": "not_recorded",
+        "employeeNumber": null,
+        "regularVehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "employmentStatus": "active",
+        "operationalActive": true,
+        "personnelRecorded": true,
+        "profileCompleteness": {
+          "total": 8,
+          "recorded": 4
+        }
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/people/absences",
+    "status": 200,
+    "request": "{\"input\":{\"id\":\"cace96d5-f7f1-4f54-ba75-7bd3b1c04647\",\"employeeId\":\"181d24d7-74d3-4b78-bc3a-d171612542c6\",\"version\":1,\"category\":\"sick\",\"status\":\"approved\",\"documentIds\":[],\"startDate\":\"2026-10-14\",\"endDate\":\"2026-10-14\",\"returnDate\":\"\",\"returnStatus\":\"expected\",\"notes\":\"Synthetic absence browser note\"},\"requestId\":\"342731fb-c022-4e75-b136-f8f148c068a9\"}",
+    "response": {
+      "id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+      "version": 2
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/people/absences?employeeId=181d24d7-74d3-4b78-bc3a-d171612542c6&id=cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+    "status": 200,
+    "request": null,
+    "response": {
+      "rows": [
+        {
+          "id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+          "notes": "Synthetic absence browser note",
+          "events": [
+            {
+              "id": "d064fff5-b733-433b-b78a-accb326bf477",
+              "actor_id": "00000000-0000-4000-8000-000000000001",
+              "snapshot": {
+                "id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+                "notes": "Synthetic absence browser note",
+                "status": "requested",
+                "version": 1,
+                "category": "sick",
+                "end_date": "2026-10-14",
+                "created_at": "2026-10-14T09:02:50.304+07:00",
+                "created_by": "00000000-0000-4000-8000-000000000001",
+                "start_date": "2026-10-14",
+                "updated_at": "2026-10-14T09:02:50.304+07:00",
+                "updated_by": "00000000-0000-4000-8000-000000000001",
+                "approved_at": null,
+                "approved_by": null,
+                "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+                "return_date": null,
+                "document_ids": [],
+                "return_status": "expected"
+              },
+              "absence_id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+              "actor_name": "Synthetic HR",
+              "incident_id": null,
+              "recorded_at": "2026-10-14T09:02:50.304+07:00"
+            },
+            {
+              "id": "75845cc3-7653-4604-bdab-042531d69a79",
+              "actor_id": "00000000-0000-4000-8000-000000000001",
+              "snapshot": {
+                "id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+                "notes": "Synthetic absence browser note",
+                "status": "approved",
+                "version": 2,
+                "category": "sick",
+                "end_date": "2026-10-14",
+                "created_at": "2026-10-14T09:02:50.304+07:00",
+                "created_by": "00000000-0000-4000-8000-000000000001",
+                "start_date": "2026-10-14",
+                "updated_at": "2026-10-14T09:02:51.271+07:00",
+                "updated_by": "00000000-0000-4000-8000-000000000001",
+                "approved_at": "2026-10-14T09:02:51.271+07:00",
+                "approved_by": "00000000-0000-4000-8000-000000000001",
+                "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+                "return_date": null,
+                "document_ids": [],
+                "return_status": "expected"
+              },
+              "absence_id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+              "actor_name": "Synthetic HR",
+              "incident_id": null,
+              "recorded_at": "2026-10-14T09:02:51.271+07:00"
+            }
+          ],
+          "status": "approved",
+          "version": 2,
+          "category": "sick",
+          "duration": 1,
+          "end_date": "2026-10-14",
+          "driver_id": "11",
+          "away_today": true,
+          "created_at": "2026-10-14T09:02:50.304+07:00",
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "start_date": "2026-10-14",
+          "updated_at": "2026-10-14T09:02:51.271+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "approved_at": "2026-10-14T09:02:51.271+07:00",
+          "approved_by": "00000000-0000-4000-8000-000000000001",
+          "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "return_date": null,
+          "document_ids": [],
+          "approved_name": "Synthetic HR",
+          "employee_name": "Synthetic Driver 11",
+          "return_status": "expected"
+        }
+      ],
+      "today": "2026-10-14",
+      "total": 1
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/people/absences?page=1&status=all&view=all&search=&employeeId=181d24d7-74d3-4b78-bc3a-d171612542c6",
+    "status": 200,
+    "request": null,
+    "response": {
+      "rows": [
+        {
+          "id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+          "notes": "Synthetic absence browser note",
+          "events": [
+            {
+              "id": "d064fff5-b733-433b-b78a-accb326bf477",
+              "actor_id": "00000000-0000-4000-8000-000000000001",
+              "snapshot": {
+                "id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+                "notes": "Synthetic absence browser note",
+                "status": "requested",
+                "version": 1,
+                "category": "sick",
+                "end_date": "2026-10-14",
+                "created_at": "2026-10-14T09:02:50.304+07:00",
+                "created_by": "00000000-0000-4000-8000-000000000001",
+                "start_date": "2026-10-14",
+                "updated_at": "2026-10-14T09:02:50.304+07:00",
+                "updated_by": "00000000-0000-4000-8000-000000000001",
+                "approved_at": null,
+                "approved_by": null,
+                "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+                "return_date": null,
+                "document_ids": [],
+                "return_status": "expected"
+              },
+              "absence_id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+              "actor_name": "Synthetic HR",
+              "incident_id": null,
+              "recorded_at": "2026-10-14T09:02:50.304+07:00"
+            },
+            {
+              "id": "75845cc3-7653-4604-bdab-042531d69a79",
+              "actor_id": "00000000-0000-4000-8000-000000000001",
+              "snapshot": {
+                "id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+                "notes": "Synthetic absence browser note",
+                "status": "approved",
+                "version": 2,
+                "category": "sick",
+                "end_date": "2026-10-14",
+                "created_at": "2026-10-14T09:02:50.304+07:00",
+                "created_by": "00000000-0000-4000-8000-000000000001",
+                "start_date": "2026-10-14",
+                "updated_at": "2026-10-14T09:02:51.271+07:00",
+                "updated_by": "00000000-0000-4000-8000-000000000001",
+                "approved_at": "2026-10-14T09:02:51.271+07:00",
+                "approved_by": "00000000-0000-4000-8000-000000000001",
+                "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+                "return_date": null,
+                "document_ids": [],
+                "return_status": "expected"
+              },
+              "absence_id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+              "actor_name": "Synthetic HR",
+              "incident_id": null,
+              "recorded_at": "2026-10-14T09:02:51.271+07:00"
+            }
+          ],
+          "status": "approved",
+          "version": 2,
+          "category": "sick",
+          "duration": 1,
+          "end_date": "2026-10-14",
+          "driver_id": "11",
+          "away_today": true,
+          "created_at": "2026-10-14T09:02:50.304+07:00",
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "start_date": "2026-10-14",
+          "updated_at": "2026-10-14T09:02:51.271+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "approved_at": "2026-10-14T09:02:51.271+07:00",
+          "approved_by": "00000000-0000-4000-8000-000000000001",
+          "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "return_date": null,
+          "document_ids": [],
+          "approved_name": "Synthetic HR",
+          "employee_name": "Synthetic Driver 11",
+          "return_status": "expected"
+        }
+      ],
+      "today": "2026-10-14",
+      "total": 1
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/profile/driver/11?section=absences",
+    "status": 200,
+    "request": null,
+    "response": {
+      "data": {
+        "rows": [
+          {
+            "id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+            "notes": "Synthetic absence browser note",
+            "events": [
+              {
+                "id": "d064fff5-b733-433b-b78a-accb326bf477",
+                "actor_id": "00000000-0000-4000-8000-000000000001",
+                "snapshot": {
+                  "id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+                  "notes": "Synthetic absence browser note",
+                  "status": "requested",
+                  "version": 1,
+                  "category": "sick",
+                  "end_date": "2026-10-14",
+                  "created_at": "2026-10-14T09:02:50.304+07:00",
+                  "created_by": "00000000-0000-4000-8000-000000000001",
+                  "start_date": "2026-10-14",
+                  "updated_at": "2026-10-14T09:02:50.304+07:00",
+                  "updated_by": "00000000-0000-4000-8000-000000000001",
+                  "approved_at": null,
+                  "approved_by": null,
+                  "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+                  "return_date": null,
+                  "document_ids": [],
+                  "return_status": "expected"
+                },
+                "absence_id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+                "actor_name": "Synthetic HR",
+                "incident_id": null,
+                "recorded_at": "2026-10-14T09:02:50.304+07:00"
+              },
+              {
+                "id": "75845cc3-7653-4604-bdab-042531d69a79",
+                "actor_id": "00000000-0000-4000-8000-000000000001",
+                "snapshot": {
+                  "id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+                  "notes": "Synthetic absence browser note",
+                  "status": "approved",
+                  "version": 2,
+                  "category": "sick",
+                  "end_date": "2026-10-14",
+                  "created_at": "2026-10-14T09:02:50.304+07:00",
+                  "created_by": "00000000-0000-4000-8000-000000000001",
+                  "start_date": "2026-10-14",
+                  "updated_at": "2026-10-14T09:02:51.271+07:00",
+                  "updated_by": "00000000-0000-4000-8000-000000000001",
+                  "approved_at": "2026-10-14T09:02:51.271+07:00",
+                  "approved_by": "00000000-0000-4000-8000-000000000001",
+                  "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+                  "return_date": null,
+                  "document_ids": [],
+                  "return_status": "expected"
+                },
+                "absence_id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+                "actor_name": "Synthetic HR",
+                "incident_id": null,
+                "recorded_at": "2026-10-14T09:02:51.271+07:00"
+              }
+            ],
+            "status": "approved",
+            "version": 2,
+            "category": "sick",
+            "duration": 1,
+            "end_date": "2026-10-14",
+            "driver_id": "11",
+            "away_today": true,
+            "created_at": "2026-10-14T09:02:50.304+07:00",
+            "created_by": "00000000-0000-4000-8000-000000000001",
+            "start_date": "2026-10-14",
+            "updated_at": "2026-10-14T09:02:51.271+07:00",
+            "updated_by": "00000000-0000-4000-8000-000000000001",
+            "approved_at": "2026-10-14T09:02:51.271+07:00",
+            "approved_by": "00000000-0000-4000-8000-000000000001",
+            "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+            "return_date": null,
+            "document_ids": [],
+            "approved_name": "Synthetic HR",
+            "employee_name": "Synthetic Driver 11",
+            "return_status": "expected"
+          }
+        ],
+        "today": "2026-10-14",
+        "total": 1
+      },
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "section": "absences",
+      "employee": {
+        "id": "11",
+        "kind": "driver",
+        "name": "Synthetic Driver 11",
+        "jobRole": null,
+        "operate": true,
+        "vehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "driverId": "11",
+        "awayToday": true,
+        "startDate": "2026-01-01",
+        "department": null,
+        "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+        "nextFollowup": null,
+        "documentStatus": "not_recorded",
+        "employeeNumber": null,
+        "regularVehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "employmentStatus": "active",
+        "operationalActive": true,
+        "personnelRecorded": true,
+        "profileCompleteness": {
+          "total": 8,
+          "recorded": 4
+        }
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/access",
+    "status": 200,
+    "request": null,
+    "response": {
+      "hr": true,
+      "admin": true,
+      "ready": true,
+      "userId": "00000000-0000-4000-8000-000000000001",
+      "operate": true,
+      "storageReady": true,
+      "releaseReady": true,
+      "peopleReady": true
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/people/choices",
+    "status": 200,
+    "request": null,
+    "response": {
+      "vehicles": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "FIXTURE-ONLY"
+        }
+      ],
+      "employees": [
+        {
+          "id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "name": "Synthetic Driver 11"
+        }
+      ],
+      "responsible": [
+        {
+          "id": "00000000-0000-4000-8000-000000000001",
+          "name": "Synthetic HR"
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000002",
+          "name": "Synthetic Office"
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000003",
+          "name": "Synthetic Driver Account"
+        }
+      ]
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/people/absences?page=1&status=all&view=all&search=",
+    "status": 200,
+    "request": null,
+    "response": {
+      "rows": [
+        {
+          "id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+          "notes": "Synthetic absence browser note",
+          "events": [
+            {
+              "id": "d064fff5-b733-433b-b78a-accb326bf477",
+              "actor_id": "00000000-0000-4000-8000-000000000001",
+              "snapshot": {
+                "id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+                "notes": "Synthetic absence browser note",
+                "status": "requested",
+                "version": 1,
+                "category": "sick",
+                "end_date": "2026-10-14",
+                "created_at": "2026-10-14T09:02:50.304+07:00",
+                "created_by": "00000000-0000-4000-8000-000000000001",
+                "start_date": "2026-10-14",
+                "updated_at": "2026-10-14T09:02:50.304+07:00",
+                "updated_by": "00000000-0000-4000-8000-000000000001",
+                "approved_at": null,
+                "approved_by": null,
+                "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+                "return_date": null,
+                "document_ids": [],
+                "return_status": "expected"
+              },
+              "absence_id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+              "actor_name": "Synthetic HR",
+              "incident_id": null,
+              "recorded_at": "2026-10-14T09:02:50.304+07:00"
+            },
+            {
+              "id": "75845cc3-7653-4604-bdab-042531d69a79",
+              "actor_id": "00000000-0000-4000-8000-000000000001",
+              "snapshot": {
+                "id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+                "notes": "Synthetic absence browser note",
+                "status": "approved",
+                "version": 2,
+                "category": "sick",
+                "end_date": "2026-10-14",
+                "created_at": "2026-10-14T09:02:50.304+07:00",
+                "created_by": "00000000-0000-4000-8000-000000000001",
+                "start_date": "2026-10-14",
+                "updated_at": "2026-10-14T09:02:51.271+07:00",
+                "updated_by": "00000000-0000-4000-8000-000000000001",
+                "approved_at": "2026-10-14T09:02:51.271+07:00",
+                "approved_by": "00000000-0000-4000-8000-000000000001",
+                "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+                "return_date": null,
+                "document_ids": [],
+                "return_status": "expected"
+              },
+              "absence_id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+              "actor_name": "Synthetic HR",
+              "incident_id": null,
+              "recorded_at": "2026-10-14T09:02:51.271+07:00"
+            }
+          ],
+          "status": "approved",
+          "version": 2,
+          "category": "sick",
+          "duration": 1,
+          "end_date": "2026-10-14",
+          "driver_id": "11",
+          "away_today": true,
+          "created_at": "2026-10-14T09:02:50.304+07:00",
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "start_date": "2026-10-14",
+          "updated_at": "2026-10-14T09:02:51.271+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "approved_at": "2026-10-14T09:02:51.271+07:00",
+          "approved_by": "00000000-0000-4000-8000-000000000001",
+          "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "return_date": null,
+          "document_ids": [],
+          "approved_name": "Synthetic HR",
+          "employee_name": "Synthetic Driver 11",
+          "return_status": "expected"
+        }
+      ],
+      "today": "2026-10-14",
+      "total": 1
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/profile/employee/181d24d7-74d3-4b78-bc3a-d171612542c6?section=documents",
+    "status": 200,
+    "request": null,
+    "response": {
+      "data": {
+        "licences": [],
+        "policies": [],
+        "documents": [],
+        "licenceRules": [],
+        "vehicleTypes": [
+          "FOUR_WHEEL_TRUCK"
+        ]
+      },
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "section": "documents",
+      "employee": {
+        "id": "11",
+        "kind": "driver",
+        "name": "Synthetic Driver 11",
+        "jobRole": null,
+        "operate": true,
+        "vehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "driverId": "11",
+        "awayToday": true,
+        "startDate": "2026-01-01",
+        "department": null,
+        "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+        "nextFollowup": null,
+        "documentStatus": "not_recorded",
+        "employeeNumber": null,
+        "regularVehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "employmentStatus": "active",
+        "operationalActive": true,
+        "personnelRecorded": true,
+        "profileCompleteness": {
+          "total": 8,
+          "recorded": 4
+        }
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/people/absences",
+    "status": 200,
+    "request": "{\"input\":{\"id\":\"cace96d5-f7f1-4f54-ba75-7bd3b1c04647\",\"employeeId\":\"181d24d7-74d3-4b78-bc3a-d171612542c6\",\"version\":2,\"category\":\"sick\",\"status\":\"completed\",\"documentIds\":[],\"startDate\":\"2026-10-14\",\"endDate\":\"2026-10-14\",\"returnDate\":\"2026-10-14\",\"returnStatus\":\"returned\",\"notes\":\"Synthetic absence browser note\"},\"requestId\":\"1c9a879f-d392-47fc-8b61-126c4554eb57\"}",
+    "response": {
+      "id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+      "version": 3
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/people/absences?employeeId=181d24d7-74d3-4b78-bc3a-d171612542c6&id=cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+    "status": 200,
+    "request": null,
+    "response": {
+      "rows": [
+        {
+          "id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+          "notes": "Synthetic absence browser note",
+          "events": [
+            {
+              "id": "d064fff5-b733-433b-b78a-accb326bf477",
+              "actor_id": "00000000-0000-4000-8000-000000000001",
+              "snapshot": {
+                "id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+                "notes": "Synthetic absence browser note",
+                "status": "requested",
+                "version": 1,
+                "category": "sick",
+                "end_date": "2026-10-14",
+                "created_at": "2026-10-14T09:02:50.304+07:00",
+                "created_by": "00000000-0000-4000-8000-000000000001",
+                "start_date": "2026-10-14",
+                "updated_at": "2026-10-14T09:02:50.304+07:00",
+                "updated_by": "00000000-0000-4000-8000-000000000001",
+                "approved_at": null,
+                "approved_by": null,
+                "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+                "return_date": null,
+                "document_ids": [],
+                "return_status": "expected"
+              },
+              "absence_id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+              "actor_name": "Synthetic HR",
+              "incident_id": null,
+              "recorded_at": "2026-10-14T09:02:50.304+07:00"
+            },
+            {
+              "id": "75845cc3-7653-4604-bdab-042531d69a79",
+              "actor_id": "00000000-0000-4000-8000-000000000001",
+              "snapshot": {
+                "id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+                "notes": "Synthetic absence browser note",
+                "status": "approved",
+                "version": 2,
+                "category": "sick",
+                "end_date": "2026-10-14",
+                "created_at": "2026-10-14T09:02:50.304+07:00",
+                "created_by": "00000000-0000-4000-8000-000000000001",
+                "start_date": "2026-10-14",
+                "updated_at": "2026-10-14T09:02:51.271+07:00",
+                "updated_by": "00000000-0000-4000-8000-000000000001",
+                "approved_at": "2026-10-14T09:02:51.271+07:00",
+                "approved_by": "00000000-0000-4000-8000-000000000001",
+                "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+                "return_date": null,
+                "document_ids": [],
+                "return_status": "expected"
+              },
+              "absence_id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+              "actor_name": "Synthetic HR",
+              "incident_id": null,
+              "recorded_at": "2026-10-14T09:02:51.271+07:00"
+            },
+            {
+              "id": "244acb65-1c7a-422b-8edf-6cf3b1377344",
+              "actor_id": "00000000-0000-4000-8000-000000000001",
+              "snapshot": {
+                "id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+                "notes": "Synthetic absence browser note",
+                "status": "completed",
+                "version": 3,
+                "category": "sick",
+                "end_date": "2026-10-14",
+                "created_at": "2026-10-14T09:02:50.304+07:00",
+                "created_by": "00000000-0000-4000-8000-000000000001",
+                "start_date": "2026-10-14",
+                "updated_at": "2026-10-14T09:02:53.384+07:00",
+                "updated_by": "00000000-0000-4000-8000-000000000001",
+                "approved_at": "2026-10-14T09:02:51.271+07:00",
+                "approved_by": "00000000-0000-4000-8000-000000000001",
+                "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+                "return_date": "2026-10-14",
+                "document_ids": [],
+                "return_status": "returned"
+              },
+              "absence_id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+              "actor_name": "Synthetic HR",
+              "incident_id": null,
+              "recorded_at": "2026-10-14T09:02:53.384+07:00"
+            }
+          ],
+          "status": "completed",
+          "version": 3,
+          "category": "sick",
+          "duration": 1,
+          "end_date": "2026-10-14",
+          "driver_id": "11",
+          "away_today": false,
+          "created_at": "2026-10-14T09:02:50.304+07:00",
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "start_date": "2026-10-14",
+          "updated_at": "2026-10-14T09:02:53.384+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "approved_at": "2026-10-14T09:02:51.271+07:00",
+          "approved_by": "00000000-0000-4000-8000-000000000001",
+          "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "return_date": "2026-10-14",
+          "document_ids": [],
+          "approved_name": "Synthetic HR",
+          "employee_name": "Synthetic Driver 11",
+          "return_status": "returned"
+        }
+      ],
+      "today": "2026-10-14",
+      "total": 1
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/people/absences?page=1&status=all&view=all&search=",
+    "status": 200,
+    "request": null,
+    "response": {
+      "rows": [
+        {
+          "id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+          "notes": "Synthetic absence browser note",
+          "events": [
+            {
+              "id": "d064fff5-b733-433b-b78a-accb326bf477",
+              "actor_id": "00000000-0000-4000-8000-000000000001",
+              "snapshot": {
+                "id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+                "notes": "Synthetic absence browser note",
+                "status": "requested",
+                "version": 1,
+                "category": "sick",
+                "end_date": "2026-10-14",
+                "created_at": "2026-10-14T09:02:50.304+07:00",
+                "created_by": "00000000-0000-4000-8000-000000000001",
+                "start_date": "2026-10-14",
+                "updated_at": "2026-10-14T09:02:50.304+07:00",
+                "updated_by": "00000000-0000-4000-8000-000000000001",
+                "approved_at": null,
+                "approved_by": null,
+                "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+                "return_date": null,
+                "document_ids": [],
+                "return_status": "expected"
+              },
+              "absence_id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+              "actor_name": "Synthetic HR",
+              "incident_id": null,
+              "recorded_at": "2026-10-14T09:02:50.304+07:00"
+            },
+            {
+              "id": "75845cc3-7653-4604-bdab-042531d69a79",
+              "actor_id": "00000000-0000-4000-8000-000000000001",
+              "snapshot": {
+                "id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+                "notes": "Synthetic absence browser note",
+                "status": "approved",
+                "version": 2,
+                "category": "sick",
+                "end_date": "2026-10-14",
+                "created_at": "2026-10-14T09:02:50.304+07:00",
+                "created_by": "00000000-0000-4000-8000-000000000001",
+                "start_date": "2026-10-14",
+                "updated_at": "2026-10-14T09:02:51.271+07:00",
+                "updated_by": "00000000-0000-4000-8000-000000000001",
+                "approved_at": "2026-10-14T09:02:51.271+07:00",
+                "approved_by": "00000000-0000-4000-8000-000000000001",
+                "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+                "return_date": null,
+                "document_ids": [],
+                "return_status": "expected"
+              },
+              "absence_id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+              "actor_name": "Synthetic HR",
+              "incident_id": null,
+              "recorded_at": "2026-10-14T09:02:51.271+07:00"
+            },
+            {
+              "id": "244acb65-1c7a-422b-8edf-6cf3b1377344",
+              "actor_id": "00000000-0000-4000-8000-000000000001",
+              "snapshot": {
+                "id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+                "notes": "Synthetic absence browser note",
+                "status": "completed",
+                "version": 3,
+                "category": "sick",
+                "end_date": "2026-10-14",
+                "created_at": "2026-10-14T09:02:50.304+07:00",
+                "created_by": "00000000-0000-4000-8000-000000000001",
+                "start_date": "2026-10-14",
+                "updated_at": "2026-10-14T09:02:53.384+07:00",
+                "updated_by": "00000000-0000-4000-8000-000000000001",
+                "approved_at": "2026-10-14T09:02:51.271+07:00",
+                "approved_by": "00000000-0000-4000-8000-000000000001",
+                "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+                "return_date": "2026-10-14",
+                "document_ids": [],
+                "return_status": "returned"
+              },
+              "absence_id": "cace96d5-f7f1-4f54-ba75-7bd3b1c04647",
+              "actor_name": "Synthetic HR",
+              "incident_id": null,
+              "recorded_at": "2026-10-14T09:02:53.384+07:00"
+            }
+          ],
+          "status": "completed",
+          "version": 3,
+          "category": "sick",
+          "duration": 1,
+          "end_date": "2026-10-14",
+          "driver_id": "11",
+          "away_today": false,
+          "created_at": "2026-10-14T09:02:50.304+07:00",
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "start_date": "2026-10-14",
+          "updated_at": "2026-10-14T09:02:53.384+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "approved_at": "2026-10-14T09:02:51.271+07:00",
+          "approved_by": "00000000-0000-4000-8000-000000000001",
+          "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "return_date": "2026-10-14",
+          "document_ids": [],
+          "approved_name": "Synthetic HR",
+          "employee_name": "Synthetic Driver 11",
+          "return_status": "returned"
+        }
+      ],
+      "today": "2026-10-14",
+      "total": 1
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/profile/driver/11?section=overview",
+    "status": 200,
+    "request": null,
+    "response": {
+      "data": {
+        "private": {
+          "english_name": null,
+          "legal_name_th": null
+        },
+        "profile": {
+          "id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "end_date": null,
+          "job_role": null,
+          "driver_id": "11",
+          "created_at": "2026-10-14T09:02:03.505+07:00",
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "department": null,
+          "start_date": "2026-01-01",
+          "updated_at": "2026-10-14T09:02:48.989+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "preferred_name": "Synthetic Driver 11",
+          "employee_number": null,
+          "employment_status": "active"
+        },
+        "timeline": [
+          {
+            "at": "2026-10-14T09:02:53.384+07:00",
+            "id": "244acb65-1c7a-422b-8edf-6cf3b1377344",
+            "type": "absence",
+            "status": "completed"
+          },
+          {
+            "at": "2026-10-14T09:02:51.271+07:00",
+            "id": "75845cc3-7653-4604-bdab-042531d69a79",
+            "type": "absence",
+            "status": "approved"
+          },
+          {
+            "at": "2026-10-14T09:02:50.304+07:00",
+            "id": "d064fff5-b733-433b-b78a-accb326bf477",
+            "type": "absence",
+            "status": "requested"
+          },
+          {
+            "at": "2026-10-14T09:02:03.505+07:00",
+            "id": "0601bd21-32b7-40e3-9e78-805650359db4",
+            "type": "employment",
+            "status": "active"
+          }
+        ]
+      },
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "section": "overview",
+      "employee": {
+        "id": "11",
+        "kind": "driver",
+        "name": "Synthetic Driver 11",
+        "jobRole": null,
+        "operate": true,
+        "vehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "driverId": "11",
+        "awayToday": false,
+        "startDate": "2026-01-01",
+        "department": null,
+        "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+        "nextFollowup": null,
+        "documentStatus": "not_recorded",
+        "employeeNumber": null,
+        "regularVehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "employmentStatus": "active",
+        "operationalActive": true,
+        "personnelRecorded": true,
+        "profileCompleteness": {
+          "total": 8,
+          "recorded": 4
+        }
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/profile/driver/11?section=incidents",
+    "status": 200,
+    "request": null,
+    "response": {
+      "data": {
+        "rows": [],
+        "today": "2026-10-14",
+        "total": 0
+      },
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "section": "incidents",
+      "employee": {
+        "id": "11",
+        "kind": "driver",
+        "name": "Synthetic Driver 11",
+        "jobRole": null,
+        "operate": true,
+        "vehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "driverId": "11",
+        "awayToday": false,
+        "startDate": "2026-01-01",
+        "department": null,
+        "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+        "nextFollowup": null,
+        "documentStatus": "not_recorded",
+        "employeeNumber": null,
+        "regularVehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "employmentStatus": "active",
+        "operationalActive": true,
+        "personnelRecorded": true,
+        "profileCompleteness": {
+          "total": 8,
+          "recorded": 4
+        }
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/people/choices",
+    "status": 200,
+    "request": null,
+    "response": {
+      "vehicles": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "FIXTURE-ONLY"
+        }
+      ],
+      "employees": [
+        {
+          "id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "name": "Synthetic Driver 11"
+        }
+      ],
+      "responsible": [
+        {
+          "id": "00000000-0000-4000-8000-000000000001",
+          "name": "Synthetic HR"
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000002",
+          "name": "Synthetic Office"
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000003",
+          "name": "Synthetic Driver Account"
+        }
+      ]
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/people/incidents?page=1&status=all&view=all&search=&employeeId=181d24d7-74d3-4b78-bc3a-d171612542c6",
+    "status": 200,
+    "request": null,
+    "response": {
+      "rows": [],
+      "today": "2026-10-14",
+      "total": 0
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/profile/employee/181d24d7-74d3-4b78-bc3a-d171612542c6?section=documents",
+    "status": 200,
+    "request": null,
+    "response": {
+      "data": {
+        "licences": [],
+        "policies": [],
+        "documents": [],
+        "licenceRules": [],
+        "vehicleTypes": [
+          "FOUR_WHEEL_TRUCK"
+        ]
+      },
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "section": "documents",
+      "employee": {
+        "id": "11",
+        "kind": "driver",
+        "name": "Synthetic Driver 11",
+        "jobRole": null,
+        "operate": true,
+        "vehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "driverId": "11",
+        "awayToday": false,
+        "startDate": "2026-01-01",
+        "department": null,
+        "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+        "nextFollowup": null,
+        "documentStatus": "not_recorded",
+        "employeeNumber": null,
+        "regularVehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "employmentStatus": "active",
+        "operationalActive": true,
+        "personnelRecorded": true,
+        "profileCompleteness": {
+          "total": 8,
+          "recorded": 4
+        }
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/people/incidents",
+    "status": 200,
+    "request": "{\"input\":{\"employeeId\":\"181d24d7-74d3-4b78-bc3a-d171612542c6\",\"category\":\"damage\",\"status\":\"open\",\"documentIds\":[],\"occurredAt\":\"2026-10-14T09:00:00+07:00\",\"description\":\"Synthetic browser incident\",\"severity\":\"low\",\"actionTaken\":\"\"},\"requestId\":\"ff6a89c2-01d0-4838-b008-cb911e920144\"}",
+    "response": {
+      "id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+      "version": 1
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/people/incidents?employeeId=181d24d7-74d3-4b78-bc3a-d171612542c6&id=ada8db7b-62a0-4349-aa98-08ba479cfe86",
+    "status": 200,
+    "request": null,
+    "response": {
+      "rows": [
+        {
+          "id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+          "events": [
+            {
+              "id": "53d3f349-36d6-48f0-8987-9953cbf78240",
+              "actor_id": "00000000-0000-4000-8000-000000000001",
+              "snapshot": {
+                "id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+                "status": "open",
+                "version": 1,
+                "category": "damage",
+                "severity": "low",
+                "created_at": "2026-10-14T09:02:55.687+07:00",
+                "created_by": "00000000-0000-4000-8000-000000000001",
+                "updated_at": "2026-10-14T09:02:55.687+07:00",
+                "updated_by": "00000000-0000-4000-8000-000000000001",
+                "vehicle_id": null,
+                "description": "Synthetic browser incident",
+                "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+                "occurred_at": "2026-10-14T09:00:00+07:00",
+                "resolved_at": null,
+                "action_taken": null,
+                "document_ids": [],
+                "followup_date": null,
+                "job_reference": null,
+                "responsible_id": null
+              },
+              "absence_id": null,
+              "actor_name": "Synthetic HR",
+              "incident_id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+              "recorded_at": "2026-10-14T09:02:55.687+07:00"
+            }
+          ],
+          "status": "open",
+          "version": 1,
+          "category": "damage",
+          "severity": "low",
+          "driver_id": "11",
+          "created_at": "2026-10-14T09:02:55.687+07:00",
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "updated_at": "2026-10-14T09:02:55.687+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "vehicle_id": null,
+          "description": "Synthetic browser incident",
+          "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "occurred_at": "2026-10-14T09:00:00+07:00",
+          "resolved_at": null,
+          "action_taken": null,
+          "document_ids": [],
+          "employee_name": "Synthetic Driver 11",
+          "followup_date": null,
+          "job_reference": null,
+          "responsible_id": null,
+          "responsible_name": null,
+          "vehicle_registration": null
+        }
+      ],
+      "today": "2026-10-14",
+      "total": 1
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/people/incidents?page=1&status=all&view=all&search=&employeeId=181d24d7-74d3-4b78-bc3a-d171612542c6",
+    "status": 200,
+    "request": null,
+    "response": {
+      "rows": [
+        {
+          "id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+          "events": [
+            {
+              "id": "53d3f349-36d6-48f0-8987-9953cbf78240",
+              "actor_id": "00000000-0000-4000-8000-000000000001",
+              "snapshot": {
+                "id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+                "status": "open",
+                "version": 1,
+                "category": "damage",
+                "severity": "low",
+                "created_at": "2026-10-14T09:02:55.687+07:00",
+                "created_by": "00000000-0000-4000-8000-000000000001",
+                "updated_at": "2026-10-14T09:02:55.687+07:00",
+                "updated_by": "00000000-0000-4000-8000-000000000001",
+                "vehicle_id": null,
+                "description": "Synthetic browser incident",
+                "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+                "occurred_at": "2026-10-14T09:00:00+07:00",
+                "resolved_at": null,
+                "action_taken": null,
+                "document_ids": [],
+                "followup_date": null,
+                "job_reference": null,
+                "responsible_id": null
+              },
+              "absence_id": null,
+              "actor_name": "Synthetic HR",
+              "incident_id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+              "recorded_at": "2026-10-14T09:02:55.687+07:00"
+            }
+          ],
+          "status": "open",
+          "version": 1,
+          "category": "damage",
+          "severity": "low",
+          "driver_id": "11",
+          "created_at": "2026-10-14T09:02:55.687+07:00",
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "updated_at": "2026-10-14T09:02:55.687+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "vehicle_id": null,
+          "description": "Synthetic browser incident",
+          "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "occurred_at": "2026-10-14T09:00:00+07:00",
+          "resolved_at": null,
+          "action_taken": null,
+          "document_ids": [],
+          "employee_name": "Synthetic Driver 11",
+          "followup_date": null,
+          "job_reference": null,
+          "responsible_id": null,
+          "responsible_name": null,
+          "vehicle_registration": null
+        }
+      ],
+      "today": "2026-10-14",
+      "total": 1
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/profile/driver/11?section=incidents",
+    "status": 200,
+    "request": null,
+    "response": {
+      "data": {
+        "rows": [
+          {
+            "id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+            "events": [
+              {
+                "id": "53d3f349-36d6-48f0-8987-9953cbf78240",
+                "actor_id": "00000000-0000-4000-8000-000000000001",
+                "snapshot": {
+                  "id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+                  "status": "open",
+                  "version": 1,
+                  "category": "damage",
+                  "severity": "low",
+                  "created_at": "2026-10-14T09:02:55.687+07:00",
+                  "created_by": "00000000-0000-4000-8000-000000000001",
+                  "updated_at": "2026-10-14T09:02:55.687+07:00",
+                  "updated_by": "00000000-0000-4000-8000-000000000001",
+                  "vehicle_id": null,
+                  "description": "Synthetic browser incident",
+                  "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+                  "occurred_at": "2026-10-14T09:00:00+07:00",
+                  "resolved_at": null,
+                  "action_taken": null,
+                  "document_ids": [],
+                  "followup_date": null,
+                  "job_reference": null,
+                  "responsible_id": null
+                },
+                "absence_id": null,
+                "actor_name": "Synthetic HR",
+                "incident_id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+                "recorded_at": "2026-10-14T09:02:55.687+07:00"
+              }
+            ],
+            "status": "open",
+            "version": 1,
+            "category": "damage",
+            "severity": "low",
+            "driver_id": "11",
+            "created_at": "2026-10-14T09:02:55.687+07:00",
+            "created_by": "00000000-0000-4000-8000-000000000001",
+            "updated_at": "2026-10-14T09:02:55.687+07:00",
+            "updated_by": "00000000-0000-4000-8000-000000000001",
+            "vehicle_id": null,
+            "description": "Synthetic browser incident",
+            "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+            "occurred_at": "2026-10-14T09:00:00+07:00",
+            "resolved_at": null,
+            "action_taken": null,
+            "document_ids": [],
+            "employee_name": "Synthetic Driver 11",
+            "followup_date": null,
+            "job_reference": null,
+            "responsible_id": null,
+            "responsible_name": null,
+            "vehicle_registration": null
+          }
+        ],
+        "today": "2026-10-14",
+        "total": 1
+      },
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "section": "incidents",
+      "employee": {
+        "id": "11",
+        "kind": "driver",
+        "name": "Synthetic Driver 11",
+        "jobRole": null,
+        "operate": true,
+        "vehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "driverId": "11",
+        "awayToday": false,
+        "startDate": "2026-01-01",
+        "department": null,
+        "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+        "nextFollowup": null,
+        "documentStatus": "not_recorded",
+        "employeeNumber": null,
+        "regularVehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "employmentStatus": "active",
+        "operationalActive": true,
+        "personnelRecorded": true,
+        "profileCompleteness": {
+          "total": 8,
+          "recorded": 4
+        }
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/profile/employee/181d24d7-74d3-4b78-bc3a-d171612542c6?section=documents",
+    "status": 200,
+    "request": null,
+    "response": {
+      "data": {
+        "licences": [],
+        "policies": [],
+        "documents": [],
+        "licenceRules": [],
+        "vehicleTypes": [
+          "FOUR_WHEEL_TRUCK"
+        ]
+      },
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "section": "documents",
+      "employee": {
+        "id": "11",
+        "kind": "driver",
+        "name": "Synthetic Driver 11",
+        "jobRole": null,
+        "operate": true,
+        "vehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "driverId": "11",
+        "awayToday": false,
+        "startDate": "2026-01-01",
+        "department": null,
+        "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+        "nextFollowup": null,
+        "documentStatus": "not_recorded",
+        "employeeNumber": null,
+        "regularVehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "employmentStatus": "active",
+        "operationalActive": true,
+        "personnelRecorded": true,
+        "profileCompleteness": {
+          "total": 8,
+          "recorded": 4
+        }
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/people/incidents",
+    "status": 200,
+    "request": "{\"input\":{\"id\":\"ada8db7b-62a0-4349-aa98-08ba479cfe86\",\"employeeId\":\"181d24d7-74d3-4b78-bc3a-d171612542c6\",\"version\":1,\"category\":\"damage\",\"status\":\"resolved\",\"documentIds\":[],\"occurredAt\":\"2026-10-14T09:00:00+07:00\",\"description\":\"Synthetic browser incident\",\"vehicleId\":\"\",\"jobReference\":\"\",\"severity\":\"low\",\"actionTaken\":\"Synthetic browser resolution\",\"responsibleId\":\"\",\"followupDate\":\"\"},\"requestId\":\"fd15f4f1-6462-4c14-9aba-8812c1006573\"}",
+    "response": {
+      "id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+      "version": 2
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/people/incidents?employeeId=181d24d7-74d3-4b78-bc3a-d171612542c6&id=ada8db7b-62a0-4349-aa98-08ba479cfe86",
+    "status": 200,
+    "request": null,
+    "response": {
+      "rows": [
+        {
+          "id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+          "events": [
+            {
+              "id": "53d3f349-36d6-48f0-8987-9953cbf78240",
+              "actor_id": "00000000-0000-4000-8000-000000000001",
+              "snapshot": {
+                "id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+                "status": "open",
+                "version": 1,
+                "category": "damage",
+                "severity": "low",
+                "created_at": "2026-10-14T09:02:55.687+07:00",
+                "created_by": "00000000-0000-4000-8000-000000000001",
+                "updated_at": "2026-10-14T09:02:55.687+07:00",
+                "updated_by": "00000000-0000-4000-8000-000000000001",
+                "vehicle_id": null,
+                "description": "Synthetic browser incident",
+                "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+                "occurred_at": "2026-10-14T09:00:00+07:00",
+                "resolved_at": null,
+                "action_taken": null,
+                "document_ids": [],
+                "followup_date": null,
+                "job_reference": null,
+                "responsible_id": null
+              },
+              "absence_id": null,
+              "actor_name": "Synthetic HR",
+              "incident_id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+              "recorded_at": "2026-10-14T09:02:55.687+07:00"
+            },
+            {
+              "id": "53d8d65f-dbe4-45bc-abca-b88cd18dab53",
+              "actor_id": "00000000-0000-4000-8000-000000000001",
+              "snapshot": {
+                "id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+                "status": "resolved",
+                "version": 2,
+                "category": "damage",
+                "severity": "low",
+                "created_at": "2026-10-14T09:02:55.687+07:00",
+                "created_by": "00000000-0000-4000-8000-000000000001",
+                "updated_at": "2026-10-14T09:02:56.477+07:00",
+                "updated_by": "00000000-0000-4000-8000-000000000001",
+                "vehicle_id": null,
+                "description": "Synthetic browser incident",
+                "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+                "occurred_at": "2026-10-14T09:00:00+07:00",
+                "resolved_at": "2026-10-14T09:02:56.477+07:00",
+                "action_taken": "Synthetic browser resolution",
+                "document_ids": [],
+                "followup_date": null,
+                "job_reference": null,
+                "responsible_id": null
+              },
+              "absence_id": null,
+              "actor_name": "Synthetic HR",
+              "incident_id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+              "recorded_at": "2026-10-14T09:02:56.477+07:00"
+            }
+          ],
+          "status": "resolved",
+          "version": 2,
+          "category": "damage",
+          "severity": "low",
+          "driver_id": "11",
+          "created_at": "2026-10-14T09:02:55.687+07:00",
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "updated_at": "2026-10-14T09:02:56.477+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "vehicle_id": null,
+          "description": "Synthetic browser incident",
+          "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "occurred_at": "2026-10-14T09:00:00+07:00",
+          "resolved_at": "2026-10-14T09:02:56.477+07:00",
+          "action_taken": "Synthetic browser resolution",
+          "document_ids": [],
+          "employee_name": "Synthetic Driver 11",
+          "followup_date": null,
+          "job_reference": null,
+          "responsible_id": null,
+          "responsible_name": null,
+          "vehicle_registration": null
+        }
+      ],
+      "today": "2026-10-14",
+      "total": 1
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/people/incidents?page=1&status=all&view=all&search=&employeeId=181d24d7-74d3-4b78-bc3a-d171612542c6",
+    "status": 200,
+    "request": null,
+    "response": {
+      "rows": [
+        {
+          "id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+          "events": [
+            {
+              "id": "53d3f349-36d6-48f0-8987-9953cbf78240",
+              "actor_id": "00000000-0000-4000-8000-000000000001",
+              "snapshot": {
+                "id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+                "status": "open",
+                "version": 1,
+                "category": "damage",
+                "severity": "low",
+                "created_at": "2026-10-14T09:02:55.687+07:00",
+                "created_by": "00000000-0000-4000-8000-000000000001",
+                "updated_at": "2026-10-14T09:02:55.687+07:00",
+                "updated_by": "00000000-0000-4000-8000-000000000001",
+                "vehicle_id": null,
+                "description": "Synthetic browser incident",
+                "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+                "occurred_at": "2026-10-14T09:00:00+07:00",
+                "resolved_at": null,
+                "action_taken": null,
+                "document_ids": [],
+                "followup_date": null,
+                "job_reference": null,
+                "responsible_id": null
+              },
+              "absence_id": null,
+              "actor_name": "Synthetic HR",
+              "incident_id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+              "recorded_at": "2026-10-14T09:02:55.687+07:00"
+            },
+            {
+              "id": "53d8d65f-dbe4-45bc-abca-b88cd18dab53",
+              "actor_id": "00000000-0000-4000-8000-000000000001",
+              "snapshot": {
+                "id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+                "status": "resolved",
+                "version": 2,
+                "category": "damage",
+                "severity": "low",
+                "created_at": "2026-10-14T09:02:55.687+07:00",
+                "created_by": "00000000-0000-4000-8000-000000000001",
+                "updated_at": "2026-10-14T09:02:56.477+07:00",
+                "updated_by": "00000000-0000-4000-8000-000000000001",
+                "vehicle_id": null,
+                "description": "Synthetic browser incident",
+                "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+                "occurred_at": "2026-10-14T09:00:00+07:00",
+                "resolved_at": "2026-10-14T09:02:56.477+07:00",
+                "action_taken": "Synthetic browser resolution",
+                "document_ids": [],
+                "followup_date": null,
+                "job_reference": null,
+                "responsible_id": null
+              },
+              "absence_id": null,
+              "actor_name": "Synthetic HR",
+              "incident_id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+              "recorded_at": "2026-10-14T09:02:56.477+07:00"
+            }
+          ],
+          "status": "resolved",
+          "version": 2,
+          "category": "damage",
+          "severity": "low",
+          "driver_id": "11",
+          "created_at": "2026-10-14T09:02:55.687+07:00",
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "updated_at": "2026-10-14T09:02:56.477+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "vehicle_id": null,
+          "description": "Synthetic browser incident",
+          "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "occurred_at": "2026-10-14T09:00:00+07:00",
+          "resolved_at": "2026-10-14T09:02:56.477+07:00",
+          "action_taken": "Synthetic browser resolution",
+          "document_ids": [],
+          "employee_name": "Synthetic Driver 11",
+          "followup_date": null,
+          "job_reference": null,
+          "responsible_id": null,
+          "responsible_name": null,
+          "vehicle_registration": null
+        }
+      ],
+      "today": "2026-10-14",
+      "total": 1
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/profile/driver/11?section=incidents",
+    "status": 200,
+    "request": null,
+    "response": {
+      "data": {
+        "rows": [
+          {
+            "id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+            "events": [
+              {
+                "id": "53d3f349-36d6-48f0-8987-9953cbf78240",
+                "actor_id": "00000000-0000-4000-8000-000000000001",
+                "snapshot": {
+                  "id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+                  "status": "open",
+                  "version": 1,
+                  "category": "damage",
+                  "severity": "low",
+                  "created_at": "2026-10-14T09:02:55.687+07:00",
+                  "created_by": "00000000-0000-4000-8000-000000000001",
+                  "updated_at": "2026-10-14T09:02:55.687+07:00",
+                  "updated_by": "00000000-0000-4000-8000-000000000001",
+                  "vehicle_id": null,
+                  "description": "Synthetic browser incident",
+                  "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+                  "occurred_at": "2026-10-14T09:00:00+07:00",
+                  "resolved_at": null,
+                  "action_taken": null,
+                  "document_ids": [],
+                  "followup_date": null,
+                  "job_reference": null,
+                  "responsible_id": null
+                },
+                "absence_id": null,
+                "actor_name": "Synthetic HR",
+                "incident_id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+                "recorded_at": "2026-10-14T09:02:55.687+07:00"
+              },
+              {
+                "id": "53d8d65f-dbe4-45bc-abca-b88cd18dab53",
+                "actor_id": "00000000-0000-4000-8000-000000000001",
+                "snapshot": {
+                  "id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+                  "status": "resolved",
+                  "version": 2,
+                  "category": "damage",
+                  "severity": "low",
+                  "created_at": "2026-10-14T09:02:55.687+07:00",
+                  "created_by": "00000000-0000-4000-8000-000000000001",
+                  "updated_at": "2026-10-14T09:02:56.477+07:00",
+                  "updated_by": "00000000-0000-4000-8000-000000000001",
+                  "vehicle_id": null,
+                  "description": "Synthetic browser incident",
+                  "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+                  "occurred_at": "2026-10-14T09:00:00+07:00",
+                  "resolved_at": "2026-10-14T09:02:56.477+07:00",
+                  "action_taken": "Synthetic browser resolution",
+                  "document_ids": [],
+                  "followup_date": null,
+                  "job_reference": null,
+                  "responsible_id": null
+                },
+                "absence_id": null,
+                "actor_name": "Synthetic HR",
+                "incident_id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+                "recorded_at": "2026-10-14T09:02:56.477+07:00"
+              }
+            ],
+            "status": "resolved",
+            "version": 2,
+            "category": "damage",
+            "severity": "low",
+            "driver_id": "11",
+            "created_at": "2026-10-14T09:02:55.687+07:00",
+            "created_by": "00000000-0000-4000-8000-000000000001",
+            "updated_at": "2026-10-14T09:02:56.477+07:00",
+            "updated_by": "00000000-0000-4000-8000-000000000001",
+            "vehicle_id": null,
+            "description": "Synthetic browser incident",
+            "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+            "occurred_at": "2026-10-14T09:00:00+07:00",
+            "resolved_at": "2026-10-14T09:02:56.477+07:00",
+            "action_taken": "Synthetic browser resolution",
+            "document_ids": [],
+            "employee_name": "Synthetic Driver 11",
+            "followup_date": null,
+            "job_reference": null,
+            "responsible_id": null,
+            "responsible_name": null,
+            "vehicle_registration": null
+          }
+        ],
+        "today": "2026-10-14",
+        "total": 1
+      },
+      "access": {
+        "hr": true,
+        "admin": true,
+        "ready": true,
+        "userId": "00000000-0000-4000-8000-000000000001",
+        "operate": true,
+        "storageReady": true,
+        "releaseReady": true,
+        "peopleReady": true
+      },
+      "section": "incidents",
+      "employee": {
+        "id": "11",
+        "kind": "driver",
+        "name": "Synthetic Driver 11",
+        "jobRole": null,
+        "operate": true,
+        "vehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "driverId": "11",
+        "awayToday": false,
+        "startDate": "2026-01-01",
+        "department": null,
+        "employeeId": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+        "nextFollowup": null,
+        "documentStatus": "not_recorded",
+        "employeeNumber": null,
+        "regularVehicle": {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "Synthetic fleet",
+          "type": "FOUR_WHEEL_TRUCK",
+          "model": null,
+          "registration": "FIXTURE-ONLY"
+        },
+        "employmentStatus": "active",
+        "operationalActive": true,
+        "personnelRecorded": true,
+        "profileCompleteness": {
+          "total": 8,
+          "recorded": 4
+        }
+      }
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/access",
+    "status": 200,
+    "request": null,
+    "response": {
+      "hr": true,
+      "admin": true,
+      "ready": true,
+      "userId": "00000000-0000-4000-8000-000000000001",
+      "operate": true,
+      "storageReady": true,
+      "releaseReady": true,
+      "peopleReady": true
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/people/choices",
+    "status": 200,
+    "request": null,
+    "response": {
+      "vehicles": [
+        {
+          "id": "10000000-0000-4000-8000-000000000001",
+          "name": "FIXTURE-ONLY"
+        }
+      ],
+      "employees": [
+        {
+          "id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "name": "Synthetic Driver 11"
+        }
+      ],
+      "responsible": [
+        {
+          "id": "00000000-0000-4000-8000-000000000001",
+          "name": "Synthetic HR"
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000002",
+          "name": "Synthetic Office"
+        },
+        {
+          "id": "00000000-0000-4000-8000-000000000003",
+          "name": "Synthetic Driver Account"
+        }
+      ]
+    }
+  },
+  {
+    "url": "http://127.0.0.1:53204/api/hr/people/incidents?page=1&status=all&view=all&search=",
+    "status": 200,
+    "request": null,
+    "response": {
+      "rows": [
+        {
+          "id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+          "events": [
+            {
+              "id": "53d3f349-36d6-48f0-8987-9953cbf78240",
+              "actor_id": "00000000-0000-4000-8000-000000000001",
+              "snapshot": {
+                "id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+                "status": "open",
+                "version": 1,
+                "category": "damage",
+                "severity": "low",
+                "created_at": "2026-10-14T09:02:55.687+07:00",
+                "created_by": "00000000-0000-4000-8000-000000000001",
+                "updated_at": "2026-10-14T09:02:55.687+07:00",
+                "updated_by": "00000000-0000-4000-8000-000000000001",
+                "vehicle_id": null,
+                "description": "Synthetic browser incident",
+                "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+                "occurred_at": "2026-10-14T09:00:00+07:00",
+                "resolved_at": null,
+                "action_taken": null,
+                "document_ids": [],
+                "followup_date": null,
+                "job_reference": null,
+                "responsible_id": null
+              },
+              "absence_id": null,
+              "actor_name": "Synthetic HR",
+              "incident_id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+              "recorded_at": "2026-10-14T09:02:55.687+07:00"
+            },
+            {
+              "id": "53d8d65f-dbe4-45bc-abca-b88cd18dab53",
+              "actor_id": "00000000-0000-4000-8000-000000000001",
+              "snapshot": {
+                "id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+                "status": "resolved",
+                "version": 2,
+                "category": "damage",
+                "severity": "low",
+                "created_at": "2026-10-14T09:02:55.687+07:00",
+                "created_by": "00000000-0000-4000-8000-000000000001",
+                "updated_at": "2026-10-14T09:02:56.477+07:00",
+                "updated_by": "00000000-0000-4000-8000-000000000001",
+                "vehicle_id": null,
+                "description": "Synthetic browser incident",
+                "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+                "occurred_at": "2026-10-14T09:00:00+07:00",
+                "resolved_at": "2026-10-14T09:02:56.477+07:00",
+                "action_taken": "Synthetic browser resolution",
+                "document_ids": [],
+                "followup_date": null,
+                "job_reference": null,
+                "responsible_id": null
+              },
+              "absence_id": null,
+              "actor_name": "Synthetic HR",
+              "incident_id": "ada8db7b-62a0-4349-aa98-08ba479cfe86",
+              "recorded_at": "2026-10-14T09:02:56.477+07:00"
+            }
+          ],
+          "status": "resolved",
+          "version": 2,
+          "category": "damage",
+          "severity": "low",
+          "driver_id": "11",
+          "created_at": "2026-10-14T09:02:55.687+07:00",
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "updated_at": "2026-10-14T09:02:56.477+07:00",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "vehicle_id": null,
+          "description": "Synthetic browser incident",
+          "employee_id": "181d24d7-74d3-4b78-bc3a-d171612542c6",
+          "occurred_at": "2026-10-14T09:00:00+07:00",
+          "resolved_at": "2026-10-14T09:02:56.477+07:00",
+          "action_taken": "Synthetic browser resolution",
+          "document_ids": [],
+          "employee_name": "Synthetic Driver 11",
+          "followup_date": null,
+          "job_reference": null,
+          "responsible_id": null,
+          "responsible_name": null,
+          "vehicle_registration": null
+        }
+      ],
+      "today": "2026-10-14",
+      "total": 1
+    }
+  }
+]

@@ -1,0 +1,1579 @@
+[
+  {
+    "path": "/auth/v1/user",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/support_tickets",
+    "method": "HEAD",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/rpc/maintenance_centre_version",
+    "method": "POST",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/drivers",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/weekly_mileage",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_records",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirements",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirement_vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_attachments",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/auth/v1/user",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_baselines",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicle_service_logs",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_history",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/driver_accounts",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/account_access",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/rpc/save_vehicle_maintenance_schedule",
+    "method": "POST",
+    "body": {
+      "payload": {
+        "service_key": "coolant",
+        "name": "Engine Coolant",
+        "category": "engine",
+        "schedule_kind": "replacement",
+        "replacement_strategy": "interval",
+        "applicability_status": "applicable",
+        "frequency_months": 12,
+        "mileage_interval": 20000,
+        "warning_days": 30,
+        "warning_km": 1000,
+        "specification": null,
+        "capacity": null,
+        "notes": null
+      },
+      "target_vehicle": "10000000-0000-4000-8000-000000000001",
+      "expected_updated_at": null
+    }
+  },
+  {
+    "path": "/rest/v1/rpc/maintenance_centre_version",
+    "method": "POST",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/rpc/maintenance_centre_version",
+    "method": "POST",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/drivers",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/weekly_mileage",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_records",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirements",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirement_vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_attachments",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/drivers",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/weekly_mileage",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_records",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirements",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirement_vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_attachments",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_baselines",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicle_service_logs",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_baselines",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicle_service_logs",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_history",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_history",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/auth/v1/user",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/support_tickets",
+    "method": "HEAD",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/rpc/maintenance_centre_version",
+    "method": "POST",
+    "body": {}
+  },
+  {
+    "path": "/auth/v1/user",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/driver_accounts",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/account_access",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/drivers",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/weekly_mileage",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_records",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirements",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirement_vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_attachments",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_baselines",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicle_service_logs",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_history",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/rpc/save_maintenance_record",
+    "method": "POST",
+    "body": {
+      "payload": {
+        "id": "6f7b9600-e956-4bb7-b544-a6349784bdd2",
+        "vehicle_id": "10000000-0000-4000-8000-000000000001",
+        "service_date": "2026-10-14",
+        "odometer": 50000,
+        "garage": "Synthetic garage",
+        "receipt_reference": null,
+        "receipt_total": 300,
+        "mismatch_confirmed": false,
+        "notes": null,
+        "off_road_at": null,
+        "returned_at": null
+      },
+      "item_rows": [
+        {
+          "id": "38abd713-a019-47e1-adb6-7a98033b7bb3",
+          "description": "Oil replacement",
+          "description_th": null,
+          "category": "oil",
+          "quantity": 1,
+          "unit_price": 100,
+          "line_total": null,
+          "notes": null,
+          "requirement_id": null,
+          "reminder_months": null,
+          "reminder_km": null,
+          "warning_days": 30,
+          "warning_km": 1000,
+          "override_date": null,
+          "override_km": null,
+          "service_key": "engine_oil",
+          "service_confirmed": true,
+          "service_action": "fluid_replacement"
+        },
+        {
+          "id": "7e2b3dc0-7d52-4ff7-b836-3c8899539564",
+          "description": "Oil filter replacement",
+          "description_th": null,
+          "category": "oil",
+          "quantity": 1,
+          "unit_price": 100,
+          "line_total": null,
+          "notes": null,
+          "requirement_id": null,
+          "reminder_months": null,
+          "reminder_km": null,
+          "warning_days": 30,
+          "warning_km": 1000,
+          "override_date": null,
+          "override_km": null,
+          "service_key": "oil_filter",
+          "service_confirmed": true,
+          "service_action": "component_replacement"
+        },
+        {
+          "id": "5e97460d-49e7-402e-a3dd-c613a0785bc6",
+          "description": "Coolant replacement",
+          "description_th": null,
+          "category": "engine",
+          "quantity": 1,
+          "unit_price": 100,
+          "line_total": null,
+          "notes": null,
+          "requirement_id": null,
+          "reminder_months": null,
+          "reminder_km": null,
+          "warning_days": 30,
+          "warning_km": 1000,
+          "override_date": null,
+          "override_km": null,
+          "service_key": "coolant",
+          "service_confirmed": true,
+          "service_action": "fluid_replacement"
+        }
+      ],
+      "expected_updated_at": null
+    }
+  },
+  {
+    "path": "/rest/v1/rpc/maintenance_centre_version",
+    "method": "POST",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_records",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/drivers",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/weekly_mileage",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_records",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirements",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirement_vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_attachments",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/rpc/maintenance_centre_version",
+    "method": "POST",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_baselines",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicle_service_logs",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/drivers",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/weekly_mileage",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_records",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirements",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirement_vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_attachments",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_history",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_baselines",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicle_service_logs",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_history",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/storage/v1/object/maintenance-receipts/6f7b9600-e956-4bb7-b544-a6349784bdd2/7b75f35c-d0ad-4758-a853-ad64d1c0c8db.pdf",
+    "method": "POST",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_attachments",
+    "method": "POST",
+    "body": {
+      "id": "7b75f35c-d0ad-4758-a853-ad64d1c0c8db",
+      "record_id": "6f7b9600-e956-4bb7-b544-a6349784bdd2",
+      "file_path": "6f7b9600-e956-4bb7-b544-a6349784bdd2/7b75f35c-d0ad-4758-a853-ad64d1c0c8db.pdf",
+      "original_filename": "synthetic-receipt.pdf",
+      "mime_type": "application/pdf",
+      "size_bytes": 40,
+      "uploaded_by": "00000000-0000-4000-8000-000000000001"
+    }
+  },
+  {
+    "path": "/rest/v1/rpc/maintenance_centre_version",
+    "method": "POST",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/rpc/maintenance_centre_version",
+    "method": "POST",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/drivers",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/weekly_mileage",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_records",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirements",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirement_vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_attachments",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/drivers",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/weekly_mileage",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_records",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirements",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirement_vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_attachments",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_baselines",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicle_service_logs",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_baselines",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicle_service_logs",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_history",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_history",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/storage/v1/object/sign/maintenance-receipts/6f7b9600-e956-4bb7-b544-a6349784bdd2/7b75f35c-d0ad-4758-a853-ad64d1c0c8db.pdf",
+    "method": "POST",
+    "body": {
+      "expiresIn": 300
+    }
+  },
+  {
+    "path": "/storage/v1/object/sign/maintenance-receipts/6f7b9600-e956-4bb7-b544-a6349784bdd2/7b75f35c-d0ad-4758-a853-ad64d1c0c8db.pdf",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/storage/v1/object/sign/maintenance-receipts/6f7b9600-e956-4bb7-b544-a6349784bdd2/7b75f35c-d0ad-4758-a853-ad64d1c0c8db.pdf",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/auth/v1/user",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/support_tickets",
+    "method": "HEAD",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/drivers",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/weekly_mileage",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicle_service_logs",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/auth/v1/user",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/driver_accounts",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/account_access",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/drivers",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_history",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirements",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_baselines",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/auth/v1/user",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/support_tickets",
+    "method": "HEAD",
+    "body": {}
+  },
+  {
+    "path": "/auth/v1/user",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/rpc/maintenance_centre_version",
+    "method": "POST",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/driver_accounts",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/account_access",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/drivers",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/weekly_mileage",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_records",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirements",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirement_vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_attachments",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_baselines",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicle_service_logs",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_history",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/rpc/save_maintenance_record",
+    "method": "POST",
+    "body": {
+      "payload": {
+        "id": "6f7b9600-e956-4bb7-b544-a6349784bdd2",
+        "vehicle_id": "10000000-0000-4000-8000-000000000001",
+        "service_date": "2026-10-14",
+        "odometer": 49000,
+        "garage": "Synthetic garage",
+        "receipt_reference": null,
+        "receipt_total": "300.00",
+        "calculated_total": "300.00",
+        "mismatch_confirmed": false,
+        "notes": null,
+        "off_road_at": null,
+        "returned_at": null,
+        "is_deleted": false,
+        "created_by": "00000000-0000-4000-8000-000000000001",
+        "created_at": "2026-10-14T05:24:09.015Z",
+        "updated_by": "00000000-0000-4000-8000-000000000001",
+        "updated_at": "2026-10-14T05:24:09.015Z"
+      },
+      "item_rows": [
+        {
+          "id": "38abd713-a019-47e1-adb6-7a98033b7bb3",
+          "record_id": "6f7b9600-e956-4bb7-b544-a6349784bdd2",
+          "position": 0,
+          "description": "Oil replacement",
+          "description_th": null,
+          "category": "oil",
+          "quantity": 1,
+          "unit_price": 100,
+          "notes": null,
+          "requirement_id": null,
+          "reminder_months": null,
+          "reminder_km": null,
+          "warning_days": 30,
+          "warning_km": "1000.00",
+          "override_date": null,
+          "override_km": null,
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "created_at": "2026-10-14T05:24:09.015Z",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "updated_at": "2026-10-14T05:24:09.015Z",
+          "line_total": null,
+          "service_key": "engine_oil",
+          "service_action": "fluid_replacement",
+          "service_confirmed": true,
+          "condition": null
+        },
+        {
+          "id": "7e2b3dc0-7d52-4ff7-b836-3c8899539564",
+          "record_id": "6f7b9600-e956-4bb7-b544-a6349784bdd2",
+          "position": 1,
+          "description": "Oil filter replacement",
+          "description_th": null,
+          "category": "oil",
+          "quantity": 1,
+          "unit_price": 100,
+          "notes": null,
+          "requirement_id": null,
+          "reminder_months": null,
+          "reminder_km": null,
+          "warning_days": 30,
+          "warning_km": "1000.00",
+          "override_date": null,
+          "override_km": null,
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "created_at": "2026-10-14T05:24:09.015Z",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "updated_at": "2026-10-14T05:24:09.015Z",
+          "line_total": null,
+          "service_key": "oil_filter",
+          "service_action": "component_replacement",
+          "service_confirmed": true,
+          "condition": null
+        },
+        {
+          "id": "5e97460d-49e7-402e-a3dd-c613a0785bc6",
+          "record_id": "6f7b9600-e956-4bb7-b544-a6349784bdd2",
+          "position": 2,
+          "description": "Coolant replacement",
+          "description_th": null,
+          "category": "engine",
+          "quantity": 1,
+          "unit_price": 100,
+          "notes": null,
+          "requirement_id": null,
+          "reminder_months": null,
+          "reminder_km": null,
+          "warning_days": 30,
+          "warning_km": "1000.00",
+          "override_date": null,
+          "override_km": null,
+          "created_by": "00000000-0000-4000-8000-000000000001",
+          "created_at": "2026-10-14T05:24:09.015Z",
+          "updated_by": "00000000-0000-4000-8000-000000000001",
+          "updated_at": "2026-10-14T05:24:09.015Z",
+          "line_total": null,
+          "service_key": "coolant",
+          "service_action": "fluid_replacement",
+          "service_confirmed": true,
+          "condition": null
+        }
+      ],
+      "expected_updated_at": "2026-10-14T05:24:09.015Z"
+    }
+  },
+  {
+    "path": "/rest/v1/maintenance_records",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/rpc/maintenance_centre_version",
+    "method": "POST",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/rpc/maintenance_centre_version",
+    "method": "POST",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/drivers",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/weekly_mileage",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_records",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirements",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirement_vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_attachments",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/drivers",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/weekly_mileage",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_records",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirements",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirement_vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_attachments",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_baselines",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicle_service_logs",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_baselines",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicle_service_logs",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_history",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/auth/v1/user",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/support_tickets",
+    "method": "HEAD",
+    "body": {}
+  },
+  {
+    "path": "/auth/v1/user",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/driver_accounts",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/account_access",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/drivers",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/weekly_mileage",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicle_service_logs",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/drivers",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_history",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirements",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_baselines",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/auth/v1/user",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/support_tickets",
+    "method": "HEAD",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/rpc/maintenance_centre_version",
+    "method": "POST",
+    "body": {}
+  },
+  {
+    "path": "/auth/v1/user",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/driver_accounts",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/account_access",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/drivers",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/weekly_mileage",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_records",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirements",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirement_vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_attachments",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_baselines",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicle_service_logs",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_history",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/rpc/delete_maintenance_record",
+    "method": "POST",
+    "body": {
+      "target_id": "6f7b9600-e956-4bb7-b544-a6349784bdd2",
+      "expected_updated_at": "2026-10-14T05:24:19.979Z"
+    }
+  },
+  {
+    "path": "/rest/v1/rpc/maintenance_centre_version",
+    "method": "POST",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/rpc/maintenance_centre_version",
+    "method": "POST",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/drivers",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/weekly_mileage",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_records",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirements",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirement_vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_attachments",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/drivers",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/auth/v1/user",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/support_tickets",
+    "method": "HEAD",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/drivers",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/auth/v1/user",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/weekly_mileage",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicle_service_logs",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/driver_accounts",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/account_access",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/drivers",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_history",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirements",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_baselines",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/auth/v1/user",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/support_tickets",
+    "method": "HEAD",
+    "body": {}
+  },
+  {
+    "path": "/auth/v1/user",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/driver_accounts",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/rpc/maintenance_centre_version",
+    "method": "POST",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/account_access",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/drivers",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/weekly_mileage",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_records",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirement_vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirements",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_attachments",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_baselines",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicle_service_logs",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_history",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/auth/v1/user",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/support_tickets",
+    "method": "HEAD",
+    "body": {}
+  },
+  {
+    "path": "/auth/v1/user",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/driver_accounts",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/account_access",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/rpc/maintenance_centre_version",
+    "method": "POST",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/drivers",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/weekly_mileage",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_records",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirements",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_requirement_vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_attachments",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicles",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_baselines",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/vehicle_service_logs",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/oil_change_history",
+    "method": "GET",
+    "body": {}
+  },
+  {
+    "path": "/rest/v1/maintenance_items",
+    "method": "GET",
+    "body": {}
+  }
+]

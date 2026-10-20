@@ -1,0 +1,14 @@
+✔ auth refresh is deferred beyond the SDK lock and repeated sign-in notifications are deduplicated (6718.3963ms)
+✔ missing People Centre RPC is diagnosed with its exact pending migration and creation stays blocked (271.7584ms)
+✔ missing release guard is diagnosed separately and existing private compliance reads still work (313.7142ms)
+✔ compliance filters cover the full directory before pagination and omit confidential file/licence fields (588.0296ms)
+✔ ordinary office and driver sessions cannot read compliance metadata or case data (86.9287ms)
+✔ document expiry and unrecorded filters use ready records and latest applicable licence only (1.2036ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 8641.2407

@@ -160,7 +160,11 @@ export function AccountMenu({ compact = false }: AccountMenuProps) {
     }
 
     let active = true;
-    const loadSupportCount = () => {
+    const loadSupportCount = (event?: Event) => {
+      if (event) {
+        const detail = (event as CustomEvent<{ resource?: string; resources?: string[] }>).detail;
+        if (detail?.resource && detail.resource !== "support_tickets" && !detail.resources?.includes("support_tickets")) return;
+      }
       void fetchSupportTicketNotificationCount(["Open", "In Progress"]).then((count) => {
         if (active) setSupportTicketCount(count);
       }).catch(() => undefined);

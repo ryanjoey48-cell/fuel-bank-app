@@ -1,0 +1,1 @@
+const fs=require('node:fs');const text=fs.readFileSync('output/ees-hr-v7/hr-tests.txt','utf8');const start=text.indexOf('✖ failing tests:');console.log(start<0?text.slice(-1100):text.slice(start,start+4000));console.log('WRITE AUDIT',fs.readFileSync('output/ees-hr-v7/driver-write-audit.txt','utf8'));

@@ -303,8 +303,7 @@ export default function DispatchPage() {
   const summaryCards = [
     { key: "all" as const, label: copy.totalJobs, value: summary.totalJobs, icon: CalendarDays },
     { key: "unassigned" as const, label: copy.unassigned, value: summary.unassigned, icon: UserRound },
-    { key: "conflicts" as const, label: copy.potentialConflicts, value: summary.potentialConflicts, icon: AlertTriangle },
-    { key: "missing_trip" as const, label: copy.missingTrip, value: summary.missingTrip, icon: Route }
+    { key: "conflicts" as const, label: copy.potentialConflicts, value: summary.potentialConflicts, icon: AlertTriangle }
   ];
 
   const handleCreateTrip = async (booking: BookingDiaryEntry) => {
@@ -385,7 +384,7 @@ export default function DispatchPage() {
       {error ? <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{error}</p> : null}
       {actionMessage ? <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">{actionMessage}</p> : null}
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-3 sm:grid-cols-3">
         {summaryCards.map(({ key, label, value, icon: Icon }) => (
           <button
             key={key}

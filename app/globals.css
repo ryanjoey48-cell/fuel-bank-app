@@ -3330,3 +3330,47 @@ td {
 .driver-portal-shell [role="group"][aria-label] { background: var(--driver-surface); border-color: var(--driver-border); box-shadow: none; }
 .driver-portal-shell [role="group"][aria-label] button[aria-pressed="true"] { background: var(--driver-accent); color: var(--driver-text); box-shadow: none; }
 .driver-portal-shell [role="group"][aria-label] button[aria-pressed="false"] { color: var(--driver-text-secondary); }
+/* Maintenance Centre — light office design. Scoped to this page only. */
+.maintenance-centre {
+  color-scheme: light;
+  background: #faf8f5;
+  color: #202436;
+  border: 1px solid #eee9e3;
+}
+.maintenance-centre .surface-card,
+.maintenance-centre .maintenance-panel,
+.maintenance-centre .maintenance-history-panel {
+  background: #fff;
+  border-color: #e9e5ef;
+  box-shadow: 0 2px 12px rgba(30, 25, 55, .035);
+}
+.maintenance-centre .form-input {
+  min-width: 0;
+  background: #fff;
+  color: #1e293b;
+  border-color: #dcd9e3;
+}
+.maintenance-centre .form-input:focus {
+  border-color: #8b69b6;
+}
+.maintenance-centre .btn-primary {
+  background: #654193;
+  color: #fff;
+  border-color: #654193;
+}
+.maintenance-centre .btn-primary:hover:not(:disabled) { background: #523477; }
+.maintenance-centre .btn-secondary {
+  background: #fff;
+  color: #493767;
+  border-color: #ded8e7;
+}
+.maintenance-centre .btn-secondary:hover:not(:disabled) { background: #f7f3fb; }
+.maintenance-centre button:focus-visible,
+.maintenance-centre summary:focus-visible { outline: 2px solid #8060ad; outline-offset: 3px; }
+.maintenance-centre article,
+.maintenance-centre label { min-width: 0; overflow-wrap: anywhere; }
+.maintenance-centre input[type="file"] { background: #fff; color: #334155; }
+@media (max-width: 639px) {
+  .maintenance-centre { padding: 12px; }
+  .maintenance-centre .form-input { font-size: 16px; }
+}

@@ -46,7 +46,7 @@ export function getEffectiveOilChangeIntervalForVehicleType(
       ? Number(intervalKm)
       : null;
 
-  if (isFourWheelOilChangeVehicleType(vehicleType) && (savedInterval == null || savedInterval === 8000)) {
+  if (isFourWheelOilChangeVehicleType(vehicleType) && savedInterval == null) {
     return 10000;
   }
 

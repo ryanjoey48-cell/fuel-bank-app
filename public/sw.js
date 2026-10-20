@@ -1,4 +1,4 @@
-const CACHE_NAME = "fuel-bank-app-v2";
+const CACHE_NAME = "fuel-bank-app-v3-private-data-network-only";
 const APP_SHELL = [
   "/manifest.json",
   "/icon-192.png",
@@ -37,9 +37,9 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Never serve cached Driver RSC pages or job/profile API data after a write.
-  // This also bypasses Driver responses stored by older versions of this worker.
-  if (url.pathname === "/driver" || url.pathname.startsWith("/driver/") || url.pathname.startsWith("/api/driver/") || url.pathname === "/api/admin/driver-accounts" || url.pathname.startsWith("/api/admin/driver-operations")) {
+  // API responses and employee/driver pages must never enter the offline cache.
+  // Bypass previously cached responses too, including confidential HR files.
+  if (url.pathname.startsWith("/api/") || ["/driver", "/drivers", "/hr", "/employees"].some(path => url.pathname === path || url.pathname.startsWith(path + "/")) || request.headers?.has("Authorization") || request.cache === "no-store") {
     event.respondWith(fetch(request, { cache: "no-store" }));
     return;
   }
@@ -60,7 +60,7 @@ self.addEventListener("fetch", (event) => {
       }
 
       return fetch(request).then((response) => {
-        if (!response || response.status !== 200 || response.type === "opaque") {
+        if (!response || response.status !== 200 || response.type === "opaque" || /no-store|private/i.test(response.headers.get("Cache-Control") || "")) {
           return response;
         }
 

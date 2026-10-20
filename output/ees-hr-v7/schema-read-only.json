@@ -1,0 +1,3604 @@
+{
+  "projectHost": "hafoaurzfgkkwpvzedvd.supabase.co",
+  "definitions": {
+    "ees_employee_licences": {
+      "required": [
+        "id",
+        "employee_id",
+        "category",
+        "licence_number",
+        "issue_date",
+        "expiry_date",
+        "verification_status",
+        "recorded_by",
+        "recorded_at"
+      ],
+      "properties": {
+        "id": {
+          "default": "gen_random_uuid()",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "employee_id": {
+          "description": "Note:\nThis is a Foreign Key to `ees_employee_profiles.id`.<fk table='ees_employee_profiles' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "category": {
+          "format": "text",
+          "type": "string"
+        },
+        "licence_number": {
+          "format": "text",
+          "type": "string"
+        },
+        "issue_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "expiry_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "front_document_id": {
+          "description": "Note:\nThis is a Foreign Key to `ees_employee_documents.id`.<fk table='ees_employee_documents' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "back_document_id": {
+          "description": "Note:\nThis is a Foreign Key to `ees_employee_documents.id`.<fk table='ees_employee_documents' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "verification_status": {
+          "default": "unverified",
+          "format": "text",
+          "type": "string"
+        },
+        "verified_by": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "verified_at": {
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "recorded_by": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "recorded_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ees_hr_case_events": {
+      "required": [
+        "id",
+        "snapshot",
+        "actor_id",
+        "recorded_at"
+      ],
+      "properties": {
+        "id": {
+          "default": "gen_random_uuid()",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "absence_id": {
+          "description": "Note:\nThis is a Foreign Key to `ees_hr_absences.id`.<fk table='ees_hr_absences' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "incident_id": {
+          "description": "Note:\nThis is a Foreign Key to `ees_hr_incidents.id`.<fk table='ees_hr_incidents' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "snapshot": {
+          "format": "jsonb"
+        },
+        "actor_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "recorded_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "vehicle_safety_replacement_tracking": {
+      "required": [
+        "issue_id",
+        "stage",
+        "updated_at"
+      ],
+      "properties": {
+        "issue_id": {
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "text",
+          "type": "string"
+        },
+        "stage": {
+          "default": "reported",
+          "format": "text",
+          "type": "string"
+        },
+        "assigned_to": {
+          "format": "text",
+          "type": "string"
+        },
+        "note": {
+          "format": "text",
+          "type": "string"
+        },
+        "updated_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "updated_by": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ees_driver_vehicle_assignments": {
+      "required": [
+        "id",
+        "driver_id",
+        "vehicle_id",
+        "effective_from",
+        "assignment_kind",
+        "reason",
+        "recorded_at"
+      ],
+      "properties": {
+        "id": {
+          "default": "gen_random_uuid()",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "driver_id": {
+          "description": "Note:\nThis is a Foreign Key to `drivers.id`.<fk table='drivers' column='id'/>",
+          "format": "bigint",
+          "type": "integer"
+        },
+        "vehicle_id": {
+          "description": "Note:\nThis is a Foreign Key to `vehicles.id`.<fk table='vehicles' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "effective_from": {
+          "format": "date",
+          "type": "string"
+        },
+        "effective_to": {
+          "format": "date",
+          "type": "string"
+        },
+        "assignment_kind": {
+          "default": "permanent",
+          "format": "text",
+          "type": "string"
+        },
+        "reason": {
+          "default": "operational",
+          "format": "text",
+          "type": "string"
+        },
+        "notes": {
+          "format": "text",
+          "type": "string"
+        },
+        "recorded_by": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "recorded_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "previous_vehicle_reg": {
+          "format": "text",
+          "type": "string"
+        },
+        "closed_by": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "closed_at": {
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "cancelled_at": {
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "cancellation_reason": {
+          "format": "text",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ees_hr_absences": {
+      "required": [
+        "id",
+        "employee_id",
+        "category",
+        "start_date",
+        "end_date",
+        "status",
+        "return_status",
+        "document_ids",
+        "version",
+        "created_by",
+        "created_at",
+        "updated_by",
+        "updated_at"
+      ],
+      "properties": {
+        "id": {
+          "default": "gen_random_uuid()",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "employee_id": {
+          "description": "Note:\nThis is a Foreign Key to `ees_employee_profiles.id`.<fk table='ees_employee_profiles' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "category": {
+          "format": "text",
+          "type": "string"
+        },
+        "start_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "end_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "status": {
+          "format": "text",
+          "type": "string"
+        },
+        "approved_by": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "approved_at": {
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "return_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "return_status": {
+          "default": "expected",
+          "format": "text",
+          "type": "string"
+        },
+        "notes": {
+          "format": "text",
+          "type": "string"
+        },
+        "document_ids": {
+          "format": "uuid[]",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "version": {
+          "default": 1,
+          "format": "integer",
+          "type": "integer"
+        },
+        "created_by": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "created_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "updated_by": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "updated_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ees_hr_audit": {
+      "required": [
+        "id",
+        "actor_id",
+        "action",
+        "entity_type",
+        "entity_id",
+        "changed_fields",
+        "recorded_at"
+      ],
+      "properties": {
+        "id": {
+          "default": "gen_random_uuid()",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "actor_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "action": {
+          "format": "text",
+          "type": "string"
+        },
+        "entity_type": {
+          "format": "text",
+          "type": "string"
+        },
+        "entity_id": {
+          "format": "text",
+          "type": "string"
+        },
+        "changed_fields": {
+          "format": "text[]",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "recorded_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "vehicles": {
+      "required": [
+        "id",
+        "vehicle_reg",
+        "vehicle_name",
+        "active",
+        "created_at",
+        "updated_at"
+      ],
+      "properties": {
+        "id": {
+          "default": "gen_random_uuid()",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "user_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "vehicle_reg": {
+          "format": "text",
+          "type": "string"
+        },
+        "vehicle_type": {
+          "format": "text",
+          "type": "string"
+        },
+        "vehicle_name": {
+          "format": "text",
+          "type": "string"
+        },
+        "last_oil_change_odometer": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "last_oil_change_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "oil_change_interval_km": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "active": {
+          "default": true,
+          "format": "boolean",
+          "type": "boolean"
+        },
+        "company_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "vehicle_category": {
+          "format": "text",
+          "type": "string"
+        },
+        "fuel_type": {
+          "default": "DIESEL",
+          "format": "text",
+          "type": "string"
+        },
+        "standard_km_per_litre": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "default_driver_cost": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "created_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "updated_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "vehicle_model": {
+          "format": "text",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "vehicle_safety_assets": {
+      "required": [
+        "id",
+        "vehicle_id",
+        "requirement_id",
+        "quantity",
+        "condition",
+        "active",
+        "created_at",
+        "updated_at"
+      ],
+      "properties": {
+        "id": {
+          "default": "gen_random_uuid()",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "vehicle_id": {
+          "description": "Note:\nThis is a Foreign Key to `vehicles.id`.<fk table='vehicles' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "requirement_id": {
+          "description": "Note:\nThis is a Foreign Key to `vehicle_safety_requirements.id`.<fk table='vehicle_safety_requirements' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "asset_code": {
+          "format": "text",
+          "type": "string"
+        },
+        "serial_number": {
+          "format": "text",
+          "type": "string"
+        },
+        "quantity": {
+          "default": 1,
+          "format": "integer",
+          "type": "integer"
+        },
+        "condition": {
+          "default": "good",
+          "format": "text",
+          "type": "string"
+        },
+        "issued_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "expiry_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "next_service_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "notes": {
+          "format": "text",
+          "type": "string"
+        },
+        "photo_url": {
+          "format": "text",
+          "type": "string"
+        },
+        "active": {
+          "default": true,
+          "format": "boolean",
+          "type": "boolean"
+        },
+        "created_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "updated_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ees_hr_meetings": {
+      "required": [
+        "id",
+        "meeting_date",
+        "category",
+        "subject",
+        "attendees",
+        "discussion",
+        "acknowledgement",
+        "created_by",
+        "created_at"
+      ],
+      "properties": {
+        "id": {
+          "default": "gen_random_uuid()",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "driver_id": {
+          "description": "Note:\nThis is a Foreign Key to `drivers.id`.<fk table='drivers' column='id'/>",
+          "format": "bigint",
+          "type": "integer"
+        },
+        "meeting_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "category": {
+          "format": "text",
+          "type": "string"
+        },
+        "subject": {
+          "format": "text",
+          "type": "string"
+        },
+        "attendees": {
+          "format": "text",
+          "type": "string"
+        },
+        "discussion": {
+          "format": "text",
+          "type": "string"
+        },
+        "employee_response": {
+          "format": "text",
+          "type": "string"
+        },
+        "agreed_actions": {
+          "format": "text",
+          "type": "string"
+        },
+        "follow_up_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "acknowledgement": {
+          "default": "not_requested",
+          "format": "text",
+          "type": "string"
+        },
+        "created_by": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "created_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "employee_id": {
+          "description": "Note:\nThis is a Foreign Key to `ees_employee_profiles.id`.<fk table='ees_employee_profiles' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "author_name_snapshot": {
+          "format": "text",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ees_employee_compensation": {
+      "required": [
+        "id",
+        "employee_id",
+        "effective_from",
+        "amount",
+        "currency",
+        "period",
+        "reason",
+        "recorded_by",
+        "recorded_at"
+      ],
+      "properties": {
+        "id": {
+          "default": "gen_random_uuid()",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "employee_id": {
+          "description": "Note:\nThis is a Foreign Key to `ees_employee_profiles.id`.<fk table='ees_employee_profiles' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "effective_from": {
+          "format": "date",
+          "type": "string"
+        },
+        "amount": {
+          "format": "numeric",
+          "type": "number"
+        },
+        "currency": {
+          "default": "THB",
+          "format": "text",
+          "type": "string"
+        },
+        "period": {
+          "format": "text",
+          "type": "string"
+        },
+        "reason": {
+          "format": "text",
+          "type": "string"
+        },
+        "recorded_by": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "recorded_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ees_hr_incidents": {
+      "required": [
+        "id",
+        "employee_id",
+        "occurred_at",
+        "category",
+        "description",
+        "severity",
+        "status",
+        "document_ids",
+        "version",
+        "created_by",
+        "created_at",
+        "updated_by",
+        "updated_at"
+      ],
+      "properties": {
+        "id": {
+          "default": "gen_random_uuid()",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "employee_id": {
+          "description": "Note:\nThis is a Foreign Key to `ees_employee_profiles.id`.<fk table='ees_employee_profiles' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "occurred_at": {
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "category": {
+          "format": "text",
+          "type": "string"
+        },
+        "description": {
+          "format": "text",
+          "type": "string"
+        },
+        "vehicle_id": {
+          "description": "Note:\nThis is a Foreign Key to `vehicles.id`.<fk table='vehicles' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "job_reference": {
+          "format": "text",
+          "type": "string"
+        },
+        "severity": {
+          "format": "text",
+          "type": "string"
+        },
+        "status": {
+          "format": "text",
+          "type": "string"
+        },
+        "action_taken": {
+          "format": "text",
+          "type": "string"
+        },
+        "responsible_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "followup_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "resolved_at": {
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "document_ids": {
+          "format": "uuid[]",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "version": {
+          "default": 1,
+          "format": "integer",
+          "type": "integer"
+        },
+        "created_by": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "created_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "updated_by": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "updated_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "vehicle_safety_replacement_events": {
+      "required": [
+        "id",
+        "issue_id",
+        "stage",
+        "created_at"
+      ],
+      "properties": {
+        "id": {
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "bigint",
+          "type": "integer"
+        },
+        "issue_id": {
+          "format": "text",
+          "type": "string"
+        },
+        "stage": {
+          "format": "text",
+          "type": "string"
+        },
+        "assigned_to": {
+          "format": "text",
+          "type": "string"
+        },
+        "note": {
+          "format": "text",
+          "type": "string"
+        },
+        "created_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "created_by": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "drivers": {
+      "required": [
+        "id",
+        "name",
+        "active"
+      ],
+      "properties": {
+        "id": {
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "bigint",
+          "type": "integer"
+        },
+        "name": {
+          "format": "text",
+          "type": "string"
+        },
+        "vehicle": {
+          "format": "text",
+          "type": "string"
+        },
+        "fuel_type": {
+          "format": "text",
+          "type": "string"
+        },
+        "payment_method": {
+          "format": "text",
+          "type": "string"
+        },
+        "common_location": {
+          "format": "text",
+          "type": "string"
+        },
+        "created_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "vehicle_reg": {
+          "format": "text",
+          "type": "string"
+        },
+        "vehicle_type": {
+          "format": "text",
+          "type": "string"
+        },
+        "assigned_vehicle_id": {
+          "description": "Note:\nThis is a Foreign Key to `vehicles.id`.<fk table='vehicles' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "active": {
+          "default": true,
+          "format": "boolean",
+          "type": "boolean"
+        },
+        "user_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "vehicle_model": {
+          "format": "text",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ees_employee_employment_history": {
+      "required": [
+        "id",
+        "employee_id",
+        "employment_status",
+        "effective_on",
+        "reason",
+        "recorded_by",
+        "recorded_at"
+      ],
+      "properties": {
+        "id": {
+          "default": "gen_random_uuid()",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "employee_id": {
+          "description": "Note:\nThis is a Foreign Key to `ees_employee_profiles.id`.<fk table='ees_employee_profiles' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "employment_status": {
+          "format": "text",
+          "type": "string"
+        },
+        "effective_on": {
+          "format": "date",
+          "type": "string"
+        },
+        "reason": {
+          "format": "text",
+          "type": "string"
+        },
+        "recorded_by": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "recorded_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ees_employee_documents": {
+      "required": [
+        "id",
+        "employee_id",
+        "category",
+        "original_filename",
+        "mime_type",
+        "size_bytes",
+        "object_key",
+        "version_group",
+        "version",
+        "policy_id",
+        "processing_purpose",
+        "documented_lawful_basis",
+        "retain_until",
+        "legal_hold",
+        "state",
+        "uploaded_by",
+        "uploaded_at"
+      ],
+      "properties": {
+        "id": {
+          "default": "gen_random_uuid()",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "employee_id": {
+          "description": "Note:\nThis is a Foreign Key to `ees_employee_profiles.id`.<fk table='ees_employee_profiles' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "category": {
+          "format": "text",
+          "type": "string"
+        },
+        "description": {
+          "format": "text",
+          "type": "string"
+        },
+        "original_filename": {
+          "format": "text",
+          "type": "string"
+        },
+        "mime_type": {
+          "format": "text",
+          "type": "string"
+        },
+        "size_bytes": {
+          "format": "bigint",
+          "type": "integer"
+        },
+        "object_key": {
+          "format": "text",
+          "type": "string"
+        },
+        "version_group": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "version": {
+          "format": "integer",
+          "type": "integer"
+        },
+        "replaces_id": {
+          "description": "Note:\nThis is a Foreign Key to `ees_employee_documents.id`.<fk table='ees_employee_documents' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "issue_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "expiry_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "policy_id": {
+          "description": "Note:\nThis is a Foreign Key to `ees_hr_document_policies.id`.<fk table='ees_hr_document_policies' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "processing_purpose": {
+          "format": "text",
+          "type": "string"
+        },
+        "documented_lawful_basis": {
+          "format": "text",
+          "type": "string"
+        },
+        "retain_until": {
+          "format": "date",
+          "type": "string"
+        },
+        "legal_hold": {
+          "default": false,
+          "format": "boolean",
+          "type": "boolean"
+        },
+        "state": {
+          "default": "pending",
+          "format": "text",
+          "type": "string"
+        },
+        "uploaded_by": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "uploaded_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "retired_at": {
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "purged_at": {
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "retirement_reason": {
+          "format": "text",
+          "type": "string"
+        },
+        "purge_reason": {
+          "format": "text",
+          "type": "string"
+        },
+        "legal_hold_reason": {
+          "format": "text",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ees_hr_followup_events": {
+      "required": [
+        "id",
+        "followup_id",
+        "action",
+        "actor_id",
+        "recorded_at"
+      ],
+      "properties": {
+        "id": {
+          "default": "gen_random_uuid()",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "followup_id": {
+          "description": "Note:\nThis is a Foreign Key to `ees_hr_followups.id`.<fk table='ees_hr_followups' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "action": {
+          "format": "text",
+          "type": "string"
+        },
+        "outcome_notes": {
+          "format": "text",
+          "type": "string"
+        },
+        "actor_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "recorded_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "vehicle_safety_issues": {
+      "required": [
+        "id",
+        "vehicle_id",
+        "issue_type",
+        "severity",
+        "status",
+        "reported_at",
+        "created_at",
+        "updated_at"
+      ],
+      "properties": {
+        "id": {
+          "default": "gen_random_uuid()",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "vehicle_id": {
+          "description": "Note:\nThis is a Foreign Key to `vehicles.id`.<fk table='vehicles' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "driver_id": {
+          "description": "Note:\nThis is a Foreign Key to `drivers.id`.<fk table='drivers' column='id'/>",
+          "format": "bigint",
+          "type": "integer"
+        },
+        "booking_id": {
+          "description": "Note:\nThis is a Foreign Key to `booking_diary.id`.<fk table='booking_diary' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "inspection_id": {
+          "description": "Note:\nThis is a Foreign Key to `vehicle_safety_inspections.id`.<fk table='vehicle_safety_inspections' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "requirement_id": {
+          "description": "Note:\nThis is a Foreign Key to `vehicle_safety_requirements.id`.<fk table='vehicle_safety_requirements' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "issue_type": {
+          "format": "text",
+          "type": "string"
+        },
+        "severity": {
+          "default": "attention",
+          "format": "text",
+          "type": "string"
+        },
+        "description": {
+          "format": "text",
+          "type": "string"
+        },
+        "photo_url": {
+          "format": "text",
+          "type": "string"
+        },
+        "status": {
+          "default": "open",
+          "format": "text",
+          "type": "string"
+        },
+        "reported_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "resolved_at": {
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "resolution_notes": {
+          "format": "text",
+          "type": "string"
+        },
+        "replacement_inventory_item_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "created_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "updated_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ees_hr_followups": {
+      "required": [
+        "id",
+        "due_date",
+        "required_action",
+        "created_by",
+        "created_at"
+      ],
+      "properties": {
+        "id": {
+          "default": "gen_random_uuid()",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "employee_id": {
+          "description": "Note:\nThis is a Foreign Key to `ees_employee_profiles.id`.<fk table='ees_employee_profiles' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "driver_id": {
+          "description": "Note:\nThis is a Foreign Key to `drivers.id`.<fk table='drivers' column='id'/>",
+          "format": "bigint",
+          "type": "integer"
+        },
+        "meeting_id": {
+          "description": "Note:\nThis is a Foreign Key to `ees_hr_meetings.id`.<fk table='ees_hr_meetings' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "due_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "responsible_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "required_action": {
+          "format": "text",
+          "type": "string"
+        },
+        "completed_at": {
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "completed_by": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "outcome_notes": {
+          "format": "text",
+          "type": "string"
+        },
+        "created_by": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "created_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "vehicle_safety_requirements": {
+      "required": [
+        "id",
+        "code",
+        "name_en",
+        "name_th",
+        "required",
+        "sort_order",
+        "active",
+        "created_at",
+        "updated_at"
+      ],
+      "properties": {
+        "id": {
+          "default": "gen_random_uuid()",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "code": {
+          "format": "text",
+          "type": "string"
+        },
+        "name_en": {
+          "format": "text",
+          "type": "string"
+        },
+        "name_th": {
+          "format": "text",
+          "type": "string"
+        },
+        "description_en": {
+          "format": "text",
+          "type": "string"
+        },
+        "description_th": {
+          "format": "text",
+          "type": "string"
+        },
+        "required": {
+          "default": true,
+          "format": "boolean",
+          "type": "boolean"
+        },
+        "sort_order": {
+          "default": 0,
+          "format": "integer",
+          "type": "integer"
+        },
+        "active": {
+          "default": true,
+          "format": "boolean",
+          "type": "boolean"
+        },
+        "created_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "updated_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ees_employee_profiles": {
+      "required": [
+        "id",
+        "employment_status",
+        "created_by",
+        "created_at",
+        "updated_by",
+        "updated_at"
+      ],
+      "properties": {
+        "id": {
+          "default": "gen_random_uuid()",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "driver_id": {
+          "description": "Note:\nThis is a Foreign Key to `drivers.id`.<fk table='drivers' column='id'/>",
+          "format": "bigint",
+          "type": "integer"
+        },
+        "preferred_name": {
+          "format": "text",
+          "type": "string"
+        },
+        "employee_number": {
+          "format": "text",
+          "type": "string"
+        },
+        "job_role": {
+          "format": "text",
+          "type": "string"
+        },
+        "department": {
+          "format": "text",
+          "type": "string"
+        },
+        "employment_status": {
+          "default": "not_recorded",
+          "format": "text",
+          "type": "string"
+        },
+        "start_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "end_date": {
+          "format": "date",
+          "type": "string"
+        },
+        "created_by": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "created_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "updated_by": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "updated_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ees_hr_meeting_addenda": {
+      "required": [
+        "id",
+        "meeting_id",
+        "kind",
+        "reason",
+        "content",
+        "created_by",
+        "created_at"
+      ],
+      "properties": {
+        "id": {
+          "default": "gen_random_uuid()",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "meeting_id": {
+          "description": "Note:\nThis is a Foreign Key to `ees_hr_meetings.id`.<fk table='ees_hr_meetings' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "kind": {
+          "format": "text",
+          "type": "string"
+        },
+        "reason": {
+          "format": "text",
+          "type": "string"
+        },
+        "content": {
+          "format": "text",
+          "type": "string"
+        },
+        "acknowledgement": {
+          "format": "text",
+          "type": "string"
+        },
+        "created_by": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "created_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ees_hr_admins": {
+      "required": [
+        "user_id",
+        "granted_at",
+        "active"
+      ],
+      "properties": {
+        "user_id": {
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "granted_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "active": {
+          "default": true,
+          "format": "boolean",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "ees_hr_meeting_state": {
+      "required": [
+        "meeting_id",
+        "is_test",
+        "reason",
+        "recorded_by",
+        "recorded_at"
+      ],
+      "properties": {
+        "meeting_id": {
+          "description": "Note:\nThis is a Primary Key.<pk/>\nThis is a Foreign Key to `ees_hr_meetings.id`.<fk table='ees_hr_meetings' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "is_test": {
+          "default": false,
+          "format": "boolean",
+          "type": "boolean"
+        },
+        "archived_at": {
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "reason": {
+          "format": "text",
+          "type": "string"
+        },
+        "recorded_by": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "recorded_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ees_operational_managers": {
+      "required": [
+        "user_id",
+        "active",
+        "granted_by",
+        "granted_at"
+      ],
+      "properties": {
+        "user_id": {
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "active": {
+          "default": true,
+          "format": "boolean",
+          "type": "boolean"
+        },
+        "driver_ids": {
+          "format": "bigint[]",
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "granted_by": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "granted_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "vehicle_safety_inspection_items": {
+      "required": [
+        "id",
+        "inspection_id",
+        "requirement_id",
+        "status",
+        "created_at"
+      ],
+      "properties": {
+        "id": {
+          "default": "gen_random_uuid()",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "inspection_id": {
+          "description": "Note:\nThis is a Foreign Key to `vehicle_safety_inspections.id`.<fk table='vehicle_safety_inspections' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "requirement_id": {
+          "description": "Note:\nThis is a Foreign Key to `vehicle_safety_requirements.id`.<fk table='vehicle_safety_requirements' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "status": {
+          "format": "text",
+          "type": "string"
+        },
+        "notes": {
+          "format": "text",
+          "type": "string"
+        },
+        "photo_url": {
+          "format": "text",
+          "type": "string"
+        },
+        "created_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "quantity_available": {
+          "format": "integer",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "ees_employee_training": {
+      "required": [
+        "id",
+        "employee_id",
+        "course",
+        "completed_on",
+        "recorded_by",
+        "recorded_at"
+      ],
+      "properties": {
+        "id": {
+          "default": "gen_random_uuid()",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "employee_id": {
+          "description": "Note:\nThis is a Foreign Key to `ees_employee_profiles.id`.<fk table='ees_employee_profiles' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "course": {
+          "format": "text",
+          "type": "string"
+        },
+        "completed_on": {
+          "format": "date",
+          "type": "string"
+        },
+        "expires_on": {
+          "format": "date",
+          "type": "string"
+        },
+        "certificate_id": {
+          "description": "Note:\nThis is a Foreign Key to `ees_employee_documents.id`.<fk table='ees_employee_documents' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "notes": {
+          "format": "text",
+          "type": "string"
+        },
+        "recorded_by": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "recorded_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ees_licence_vehicle_rules": {
+      "required": [
+        "id",
+        "category",
+        "vehicle_type",
+        "compatible",
+        "reliable_source",
+        "reviewed_by",
+        "reviewed_at",
+        "active"
+      ],
+      "properties": {
+        "id": {
+          "default": "gen_random_uuid()",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "category": {
+          "format": "text",
+          "type": "string"
+        },
+        "vehicle_type": {
+          "format": "text",
+          "type": "string"
+        },
+        "compatible": {
+          "format": "boolean",
+          "type": "boolean"
+        },
+        "reliable_source": {
+          "format": "text",
+          "type": "string"
+        },
+        "reviewed_by": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "reviewed_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "active": {
+          "default": true,
+          "format": "boolean",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "ees_employee_private": {
+      "required": [
+        "employee_id",
+        "updated_by",
+        "updated_at"
+      ],
+      "properties": {
+        "employee_id": {
+          "description": "Note:\nThis is a Primary Key.<pk/>\nThis is a Foreign Key to `ees_employee_profiles.id`.<fk table='ees_employee_profiles' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "legal_name_th": {
+          "format": "text",
+          "type": "string"
+        },
+        "english_name": {
+          "format": "text",
+          "type": "string"
+        },
+        "telephone": {
+          "format": "text",
+          "type": "string"
+        },
+        "address": {
+          "format": "text",
+          "type": "string"
+        },
+        "emergency_contact": {
+          "format": "text",
+          "type": "string"
+        },
+        "emergency_phone": {
+          "format": "text",
+          "type": "string"
+        },
+        "employment_notes": {
+          "format": "text",
+          "type": "string"
+        },
+        "updated_by": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "updated_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "vehicle_safety_inspections": {
+      "required": [
+        "id",
+        "vehicle_id",
+        "inspection_date",
+        "inspected_at",
+        "overall_status",
+        "created_at",
+        "updated_at"
+      ],
+      "properties": {
+        "id": {
+          "default": "gen_random_uuid()",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "vehicle_id": {
+          "description": "Note:\nThis is a Foreign Key to `vehicles.id`.<fk table='vehicles' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "driver_id": {
+          "description": "Note:\nThis is a Foreign Key to `drivers.id`.<fk table='drivers' column='id'/>",
+          "format": "bigint",
+          "type": "integer"
+        },
+        "booking_id": {
+          "description": "Note:\nThis is a Foreign Key to `booking_diary.id`.<fk table='booking_diary' column='id'/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "inspection_date": {
+          "default": "CURRENT_DATE",
+          "format": "date",
+          "type": "string"
+        },
+        "inspected_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "overall_status": {
+          "default": "pending",
+          "format": "text",
+          "type": "string"
+        },
+        "notes": {
+          "format": "text",
+          "type": "string"
+        },
+        "created_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        },
+        "updated_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ees_hr_v7_requests": {
+      "required": [
+        "actor_id",
+        "request_id",
+        "action",
+        "input_hash",
+        "result",
+        "recorded_at"
+      ],
+      "properties": {
+        "actor_id": {
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "request_id": {
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "action": {
+          "format": "text",
+          "type": "string"
+        },
+        "input_hash": {
+          "format": "text",
+          "type": "string"
+        },
+        "result": {
+          "format": "jsonb"
+        },
+        "recorded_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ees_hr_document_policies": {
+      "required": [
+        "id",
+        "category",
+        "processing_purpose",
+        "documented_lawful_basis",
+        "retention_days",
+        "policy_reference",
+        "active",
+        "approved_by",
+        "approved_at"
+      ],
+      "properties": {
+        "id": {
+          "default": "gen_random_uuid()",
+          "description": "Note:\nThis is a Primary Key.<pk/>",
+          "format": "uuid",
+          "type": "string"
+        },
+        "category": {
+          "format": "text",
+          "type": "string"
+        },
+        "processing_purpose": {
+          "format": "text",
+          "type": "string"
+        },
+        "documented_lawful_basis": {
+          "format": "text",
+          "type": "string"
+        },
+        "retention_days": {
+          "format": "integer",
+          "type": "integer"
+        },
+        "policy_reference": {
+          "format": "text",
+          "type": "string"
+        },
+        "active": {
+          "default": true,
+          "format": "boolean",
+          "type": "boolean"
+        },
+        "approved_by": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "approved_at": {
+          "default": "now()",
+          "format": "timestamp with time zone",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "paths": {
+    "/rpc/ees_people_choices": {
+      "get": {
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_people_choices"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_people_choices"
+        ]
+      }
+    },
+    "/rpc/ees_hr_v7_public_employee": {
+      "get": {
+        "parameters": [
+          {
+            "format": "bigint",
+            "in": "query",
+            "name": "p_driver_id",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "format": "uuid",
+            "in": "query",
+            "name": "p_employee_id",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_hr_v7_public_employee"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_driver_id": {
+                  "format": "bigint",
+                  "type": "integer"
+                },
+                "p_employee_id": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_driver_id"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_hr_v7_public_employee"
+        ]
+      }
+    },
+    "/rpc/ees_people_profile": {
+      "get": {
+        "parameters": [
+          {
+            "format": "text",
+            "in": "query",
+            "name": "p_kind",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "format": "text",
+            "in": "query",
+            "name": "p_id",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "format": "text",
+            "in": "query",
+            "name": "p_section",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_people_profile"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_id": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_kind": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_section": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_kind",
+                "p_id"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_people_profile"
+        ]
+      }
+    },
+    "/rpc/ees_hr_v7_office_read": {
+      "get": {
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_hr_v7_office_read"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_hr_v7_office_read"
+        ]
+      }
+    },
+    "/rpc/ees_people_directory": {
+      "get": {
+        "parameters": [
+          {
+            "format": "jsonb",
+            "in": "query",
+            "name": "p_query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_people_directory"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_query": {
+                  "format": "jsonb"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_people_directory"
+        ]
+      }
+    },
+    "/rpc/ees_people_ready": {
+      "get": {
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_people_ready"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_people_ready"
+        ]
+      }
+    },
+    "/rpc/ees_hr_v7_directory": {
+      "get": {
+        "parameters": [
+          {
+            "format": "jsonb",
+            "in": "query",
+            "name": "p_query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_hr_v7_directory"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_query": {
+                  "format": "jsonb"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_hr_v7_directory"
+        ]
+      }
+    },
+    "/rpc/ees_people_cases": {
+      "get": {
+        "parameters": [
+          {
+            "format": "text",
+            "in": "query",
+            "name": "p_kind",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "format": "jsonb",
+            "in": "query",
+            "name": "p_query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_people_cases"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_kind": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_query": {
+                  "format": "jsonb"
+                }
+              },
+              "required": [
+                "p_kind"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_people_cases"
+        ]
+      }
+    },
+    "/rpc/ees_hr_v7_followups": {
+      "get": {
+        "parameters": [
+          {
+            "format": "jsonb",
+            "in": "query",
+            "name": "p_query",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_hr_v7_followups"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_query": {
+                  "format": "jsonb"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_hr_v7_followups"
+        ]
+      }
+    },
+    "/rpc/ees_hr_v7_finalize_document": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_actor": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_id": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "p_operation": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_id",
+                "p_actor",
+                "p_operation"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_hr_v7_finalize_document"
+        ]
+      }
+    },
+    "/rpc/ees_change_driver_vehicle": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_assignment_kind": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_driver_id": {
+                  "format": "bigint",
+                  "type": "integer"
+                },
+                "p_effective_from": {
+                  "format": "date",
+                  "type": "string"
+                },
+                "p_effective_to": {
+                  "format": "date",
+                  "type": "string"
+                },
+                "p_notes": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_reason": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_vehicle_id": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_driver_id",
+                "p_vehicle_id",
+                "p_effective_from",
+                "p_assignment_kind",
+                "p_reason"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_change_driver_vehicle"
+        ]
+      }
+    },
+    "/rpc/ees_is_hr_admin": {
+      "get": {
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_is_hr_admin"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_is_hr_admin"
+        ]
+      }
+    },
+    "/rpc/ees_hr_v7_audit": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_action": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_fields": {
+                  "format": "text[]",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "p_id": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_type": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_action",
+                "p_type",
+                "p_id"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_hr_v7_audit"
+        ]
+      }
+    },
+    "/rpc/ees_hr_v7_operate": {
+      "get": {
+        "parameters": [
+          {
+            "format": "bigint",
+            "in": "query",
+            "name": "p_driver_id",
+            "required": false,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_hr_v7_operate"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_driver_id": {
+                  "format": "bigint",
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_hr_v7_operate"
+        ]
+      }
+    },
+    "/rpc/ees_safety_office_allowed": {
+      "get": {
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_safety_office_allowed"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_safety_office_allowed"
+        ]
+      }
+    },
+    "/rpc/ees_record_hr_meeting": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_acknowledgement": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_agreed_actions": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_attendees": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_category": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_discussion": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_driver_id": {
+                  "format": "bigint",
+                  "type": "integer"
+                },
+                "p_employee_response": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_follow_up_date": {
+                  "format": "date",
+                  "type": "string"
+                },
+                "p_meeting_date": {
+                  "format": "date",
+                  "type": "string"
+                },
+                "p_subject": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_driver_id",
+                "p_meeting_date",
+                "p_category",
+                "p_subject",
+                "p_attendees",
+                "p_discussion"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_record_hr_meeting"
+        ]
+      }
+    },
+    "/rpc/ees_hr_v7_meeting": {
+      "get": {
+        "parameters": [
+          {
+            "format": "uuid",
+            "in": "query",
+            "name": "p_id",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "format": "boolean",
+            "in": "query",
+            "name": "p_allow_test",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_hr_v7_meeting"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_allow_test": {
+                  "format": "boolean",
+                  "type": "boolean"
+                },
+                "p_id": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_id"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_hr_v7_meeting"
+        ]
+      }
+    },
+    "/rpc/ees_hr_v7_licence_status": {
+      "get": {
+        "parameters": [
+          {
+            "format": "bigint",
+            "in": "query",
+            "name": "p_driver_id",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "format": "uuid",
+            "in": "query",
+            "name": "p_vehicle_id",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_hr_v7_licence_status"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_driver_id": {
+                  "format": "bigint",
+                  "type": "integer"
+                },
+                "p_vehicle_id": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_driver_id"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_hr_v7_licence_status"
+        ]
+      }
+    },
+    "/rpc/ees_people_action": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_input": {
+                  "format": "jsonb"
+                },
+                "p_kind": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_request_id": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_kind",
+                "p_input",
+                "p_request_id"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_people_action"
+        ]
+      }
+    },
+    "/rpc/ees_hr_v7_change_driver_vehicle": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_assignment_kind": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_driver_id": {
+                  "format": "bigint",
+                  "type": "integer"
+                },
+                "p_effective_from": {
+                  "format": "date",
+                  "type": "string"
+                },
+                "p_effective_to": {
+                  "format": "date",
+                  "type": "string"
+                },
+                "p_notes": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_reason": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_vehicle_id": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_driver_id",
+                "p_vehicle_id",
+                "p_effective_from",
+                "p_assignment_kind",
+                "p_reason"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_hr_v7_change_driver_vehicle"
+        ]
+      }
+    },
+    "/rpc/ees_hr_v7_vehicle_json": {
+      "get": {
+        "parameters": [
+          {
+            "format": "uuid",
+            "in": "query",
+            "name": "p_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_hr_v7_vehicle_json"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_id": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_id"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_hr_v7_vehicle_json"
+        ]
+      }
+    },
+    "/rpc/ees_hr_v7_action": {
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_action": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_input": {
+                  "format": "jsonb"
+                },
+                "p_request_id": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_action",
+                "p_input"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_hr_v7_action"
+        ]
+      }
+    },
+    "/rpc/ees_hr_v7_storage_ready": {
+      "get": {
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_hr_v7_storage_ready"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_hr_v7_storage_ready"
+        ]
+      }
+    },
+    "/rpc/ees_people_public_employee": {
+      "get": {
+        "parameters": [
+          {
+            "format": "bigint",
+            "in": "query",
+            "name": "p_driver_id",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "format": "uuid",
+            "in": "query",
+            "name": "p_employee_id",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_people_public_employee"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_driver_id": {
+                  "format": "bigint",
+                  "type": "integer"
+                },
+                "p_employee_id": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_driver_id"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_people_public_employee"
+        ]
+      }
+    },
+    "/rpc/ees_hr_v7_profile": {
+      "get": {
+        "parameters": [
+          {
+            "format": "text",
+            "in": "query",
+            "name": "p_kind",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "format": "text",
+            "in": "query",
+            "name": "p_id",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "format": "text",
+            "in": "query",
+            "name": "p_section",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_hr_v7_profile"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_id": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_kind": {
+                  "format": "text",
+                  "type": "string"
+                },
+                "p_section": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_kind",
+                "p_id"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_hr_v7_profile"
+        ]
+      }
+    },
+    "/rpc/ees_hr_v7_access": {
+      "get": {
+        "parameters": [
+          {
+            "format": "bigint",
+            "in": "query",
+            "name": "p_driver_id",
+            "required": false,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_hr_v7_access"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_driver_id": {
+                  "format": "bigint",
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_hr_v7_access"
+        ]
+      }
+    },
+    "/rpc/ees_hr_v7_lookups": {
+      "get": {
+        "parameters": [
+          {
+            "format": "text",
+            "in": "query",
+            "name": "p_kind",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "format": "bigint",
+            "in": "query",
+            "name": "p_driver_id",
+            "required": false,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_hr_v7_lookups"
+        ]
+      },
+      "post": {
+        "parameters": [
+          {
+            "in": "body",
+            "name": "args",
+            "required": true,
+            "schema": {
+              "properties": {
+                "p_driver_id": {
+                  "format": "bigint",
+                  "type": "integer"
+                },
+                "p_kind": {
+                  "format": "text",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "p_kind"
+              ],
+              "type": "object"
+            }
+          },
+          {
+            "$ref": "#/parameters/preferParams"
+          }
+        ],
+        "produces": [
+          "application/json",
+          "application/vnd.pgrst.object+json;nulls=stripped",
+          "application/vnd.pgrst.object+json"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "tags": [
+          "(rpc) ees_hr_v7_lookups"
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,67 @@
+Initial body: EN / TH
+
+EXPERT EXPRESS SENDER CO., LTD.
+
+Weekly Mileage
+
+Record weekly odometers, review distance results and manage oil-service status from the same mileage data.
+
+Weekly Mileage
+Distance Results
+Oil Service
+Reporting week summary
+
+Check this week's completion and add any missing odometer readings.
+
+11 OCT 2026
+Add Mileage
+Download Weekly Mileage PDF
+
+WEEKLY DISTANCE COVERED
+
+Not enough data yet
+
+Total from comparable odometer readings
+
+VEHICLES ENTERED
+
+0 / 1
+
+1 entries this week
+
+MISSING ENTRIES
+
+0
+
+All vehicles complete
+
+CHANGE VS PREVIOUS WEEK
+
+No previous week to compare
+
+No previous-week comparison
+
+Weekly odometer records
+11 OCT 2026 · 1 ENTRIES
+
+Review submitted odometer readings for a selected reporting week.
+
+SORTED BY WEEKLY DISTANCE: HIGHEST → LOWEST
+
+←
+11 Oct 2026
+→
+Export
+DRIVER	VEHICLE REG	PREVIOUS ODOMETER	CURRENT ODOMETER	WEEKLY KM	ACTION
+Buew	
+3ฒน-9565
+NO PREVIOUS WEEK	-	360,000	-	
+Edit
+•••
+
+Page 1 of 1
+
+Previous
+Next { drivers: 1, vehicles: 1, mileage: 1, history: 1, baselines: 1 }
+Loaded actual page { drivers: 1, vehicles: 1, mileage: 1, history: 1, baselines: 1 }
+Browser checks passed

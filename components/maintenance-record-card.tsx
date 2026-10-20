@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, FileCheck2, FileText, X } from "lucide-react";
+import { ChevronDown, FileCheck2, FileText, Truck, MapPin, CalendarDays, X, ArrowUpRight } from "lucide-react";
 import { useLanguage } from "@/lib/language-provider";
 import { useAccountAccess } from "@/lib/use-account-access";
 import {
@@ -27,6 +27,8 @@ import type {
   MaintenanceReminder,
 } from "@/lib/maintenance-types";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/utils";
+import {maintenanceVehicleModel} from '@/lib/maintenance-vehicle-label';
+import {useMaintenanceDialog} from "./use-maintenance-dialog";
 import { MaintenanceItemTable } from "./maintenance-item-table";
 import { MaintenanceAttachmentList } from "./maintenance-attachments";
 
@@ -37,6 +39,9 @@ export function MaintenanceVisit({
   onChanged,
   reminders,
   detailed = false,
+  summaryDescription = false,
+  hideSummary = false,
+  onClose,
 }: {
   record: MaintenanceRecord;
   data: MaintenanceData;
@@ -44,6 +49,9 @@ export function MaintenanceVisit({
   onChanged: () => void;
   reminders?: MaintenanceReminder[];
   detailed?: boolean;
+  summaryDescription?: boolean;
+  hideSummary?: boolean;
+  onClose?: () => void;
 }) {
   const { t, language } = useLanguage();
   const c = t.maintenance;
@@ -59,23 +67,8 @@ export function MaintenanceVisit({
     setExpanded(detailed);
   }, [detailed]);
 
-  useEffect(() => {
-    if (!expanded) return;
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setExpanded(false);
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [expanded]);
+  const close = () => {setExpanded(false);onClose?.();};
+  const dialogRef = useMaintenanceDialog(expanded,close);
 
   const items = data.items
     .filter((item) => item.record_id === record.id)
@@ -169,195 +162,42 @@ export function MaintenanceVisit({
 
   return (
     <article
-      className="min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white transition-shadow duration-200 hover:border-violet-200 hover:shadow-[0_8px_22px_rgba(67,56,202,0.07)]"
+      className={`${hideSummary?'':'maintenance-record-tile'} min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white transition-shadow duration-200 hover:border-violet-200 hover:shadow-[0_8px_22px_rgba(67,56,202,0.07)]`}
     >
-      {/* COMPACT RECORD */}
-      <div className="p-4">
-        <div className="grid gap-4 lg:grid-cols-[1.15fr_1.35fr_1.55fr_1fr_auto] lg:items-center">
-          {/* VEHICLE */}
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h4 className="text-lg font-bold tracking-tight text-slate-950">
-                {vehicle?.vehicle_reg ?? "—"}
-              </h4>
-
-              {highCost && (
-                <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">
-                  {c.highCostRepair}
-                </span>
-              )}
-
-              {record.is_deleted && (
-                <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-700">
-                  {c.deleted}
-                </span>
-              )}
-            </div>
-
-            <p className="mt-1 truncate text-xs text-slate-500">
-              {driver} · {vehicleType}
-            </p>
-          </div>
-
-          {/* SERVICE */}
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
-              {c.serviceDate}
-            </p>
-            <p className="mt-1 text-sm font-semibold text-slate-900">
-              {formatDate(record.service_date, language)}
-            </p>
-            <p
-              className="mt-0.5 truncate text-xs text-slate-500"
-              title={record.garage || "—"}
-            >
-              {record.garage || "—"}
-            </p>
-          </div>
-
-          {/* WORK */}
-          <div className="min-w-0">
-            <div className="flex items-baseline gap-2">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
-                {items.length === 1 ? c.maintenanceItem : c.maintenanceItemsCount}
-              </p>
-              <span className="text-sm font-semibold text-slate-900">
-                {formatNumber(items.length, language)}
-              </span>
-            </div>
-
-            <div className="mt-1.5 flex min-w-0 flex-wrap gap-1">
-              {categories.slice(0, 2).map((category) => (
-                <span
-                  key={category}
-                  className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${maintenanceCategoryTone[category]}`}
-                >
-                  {maintenanceCategoryShortLabels[language][category]}
-                </span>
-              ))}
-
-              {categories.length > 2 && (
-                <span
-                  title={categories
-                    .slice(2)
-                    .map(
-                      (category) =>
-                        maintenanceCategoryShortLabels[language][category]
-                    )
-                    .join(", ")}
-                  className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600"
-                >
-                  +{categories.length - 2}
-                </span>
-              )}
-
-              {attachments.length > 0 && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                  <FileCheck2 className="h-3 w-3" />
-                  {attachments.length === 1 ? c.receiptAttached : `${attachments.length}`}
-                </span>
-              )}
-
-              {difference === 0 && (
-                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                  ✓ {c.matched}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* COST */}
-          <div className="min-w-0 lg:text-right">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
-              {c.recordTotal}
-            </p>
-            <p className="mt-1 whitespace-nowrap text-base font-bold tracking-tight text-violet-950">
-              {formatCurrency(Number(record.calculated_total), language)}
-            </p>
-            {difference !== null && difference !== 0 && (
-              <p className="mt-1 text-[11px] font-semibold text-amber-700">
-                ⚠ {c.difference}: {formatCurrency(difference, language)}
-              </p>
-            )}
-          </div>
-
-          {/* ACTIONS */}
-          <div className="flex items-center justify-end gap-2">
-            {attachments.length > 0 && (
-              <button
-                type="button"
-                disabled={busy}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-violet-200 hover:text-violet-700 disabled:opacity-50"
-                onClick={() => void openReceipt()}
-                title={attachments.length > 1 ? c.viewReceipts : c.viewReceipt}
-                aria-label={attachments.length > 1 ? c.viewReceipts : c.viewReceipt}
-              >
-                <FileText className="h-4 w-4" aria-hidden="true" />
-              </button>
-            )}
-
-            <button
-              type="button"
-              className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-violet-100 bg-violet-50/70 px-3 text-sm font-semibold text-violet-800 transition hover:bg-violet-100"
-              aria-haspopup="dialog"
-              onClick={() => setExpanded(true)}
-            >
-              {c.viewRecord}
-              <ChevronDown className="h-4 w-4" />
-            </button>
-          </div>
+      {!hideSummary && <div className="flex h-full flex-col gap-2.5 p-3 sm:p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2.5"><span className="maintenance-record-icon" aria-hidden="true"><Truck size={18}/></span><div className="min-w-0"><h4 className="text-lg font-semibold tracking-tight text-slate-950">{vehicle?.vehicle_reg??'—'}</h4><p className="truncate text-xs text-slate-500">{driver}</p><p className="mt-0.5 truncate text-xs text-slate-500" title={maintenanceVehicleModel(vehicle)}>{[maintenanceVehicleModel(vehicle),vehicleType].filter(Boolean).join(' · ')}</p></div></div>
+          <button type="button" onClick={()=>setExpanded(true)} className="maintenance-record-cost shrink-0 rounded-xl px-2.5 py-1.5 text-base font-semibold tracking-tight text-violet-900">{formatCurrency(Number(record.calculated_total),language)}</button>
         </div>
-
-        {(record.odometer !== null ||
-          inferredMileage ||
-          record.receipt_reference) && (
-          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-slate-100 pt-2.5 text-[11px] text-slate-500">
-            {(record.odometer !== null || inferredMileage) && (
-              <span>
-                {record.odometer !== null ? c.mileage : c.inferredMileage}:{" "}
-                <strong className="font-semibold text-slate-700">
-                  {mileageValue}
-                </strong>
-                {inferredMileage && (
-                  <span> · {formatDate(inferredMileage.date, language)}</span>
-                )}
-              </span>
-            )}
-
-            {record.receipt_reference && (
-              <span>
-                {c.receiptReference}:{" "}
-                <strong className="font-semibold text-slate-700">
-                  {record.receipt_reference}
-                </strong>
-              </span>
-            )}
+        <div className="flex min-w-0 items-start gap-2"><p className="line-clamp-2 min-w-0 flex-1 text-sm font-medium leading-5 text-slate-800" title={items.slice(0,2).map(i=>i.description).join(', ')}>{items.slice(0,2).map(i=>language==='th'?i.description_th||i.description:i.description).join(', ')||c.visits}</p>{items.length>2&&<span className="shrink-0 rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-800">{`+${items.length-2}`}</span>}</div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500"><span className="inline-flex items-center gap-1.5"><CalendarDays size={13} aria-hidden="true"/>{formatDate(record.service_date,language)}</span><span className="inline-flex min-w-0 items-center gap-1.5"><MapPin size={13} className="shrink-0" aria-hidden="true"/><span className="truncate" title={record.garage||'—'}>{record.garage||'—'}</span></span></div>
+        <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2">
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+            {attachments.length>0&&<button type="button" onClick={()=>void openReceipt()} disabled={busy} className="maintenance-receipt-badge inline-flex min-h-9 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 text-xs font-medium text-emerald-800"><FileCheck2 className="h-3.5 w-3.5"/>{c.receiptAttached}</button>}
+            {record.is_deleted&&<span className="text-rose-800">{c.deleted}</span>}
+            {highCost&&<span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900">{c.highCostRepair}</span>}
+            {difference!==null&&difference!==0&&<span className="text-amber-900">⚠ {c.difference}: {formatCurrency(difference,language)}</span>}
           </div>
-        )}
-
-        {error && (
-          <p
-            role="alert"
-            className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700"
-          >
-            {error}
-          </p>
-        )}
-      </div>
+          <button type="button" aria-haspopup="dialog" onClick={()=>setExpanded(true)} className="maintenance-view-details ml-auto inline-flex min-h-9 items-center gap-1 rounded-lg bg-violet-50 px-3 text-sm font-medium text-violet-800">{c.viewRecord}<ChevronDown className="h-4 w-4"/></button>
+        </div>
+        {error&&<p role="alert" className="text-sm text-rose-800">{error}</p>}
+      </div>}
 
       {expanded && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 p-3 backdrop-blur-[2px] sm:p-5"
           role="presentation"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setExpanded(false);
+            if (event.target === event.currentTarget) close();
           }}
         >
           <section
+            ref={dialogRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-label={`${vehicle?.vehicle_reg ?? ""} ${c.viewRecord}`}
-            className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-violet-100 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.28)]"
+            className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-violet-100 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.28)]"
           >
             {/* MODAL HEADER */}
             <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-100 bg-white px-5 py-4 sm:px-6">
@@ -383,38 +223,49 @@ export function MaintenanceVisit({
                 <p className="mt-1 text-sm text-slate-500">
                   {formatDate(record.service_date, language)} · {record.garage || "—"}
                 </p>
+                <p className="mt-1 text-xs text-slate-500">{driver} · {[maintenanceVehicleModel(vehicle), vehicleType].filter(Boolean).join(" · ")}</p>
               </div>
 
               <button
                 type="button"
                 aria-label="Close"
                 className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700"
-                onClick={() => setExpanded(false)}
+                onClick={close}
               >
                 <X className="h-5 w-5" aria-hidden="true" />
               </button>
             </header>
 
             {/* MODAL CONTENT */}
-            <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50/60 px-5 py-5 sm:px-6">
-              <div className="space-y-5">
-                {/* ESSENTIAL RECORD SNAPSHOT */}
-                <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  {[
-                    [c.driver, driver],
-                    [c.vehicleType, vehicleType],
-                    [c.mileage, mileageValue],
-                    [c.recordTotal, formatCurrency(Number(record.calculated_total), language)],
-                  ].map(([label, value]) => (
-                    <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
-                        {label}
-                      </p>
-                      <p className="mt-1.5 break-words text-sm font-semibold text-slate-900">
-                        {value}
-                      </p>
-                    </div>
-                  ))}
+            <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50/60 px-3 py-3 sm:px-5">
+              <div className="space-y-3">
+                {/* A clear starting point for reviewing an existing garage record. */}
+                <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-violet-100 bg-white px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-900">{language === "th" ? "ตรวจสอบรายการซ่อม" : "Review garage work"}</p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      {attachments.length > 0
+                        ? (language === "th" ? `แนบใบเสร็จ ${attachments.length} ไฟล์` : `${attachments.length} receipt attachment${attachments.length === 1 ? "" : "s"} saved`)
+                        : c.noReceipt}
+                    </p>
+                  </div>
+                  {attachments.length > 0 && (
+                    <button type="button" onClick={() => void openReceipt()} disabled={busy}
+                      className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-violet-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-800 disabled:opacity-50">
+                      <FileText className="h-4 w-4" aria-hidden="true" />
+                      {attachments.length > 1 ? c.viewReceipts : c.viewReceipt}
+                      <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  )}
+                </section>
+                {error && <p role="alert" className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>}
+
+                {/* One concise line of key service facts, rather than four tall cards. */}
+                <section className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm">
+                  <span><span className="text-slate-500">{c.driver}: </span><strong className="text-slate-900">{driver}</strong></span>
+                  <span><span className="text-slate-500">{c.vehicleType}: </span><strong className="text-slate-900">{vehicleType}</strong></span>
+                  <span><span className="text-slate-500">{c.mileage}: </span><strong className="text-slate-900">{mileageValue}</strong></span>
+                  <span className="sm:ml-auto"><span className="text-slate-500">{c.recordTotal}: </span><strong className="text-violet-800">{formatCurrency(Number(record.calculated_total), language)}</strong></span>
                 </section>
 
                 {/* RECEIPT CHECK */}
@@ -478,7 +329,7 @@ export function MaintenanceVisit({
                       ))}
                     </div>
                   </div>
-                  <div className="max-h-[38vh] overflow-y-auto">
+                  <div>
                     <MaintenanceItemTable items={items} record={record} />
                   </div>
                 </section>
@@ -589,25 +440,13 @@ export function MaintenanceVisit({
 
               {!record.is_deleted && (
                 <div className="flex flex-wrap gap-2">
-                  {attachments.length > 0 && (
-                    <button
-                      type="button"
-                      className="btn-secondary min-h-10"
-                      disabled={busy}
-                      onClick={() => void openReceipt()}
-                    >
-                      <FileText className="mr-2 h-4 w-4" aria-hidden="true" />
-                      {attachments.length > 1 ? c.viewReceipts : c.viewReceipt}
-                    </button>
-                  )}
-
                   {can("business:write") && (
                     <button
                       type="button"
                       className="btn-secondary min-h-10"
                       disabled={busy}
                       onClick={() => {
-                        setExpanded(false);
+                        close();
                         onEdit(record);
                       }}
                     >
@@ -626,7 +465,7 @@ export function MaintenanceVisit({
                         setError(null);
                         try {
                           await deleteMaintenanceRecord(record);
-                          setExpanded(false);
+                          close();
                           onChanged();
                         } catch {
                           setError(c.saveError);

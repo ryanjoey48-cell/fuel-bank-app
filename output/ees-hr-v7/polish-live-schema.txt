@@ -1,0 +1,521 @@
+{
+  "tables": [
+    {
+      "name": "ees_employee_licences",
+      "fields": [
+        "id",
+        "employee_id",
+        "category",
+        "licence_number",
+        "issue_date",
+        "expiry_date",
+        "front_document_id",
+        "back_document_id",
+        "verification_status",
+        "verified_by",
+        "verified_at",
+        "recorded_by",
+        "recorded_at"
+      ]
+    },
+    {
+      "name": "ees_hr_case_events",
+      "fields": [
+        "id",
+        "absence_id",
+        "incident_id",
+        "snapshot",
+        "actor_id",
+        "recorded_at"
+      ]
+    },
+    {
+      "name": "vehicle_safety_replacement_tracking",
+      "fields": [
+        "issue_id",
+        "stage",
+        "assigned_to",
+        "note",
+        "updated_at",
+        "updated_by"
+      ]
+    },
+    {
+      "name": "ees_driver_vehicle_assignments",
+      "fields": [
+        "id",
+        "driver_id",
+        "vehicle_id",
+        "effective_from",
+        "effective_to",
+        "assignment_kind",
+        "reason",
+        "notes",
+        "recorded_by",
+        "recorded_at",
+        "previous_vehicle_reg",
+        "closed_by",
+        "closed_at",
+        "cancelled_at",
+        "cancellation_reason"
+      ]
+    },
+    {
+      "name": "ees_hr_absences",
+      "fields": [
+        "id",
+        "employee_id",
+        "category",
+        "start_date",
+        "end_date",
+        "status",
+        "approved_by",
+        "approved_at",
+        "return_date",
+        "return_status",
+        "notes",
+        "document_ids",
+        "version",
+        "created_by",
+        "created_at",
+        "updated_by",
+        "updated_at"
+      ]
+    },
+    {
+      "name": "ees_hr_audit",
+      "fields": [
+        "id",
+        "actor_id",
+        "action",
+        "entity_type",
+        "entity_id",
+        "changed_fields",
+        "recorded_at"
+      ]
+    },
+    {
+      "name": "vehicles",
+      "fields": [
+        "id",
+        "user_id",
+        "vehicle_reg",
+        "vehicle_type",
+        "vehicle_name",
+        "last_oil_change_odometer",
+        "last_oil_change_date",
+        "oil_change_interval_km",
+        "active",
+        "company_id",
+        "vehicle_category",
+        "fuel_type",
+        "standard_km_per_litre",
+        "default_driver_cost",
+        "created_at",
+        "updated_at",
+        "vehicle_model"
+      ]
+    },
+    {
+      "name": "vehicle_safety_assets",
+      "fields": [
+        "id",
+        "vehicle_id",
+        "requirement_id",
+        "asset_code",
+        "serial_number",
+        "quantity",
+        "condition",
+        "issued_date",
+        "expiry_date",
+        "next_service_date",
+        "notes",
+        "photo_url",
+        "active",
+        "created_at",
+        "updated_at"
+      ]
+    },
+    {
+      "name": "ees_hr_meetings",
+      "fields": [
+        "id",
+        "driver_id",
+        "meeting_date",
+        "category",
+        "subject",
+        "attendees",
+        "discussion",
+        "employee_response",
+        "agreed_actions",
+        "follow_up_date",
+        "acknowledgement",
+        "created_by",
+        "created_at",
+        "employee_id",
+        "author_name_snapshot"
+      ]
+    },
+    {
+      "name": "ees_employee_compensation",
+      "fields": [
+        "id",
+        "employee_id",
+        "effective_from",
+        "amount",
+        "currency",
+        "period",
+        "reason",
+        "recorded_by",
+        "recorded_at"
+      ]
+    },
+    {
+      "name": "ees_hr_incidents",
+      "fields": [
+        "id",
+        "employee_id",
+        "occurred_at",
+        "category",
+        "description",
+        "vehicle_id",
+        "job_reference",
+        "severity",
+        "status",
+        "action_taken",
+        "responsible_id",
+        "followup_date",
+        "resolved_at",
+        "document_ids",
+        "version",
+        "created_by",
+        "created_at",
+        "updated_by",
+        "updated_at"
+      ]
+    },
+    {
+      "name": "vehicle_safety_replacement_events",
+      "fields": [
+        "id",
+        "issue_id",
+        "stage",
+        "assigned_to",
+        "note",
+        "created_at",
+        "created_by"
+      ]
+    },
+    {
+      "name": "drivers",
+      "fields": [
+        "id",
+        "name",
+        "vehicle",
+        "fuel_type",
+        "payment_method",
+        "common_location",
+        "created_at",
+        "vehicle_reg",
+        "vehicle_type",
+        "assigned_vehicle_id",
+        "active",
+        "user_id",
+        "vehicle_model"
+      ]
+    },
+    {
+      "name": "ees_employee_employment_history",
+      "fields": [
+        "id",
+        "employee_id",
+        "employment_status",
+        "effective_on",
+        "reason",
+        "recorded_by",
+        "recorded_at"
+      ]
+    },
+    {
+      "name": "ees_employee_documents",
+      "fields": [
+        "id",
+        "employee_id",
+        "category",
+        "description",
+        "original_filename",
+        "mime_type",
+        "size_bytes",
+        "object_key",
+        "version_group",
+        "version",
+        "replaces_id",
+        "issue_date",
+        "expiry_date",
+        "policy_id",
+        "processing_purpose",
+        "documented_lawful_basis",
+        "retain_until",
+        "legal_hold",
+        "state",
+        "uploaded_by",
+        "uploaded_at",
+        "retired_at",
+        "purged_at",
+        "retirement_reason",
+        "purge_reason",
+        "legal_hold_reason"
+      ]
+    },
+    {
+      "name": "ees_hr_followup_events",
+      "fields": [
+        "id",
+        "followup_id",
+        "action",
+        "outcome_notes",
+        "actor_id",
+        "recorded_at"
+      ]
+    },
+    {
+      "name": "vehicle_safety_issues",
+      "fields": [
+        "id",
+        "vehicle_id",
+        "driver_id",
+        "booking_id",
+        "inspection_id",
+        "requirement_id",
+        "issue_type",
+        "severity",
+        "description",
+        "photo_url",
+        "status",
+        "reported_at",
+        "resolved_at",
+        "resolution_notes",
+        "replacement_inventory_item_id",
+        "created_at",
+        "updated_at"
+      ]
+    },
+    {
+      "name": "ees_hr_followups",
+      "fields": [
+        "id",
+        "employee_id",
+        "driver_id",
+        "meeting_id",
+        "due_date",
+        "responsible_id",
+        "required_action",
+        "completed_at",
+        "completed_by",
+        "outcome_notes",
+        "created_by",
+        "created_at"
+      ]
+    },
+    {
+      "name": "vehicle_safety_requirements",
+      "fields": [
+        "id",
+        "code",
+        "name_en",
+        "name_th",
+        "description_en",
+        "description_th",
+        "required",
+        "sort_order",
+        "active",
+        "created_at",
+        "updated_at"
+      ]
+    },
+    {
+      "name": "ees_employee_profiles",
+      "fields": [
+        "id",
+        "driver_id",
+        "preferred_name",
+        "employee_number",
+        "job_role",
+        "department",
+        "employment_status",
+        "start_date",
+        "end_date",
+        "created_by",
+        "created_at",
+        "updated_by",
+        "updated_at"
+      ]
+    },
+    {
+      "name": "ees_hr_meeting_addenda",
+      "fields": [
+        "id",
+        "meeting_id",
+        "kind",
+        "reason",
+        "content",
+        "acknowledgement",
+        "created_by",
+        "created_at"
+      ]
+    },
+    {
+      "name": "ees_hr_admins",
+      "fields": [
+        "user_id",
+        "granted_at",
+        "active"
+      ]
+    },
+    {
+      "name": "ees_hr_meeting_state",
+      "fields": [
+        "meeting_id",
+        "is_test",
+        "archived_at",
+        "reason",
+        "recorded_by",
+        "recorded_at"
+      ]
+    },
+    {
+      "name": "ees_operational_managers",
+      "fields": [
+        "user_id",
+        "active",
+        "driver_ids",
+        "granted_by",
+        "granted_at"
+      ]
+    },
+    {
+      "name": "vehicle_safety_inspection_items",
+      "fields": [
+        "id",
+        "inspection_id",
+        "requirement_id",
+        "status",
+        "notes",
+        "photo_url",
+        "created_at",
+        "quantity_available"
+      ]
+    },
+    {
+      "name": "ees_employee_training",
+      "fields": [
+        "id",
+        "employee_id",
+        "course",
+        "completed_on",
+        "expires_on",
+        "certificate_id",
+        "notes",
+        "recorded_by",
+        "recorded_at"
+      ]
+    },
+    {
+      "name": "ees_licence_vehicle_rules",
+      "fields": [
+        "id",
+        "category",
+        "vehicle_type",
+        "compatible",
+        "reliable_source",
+        "reviewed_by",
+        "reviewed_at",
+        "active"
+      ]
+    },
+    {
+      "name": "ees_employee_private",
+      "fields": [
+        "employee_id",
+        "legal_name_th",
+        "english_name",
+        "telephone",
+        "address",
+        "emergency_contact",
+        "emergency_phone",
+        "employment_notes",
+        "updated_by",
+        "updated_at"
+      ]
+    },
+    {
+      "name": "vehicle_safety_inspections",
+      "fields": [
+        "id",
+        "vehicle_id",
+        "driver_id",
+        "booking_id",
+        "inspection_date",
+        "inspected_at",
+        "overall_status",
+        "notes",
+        "created_at",
+        "updated_at"
+      ]
+    },
+    {
+      "name": "ees_hr_v7_requests",
+      "fields": [
+        "actor_id",
+        "request_id",
+        "action",
+        "input_hash",
+        "result",
+        "recorded_at"
+      ]
+    },
+    {
+      "name": "ees_hr_document_policies",
+      "fields": [
+        "id",
+        "category",
+        "processing_purpose",
+        "documented_lawful_basis",
+        "retention_days",
+        "policy_reference",
+        "active",
+        "approved_by",
+        "approved_at"
+      ]
+    }
+  ],
+  "functions": [
+    "/rpc/ees_people_choices",
+    "/rpc/ees_hr_v7_public_employee",
+    "/rpc/ees_people_profile",
+    "/rpc/ees_hr_v7_office_read",
+    "/rpc/ees_people_directory",
+    "/rpc/ees_people_ready",
+    "/rpc/ees_hr_v7_directory",
+    "/rpc/ees_people_cases",
+    "/rpc/ees_hr_v7_followups",
+    "/rpc/ees_hr_v7_finalize_document",
+    "/rpc/ees_change_driver_vehicle",
+    "/rpc/ees_is_hr_admin",
+    "/rpc/ees_hr_v7_audit",
+    "/rpc/ees_hr_v7_operate",
+    "/rpc/ees_safety_office_allowed",
+    "/rpc/ees_record_hr_meeting",
+    "/rpc/ees_hr_v7_meeting",
+    "/rpc/ees_hr_v7_licence_status",
+    "/rpc/ees_people_action",
+    "/rpc/ees_hr_v7_change_driver_vehicle",
+    "/rpc/ees_hr_v7_vehicle_json",
+    "/rpc/ees_hr_v7_action",
+    "/rpc/ees_hr_v7_storage_ready",
+    "/rpc/ees_people_public_employee",
+    "/rpc/ees_hr_v7_profile",
+    "/rpc/ees_hr_v7_access",
+    "/rpc/ees_hr_v7_lookups"
+  ]
+}

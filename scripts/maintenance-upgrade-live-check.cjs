@@ -1,0 +1,18 @@
+// Read-only verification. Never writes service events or inspections.
+const fs=require('fs'),path=require('path'),Module=require('module'),ts=require('typescript');
+const {createClient}=require('@supabase/supabase-js');
+const client=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
+async function read(table){const result=[];for(let offset=0;;offset+=500){const {data,error}=await client.from(table).select('*').range(offset,offset+499).abortSignal(AbortSignal.timeout(20000));if(error)throw new Error(table+': '+error.code+' '+error.message);result.push(...data);if(data.length<500)return result;}}
+const cache=new Map();function load(file){file=path.resolve(file);if(cache.has(file))return cache.get(file).exports;const m=new Module(file,module);cache.set(file,m);m.paths=Module._nodeModulePaths(path.dirname(file));m.require=q=>q.startsWith('@/')||q.startsWith('.')?load((q.startsWith('@/')?path.resolve(q.slice(2)):path.resolve(path.dirname(file),q))+'.ts'):require(q);m._compile(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,file);return m.exports;}
+(async()=>{
+ const [vehicles,mileage,logs,baselines,requirements,applicability,items,records]=await Promise.all(['vehicles','weekly_mileage','vehicle_service_logs','oil_change_baselines','maintenance_requirements','maintenance_requirement_vehicles','maintenance_items','maintenance_records'].map(read));
+ if(!vehicles.length)throw Error('No vehicles visible with configured credentials; live verification unavailable.');
+ const target=new Set(['74-8969','64-0359','68-7154','ตฉอ-8453','ฒอ-8453']);
+ const selected=vehicles.filter(v=>target.has(v.vehicle_reg)).map(v=>({...v,maintenance_oil_schedule:requirements.find(s=>s.active&&s.service_key==='engine_oil'&&s.schedule_kind==='replacement'&&applicability.some(a=>a.vehicle_id===v.id&&a.requirement_id===s.id))}));
+ const maintenanceLogs=records.filter(r=>!r.is_deleted&&items.some(i=>i.record_id===r.id&&i.service_key==='engine_oil'&&i.service_action==='fluid_replacement'&&i.service_confirmed)).map(r=>({id:'maintenance-'+r.id,maintenance_record_id:r.id,vehicle_id:r.vehicle_id,vehicle_reg:vehicles.find(v=>v.id===r.vehicle_id)?.vehicle_reg,service_date:r.service_date,odometer:r.odometer,oil_change_odometer:r.odometer,created_at:r.created_at}));
+ const {buildOilServiceSnapshot}=load('lib/oil-service-snapshot.ts');
+ const source={vehicles:selected,mileage,logs:[...logs.filter(l=>!l.service_type||l.service_type==='oil_change'),...maintenanceLogs],baselines,drivers:[]};
+ const weekly=buildOilServiceSnapshot(source),maintenance=buildOilServiceSnapshot(source);
+ const result={verifiedAt:new Date().toISOString(),activeVehicles:vehicles.filter(v=>v.active!==false).length,parity:JSON.stringify(weekly)===JSON.stringify(maintenance),rows:weekly.map(r=>({registration:r.registration,status:r.status,mileageDate:r.currentOdometerDate,currentOdometer:r.currentOdometer,lastOilChangeDate:r.lastOilChangeDate,lastOilChangeOdometer:r.lastOilChangeOdometer,interval:r.oilChangeIntervalKm,nextDue:r.nextOilChangeDueOdometer,remaining:r.kmRemaining,reviewReasons:r.reviewReasons,history:logs.filter(l=>l.vehicle_id===r.vehicleId||l.vehicle_reg===r.registration).map(l=>({id:l.id,date:l.service_date,odometer:l.oil_change_odometer??l.odometer,interval:l.interval_km}))}))};
+ const output=process.env.MAINTENANCE_LIVE_CHECK_OUTPUT;if(output)fs.writeFileSync(output,JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));
+})().catch(e=>{console.error(e.message);process.exitCode=1;});

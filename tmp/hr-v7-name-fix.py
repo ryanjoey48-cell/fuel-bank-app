@@ -1,0 +1,4 @@
+from pathlib import Path
+p=Path('supabase/migrations/20261013110000_ees_hr_v7_workflows.sql');s=p.read_text(encoding='utf-8');replacements=[('reason text; name text;','reason text; display_value text;'),('name:=','display_value:='),('and name is null','and display_value is null'),("coalesce(name,'')","coalesce(display_value,'')"),('values(driver_key,name,','values(driver_key,display_value,'),('set preferred_name=name,','set preferred_name=display_value,'),('if name is not null','if display_value is not null'),('set name=name ','set name=display_value '),('if name is null','if display_value is null'),('char_length(name)','char_length(display_value)'),('=lower(name))','=lower(display_value))'),("values(name,'',true,actor)","values(display_value,'',true,actor)"),('set name=name,','set name=display_value,')];
+for a,b in replacements:s=s.replace(a,b)
+p.write_text(s,encoding='utf-8')

@@ -49,6 +49,7 @@ export type WeeklyMileageEntry = {
 };
 
 export type Vehicle = {
+  maintenance_oil_schedule?: import('@/lib/preventative-maintenance').ServiceSchedule;
   id: string;
   user_id: string;
   company_id?: string | null;
@@ -69,6 +70,7 @@ export type Vehicle = {
 };
 
 export type VehicleServiceLog = {
+  maintenance_record_id?: string;
   id: string;
   vehicle_id: string | null;
   vehicle_reg: string;

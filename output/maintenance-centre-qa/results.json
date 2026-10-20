@@ -1,0 +1,18 @@
+{
+  "passed": true,
+  "results": [
+    "Overview loads; search and clear PASS",
+    "Combined coolant configuration persists after refresh PASS",
+    "One visit with oil, filter and coolant; duplicate-click prevention PASS",
+    "Receipt byte upload and metadata persistence PASS",
+    "Receipt retrieval through existing signed URL action PASS",
+    "Weekly Mileage sees Maintenance oil change next due 60,000 PASS",
+    "No duplicate oil log; corrected original baseline untouched PASS",
+    "Coolant schedule advances from confirmed visit PASS",
+    "Historical correction recalculates Weekly Mileage from 60,000 to 59,000 PASS",
+    "Void restores preserved earlier baseline and retains receipt PASS",
+    "iPhone / iPad / desktop layout without horizontal overflow PASS",
+    "Thai language toggle labels PASS"
+  ],
+  "errors": []
+}

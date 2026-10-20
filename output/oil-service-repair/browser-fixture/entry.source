@@ -1,0 +1,1 @@
+import React from 'react';import {createRoot} from 'react-dom/client';import Page from '../../../app/(dashboard)/weekly-mileage/page';import {FixtureProvider} from './mocks.source';createRoot(document.getElementById('root')).render(<FixtureProvider><Page/></FixtureProvider>);

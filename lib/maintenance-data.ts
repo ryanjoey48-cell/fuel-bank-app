@@ -1,3 +1,4 @@
+import { clearDataReadCache } from './data';
 import { supabase } from "@/lib/supabase";
 import type { Driver, FuelLog, Vehicle, WeeklyMileageEntry } from "@/types/database";
 import type { MaintenanceAttachment, MaintenanceData, MaintenanceItem, MaintenanceItemInput, MaintenanceRecord, MaintenanceRecordInput, MaintenanceRequirement, MaintenanceApplicability } from "./maintenance-types";
@@ -30,7 +31,7 @@ export async function fetchMaintenanceData(includeFuel=false):Promise<Maintenanc
  const [vehicles,drivers,mileage,records,items,requirements,applicability,attachments,fuel]=await Promise.all([all<Vehicle>("vehicles"),all<Driver>("drivers"),all<WeeklyMileageEntry>("weekly_mileage"),all<MaintenanceRecord>("maintenance_records"),all<MaintenanceItem>("maintenance_items"),all<MaintenanceRequirement>("maintenance_requirements"),all<MaintenanceApplicability>("maintenance_requirement_vehicles"),all<MaintenanceAttachment>("maintenance_attachments"),includeFuel?all<FuelLog>("fuel_logs"):Promise.resolve([])]);
  return {vehicles,drivers,mileage,records,items,requirements,applicability,attachments,fuel};
 }
-export function maintenanceChanged(){window.dispatchEvent(new CustomEvent("fuel-bank:data-changed",{detail:{resource:"maintenance"}}));}
+export function maintenanceChanged(){clearDataReadCache();window.dispatchEvent(new CustomEvent("fuel-bank:data-changed",{detail:{resource:"maintenance",resources:['maintenance','vehicles','vehicle_service_logs','oil_change_baselines']}}));}
 export async function saveMaintenanceRecord(payload:MaintenanceRecordInput,items:MaintenanceItemInput[],updatedAt:string|null) {
  const {data,error}=await supabase.rpc("save_maintenance_record",{payload,item_rows:items,expected_updated_at:updatedAt});if(error)throw error;maintenanceChanged();
  const {data:record,error:readError}=await supabase.from("maintenance_records").select("*").eq("id",data).single();if(readError)throw readError;return record as MaintenanceRecord;
