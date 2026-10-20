@@ -26,6 +26,7 @@ const {
   matchesLocationFilter,
   matchesLocationSearch,
   parseAlternativeNames,
+  projectLocationForDirectory,
   safeGoogleMapsUrl,
   validateLocationForm
 } = loadTypeScriptModule("lib/locations-directory.ts");
@@ -89,6 +90,20 @@ test("dispatch restrictions remain extractable while routine notes do not become
   assert.equal(getDispatchRestriction(location), null);
   assert.match(getDispatchRestriction({ notes: "DO NOT DISPATCH before confirming the access road.", source_info: null }), /DO NOT DISPATCH/);
   assert.match(getDispatchRestriction({ notes: null, source_info: "ห้ามส่งรถเข้าทางด้านหลัง" }), /ห้ามส่งรถ/);
+  assert.equal(getDispatchRestriction({ notes: "Verification note: NEEDS VERIFICATION — do not dispatch until the correct receiving gate and truck entrance are confirmed.", source_info: null }), "do not dispatch until the correct receiving gate and truck entrance are confirmed.");
+  assert.ok(getDispatchRestriction({ notes: `Do not dispatch ${"until confirmed ".repeat(30)}`, source_info: null }).length <= 220);
+});
+
+test("directory projection keeps dispatch warnings but hides full internal notes and sources from non-admin accounts", () => {
+  const record = { ...location, notes: "DO NOT DISPATCH until the rear entrance is confirmed.", source_info: "Internal workbook row 17" };
+  const officeView = projectLocationForDirectory(record, false);
+  assert.equal(officeView.notes, null);
+  assert.equal(officeView.source_info, null);
+  assert.equal(officeView.dispatch_restriction, "DO NOT DISPATCH until the rear entrance is confirmed.");
+
+  const adminView = projectLocationForDirectory(record, true);
+  assert.equal(adminView.notes, record.notes);
+  assert.equal(adminView.source_info, record.source_info);
 });
 
 test("add and edit form validation requires essentials, safe Maps links and evidence for verified records", () => {
@@ -122,4 +137,13 @@ test("Locations UI is subscribed to the existing language provider without addin
   assert.match(component, /useLanguage\(\)/);
   assert.match(component, /t\.locations/);
   assert.doesNotMatch(component, /LanguageSwitcher/);
+  assert.match(component, /aria-label=\{copy\.viewsLabel\}/);
+  assert.match(component, /view === "map"/);
+  assert.match(component, /lg:items-start/);
+  assert.match(component, /location\.destination_type === "Other" \? copy\.destination/);
+  assert.match(component, /canViewInternal && <button/);
+
+  const collectionApi = fs.readFileSync(path.resolve("app/api/locations/route.ts"), "utf8");
+  assert.match(collectionApi, /projectLocationForDirectory\(location, includeInternal\)/);
+  assert.match(collectionApi, /admin:user_management/);
 });

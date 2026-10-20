@@ -13,6 +13,10 @@ export type SearchableLocation = {
   source_info?: string | null;
 };
 
+export type DirectoryLocationProjection<T extends SearchableLocation> = T & {
+  dispatch_restriction: string | null;
+};
+
 export type LocationFormInput = {
   company_name: string;
   address: string;
@@ -110,7 +114,23 @@ export function getDispatchRestriction(location: Pick<SearchableLocation, "notes
     .filter((value): value is string => typeof value === "string")
     .flatMap((value) => value.split(/\r?\n/));
 
-  return lines.find((line) => DISPATCH_RESTRICTION.test(line))?.trim() ?? null;
+  const restriction = lines.find((line) => DISPATCH_RESTRICTION.test(line))?.trim();
+  if (!restriction) return null;
+
+  const concise = restriction
+    .replace(/^(?:workbook status|verification note):\s*/i, "")
+    .replace(/^needs verification\s*[—-]\s*/i, "");
+  return concise.length > 220 ? `${concise.slice(0, 217).trimEnd()}…` : concise;
+}
+
+/** Keep dispatch warnings available while limiting internal notes and sources to admins. */
+export function projectLocationForDirectory<T extends SearchableLocation>(location: T, includeInternal: boolean): DirectoryLocationProjection<T> {
+  return {
+    ...location,
+    notes: includeInternal ? location.notes ?? null : null,
+    source_info: includeInternal ? location.source_info ?? null : null,
+    dispatch_restriction: getDispatchRestriction(location)
+  };
 }
 
 export function validateLocationForm(input: LocationFormInput): LocationFormError[] {
