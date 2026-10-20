@@ -1,0 +1,15 @@
+✔ real authenticated route commits phone change and a fresh profile read confirms persisted fields (106403.1604ms)
+✔ directory paginates and direct profile route reaches a driver beyond the first page (541.3363ms)
+✔ office employee create, read, salary, training and directory filters work without a driver (427.496ms)
+✔ anonymous, ordinary office and driver sessions cannot access private profile, meetings, files or mutate HR (139.305ms)
+✔ ordinary office public overview cannot expose private personnel or compensation (45.4652ms)
+✔ server-only document finalization and invalid action fields cannot bypass authorization (91.1464ms)
+✔ secure document transport uses approved policy, validates bytes, retries upload and blocks non-HR downloads (547.6277ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 109025.8289

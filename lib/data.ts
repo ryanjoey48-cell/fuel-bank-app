@@ -1,5 +1,8 @@
 "use client";
 
+import { withRequestDeadline } from "@/lib/request-deadline";
+import { deleteVerifiedOilServiceRecord } from "@/lib/oil-service-delete";
+import { createOilServiceDeleteContext } from "@/lib/oil-service-delete-session";
 import { supabase } from "@/lib/supabase";
 import { fetchCurrentAccess } from "@/lib/account-management";
 import { hasPermission } from "@/lib/authorization";
@@ -470,7 +473,7 @@ function isMissingTableError(error: unknown) {
 }
 
 async function insertVehicleServiceLogWithSchemaFallback(payload: Record<string, unknown>) {
-  let activePayload = { ...payload };
+  let activePayload = { ...payload, id: crypto.randomUUID() } as Record<string, unknown>;
   const removedColumns: string[] = [];
 
   for (let attempt = 0; attempt < 10; attempt += 1) {
@@ -577,20 +580,6 @@ async function updateOilChangeHistoryWithSchemaFallback(id: string, payload: Rec
     .single();
 }
 
-async function deleteVehicleServiceLogWithSchemaFallback(id: string) {
-  return supabase
-    .from("vehicle_service_logs")
-    .delete()
-    .eq("id", id);
-}
-
-async function deleteOilChangeHistoryWithSchemaFallback(id: string) {
-  return supabase
-    .from("oil_change_history")
-    .delete()
-    .eq("id", id);
-}
-
 function normalizeTransferReceiptStatus(value: unknown) {
   if (value === "pending" || value === "submitted" || value === "approved") {
     return value;
@@ -680,14 +669,13 @@ async function readThroughCache<T>(
 
   const promise = fetcher()
     .then((value) => {
-      readCache.set(key, {
-        value,
-        expiresAt: Date.now() + ttlMs
-      });
+      if (readCache.get(key)?.promise === promise) {
+        readCache.set(key, { value, expiresAt: Date.now() + ttlMs });
+      }
       return value;
     })
     .catch((error) => {
-      readCache.delete(key);
+      if (readCache.get(key)?.promise === promise) readCache.delete(key);
       throw error;
     });
 
@@ -699,13 +687,13 @@ async function readThroughCache<T>(
   return promise;
 }
 
-function dispatchDataChange(resource: string) {
+function dispatchDataChange(resource: string, resources: string[] = [resource]) {
   clearReadCache();
   if (typeof window === "undefined") {
     return;
   }
 
-  window.dispatchEvent(new CustomEvent("fuel-bank:data-changed", { detail: { resource } }));
+  window.dispatchEvent(new CustomEvent("fuel-bank:data-changed", { detail: { resource, resources } }));
 }
 
 function buildDriverLookup(rows: Array<{ id: string; name: string | null }>) {
@@ -866,7 +854,7 @@ function mergeVehicleRowsByRegistration(vehicles: Vehicle[]) {
 }
 
 function normalizeServiceLogRow(log: VehicleServiceLog) {
-  const odometer = Number(log.odometer ?? log.oil_change_odometer ?? log.service_odometer ?? 0);
+  const odometer = Number(log.odometer ?? log.oil_change_odometer ?? log.service_odometer ?? Number.NaN);
   const intervalKm =
     log.interval_km != null && Number.isFinite(Number(log.interval_km))
       ? Number(log.interval_km)
@@ -1044,7 +1032,7 @@ async function recomputeOilChangeBaselineFromHistory({
 }) {
   const vehicleReg = normalizeVehicleRegistration(vehicle.vehicle_reg ?? vehicle.registration);
   const logs = await fetchOilChangeLogsForVehicle(vehicleReg);
-  const latest = logs.find((log) => Number.isFinite(Number(log.oil_change_odometer ?? log.odometer ?? log.service_odometer))) ?? null;
+  const latest = logs.find((log) => (log.oil_change_odometer ?? log.odometer ?? log.service_odometer) != null && Number.isFinite(Number(log.oil_change_odometer ?? log.odometer ?? log.service_odometer)) && Number(log.oil_change_odometer ?? log.odometer ?? log.service_odometer) >= 0 && Number.isFinite(Date.parse(log.service_date))) ?? null;
 
   if (!latest) {
     const baselineDelete = await supabase
@@ -1067,7 +1055,8 @@ async function recomputeOilChangeBaselineFromHistory({
         .eq("id", vehicle.id)
         .select()
         .single();
-      if (!vehicleUpdate.error && vehicleUpdate.data) {
+      if (vehicleUpdate.error) throw new Error(vehicleUpdate.error.message || "Unable to clear the vehicle service summary.");
+      if (vehicleUpdate.data) {
         return { vehicle: normalizeVehicleRow(vehicleUpdate.data as Vehicle), serviceLog: null };
       }
     }
@@ -1117,10 +1106,7 @@ async function recomputeOilChangeBaselineFromHistory({
       .select()
       .single();
     if (vehicleUpdate.error) {
-      logDataError("recomputeOilChangeBaselineFromHistory vehicle update warning:", vehicleUpdate.error, {
-        vehicleId: vehicle.id,
-        vehiclePayload
-      });
+      throw new Error(vehicleUpdate.error.message || "Unable to update the vehicle service summary.");
     } else if (vehicleUpdate.data) {
       return { vehicle: normalizeVehicleRow(vehicleUpdate.data as Vehicle), serviceLog: latest };
     }
@@ -1201,7 +1187,7 @@ function getServiceSchemaSetupMessage(error: unknown) {
 }
 
 async function getCurrentUserId() {
-  const { data, error } = await supabase.auth.getUser();
+  const { data, error } = await withRequestDeadline(() => supabase.auth.getUser());
   if (error) {
     const message = String(error.message ?? "").toLowerCase();
     if (message.includes("auth session missing") || message.includes("missing")) {
@@ -1506,7 +1492,7 @@ export async function fetchVehicles() {
       });
     }
 
-    return merged;
+    return (await import('./maintenance-oil-data')).oilSchedulesForVehicles(merged);
   });
 }
 
@@ -1606,7 +1592,8 @@ export async function fetchOilChangeHistory() {
     ? []
     : ((legacyResult.data ?? []) as OilChangeHistory[]).map(normalizeOilChangeHistoryRow);
 
-  return sortServiceLogsByLatest([...serviceLogs, ...legacyLogs]);
+  const maintenanceLogs = await (await import('./maintenance-oil-data')).maintenanceOilEvents();
+  return sortServiceLogsByLatest([...serviceLogs, ...legacyLogs, ...maintenanceLogs]);
 }
 
 async function ensureVehicleForService({
@@ -1801,6 +1788,7 @@ export async function saveOilChangeService(payload: {
     Number(getEffectiveOilChangeIntervalForVehicleType(payload.vehicleType, payload.intervalKm) || 30000)
   );
 
+  let saved = false;
   try {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(serviceDate)) {
       throw new Error("Last oil change date must be saved in YYYY-MM-DD format.");
@@ -1813,6 +1801,7 @@ export async function saveOilChangeService(payload: {
     }
 
     const previousLog = payload.updateExistingLog ? await fetchOilChangeLogById(payload.serviceLogId) : null;
+    if (payload.updateExistingLog && !previousLog) throw new Error("The selected service record could not be read. Reload history and check permissions before editing.");
     const vehicle = await ensureVehicleForService({
       vehicleId: payload.vehicleId,
       registration: payload.vehicleReg,
@@ -1879,7 +1868,7 @@ export async function saveOilChangeService(payload: {
         logDataError("saveOilChangeService history error:", historyResult.error, historyPayload);
         throw new Error(
           getServiceSchemaSetupMessage(historyResult.error) ??
-            historyResult.error?.message ??
+            (historyResult.error?.code === "23505" ? "A service record already matches a database uniqueness rule. Reload history and edit the existing entry; no existing record was overwritten." : historyResult.error?.message) ??
             "Failed to save oil change history - try again."
         );
       }
@@ -1887,6 +1876,7 @@ export async function saveOilChangeService(payload: {
       historyRow = normalizeServiceLogRow(historyResult.data as VehicleServiceLog);
     }
 
+    saved = true;
     const recomputed = await recomputeOilChangeBaselineFromHistory({
       vehicle,
       vehicleType: payload.vehicleType
@@ -1903,16 +1893,17 @@ export async function saveOilChangeService(payload: {
       }
     }
 
-    dispatchDataChange("oil_change_baselines");
-    dispatchDataChange("oil_change_history");
-    dispatchDataChange("vehicle_service_logs");
-    dispatchDataChange("vehicles");
+    dispatchDataChange("vehicle_service_logs", ["oil_change_baselines", "oil_change_history", "vehicle_service_logs", "vehicles"]);
     return {
       vehicle: recomputed.vehicle,
       serviceLog: recomputed.serviceLog ?? historyRow
     };
   } catch (error) {
     console.error("Oil change service save failed", serializeError(error));
+    if (saved) {
+      dispatchDataChange("vehicle_service_logs", ["oil_change_baselines", "oil_change_history", "vehicle_service_logs", "vehicles"]);
+      throw new Error(`The service record was saved, but its summary could not be updated. Reload history before retrying. ${error instanceof Error ? error.message : "Check database permissions."}`);
+    }
     throw error;
   }
 }
@@ -1930,37 +1921,25 @@ export async function deleteOilChangeService(payload: {
   }
 
   try {
-    const vehicle = await ensureVehicleForService({
-      vehicleId: payload.vehicleId,
-      registration: payload.vehicleReg,
-      vehicleName: payload.vehicleName,
-      vehicleType: payload.vehicleType
-    });
+    const context = await createOilServiceDeleteContext();
+    const table = serviceLogId.startsWith("oil-change-history-") ? "oil_change_history" as const : "vehicle_service_logs" as const;
+    const id = table === "oil_change_history" ? serviceLogId.replace(/^oil-change-history-/, "") : serviceLogId;
+    const vehicle = await fetchVehicleForOilChangeRegistration(payload.vehicleReg);
+    if (!vehicle) throw new Error("Unable to load the selected record's vehicle. No deletion was attempted.");
+    await deleteVerifiedOilServiceRecord(context.client, {
+      projectHost: context.projectHost, userId: context.userId, databaseRole: context.databaseRole,
+      accountRole: context.accountRole, table, id
+    }, payload.vehicleReg);
 
-    if (serviceLogId.startsWith("oil-change-history-")) {
-      const legacyId = serviceLogId.replace(/^oil-change-history-/, "");
-      const result = await deleteOilChangeHistoryWithSchemaFallback(legacyId);
-      if (result.error) {
-        logDataError("deleteOilChangeService legacy history error:", result.error, { legacyId });
-        throw new Error(result.error.message ?? "Failed to delete oil change history.");
-      }
-    } else {
-      const result = await deleteVehicleServiceLogWithSchemaFallback(serviceLogId);
-      if (result.error) {
-        logDataError("deleteOilChangeService service log error:", result.error, { serviceLogId });
-        throw new Error(result.error.message ?? "Failed to delete oil change service record.");
-      }
+    let recomputed;
+    try {
+      recomputed = await recomputeOilChangeBaselineFromHistory({ vehicle, vehicleType: payload.vehicleType });
+    } catch (error) {
+      dispatchDataChange("vehicle_service_logs", ["oil_change_baselines", "oil_change_history", "vehicle_service_logs", "vehicles"]);
+      throw new Error(`The selected record was deleted, but its summary could not be refreshed. Reload history; do not repeat deletion. ${error instanceof Error ? error.message : "Check database permissions."}`);
     }
 
-    const recomputed = await recomputeOilChangeBaselineFromHistory({
-      vehicle,
-      vehicleType: payload.vehicleType
-    });
-
-    dispatchDataChange("oil_change_baselines");
-    dispatchDataChange("oil_change_history");
-    dispatchDataChange("vehicle_service_logs");
-    dispatchDataChange("vehicles");
+    dispatchDataChange("vehicle_service_logs", ["oil_change_baselines", "oil_change_history", "vehicle_service_logs", "vehicles"]);
     return recomputed;
   } catch (error) {
     console.error("Oil change service delete failed", serializeError(error));
@@ -4042,156 +4021,23 @@ export async function fetchRouteDistanceEstimate(
 }
 
 export async function saveDriver(payload: Partial<Driver>) {
-  const { id, ...rest } = payload;
-  const cleaned = stripUndefined({
-    ...rest,
-    name: normalizeDisplayName(rest.name),
-    vehicle_reg: normalizeVehicleRegistration(rest.vehicle_reg) || "",
-    active: rest.active ?? true
+  const { hrAction } = await import("@/lib/ees-hr-v7-client");
+  // Assignment changes must use the dedicated atomic history workflow.
+  if (payload.vehicle_reg !== undefined || payload.assigned_vehicle_id !== undefined || payload.vehicle_type !== undefined) {
+    throw new Error("HR_USE_ASSIGNMENT_WORKFLOW");
+  }
+  const result = await hrAction<{driverId:string}>("save_driver", {
+    ...(payload.id ? {driverId:String(payload.id)} : {}),
+    name: normalizeDisplayName(payload.name), active: payload.active ?? true
   });
-  const driverName = normalizeComparableText(String(cleaned.name ?? ""));
-  const vehicleReg = normalizeComparableText(String(cleaned.vehicle_reg ?? ""));
-  const nextDriverIsActive = cleaned.active !== false;
-
-  const { data: existingDrivers, error: existingDriversError } = await supabase
-    .from("drivers")
-    .select("id, name, vehicle_reg, active");
-
-  if (existingDriversError) {
-    logDataError("saveDriver existingDrivers error:", existingDriversError);
-    throw existingDriversError;
-  }
-
-  const previousDriver = id
-    ? ((existingDrivers ?? []) as Driver[]).find((driver) => String(driver.id) === String(id)) ?? null
-    : null;
-  const conflict = ((existingDrivers ?? []) as Array<Pick<Driver, "id" | "name" | "vehicle_reg" | "active">>)
-    .filter((driver) => String(driver.id) !== String(id ?? ""))
-    .find(
-      (driver) =>
-        (nextDriverIsActive &&
-          driver.active !== false &&
-          driverName &&
-          normalizeComparableText(driver.name) === driverName) ||
-        (nextDriverIsActive &&
-          driver.active !== false &&
-          vehicleReg &&
-          normalizeComparableText(driver.vehicle_reg) === vehicleReg)
-    );
-
-  if (conflict) {
-    const sameName = normalizeComparableText(conflict.name) === driverName;
-    throw new Error(sameName ? "DUPLICATE_DRIVER_NAME" : "DUPLICATE_DRIVER_VEHICLE");
-  }
-
-  const { data, error } = id
-    ? await supabase.from("drivers").update(cleaned).eq("id", id).select().single()
-    : await supabase.from("drivers").insert(cleaned).select().single();
-
-  if (error) {
-    logDataError("saveDriver error:", error, cleaned);
-    throw error;
-  }
-
-  await syncVehicleMasterForDriver(data as Driver, previousDriver);
-  dispatchDataChange("drivers");
-  return data as Driver;
-}
-
-async function syncVehicleMasterForDriver(driver: Driver, previousDriver: Driver | null) {
-  const nextRegistration = normalizeVehicleRegistration(driver.vehicle_reg);
-  if (!nextRegistration) {
-    return;
-  }
-
-  const previousRegistration = normalizeVehicleRegistration(previousDriver?.vehicle_reg);
-  const candidateKeys = new Set([
-    normalizeComparableText(nextRegistration),
-    normalizeComparableText(previousRegistration)
-  ].filter(Boolean));
-
-  const { data: vehicles, error } = await supabase
-    .from("vehicles")
-    .select("*");
-
-  if (error) {
-    if (!isMissingTableError(error)) {
-      logDataError("syncVehicleMasterForDriver vehicle lookup warning:", error, {
-        driverId: driver.id,
-        nextRegistration,
-        previousRegistration
-      });
-    }
-    return;
-  }
-
-  const assignedVehicle = driver.assigned_vehicle_id
-    ? ((vehicles ?? []) as Vehicle[]).find((vehicle) => String(vehicle.id) === String(driver.assigned_vehicle_id))
-    : null;
-  const registrationVehicle = ((vehicles ?? []) as Vehicle[]).find((vehicle) =>
-    candidateKeys.has(normalizeComparableText(normalizeVehicleRegistration(vehicle.vehicle_reg ?? vehicle.registration)))
-  );
-  const vehicle = assignedVehicle ?? registrationVehicle ?? null;
-
-  if (!vehicle) {
-    return;
-  }
-
-  const normalizedVehicle = normalizeVehicleRow(vehicle);
-  const updatePayload = stripUndefined({
-    vehicle_reg: nextRegistration,
-    vehicle_name:
-      normalizeComparableText(normalizedVehicle.vehicle_name) === normalizeComparableText(previousRegistration)
-        ? nextRegistration
-        : undefined,
-    vehicle_type: normalizedVehicle.vehicle_type || driver.vehicle_type || undefined,
-    active: true
-  });
-
-  const updateResult = await supabase
-    .from("vehicles")
-    .update(updatePayload)
-    .eq("id", normalizedVehicle.id)
-    .select("id")
-    .single();
-
-  if (updateResult.error) {
-    logDataError("syncVehicleMasterForDriver vehicle update warning:", updateResult.error, {
-      driverId: driver.id,
-      vehicleId: normalizedVehicle.id,
-      updatePayload
-    });
-    return;
-  }
-
-  if (!driver.assigned_vehicle_id) {
-    const assignedResult = await supabase
-      .from("drivers")
-      .update({ assigned_vehicle_id: normalizedVehicle.id })
-      .eq("id", driver.id)
-      .select("id")
-      .single();
-
-    if (assignedResult.error) {
-      logDataError("syncVehicleMasterForDriver driver assignment warning:", assignedResult.error, {
-        driverId: driver.id,
-        vehicleId: normalizedVehicle.id
-      });
-    }
-  }
-
-  dispatchDataChange("vehicles");
+  const {data,error}=await supabase.from("drivers").select("*").eq("id",result.driverId).single();
+  if(error)throw error;
+  return {...data,id:result.driverId} as Driver;
 }
 
 export async function deleteDriver(id: string) {
-  const { error } = await supabase.from("drivers").delete().eq("id", id);
-
-  if (error) {
-    logDataError("deleteDriver error:", error, { id });
-    throw error;
-  }
-
-  dispatchDataChange("drivers");
+  const { hrAction } = await import("@/lib/ees-hr-v7-client");
+  await hrAction("deactivate_driver",{driverId:String(id),reason:"Operational record deactivated; history retained"});
 }
 
 export async function saveFuelLog(payload: Partial<FuelLog>) {
@@ -4991,6 +4837,7 @@ export async function deleteSupportTicket(id: string) {
 }
 
 export async function fetchSupportTicketNotificationCount(statuses: SupportTicketStatus[] = ["Open", "In Progress"]) {
+  return readThroughCache(`support_tickets:count:${[...statuses].sort().join(",")}`, async () => {
   const { count, error } = await supabase
     .from("support_tickets")
     .select("id", { count: "exact", head: true })
@@ -5002,6 +4849,7 @@ export async function fetchSupportTicketNotificationCount(statuses: SupportTicke
   }
 
   return count ?? 0;
+  });
 }
 
 export async function fetchUncheckedFuelLogCount() {

@@ -48,7 +48,8 @@ type NavGroup = {
 function routeIsActive(pathname: string, href: string) {
   return (
     pathname === href ||
-    (href !== "/dashboard" && pathname.startsWith(`${href}/`))
+    (href !== "/dashboard" && pathname.startsWith(`${href}/`)) ||
+    (href === "/hr" && ["/drivers", "/employees"].some(path => pathname === path || pathname.startsWith(path + "/")))
   );
 }
 
@@ -125,11 +126,11 @@ export function TopNavigation() {
             label: t.nav.tripJourney,
             icon: MapPinned
           },
-          {
+          ...(can("business:read") ? [{
             href: "/locations",
-            label: "Locations",
+            label: language === "th" ? "สถานที่" : "Locations",
             icon: MapPin
-          }
+          }] : [])
         ]
       },
       {
@@ -137,11 +138,11 @@ export function TopNavigation() {
         label: copy.fleet,
         items: [
           {
-            href: "/drivers",
+            href: "/hr",
             label:
               language === "th"
-                ? "คนขับและยานพาหนะ"
-                : "Drivers & Vehicles",
+                ? "บุคลากรและงาน HR"
+                : "People & HR",
             icon: Truck
           },
           {

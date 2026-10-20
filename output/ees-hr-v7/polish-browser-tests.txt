@@ -1,0 +1,8 @@
+Exact migration setup state blocks creation and Check again recovers against migrated SQL PASS
+Incidents permission/auth/network errors remain blocked and Retry recovers PASS
+Hung access request reaches a bounded error state and retry recovers PASS
+All nine employee profile tabs load without errors PASS
+Compact global document filters, pagination and direct profile/document navigation PASS
+EN all five HR pages align at desktop/iPad/iPhone without overflow PASS
+TH all five HR pages align at desktop/iPad/iPhone without overflow PASS
+No runtime errors in revised HR access, profile or compliance screens PASS

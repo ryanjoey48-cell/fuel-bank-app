@@ -14,9 +14,14 @@ export function PwaRegister() {
       return;
     }
 
-    window.addEventListener("load", () => {
-      void navigator.serviceWorker.register("/sw.js");
-    });
+    const register = () => {
+      void navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" })
+        .then(registration => registration.update()).catch(() => undefined);
+    };
+    if (document.readyState === "complete") register();
+    else window.addEventListener("load", register, { once: true });
+    window.addEventListener("focus", register);
+    return () => {window.removeEventListener("load", register);window.removeEventListener("focus", register);};
   }, []);
 
   return null;

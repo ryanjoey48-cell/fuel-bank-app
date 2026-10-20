@@ -1,0 +1,32 @@
+.previewMap {
+  width: 100%;
+  height: 220px;
+  background: #f1f5f9;
+}
+
+.previewMap :global(.leaflet-container) {
+  width: 100%;
+  height: 100%;
+  color: #1e293b;
+  font: inherit;
+  background: #f1f5f9;
+}
+
+.previewMap :global(.leaflet-control-attribution) {
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: 8px 0 0;
+  background: rgba(255, 255, 255, 0.94);
+  font-size: 10px;
+}
+
+.previewMap :global(.leaflet-control-attribution a),
+.previewMap :global(.leaflet-bar a) {
+  color: #4c1d95;
+  font-weight: 700;
+}
+
+@media (max-width: 639px) {
+  .previewMap {
+    height: 200px;
+  }
+}

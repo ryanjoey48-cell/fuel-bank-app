@@ -1,0 +1,81 @@
+✔ real authenticated route commits phone change and a fresh profile read confirms persisted fields (19686.7977ms)
+✔ directory paginates and direct profile route reaches a driver beyond the first page (334.5289ms)
+✔ office employee create, read, salary, training and directory filters work without a driver (338.7851ms)
+✔ anonymous, ordinary office and driver sessions cannot access private profile, meetings, files or mutate HR (157.6659ms)
+✔ ordinary office public overview cannot expose private personnel or compensation (31.4852ms)
+✔ server-only document finalization and invalid action fields cannot bypass authorization (93.1693ms)
+✔ secure document transport uses approved policy, validates bytes, retries upload and blocks non-HR downloads (1247.2313ms)
+✔ save success requires fresh persisted phone and stable selected employee identity (2.8509ms)
+✔ verification checks all submitted fields and error contains no entered private values (0.5194ms)
+✔ private fields require exact read-back equality, including changed whitespace (0.3195ms)
+✔ mutation invalidates pending GET deduplication so post-save verification reads fresh data (127.7351ms)
+✔ concurrent reads share only the current epoch and explicit revalidation starts a new request (37.2332ms)
+✔ schema is additive and directory keeps BIGINT IDs exact without duplicating drivers (22554.6285ms)
+✔ ordinary office, driver-only, read-only HR member and suspended users cannot read/write confidential HR (93.08ms)
+✔ personnel save is explicit, preserves omitted values, and creates a unique stable driver linkage (84.7502ms)
+✔ public directory and overview omit addresses, salary, private licence numbers and document filenames (47.2578ms)
+✔ scoped operational manager may reassign only the approved driver; fleet and historical references stay unchanged (59.5389ms)
+✔ first assignment works and raw registration editing cannot bypass the history workflow (18.9416ms)
+✔ temporary cover preserves regular truck and rejects overlapping cover (38.8321ms)
+✔ meeting, immutable full notes, training category, independent follow-up and completion audit persist (52.7442ms)
+✔ office employees need no vehicle or licence and do not create an operational driver automatically (149.918ms)
+✔ same request nonce prevents duplicate meetings and cannot be reused for altered content (27.8787ms)
+✔ test meetings are not exposed in normal history and admin archiving preserves originals (94.308ms)
+✔ private storage readiness is structural and all browser-role direct byte reads remain blocked (36.6756ms)
+✔ document policy is required, upload completion is server-only, and retention/hold guard deletion (57.4652ms)
+✔ expired licence blocks a new vehicle assignment without making a legal-sufficiency claim (10.2149ms)
+✔ employee departure retains driver IDs, original employment/meeting history and historical trips (19.014ms)
+✔ all prepared migrations are idempotent and preserve original meeting and historical references (315.634ms)
+✔ company policy approval cannot be omitted through a direct RPC (15.9985ms)
+✔ known departure cannot be reversed by operational activation and rule sources are enforced in SQL (25.2468ms)
+✔ retention purge records outcome and prevents a concurrent new hold after purge starts (55.5339ms)
+✖ operational approval cannot attach an office employee to a new driver without HR authority (7.6603ms)
+✔ private contact edits do not reactivate a paused driver or overwrite an operational name (30.1703ms)
+✔ old cached HR profile, private document and API responses are bypassed after saves (104.7865ms)
+✔ no-store or Authorization requests never enter offline storage (4.4257ms)
+✔ activation purges obsolete cache containing HR responses and immediately takes control (4.9177ms)
+ℹ tests 36
+ℹ suites 0
+ℹ pass 35
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 50246.8644
+
+✖ failing tests:
+
+test at tests\hr-v7-database.test.cjs:39:1
+✖ operational approval cannot attach an office employee to a new driver without HR authority (7.6603ms)
+  error: column reference "status" is ambiguous
+      at Ce.la (C:\Users\User\Downloads\Fuel Bank App\node_modules\@electric-sql\pglite\dist\index.cjs:4:22506)
+      at Ce.Ja (C:\Users\User\Downloads\Fuel Bank App\node_modules\@electric-sql\pglite\dist\index.cjs:4:19876)
+      at Ce.parse (C:\Users\User\Downloads\Fuel Bank App\node_modules\@electric-sql\pglite\dist\index.cjs:4:18520)
+      at _e.Ra (C:\Users\User\Downloads\Fuel Bank App\node_modules\@electric-sql\pglite\dist\index.cjs:15:1789)
+      at C:\Users\User\Downloads\Fuel Bank App\node_modules\@electric-sql\pglite\dist\index.cjs:15:1161
+      at wasm://wasm/0269e01e:wasm-function[10979]:0x5ad057
+      at wasm://wasm/0269e01e:wasm-function[3598]:0x281dd2
+      at wasm://wasm/0269e01e:wasm-function[3640]:0x289ccf
+      at wasm://wasm/0269e01e:wasm-function[3650]:0x289f2b
+      at wasm://wasm/0269e01e:wasm-function[9956]:0x556968 {
+    length: 481,
+    severity: 'ERROR',
+    code: '42702',
+    detail: 'It could refer to either a PL/pgSQL variable or a table column.',
+    hint: undefined,
+    position: undefined,
+    internalPosition: '78',
+    internalQuery: "not exists(select 1 from public.account_access where user_id=target_user and status='active' and role in ('admin','office_staff'))\r\n      or exists(select 1 from public.driver_accounts where auth_user_id=target_user and active)",
+    where: 'PL/pgSQL function public.ees_hr_v7_action(text,jsonb,uuid) line 292 at IF',
+    schema: undefined,
+    table: undefined,
+    column: undefined,
+    dataType: undefined,
+    constraint: undefined,
+    file: 'pl_comp.c',
+    line: '1046',
+    routine: 'plpgsql_post_column_ref',
+    query: 'select public.ees_hr_v7_action($1,$2,$3) result',
+    params: [ 'grant_manager', '{"userId":"00000000-0000-4000-8000-000000000002","active":true,"allDrivers":true}', '446eb8a1-17e1-436a-90f6-7331324c3927' ],
+    queryOptions: undefined
+  }

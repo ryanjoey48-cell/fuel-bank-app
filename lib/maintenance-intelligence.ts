@@ -4,7 +4,7 @@ import type { MaintenanceCategory, MaintenanceData, MaintenanceItemInput } from 
 const normalise = (value: string) => value.normalize("NFKC").trim().toLocaleLowerCase().replace(/[.,/\\()\-_]+/g, " ").replace(/\s+/g, " ").trim();
 export function duplicateMaintenanceItem<T extends MaintenanceItemInput>(item: T, id: string): T {
   // A copied price/category must never carry another line's receipt wording or notes.
-  return { ...item, id, notes: null, description_th: null };
+  return { ...item, id, notes: null, description_th: null, service_confirmed:false };
 }
 
 export type RepeatedRepair = { vehicleId: string; name: string; category: MaintenanceCategory; visits: number; first: string; last: string; total: number; categoryFallback: boolean };

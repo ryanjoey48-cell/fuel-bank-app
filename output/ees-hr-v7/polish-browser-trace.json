@@ -1,0 +1,40 @@
+[
+  {
+    "url": "http://127.0.0.1:58098/api/hr/access",
+    "status": 200,
+    "request": null,
+    "response": {
+      "ready": true,
+      "hr": true,
+      "operate": true,
+      "admin": true,
+      "storageReady": true,
+      "userId": "00000000-0000-4000-8000-000000000001",
+      "releaseReady": false,
+      "peopleReady": false,
+      "setupDependencies": [
+        {
+          "rpc": "ees_hr_v7_release_ready",
+          "migration": "20261013140000_ees_hr_v7_workflow_guards.sql",
+          "reason": "missing_rpc"
+        }
+      ]
+    }
+  },
+  {
+    "url": "http://127.0.0.1:58098/api/hr/access",
+    "status": 200,
+    "request": null,
+    "response": {
+      "hr": true,
+      "admin": true,
+      "ready": true,
+      "userId": "00000000-0000-4000-8000-000000000001",
+      "operate": true,
+      "storageReady": true,
+      "releaseReady": true,
+      "peopleReady": true,
+      "setupDependencies": []
+    }
+  }
+]

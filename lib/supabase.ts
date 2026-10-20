@@ -5,6 +5,8 @@ import { PostgrestClient } from "@supabase/postgrest-js";
 import { StorageClient } from "@supabase/storage-js";
 import { safeLocalStorage } from "@/lib/safe-browser-storage";
 
+import { completeJsonResponse, withRequestDeadline } from "@/lib/request-deadline";
+
 type AuthClientInstance = InstanceType<typeof AuthClient>;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -112,7 +114,7 @@ async function safeAuthLock<R>(_name: string, _acquireTimeout: number, fn: () =>
 }
 
 function createAuthorizedFetch(auth: AuthClientInstance) {
-  return async (input: RequestInfo | URL, init?: RequestInit) => {
+  return async (input: RequestInfo | URL, init?: RequestInit) => withRequestDeadline(async (signal) => {
     const headers = new Headers(init?.headers);
     headers.set("apikey", supabaseAnonKey!);
 
@@ -124,11 +126,9 @@ function createAuthorizedFetch(auth: AuthClientInstance) {
       headers.set("Authorization", `Bearer ${data.session?.access_token ?? supabaseAnonKey}`);
     }
 
-    return fetch(input, {
-      ...init,
-      headers
-    });
-  };
+    const response = await fetch(input, { ...init, headers, signal });
+    return /\/rest\/v1(?:\/|$)/.test(String(input)) ? completeJsonResponse(response) : response;
+  }, init?.signal);
 }
 
 function fetchInputUrl(input: RequestInfo | URL) {
@@ -153,7 +153,7 @@ function createAuthFetch() {
     const method = init?.method ?? (typeof Request !== "undefined" && input instanceof Request ? input.method : "GET");
 
     try {
-      const response = await fetch(input, init);
+      const response = await withRequestDeadline(async (signal) => completeJsonResponse(await fetch(input, { ...init, signal })), init?.signal);
       if (shouldRecord) {
         recordAuthRequest({
           at: new Date().toISOString(),
@@ -245,3 +245,13 @@ export function getSupabaseBrowserClient() {
 }
 
 export const supabase = getSupabaseBrowserClient();
+
+/** Bind an operation to one verified session without changing the shared client's headers. */
+export function createSessionRestClient(accessToken: string) {
+  if (supabaseConfigError || !parsedSupabaseUrl || !supabaseAnonKey || !accessToken) throw unavailableError();
+  return new PostgrestClient(new URL("rest/v1", parsedSupabaseUrl).href, {
+    headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${accessToken}` },
+    fetch: (input, init) => withRequestDeadline(async signal => completeJsonResponse(await fetch(input, { ...init, signal })), init?.signal),
+    timeout: 12_000
+  });
+}

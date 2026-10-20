@@ -13,6 +13,7 @@ import {
   FileSpreadsheet,
   LayoutDashboard,
   MapPinned,
+  MapPin,
   Package,
   PackageSearch,
   Route,
@@ -53,7 +54,7 @@ const SIDEBAR_STORAGE_KEY = "fuel-bank-sidebar-expanded";
 
 export function Sidebar({ open, onClose }: SidebarProps) {
   const pathname = usePathname();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [desktopExpanded, setDesktopExpanded] = useState(false);
   const [preferenceLoaded, setPreferenceLoaded] = useState(false);
   const [supportTicketCount, setSupportTicketCount] = useState(0);
@@ -90,7 +91,11 @@ export function Sidebar({ open, onClose }: SidebarProps) {
       }
     });
 
-    const handleSupportChange = () => {
+    const handleSupportChange = (event?: Event) => {
+      if (event) {
+        const detail = (event as CustomEvent<{ resource?: string; resources?: string[] }>).detail;
+        if (detail?.resource && detail.resource !== "support_tickets" && !detail.resources?.includes("support_tickets")) return;
+      }
       if (!active || !isAdmin) return;
 
       void fetchSupportTicketNotificationCount(["Open", "In Progress"])
@@ -158,6 +163,11 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           href: "/trip-journey",
           label: t.nav.tripJourney,
           icon: MapPinned
+        },
+        {
+          href: "/locations",
+          label: language === "th" ? "ทำเนียบสถานที่" : "Locations",
+          icon: MapPin
         }
       ]
     },
@@ -205,8 +215,8 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           icon: PackageSearch
         },
         {
-          href: "/drivers",
-          label: t.nav.drivers,
+          href: "/hr",
+          label: language === "th" ? "บุคลากรและงาน HR" : "People & HR",
           icon: Truck
         }
       ]

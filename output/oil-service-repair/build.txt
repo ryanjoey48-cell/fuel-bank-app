@@ -1,0 +1,110 @@
+
+> fuel-bank-app@0.1.0 build
+> next build
+
+   ▲ Next.js 15.5.14
+   - Environments: .env.local
+
+   Creating an optimized production build ...
+Browserslist: browsers data (caniuse-lite) is 7 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+ ✓ Compiled successfully in 90s
+   Skipping validation of types
+   Skipping linting
+   Collecting page data ...
+   Generating static pages (0/57) ...
+   Generating static pages (14/57) 
+   Generating static pages (28/57) 
+   Generating static pages (42/57) 
+ ✓ Generating static pages (57/57)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                               Size  First Load JS
+┌ ○ /                                                    228 B         102 kB
+├ ○ /_not-found                                           1 kB         103 kB
+├ ○ /access/pending                                      136 B         217 kB
+├ ○ /access/rejected                                     135 B         217 kB
+├ ○ /admin/august-job-reconciliation                   6.22 kB         260 kB
+├ ○ /admin/booking-maps                                14.2 kB         274 kB
+├ ○ /admin/driver-operations                           19.8 kB         230 kB
+├ ○ /admin/support-tickets                             6.08 kB         244 kB
+├ ○ /admin/users                                       13.4 kB         220 kB
+├ ƒ /api/admin/august-job-reconciliation                 228 B         102 kB
+├ ƒ /api/admin/booking-maps/audit                        228 B         102 kB
+├ ƒ /api/admin/booking-maps/booking-checks               228 B         102 kB
+├ ƒ /api/admin/booking-maps/dry-run                      228 B         102 kB
+├ ƒ /api/admin/booking-maps/exceptions                   228 B         102 kB
+├ ƒ /api/admin/booking-maps/locations                    228 B         102 kB
+├ ƒ /api/admin/booking-maps/locations/[id]               228 B         102 kB
+├ ƒ /api/admin/booking-maps/locations/impact             228 B         102 kB
+├ ƒ /api/admin/booking-maps/locations/snapshot           228 B         102 kB
+├ ƒ /api/admin/booking-maps/route-approvals              228 B         102 kB
+├ ƒ /api/admin/driver-access-requests                    228 B         102 kB
+├ ƒ /api/admin/driver-access-requests/[id]               228 B         102 kB
+├ ƒ /api/admin/driver-access-requests/drivers            228 B         102 kB
+├ ƒ /api/admin/driver-accounts                           228 B         102 kB
+├ ƒ /api/admin/driver-notifications                      228 B         102 kB
+├ ƒ /api/admin/driver-operations                         228 B         102 kB
+├ ƒ /api/admin/driver-operations/drivers/[driverId]      228 B         102 kB
+├ ƒ /api/admin/driver-operations/history                 228 B         102 kB
+├ ƒ /api/admin/driver-operations/jobs/[bookingId]        228 B         102 kB
+├ ƒ /api/admin/driver-operations/profiles/[accountId]    228 B         102 kB
+├ ƒ /api/admin/me                                        228 B         102 kB
+├ ƒ /api/admin/users                                     228 B         102 kB
+├ ƒ /api/admin/users/[id]                                228 B         102 kB
+├ ƒ /api/admin/users/[id]/password-reset                 228 B         102 kB
+├ ƒ /api/auth/login-routing                              228 B         102 kB
+├ ƒ /api/distance-estimate                               228 B         102 kB
+├ ƒ /api/driver/jobs/[bookingId]/events                  228 B         102 kB
+├ ƒ /api/driver/profile                                  228 B         102 kB
+├ ƒ /api/driver/profile/avatar                           228 B         102 kB
+├ ƒ /api/driver/profile/password                         228 B         102 kB
+├ ƒ /api/driver/session                                  228 B         102 kB
+├ ƒ /api/google-maps-status                              228 B         102 kB
+├ ƒ /api/location-autocomplete                           228 B         102 kB
+├ ƒ /api/location-details                                228 B         102 kB
+├ ƒ /api/office/bookings/[bookingId]/driver-events       228 B         102 kB
+├ ƒ /api/support-ticket-email                            228 B         102 kB
+├ ○ /apple-icon.png                                        0 B            0 B
+├ ○ /booking-diary                                     31.1 kB         395 kB
+├ ○ /change-password                                   2.85 kB         257 kB
+├ ○ /dashboard                                         8.06 kB         260 kB
+├ ○ /dispatch                                          8.87 kB         247 kB
+├ ƒ /driver                                            6.67 kB         185 kB
+├ ƒ /driver/history                                    2.33 kB         175 kB
+├ ƒ /driver/jobs/[bookingId]                           11.7 kB         181 kB
+├ ƒ /driver/login                                      5.47 kB         218 kB
+├ ƒ /driver/profile                                    4.31 kB         173 kB
+├ ○ /drivers                                           9.02 kB         367 kB
+├ ○ /fuel-logs                                         43.7 kB         412 kB
+├ ○ /fuel-spend-report                                 19.4 kB         383 kB
+├ ○ /grease-maintenance                                 7.5 kB         261 kB
+├ ○ /icon.png                                              0 B            0 B
+├ ○ /insurance                                         40.2 kB         247 kB
+├ ○ /inventory                                         19.2 kB         226 kB
+├ ○ /login                                             8.39 kB         221 kB
+├ ○ /maintenance                                         26 kB         366 kB
+├ ○ /maintenance/analytics                             7.31 kB         227 kB
+├ ○ /profile                                              4 kB         258 kB
+├ ○ /reports                                           18.8 kB         263 kB
+├ ○ /safety                                            14.1 kB         233 kB
+├ ○ /safety/issues                                     6.32 kB         228 kB
+├ ○ /shipments                                         31.2 kB         279 kB
+├ ○ /support                                           3.44 kB         257 kB
+├ ○ /transfers                                         7.22 kB         381 kB
+├ ○ /trip-journey                                      40.4 kB         278 kB
+├ ○ /vehicle-performance                               31.8 kB         400 kB
+└ ○ /weekly-mileage                                      43 kB         405 kB
++ First Load JS shared by all                           102 kB
+  ├ chunks/1255-dfb5f8d642ae4426.js                    45.7 kB
+  ├ chunks/4bd1b696-100b9d70ed4e49c1.js                54.2 kB
+  └ other shared chunks (total)                        2.19 kB
+
+
+ƒ Middleware                                           34.2 kB
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

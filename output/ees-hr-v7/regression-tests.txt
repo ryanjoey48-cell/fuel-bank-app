@@ -1,0 +1,28 @@
+✔ save success requires fresh persisted phone and stable selected employee identity (4.7804ms)
+✔ verification checks all submitted fields and error contains no entered private values (1.0937ms)
+✔ mutation invalidates pending GET deduplication so post-save verification reads fresh data (396.3062ms)
+✔ concurrent reads share only the current epoch and explicit revalidation starts a new request (103.5445ms)
+✔ schema is additive and directory keeps BIGINT IDs exact without duplicating drivers (35472.1486ms)
+✔ ordinary office, driver-only, read-only HR member and suspended users cannot read/write confidential HR (118.4469ms)
+✔ personnel save is explicit, preserves omitted values, and creates a unique stable driver linkage (127.3791ms)
+✔ public directory and overview omit addresses, salary, private licence numbers and document filenames (117.4577ms)
+✔ scoped operational manager may reassign only the approved driver; fleet and historical references stay unchanged (102.7197ms)
+✔ first assignment works and raw registration editing cannot bypass the history workflow (94.3774ms)
+✔ temporary cover preserves regular truck and rejects overlapping cover (123.502ms)
+✔ meeting, immutable full notes, training category, independent follow-up and completion audit persist (299.2057ms)
+✔ office employees need no vehicle or licence and do not create an operational driver automatically (111.1182ms)
+✔ same request nonce prevents duplicate meetings and cannot be reused for altered content (59.3983ms)
+✔ test meetings are not exposed in normal history and admin archiving preserves originals (115.0911ms)
+✔ private storage readiness is structural and all browser-role direct byte reads remain blocked (40.1069ms)
+✔ document policy is required, upload completion is server-only, and retention/hold guard deletion (100.054ms)
+✔ expired licence blocks a new vehicle assignment without making a legal-sufficiency claim (7.8811ms)
+✔ employee departure retains driver IDs, original employment/meeting history and historical trips (16.3176ms)
+✔ all prepared migrations are idempotent and preserve original meeting and historical references (195.6811ms)
+ℹ tests 20
+ℹ suites 0
+ℹ pass 20
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 38226.5728

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { hasPermission } from "@/lib/authorization";
 import { AdminApiError, createServerSupabaseAdmin, requireVerifiedUser, resolveAccountAccess } from "@/lib/admin-user-management-server";
-import { safeGoogleMapsUrl } from "@/lib/locations-directory";
+import { projectLocationForDirectory, safeGoogleMapsUrl } from "@/lib/locations-directory";
 
 const fields = "id,company_name,thai_name,alternative_names,address,province,destination_type,google_maps_url,truck_entrance_url,verification_status,verified_at,notes,source_info,created_at,updated_at";
 const types = ["Factory", "Warehouse", "Airport", "Port", "Customer", "Depot", "Other"];
@@ -18,7 +18,7 @@ async function access(request: Request, permission: "business:read" | "business:
   const admin = createServerSupabaseAdmin();
   const account = await resolveAccountAccess(admin, user);
   if (!hasPermission(account, permission)) throw new AdminApiError(403, "You do not have access to the locations directory.");
-  return { user, admin };
+  return { user, admin, account };
 }
 function fail(error: unknown) {
   if (error instanceof AdminApiError) return NextResponse.json({ error: error.message }, { status: error.status });
@@ -27,15 +27,16 @@ function fail(error: unknown) {
 
 export async function PATCH(request: Request, context: Context) {
   try {
-    const { user, admin } = await access(request, "business:write");
+    const { user, admin, account } = await access(request, "business:write");
     const { id } = await context.params;
     const body = await request.json();
+    const includeInternal = hasPermission(account, "admin:user_management");
     const status = body.verification_status === "verified" ? "verified" : "needs_check";
     const verificationEvidence = typeof body.verification_evidence === "string" ? body.verification_evidence.trim() : "";
     if (status === "verified" && !verificationEvidence) throw new AdminApiError(400, "A verification evidence reference is required to mark a location verified.");
     if (verificationEvidence.length > 2048) throw new AdminApiError(400, "Verification evidence references must be 2048 characters or fewer.");
     const sourceInfo = String(body.source_info ?? "").trim();
-    const values = {
+    const values: Record<string, unknown> = {
       company_name: String(body.company_name ?? "").trim(),
       thai_name: String(body.thai_name ?? "").trim() || null,
       alternative_names: Array.isArray(body.alternative_names) ? body.alternative_names.map((name: unknown) => String(name).trim()).filter(Boolean) : [],
@@ -46,14 +47,23 @@ export async function PATCH(request: Request, context: Context) {
       truck_entrance_url: mapUrl(body.truck_entrance_url),
       verification_status: status,
       verified_at: status === "verified" ? (body.verified_at || new Date().toISOString()) : null,
-      notes: String(body.notes ?? "").trim() || null,
-      source_info: [sourceInfo, verificationEvidence && `${verificationEvidencePrefix}${verificationEvidence}`].filter(Boolean).join("\n") || null,
       updated_by: user.id
     };
+    if (includeInternal) {
+      values.notes = String(body.notes ?? "").trim() || null;
+      values.source_info = [sourceInfo, verificationEvidence && `${verificationEvidencePrefix}${verificationEvidence}`]
+        .filter(Boolean).join("\n") || null;
+    } else if (verificationEvidence) {
+      const { data: prior, error: priorError } = await admin.from("ees_locations").select("source_info").eq("id", id).single();
+      if (priorError) throw priorError;
+      const priorLines = String(prior.source_info ?? "").split(/\r?\n/)
+        .filter((line) => line.trim() && !line.startsWith(verificationEvidencePrefix));
+      values.source_info = [...priorLines, `${verificationEvidencePrefix}${verificationEvidence}`].join("\n");
+    }
     if (!values.company_name || !values.address) throw new AdminApiError(400, "Company name and address are required.");
     const { data, error } = await admin.from("ees_locations").update(values).eq("id", id).select(fields).single();
     if (error) throw error;
-    return NextResponse.json({ location: data });
+    return NextResponse.json({ location: projectLocationForDirectory(data, includeInternal) });
   } catch (error) { return fail(error); }
 }
 
@@ -81,9 +91,12 @@ export async function POST(request: Request, context: Context) {
 
 export async function DELETE(request: Request, context: Context) {
   try {
-    const { admin } = await access(request, "business:delete");
+    const { admin, user } = await access(request, "business:delete");
     const { id } = await context.params;
-    const { error } = await admin.from("ees_locations").delete().eq("id", id);
+    const { error } = await admin.rpc("delete_ees_location_with_map_pin_audit_actor", {
+      p_location_id: id,
+      p_actor_id: user.id
+    });
     if (error) throw error;
     return NextResponse.json({ ok: true });
   } catch (error) { return fail(error); }

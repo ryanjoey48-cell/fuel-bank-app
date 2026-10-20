@@ -1,0 +1,85 @@
+{
+  "projectHost": "hafoaurzfgkkwpvzedvd.supabase.co",
+  "table": "public.vehicle_service_logs",
+  "idSchema": {
+    "default": "gen_random_uuid()",
+    "description": "Note:\nThis is a Primary Key.<pk/>",
+    "format": "uuid",
+    "type": "string"
+  },
+  "rows": [
+    {
+      "id": "36c5b6d1-3c63-416a-abab-feeeb54a5841",
+      "vehicle_reg": "3ฒน-9565",
+      "service_type": "oil_change",
+      "service_date": "2026-02-28",
+      "odometer": 309396,
+      "user_id": "6b36f383-28e0-48aa-99a0-c1e655d6c3f7"
+    },
+    {
+      "id": "149ff7dd-cc6c-46cc-8fd6-68ad9de8cd87",
+      "vehicle_reg": "3ฒน-9565",
+      "service_type": "oil_change",
+      "service_date": "2026-04-18",
+      "odometer": 319468,
+      "user_id": "6b36f383-28e0-48aa-99a0-c1e655d6c3f7"
+    },
+    {
+      "id": "3afac003-0f99-46bd-a0e1-0c0585d69058",
+      "vehicle_reg": "3ฒน-9565",
+      "service_type": "oil_change",
+      "service_date": "2026-06-03",
+      "odometer": 329546,
+      "user_id": null
+    },
+    {
+      "id": "fa5a8f6d-d916-4cc4-9a32-981a741f0f4e",
+      "vehicle_reg": "3ฒน-9565",
+      "service_type": "oil_change",
+      "service_date": "2026-07-18",
+      "odometer": 341928,
+      "user_id": null
+    },
+    {
+      "id": "160dd57f-82a1-4834-a896-e9a7fa3d06bd",
+      "vehicle_reg": "3ฒน-9565",
+      "service_type": "oil_change",
+      "service_date": "2026-09-05",
+      "odometer": 354784,
+      "user_id": null
+    },
+    {
+      "id": "388afff7-6421-483b-a754-da56b2f1b0ca",
+      "vehicle_reg": "3ฒน-9565",
+      "service_type": "oil_change",
+      "service_date": "2026-09-07",
+      "odometer": 354784,
+      "user_id": null
+    },
+    {
+      "id": "ed4196f7-b1f5-4676-a438-ff06728c8b0f",
+      "vehicle_reg": "3ฒน-9565",
+      "service_type": "oil_change",
+      "service_date": "2026-10-05",
+      "odometer": 354784,
+      "user_id": null
+    }
+  ],
+  "roleFunctions": [
+    {
+      "path": "/rpc/current_account_role",
+      "available": true
+    },
+    {
+      "path": "/rpc/is_account_active",
+      "available": true
+    },
+    {
+      "path": "/rpc/is_office_account",
+      "available": true
+    }
+  ],
+  "sqlInspectionFunctions": [
+    "/rpc/rls_auto_enable"
+  ]
+}

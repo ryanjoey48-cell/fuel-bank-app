@@ -1,0 +1,24 @@
+✔ schema is additive and directory keeps BIGINT IDs exact without duplicating drivers (13355.7304ms)
+✔ ordinary office, driver-only, read-only HR member and suspended users cannot read/write confidential HR (36.51ms)
+✔ personnel save is explicit, preserves omitted values, and creates a unique stable driver linkage (46.9202ms)
+✔ public directory and overview omit addresses, salary, private licence numbers and document filenames (38.1131ms)
+✔ scoped operational manager may reassign only the approved driver; fleet and historical references stay unchanged (31.3653ms)
+✔ first assignment works and raw registration editing cannot bypass the history workflow (13.4327ms)
+✔ temporary cover preserves regular truck and rejects overlapping cover (22.0672ms)
+✔ meeting, immutable full notes, training category, independent follow-up and completion audit persist (39.0575ms)
+✔ office employees need no vehicle or licence and do not create an operational driver automatically (28.5862ms)
+✔ same request nonce prevents duplicate meetings and cannot be reused for altered content (10.3104ms)
+✔ test meetings are not exposed in normal history and admin archiving preserves originals (30.0359ms)
+✔ private storage readiness is structural and all browser-role direct byte reads remain blocked (22.3639ms)
+✔ document policy is required, upload completion is server-only, and retention/hold guard deletion (49.9732ms)
+✔ expired licence blocks a new vehicle assignment without making a legal-sufficiency claim (11.8128ms)
+✔ employee departure retains driver IDs, original employment/meeting history and historical trips (14.4966ms)
+✔ all prepared migrations are idempotent and preserve original meeting and historical references (69.1754ms)
+ℹ tests 16
+ℹ suites 0
+ℹ pass 16
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 14278.1348

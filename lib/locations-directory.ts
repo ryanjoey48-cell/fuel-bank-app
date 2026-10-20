@@ -13,6 +13,10 @@ export type SearchableLocation = {
   source_info?: string | null;
 };
 
+export type DirectoryLocationProjection<T extends SearchableLocation> = T & {
+  dispatch_restriction: string | null;
+};
+
 export type LocationFormInput = {
   company_name: string;
   address: string;
@@ -29,8 +33,66 @@ export type LocationFormError =
   | "truckEntranceUrl"
   | "verificationEvidence";
 
+export type LocationPinType = "destination" | "truck_entrance";
+export type LocationPin = {
+  id: string;
+  location_id: string;
+  pin_type: LocationPinType;
+  latitude: number;
+  longitude: number;
+  pin_status: "manual_confirmed";
+  coordinate_source: string;
+  source_reference: string | null;
+  created_by: string;
+  created_at: string;
+  confirmed_by: string;
+  confirmed_at: string;
+  updated_by: string;
+  updated_at: string;
+};
+
+export type Coordinates = { latitude: number; longitude: number };
+
 const GOOGLE_MAPS_HOST = /^(maps\.google\.com|(?:www\.)?google\.(?:com|[a-z]{2,3}|co\.[a-z]{2}))$/i;
 const DISPATCH_RESTRICTION = /do\s+not\s+dispatch|do\s+not\s+send\s+(?:a\s+)?truck|no\s+dispatch|not\s+for\s+dispatch|ห้ามจัดส่ง|ห้ามส่งรถ|ห้ามใช้สำหรับจัดส่ง/i;
+
+function normalizeMapsMatchText(value: string): string {
+  return value.normalize("NFKC").toLocaleLowerCase().replace(/[\p{P}\p{S}\s]+/gu, "");
+}
+
+export function isValidCoordinates(latitude: unknown, longitude: unknown): boolean {
+  return typeof latitude === "number" && Number.isFinite(latitude) && latitude >= -90 && latitude <= 90
+    && typeof longitude === "number" && Number.isFinite(longitude) && longitude >= -180 && longitude <= 180;
+}
+
+/** Accepts a pasted latitude, longitude pair without guessing or geocoding. */
+export function parseCoordinates(value: string): Coordinates | null {
+  const normalized = value.trim().replace(/^\(|\)$/g, "");
+  const match = normalized.match(/^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*[,;\s]\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+))$/);
+  if (!match) return null;
+  const latitude = Number(match[1]);
+  const longitude = Number(match[2]);
+  return isValidCoordinates(latitude, longitude) ? { latitude, longitude } : null;
+}
+
+export function formatCoordinates({ latitude, longitude }: Coordinates): string {
+  return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+}
+
+export function getUnpinnedLocationIds(locations: readonly { id: string }[], pins: readonly Pick<LocationPin, "location_id" | "pin_type">[]): Set<string> {
+  const destinationPins = new Set(pins.filter((pin) => pin.pin_type === "destination").map((pin) => pin.location_id));
+  return new Set(locations.filter((location) => !destinationPins.has(location.id)).map((location) => location.id));
+}
+
+export function getConfirmedDestinationLocationIds(
+  locations: readonly { id: string }[],
+  pins: readonly Pick<LocationPin, "location_id" | "pin_type" | "pin_status">[]
+): Set<string> {
+  const locationIds = new Set(locations.map((location) => location.id));
+  return new Set(pins
+    .filter((pin) => pin.pin_type === "destination" && pin.pin_status === "manual_confirmed" && locationIds.has(pin.location_id))
+    .map((pin) => pin.location_id));
+}
 
 /** Returns a canonical Google Maps URL, or null when the value is not safe to open. */
 export function safeGoogleMapsUrl(value: unknown): string | null {
@@ -41,7 +103,7 @@ export function safeGoogleMapsUrl(value: unknown): string | null {
     if (
       url.protocol !== "https:" ||
       !GOOGLE_MAPS_HOST.test(url.hostname) ||
-      url.pathname.startsWith("/maps") === false ||
+      (url.pathname !== "/maps" && !url.pathname.startsWith("/maps/")) ||
       url.username !== "" ||
       url.password !== "" ||
       url.port !== ""
@@ -53,19 +115,50 @@ export function safeGoogleMapsUrl(value: unknown): string | null {
   }
 }
 
-/** Builds a correctly encoded Maps search URL without making a network request. */
-export function buildGoogleMapsSearchUrl(address: string): string | null {
-  const query = address.trim();
-  if (!query) return null;
+/** Builds a Maps search from the saved destination details without making a network request. */
+export function buildGoogleMapsSearchUrl(location: Pick<SearchableLocation, "address"> & Partial<Pick<SearchableLocation, "company_name" | "thai_name" | "alternative_names" | "province">> | string): string | null {
+  const destination = typeof location === "string" ? { address: location } : location;
+  const address = destination.address.trim();
+  if (!address) return null;
+
+  const query = [
+    destination.company_name?.trim(),
+    destination.thai_name?.trim(),
+    address,
+    destination.province?.trim()
+  ].filter((part): part is string => Boolean(part)).join(", ");
 
   const url = new URL("https://www.google.com/maps/search/");
   url.searchParams.set("api", "1");
   url.searchParams.set("query", query);
-  return url.toString();
+  const result = url.toString();
+  return result.length <= 2048 ? result : null;
 }
 
-export function getLocationMapUrl(location: Pick<SearchableLocation, "address"> & { google_maps_url?: string | null }): string | null {
-  return safeGoogleMapsUrl(location.google_maps_url) ?? buildGoogleMapsSearchUrl(location.address);
+function isDestinationSpecificMapsUrl(value: string, location: SearchableLocation): boolean {
+  const safeUrl = safeGoogleMapsUrl(value);
+  if (!safeUrl) return false;
+
+  const url = new URL(safeUrl);
+  const searchableUrlText = normalizeMapsMatchText(`${url.pathname} ${[...url.searchParams.values()].join(" ")}`);
+  const names = [location.company_name, location.thai_name]
+    .filter((name): name is string => typeof name === "string" && name.trim().length > 0)
+    .map(normalizeMapsMatchText)
+    .filter((name) => name.length >= 3);
+  const nameMatches = names.some((name) => searchableUrlText.includes(name));
+  const address = normalizeMapsMatchText(location.address);
+
+  // A saved URL is reused only when its visible query/path names this destination
+  // and includes the saved address. Opaque place IDs and generic search URLs fall
+  // back to a fresh search built from this record's own names and address.
+  return nameMatches && address.length >= 6 && searchableUrlText.includes(address);
+}
+
+export function getLocationMapUrl(location: SearchableLocation & { google_maps_url?: string | null }): string | null {
+  if (location.google_maps_url && isDestinationSpecificMapsUrl(location.google_maps_url, location)) {
+    return safeGoogleMapsUrl(location.google_maps_url);
+  }
+  return buildGoogleMapsSearchUrl(location);
 }
 
 export function getLocationDisplayName(location: SearchableLocation, language: LocationsLanguage): string {
@@ -110,7 +203,23 @@ export function getDispatchRestriction(location: Pick<SearchableLocation, "notes
     .filter((value): value is string => typeof value === "string")
     .flatMap((value) => value.split(/\r?\n/));
 
-  return lines.find((line) => DISPATCH_RESTRICTION.test(line))?.trim() ?? null;
+  const restriction = lines.find((line) => DISPATCH_RESTRICTION.test(line))?.trim();
+  if (!restriction) return null;
+
+  const concise = restriction
+    .replace(/^(?:workbook status|verification note):\s*/i, "")
+    .replace(/^needs verification\s*[—-]\s*/i, "");
+  return concise.length > 220 ? `${concise.slice(0, 217).trimEnd()}…` : concise;
+}
+
+/** Keep dispatch warnings available while limiting internal notes and sources to admins. */
+export function projectLocationForDirectory<T extends SearchableLocation>(location: T, includeInternal: boolean): DirectoryLocationProjection<T> {
+  return {
+    ...location,
+    notes: includeInternal ? location.notes ?? null : null,
+    source_info: includeInternal ? location.source_info ?? null : null,
+    dispatch_restriction: getDispatchRestriction(location)
+  };
 }
 
 export function validateLocationForm(input: LocationFormInput): LocationFormError[] {

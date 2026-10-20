@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { AlertTriangle, ArrowUpRight, ChevronDown, Heart, Info, LoaderCircle, MapPin, Pencil, Plus, RefreshCw, Search, X } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, Check, ChevronDown, Heart, Info, List, LoaderCircle, Map as MapIcon, MapPin, Pencil, Plus, RefreshCw, Search, X } from "lucide-react";
 import { EESLogo } from "@/components/ees-logo";
+import { LocationsMap, type SaveLocationPinInput } from "@/components/locations-map";
+import { LocationSmartPinDialog } from "@/components/location-smart-pin-dialog";
 import { useAccountAccess } from "@/lib/use-account-access";
 import { useLanguage } from "@/lib/language-provider";
 import { supabase } from "@/lib/supabase";
@@ -11,12 +13,15 @@ import {
   getDispatchRestriction,
   getLocationDisplayName,
   getLocationMapUrl,
+  getUnpinnedLocationIds,
   matchesLocationFilter,
   matchesLocationSearch,
   parseAlternativeNames,
   safeGoogleMapsUrl,
   validateLocationForm,
-  type LocationFormError
+  type LocationFormError,
+  type LocationPin,
+  type LocationPinType
 } from "@/lib/locations-directory";
 import type { Translation } from "@/lib/translations";
 
@@ -32,6 +37,7 @@ type Location = {
   truck_entrance_url: string | null;
   verification_status: "verified" | "needs_check";
   verified_at: string | null;
+  dispatch_restriction?: string | null;
   notes: string | null;
   source_info: string | null;
   created_at: string;
@@ -150,16 +156,27 @@ function validationMessage(error: LocationFormError, copy: LocationCopy) {
 export function LocationsDirectory() {
   const { can } = useAccountAccess();
   const canEdit = can("business:write");
+  const canViewInternal = can("admin:user_management");
   const { language, t } = useLanguage();
   const copy = t.locations;
   const [locations, setLocations] = useState<Location[]>([]);
   const [activity, setActivity] = useState<Activity[]>([]);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [view, setView] = useState<"directory" | "map">("directory");
+  const [mapPins, setMapPins] = useState<LocationPin[]>([]);
+  const [mapPinsLoaded, setMapPinsLoaded] = useState(false);
+  const [mapStorageReady, setMapStorageReady] = useState(false);
+  const [mapStorageLoading, setMapStorageLoading] = useState(false);
+  const [mapRequestFailed, setMapRequestFailed] = useState(false);
+  const [mapEditorLocationId, setMapEditorLocationId] = useState("");
+  const [mapEditorPinType, setMapEditorPinType] = useState<LocationPinType>("destination");
+  const [smartPinLocation, setSmartPinLocation] = useState<Location | null>(null);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<ApiErrorKey | "">("");
   const [success, setSuccess] = useState<SuccessKey | "">("");
   const [editing, setEditing] = useState<Location | "new" | false>(false);
+  const [detailLocation, setDetailLocation] = useState<Location | false>(false);
   const [form, setForm] = useState<FormValues>(emptyForm);
   const [formErrors, setFormErrors] = useState<Partial<Record<LocationFormError, true>>>({});
   const [formAlert, setFormAlert] = useState<ApiErrorKey | "">("");
@@ -168,6 +185,13 @@ export function LocationsDirectory() {
   const [pendingActivity, setPendingActivity] = useState<Set<string>>(() => new Set());
   const dialogRef = useRef<HTMLElement | null>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
+  const detailDialogRef = useRef<HTMLElement | null>(null);
+  const detailReturnFocusRef = useRef<HTMLElement | null>(null);
+
+  const dismissDetails = useCallback(() => {
+    setDetailLocation(false);
+    requestAnimationFrame(() => detailReturnFocusRef.current?.focus());
+  }, []);
 
   const dismissEditor = useCallback(() => {
     if (editing === false) return;
@@ -190,8 +214,13 @@ export function LocationsDirectory() {
         ...init?.headers
       }
     });
-    const body = await response.json().catch(() => ({})) as { error?: string };
-    if (!response.ok) throw new Error(body.error || "Unable to access locations.");
+    const body = await response.json().catch(() => ({})) as { error?: string; code?: string };
+    if (!response.ok) {
+      const error = new Error(body.error || "Unable to access locations.") as Error & { status: number; code?: string };
+      error.status = response.status;
+      error.code = body.code;
+      throw error;
+    }
     return body as T;
   }, []);
 
@@ -210,13 +239,122 @@ export function LocationsDirectory() {
     }
   }, [request]);
 
+  const loadMapPins = useCallback(async () => {
+    setMapStorageLoading(true);
+    setMapRequestFailed(false);
+    try {
+      const data = await request<{ pins: LocationPin[]; storageReady: boolean }>("/api/locations/map-pins");
+      setMapPins(Array.isArray(data.pins) ? data.pins : []);
+      setMapStorageReady(data.storageReady === true);
+      setMapPinsLoaded(true);
+    } catch {
+      setMapRequestFailed(true);
+    } finally {
+      setMapStorageLoading(false);
+    }
+  }, [request]);
+
+  const saveMapPin = useCallback(async (pin: SaveLocationPinInput) => {
+    const data = await request<{ pin: LocationPin }>("/api/locations/map-pins", {
+      method: "POST",
+      body: JSON.stringify({ ...pin, manual_correction: true, confirm: true })
+    });
+    setMapPins((current) => [
+      ...current.filter((item) => item.location_id !== data.pin.location_id || item.pin_type !== data.pin.pin_type),
+      data.pin
+    ]);
+    setMapStorageReady(true);
+    setMapPinsLoaded(true);
+    return data.pin;
+  }, [request]);
+
+  const lookupGeoapify = useCallback((locationId: string, signal: AbortSignal) => request<{
+    candidates: Array<{
+      id: string;
+      placeId: string | null;
+      name: string;
+      formattedAddress: string;
+      latitude: number;
+      longitude: number;
+      resultType: "amenity" | "building";
+      confidence: number;
+      attribution: string;
+      license: string | null;
+      dataSource: string | null;
+      confirmationToken: string;
+    }>;
+    found: boolean;
+  }>("/api/locations/geocode", {
+    method: "POST",
+    signal,
+    body: JSON.stringify({ location_id: locationId, pin_type: "destination", language })
+  }), [language, request]);
+
+  const saveSmartPin = useCallback(async (locationId: string, confirmationToken: string, signal: AbortSignal) => {
+    const data = await request<{ pin: LocationPin }>("/api/locations/map-pins", {
+      method: "POST",
+      signal,
+      body: JSON.stringify({
+        location_id: locationId,
+        pin_type: "destination",
+        confirmation_token: confirmationToken,
+        confirm: true
+      })
+    });
+    setMapPins((current) => [
+      ...current.filter((item) => item.location_id !== data.pin.location_id || item.pin_type !== data.pin.pin_type),
+      data.pin
+    ]);
+    setMapStorageReady(true);
+    setMapPinsLoaded(true);
+    return data.pin;
+  }, [request]);
+
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    if (!canViewInternal || view !== "map" || mapPinsLoaded || mapRequestFailed || mapStorageLoading) return;
+    void loadMapPins();
+  }, [canViewInternal, view, mapPinsLoaded, mapRequestFailed, mapStorageLoading, loadMapPins]);
 
   useEffect(() => {
     if (editing === false) return;
     const title = dialogRef.current?.querySelector<HTMLElement>("[data-dialog-title]");
     title?.focus();
   }, [editing]);
+
+  useEffect(() => {
+    if (detailLocation === false) return;
+    detailDialogRef.current?.querySelector<HTMLElement>("[data-detail-title]")?.focus();
+  }, [detailLocation]);
+
+  useEffect(() => {
+    if (detailLocation === false) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        dismissDetails();
+        return;
+      }
+      if (event.key !== "Tab" || !detailDialogRef.current) return;
+      const focusable = [...detailDialogRef.current.querySelectorAll<HTMLElement>(
+        "a[href], button:not(:disabled), [tabindex]:not([tabindex='-1'])"
+      )];
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const title = detailDialogRef.current.querySelector("[data-detail-title]");
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === title || document.activeElement === detailDialogRef.current)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [detailLocation, dismissDetails]);
 
   useEffect(() => {
     if (editing === false) return;
@@ -276,7 +414,25 @@ export function LocationsDirectory() {
   ];
   const mapPreviewUrl = form.google_maps_url.trim()
     ? safeGoogleMapsUrl(form.google_maps_url)
-    : buildGoogleMapsSearchUrl(form.address);
+    : buildGoogleMapsSearchUrl({ company_name: form.company_name, thai_name: form.thai_name, address: form.address, province: form.province });
+  const unpinnedLocationIds = useMemo(() => getUnpinnedLocationIds(locations, mapPins), [locations, mapPins]);
+
+  function openPinEditor(locationId: string) {
+    setMapEditorLocationId(locationId);
+    setMapEditorPinType("destination");
+    setView("map");
+    window.requestAnimationFrame(() => {
+      const editor = document.getElementById("location-pin-editor");
+      editor?.scrollIntoView({ behavior: "smooth", block: "center" });
+      editor?.querySelector<HTMLSelectElement>("[data-location-pin-select]")?.focus({ preventScroll: true });
+    });
+  }
+
+  function openSmartPin(location: Location) {
+    setSmartPinLocation(location);
+  }
+
+  const closeSmartPin = useCallback(() => setSmartPinLocation(null), []);
 
   function openEditor(value: Location | "new", trigger: HTMLElement) {
     returnFocusRef.current = trigger;
@@ -303,7 +459,7 @@ export function LocationsDirectory() {
     if (keyToClear) setFormErrors((current) => ({ ...current, [keyToClear]: undefined }));
   }
 
-  async function markUsed(location: Location) {
+  const markUsed = useCallback(async (location: Pick<Location, "id">) => {
     try {
       await request(`/api/locations/${location.id}`, { method: "POST", body: JSON.stringify({ action: "use" }) });
       setActivity((current) => [
@@ -313,7 +469,7 @@ export function LocationsDirectory() {
     } catch {
       // Keep the map link available if activity tracking is temporarily unavailable.
     }
-  }
+  }, [request, activityById]);
 
   async function toggleFavourite(location: Location) {
     if (pendingActivity.has(location.id)) return;
@@ -398,40 +554,57 @@ export function LocationsDirectory() {
     if (mapPreviewUrl) window.open(mapPreviewUrl, "_blank", "noopener,noreferrer");
   }
 
-  const resultCount = new Intl.NumberFormat(language === "th" ? "th-TH" : "en").format(visibleLocations.length);
+  function openDetails(location: Location, trigger: HTMLElement) {
+    detailReturnFocusRef.current = trigger;
+    setDetailLocation(location);
+  }
+
+  const numberFormat = new Intl.NumberFormat(language === "th" ? "th-TH" : "en");
+  const resultCount = numberFormat.format(visibleLocations.length);
   const title = editing === "new" ? copy.addTitle : copy.editTitle;
 
   return <main className="mx-auto w-full max-w-7xl pb-8 text-slate-800">
-    <header className="mb-5 flex items-center gap-3 sm:mb-6 sm:gap-4">
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm sm:h-14 sm:w-14">
-        <EESLogo alt="Expert Express Sender" size={52} className="h-11 w-11 object-contain sm:h-[52px] sm:w-[52px]" priority />
+    <header className="mb-4 flex items-center gap-2.5 sm:mb-6 sm:gap-4">
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white shadow-sm sm:h-14 sm:w-14 sm:rounded-2xl">
+        <EESLogo alt="Expert Express Sender" size={52} className="h-10 w-10 object-contain sm:h-[52px] sm:w-[52px]" priority />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-bold uppercase tracking-[.16em] text-brand-700">EES Fuel Bank</p>
-        <h1 className="text-xl font-bold tracking-tight text-slate-950 sm:text-2xl">{copy.title}</h1>
+        <p className="text-[10px] font-bold uppercase tracking-[.14em] text-brand-700 sm:text-[11px]">EES Fuel Bank</p>
+        <h1 className="text-lg font-bold leading-tight tracking-tight text-slate-950 sm:text-2xl">{copy.title}</h1>
         <p className="mt-0.5 hidden text-sm text-slate-500 sm:block">{copy.subtitle}</p>
       </div>
-      {canEdit && <button type="button" onClick={(event) => openEditor("new", event.currentTarget)} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl bg-brand-700 px-3.5 text-sm font-bold text-white shadow-sm transition hover:bg-brand-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 sm:px-4">
-        <Plus className="h-4 w-4" aria-hidden="true" /><span>{copy.addLocation}</span>
+      {canEdit && <button type="button" onClick={(event) => openEditor("new", event.currentTarget)} className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl bg-brand-700 px-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-brand-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 sm:gap-2 sm:px-4 sm:text-sm">
+        <Plus className="h-4 w-4" aria-hidden="true" /><span className="sm:hidden">{copy.addLocationShort}</span><span className="hidden sm:inline">{copy.addLocation}</span>
       </button>}
     </header>
 
-    <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4" role="search" aria-label={copy.searchLabel}>
-      <label className="flex min-h-12 items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3.5 transition focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-100 sm:px-4">
+    <section className="rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm sm:p-4" role="search" aria-label={copy.searchLabel}>
+      <label className="flex min-h-12 items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3 transition focus-within:border-brand-500 focus-within:ring-2 focus-within:ring-brand-100 sm:gap-3 sm:px-4">
         <Search className="h-5 w-5 shrink-0 text-slate-400" aria-hidden="true" />
-        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={copy.searchPlaceholder} className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-slate-400" aria-label={copy.searchLabel} />
-        {query && <button type="button" onClick={() => setQuery("")} aria-label={copy.clearSearch} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"><X className="h-4 w-4" aria-hidden="true" /></button>}
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={copy.searchPlaceholder} className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-sm placeholder:text-slate-400 sm:placeholder:text-base" aria-label={copy.searchLabel} />
+        {query && <button type="button" onClick={() => setQuery("")} aria-label={copy.clearSearch} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"><X className="h-4 w-4" aria-hidden="true" /></button>}
       </label>
-      <div className="mt-3 flex gap-2 overflow-x-auto pb-0.5" role="group" aria-label={copy.filtersLabel}>
-        {filters.map((item) => <button key={item.id} type="button" onClick={() => setFilter(item.id)} aria-pressed={filter === item.id} className={`min-h-10 shrink-0 rounded-xl px-4 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${filter === item.id ? "bg-brand-700 text-white shadow-sm" : "border border-slate-200 bg-white text-slate-600 hover:border-brand-200 hover:bg-brand-50 hover:text-brand-800"}`}>
+      <div className="mt-2.5 grid grid-cols-3 gap-1.5 pb-0.5 sm:gap-2" role="group" aria-label={copy.filtersLabel}>
+        {filters.map((item) => <button key={item.id} type="button" onClick={() => setFilter(item.id)} aria-pressed={filter === item.id} className={`min-h-11 w-full min-w-0 rounded-xl px-1.5 text-center text-xs font-semibold leading-4 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 sm:px-4 sm:text-sm ${filter === item.id ? "bg-brand-700 text-white shadow-sm" : "border border-slate-200 bg-white text-slate-600 hover:border-brand-200 hover:bg-brand-50 hover:text-brand-800"}`}>
           {item.label}
         </button>)}
       </div>
+      {canViewInternal && <div className="mt-2.5 flex justify-end" role="group" aria-label={copy.viewsLabel}>
+        <div className="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+          <button type="button" aria-pressed={view === "directory"} onClick={() => setView("directory")} className={`inline-flex min-h-11 items-center gap-2 rounded-lg px-3.5 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 ${view === "directory" ? "bg-white text-brand-800 shadow-sm" : "text-slate-600 hover:text-brand-800"}`}>
+            <List className="h-4 w-4" aria-hidden="true" />{copy.directoryView}
+          </button>
+          <button type="button" aria-pressed={view === "map"} onClick={() => setView("map")} className={`inline-flex min-h-11 items-center gap-2 rounded-lg px-3.5 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 ${view === "map" ? "bg-white text-brand-800 shadow-sm" : "text-slate-600 hover:text-brand-800"}`}>
+            <MapIcon className="h-4 w-4" aria-hidden="true" />{copy.mapView}
+          </button>
+        </div>
+      </div>}
     </section>
 
-    {locations.some((location) => location.verification_status === "needs_check") && <p className="mt-3 flex items-start gap-2 rounded-xl bg-brand-50 px-3.5 py-2.5 text-sm leading-5 text-brand-900" role="note">
-      <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand-700" aria-hidden="true" />{copy.checkPinBeforeDispatch}
-    </p>}
+    <section className="mt-3 flex min-h-14 items-center gap-3 rounded-2xl border border-brand-100 bg-brand-50/70 px-4 py-2.5 sm:min-h-16 sm:px-5" aria-label={copy.locationSummary} aria-live="polite">
+      <p className="text-2xl font-extrabold leading-none tabular-nums text-brand-900 sm:text-3xl">{loading ? "—" : numberFormat.format(locations.length)}</p>
+      <p className="text-sm font-semibold text-brand-900 sm:text-base">{copy.allLocations}</p>
+    </section>
 
     {pageError && <div role="alert" className="mt-4 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-sm text-rose-900">
       <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /><p className="min-w-0 flex-1">{apiErrorMessage(pageError, copy)}</p>
@@ -440,72 +613,118 @@ export function LocationsDirectory() {
     </div>}
     {success && <p role="status" aria-live="polite" className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-sm font-medium text-emerald-800">{copy[success]}</p>}
 
-    <div className="mb-3 mt-4 flex min-h-9 items-center justify-between gap-3 text-sm text-slate-500">
+    <div className="mb-2 mt-3 flex min-h-9 items-center justify-between gap-3 text-sm text-slate-500">
       <span aria-live="polite">{loading ? copy.loading : `${resultCount} ${visibleLocations.length === 1 ? copy.oneLocation : copy.manyLocations}`}</span>
-      {!loading && <button type="button" onClick={() => void load()} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 font-semibold text-brand-700 hover:bg-brand-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600">
+      {!loading && <button type="button" onClick={() => void load()} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 font-semibold text-brand-700 hover:bg-brand-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600">
         <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />{copy.refresh}
       </button>}
     </div>
 
-    {loading ? <div className="grid gap-3 lg:grid-cols-2" aria-label={copy.loading} aria-busy="true">
+    {loading ? <div className="grid gap-3 lg:grid-cols-2 lg:items-start" aria-label={copy.loading} aria-busy="true">
       {[1, 2, 3, 4].map((item) => <div key={item} className="h-56 animate-pulse rounded-2xl border border-slate-200 bg-white p-5"><div className="h-5 w-2/3 rounded bg-slate-100" /><div className="mt-4 h-4 w-full rounded bg-slate-100" /><div className="mt-2 h-4 w-4/5 rounded bg-slate-100" /><div className="mt-8 h-11 rounded-xl bg-slate-100" /></div>)}
-    </div> : visibleLocations.length > 0 ? <div className="grid gap-3 lg:grid-cols-2 lg:gap-4">
+    </div> : view === "map" && canViewInternal ? <div className="space-y-4">
+      {mapRequestFailed && <div role="alert" className="flex items-center gap-3 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-sm text-rose-900"><Info className="h-4 w-4 shrink-0" aria-hidden="true" /><p className="min-w-0 flex-1">{copy.mapLoadError}</p><button type="button" onClick={() => void loadMapPins()} className="shrink-0 font-bold underline underline-offset-2">{copy.retry}</button></div>}
+      <LocationsMap
+        locations={locations}
+        visibleLocations={visibleLocations}
+        pins={mapPins}
+        storageReady={mapStorageReady}
+        storageLoading={mapStorageLoading}
+        canEdit={canEdit}
+        canManualEdit={canViewInternal}
+        language={language}
+        copy={copy}
+        selectedLocationId={mapEditorLocationId}
+        onSelectedLocationChange={setMapEditorLocationId}
+        pinType={mapEditorPinType}
+        onPinTypeChange={setMapEditorPinType}
+        onMarkUsed={markUsed}
+        onSavePin={saveMapPin}
+      />
+      <section aria-labelledby="locations-map-title" className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-wrap items-end justify-between gap-2 border-b border-slate-100 px-4 py-4 sm:px-5">
+          <div>
+            <h2 id="locations-map-title" className="font-bold text-slate-900">{copy.unresolvedLocations}</h2>
+            <p className="mt-0.5 text-sm text-slate-500">{copy.mapFollowsFilters}</p>
+          </div>
+          <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-900">{visibleLocations.filter((location) => unpinnedLocationIds.has(location.id)).length} {copy.locationsWithoutCoordinates}</span>
+        </div>
+        {visibleLocations.some((location) => unpinnedLocationIds.has(location.id)) ? <ul className="divide-y divide-slate-100">
+          {visibleLocations.filter((location) => unpinnedLocationIds.has(location.id)).map((location) => {
+            const item = activityById.get(location.id);
+            const mapUrl = getLocationMapUrl(location);
+            const truckUrl = safeGoogleMapsUrl(location.truck_entrance_url);
+            const displayName = getLocationDisplayName(location, language);
+            const restriction = location.dispatch_restriction ?? getDispatchRestriction(location);
+            return <li key={location.id} className="flex min-w-0 flex-col gap-3 p-3 sm:flex-row sm:items-center sm:p-4">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="break-words font-bold text-slate-950">{displayName}</p>
+                  {location.destination_type.trim().toLocaleLowerCase() !== "other" && <span className="rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-800">{categoryTerms(location.destination_type, copy)[1] ?? location.destination_type}</span>}
+                </div>
+                <p className="mt-1 break-words text-sm leading-5 text-slate-600">{location.address}</p>
+                {restriction && <p role="note" className="mt-2 flex items-start gap-1.5 text-sm font-semibold text-rose-800"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" /><span>{restriction}</span></p>}
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+                <button type="button" onClick={() => void toggleFavourite(location)} disabled={pendingActivity.has(location.id)} aria-pressed={item?.is_favourite === true} aria-label={item?.is_favourite ? copy.removeFavourite : copy.addFavourite} className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-60"><Heart className={`h-5 w-5 ${item?.is_favourite ? "fill-rose-500 text-rose-500" : ""}`} aria-hidden="true" /></button>
+                {mapUrl && <a href={mapUrl} target="_blank" rel="noopener noreferrer" onClick={() => void markUsed(location)} aria-label={`${copy.map}: ${displayName}`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-700 px-3 text-sm font-bold text-white hover:bg-brand-800"><MapPin className="h-4 w-4" aria-hidden="true" />{copy.map}<ArrowUpRight className="h-4 w-4" aria-hidden="true" /></a>}
+                {truckUrl && <a href={truckUrl} target="_blank" rel="noopener noreferrer" onClick={() => void markUsed(location)} aria-label={`${copy.truckEntrance}: ${displayName}`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 text-sm font-semibold text-brand-800 hover:bg-brand-100"><MapPin className="h-4 w-4" aria-hidden="true" />{copy.truckEntrance}<ArrowUpRight className="h-4 w-4" aria-hidden="true" /></a>}
+                {canViewInternal && <button type="button" onClick={(event) => openDetails(location, event.currentTarget)} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"><Info className="h-4 w-4" aria-hidden="true" />{copy.details}</button>}
+                {canEdit && <button type="button" onClick={() => openSmartPin(location)} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 text-sm font-bold text-brand-800 hover:bg-brand-100"><MapPin className="h-4 w-4" aria-hidden="true" />{copy.findOnMap}</button>}
+                {canViewInternal && <button type="button" onClick={() => openPinEditor(location.id)} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">{copy.manualCorrection}</button>}
+              </div>
+            </li>;
+          })}
+        </ul> : <p className="px-4 py-8 text-center text-sm text-slate-500">{copy.allVisibleLocationsPinned}</p>}
+      </section>
+    </div> : visibleLocations.length > 0 ? <div className="grid gap-2.5 lg:grid-cols-2 lg:items-start lg:gap-4">
       {visibleLocations.map((location) => {
         const item = activityById.get(location.id);
         const mapUrl = getLocationMapUrl(location);
         const truckUrl = safeGoogleMapsUrl(location.truck_entrance_url);
-        const restriction = getDispatchRestriction(location);
+        const restriction = location.dispatch_restriction ?? getDispatchRestriction(location);
         const displayName = getLocationDisplayName(location, language);
         const secondaryName = language === "th" && displayName !== location.company_name ? location.company_name : location.thai_name && language === "en" ? location.thai_name : "";
-        const category = categoryTerms(location.destination_type, copy)[1] ?? location.destination_type;
+        const category = location.destination_type.trim().toLocaleLowerCase() !== "other"
+          ? categoryTerms(location.destination_type, copy)[1] ?? location.destination_type
+          : null;
 
-        return <article key={location.id} className="flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_2px_10px_rgba(35,25,55,.035)] transition hover:border-brand-200 hover:shadow-[0_6px_18px_rgba(35,25,55,.07)] sm:p-5">
-          <div className="flex items-start gap-3">
+        return <article key={location.id} aria-label={displayName} className="flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-3.5 shadow-[0_2px_10px_rgba(35,25,55,.035)] transition hover:border-brand-200 hover:shadow-[0_6px_18px_rgba(35,25,55,.07)] sm:p-5">
+          <div className="flex items-start gap-2.5 sm:gap-3">
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="break-words text-lg font-bold leading-snug text-slate-950">{displayName}</h2>
-                <span className="rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-800">{category}</span>
+              <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
+                <h2 className="min-w-0 flex-1 basis-40 break-words text-base font-bold leading-snug text-slate-950 sm:text-lg">{displayName}</h2>
+                {category && <span className="rounded-lg bg-brand-50 px-2 py-1 text-[11px] font-semibold leading-4 text-brand-800">{category}</span>}
               </div>
-              {secondaryName && <p className="mt-1 break-words text-sm text-slate-500">{secondaryName}</p>}
+              {secondaryName && <p className="mt-0.5 break-words text-xs text-slate-500 sm:text-sm">{secondaryName}</p>}
             </div>
             <button type="button" onClick={() => void toggleFavourite(location)} disabled={pendingActivity.has(location.id)} aria-pressed={item?.is_favourite === true} aria-label={item?.is_favourite ? copy.removeFavourite : copy.addFavourite} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 disabled:opacity-60">
               <Heart className={`h-5 w-5 ${item?.is_favourite ? "fill-rose-500 text-rose-500" : ""}`} aria-hidden="true" />
             </button>
           </div>
 
-          <p className="mt-3 whitespace-pre-line break-words text-sm leading-6 text-slate-700">{location.address}</p>
-          {location.province && <p className="mt-1 text-sm text-slate-500">{location.province}</p>}
+          <p className="mt-2 whitespace-pre-line break-words text-sm leading-5 text-slate-700 sm:mt-3 sm:leading-6">{location.address}</p>
+          {location.province && <p className="mt-0.5 text-xs font-medium text-slate-500 sm:text-sm">{location.province}</p>}
 
-          {restriction && <div role="note" className="mt-3 flex items-start gap-2 rounded-xl border border-rose-300 bg-rose-50 px-3 py-2.5 text-sm leading-5 text-rose-950">
+          {restriction && <div role="note" className="mt-2 flex items-start gap-1.5 rounded-lg border-l-[3px] border-rose-600 bg-rose-50 px-2.5 py-2 text-xs leading-5 text-rose-950 sm:text-sm">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-700" aria-hidden="true" />
             <p className="break-words"><strong>{copy.dispatchRestriction}:</strong> {restriction}</p>
           </div>}
 
-          <div className="mt-auto grid gap-2 pt-4 sm:grid-cols-2">
-            {mapUrl ? <a href={mapUrl} target="_blank" rel="noopener noreferrer" onClick={() => void markUsed(location)} aria-label={`${copy.map}: ${displayName}`} className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-brand-700 px-3 text-sm font-bold text-white transition hover:bg-brand-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600">
-              <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" /><span>{copy.map}</span><ArrowUpRight className="h-4 w-4 shrink-0" aria-hidden="true" />
-            </a> : <button type="button" disabled className="min-h-12 rounded-xl bg-slate-100 text-sm font-semibold text-slate-400">{copy.map}</button>}
-            {truckUrl && <a href={truckUrl} target="_blank" rel="noopener noreferrer" onClick={() => void markUsed(location)} aria-label={`${copy.truckEntrance}: ${displayName}`} className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 text-sm font-semibold text-brand-800 transition hover:bg-brand-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600">
-              <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" /><span>{copy.truckEntrance}</span><ArrowUpRight className="h-4 w-4 shrink-0" aria-hidden="true" />
-            </a>}
-          </div>
+          {mapUrl ? <a href={mapUrl} target="_blank" rel="noopener noreferrer" onClick={() => void markUsed(location)} aria-label={`${copy.map}: ${displayName}`} className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand-800 px-3 text-sm font-bold text-white shadow-sm transition hover:bg-brand-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 sm:min-h-12 sm:text-base">
+            <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" /><span>{copy.map}</span><ArrowUpRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+          </a> : <button type="button" disabled className="mt-3 min-h-12 w-full rounded-xl bg-slate-100 text-sm font-semibold text-slate-400">{copy.map}</button>}
 
-          <details className="group mt-3 border-t border-slate-100 pt-2.5">
-            <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-1 text-sm font-semibold text-brand-800 hover:bg-brand-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 [&::-webkit-details-marker]:hidden">
-              <span>{copy.details}</span><ChevronDown className="h-4 w-4 shrink-0 transition group-open:rotate-180" aria-hidden="true" />
+          {(truckUrl || canViewInternal || canEdit) && <details className="group mt-1.5 border-t border-slate-100 pt-1.5">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-lg px-2 text-xs font-semibold text-slate-500 transition hover:bg-slate-50 hover:text-brand-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 [&::-webkit-details-marker]:hidden">
+              <span>{copy.moreOptions}</span><ChevronDown className="h-4 w-4 shrink-0 transition group-open:rotate-180" aria-hidden="true" />
             </summary>
-            <div className="grid gap-2.5 px-1 pb-1 pt-2 text-sm">
-              <div><p className="font-semibold text-slate-700">{copy.verificationStatus}</p><p className="mt-0.5 text-slate-600">{location.verification_status === "verified" ? copy.verified : copy.needsCheck}{location.verification_status === "verified" && location.verified_at ? ` · ${copy.verifiedOn} ${new Date(location.verified_at).toLocaleDateString(language === "th" ? "th-TH" : "en-GB", { dateStyle: "medium" })}` : ""}</p></div>
-              {location.verification_status !== "verified" && <p className="text-xs leading-5 text-slate-500">{copy.mapPinNotConfirmed}</p>}
-              <div><p className="font-semibold text-slate-700">{copy.alternativeNames}</p><p className="mt-0.5 break-words text-slate-600">{location.alternative_names.length ? location.alternative_names.join(", ") : copy.noAlternativeNames}</p></div>
-              <div><p className="font-semibold text-slate-700">{copy.internalNotes}</p><p className="mt-0.5 whitespace-pre-line break-words text-slate-600">{location.notes || copy.notProvided}</p></div>
-              <div><p className="font-semibold text-slate-700">{copy.sourceInformation}</p><p className="mt-0.5 whitespace-pre-line break-words text-slate-600">{location.source_info || copy.notProvided}</p></div>
+            <div className="flex flex-wrap gap-1 border-t border-slate-100 pt-1">
+              {truckUrl && <a href={truckUrl} target="_blank" rel="noopener noreferrer" onClick={() => void markUsed(location)} aria-label={`${copy.truckEntrance}: ${displayName}`} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-brand-800 transition hover:bg-brand-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"><MapPin className="h-4 w-4" aria-hidden="true" />{copy.truckEntrance}<ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" /></a>}
+              {canViewInternal && <button type="button" onClick={(event) => openDetails(location, event.currentTarget)} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-brand-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"><Info className="h-4 w-4" aria-hidden="true" />{copy.details}</button>}
+              {canEdit && <button type="button" onClick={(event) => openEditor(location, event.currentTarget)} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-brand-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"><Pencil className="h-4 w-4" aria-hidden="true" />{t.common.edit}</button>}
             </div>
-          </details>
-
-          {canEdit && <button type="button" onClick={(event) => openEditor(location, event.currentTarget)} className="mt-2 inline-flex min-h-10 w-fit items-center gap-2 rounded-lg px-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-brand-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600">
-            <Pencil className="h-4 w-4" aria-hidden="true" />{t.common.edit}
-          </button>}
+          </details>}
         </article>;
       })}
     </div> : <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-5 py-12 text-center sm:py-14">
@@ -513,6 +732,46 @@ export function LocationsDirectory() {
       <h2 className="mt-4 text-lg font-bold text-slate-950">{locations.length ? copy.noMatchesTitle : copy.emptyTitle}</h2>
       <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-slate-500">{locations.length ? copy.noMatchesDescription : copy.emptyDescription}</p>
       {canEdit && locations.length === 0 && <button type="button" onClick={(event) => openEditor("new", event.currentTarget)} className="mt-5 inline-flex min-h-12 items-center gap-2 rounded-xl bg-brand-700 px-5 font-semibold text-white transition hover:bg-brand-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"><Plus className="h-5 w-5" aria-hidden="true" />{copy.addFirstLocation}</button>}
+    </div>}
+
+    {detailLocation !== false && <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-5" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) dismissDetails(); }}>
+      <section ref={detailDialogRef} role="dialog" aria-modal="true" aria-labelledby="location-details-title" className="my-auto flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
+        <header className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-6 sm:py-5">
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-[.14em] text-brand-700">EES Fuel Bank</p>
+            <h2 id="location-details-title" data-detail-title tabIndex={-1} className="mt-0.5 break-words text-xl font-bold text-slate-950 outline-none">{getLocationDisplayName(detailLocation, language)}</h2>
+          </div>
+          <button type="button" onClick={dismissDetails} aria-label={copy.closeDetails} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"><X className="h-5 w-5" aria-hidden="true" /></button>
+        </header>
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-5 sm:px-6">
+          <section>
+            <h3 className="text-sm font-bold text-slate-700">{copy.verificationStatus}</h3>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <span className={`inline-flex min-h-8 items-center rounded-full px-3 text-xs font-bold ${detailLocation.verification_status === "verified" ? "bg-emerald-50 text-emerald-800" : "bg-amber-100 text-amber-950"}`}>{detailLocation.verification_status === "verified" ? copy.verified : copy.needsCheck}</span>
+            </div>
+            {detailLocation.verification_status === "verified" && detailLocation.verified_at && <p className="mt-1 text-xs text-slate-500">{copy.verifiedOn} {new Date(detailLocation.verified_at).toLocaleDateString(language === "th" ? "th-TH" : "en-GB", { dateStyle: "medium" })}</p>}
+          </section>
+          <details className="group rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-sm font-bold text-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 [&::-webkit-details-marker]:hidden">
+              <span>{copy.advancedDetails}</span><ChevronDown className="h-4 w-4 shrink-0 transition group-open:rotate-180" aria-hidden="true" />
+            </summary>
+            <div className="mt-3 space-y-3 border-t border-slate-200 pt-3">
+              <section>
+                <h3 className="text-xs font-bold text-slate-600">{copy.alternativeNames}</h3>
+                <p className="mt-1 break-words text-sm text-slate-700">{detailLocation.alternative_names.length ? detailLocation.alternative_names.join(", ") : copy.noAlternativeNames}</p>
+              </section>
+              <section>
+                <h3 className="text-xs font-bold text-slate-600">{copy.internalNotes}</h3>
+                <p className="mt-1 whitespace-pre-line break-words text-sm leading-5 text-slate-700">{detailLocation.notes || copy.notProvided}</p>
+              </section>
+              <section>
+                <h3 className="text-xs font-bold text-slate-600">{copy.sourceInformation}</h3>
+                <p className="mt-1 whitespace-pre-line break-words text-sm leading-5 text-slate-700">{detailLocation.source_info || copy.notProvided}</p>
+              </section>
+            </div>
+          </details>
+        </div>
+      </section>
     </div>}
 
     {editing !== false && <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-slate-950/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-5" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) dismissEditor(); }}>
@@ -584,15 +843,17 @@ export function LocationsDirectory() {
                     <span id="location-help-alternatives" className="text-xs font-normal text-slate-500">{copy.alternativeNamesHelp}</span>
                   </label>
 
-                  <label htmlFor="location-field-notes" className="grid min-w-0 gap-1.5 text-sm font-semibold text-slate-700 sm:col-span-2">
-                    <span>{copy.internalNotes}<span className="ml-1 text-xs font-normal text-slate-500">· {copy.optional}</span></span>
-                    <textarea id="location-field-notes" value={form.notes} onChange={(event) => setFormValue("notes", event.target.value)} rows={3} className={textareaClass} />
-                  </label>
+                  {canViewInternal && <>
+                    <label htmlFor="location-field-notes" className="grid min-w-0 gap-1.5 text-sm font-semibold text-slate-700 sm:col-span-2">
+                      <span>{copy.internalNotes}<span className="ml-1 text-xs font-normal text-slate-500">· {copy.optional}</span></span>
+                      <textarea id="location-field-notes" value={form.notes} onChange={(event) => setFormValue("notes", event.target.value)} rows={3} className={textareaClass} />
+                    </label>
 
-                  <label htmlFor="location-field-source" className="grid min-w-0 gap-1.5 text-sm font-semibold text-slate-700 sm:col-span-2">
-                    <span>{copy.sourceReference}<span className="ml-1 text-xs font-normal text-slate-500">· {copy.optional}</span></span>
-                    <textarea id="location-field-source" value={form.source_info} onChange={(event) => setFormValue("source_info", event.target.value)} rows={2} className={textareaClass} />
-                  </label>
+                    <label htmlFor="location-field-source" className="grid min-w-0 gap-1.5 text-sm font-semibold text-slate-700 sm:col-span-2">
+                      <span>{copy.sourceReference}<span className="ml-1 text-xs font-normal text-slate-500">· {copy.optional}</span></span>
+                      <textarea id="location-field-source" value={form.source_info} onChange={(event) => setFormValue("source_info", event.target.value)} rows={2} className={textareaClass} />
+                    </label>
+                  </>}
 
                   <label htmlFor="location-field-verification" className="grid min-w-0 gap-1.5 text-sm font-semibold text-slate-700">
                     <span>{copy.verificationStatus}</span>
@@ -625,5 +886,13 @@ export function LocationsDirectory() {
         </form>
       </section>
     </div>}
+    {smartPinLocation && <LocationSmartPinDialog
+      location={smartPinLocation}
+      language={language}
+      copy={copy}
+      onLookup={lookupGeoapify}
+      onSave={saveSmartPin}
+      onClose={closeSmartPin}
+    />}
   </main>;
 }

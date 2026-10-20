@@ -123,7 +123,7 @@ export type DriverWeeklyComparisonRow = {
   history: WeeklyMileageEntry[];
 };
 
-export type OilChangeStatus = "ok" | "due_soon" | "urgent" | "overdue" | "not_set" | "no_odometer" | "review_required";
+export type OilChangeStatus = "not_applicable" | "condition_based" | "ok" | "due_soon" | "urgent" | "overdue" | "not_set" | "no_odometer" | "review_required";
 
 export type OilChangeAlertRow = {
   vehicleId: string | null;
@@ -152,8 +152,13 @@ export type OilChangeAlertRow = {
   sortRank: number;
 };
 
-const OIL_CHANGE_DUE_SOON_THRESHOLD_KM = 3000;
-const OIL_CHANGE_URGENT_THRESHOLD_KM = 1000;
+export const OIL_CHANGE_DUE_SOON_THRESHOLD_KM = 3000;
+export const OIL_CHANGE_URGENT_THRESHOLD_KM = 1000;
+
+export function oilMileageStatus(remaining: number): OilChangeStatus {
+  return remaining < 0 ? 'overdue' : remaining <= OIL_CHANGE_URGENT_THRESHOLD_KM ? 'urgent'
+    : remaining <= OIL_CHANGE_DUE_SOON_THRESHOLD_KM ? 'due_soon' : 'ok';
+}
 
 function toRoundedNumber(value: number, digits = 2) {
   if (!Number.isFinite(value)) {
@@ -227,8 +232,9 @@ function compareWeeklyMileageEntries(left: WeeklyMileageEntry, right: WeeklyMile
 }
 
 function getNormalizedOdometer(entry: WeeklyMileageEntry) {
-  const value = Number(entry.odometer_reading ?? entry.mileage);
-  return Number.isFinite(value) ? value : null;
+  const raw = entry.odometer_reading ?? entry.mileage;
+  const value = Number(raw);
+  return raw != null && Number.isFinite(value) && value >= 0 ? value : null;
 }
 
 function parseDateValue(value: string | null | undefined) {
@@ -280,7 +286,7 @@ function getLatestWeeklyMileageByVehicle(entries: WeeklyMileageEntry[]) {
     const vehicleKey = getVehicleKey(entry.vehicle_reg);
     const odometer = getNormalizedOdometer(entry);
 
-    if (!vehicleKey || !entry.week_ending || odometer == null) {
+    if (!vehicleKey || !entry.week_ending || !Number.isFinite(Date.parse(entry.week_ending)) || odometer == null) {
       continue;
     }
 
@@ -380,14 +386,8 @@ function buildOilChangeRow({
         ? "review_required"
         : currentOdometer == null
         ? "no_odometer"
-        : kmRemaining! < 0
-          ? "overdue"
-          : kmRemaining! <= OIL_CHANGE_URGENT_THRESHOLD_KM
-            ? "urgent"
-            : kmRemaining! <= OIL_CHANGE_DUE_SOON_THRESHOLD_KM
-              ? "due_soon"
-              : "ok";
-  const sortRank: Record<OilChangeStatus, number> = {
+        : oilMileageStatus(kmRemaining!);
+  const sortRank: Record<OilChangeStatus, number> = {not_applicable:7,condition_based:6,
     overdue: 0,
     urgent: 1,
     due_soon: 2,

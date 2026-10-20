@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Activity,
   ArrowRight,
   BarChart3,
   Boxes,
@@ -27,11 +26,9 @@ import { EESLogo } from "@/components/ees-logo";
 import {
   fetchBookingDiaryEntries,
   fetchFuelLogs,
-  fetchTripJourneys,
   fetchVehicles
 } from "@/lib/data";
 import { useLanguage } from "@/lib/language-provider";
-import { buildMaintenanceReminders, maintenanceToday } from "@/lib/maintenance";
 import { fetchMaintenanceData } from "@/lib/maintenance-data";
 import type { MaintenanceData } from "@/lib/maintenance-types";
 import { useAccountAccess } from "@/lib/use-account-access";
@@ -39,7 +36,6 @@ import { formatCurrency, formatDate, formatNumber } from "@/lib/utils";
 import type {
   BookingDiaryEntry,
   FuelLogWithDriver,
-  TripJourneyWithFuel,
   Vehicle
 } from "@/types/database";
 
@@ -60,12 +56,6 @@ type ActivityItem = {
   reference: string;
   title: string;
   tone: "purple" | "slate";
-};
-
-type ReviewBreakdown = {
-  fuel: number;
-  maintenance: number;
-  trips: number;
 };
 
 const pad = (value: number) => String(value).padStart(2, "0");
@@ -170,58 +160,6 @@ function SummaryCard({ icon: Icon, label, value, detail }: { icon: LucideIcon; l
   );
 }
 
-function ReviewSummaryCard({
-  label,
-  value,
-  detail,
-  breakdown,
-  language
-}: {
-  label: string;
-  value: string;
-  detail: string;
-  breakdown: ReviewBreakdown;
-  language: "en" | "th";
-}) {
-  const labels = language === "th"
-    ? { fuel: "เชื้อเพลิง", trips: "เที่ยววิ่ง", maintenance: "ซ่อมบำรุง", open: "ดูรายละเอียด" }
-    : { fuel: "Fuel", trips: "Trip journeys", maintenance: "Maintenance", open: "View breakdown" };
-
-  return (
-    <details className="office-summary group h-full rounded-2xl border border-slate-300/80 bg-white p-4 shadow-[0_9px_24px_rgba(15,23,42,0.065)]">
-      <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.1em] text-slate-500">{label}</p>
-            <p className="mt-1.5 text-2xl font-black tracking-tight text-slate-950 sm:text-[1.7rem]"><HomeSummaryValue value={value} /></p>
-          </div>
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-700">
-            <Activity className="h-5 w-5" />
-          </span>
-        </div>
-        <p className="mt-1.5 text-xs leading-5 text-slate-500">{detail}</p>
-        <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-violet-700">
-          {labels.open}<ArrowRight className="h-3 w-3 transition group-open:rotate-90" />
-        </span>
-      </summary>
-      <div className="mt-3 grid grid-cols-3 gap-2 border-t border-slate-100 pt-3">
-        <ReviewMini label={labels.fuel} value={breakdown.fuel} href="/fuel-logs" />
-        <ReviewMini label={labels.trips} value={breakdown.trips} href="/trip-journey" />
-        <ReviewMini label={labels.maintenance} value={breakdown.maintenance} href="/maintenance" />
-      </div>
-    </details>
-  );
-}
-
-function ReviewMini({ label, value, href }: { label: string; value: number; href: string }) {
-  return (
-    <Link href={href} className="rounded-xl bg-violet-50/70 px-2 py-2 text-center transition hover:bg-violet-100">
-      <span className="block text-base font-black text-slate-950">{value}</span>
-      <span className="block truncate text-[10px] font-semibold text-slate-500">{label}</span>
-    </Link>
-  );
-}
-
 function TodayMetric({ href, label, value, icon: Icon }: { href: string; label: string; value: string; icon: LucideIcon }) {
   return (
     <Link href={href} className="group flex min-h-[70px] items-center gap-3 rounded-xl border border-slate-200 bg-white px-3.5 py-3 transition hover:border-violet-200 hover:bg-violet-50/40">
@@ -243,7 +181,6 @@ export default function DashboardPage() {
   const isAdmin = can("admin:user_management");
   const [bookings, setBookings] = useState<BookingDiaryEntry[]>([]);
   const [fuelLogs, setFuelLogs] = useState<FuelLogWithDriver[]>([]);
-  const [trips, setTrips] = useState<TripJourneyWithFuel[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [maintenance, setMaintenance] = useState<MaintenanceData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -252,16 +189,14 @@ export default function DashboardPage() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [bookingRows, fuelRows, tripRows, vehicleRows, maintenanceResult] = await Promise.all([
+      const [bookingRows, fuelRows, vehicleRows, maintenanceResult] = await Promise.all([
         fetchBookingDiaryEntries(),
         fetchFuelLogs(),
-        fetchTripJourneys(),
         fetchVehicles(),
         fetchMaintenanceData().catch(() => null)
       ]);
       setBookings(bookingRows);
       setFuelLogs(fuelRows);
-      setTrips(tripRows);
       setVehicles(vehicleRows);
       setMaintenance(maintenanceResult);
     } catch (caught) {
@@ -286,17 +221,20 @@ export default function DashboardPage() {
   const todayBookings = useMemo(() => bookings.filter((row) => row.booking_date === today), [bookings, today]);
   const assignedToday = useMemo(() => todayBookings.filter(hasAssignedDriver).length, [todayBookings]);
   const unassignedToday = Math.max(todayBookings.length - assignedToday, 0);
-  const tripBookingIds = useMemo(() => new Set(trips.flatMap((trip) => [trip.booking_diary_id, trip.booking_id]).filter(Boolean).map(String)), [trips]);
-  const missingTrips = monthlyBookings.filter((booking) => !tripBookingIds.has(String(booking.id))).length;
-  const uncheckedFuel = monthlyFuel.filter((row) => !row.receipt_checked).length;
-  const maintenanceReview = maintenance ? buildMaintenanceReminders(maintenance, maintenanceToday()).filter((row) => row.status !== "ok").length : 0;
-  const reviewCount = missingTrips + uncheckedFuel + maintenanceReview;
+  const upcomingBookings = useMemo(() => {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() + 1);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    return bookings.filter((booking) => inRange(booking.booking_date, dateKey(start), dateKey(end))).length;
+  }, [bookings]);
   const fuelSpend = monthlyFuel.reduce((sum, row) => sum + asNumber(row.total_cost), 0);
   const activeVehicles = vehicles.filter((vehicle) => vehicle.active !== false).length;
 
   const todayLabels = language === "th"
-    ? { title: "วันนี้", jobs: "งานวันนี้", assigned: "มอบหมายคนขับแล้ว", unassigned: "ยังไม่มอบหมาย", maintenance: "ซ่อมบำรุงที่ต้องดู" }
-    : { title: "Today", jobs: "Jobs today", assigned: "Drivers assigned", unassigned: "Unassigned", maintenance: "Maintenance due" };
+    ? { title: "วันนี้", jobs: "งานวันนี้", assigned: "มอบหมายคนขับแล้ว", unassigned: "ยังไม่มอบหมาย" }
+    : { title: "Today", jobs: "Jobs today", assigned: "Drivers assigned", unassigned: "Unassigned" };
 
   const recentActivity = useMemo<ActivityItem[]>(() => {
     const bookingActivity = bookings.map((booking) => ({
@@ -407,13 +345,7 @@ export default function DashboardPage() {
         <SummaryCard icon={CalendarDays} label={home.summary.bookings} value={loading ? "—" : formatNumber(monthlyBookings.length, language)} detail={home.summary.bookingsDetail} />
         <SummaryCard icon={Fuel} label={home.summary.fuelSpend} value={loading ? "—" : formatCurrency(fuelSpend, language)} detail={home.summary.fuelDetail} />
         <SummaryCard icon={Truck} label={home.summary.fleet} value={loading ? "—" : formatNumber(activeVehicles, language)} detail={home.summary.fleetDetail} />
-        <ReviewSummaryCard
-          label={home.summary.review}
-          value={loading ? "—" : formatNumber(reviewCount, language)}
-          detail={home.summary.reviewDetail}
-          breakdown={{ fuel: uncheckedFuel, trips: missingTrips, maintenance: maintenanceReview }}
-          language={language}
-        />
+        <SummaryCard icon={CalendarDays} label={language === "th" ? "งานที่กำลังจะมาถึง" : "Upcoming Bookings"} value={loading ? "—" : formatNumber(upcomingBookings, language)} detail={language === "th" ? "งานที่กำหนดไว้ใน 7 วันข้างหน้า (ไม่รวมวันนี้)" : "Scheduled jobs over the next 7 days, excluding today"} />
       </section>
 
       <section aria-labelledby="today-title" className="rounded-[1.35rem] border border-violet-100 bg-violet-50/35 p-3.5 shadow-sm">
@@ -421,11 +353,10 @@ export default function DashboardPage() {
           <span className="h-2 w-2 rounded-full bg-violet-600" />
           <h2 id="today-title" className="text-xs font-extrabold uppercase tracking-[0.14em] text-violet-800">{todayLabels.title}</h2>
         </div>
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <TodayMetric href="/booking-diary" label={todayLabels.jobs} value={loading ? "—" : formatNumber(todayBookings.length, language)} icon={CalendarDays} />
           <TodayMetric href="/dispatch" label={todayLabels.assigned} value={loading ? "—" : formatNumber(assignedToday, language)} icon={Users} />
           <TodayMetric href="/dispatch" label={todayLabels.unassigned} value={loading ? "—" : formatNumber(unassignedToday, language)} icon={ClipboardCheck} />
-          <TodayMetric href="/maintenance" label={todayLabels.maintenance} value={loading ? "—" : formatNumber(maintenanceReview, language)} icon={Wrench} />
         </div>
       </section>
 

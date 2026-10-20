@@ -36,6 +36,8 @@ if (!publicGoogleMapsApiKey) {
 }
 
 const nextConfig: NextConfig = {
+  // Local verification can cap concurrency on memory-constrained Windows hosts.
+  ...(process.env.FUEL_BANK_LOW_MEMORY === "1" ? {experimental:{cpus:1,webpackMemoryOptimizations:true}} : {}),
   // Keep local verification builds separate from a running development server.
   distDir: process.env.FUEL_BANK_ISOLATED_BUILD === "1" ? ".next-maintenance-qa" : ".next",
   reactStrictMode: true,

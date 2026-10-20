@@ -1,0 +1,111 @@
+ M app/(dashboard)/dashboard/page.tsx
+ M app/(dashboard)/dispatch/page.tsx
+ M app/(dashboard)/drivers/page.tsx
+ M app/(dashboard)/maintenance/page.tsx
+ M app/(dashboard)/weekly-mileage/page.tsx
+ M app/globals.css
+ M components/account-menu.tsx
+ M components/maintenance-record-card.tsx
+ M components/maintenance-record-collection.tsx
+ M components/maintenance-record-form.tsx
+ M components/pwa-register.tsx
+ M components/sidebar.tsx
+ M components/top-navigation.tsx
+ M lib/data.ts
+ M lib/maintenance-data.ts
+ M lib/maintenance-intelligence.ts
+ M lib/maintenance-types.ts
+ M lib/maintenance.ts
+ M lib/oil-change-service.ts
+ M lib/operations.ts
+ M lib/supabase.ts
+ M middleware.ts
+ M next.config.ts
+ M package-lock.json
+ M package.json
+ M public/sw.js
+ M tests/maintenance.test.cjs
+ M tests/supabase-authorized-fetch.test.cjs
+ M tsconfig.tsbuildinfo
+ M types/database.ts
+?? app/api/hr/
+?? app/drivers/
+?? app/employees/
+?? app/hr/
+?? components/hr/
+?? components/maintenance-centre.tsx
+?? components/maintenance-legacy-oil-history.tsx
+?? components/maintenance-schedule-settings.tsx
+?? components/maintenance-service-fields.tsx
+?? components/maintenance-vehicle-checks.tsx
+?? components/vehicle-maintenance-summary.tsx
+?? docs/maintenance-centre-preflight.sql
+?? docs/maintenance-centre-release-notes.md
+?? ees-changes.txt
+?? lib/ees-hr-compliance-server.ts
+?? lib/ees-hr-compliance.ts
+?? lib/ees-hr-meeting-report.ts
+?? lib/ees-hr-meetings.ts
+?? lib/ees-hr-save-verification.ts
+?? lib/ees-hr-session.ts
+?? lib/ees-hr-v7-client.ts
+?? lib/ees-hr-v7-copy.ts
+?? lib/ees-hr-v7-server.ts
+?? lib/ees-hr-v7-types.ts
+?? lib/ees-hr-v7-validation.ts
+?? lib/ees-hr-v7-vehicle-label.ts
+?? lib/ees-people-copy.ts
+?? lib/ees-vehicle-history.ts
+?? lib/maintenance-centre-copy.ts
+?? lib/maintenance-checks-data.ts
+?? lib/maintenance-office-copy.ts
+?? lib/maintenance-office.ts
+?? lib/maintenance-oil-data.ts
+?? lib/oil-service-delete-session.ts
+?? lib/oil-service-delete.ts
+?? lib/oil-service-mutations.ts
+?? lib/oil-service-snapshot.ts
+?? lib/preventative-maintenance.ts
+?? lib/request-deadline.ts
+?? output/ees-hr-v7/
+?? output/maintenance-centre-qa/
+?? output/oil-delete-rls/
+?? output/oil-service-repair/
+?? scripts/lint.cjs
+?? supabase/migrations/20261012100000_oil_service_delete_business_roles.sql
+?? supabase/migrations/20261013100000_ees_hr_v7_foundation.sql
+?? supabase/migrations/20261013110000_ees_hr_v7_workflows.sql
+?? supabase/migrations/20261013120000_ees_hr_v7_reads.sql
+?? supabase/migrations/20261013130000_ees_hr_v7_read_corrections.sql
+?? supabase/migrations/20261013140000_ees_hr_v7_workflow_guards.sql
+?? supabase/migrations/20261013150000_ees_hr_v7_people_centre.sql
+?? supabase/migrations/20261014100000_preventative_maintenance_centre.sql
+?? supabase/migrations/20261014110000_maintenance_vehicle_checks.sql
+?? tests/fixtures/hr-v7-base.sql
+?? tests/fixtures/hr-v7-http.cjs
+?? tests/fixtures/maintenance-centre-base.sql
+?? tests/fixtures/maintenance-centre-http.cjs
+?? tests/hr-v7-api.test.cjs
+?? tests/hr-v7-browser.cjs
+?? tests/hr-v7-build.cjs
+?? tests/hr-v7-client.test.cjs
+?? tests/hr-v7-database.test.cjs
+?? tests/hr-v7-people-layout.cjs
+?? tests/hr-v7-people.test.cjs
+?? tests/hr-v7-polish-browser.cjs
+?? tests/hr-v7-polish.test.cjs
+?? tests/hr-v7-service-worker.test.cjs
+?? tests/maintenance-centre-browser.cjs
+?? tests/maintenance-centre-database.test.cjs
+?? tests/maintenance-centre.test.cjs
+?? tests/oil-service-delete-rls.test.cjs
+?? tests/oil-service-repair.test.cjs
+?? tmp/hr-v7-db-smoke.cjs
+?? tmp/hr-v7-failure-summary.py
+?? tmp/hr-v7-finalize-files.cjs
+?? tmp/hr-v7-forward.py
+?? tmp/hr-v7-inspect.cjs
+?? tmp/hr-v7-last-failure.cjs
+?? tmp/hr-v7-name-fix.py
+?? tmp/hr-v7-render-pdf.py
+?? tmp/hr-v7-schema-audit.cjs

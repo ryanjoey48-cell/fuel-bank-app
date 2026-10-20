@@ -1,0 +1,16 @@
+Directory page 2 → driver profile beyond first page PASS
+Single save, duplicate-click prevention, DB read-back verification PASS
+Refresh and leave/reopen persistence PASS
+Stale verification denies false success and safe retry verifies existing commit PASS
+Lost network response preserves edits and retry verifies persisted value PASS
+Older delayed load cannot overwrite newer verified state PASS
+Absence create → approve → team view → complete with return date and database persistence PASS
+Incident create → resolve → team view and immutable original history PASS
+Directory summary cards, role filter and timestamped profile timeline render PASS
+Meeting create/read and bilingual PDF download PASS
+Browser meeting/follow-up completion workflow PASS
+Company-policy gating, private document upload and PDF.js secure preview PASS
+Training with ready certificate selection and persistence PASS
+Desktop/iPad/iPhone EN + iPhone TH layout and labels PASS
+People Centre absence desktop/iPad/iPhone Thai layout PASS
+No browser runtime errors PASS

@@ -1,0 +1,21 @@
+{
+  "typecheckChangedFilesExitCode": 0,
+  "lintExitCode": 0,
+  "fullSuite": {
+    "newFailures": 0,
+    "baselineFailed": 40,
+    "passed": 485,
+    "failed": 40,
+    "tests": 525
+  },
+  "productionMutations": 0,
+  "deployment": "Not performed",
+  "browser": "Actual component with local in-memory data: passed",
+  "targetedTests": {
+    "passed": 43,
+    "failed": 0
+  },
+  "sql": "Read-only diagnostics; no migration applied",
+  "typecheckFullExitCode": 0,
+  "productionBuildExitCode": 0
+}

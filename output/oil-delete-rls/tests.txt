@@ -1,0 +1,346 @@
+TAP version 13
+# Subtest: visible ownerless row blocked by DELETE RLS is classified after checking the same PK
+ok 1 - visible ownerless row blocked by DELETE RLS is classified after checking the same PK
+  ---
+  duration_ms: 19.212
+  type: 'test'
+  ...
+# Subtest: selected wrong registration, missing visibility and invalid identifiers never send DELETE
+ok 2 - selected wrong registration, missing visibility and invalid identifiers never send DELETE
+  ---
+  duration_ms: 5.2271
+  type: 'test'
+  ...
+# Subtest: grant denial and network failures have distinct classifications
+ok 3 - grant denial and network failures have distinct classifications
+  ---
+  duration_ms: 8.1861
+  type: 'test'
+  ...
+# Subtest: zero RETURNING with disappearance is not falsely reported as verified success
+ok 4 - zero RETURNING with disappearance is not falsely reported as verified success
+  ---
+  duration_ms: 0.6785
+  type: 'test'
+  ...
+# Subtest: verified success only targets selected incorrect record and never the correct 5 September UUID
+ok 5 - verified success only targets selected incorrect record and never the correct 5 September UUID
+  ---
+  duration_ms: 1.974
+  type: 'test'
+  ...
+# Subtest: unexpected returning UUID is never accepted
+ok 6 - unexpected returning UUID is never accepted
+  ---
+  duration_ms: 2.0416
+  type: 'test'
+  ...
+# Subtest: business delete allows only active admin/office staff
+ok 7 - business delete allows only active admin/office staff
+  ---
+  duration_ms: 1.2898
+  type: 'test'
+  ...
+# Subtest: session validation binds every role query to one verified JWT, never anon fallback
+ok 8 - session validation binds every role query to one verified JWT, never anon fallback
+  ---
+  duration_ms: 89.3233
+  type: 'test'
+  ...
+# Subtest: expired, anonymous, driver-only, missing and mismatched sessions cannot create a DELETE client
+ok 9 - expired, anonymous, driver-only, missing and mismatched sessions cannot create a DELETE client
+  ---
+  duration_ms: 389.9966
+  type: 'test'
+  ...
+# Subtest: current database account state denies read-only, suspended and driver-linked accounts
+ok 10 - current database account state denies read-only, suspended and driver-linked accounts
+  ---
+  duration_ms: 117.7504
+  type: 'test'
+  ...
+# Subtest: review migration retains RLS/SELECT and adds role-restricted idempotent DELETE policies without row mutations
+ok 11 - review migration retains RLS/SELECT and adds role-restricted idempotent DELETE policies without row mutations
+  ---
+  duration_ms: 2.9559
+  type: 'test'
+  ...
+# Subtest: actual PostgREST DELETE request uses only the selected UUID filter, representation return and frozen authenticated header
+ok 12 - actual PostgREST DELETE request uses only the selected UUID filter, representation return and frozen authenticated header
+  ---
+  duration_ms: 163.6884
+  type: 'test'
+  ...
+# Subtest: actual PostgREST zero-row DELETE with visible pre/post SELECT reproduces the RLS-blocked failure
+ok 13 - actual PostgREST zero-row DELETE with visible pre/post SELECT reproduces the RLS-blocked failure
+  ---
+  duration_ms: 16.6853
+  type: 'test'
+  ...
+# Subtest: delete verifies exactly the selected primary key, including RLS zero-row failures
+ok 14 - delete verifies exactly the selected primary key, including RLS zero-row failures
+  ---
+  duration_ms: 3.5335
+  type: 'test'
+  ...
+# Subtest: timeout aborts the request and a later request can succeed
+ok 15 - timeout aborts the request and a later request can succeed
+  ---
+  duration_ms: 15.9621
+  type: 'test'
+  ...
+# Subtest: caller cancellation is preserved
+ok 16 - caller cancellation is preserved
+  ---
+  duration_ms: 0.8057
+  type: 'test'
+  ...
+# Subtest: concurrent dashboard refreshes share a read and mutations trigger one trailing fresh snapshot
+ok 17 - concurrent dashboard refreshes share a read and mutations trigger one trailing fresh snapshot
+  ---
+  duration_ms: 2.3214
+  type: 'test'
+  ...
+# Subtest: failed refresh releases the coordinator for retry
+ok 18 - failed refresh releases the coordinator for retry
+  ---
+  duration_ms: 0.9121
+  type: 'test'
+  ...
+# Subtest: latest service uses service date, not its recorded date
+ok 19 - latest service uses service date, not its recorded date
+  ---
+  duration_ms: 93.6361
+  type: 'test'
+  ...
+# Subtest: Buew conflicting services require review and all original records remain intact
+ok 20 - Buew conflicting services require review and all original records remain intact
+  ---
+  duration_ms: 8.3674
+  type: 'test'
+  ...
+# Subtest: historical distance uses current valid mileage rather than the prior oil change
+ok 21 - historical distance uses current valid mileage rather than the prior oil change
+  ---
+  duration_ms: 0.7416
+  type: 'test'
+  ...
+# Subtest: saved historical intervals and vehicle overrides are preserved
+ok 22 - saved historical intervals and vehicle overrides are preserved
+  ---
+  duration_ms: 1.0742
+  type: 'test'
+  ...
+# Subtest: status thresholds and impossible readings are calculated consistently
+ok 23 - status thresholds and impossible readings are calculated consistently
+  ---
+  duration_ms: 2.3471
+  type: 'test'
+  ...
+# Subtest: real deletion helper targets selected UUID and verifies returning id, refreshing once
+ok 24 - real deletion helper targets selected UUID and verifies returning id, refreshing once
+  ---
+  duration_ms: 53.3544
+  type: 'test'
+  ...
+# Subtest: real deletion helper surfaces database errors and RLS no-op without success refresh
+ok 25 - real deletion helper surfaces database errors and RLS no-op without success refresh
+  ---
+  duration_ms: 101.1248
+  type: 'test'
+  ...
+# Subtest: new insert IDs are unique and editing only updates the selected record
+ok 26 - new insert IDs are unique and editing only updates the selected record
+  ---
+  duration_ms: 44.6087
+  type: 'test'
+  ...
+# Subtest: recorded date uses the fleet Bangkok timezone and impossible dates are rejected
+ok 27 - recorded date uses the fleet Bangkok timezone and impossible dates are rejected
+  ---
+  duration_ms: 104.0338
+  type: 'test'
+  ...
+# Subtest: a pending JSON response body remains bounded after HTTP headers arrive
+ok 28 - a pending JSON response body remains bounded after HTTP headers arrive
+  ---
+  duration_ms: 139.6722
+  type: 'test'
+  ...
+# Subtest: registration spacing and hyphens use the same normalized service dataset
+ok 29 - registration spacing and hyphens use the same normalized service dataset
+  ---
+  duration_ms: 1.0897
+  type: 'test'
+  ...
+# Subtest: database default anonymous header is replaced by current user token
+ok 30 - database default anonymous header is replaced by current user token
+  ---
+  duration_ms: 1122.7994
+  type: 'test'
+  ...
+# Subtest: requests follow sign-out, sign-in and refreshed sessions
+ok 31 - requests follow sign-out, sign-in and refreshed sessions
+  ---
+  duration_ms: 72.2274
+  type: 'test'
+  ...
+# Subtest: session failures reject instead of silently reading as anonymous
+ok 32 - session failures reject instead of silently reading as anonymous
+  ---
+  duration_ms: 158.9778
+  type: 'test'
+  ...
+# Subtest: explicit non-default authorization is preserved
+ok 33 - explicit non-default authorization is preserved
+  ---
+  duration_ms: 184.4847
+  type: 'test'
+  ...
+# Subtest: a pending authentication lookup is bounded before any database request is sent
+ok 34 - a pending authentication lookup is bounded before any database request is sent
+  ---
+  duration_ms: 109.01
+  type: 'test'
+  ...
+# Subtest: uses three distinct reporting dates and compares by vehicle when drivers change
+ok 35 - uses three distinct reporting dates and compares by vehicle when drivers change
+  ---
+  duration_ms: 76.4413
+  type: 'test'
+  ...
+# Subtest: never compares duplicate records from the selected reporting date
+ok 36 - never compares duplicate records from the selected reporting date
+  ---
+  duration_ms: 0.9192
+  type: 'test'
+  ...
+# Subtest: checks higher and lower mileage at the configurable absolute KM threshold
+ok 37 - checks higher and lower mileage at the configurable absolute KM threshold
+  ---
+  duration_ms: 1.1676
+  type: 'test'
+  ...
+# Subtest: uses like-for-like totals and never counts missing readings as zero
+ok 38 - uses like-for-like totals and never counts missing readings as zero
+  ---
+  duration_ms: 0.9339
+  type: 'test'
+  ...
+# Subtest: weekly distance history reuses the existing weekly summary distance calculation
+ok 39 - weekly distance history reuses the existing weekly summary distance calculation
+  ---
+  duration_ms: 8.2723
+  type: 'test'
+  ...
+# Subtest: weekly distance history summary cards calculate from the displayed rows
+ok 40 - weekly distance history summary cards calculate from the displayed rows
+  ---
+  duration_ms: 1.4358
+  type: 'test'
+  ...
+# Subtest: weekly distance history reports expected, valid, missing, and highest/lowest distance vehicles
+ok 41 - weekly distance history reports expected, valid, missing, and highest/lowest distance vehicles
+  ---
+  duration_ms: 3.5414
+  type: 'test'
+  ...
+# Subtest: weekly distance totals exclude decreased odometers but continue from the new reading
+ok 42 - weekly distance totals exclude decreased odometers but continue from the new reading
+  ---
+  duration_ms: 43.397
+  type: 'test'
+  ...
+# Subtest: oil change and weekly mileage stay separate for the 05 Sep / 06 Sep regression
+ok 43 - oil change and weekly mileage stay separate for the 05 Sep / 06 Sep regression
+  ---
+  duration_ms: 4.9441
+  type: 'test'
+  ...
+# Subtest: future oil change records do not create a clean service state for older mileage
+ok 44 - future oil change records do not create a clean service state for older mileage
+  ---
+  duration_ms: 2.0182
+  type: 'test'
+  ...
+# Subtest: corrected 05 Sep oil change drives the 06 Sep card after duplicate future service is removed
+ok 45 - corrected 05 Sep oil change drives the 06 Sep card after duplicate future service is removed
+  ---
+  duration_ms: 1.1357
+  type: 'test'
+  ...
+# Subtest: new oil change resets the service baseline without changing weekly mileage logic
+ok 46 - new oil change resets the service baseline without changing weekly mileage logic
+  ---
+  duration_ms: 0.9381
+  type: 'test'
+  ...
+# Subtest: oil change save path no longer writes service odometers into weekly mileage
+ok 47 - oil change save path no longer writes service odometers into weekly mileage
+  ---
+  duration_ms: 1.7102
+  type: 'test'
+  ...
+# Subtest: oil change service selection orders by service date, not created_at
+ok 48 - oil change service selection orders by service date, not created_at
+  ---
+  duration_ms: 7.6425
+  type: 'test'
+  ...
+# Subtest: requires the immediately previous reporting week for this-week distance
+ok 49 - requires the immediately previous reporting week for this-week distance
+  ---
+  duration_ms: 1.1377
+  type: 'test'
+  ...
+# Subtest: requires the exact earlier reporting week for previous-week comparison
+ok 50 - requires the exact earlier reporting week for previous-week comparison
+  ---
+  duration_ms: 1.5416
+  type: 'test'
+  ...
+# Subtest: starts a new odometer baseline without comparing against legacy readings
+ok 51 - starts a new odometer baseline without comparing against legacy readings
+  ---
+  duration_ms: 2.7339
+  type: 'test'
+  ...
+# Subtest: reports missing, no change, comparison gaps, and either negative interval as errors
+ok 52 - reports missing, no change, comparison gaps, and either negative interval as errors
+  ---
+  duration_ms: 3.9278
+  type: 'test'
+  ...
+# Subtest: includes genuine active vehicles even when they have no driver or mileage yet
+ok 53 - includes genuine active vehicles even when they have no driver or mileage yet
+  ---
+  duration_ms: 8.7465
+  type: 'test'
+  ...
+# Subtest: sorts incomplete readings and errors before neutral mileage variations
+ok 54 - sorts incomplete readings and errors before neutral mileage variations
+  ---
+  duration_ms: 1.4502
+  type: 'test'
+  ...
+# Subtest: groups cannot-compare, more, less, and same rows with largest changes first
+ok 55 - groups cannot-compare, more, less, and same rows with largest changes first
+  ---
+  duration_ms: 1.4873
+  type: 'test'
+  ...
+# Subtest: keeps the management PDF objective, percentage-free, and consistently branded
+ok 56 - keeps the management PDF objective, percentage-free, and consistently branded
+  ---
+  duration_ms: 10.5392
+  type: 'test'
+  ...
+1..56
+# tests 56
+# suites 0
+# pass 56
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 9309.5016

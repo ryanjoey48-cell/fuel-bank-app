@@ -17,6 +17,8 @@ export const config = {
     "/shipments/:path*",
     "/trip-journey/:path*",
     "/drivers/:path*",
+    "/hr/:path*",
+    "/employees/:path*",
     "/fleet/:path*",
     "/weekly-mileage/:path*",
     "/maintenance/:path*",

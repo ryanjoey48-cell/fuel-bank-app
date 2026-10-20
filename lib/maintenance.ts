@@ -30,7 +30,7 @@ export function maintenanceDriver(data: Pick<MaintenanceData,"drivers">, vehicle
 // Only stable vehicle IDs are used. Conflicting dates, declining readings and stale
 // readings never make a mileage reminder look healthy.
 export function reliableMaintenanceMileage(entries: WeeklyMileageEntry[],vehicleId:string,today=maintenanceToday()) {
- const rows=entries.filter(e=>e.vehicle_id===vehicleId && validMaintenanceDate(e.week_ending) && e.week_ending<=today).sort((a,b)=>a.week_ending.localeCompare(b.week_ending)||a.created_at.localeCompare(b.created_at));
+ const rows=entries.filter(e=>e.vehicle_id===vehicleId && validMaintenanceDate(e.week_ending) && e.week_ending<=today).sort((a,b)=>a.week_ending.localeCompare(b.week_ending)||String(a.created_at??'').localeCompare(String(b.created_at??'')));
  const dated: {date:string;value:number;baseline:boolean;valid:boolean}[]=[];
  for (const e of rows) {
   const raw=e.odometer_reading ?? e.mileage; const value=Number(raw);
@@ -50,9 +50,9 @@ export function buildMaintenanceReminders(data: MaintenanceData,today=maintenanc
  const reminders:MaintenanceReminder[]=[];
  for(const vehicle of data.vehicles.filter(v=>v.active!==false)) {
   const latest=new Map<string,{item:MaintenanceItem;record:MaintenanceRecord}>();
-  for(const item of data.items) { const record=records.get(item.record_id); if(!record || record.vehicle_id!==vehicle.id) continue; const key=relevantKey(item),prev=latest.get(key); if(!prev || `${record.service_date}|${record.created_at}|${item.position.toString().padStart(9,"0")}|${item.id}`>`${prev.record.service_date}|${prev.record.created_at}|${prev.item.position.toString().padStart(9,"0")}|${prev.item.id}`) latest.set(key,{item,record}); }
+  for(const item of data.items.filter(i=>!i.service_key)) { const record=records.get(item.record_id); if(!record || record.vehicle_id!==vehicle.id) continue; const key=relevantKey(item),prev=latest.get(key); if(!prev || `${record.service_date}|${record.created_at}|${item.position.toString().padStart(9,"0")}|${item.id}`>`${prev.record.service_date}|${prev.record.created_at}|${prev.item.position.toString().padStart(9,"0")}|${prev.item.id}`) latest.set(key,{item,record}); }
   const mileage=reliableMaintenanceMileage(data.mileage,vehicle.id,today);
-  for(const req of data.requirements.filter(r=>r.active && requirementApplies(r,vehicle,data))) {
+  for(const req of data.requirements.filter(r=>!r.service_key && r.active && requirementApplies(r,vehicle,data))) {
    const key=`requirement:${req.id}`;
    if(!latest.has(key)) reminders.push({key:`${vehicle.id}:${key}`,vehicle_id:vehicle.id,name:req.name,category:req.category,status:"noHistory",record_id:null,item_id:null,due_date:null,due_km:null,days:null,km:null,mileage_date:mileage.date,mileage_unavailable:false});
   }

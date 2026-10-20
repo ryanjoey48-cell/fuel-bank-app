@@ -11,12 +11,14 @@ export type MaintenanceRecord = MaintenanceAudit & {
   off_road_at: string | null; returned_at: string | null; is_deleted: boolean;
 };
 export type MaintenanceItem = MaintenanceAudit & {
+  service_key?: string | null; service_action?: string; service_confirmed?: boolean; condition?: string | null;
   id: string; record_id: string; position: number; description: string; description_th: string | null;
   category: MaintenanceCategory; quantity: number; unit_price: number; line_total?: number | null; notes: string | null;
   requirement_id: string | null; reminder_months: number | null; reminder_km: number | null;
   warning_days: number; warning_km: number; override_date: string | null; override_km: number | null;
 };
 export type MaintenanceRequirement = MaintenanceAudit & {
+  service_key?: string | null; schedule_kind?: 'inspection' | 'replacement'; applicability_status?: 'applicable' | 'not_applicable'; replacement_strategy?: 'interval' | 'condition'; specification?: string | null; capacity?: string | null;
   id: string; name: string; category: MaintenanceCategory; vehicle_type: string | null;
   frequency_months: number | null; mileage_interval: number | null;
   warning_days: number; warning_km: number; active: boolean; notes: string | null;
@@ -27,6 +29,7 @@ export type MaintenanceAttachment = {
   mime_type: string; size_bytes: number; uploaded_by: string; uploaded_at: string;
 };
 export type MaintenanceData = {
+  checks?: import('./maintenance-office').VehicleMaintenanceCheck[];
   vehicles: Vehicle[]; drivers: Driver[]; mileage: WeeklyMileageEntry[]; fuel: FuelLog[];
   records: MaintenanceRecord[]; items: MaintenanceItem[]; requirements: MaintenanceRequirement[];
   applicability: MaintenanceApplicability[]; attachments: MaintenanceAttachment[];

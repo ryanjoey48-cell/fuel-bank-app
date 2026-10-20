@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useLanguage } from "@/lib/language-provider";
 import {
   maintenanceHistorySummary,
@@ -15,7 +15,6 @@ import type {
 } from "@/lib/maintenance-types";
 import { formatCurrency, formatNumber } from "@/lib/utils";
 import { MaintenanceVisit } from "./maintenance-record-card";
-import { MaintenanceField as Field } from "./maintenance-fields";
 
 export function MaintenanceRecordCollection({
   records,
@@ -24,6 +23,10 @@ export function MaintenanceRecordCollection({
   onChanged,
   reminders,
   showSummary = true,
+  compact = false,
+  sortBy,
+  onSortChange,
+  pagination,
 }: {
   records: MaintenanceRecord[];
   data: MaintenanceData;
@@ -31,12 +34,15 @@ export function MaintenanceRecordCollection({
   onChanged: () => void;
   reminders?: MaintenanceReminder[];
   showSummary?: boolean;
+  compact?: boolean;
+  pagination?: ReactNode;
+  sortBy?: MaintenanceHistorySort;
+  onSortChange?: (sort:MaintenanceHistorySort)=>void;
 }) {
   const { t, language } = useLanguage();
   const c = t.maintenance;
 
-  const [sort, setSort] =
-    useState<MaintenanceHistorySort>("newestFirst");
+  const [sort, setSort] = useState<MaintenanceHistorySort>("newestFirst");
 
   const [group, setGroup] = useState<
     "recordsGroup" | "vehicleGroup"
@@ -48,8 +54,8 @@ export function MaintenanceRecordCollection({
   );
 
   const sorted = useMemo(
-    () => sortMaintenanceHistory(records, data, sort),
-    [records, data, sort]
+    () => sortMaintenanceHistory(records, data, sortBy??sort),
+    [records, data, sort, sortBy]
   );
 
   const statuses = useMemo(
@@ -64,17 +70,19 @@ export function MaintenanceRecordCollection({
       const key =
         group === "vehicleGroup" ? record.vehicle_id : "all";
 
-      grouped.set(key, [
-        ...(grouped.get(key) ?? []),
-        record,
-      ]);
+      const existing = grouped.get(key);
+      if (existing) {
+        existing.push(record);
+      } else {
+        grouped.set(key, [record]);
+      }
     }
 
     return Array.from(grouped.entries());
   }, [sorted, group]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* PERIOD SUMMARY */}
       {showSummary && (
         <div
@@ -114,65 +122,53 @@ export function MaintenanceRecordCollection({
         </div>
       )}
 
-      {/* HISTORY CONTROLS */}
-      {!!records.length && (
-        <div className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-3 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-slate-800">
-              Maintenance records
-            </p>
-            <p className="mt-0.5 text-xs text-slate-500">
-              {formatNumber(records.length, language)} records in the
-              selected period.
-            </p>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 lg:w-[520px]">
-            <Field label={c.sortBy}>
+      {/* Compact record navigation: page controls and view options share one toolbar. */}
+      {!compact && (!!records.length || !!pagination) && (
+        <div className="maintenance-record-controls flex flex-wrap items-end justify-between gap-x-4 gap-y-3 rounded-xl border border-slate-200/80 bg-white px-3 py-3 sm:px-4">
+          {pagination && (
+            <div className="min-w-0 flex-1 text-sm text-slate-600">
+              {pagination}
+            </div>
+          )}
+          <div className="flex w-full flex-wrap items-end gap-2 sm:w-auto sm:ml-auto">
+            <label className="min-w-[155px] flex-1 space-y-1 sm:flex-none">
+              <span className="block text-[11px] font-medium text-slate-500">
+                {c.sortBy}
+              </span>
               <select
-                className="form-input !min-h-10"
-                value={sort}
-                onChange={(event) =>
-                  setSort(
-                    event.target.value as MaintenanceHistorySort
-                  )
-                }
+                className="form-input !min-h-10 w-full rounded-lg border-slate-200 bg-slate-50 px-3 text-sm text-slate-800"
+                value={sortBy ?? sort}
+                onChange={(event) => {
+                  const value = event.target.value as MaintenanceHistorySort;
+                  setSort(value);
+                  onSortChange?.(value);
+                }}
               >
-                {(
-                  [
-                    "newestFirst",
-                    "oldestFirst",
-                    "highestCost",
-                    "vehicleRegistration",
-                  ] as const
-                ).map((key) => (
-                  <option key={key} value={key}>
-                    {c[key]}
-                  </option>
+                {([
+                  "newestFirst",
+                  "oldestFirst",
+                  "highestCost",
+                  "vehicleRegistration",
+                ] as const).map((key) => (
+                  <option key={key} value={key}>{c[key]}</option>
                 ))}
               </select>
-            </Field>
-
-            <Field label={c.groupBy}>
+            </label>
+            <label className="min-w-[155px] flex-1 space-y-1 sm:flex-none">
+              <span className="block text-[11px] font-medium text-slate-500">
+                {c.groupBy}
+              </span>
               <select
-                className="form-input !min-h-10"
+                className="form-input !min-h-10 w-full rounded-lg border-slate-200 bg-slate-50 px-3 text-sm text-slate-800"
                 value={group}
-                onChange={(event) =>
-                  setGroup(
-                    event.target.value as
-                      | "recordsGroup"
-                      | "vehicleGroup"
-                  )
-                }
+                onChange={(event) => setGroup(
+                  event.target.value as "recordsGroup" | "vehicleGroup"
+                )}
               >
-                <option value="recordsGroup">
-                  {c.recordsGroup}
-                </option>
-                <option value="vehicleGroup">
-                  {c.vehicleGroup}
-                </option>
+                <option value="recordsGroup">{c.recordsGroup}</option>
+                <option value="vehicleGroup">{c.vehicleGroup}</option>
               </select>
-            </Field>
+            </label>
           </div>
         </div>
       )}
@@ -199,9 +195,9 @@ export function MaintenanceRecordCollection({
             : null;
 
         return (
-          <section key={key} className="space-y-3">
+          <section key={key} className="space-y-2.5">
             {group === "vehicleGroup" && (
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-violet-100 bg-violet-50/50 px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-violet-100 bg-violet-50/40 px-4 py-2.5">
                 <div>
                   <h4 className="font-semibold text-slate-900">
                     {vehicle?.vehicle_reg ?? "—"}
@@ -219,7 +215,7 @@ export function MaintenanceRecordCollection({
               </div>
             )}
 
-            <div className="grid items-start gap-3 xl:grid-cols-2">
+            <div className="grid items-stretch gap-3 xl:grid-cols-2">
               {entries.map((record) => (
                 <MaintenanceVisit
                   key={record.id}
@@ -229,6 +225,7 @@ export function MaintenanceRecordCollection({
                   onChanged={onChanged}
                   reminders={statuses}
                   detailed={false}
+                  summaryDescription={compact}
                 />
               ))}
             </div>
