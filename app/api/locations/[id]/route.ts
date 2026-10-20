@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { hasPermission } from "@/lib/authorization";
 import { AdminApiError, createServerSupabaseAdmin, requireVerifiedUser, resolveAccountAccess } from "@/lib/admin-user-management-server";
+import { safeGoogleMapsUrl } from "@/lib/locations-directory";
 
 const fields = "id,company_name,thai_name,alternative_names,address,province,destination_type,google_maps_url,truck_entrance_url,verification_status,verified_at,notes,source_info,created_at,updated_at";
 const types = ["Factory", "Warehouse", "Airport", "Port", "Customer", "Depot", "Other"];
@@ -8,12 +9,9 @@ const verificationEvidencePrefix = "Verification evidence: ";
 type Context = { params: Promise<{ id: string }> };
 function mapUrl(value: unknown) {
   if (value == null || value === "") return null;
-  if (typeof value !== "string" || value.length > 2048) throw new AdminApiError(400, "Map links must be valid Google Maps URLs.");
-  let url: URL;
-  try { url = new URL(value); } catch { throw new AdminApiError(400, "Map links must be valid Google Maps URLs."); }
-  const googleHost = url.hostname === "maps.google.com" || /^(www\.)?google\.(com|[a-z]{2,3}|co\.[a-z]{2})$/.test(url.hostname);
-  if (url.protocol !== "https:" || !googleHost || !url.pathname.startsWith("/maps")) throw new AdminApiError(400, "Map links must point to Google Maps over HTTPS.");
-  return url.toString();
+  const safeUrl = safeGoogleMapsUrl(value);
+  if (!safeUrl) throw new AdminApiError(400, "Map links must be valid Google Maps URLs over HTTPS.");
+  return safeUrl;
 }
 async function access(request: Request, permission: "business:read" | "business:write" | "business:delete") {
   const user = await requireVerifiedUser(request);
