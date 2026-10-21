@@ -253,11 +253,11 @@ test("protected fleet data endpoint requires verified EES business-read access a
   const denied = await unauthorized.GET(new Request("https://ees.test/api/admin/forth-tracking/vehicles"));
   assert.equal(denied.status, 403);
 
-  const connected = createFleetDataRoute({ connectionStatus: "connected", fetchedAt: "2026-10-21T05:00:00.000Z", records: [{ vehicleRegistration: "1กข2345" }], error: null });
+  const connected = createFleetDataRoute({ connectionStatus: "connected", fetchedAt: "2026-10-21T05:00:00.000Z", timestampDiagnosticEnabled: true, records: [{ vehicleRegistration: "1กข2345" }], error: null });
   const response = await connected.GET(new Request("https://ees.test/api/admin/forth-tracking/vehicles"));
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("cache-control"), "private, no-store");
-  assert.deepEqual(await response.json(), { connectionStatus: "connected", fetchedAt: "2026-10-21T05:00:00.000Z", records: [{ vehicleRegistration: "1กข2345" }], error: null });
+  assert.deepEqual(await response.json(), { connectionStatus: "connected", fetchedAt: "2026-10-21T05:00:00.000Z", timestampDiagnosticEnabled: true, records: [{ vehicleRegistration: "1กข2345" }], error: null });
 });
 
 test("protected diagnostic rejects unauthenticated and unauthorized EES callers", async () => {
@@ -404,7 +404,7 @@ test("authenticates once, validates tracking data, and returns aggregate counts 
 
 test("fleet endpoint service exposes normalized vehicle fields only and reuses its OAuth token", async () => {
   const requests = [];
-  const service = makeFleetService({ ...credentials, FORTH_SOURCE_TIME_ZONE: "Asia/Bangkok" }, async (url, init) => {
+  const service = makeFleetService({ ...credentials, FORTH_SOURCE_TIME_ZONE: "Asia/Bangkok", FORTH_TIMESTAMP_DIAGNOSTIC_ENABLED: "true" }, async (url, init) => {
     requests.push(String(url));
     if (String(url).endsWith("/token")) return Response.json({ access_token: "bearer-test-token", token_type: "Bearer", expires_in: 3600 });
     assert.equal(new Headers(init.headers).get("authorization"), "Bearer bearer-test-token");
@@ -429,6 +429,7 @@ test("fleet endpoint service exposes normalized vehicle fields only and reuses i
 
   const result = await service.getFleetData();
   assert.equal(result.connectionStatus, "connected");
+  assert.equal(result.timestampDiagnosticEnabled, true);
   assert.equal(result.records.length, 1);
   assert.equal(result.records[0].reportedDriver, "Driver A");
   assert.equal(result.records[0].gprsConnectivity, "connected");
@@ -445,6 +446,16 @@ test("fleet endpoint service exposes normalized vehicle fields only and reuses i
   const disconnected = await service.diagnose();
   assert.equal(disconnected.connectionStatus, "connected");
   assert.equal(requests.filter((url) => url.endsWith("/token")).length, 1);
+});
+
+test("fleet data exposes timestamp diagnostic enablement only for the exact server flag value", async () => {
+  const { createForthTrackingService } = loadTypeScript("lib/forth-tracking-server.ts");
+  for (const [flag, expected] of [["true", true], ["TRUE", false], ["false", false], [undefined, false]]) {
+    const environment = flag === undefined ? {} : { FORTH_TIMESTAMP_DIAGNOSTIC_ENABLED: flag };
+    const service = createForthTrackingService({ environment, fetcher: async () => { throw new Error("should_not_request"); } });
+    const result = await service.getFleetData();
+    assert.equal(result.timestampDiagnosticEnabled, expected);
+  }
 });
 
 test("timestamp format diagnostic returns masked format shapes and status counts from one mocked fetch", async () => {
@@ -631,4 +642,19 @@ test("Fleet Tracking appears once in the permission-gated Fleet group used by de
   assert.ok(fleetGroup.includes('href: "/fleet-tracking"'));
   assert.equal(source.split("groups.map(").length - 1, 2);
   assert.ok(source.includes("routeIsActive(pathname, item.href)"));
+});
+
+test("temporary Fleet Tracking timestamp control is server-gated, confirmed, authenticated, sanitized, and one-shot", () => {
+  const source = fs.readFileSync(path.join(root, "components/forth-tracking-centre.tsx"), "utf8");
+  const endpoint = "/api/admin/forth-tracking/timestamp-format-diagnostic?confirm=format-only";
+  assert.equal(source.split(endpoint).length - 1, 1);
+  assert.ok(source.includes("data?.timestampDiagnosticEnabled === true"));
+  assert.ok(source.includes("onClick={() => void runTimestampDiagnostic()}"));
+  assert.ok(source.includes("window.confirm(copy.confirmDiagnostic)"));
+  assert.ok(source.includes("timestampDiagnosticAttemptedRef.current"));
+  assert.ok(source.includes("disabled={timestampDiagnosticRunning || timestampDiagnosticAttempted}"));
+  assert.ok(source.includes("headers: { Authorization: `Bearer ${accessToken}` }"));
+  assert.ok(source.includes("sanitizeTimestampDiagnostic(await response.json())"));
+  assert.ok(source.indexOf(endpoint) > source.indexOf("const runTimestampDiagnostic = async () =>"));
+  assert.equal(source.includes("console.log"), false);
 });

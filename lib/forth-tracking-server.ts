@@ -60,6 +60,7 @@ export type ForthFleetTrackingRecord = Pick<
 export type ForthFleetTrackingData = {
   connectionStatus: ForthTrackingDiagnostic["connectionStatus"];
   fetchedAt: string | null;
+  timestampDiagnosticEnabled: boolean;
   records: ForthFleetTrackingRecord[];
   error: ForthTrackingDiagnostic["error"];
 };
@@ -521,6 +522,7 @@ export function createForthTrackingService(options: {
     return {
       connectionStatus: result.connectionStatus,
       fetchedAt: result.fetchedAt,
+      timestampDiagnosticEnabled: environment.FORTH_TIMESTAMP_DIAGNOSTIC_ENABLED === "true",
       records,
       error: result.error
     };
