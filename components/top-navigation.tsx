@@ -137,6 +137,11 @@ export function TopNavigation() {
         key: "fleet",
         label: copy.fleet,
         items: [
+          ...(can("business:read") ? [{
+            href: "/fleet-tracking",
+            label: language === "th" ? "ติดตามรถ" : "Fleet Tracking",
+            icon: MapPinned
+          }] : []),
           {
             href: "/hr",
             label:
