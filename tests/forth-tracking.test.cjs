@@ -109,16 +109,51 @@ test("rejects out-of-range coordinates and treats an empty array as a valid resp
   assert.deepEqual(normalizeForthTrackingResponse([], { now: baseNow }), []);
 });
 
-test("distinguishes stale, timezone-ambiguous, and non-GPS positions", () => {
-  const [stale, ambiguous, noGps] = normalizeForthTrackingResponse([
+test("distinguishes stale, unconfigured-timezone, and non-GPS positions", () => {
+  const [stale, ambiguous, noGps, lostGps] = normalizeForthTrackingResponse([
     { dateTime: "2026-10-21T04:00:00Z", positionSource: "GPS" },
     { dateTime: "2026-10-21T04:55:00", positionSource: "LBS" },
-    { GPS: "No GPS", positionSource: "Cellular" }
+    { GPS: "No GPS", positionSource: "Cellular" },
+    { GPS: "Online", positionSource: "GPS signal lost" }
   ], { now: baseNow });
   assert.equal(stale.timestampStatus, "stale");
-  assert.equal(ambiguous.timestampStatus, "timezone_ambiguous");
+  assert.equal(ambiguous.timestampStatus, "timezone_unconfigured");
   assert.equal(ambiguous.positionStatus, "non_gps");
   assert.equal(noGps.gpsConnectivity, "disconnected");
+  assert.equal(lostGps.gpsConnectivity, "disconnected");
+  assert.equal(lostGps.positionStatus, "non_gps");
+});
+
+test("parses timezone-less Forth timestamps only with a configured source timezone and preserves the source text", () => {
+  const sourceTimestamp = " 2026-10-21 11:55:00 ";
+  const [unconfigured] = normalizeForthTrackingResponse([{ dateTime: sourceTimestamp }], { now: baseNow });
+  assert.equal(unconfigured.timestampStatus, "timezone_unconfigured");
+  assert.equal(unconfigured.lastGpsTimestamp, null);
+  assert.equal(unconfigured.sourceTimestampRaw, sourceTimestamp);
+
+  const [bangkok] = normalizeForthTrackingResponse([{ dateTime: sourceTimestamp }], {
+    now: baseNow,
+    sourceTimeZone: "Asia/Bangkok"
+  });
+  assert.equal(bangkok.lastGpsTimestamp, "2026-10-21T04:55:00.000Z");
+  assert.equal(bangkok.timestampStatus, "current");
+  assert.equal(bangkok.sourceTimestampRaw, sourceTimestamp);
+
+  const [invalidZone] = normalizeForthTrackingResponse([{ dateTime: "2026-10-21T11:55:00" }], {
+    now: baseNow,
+    sourceTimeZone: "Not/A_Real_Zone"
+  });
+  assert.equal(invalidZone.timestampStatus, "timezone_invalid");
+  assert.equal(invalidZone.lastGpsTimestamp, null);
+});
+
+test("rejects daylight-saving gaps and ambiguities instead of guessing an instant", () => {
+  const records = normalizeForthTrackingResponse([
+    { dateTime: "2026-11-01T01:30:00" },
+    { dateTime: "2026-03-08T02:30:00" }
+  ], { now: Date.parse("2026-11-01T08:00:00Z"), sourceTimeZone: "America/New_York" });
+  assert.equal(records[0].timestampStatus, "timezone_ambiguous");
+  assert.equal(records[1].timestampStatus, "invalid");
 });
 
 test("preserves Thai registration characters and matches harmless formatting changes", () => {
@@ -316,7 +351,7 @@ test("authenticates once, validates tracking data, and returns aggregate counts 
 
 test("fleet endpoint service exposes normalized vehicle fields only and reuses its OAuth token", async () => {
   const requests = [];
-  const service = makeFleetService(credentials, async (url, init) => {
+  const service = makeFleetService({ ...credentials, FORTH_SOURCE_TIME_ZONE: "Asia/Bangkok" }, async (url, init) => {
     requests.push(String(url));
     if (String(url).endsWith("/token")) return Response.json({ access_token: "bearer-test-token", token_type: "Bearer", expires_in: 3600 });
     assert.equal(new Headers(init.headers).get("authorization"), "Bearer bearer-test-token");
@@ -334,7 +369,7 @@ test("fleet endpoint service exposes normalized vehicle fields only and reuses i
       Engine: "On",
       Speed: 42,
       COG: 90,
-      dateTime: "2026-10-21T04:55:00Z",
+      dateTime: "2026-10-21 11:55:00",
       positionSource: "GPS"
     }]);
   });
@@ -345,6 +380,9 @@ test("fleet endpoint service exposes normalized vehicle fields only and reuses i
   assert.equal(result.records[0].reportedDriver, "Driver A");
   assert.equal(result.records[0].gprsConnectivity, "connected");
   assert.equal(result.records[0].speed, 42);
+  assert.equal(result.records[0].sourceTimestampRaw, "2026-10-21 11:55:00");
+  assert.equal(result.records[0].lastGpsTimestamp, "2026-10-21T04:55:00.000Z");
+  assert.equal(result.fetchedAt, "2026-10-21T05:00:00.000Z");
   assert.equal(Object.hasOwn(result.records[0], "optionalSensors"), false);
   assert.equal(JSON.stringify(result).includes("private-id"), false);
   assert.equal(JSON.stringify(result).includes("private-sensor-value"), false);
@@ -397,10 +435,10 @@ test("does not expose invalid JSON or upstream error bodies", async () => {
   assert.equal(JSON.stringify(failed).includes("private error body"), false);
 });
 
-test("fleet view classification and filters do not infer movement from incomplete or stale data", () => {
+test("fleet view classification and filters use current GPS data and avoid inferring movement", () => {
   const { getForthFleetStatus, summarizeForthFleet, filterForthFleetRecords, formatForthTrackingTime } = loadTypeScript("lib/forth-tracking-view.ts");
   const records = [
-    { vehicleRegistration: "MOVING-1", reportedDriver: "Driver A", gpsDeviceId: "D1", gpsConnectivity: "connected", gprsConnectivity: "connected", timestampStatus: "current", coordinateStatus: "valid", positionStatus: "gps", speed: 12, lastGpsTimestamp: "2026-10-21T04:59:00.000Z" },
+    { vehicleRegistration: "MOVING-1", reportedDriver: "Driver A", gpsDeviceId: "D1", gpsConnectivity: "connected", gprsConnectivity: "connected", timestampStatus: "current", coordinateStatus: "valid", positionStatus: "unknown", speed: 12, lastGpsTimestamp: "2026-10-21T04:59:00.000Z" },
     { vehicleRegistration: "PARKED-1", gpsDeviceId: "D2", gpsConnectivity: "connected", gprsConnectivity: "connected", timestampStatus: "current", coordinateStatus: "valid", positionStatus: "gps", speed: 0, lastGpsTimestamp: "2026-10-21T04:58:00.000Z" },
     { vehicleRegistration: "STALE-1", gpsDeviceId: "D3", gpsConnectivity: "connected", gprsConnectivity: "connected", timestampStatus: "stale", coordinateStatus: "valid", positionStatus: "gps", speed: 50, lastGpsTimestamp: "2026-10-20T04:58:00.000Z" },
     { vehicleRegistration: "UNKNOWN-1", gpsDeviceId: "D4", gpsConnectivity: "unknown", gprsConnectivity: "unknown", timestampStatus: "missing", coordinateStatus: "missing", positionStatus: "unknown", speed: null, lastGpsTimestamp: null }
@@ -415,6 +453,79 @@ test("fleet view classification and filters do not infer movement from incomplet
     .formatToParts(new Date("2026-10-21T04:59:00.000Z"))
     .find((part) => part.type === "timeZoneName").value;
   assert.ok(formattedTime.includes(zoneLabel));
+});
+
+test("classifies lost, stale, ambiguous, invalid, and incomplete GPS records safely", () => {
+  const { getForthFleetStatus, summarizeForthFleet } = loadTypeScript("lib/forth-tracking-view.ts");
+  const base = {
+    gpsConnectivity: "connected",
+    gprsConnectivity: "connected",
+    timestampStatus: "current",
+    coordinateStatus: "valid",
+    positionStatus: "gps",
+    speed: 10,
+    latitude: 13.7,
+    longitude: 100.5,
+    lastGpsTimestamp: "2026-10-21T04:59:00.000Z"
+  };
+  const records = [
+    { ...base },
+    { ...base, gpsConnectivity: "disconnected" },
+    { ...base, timestampStatus: "stale", speed: 40, lastGpsTimestamp: "2026-10-21T04:00:00.000Z" },
+    { ...base, timestampStatus: "timezone_unconfigured", lastGpsTimestamp: null },
+    { ...base, coordinateStatus: "missing", latitude: null },
+    { ...base, coordinateStatus: "invalid", latitude: null },
+    { ...base, speed: null },
+    { ...base, speed: -1 },
+    { ...base, speed: Number.NaN },
+    { ...base, positionStatus: "non_gps" }
+  ];
+
+  assert.deepEqual(records.map(getForthFleetStatus), [
+    "moving", "offline_stale", "offline_stale", "unknown", "unknown",
+    "unknown", "unknown", "unknown", "unknown", "unknown"
+  ]);
+  assert.equal(summarizeForthFleet(records).lastUpdate, "2026-10-21T04:59:00.000Z");
+});
+
+test("map coordinate projection excludes missing, invalid, non-finite, and out-of-range values", () => {
+  const { getForthFleetMapRecords } = loadTypeScript("lib/forth-tracking-view.ts");
+  const record = (latitude, longitude, coordinateStatus = "valid") => ({
+    vehicleRegistration: "BUS-1",
+    gpsDeviceId: "GPS-1",
+    latitude,
+    longitude,
+    coordinateStatus
+  });
+  const mapped = getForthFleetMapRecords([
+    record(0, 0),
+    record(-90, 180),
+    record(null, 100),
+    record(13, null),
+    record(Number.NaN, 100),
+    record(91, 100),
+    record(13, -181),
+    record(13, 100, "invalid")
+  ]);
+
+  assert.deepEqual(mapped.map(({ position }) => position), [[0, 0], [-90, 180]]);
+  assert.equal(mapped[0].key, "GPS-1:0");
+});
+
+test("Leaflet map builds visible status markers above tiles, fits locations, and focuses selection", () => {
+  const source = fs.readFileSync(path.join(root, "components/forth-tracking-map.tsx"), "utf8");
+  const styles = fs.readFileSync(path.join(root, "components/forth-tracking-map.module.css"), "utf8");
+  assert.ok(source.includes('import "leaflet/dist/leaflet.css"'));
+  assert.ok(source.includes("Leaflet.divIcon("));
+  assert.ok(source.includes("Leaflet.marker(position"));
+  assert.ok(source.includes('setProperty("z-index", "650")'));
+  assert.ok(source.includes('setProperty("z-index", "200")'));
+  assert.ok(source.includes("map.fitBounds("));
+  assert.ok(source.includes("map.panTo(position"));
+  assert.ok(source.includes("setZIndexOffset(selected ? 1000 : 0)"));
+  assert.ok(styles.includes(".mapCanvas :global(.leaflet-pane.leaflet-marker-pane)"));
+  assert.ok(styles.includes(".vehicleMarkerDot"));
+  assert.ok(styles.includes(".vehicleMarkerSelected"));
 });
 
 test("Fleet Tracking appears once in the permission-gated Fleet group used by desktop and mobile navigation", () => {

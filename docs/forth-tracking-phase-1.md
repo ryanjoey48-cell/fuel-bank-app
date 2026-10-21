@@ -2,7 +2,7 @@
 
 The Phase 1 integration is a server-only, read-only adapter for Forth's tracking endpoint. Its protected diagnostic is `GET /api/admin/forth-tracking`. It uses the existing Supabase verified-user flow and requires the active EES `business:read` permission, which excludes driver portal accounts.
 
-The diagnostic reports connection and authentication status, record and coordinate counts, the newest timezone-qualified GPS timestamp, and a fixed safe error code. It does not return tracking records, registrations, driver identifiers, raw upstream error bodies, credentials, or access tokens. Forth requests use TLS, a 10-second timeout, no-store caching, no redirect following, and no automatic retry. Successfully issued tokens are reused until shortly before their reported expiry; failed token requests are cooled down for one minute.
+The diagnostic reports connection and authentication status, record and coordinate counts, the latest valid GPS position timestamp, and a fixed safe error code. It does not return tracking records, registrations, driver identifiers, raw upstream error bodies, credentials, or access tokens. Forth requests use TLS, a 10-second timeout, no-store caching, no redirect following, and no automatic retry. Successfully issued tokens are reused until shortly before their reported expiry; failed token requests are cooled down for one minute.
 
 ## Server environment
 
@@ -13,6 +13,7 @@ FORTH_CLIENT_ID=
 FORTH_CLIENT_SECRET=
 FORTH_USERNAME=
 FORTH_PASSWORD=
+FORTH_SOURCE_TIME_ZONE=
 FORTH_TOKEN_REQUEST_PROFILE=oauth-password-basic-v1
 ```
 
@@ -23,9 +24,9 @@ The source confirms what DotNetOpenAuth generates; it does not independently pro
 ### Production safety gate and controlled diagnostic
 
 1. Rotate the Forth client secret because its earlier value was exposed. Store the replacement only as a Vercel Secret; do not paste it into chat, source control, or logs.
-2. The five variables are `FORTH_CLIENT_ID`, `FORTH_CLIENT_SECRET`, `FORTH_USERNAME`, `FORTH_PASSWORD`, and `FORTH_TOKEN_REQUEST_PROFILE`. Set the profile to `oauth-password-basic-v1`. Credential values must remain server-side and must never use a `NEXT_PUBLIC_` prefix.
+2. Configure the OAuth variables `FORTH_CLIENT_ID`, `FORTH_CLIENT_SECRET`, `FORTH_USERNAME`, `FORTH_PASSWORD`, and `FORTH_TOKEN_REQUEST_PROFILE`; set the profile to `oauth-password-basic-v1`. For timezone-less Forth timestamps, set `FORTH_SOURCE_TIME_ZONE` to the IANA timezone confirmed by Forth. There is deliberately no default timezone. Credential values must remain server-side and must never use a `NEXT_PUBLIC_` prefix.
 3. Vercel Secret values cannot be read back after saving. A configured-variable claim does not verify the values or prove that the client secret was rotated. Do not activate a deployment or call Forth until the replacement secret is configured and the controlled test is explicitly approved.
-4. For a controlled Preview diagnostic, set the credentials as **Preview-only Secret** values and the profile flag as **Preview-only Config**, then create a Preview deployment after approval. Use a verified EES office account with `business:read` and make one `GET` request to `/api/admin/forth-tracking` in that signed-in browser session. Production credentials do not need to be copied into Preview.
+4. For a controlled Preview diagnostic, set OAuth credentials as **Preview-only Secret** values, and the profile and confirmed timezone as **Preview-only Config** values, then create a Preview deployment after approval. Use a verified EES office account with `business:read` and make one `GET` request to `/api/admin/forth-tracking` in that signed-in browser session. Production credentials do not need to be copied into Preview.
 5. Any later Production deployment also requires the replacement secret to be configured for Production, a passing controlled diagnostic, and explicit deployment approval. Environment changes apply to new deployments. See [Vercel's Secret and Config types](https://vercel.com/changelog/environment-variables-now-use-config-and-secret-types) and [environment variable management](https://vercel.com/docs/environment-variables/managing-environment-variables).
 
 That diagnostic sends one token request followed by one read-only tracking `GET` (or reuses the in-memory token while it remains valid). It returns aggregate counts and connection status only. It performs no Supabase writes and does not update vehicle, maintenance, or mileage data. The dashboard endpoint returns a sanitized read-only projection and uses the same server-side service and token cache. Do not call either endpoint until the replacement secret is configured and the controlled diagnostic is approved.
@@ -38,7 +39,7 @@ Source files: [WebServerClient.cs](https://github.com/DotNetOpenAuth/DotNetOpenA
 
 ## Data handling
 
-Tracking normalization is in `lib/forth-tracking.ts`. It keeps GPS, engine, speed, heading, source, timestamp, coordinate validity, and optional sensors separate. Time strings without an explicit timezone are marked `timezone_ambiguous`; they are not interpreted using the server timezone. Qualified timestamps are normalized to UTC, then displayed in the viewer's local timezone with a timezone label. A position is marked stale after 15 minutes. The dashboard classifies a vehicle as moving or parked only when GPS is connected, a recent GPS position and valid coordinates are present, the position source is GPS, and a numeric speed is reported. Positive speed means moving; zero means parked. Disconnected or stale records are offline/stale, and incomplete records remain unknown.
+Tracking normalization is in `lib/forth-tracking.ts`. It preserves the exact source `dateTime` string for auditing, separately stores the normalized GPS position time, and keeps the API retrieval time in `fetchedAt`. The supplied Developer's Guide examples and accessible API material do not establish the timezone convention for timezone-less `dateTime` values. Timestamps with an explicit offset are normalized directly. Naive timestamps require `FORTH_SOURCE_TIME_ZONE`; with no configured zone they stay unparsed and report `timezone_unconfigured`. Invalid IANA zones are reported separately, and daylight-saving gaps or overlaps are not silently resolved. A position is marked stale after 15 minutes. The dashboard classifies a vehicle as moving or parked only when GPS is connected, a recent GPS position and valid coordinates are present, the source is not explicitly non-GPS or reporting signal loss, and a finite non-negative speed is reported. Positive speed means moving; zero means parked. Disconnected or stale records are offline/stale, and incomplete or timezone-ambiguous records remain unknown.
 
 Vehicle matching is read-only. It prefers an explicitly stored Forth GPS device ID, then compares registrations after removing only whitespace and harmless separators. Thai characters are retained. Duplicate matches are flagged for review, province differences are respected when available, and no database write or automatic vehicle change is performed.
 

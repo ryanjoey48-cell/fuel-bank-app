@@ -51,7 +51,7 @@ const COPY = {
     unavailable: "Connection unavailable",
     refresh: "Refresh tracking",
     refreshing: "Updating…",
-    lastSync: "Last checked",
+    lastSync: "Last successful API refresh",
     total: "Tracked vehicles",
     totalHelper: "Records returned by Forth",
     moving: "Moving",
@@ -60,8 +60,8 @@ const COPY = {
     parkedHelper: "Current GPS and zero reported speed",
     offline: "Offline / stale",
     offlineHelper: "Disconnected or reporting an old position",
-    latestGps: "Last GPS update",
-    latestGpsHelper: "Newest timezone-qualified position time",
+    latestGps: "Latest valid GPS position",
+    latestGpsHelper: "Position time from Forth, separate from API refresh time",
     unknownSummary: "Other vehicles have incomplete status data and are not classified as moving or parked.",
     configurationTitle: "Forth Tracking is awaiting configuration",
     configurationBody: "This environment is not returning tracking data yet. Fleet counts and map positions will appear after the server is configured.",
@@ -105,10 +105,13 @@ const COPY = {
     missingLocation: "Coordinates not reported",
     invalidLocation: "Coordinates invalid",
     timestamp: "Reported location time",
+    sourceTimestamp: "Original Forth timestamp",
     current: "Current report",
     stale: "Stale report",
     noTimestamp: "Time unavailable",
-    ambiguousTime: "Timezone not supplied",
+    timezoneUnconfigured: "Source timezone not configured",
+    timezoneInvalid: "Source timezone is invalid",
+    ambiguousTime: "Local time is ambiguous",
     invalidTime: "Invalid time",
     positionSource: "Position source",
     gpsSource: "GPS",
@@ -130,7 +133,7 @@ const COPY = {
     unavailable: "ไม่สามารถเชื่อมต่อได้",
     refresh: "รีเฟรชข้อมูลติดตาม",
     refreshing: "กำลังอัปเดต…",
-    lastSync: "ตรวจสอบล่าสุด",
+    lastSync: "เวลารีเฟรช API สำเร็จล่าสุด",
     total: "รถที่ติดตาม",
     totalHelper: "รายการที่ Forth ส่งกลับมา",
     moving: "กำลังเคลื่อนที่",
@@ -139,8 +142,8 @@ const COPY = {
     parkedHelper: "GPS ปัจจุบันและความเร็วเป็นศูนย์",
     offline: "ออฟไลน์ / ข้อมูลเก่า",
     offlineHelper: "ขาดการเชื่อมต่อหรือรายงานตำแหน่งเก่า",
-    latestGps: "อัปเดต GPS ล่าสุด",
-    latestGpsHelper: "เวลาตำแหน่งล่าสุดที่ระบุเขตเวลา",
+    latestGps: "เวลาตำแหน่ง GPS ที่ถูกต้องล่าสุด",
+    latestGpsHelper: "เวลาจาก Forth แยกจากเวลารีเฟรช API",
     unknownSummary: "รถบางรายการมีข้อมูลสถานะไม่ครบ จึงยังจัดเป็นกำลังเคลื่อนที่หรือจอดอยู่ไม่ได้",
     configurationTitle: "รอการตั้งค่า Forth Tracking",
     configurationBody: "สภาพแวดล้อมนี้ยังไม่ได้ส่งข้อมูลติดตาม จำนวนรถและตำแหน่งบนแผนที่จะปรากฏเมื่อตั้งค่าเซิร์ฟเวอร์แล้ว",
@@ -184,10 +187,13 @@ const COPY = {
     missingLocation: "ไม่มีรายงานพิกัด",
     invalidLocation: "พิกัดไม่ถูกต้อง",
     timestamp: "เวลาที่รายงานตำแหน่ง",
+    sourceTimestamp: "เวลาต้นฉบับจาก Forth",
     current: "ข้อมูลปัจจุบัน",
     stale: "ข้อมูลเก่า",
     noTimestamp: "ไม่มีเวลา",
-    ambiguousTime: "ไม่มีเขตเวลา",
+    timezoneUnconfigured: "ยังไม่ได้ตั้งค่าเขตเวลาต้นทาง",
+    timezoneInvalid: "เขตเวลาต้นทางไม่ถูกต้อง",
+    ambiguousTime: "เวลาท้องถิ่นกำกวม",
     invalidTime: "เวลาไม่ถูกต้อง",
     positionSource: "แหล่งที่มาของตำแหน่ง",
     gpsSource: "GPS",
@@ -256,6 +262,8 @@ function recordLocationLabel(record: ForthFleetTrackingRecord, copy: Copy) {
 function timestampStatusLabel(record: ForthFleetTrackingRecord, copy: Copy) {
   if (record.timestampStatus === "current") return copy.current;
   if (record.timestampStatus === "stale") return copy.stale;
+  if (record.timestampStatus === "timezone_unconfigured") return copy.timezoneUnconfigured;
+  if (record.timestampStatus === "timezone_invalid") return copy.timezoneInvalid;
   if (record.timestampStatus === "timezone_ambiguous") return copy.ambiguousTime;
   if (record.timestampStatus === "invalid") return copy.invalidTime;
   return copy.noTimestamp;
@@ -271,6 +279,7 @@ export function ForthTrackingCentre() {
   const { language } = useLanguage();
   const copy = COPY[language];
   const [data, setData] = useState<ForthFleetTrackingData | null>(null);
+  const [lastSuccessfulRefreshAt, setLastSuccessfulRefreshAt] = useState<string | null>(null);
   const [requestError, setRequestError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -305,6 +314,9 @@ export function ForthTrackingCentre() {
         const payload: unknown = await response.json();
         if (!isFleetTrackingData(payload)) throw new Error("invalid_response");
         if (active) {
+          if (payload.connectionStatus === "connected" && payload.fetchedAt) {
+            setLastSuccessfulRefreshAt(payload.fetchedAt);
+          }
           setData(payload);
           setRequestError(false);
           setSelectedKey((current) => current && payload.records.some((record, index) => getForthFleetRecordKey(record, index) === current) ? current : null);
@@ -358,7 +370,10 @@ export function ForthTrackingCentre() {
     return data.records.find((record, index) => getForthFleetRecordKey(record, index) === selectedKey) ?? null;
   }, [data, selectedKey]);
   const lastGpsUpdate = formatForthTrackingTime(summary.lastUpdate, language);
-  const lastChecked = formatForthTrackingTime(data?.fetchedAt ?? null, language);
+  const lastChecked = formatForthTrackingTime(
+    lastSuccessfulRefreshAt ?? (data?.connectionStatus === "connected" ? data.fetchedAt : null),
+    language
+  );
   const mapCopy = useMemo(() => ({
     moving: copy.mapMoving,
     parked: copy.mapParked,
@@ -570,6 +585,7 @@ export function ForthTrackingCentre() {
               ) : copy.noPosition}
             />
             <DetailValue label={copy.timestamp} icon={<Clock3 className="h-3.5 w-3.5" />} value={<span>{formatForthTrackingTime(selectedRecord.lastGpsTimestamp, language) ?? copy.unknownValue}<span className="mt-1 block text-xs font-medium text-slate-500">{timestampStatusLabel(selectedRecord, copy)}</span></span>} />
+            <DetailValue label={copy.sourceTimestamp} icon={<Clock3 className="h-3.5 w-3.5" />} value={selectedRecord.sourceTimestampRaw || copy.unknownValue} />
             <DetailValue label={copy.positionSource} icon={<MapPinned className="h-3.5 w-3.5" />} value={selectedRecord.positionSource || (selectedRecord.positionStatus === "gps" ? copy.gpsSource : selectedRecord.positionStatus === "non_gps" ? copy.nonGpsSource : copy.unknownValue)} />
             <DetailValue label={copy.heading} icon={<Navigation className="h-3.5 w-3.5" />} value={selectedRecord.heading === null ? copy.unknownValue : `${selectedRecord.heading} ${copy.degrees}`} />
           </dl>

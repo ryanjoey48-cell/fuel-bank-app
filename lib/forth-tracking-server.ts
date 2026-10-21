@@ -48,6 +48,7 @@ export type ForthFleetTrackingRecord = Pick<
   | "engineOn"
   | "gpsConnectivity"
   | "gprsConnectivity"
+  | "sourceTimestampRaw"
   | "lastGpsTimestamp"
   | "timestampStatus"
   | "heading"
@@ -277,7 +278,10 @@ export function createForthTrackingService(options: {
 
     try {
       const payload: unknown = await response.json();
-      const records = normalizeForthTrackingResponse(payload, { now: now() });
+      const records = normalizeForthTrackingResponse(payload, {
+        now: now(),
+        sourceTimeZone: environment.FORTH_SOURCE_TIME_ZONE
+      });
       return { connectionStatus: "connected", authenticationStatus: "authenticated", credentialsConfigured: true, requestProfileConfigured: true, fetchedAt: new Date(now()).toISOString(), records, error: null };
     } catch {
       return { connectionStatus: "failed", authenticationStatus: "authenticated", credentialsConfigured: true, requestProfileConfigured: true, fetchedAt: null, records: [], error: safeError("invalid_tracking_response") };
@@ -286,6 +290,12 @@ export function createForthTrackingService(options: {
 
   function latestTimestamp(records: ForthTrackingRecord[]) {
     return records
+      .filter((record) =>
+        record.coordinateStatus === "valid" &&
+        record.gpsConnectivity !== "disconnected" &&
+        record.positionStatus !== "non_gps" &&
+        (record.timestampStatus === "current" || record.timestampStatus === "stale")
+      )
       .map((record) => record.lastGpsTimestamp)
       .filter((timestamp): timestamp is string => timestamp !== null)
       .sort()
@@ -329,6 +339,7 @@ export function createForthTrackingService(options: {
       engineOn: record.engineOn,
       gpsConnectivity: record.gpsConnectivity,
       gprsConnectivity: record.gprsConnectivity,
+      sourceTimestampRaw: record.sourceTimestampRaw,
       lastGpsTimestamp: record.lastGpsTimestamp,
       timestampStatus: record.timestampStatus,
       heading: record.heading,

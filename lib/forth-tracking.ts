@@ -1,6 +1,13 @@
 export type ForthCoordinateStatus = "valid" | "missing" | "invalid";
 export type ForthGpsConnectivity = "connected" | "disconnected" | "unknown";
-export type ForthTimestampStatus = "current" | "stale" | "missing" | "invalid" | "timezone_ambiguous";
+export type ForthTimestampStatus =
+  | "current"
+  | "stale"
+  | "missing"
+  | "invalid"
+  | "timezone_unconfigured"
+  | "timezone_invalid"
+  | "timezone_ambiguous";
 export type ForthPositionStatus = "gps" | "non_gps" | "unknown";
 
 /** Fields returned by the upstream API are optional and may vary by device. */
@@ -48,6 +55,7 @@ export type ForthTrackingRecord = {
   engineOn: boolean | null;
   gpsConnectivity: ForthGpsConnectivity;
   gprsConnectivity: ForthGpsConnectivity;
+  sourceTimestampRaw: string | null;
   lastGpsTimestamp: string | null;
   timestampStatus: ForthTimestampStatus;
   heading: number | null;
@@ -117,21 +125,135 @@ function parseBoolean(value: unknown): boolean | null {
   return null;
 }
 
-function parseTimestamp(value: unknown, now: number, staleAfterMs: number) {
+type TimestampParts = {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+  millisecond: number;
+};
+
+function utcMilliseconds(parts: TimestampParts) {
+  const date = new Date(0);
+  date.setUTCFullYear(parts.year, parts.month - 1, parts.day);
+  date.setUTCHours(parts.hour, parts.minute, parts.second, parts.millisecond);
+  if (
+    date.getUTCFullYear() !== parts.year ||
+    date.getUTCMonth() !== parts.month - 1 ||
+    date.getUTCDate() !== parts.day ||
+    date.getUTCHours() !== parts.hour ||
+    date.getUTCMinutes() !== parts.minute ||
+    date.getUTCSeconds() !== parts.second ||
+    date.getUTCMilliseconds() !== parts.millisecond
+  ) return null;
+  return date.getTime();
+}
+
+function localPartsAt(milliseconds: number, formatter: Intl.DateTimeFormat): TimestampParts | null {
+  const values = new Map(formatter.formatToParts(new Date(milliseconds)).map((part) => [part.type, part.value]));
+  const year = Number(values.get("year"));
+  const month = Number(values.get("month"));
+  const day = Number(values.get("day"));
+  const hour = Number(values.get("hour"));
+  const minute = Number(values.get("minute"));
+  const second = Number(values.get("second"));
+  if (![year, month, day, hour, minute, second].every(Number.isInteger)) return null;
+  return { year, month, day, hour, minute, second, millisecond: new Date(milliseconds).getUTCMilliseconds() };
+}
+
+function resolveLocalTimestamp(parts: TimestampParts, sourceTimeZone: string):
+  | { milliseconds: number }
+  | { failure: "timezone_invalid" | "timezone_ambiguous" | "invalid" } {
+  let formatter: Intl.DateTimeFormat;
+  try {
+    formatter = new Intl.DateTimeFormat("en-US-u-ca-gregory-nu-latn", {
+      timeZone: sourceTimeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23"
+    });
+  } catch {
+    return { failure: "timezone_invalid" };
+  }
+
+  const wallClock = utcMilliseconds(parts);
+  if (wallClock === null) return { failure: "invalid" };
+  const offsets = new Set<number>();
+  for (let hours = -36; hours <= 36; hours += 6) {
+    const sample = wallClock + hours * 60 * 60 * 1000;
+    const local = localPartsAt(sample, formatter);
+    if (!local) continue;
+    const localAsUtc = utcMilliseconds({ ...local, millisecond: 0 });
+    if (localAsUtc !== null) offsets.add(localAsUtc - Math.floor(sample / 1000) * 1000);
+  }
+
+  const matches = [...offsets]
+    .map((offset) => wallClock - offset)
+    .filter((candidate) => {
+      const local = localPartsAt(candidate, formatter);
+      return local !== null &&
+        local.year === parts.year &&
+        local.month === parts.month &&
+        local.day === parts.day &&
+        local.hour === parts.hour &&
+        local.minute === parts.minute &&
+        local.second === parts.second;
+    });
+
+  if (matches.length === 0) return { failure: "invalid" };
+  if (matches.length > 1) return { failure: "timezone_ambiguous" };
+  return { milliseconds: matches[0] };
+}
+
+function parseTimestamp(value: unknown, now: number, staleAfterMs: number, sourceTimeZone?: string | null) {
   if (value === null || value === undefined || (typeof value === "string" && !value.trim())) {
     return { timestamp: null, status: "missing" as const };
   }
   if (typeof value !== "string") return { timestamp: null, status: "invalid" as const };
 
   const raw = value.trim();
-  // Forth's timestamp timezone has not been confirmed. Naive timestamps are not
-  // interpreted in the server's local timezone because that would vary by host.
-  if (!/(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw)) {
-    return { timestamp: null, status: "timezone_ambiguous" as const };
+  const match = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(Z|([+-])(\d{2}):?(\d{2}))?$/i.exec(raw);
+  if (!match) return { timestamp: null, status: "invalid" as const };
+
+  const parts: TimestampParts = {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+    hour: Number(match[4]),
+    minute: Number(match[5]),
+    second: Number(match[6]),
+    millisecond: Number((match[7] ?? "").padEnd(3, "0").slice(0, 3) || "0")
+  };
+  const wallClock = utcMilliseconds(parts);
+  if (wallClock === null) return { timestamp: null, status: "invalid" as const };
+
+  let milliseconds: number;
+  const zone = match[8];
+  if (zone?.toUpperCase() === "Z") {
+    milliseconds = wallClock;
+  } else if (zone) {
+    const offsetHours = Number(match[10]);
+    const offsetMinutes = Number(match[11]);
+    if (offsetHours > 14 || offsetMinutes > 59 || (offsetHours === 14 && offsetMinutes !== 0)) {
+      return { timestamp: null, status: "invalid" as const };
+    }
+    const offset = (offsetHours * 60 + offsetMinutes) * 60_000 * (match[9] === "+" ? 1 : -1);
+    milliseconds = wallClock - offset;
+  } else {
+    const configuredTimeZone = sourceTimeZone?.trim();
+    if (!configuredTimeZone) return { timestamp: null, status: "timezone_unconfigured" as const };
+    const resolved = resolveLocalTimestamp(parts, configuredTimeZone);
+    if ("failure" in resolved) return { timestamp: null, status: resolved.failure };
+    milliseconds = resolved.milliseconds;
   }
 
-  const milliseconds = Date.parse(raw);
-  if (!Number.isFinite(milliseconds) || milliseconds > now + FUTURE_CLOCK_SKEW_MS) {
+  if (milliseconds > now + FUTURE_CLOCK_SKEW_MS) {
     return { timestamp: null, status: "invalid" as const };
   }
   return {
@@ -142,10 +264,11 @@ function parseTimestamp(value: unknown, now: number, staleAfterMs: number) {
 
 function sourceStatus(value: string | null): ForthPositionStatus {
   if (!value) return "unknown";
-  return /\bgps\b/i.test(value) ? "gps" : "non_gps";
+  if (/\b(?:no|lost|unavailable|disconnected|invalid)\b/i.test(value)) return "non_gps";
+  return /\bgps\b/i.test(value) && !/\bnon[-\s]?gps\b/i.test(value) ? "gps" : "non_gps";
 }
 
-function normalizeRecord(value: unknown, now: number, staleAfterMs: number): ForthTrackingRecord {
+function normalizeRecord(value: unknown, now: number, staleAfterMs: number, sourceTimeZone?: string | null): ForthTrackingRecord {
   const raw = recordValue(value);
   if (!raw) throw new ForthTrackingPayloadError();
 
@@ -159,8 +282,9 @@ function normalizeRecord(value: unknown, now: number, staleAfterMs: number): For
   } else coordinateStatus = "valid";
 
   const gpsValue = parseBoolean(raw.GPS);
-  const timestamp = parseTimestamp(raw.dateTime, now, staleAfterMs);
+  const timestamp = parseTimestamp(raw.dateTime, now, staleAfterMs, sourceTimeZone);
   const positionSource = optionalText(raw.positionSource);
+  const sourceReportsGpsLoss = Boolean(positionSource && /\b(?:no|lost|unavailable|disconnected|invalid)\b/i.test(positionSource));
   const speed = numericValue(raw.Speed);
   const heading = numericValue(raw.COG);
   const gprsValue = parseBoolean(raw.GPRS);
@@ -174,10 +298,13 @@ function normalizeRecord(value: unknown, now: number, staleAfterMs: number): For
     coordinateStatus,
     speed: speed !== null && speed >= 0 ? speed : null,
     engineOn: parseBoolean(raw.Engine),
-    gpsConnectivity: gpsValue === null ? "unknown" : gpsValue ? "connected" : "disconnected",
+    gpsConnectivity: sourceReportsGpsLoss || gpsValue === false
+      ? "disconnected"
+      : gpsValue === true ? "connected" : "unknown",
     gprsConnectivity: gprsValue === null
       ? "unknown"
       : gprsValue ? "connected" : "disconnected",
+    sourceTimestampRaw: typeof raw.dateTime === "string" ? raw.dateTime : null,
     lastGpsTimestamp: timestamp.timestamp,
     timestampStatus: timestamp.status,
     heading: heading !== null && heading >= 0 && heading <= 360 ? heading : null,
@@ -195,12 +322,12 @@ function normalizeRecord(value: unknown, now: number, staleAfterMs: number): For
 
 export function normalizeForthTrackingResponse(
   payload: unknown,
-  options: { now?: number; staleAfterMs?: number } = {}
+  options: { now?: number; staleAfterMs?: number; sourceTimeZone?: string | null } = {}
 ): ForthTrackingRecord[] {
   if (!Array.isArray(payload)) throw new ForthTrackingPayloadError();
   const now = options.now ?? Date.now();
   const staleAfterMs = options.staleAfterMs ?? DEFAULT_STALE_AFTER_MS;
-  return payload.map((record) => normalizeRecord(record, now, staleAfterMs));
+  return payload.map((record) => normalizeRecord(record, now, staleAfterMs, options.sourceTimeZone));
 }
 
 /** Registration normalization removes only harmless separators and whitespace. */

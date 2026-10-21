@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
 import styles from "./forth-tracking-map.module.css";
 import {
-  getForthFleetRecordKey,
+  getForthFleetMapRecords,
   getForthFleetStatus,
   type ForthFleetStatus
 } from "@/lib/forth-tracking-view";
@@ -40,40 +40,38 @@ function statusLabel(status: ForthFleetStatus, copy: Copy) {
   return copy.unknown;
 }
 
-function markerColors(status: ForthFleetStatus, selected: boolean) {
-  const fill = status === "moving"
-    ? "#059669"
+function markerIcon(Leaflet: LeafletModule, status: ForthFleetStatus, selected: boolean) {
+  const statusClass = status === "moving"
+    ? styles.vehicleMarkerMoving
     : status === "parked"
-      ? "#4f46e5"
+      ? styles.vehicleMarkerParked
       : status === "offline_stale"
-        ? "#d97706"
-        : "#64748b";
-  return {
-    color: selected ? "#111827" : "#ffffff",
-    fillColor: fill,
-    fillOpacity: 0.98,
-    opacity: 1,
-    radius: selected ? 10 : 7,
-    weight: selected ? 4 : 2
-  };
+        ? styles.vehicleMarkerOffline
+        : styles.vehicleMarkerUnknown;
+  return Leaflet.divIcon({
+    className: styles.vehicleMarker,
+    html: "<span class=\"" + styles.vehicleMarkerDot + " " + statusClass +
+      (selected ? " " + styles.vehicleMarkerSelected : "") + "\"></span>",
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+    popupAnchor: [0, -16],
+    tooltipAnchor: [0, -16]
+  });
 }
 
 export function ForthTrackingMap({ records, selectedKey, onSelect, language, copy }: Props) {
   const mapNodeRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<import("leaflet").Map | null>(null);
   const markerLayerRef = useRef<import("leaflet").LayerGroup | null>(null);
-  const markersByKeyRef = useRef(new Map<string, { marker: import("leaflet").CircleMarker; status: ForthFleetStatus }>());
+  const markersByKeyRef = useRef(new Map<string, { marker: import("leaflet").Marker; status: ForthFleetStatus }>());
   const leafletRef = useRef<LeafletModule | null>(null);
   const onSelectRef = useRef(onSelect);
-  const fittedInitialBoundsRef = useRef(false);
+  const fittedBoundsRef = useRef(false);
   const lastPannedSelectionRef = useRef<{ key: string; latitude: number; longitude: number } | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapFailed, setMapFailed] = useState(false);
 
-  const positionedRecords = useMemo(() => records.flatMap((record, index) => {
-    if (record.coordinateStatus !== "valid" || record.latitude === null || record.longitude === null) return [];
-    return [{ record, key: getForthFleetRecordKey(record, index) }];
-  }), [records]);
+  const positionedRecords = useMemo(() => getForthFleetMapRecords(records), [records]);
 
   useEffect(() => {
     onSelectRef.current = onSelect;
@@ -95,6 +93,8 @@ export function ForthTrackingMap({ records, selectedKey, onSelect, language, cop
           zoomControl: true,
           preferCanvas: true
         }).setView([13.7563, 100.5018], 6);
+        map.getPane("tilePane")?.style.setProperty("z-index", "200");
+        map.getPane("markerPane")?.style.setProperty("z-index", "650");
 
         Leaflet.tileLayer(tileUrl, {
           maxZoom: 19,
@@ -134,16 +134,22 @@ export function ForthTrackingMap({ records, selectedKey, onSelect, language, cop
 
     markerLayer.clearLayers();
     markersByKeyRef.current.clear();
-    const bounds: import("leaflet").LatLngExpression[] = [];
+    const bounds: [number, number][] = [];
 
-    for (const { record, key } of positionedRecords) {
-      const position: import("leaflet").LatLngExpression = [record.latitude!, record.longitude!];
+    for (const { record, key, position } of positionedRecords) {
       const status = getForthFleetStatus(record);
-      const marker = Leaflet.circleMarker(position, markerColors(status, false));
+      const markerTitle = record.vehicleRegistration || record.gpsDeviceId || copy.unknown;
+      const marker = Leaflet.marker(position, {
+        icon: markerIcon(Leaflet, status, false),
+        title: markerTitle,
+        alt: markerTitle,
+        keyboard: true,
+        riseOnHover: true
+      });
       const content = document.createElement("div");
       content.className = "forth-tracking-popup";
       const title = document.createElement("strong");
-      title.textContent = record.vehicleRegistration || record.gpsDeviceId || copy.unknown;
+      title.textContent = markerTitle;
       const state = document.createElement("span");
       state.textContent = statusLabel(status, copy);
       content.append(title, state);
@@ -157,21 +163,31 @@ export function ForthTrackingMap({ records, selectedKey, onSelect, language, cop
       bounds.push(position);
     }
 
-    if (!fittedInitialBoundsRef.current && bounds.length > 0) {
-      if (bounds.length === 1) map.setView(bounds[0], 13);
-      else map.fitBounds(Leaflet.latLngBounds(bounds), { padding: [32, 32], maxZoom: 13 });
-      fittedInitialBoundsRef.current = true;
+    const shouldFitBounds = bounds.length > 0 && (
+      !fittedBoundsRef.current ||
+      bounds.some((position) => !map.getBounds().contains(Leaflet.latLng(position)))
+    );
+    if (shouldFitBounds) {
+      const first = bounds[0];
+      const allSamePosition = bounds.every((position) =>
+        position[0] === first[0] && position[1] === first[1]
+      );
+      if (bounds.length === 1 || allSamePosition) map.setView(first, 13);
+      else map.fitBounds(Leaflet.latLngBounds(bounds), { padding: [40, 40], maxZoom: 13 });
+      fittedBoundsRef.current = true;
     }
   }, [copy, mapReady, positionedRecords]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!mapReady || !map) return;
+    const Leaflet = leafletRef.current;
+    if (!mapReady || !map || !Leaflet) return;
 
-    let selectedMarker: import("leaflet").CircleMarker | null = null;
+    let selectedMarker: import("leaflet").Marker | null = null;
     for (const [key, entry] of markersByKeyRef.current) {
       const selected = key === selectedKey;
-      entry.marker.setStyle(markerColors(entry.status, selected));
+      entry.marker.setIcon(markerIcon(Leaflet, entry.status, selected));
+      entry.marker.setZIndexOffset(selected ? 1000 : 0);
       if (selected) selectedMarker = entry.marker;
     }
 
