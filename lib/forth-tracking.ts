@@ -293,7 +293,6 @@ function normalizeRecord(value: unknown, now: number, staleAfterMs: number, sour
   const gpsValue = parseBoolean(raw.GPS);
   const timestamp = parseTimestamp(raw.dateTime, now, staleAfterMs, sourceTimeZone);
   const positionSource = optionalText(raw.positionSource);
-  const sourceReportsGpsLoss = Boolean(positionSource && /\b(?:no|lost|unavailable|disconnected|invalid)\b/i.test(positionSource));
   const speed = numericValue(raw.Speed);
   const heading = numericValue(raw.COG);
   const gprsValue = parseBoolean(raw.GPRS);
@@ -307,7 +306,10 @@ function normalizeRecord(value: unknown, now: number, staleAfterMs: number, sour
     coordinateStatus,
     speed: speed !== null && speed >= 0 ? speed : null,
     engineOn: parseBoolean(raw.Engine),
-    gpsConnectivity: sourceReportsGpsLoss || gpsValue === false
+    // GPS status and position source are separate Forth signals. A Wi-Fi/LBS
+    // position can be fresh while GPS has no fix; do not let source metadata
+    // override the explicit GPS field or imply the device lost communication.
+    gpsConnectivity: gpsValue === false
       ? "disconnected"
       : gpsValue === true ? "connected" : "unknown",
     gprsConnectivity: gprsValue === null

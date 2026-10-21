@@ -59,7 +59,7 @@ const COPY = {
     parked: "Parked",
     parkedHelper: "Current GPS and zero reported speed",
     offline: "Offline / stale",
-    offlineHelper: "Disconnected or reporting an old position",
+    offlineHelper: "GPRS disconnected or reporting an old position",
     latestGps: "Latest valid GPS position",
     latestGpsHelper: "Position time from Forth, separate from API refresh time",
     unknownSummary: "Other vehicles have incomplete status data and are not classified as moving or parked.",
@@ -97,6 +97,7 @@ const COPY = {
     gprs: "GPRS status",
     online: "Connected",
     offlineStatus: "Disconnected",
+    gpsNoFix: "No GPS fix",
     position: "Last known position",
     coordinates: "Coordinates",
     noPosition: "Coordinates unavailable",
@@ -141,7 +142,7 @@ const COPY = {
     parked: "จอดอยู่",
     parkedHelper: "GPS ปัจจุบันและความเร็วเป็นศูนย์",
     offline: "ออฟไลน์ / ข้อมูลเก่า",
-    offlineHelper: "ขาดการเชื่อมต่อหรือรายงานตำแหน่งเก่า",
+    offlineHelper: "GPRS ขาดการเชื่อมต่อหรือรายงานตำแหน่งเก่า",
     latestGps: "เวลาตำแหน่ง GPS ที่ถูกต้องล่าสุด",
     latestGpsHelper: "เวลาจาก Forth แยกจากเวลารีเฟรช API",
     unknownSummary: "รถบางรายการมีข้อมูลสถานะไม่ครบ จึงยังจัดเป็นกำลังเคลื่อนที่หรือจอดอยู่ไม่ได้",
@@ -179,6 +180,7 @@ const COPY = {
     gprs: "สถานะ GPRS",
     online: "เชื่อมต่อแล้ว",
     offlineStatus: "ขาดการเชื่อมต่อ",
+    gpsNoFix: "ไม่มีสัญญาณ GPS",
     position: "ตำแหน่งล่าสุด",
     coordinates: "พิกัด",
     noPosition: "ไม่มีพิกัด",
@@ -269,9 +271,13 @@ function timestampStatusLabel(record: ForthFleetTrackingRecord, copy: Copy) {
   return copy.noTimestamp;
 }
 
-function ConnectivityValue({ connected, copy }: { connected: "connected" | "disconnected" | "unknown"; copy: Copy }) {
+function ConnectivityValue({ connected, copy, disconnectedLabel }: {
+  connected: "connected" | "disconnected" | "unknown";
+  copy: Copy;
+  disconnectedLabel?: string;
+}) {
   if (connected === "connected") return <span className="inline-flex items-center gap-1.5 text-emerald-700"><Wifi className="h-4 w-4" />{copy.online}</span>;
-  if (connected === "disconnected") return <span className="inline-flex items-center gap-1.5 text-rose-700"><WifiOff className="h-4 w-4" />{copy.offlineStatus}</span>;
+  if (connected === "disconnected") return <span className="inline-flex items-center gap-1.5 text-rose-700"><WifiOff className="h-4 w-4" />{disconnectedLabel ?? copy.offlineStatus}</span>;
   return <span className="inline-flex items-center gap-1.5 text-slate-500"><SignalZero className="h-4 w-4" />{copy.unknownValue}</span>;
 }
 
@@ -537,7 +543,7 @@ export function ForthTrackingCentre() {
                   <span className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-slate-600">
                     <span className="inline-flex min-w-0 items-center gap-1.5"><Gauge className="h-3.5 w-3.5 shrink-0 text-slate-400" />{record.speed === null ? copy.unknownValue : `${record.speed} km/h`}</span>
                     <span className="inline-flex min-w-0 items-center gap-1.5"><Activity className="h-3.5 w-3.5 shrink-0 text-slate-400" />{copy.engine}: {record.engineOn === null ? copy.unknownValue : record.engineOn ? copy.engineOn : copy.engineOff}</span>
-                    <span className="inline-flex min-w-0 items-center gap-1.5">{record.gpsConnectivity === "connected" ? <Wifi className="h-3.5 w-3.5 shrink-0 text-emerald-600" /> : record.gpsConnectivity === "disconnected" ? <WifiOff className="h-3.5 w-3.5 shrink-0 text-slate-400" /> : <SignalZero className="h-3.5 w-3.5 shrink-0 text-slate-400" />}{record.gpsConnectivity === "connected" ? copy.online : record.gpsConnectivity === "disconnected" ? copy.offlineStatus : copy.unknownValue}</span>
+                    <span className="inline-flex min-w-0 items-center gap-1.5">{record.gpsConnectivity === "connected" ? <Wifi className="h-3.5 w-3.5 shrink-0 text-emerald-600" /> : <SignalZero className="h-3.5 w-3.5 shrink-0 text-slate-400" />}{record.gpsConnectivity === "connected" ? copy.online : record.gpsConnectivity === "disconnected" ? copy.gpsNoFix : copy.unknownValue}</span>
                     <span className="inline-flex min-w-0 items-center gap-1.5"><Clock3 className="h-3.5 w-3.5 shrink-0 text-slate-400" />{updateTime ?? timestampStatusLabel(record, copy)}</span>
                     <span className="inline-flex min-w-0 items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />{recordLocationLabel(record, copy)}</span>
                   </span>
@@ -567,7 +573,7 @@ export function ForthTrackingCentre() {
             <DetailValue label={copy.device} icon={<Signal className="h-3.5 w-3.5" />} value={selectedRecord.gpsDeviceId || copy.unknownValue} />
             <DetailValue label={copy.speed} icon={<Gauge className="h-3.5 w-3.5" />} value={selectedRecord.speed === null ? copy.unknownValue : `${selectedRecord.speed} km/h`} />
             <DetailValue label={copy.engine} icon={<Activity className="h-3.5 w-3.5" />} value={selectedRecord.engineOn === null ? copy.unknownValue : selectedRecord.engineOn ? copy.engineOn : copy.engineOff} />
-            <DetailValue label={copy.gps} icon={<Signal className="h-3.5 w-3.5" />} value={<ConnectivityValue connected={selectedRecord.gpsConnectivity} copy={copy} />} />
+            <DetailValue label={copy.gps} icon={<Signal className="h-3.5 w-3.5" />} value={<ConnectivityValue connected={selectedRecord.gpsConnectivity} copy={copy} disconnectedLabel={copy.gpsNoFix} />} />
             <DetailValue label={copy.gprs} icon={<Wifi className="h-3.5 w-3.5" />} value={<ConnectivityValue connected={selectedRecord.gprsConnectivity} copy={copy} />} />
             <DetailValue label={copy.locationStatus} icon={<MapPin className="h-3.5 w-3.5" />} value={recordLocationLabel(selectedRecord, copy)} />
             <DetailValue

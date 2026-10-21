@@ -5,7 +5,6 @@ export type ForthFleetFilter = "all" | ForthFleetStatus;
 
 export function getForthFleetStatus(record: ForthFleetTrackingRecord): ForthFleetStatus {
   if (
-    record.gpsConnectivity === "disconnected" ||
     record.gprsConnectivity === "disconnected" ||
     record.timestampStatus === "stale"
   ) {

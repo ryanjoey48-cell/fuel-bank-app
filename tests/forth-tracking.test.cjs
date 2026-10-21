@@ -94,6 +94,100 @@ test("accepts missing optional fields and distinguishes missing from invalid coo
   assert.equal(records[1].coordinateStatus, "invalid");
 });
 
+test("normalizes Forth ON/OFF values without conflating GPS status and position source", () => {
+  const { getForthFleetStatus } = loadTypeScript("lib/forth-tracking-view.ts");
+  const [gpsFallback, communicationLost, gpsSignalLost, missingValues] = normalizeForthTrackingResponse([
+    {
+      dateTime: "21-10-2026 11:59:00",
+      GPS: " ON ",
+      GPRS: " on ",
+      Engine: " OFF ",
+      Speed: " 0.0 ",
+      Latitude: " 13.7 ",
+      Longitude: " 100.5 ",
+      positionSource: "GPS signal lost"
+    },
+    {
+      dateTime: "21-10-2026 11:59:00",
+      GPS: "ON",
+      GPRS: " OFF ",
+      Engine: "On",
+      Speed: 0,
+      Latitude: 13.8,
+      Longitude: 100.6,
+      positionSource: "GPS"
+    },
+    {
+      dateTime: "21-10-2026 11:59:00",
+      GPS: " OFF ",
+      GPRS: " ON ",
+      Engine: "ON",
+      Speed: 0,
+      Latitude: 13.85,
+      Longitude: 100.65,
+      positionSource: "LBS"
+    },
+    {
+      dateTime: "21-10-2026 11:59:00",
+      Latitude: 13.9,
+      Longitude: 100.7,
+      Speed: 0
+    }
+  ], { now: baseNow, sourceTimeZone: "Asia/Bangkok" });
+
+  assert.equal(gpsFallback.gpsConnectivity, "connected");
+  assert.equal(gpsFallback.gprsConnectivity, "connected");
+  assert.equal(gpsFallback.positionStatus, "non_gps");
+  assert.equal(gpsFallback.engineOn, false);
+  assert.equal(gpsFallback.speed, 0);
+  assert.equal(gpsFallback.coordinateStatus, "valid");
+  assert.equal(getForthFleetStatus(gpsFallback), "unknown");
+
+  assert.equal(communicationLost.gpsConnectivity, "connected");
+  assert.equal(communicationLost.gprsConnectivity, "disconnected");
+  assert.equal(getForthFleetStatus(communicationLost), "offline_stale");
+
+  assert.equal(gpsSignalLost.gpsConnectivity, "disconnected");
+  assert.equal(gpsSignalLost.gprsConnectivity, "connected");
+  assert.equal(gpsSignalLost.positionStatus, "non_gps");
+  assert.equal(getForthFleetStatus(gpsSignalLost), "unknown");
+
+  assert.equal(missingValues.gpsConnectivity, "unknown");
+  assert.equal(missingValues.gprsConnectivity, "unknown");
+  assert.equal(missingValues.engineOn, null);
+  assert.equal(missingValues.positionStatus, "unknown");
+  assert.equal(getForthFleetStatus(missingValues), "unknown");
+});
+
+test("EES movement stays speed-based when the engine is on while parked", () => {
+  const { getForthFleetStatus } = loadTypeScript("lib/forth-tracking-view.ts");
+  const [engineOnMoving, engineOnStationary] = normalizeForthTrackingResponse([
+    {
+      dateTime: "21-10-2026 11:59:00",
+      GPS: "ON",
+      GPRS: "ON",
+      Engine: "ON",
+      Speed: "12",
+      Latitude: 13.7,
+      Longitude: 100.5,
+      positionSource: "GPS"
+    },
+    {
+      dateTime: "21-10-2026 11:59:00",
+      GPS: "ON",
+      GPRS: "ON",
+      Engine: "ON",
+      Speed: "0",
+      Latitude: 13.8,
+      Longitude: 100.6,
+      positionSource: "GPS"
+    }
+  ], { now: baseNow, sourceTimeZone: "Asia/Bangkok" });
+
+  assert.equal(getForthFleetStatus(engineOnMoving), "moving");
+  assert.equal(getForthFleetStatus(engineOnStationary), "parked");
+});
+
 test("returns only a safe text driver label and omits identifier-like values", () => {
   const [name, identifier] = normalizeForthTrackingResponse([
     { driver: "Driver A" },
@@ -120,7 +214,7 @@ test("distinguishes stale, unconfigured-timezone, and non-GPS positions", () => 
   assert.equal(ambiguous.timestampStatus, "timezone_unconfigured");
   assert.equal(ambiguous.positionStatus, "non_gps");
   assert.equal(noGps.gpsConnectivity, "disconnected");
-  assert.equal(lostGps.gpsConnectivity, "disconnected");
+  assert.equal(lostGps.gpsConnectivity, "connected");
   assert.equal(lostGps.positionStatus, "non_gps");
 });
 
@@ -554,6 +648,7 @@ test("classifies lost, stale, ambiguous, invalid, and incomplete GPS records saf
   const records = [
     { ...base },
     { ...base, gpsConnectivity: "disconnected" },
+    { ...base, gprsConnectivity: "disconnected" },
     { ...base, timestampStatus: "stale", speed: 40, lastGpsTimestamp: "2026-10-21T04:00:00.000Z" },
     { ...base, timestampStatus: "timezone_unconfigured", lastGpsTimestamp: null },
     { ...base, coordinateStatus: "missing", latitude: null },
@@ -565,7 +660,7 @@ test("classifies lost, stale, ambiguous, invalid, and incomplete GPS records saf
   ];
 
   assert.deepEqual(records.map(getForthFleetStatus), [
-    "moving", "offline_stale", "offline_stale", "unknown", "unknown",
+    "moving", "unknown", "offline_stale", "offline_stale", "unknown", "unknown",
     "unknown", "unknown", "unknown", "unknown", "unknown"
   ]);
   assert.equal(summarizeForthFleet(records).lastUpdate, "2026-10-21T04:59:00.000Z");
