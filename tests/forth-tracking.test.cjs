@@ -222,6 +222,27 @@ function createFleetDataRoute(fleetData, { permission = true, authError = null }
   return loadTypeScript("app/api/admin/forth-tracking/vehicles/route.ts", mocks);
 }
 
+function createTimestampFormatRoute(diagnostic, { permission = true, authError = null } = {}) {
+  let diagnosticCalls = 0;
+  const mocks = {
+    "next/server": { NextResponse: { json: (body, options = {}) => new Response(JSON.stringify(body), { status: options.status ?? 200, headers: options.headers }) } },
+    "@/lib/authorization": { hasPermission: (_access, name) => permission && name === "business:read" },
+    "@/lib/admin-user-management-server": {
+      AdminApiError: TestAdminApiError,
+      createServerSupabaseAdmin: () => ({}),
+      requireVerifiedUser: async () => { if (authError) throw authError; return { id: "office-user" }; },
+      resolveAccountAccess: async () => ({ role: "office_staff", status: "active" })
+    },
+    "@/lib/forth-tracking-server": {
+      getForthTimestampFormatDiagnostic: async () => { diagnosticCalls++; return diagnostic; }
+    }
+  };
+  return {
+    route: loadTypeScript("app/api/admin/forth-tracking/timestamp-format-diagnostic/route.ts", mocks),
+    getDiagnosticCalls: () => diagnosticCalls
+  };
+}
+
 test("protected fleet data endpoint requires verified EES business-read access and is no-store", async () => {
   const unauthenticated = createFleetDataRoute({ records: [] }, { authError: new TestAdminApiError(401, "Authentication required.") });
   const noUser = await unauthenticated.GET(new Request("https://ees.test/api/admin/forth-tracking/vehicles"));
@@ -258,6 +279,38 @@ test("protected diagnostic returns private no-store results for an authorized of
   assert.equal(response.headers.get("cache-control"), "private, no-store");
   assert.deepEqual(await response.json(), { connectionStatus: "not_configured", authenticationStatus: "protocol_unverified" });
   assert.equal(fixture.getDiagnosticCalls(), 1);
+});
+
+test("temporary timestamp-format endpoint requires office access, feature enablement, and explicit confirmation", async () => {
+  const previous = process.env.FORTH_TIMESTAMP_DIAGNOSTIC_ENABLED;
+  try {
+    delete process.env.FORTH_TIMESTAMP_DIAGNOSTIC_ENABLED;
+    const disabled = createTimestampFormatRoute({ connectionStatus: "connected" });
+    const disabledResponse = await disabled.route.GET(new Request("https://ees.test/api/admin/forth-tracking/timestamp-format-diagnostic?confirm=format-only"));
+    assert.equal(disabledResponse.status, 404);
+    assert.equal(disabled.getDiagnosticCalls(), 0);
+
+    process.env.FORTH_TIMESTAMP_DIAGNOSTIC_ENABLED = "true";
+    const denied = createTimestampFormatRoute({ connectionStatus: "connected" }, { permission: false });
+    const unauthorized = await denied.route.GET(new Request("https://ees.test/api/admin/forth-tracking/timestamp-format-diagnostic?confirm=format-only"));
+    assert.equal(unauthorized.status, 403);
+    assert.equal(denied.getDiagnosticCalls(), 0);
+
+    const noConfirmation = createTimestampFormatRoute({ connectionStatus: "connected" });
+    const confirmationRequired = await noConfirmation.route.GET(new Request("https://ees.test/api/admin/forth-tracking/timestamp-format-diagnostic"));
+    assert.equal(confirmationRequired.status, 400);
+    assert.equal(confirmationRequired.headers.get("cache-control"), "private, no-store");
+    assert.equal(noConfirmation.getDiagnosticCalls(), 0);
+
+    const enabled = createTimestampFormatRoute({ connectionStatus: "connected", formats: [] });
+    const response = await enabled.route.GET(new Request("https://ees.test/api/admin/forth-tracking/timestamp-format-diagnostic?confirm=format-only"));
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("cache-control"), "private, no-store");
+    assert.equal(enabled.getDiagnosticCalls(), 1);
+  } finally {
+    if (previous === undefined) delete process.env.FORTH_TIMESTAMP_DIAGNOSTIC_ENABLED;
+    else process.env.FORTH_TIMESTAMP_DIAGNOSTIC_ENABLED = previous;
+  }
 });
 
 const credentials = {
@@ -392,6 +445,48 @@ test("fleet endpoint service exposes normalized vehicle fields only and reuses i
   const disconnected = await service.diagnose();
   assert.equal(disconnected.connectionStatus, "connected");
   assert.equal(requests.filter((url) => url.endsWith("/token")).length, 1);
+});
+
+test("timestamp format diagnostic returns masked format shapes and status counts from one mocked fetch", async () => {
+  const requests = [];
+  const service = makeFleetService({ ...credentials, FORTH_SOURCE_TIME_ZONE: "Asia/Bangkok" }, async (url) => {
+    requests.push(String(url));
+    if (String(url).endsWith("/token")) return Response.json({ access_token: "private-access-token", token_type: "Bearer", expires_in: 3600 });
+    return Response.json([
+      { gpsID: "private-device-id", plateNumber: "private-registration", driver: "Private Driver", Latitude: 13.7, Longitude: 100.5, dateTime: "2026-10-21 11:55:00" },
+      { gpsID: "private-device-id-2", Latitude: 13.8, Longitude: 100.6, dateTime: "/Date(1761030000000+0700)/" },
+      { gpsID: "private-device-id-3", Latitude: 13.9, Longitude: 100.7, dateTime: "21/10/2026 11:55:00" },
+      { gpsID: "private-device-id-4", Latitude: 14, Longitude: 100.8 },
+      { gpsID: "private-device-id-5", Latitude: 14.1, Longitude: 100.9, dateTime: "2026-10-21 13:00:00" }
+    ]);
+  });
+
+  const diagnostic = await service.diagnoseTimestampFormat();
+  const serialized = JSON.stringify(diagnostic);
+  assert.equal(diagnostic.connectionStatus, "connected");
+  assert.equal(diagnostic.fetchedAt, "2026-10-21T05:00:00.000Z");
+  assert.equal(diagnostic.sourceTimeZoneConfigured, true);
+  assert.equal(diagnostic.sourceTimeZoneValid, true);
+  assert.equal(diagnostic.recordCount, 5);
+  assert.equal(diagnostic.dateTimeFieldPresentCount, 4);
+  assert.equal(diagnostic.dateTimeValueTypes.string, 4);
+  assert.equal(diagnostic.dateTimeValueTypes.missing, 1);
+  assert.equal(diagnostic.timestampStatusCounts.current, 1);
+  assert.equal(diagnostic.timestampStatusCounts.invalid, 3);
+  assert.equal(diagnostic.timestampStatusCounts.missing, 1);
+  assert.equal(diagnostic.timestampParseReasonCounts.parsed_current, 1);
+  assert.equal(diagnostic.timestampParseReasonCounts.parsed_stale, 0);
+  assert.equal(diagnostic.timestampParseReasonCounts.unsupported_format, 2);
+  assert.equal(diagnostic.timestampParseReasonCounts.future_timestamp, 1);
+  assert.equal(diagnostic.timestampParseReasonCounts.missing_value, 1);
+  assert.ok(diagnostic.formats.some((format) => format.pattern === "9999-99-99 99:99:99" && format.parseReasonCounts.parsed_current === 1 && format.parseReasonCounts.future_timestamp === 1));
+  assert.ok(diagnostic.formats.some((format) => format.pattern === "/AAAA(9999999999999+9999)/" && format.parseStatusCounts.invalid === 1));
+  assert.ok(diagnostic.formats.some((format) => format.pattern === "99/99/9999 99:99:99" && format.parseStatusCounts.invalid === 1));
+  for (const secret of ["private-device-id", "private-registration", "Private Driver", "private-access-token", "client-test", "secret-test", "13.7", "100.5", "2026-10-21 11:55:00", "1761030000000"]) {
+    assert.equal(serialized.includes(secret), false, `diagnostic must not include ${secret}`);
+  }
+  assert.equal(requests.filter((url) => url.endsWith("/token")).length, 1);
+  assert.equal(requests.filter((url) => url.endsWith("/tracking")).length, 1);
 });
 
 test("accepts an empty vehicle array and distinguishes Forth network failures", async () => {

@@ -8,6 +8,19 @@ export type ForthTimestampStatus =
   | "timezone_unconfigured"
   | "timezone_invalid"
   | "timezone_ambiguous";
+export type ForthTimestampParseReason =
+  | "missing_value"
+  | "value_not_string"
+  | "unsupported_format"
+  | "invalid_calendar_value"
+  | "invalid_offset"
+  | "timezone_unconfigured"
+  | "timezone_invalid"
+  | "nonexistent_local_time"
+  | "timezone_ambiguous"
+  | "future_timestamp"
+  | "parsed_current"
+  | "parsed_stale";
 export type ForthPositionStatus = "gps" | "non_gps" | "unknown";
 
 /** Fields returned by the upstream API are optional and may vary by device. */
@@ -58,6 +71,7 @@ export type ForthTrackingRecord = {
   sourceTimestampRaw: string | null;
   lastGpsTimestamp: string | null;
   timestampStatus: ForthTimestampStatus;
+  timestampParseReason: ForthTimestampParseReason;
   heading: number | null;
   positionSource: string | null;
   positionStatus: ForthPositionStatus;
@@ -213,13 +227,13 @@ function resolveLocalTimestamp(parts: TimestampParts, sourceTimeZone: string):
 
 function parseTimestamp(value: unknown, now: number, staleAfterMs: number, sourceTimeZone?: string | null) {
   if (value === null || value === undefined || (typeof value === "string" && !value.trim())) {
-    return { timestamp: null, status: "missing" as const };
+    return { timestamp: null, status: "missing" as const, reason: "missing_value" as const };
   }
-  if (typeof value !== "string") return { timestamp: null, status: "invalid" as const };
+  if (typeof value !== "string") return { timestamp: null, status: "invalid" as const, reason: "value_not_string" as const };
 
   const raw = value.trim();
   const match = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(Z|([+-])(\d{2}):?(\d{2}))?$/i.exec(raw);
-  if (!match) return { timestamp: null, status: "invalid" as const };
+  if (!match) return { timestamp: null, status: "invalid" as const, reason: "unsupported_format" as const };
 
   const parts: TimestampParts = {
     year: Number(match[1]),
@@ -231,7 +245,7 @@ function parseTimestamp(value: unknown, now: number, staleAfterMs: number, sourc
     millisecond: Number((match[7] ?? "").padEnd(3, "0").slice(0, 3) || "0")
   };
   const wallClock = utcMilliseconds(parts);
-  if (wallClock === null) return { timestamp: null, status: "invalid" as const };
+  if (wallClock === null) return { timestamp: null, status: "invalid" as const, reason: "invalid_calendar_value" as const };
 
   let milliseconds: number;
   const zone = match[8];
@@ -241,24 +255,32 @@ function parseTimestamp(value: unknown, now: number, staleAfterMs: number, sourc
     const offsetHours = Number(match[10]);
     const offsetMinutes = Number(match[11]);
     if (offsetHours > 14 || offsetMinutes > 59 || (offsetHours === 14 && offsetMinutes !== 0)) {
-      return { timestamp: null, status: "invalid" as const };
+      return { timestamp: null, status: "invalid" as const, reason: "invalid_offset" as const };
     }
     const offset = (offsetHours * 60 + offsetMinutes) * 60_000 * (match[9] === "+" ? 1 : -1);
     milliseconds = wallClock - offset;
   } else {
     const configuredTimeZone = sourceTimeZone?.trim();
-    if (!configuredTimeZone) return { timestamp: null, status: "timezone_unconfigured" as const };
+    if (!configuredTimeZone) return { timestamp: null, status: "timezone_unconfigured" as const, reason: "timezone_unconfigured" as const };
     const resolved = resolveLocalTimestamp(parts, configuredTimeZone);
-    if ("failure" in resolved) return { timestamp: null, status: resolved.failure };
+    if ("failure" in resolved) {
+      return {
+        timestamp: null,
+        status: resolved.failure,
+        reason: resolved.failure === "invalid" ? "nonexistent_local_time" as const : resolved.failure
+      };
+    }
     milliseconds = resolved.milliseconds;
   }
 
   if (milliseconds > now + FUTURE_CLOCK_SKEW_MS) {
-    return { timestamp: null, status: "invalid" as const };
+    return { timestamp: null, status: "invalid" as const, reason: "future_timestamp" as const };
   }
+  const status = now - milliseconds > staleAfterMs ? "stale" as const : "current" as const;
   return {
     timestamp: new Date(milliseconds).toISOString(),
-    status: now - milliseconds > staleAfterMs ? "stale" as const : "current" as const
+    status,
+    reason: status === "stale" ? "parsed_stale" as const : "parsed_current" as const
   };
 }
 
@@ -307,6 +329,7 @@ function normalizeRecord(value: unknown, now: number, staleAfterMs: number, sour
     sourceTimestampRaw: typeof raw.dateTime === "string" ? raw.dateTime : null,
     lastGpsTimestamp: timestamp.timestamp,
     timestampStatus: timestamp.status,
+    timestampParseReason: timestamp.reason,
     heading: heading !== null && heading >= 0 && heading <= 360 ? heading : null,
     positionSource,
     positionStatus: sourceStatus(positionSource),
