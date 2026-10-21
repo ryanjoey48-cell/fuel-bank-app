@@ -53,6 +53,71 @@ function emptyPositionSourceShapeCounts(): ForthPositionSourceShapeCounts {
   };
 }
 
+const MAX_UNKNOWN_SOURCE_LABEL_LENGTH = 80;
+const MAX_UNKNOWN_SOURCE_LABELS = 20;
+
+function sanitizeDiagnosticSourceLabel(value: string): string | null {
+  let label = "";
+  let length = 0;
+  let pendingSpace = false;
+  for (const character of value) {
+    const safeCharacter = /[\p{Cc}\p{Cf}]/u.test(character) ? " " : character;
+    if (/\s/u.test(safeCharacter)) {
+      if (label) pendingSpace = true;
+      continue;
+    }
+    if (pendingSpace) {
+      if (length >= MAX_UNKNOWN_SOURCE_LABEL_LENGTH) return null;
+      label += " ";
+      length += 1;
+      pendingSpace = false;
+    }
+    if (length >= MAX_UNKNOWN_SOURCE_LABEL_LENGTH) return null;
+    label += safeCharacter;
+    length += 1;
+  }
+  return label || null;
+}
+
+function summarizeUnknownPositionSourceStrings(records: ForthTrackingRecord[]) {
+  const counts = new Map<string, number>();
+  let unknownStringCount = 0;
+  let rejectedOccurrences = 0;
+  let notListedOccurrences = 0;
+
+  for (const record of records) {
+    if (record.positionSourceShape !== "unrecognized_string" || typeof record.positionSourceRaw !== "string") continue;
+    unknownStringCount += 1;
+    const label = sanitizeDiagnosticSourceLabel(record.positionSourceRaw);
+    if (!label) {
+      rejectedOccurrences += 1;
+      continue;
+    }
+    const existingCount = counts.get(label);
+    if (existingCount !== undefined) {
+      counts.set(label, existingCount + 1);
+    } else if (counts.size < MAX_UNKNOWN_SOURCE_LABELS) {
+      counts.set(label, 1);
+    } else {
+      notListedOccurrences += 1;
+    }
+  }
+
+  const labels = [...counts.entries()]
+    .sort(([leftLabel, leftCount], [rightLabel, rightCount]) =>
+      rightCount - leftCount || (leftLabel < rightLabel ? -1 : leftLabel > rightLabel ? 1 : 0)
+    )
+    .map(([label, occurrences]) => ({ label, occurrences }));
+
+  return {
+    unknownStringCount,
+    returnedUniqueCount: labels.length,
+    notListedOccurrences,
+    rejectedOccurrences,
+    labels
+  };
+}
+
 export type ForthFleetTrackingRecord = Pick<
   ForthTrackingRecord,
   | "gpsDeviceId"
@@ -259,7 +324,7 @@ export function createForthTrackingService(options: {
     return tokenInFlight;
   }
 
-  async function requestTracking(): Promise<TrackingResult> {
+  async function requestTracking(includeDiagnosticUnknownPositionSourceText = false): Promise<TrackingResult> {
     const credentials = readCredentials(environment);
     const profile = configuredTokenRequestProfile(environment);
     if (!credentials) {
@@ -297,7 +362,8 @@ export function createForthTrackingService(options: {
       const payload: unknown = await response.json();
       const records = normalizeForthTrackingResponse(payload, {
         now: now(),
-        sourceTimeZone: environment.FORTH_SOURCE_TIME_ZONE
+        sourceTimeZone: environment.FORTH_SOURCE_TIME_ZONE,
+        includeDiagnosticUnknownPositionSourceText
       });
       return {
         connectionStatus: "connected",
@@ -381,7 +447,7 @@ export function createForthTrackingService(options: {
   }
 
   async function diagnoseStatus() {
-    const result = await requestTracking();
+    const result = await requestTracking(true);
     const positionSourceShape = emptyPositionSourceShapeCounts();
     const alternateSourceCandidateShapes = emptyPositionSourceShapeCounts();
     let recordsWithAlternateSourceCandidate = 0;
@@ -392,6 +458,7 @@ export function createForthTrackingService(options: {
         alternateSourceCandidateShapes[shape] += 1;
       }
     }
+    const unknownPositionSourceStrings = summarizeUnknownPositionSourceStrings(result.records);
     const summary = summarizeForthFleet(result.records.map((record) => ({
       gpsDeviceId: null,
       vehicleRegistration: null,
@@ -426,6 +493,7 @@ export function createForthTrackingService(options: {
         alternateCandidateRecords: recordsWithAlternateSourceCandidate,
         alternateCandidateValues: alternateSourceCandidateShapes
       },
+      unknownPositionSourceStrings,
       error: result.connectionStatus === "connected" ? null : result.error?.message ?? "Forth tracking is unavailable."
     };
   }

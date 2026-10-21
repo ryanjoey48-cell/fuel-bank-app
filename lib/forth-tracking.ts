@@ -69,6 +69,8 @@ export type ForthTrackingRecord = {
   timestampStatus: ForthTimestampStatus;
   heading: number | null;
   positionSource: string | null;
+  /** Untrimmed source text retained only for the protected, sanitized one-shot diagnostic. */
+  positionSourceRaw: string | null;
   positionQuality: ForthPositionQuality;
   /** Sanitized raw-field shape used only by the protected aggregate diagnostic. */
   positionSourceShape: ForthPositionSourceShape;
@@ -337,7 +339,13 @@ function alternatePositionSourceShapes(
   return shapes;
 }
 
-function normalizeRecord(value: unknown, now: number, staleAfterMs: number, sourceTimeZone?: string | null): ForthTrackingRecord {
+function normalizeRecord(
+  value: unknown,
+  now: number,
+  staleAfterMs: number,
+  sourceTimeZone?: string | null,
+  includeDiagnosticUnknownPositionSourceText = false
+): ForthTrackingRecord {
   const raw = recordValue(value);
   if (!raw) throw new ForthTrackingPayloadError();
 
@@ -381,6 +389,11 @@ function normalizeRecord(value: unknown, now: number, staleAfterMs: number, sour
     timestampStatus: timestamp.status,
     heading: heading !== null && heading >= 0 && heading <= 360 ? heading : null,
     positionSource,
+    positionSourceRaw: includeDiagnosticUnknownPositionSourceText &&
+      typeof raw.positionSource === "string" &&
+      sourceQuality(positionSource) === "unknown"
+      ? raw.positionSource
+      : null,
     positionQuality: sourceQuality(positionSource),
     positionSourceShape: positionSourceShape(raw.positionSource, hasPositionSource),
     alternatePositionSourceCandidates: alternatePositionSourceShapes(raw),
@@ -396,12 +409,23 @@ function normalizeRecord(value: unknown, now: number, staleAfterMs: number, sour
 
 export function normalizeForthTrackingResponse(
   payload: unknown,
-  options: { now?: number; staleAfterMs?: number; sourceTimeZone?: string | null } = {}
+  options: {
+    now?: number;
+    staleAfterMs?: number;
+    sourceTimeZone?: string | null;
+    includeDiagnosticUnknownPositionSourceText?: boolean;
+  } = {}
 ): ForthTrackingRecord[] {
   if (!Array.isArray(payload)) throw new ForthTrackingPayloadError();
   const now = options.now ?? Date.now();
   const staleAfterMs = options.staleAfterMs ?? DEFAULT_STALE_AFTER_MS;
-  return payload.map((record) => normalizeRecord(record, now, staleAfterMs, options.sourceTimeZone));
+  return payload.map((record) => normalizeRecord(
+    record,
+    now,
+    staleAfterMs,
+    options.sourceTimeZone,
+    options.includeDiagnosticUnknownPositionSourceText === true
+  ));
 }
 
 /** Registration normalization removes only harmless separators and whitespace. */

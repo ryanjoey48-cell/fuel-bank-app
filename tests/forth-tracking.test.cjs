@@ -79,10 +79,26 @@ test("normalizes a valid tracking response without inferring movement", () => {
   assert.equal(record.speed, 0);
   assert.equal(record.timestampStatus, "current");
   assert.equal(record.positionQuality, "gps");
+  assert.equal(record.positionSourceRaw, null);
   assert.equal(record.positionSourceShape, "recognized_string");
   assert.deepEqual(record.alternatePositionSourceCandidates, []);
   assert.equal(record.optionalSensors.sensor1, "available");
   assert.equal(Object.hasOwn(record, "IDCard"), false);
+});
+
+test("captures raw unknown positionSource text only when explicitly requested for the diagnostic", () => {
+  const [ordinary] = normalizeForthTrackingResponse([{ positionSource: " Vendor-A " }], { now: baseNow });
+  const [diagnostic] = normalizeForthTrackingResponse([{ positionSource: " Vendor-A " }], {
+    now: baseNow,
+    includeDiagnosticUnknownPositionSourceText: true
+  });
+  const [recognized] = normalizeForthTrackingResponse([{ positionSource: "GPS" }], {
+    now: baseNow,
+    includeDiagnosticUnknownPositionSourceText: true
+  });
+  assert.equal(ordinary.positionSourceRaw, null);
+  assert.equal(diagnostic.positionSourceRaw, " Vendor-A ");
+  assert.equal(recognized.positionSourceRaw, null);
 });
 
 test("classifies positionSource presence and type without guessing alternate field mappings", () => {
@@ -636,6 +652,65 @@ test("status diagnostic returns aggregate counts only and omits all source ident
   }
 });
 
+test("status diagnostic returns only bounded sanitized unknown positionSource labels with occurrence counts", async () => {
+  const service = makeFleetService({ ...credentials, FORTH_SOURCE_TIME_ZONE: "Asia/Bangkok" }, async (url) => {
+    if (String(url).endsWith("/token")) return Response.json({ access_token: "mock-access-token", expires_in: 3600 });
+    return Response.json([
+      { gpsID: "PRIVATE-ID", plateNumber: "PRIVATE-REG", driver: "PRIVATE-DRIVER", Latitude: 13.7, Longitude: 100.5, positionSource: " Vendor-A " },
+      { positionSource: "Vendor-A" },
+      { positionSource: "Vendor-B\u0000\nLabel\t " },
+      { positionSource: "GPS" },
+      { positionSource: "X".repeat(81) },
+      { positionSource: 7 },
+      { positionSource: false }
+    ]);
+  });
+
+  const result = await service.diagnoseStatus();
+  assert.deepEqual(result.unknownPositionSourceStrings, {
+    unknownStringCount: 4,
+    returnedUniqueCount: 2,
+    notListedOccurrences: 0,
+    rejectedOccurrences: 1,
+    labels: [
+      { label: "Vendor-A", occurrences: 2 },
+      { label: "Vendor-B Label", occurrences: 1 }
+    ]
+  });
+  const serialized = JSON.stringify(result);
+  for (const sensitive of ["PRIVATE-ID", "PRIVATE-REG", "PRIVATE-DRIVER", "13.7", "100.5", "mock-access-token", "secret-test", "password-test", "\u0000"]) {
+    assert.equal(serialized.includes(sensitive), false);
+  }
+  assert.equal(serialized.includes("X".repeat(81)), false);
+  assert.equal(serialized.includes("Vendor-A"), true);
+});
+
+test("status diagnostic does not report empty source fields as unrecognized strings", async () => {
+  const service = makeFleetService({ ...credentials, FORTH_SOURCE_TIME_ZONE: "Asia/Bangkok" }, async (url) => {
+    if (String(url).endsWith("/token")) return Response.json({ access_token: "mock-access-token", expires_in: 3600 });
+    return Response.json([{ positionSource: "   " }]);
+  });
+
+  const result = await service.diagnoseStatus();
+  assert.equal(result.positionSourceShape.canonicalField.empty, 1);
+  assert.equal(result.unknownPositionSourceStrings.unknownStringCount, 0);
+  assert.deepEqual(result.unknownPositionSourceStrings.labels, []);
+});
+
+test("status diagnostic caps unknown source labels at twenty unique entries", async () => {
+  const service = makeFleetService({ ...credentials, FORTH_SOURCE_TIME_ZONE: "Asia/Bangkok" }, async (url) => {
+    if (String(url).endsWith("/token")) return Response.json({ access_token: "mock-access-token", expires_in: 3600 });
+    return Response.json(Array.from({ length: 24 }, (_, index) => ({ positionSource: "Unknown-" + index })));
+  });
+
+  const result = await service.diagnoseStatus();
+  assert.equal(result.unknownPositionSourceStrings.unknownStringCount, 24);
+  assert.equal(result.unknownPositionSourceStrings.returnedUniqueCount, 20);
+  assert.equal(result.unknownPositionSourceStrings.notListedOccurrences, 4);
+  assert.equal(result.unknownPositionSourceStrings.rejectedOccurrences, 0);
+  assert.equal(result.unknownPositionSourceStrings.labels.length, 20);
+});
+
 test("does not call Forth until credentials and the verified Basic token profile are configured", async () => {
   for (const profile of ["", "oauth-password-form-v1"]) {
     let calls = 0;
@@ -901,8 +976,12 @@ test("status aggregate control is business-read gated, confirmed, and single-use
   assert.ok(source.includes('can("business:read")'));
   assert.ok(source.includes("window.confirm(copy.diagnosticConfirm)"));
   assert.ok(source.includes('fetch("/api/admin/forth-tracking/status-diagnostic?confirm=aggregate-only"'));
-  assert.ok(source.includes("ees-forth-status-diagnostic-source-shape-v2-used"));
+  assert.ok(source.includes("ees-forth-status-diagnostic-unknown-labels-v3-used"));
   assert.ok(source.includes("positionSourceShape"));
+  assert.ok(source.includes("unknownPositionSourceStrings"));
+  assert.ok(source.includes("diagnosticUnknownSourceNote"));
+  assert.ok(source.includes("<code className=\"break-all font-mono text-[11px]\">{entry.label}</code>"));
+  assert.equal(source.includes("dangerouslySetInnerHTML"), false);
   assert.ok(source.includes("sessionStorage.setItem(STATUS_DIAGNOSTIC_SESSION_KEY, \"1\")"));
   assert.ok(source.includes("disabled={statusDiagnosticBusy || statusDiagnosticAttempted}"));
 });

@@ -43,7 +43,7 @@ const ForthTrackingMap = dynamic(
 
 const POLL_INTERVAL_MS = 60_000;
 const REQUEST_TIMEOUT_MS = 15_000;
-const STATUS_DIAGNOSTIC_SESSION_KEY = "ees-forth-status-diagnostic-source-shape-v2-used";
+const STATUS_DIAGNOSTIC_SESSION_KEY = "ees-forth-status-diagnostic-unknown-labels-v3-used";
 type PositionSourceShapeCounts = Record<
   "missing" | "null" | "empty" | "number" | "boolean" | "recognized_string" | "unrecognized_string" | "other",
   number
@@ -63,6 +63,13 @@ type StatusDiagnosticResult = {
     canonicalField: PositionSourceShapeCounts;
     alternateCandidateRecords: number;
     alternateCandidateValues: PositionSourceShapeCounts;
+  };
+  unknownPositionSourceStrings: {
+    unknownStringCount: number;
+    returnedUniqueCount: number;
+    notListedOccurrences: number;
+    rejectedOccurrences: number;
+    labels: Array<{ label: string; occurrences: number }>;
   };
   error: string | null;
 };
@@ -121,13 +128,15 @@ const COPY = {
     motionReasonInvalidSpeed: "Speed value is invalid",
     diagnosticTitle: "One-time status breakdown",
     diagnosticButton: "Run one-time status diagnostic",
-    diagnosticConfirm: "Run one read-only Forth request and return aggregate counts only? It will include position-source field presence/type counts, but no vehicle identifiers, coordinates, timestamps, driver details, raw keys, or values.",
+    diagnosticConfirm: "Run one read-only Forth request? It returns only unknown positionSource labels (up to 20 labels, 80 characters each) with occurrence counts, plus aggregate field-shape counts. No other vehicle, driver, location, timestamp, credential, or token data is returned.",
     diagnosticDone: "This diagnostic can run once per browser tab session.",
     diagnosticFailure: "The status diagnostic could not be completed.",
     diagnosticConnection: "Forth request status",
     diagnosticRecords: "Records analyzed",
     diagnosticSourceShape: "Position-source field shape",
     diagnosticAlternateSources: "Records with alternate source-like fields",
+    diagnosticUnknownSourceLabels: "Unrecognized positionSource labels",
+    diagnosticUnknownSourceNote: "These are untrusted source labels; no positioning meaning is inferred.",
     diagnosticClassification: "Motion classification reasons",
     configurationTitle: "Forth Tracking is awaiting configuration",
     configurationBody: "This environment is not returning tracking data yet. Fleet counts and map positions will appear after the server is configured.",
@@ -244,13 +253,15 @@ const COPY = {
     motionReasonInvalidSpeed: "ค่าความเร็วไม่ถูกต้อง",
     diagnosticTitle: "สรุปสถานะแบบครั้งเดียว",
     diagnosticButton: "เรียกใช้การวินิจฉัยครั้งเดียว",
-    diagnosticConfirm: "เรียก Forth แบบอ่านอย่างเดียวหนึ่งครั้งและแสดงเฉพาะจำนวนรวมใช่หรือไม่ จะแสดงประเภท/การมีอยู่ของฟิลด์แหล่งตำแหน่ง แต่ไม่ส่งทะเบียน พิกัด เวลา รายละเอียดผู้ขับ ชื่อฟิลด์ดิบ หรือค่า",
+    diagnosticConfirm: "เรียก Forth แบบอ่านอย่างเดียวหนึ่งครั้งใช่หรือไม่ จะแสดงเฉพาะป้าย positionSource ที่ไม่รู้จัก (สูงสุด 20 ป้าย ป้ายละ 80 ตัวอักษร) พร้อมจำนวนครั้งและสรุปรูปแบบฟิลด์ โดยไม่ส่งข้อมูลรถ ผู้ขับ ตำแหน่ง เวลา ข้อมูลรับรอง หรือโทเค็นอื่น",
     diagnosticDone: "การวินิจฉัยนี้เรียกใช้ได้หนึ่งครั้งต่อเซสชันแท็บเบราว์เซอร์",
     diagnosticFailure: "ไม่สามารถวินิจฉัยสถานะได้",
     diagnosticConnection: "สถานะคำขอ Forth",
     diagnosticRecords: "จำนวนรายการที่วิเคราะห์",
     diagnosticSourceShape: "รูปแบบฟิลด์แหล่งตำแหน่ง",
     diagnosticAlternateSources: "รายการที่มีฟิลด์แหล่งตำแหน่งอื่นที่เป็นไปได้",
+    diagnosticUnknownSourceLabels: "ป้าย positionSource ที่ไม่รู้จัก",
+    diagnosticUnknownSourceNote: "ป้ายเหล่านี้เป็นข้อมูลที่ยังไม่ยืนยัน และจะไม่อนุมานความหมาย",
     diagnosticClassification: "เหตุผลการจัดประเภทการเคลื่อนที่",
     configurationTitle: "รอการตั้งค่า Forth Tracking",
     configurationBody: "สภาพแวดล้อมนี้ยังไม่ได้ส่งข้อมูลติดตาม จำนวนรถและตำแหน่งบนแผนที่จะปรากฏเมื่อตั้งค่าเซิร์ฟเวอร์แล้ว",
@@ -334,6 +345,10 @@ function isCountObject(value: unknown): value is Record<string, number> {
 function isStatusDiagnosticResult(value: unknown): value is StatusDiagnosticResult {
   if (!value || typeof value !== "object") return false;
   const result = value as Record<string, unknown>;
+  const unknownSourceStrings = result.unknownPositionSourceStrings;
+  const unknownSourceShape = unknownSourceStrings && typeof unknownSourceStrings === "object"
+    ? unknownSourceStrings as Record<string, unknown>
+    : null;
   return ["connected", "failed", "not_configured"].includes(String(result.connectionStatus)) &&
     Number.isInteger(result.recordCount) && Number(result.recordCount) >= 0 &&
     isCountObject(result.communications) &&
@@ -349,6 +364,26 @@ function isStatusDiagnosticResult(value: unknown): value is StatusDiagnosticResu
     Number.isInteger((result.positionSourceShape as Record<string, unknown>).alternateCandidateRecords) &&
     Number((result.positionSourceShape as Record<string, unknown>).alternateCandidateRecords) >= 0 &&
     isCountObject((result.positionSourceShape as Record<string, unknown>).alternateCandidateValues) &&
+    Boolean(unknownSourceShape) &&
+    Number.isInteger(unknownSourceShape!.unknownStringCount) &&
+    Number(unknownSourceShape!.unknownStringCount) >= 0 &&
+    Number.isInteger(unknownSourceShape!.returnedUniqueCount) &&
+    Number(unknownSourceShape!.returnedUniqueCount) >= 0 &&
+    Number(unknownSourceShape!.returnedUniqueCount) <= 20 &&
+    Number.isInteger(unknownSourceShape!.notListedOccurrences) &&
+    Number(unknownSourceShape!.notListedOccurrences) >= 0 &&
+    Number.isInteger(unknownSourceShape!.rejectedOccurrences) &&
+    Number(unknownSourceShape!.rejectedOccurrences) >= 0 &&
+    Array.isArray(unknownSourceShape!.labels) &&
+    unknownSourceShape!.labels.length <= 20 &&
+    unknownSourceShape!.labels.every((entry) =>
+      Boolean(entry) &&
+      typeof entry === "object" &&
+      typeof (entry as Record<string, unknown>).label === "string" &&
+      Array.from((entry as Record<string, unknown>).label as string).length <= 80 &&
+      Number.isInteger((entry as Record<string, unknown>).occurrences) &&
+      Number((entry as Record<string, unknown>).occurrences) > 0
+    ) &&
     (result.error === null || typeof result.error === "string");
 }
 
@@ -688,6 +723,17 @@ export function ForthTrackingCentre() {
               <p><strong>{copy.engine}:</strong> {Object.entries(statusDiagnostic.engineState).map(([key, count]) => `${key} ${count}`).join(" · ")}</p>
               <p><strong>{copy.diagnosticSourceShape}:</strong> {Object.entries(statusDiagnostic.positionSourceShape.canonicalField).map(([key, count]) => `${key.replaceAll("_", " ")} ${count}`).join(" · ")}</p>
               <p><strong>{copy.diagnosticAlternateSources}:</strong> {statusDiagnostic.positionSourceShape.alternateCandidateRecords} records; {Object.entries(statusDiagnostic.positionSourceShape.alternateCandidateValues).map(([key, count]) => `${key.replaceAll("_", " ")} ${count}`).join(" · ")}</p>
+              <div className="sm:col-span-2 lg:col-span-3">
+                <p><strong>{copy.diagnosticUnknownSourceLabels}:</strong> {statusDiagnostic.unknownPositionSourceStrings.unknownStringCount} unknown string occurrences; {statusDiagnostic.unknownPositionSourceStrings.returnedUniqueCount} unique labels returned; {statusDiagnostic.unknownPositionSourceStrings.notListedOccurrences} occurrences omitted by the list limit; {statusDiagnostic.unknownPositionSourceStrings.rejectedOccurrences} values filtered by safety limits.</p>
+                <p className="text-[11px] text-slate-500">{copy.diagnosticUnknownSourceNote}</p>
+                {statusDiagnostic.unknownPositionSourceStrings.labels.length ? (
+                  <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                    {statusDiagnostic.unknownPositionSourceStrings.labels.map((entry, index) => (
+                      <li key={index}><code className="break-all font-mono text-[11px]">{entry.label}</code> · {entry.occurrences}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
               <p className="sm:col-span-2 lg:col-span-3"><strong>{copy.diagnosticClassification}:</strong> {Object.entries(statusDiagnostic.classificationReason).filter(([, count]) => count > 0).map(([key, count]) => `${key.replaceAll("_", " ")} ${count}`).join(" · ") || "—"}</p>
             </div>
           ) : statusDiagnosticError ? <p className="mt-3 text-xs text-rose-700" role="status">{copy.diagnosticFailure}</p> : statusDiagnosticAttempted ? <p className="mt-3 text-xs text-slate-600" role="status">{copy.diagnosticDone}</p> : null}
