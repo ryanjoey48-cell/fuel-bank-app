@@ -31,11 +31,7 @@ import {
   type ForthFleetFilter,
   type ForthFleetStatus
 } from "@/lib/forth-tracking-view";
-import type {
-  ForthFleetTrackingData,
-  ForthFleetTrackingRecord,
-  ForthTimestampFormatDiagnostic
-} from "@/lib/forth-tracking-server";
+import type { ForthFleetTrackingData, ForthFleetTrackingRecord } from "@/lib/forth-tracking-server";
 
 const ForthTrackingMap = dynamic(
   () => import("@/components/forth-tracking-map").then((module) => module.ForthTrackingMap),
@@ -55,28 +51,6 @@ const COPY = {
     unavailable: "Connection unavailable",
     refresh: "Refresh tracking",
     refreshing: "Updating…",
-    runDiagnostic: "Run GPS Diagnostic",
-    runningDiagnostic: "Running diagnostic…",
-    diagnosticComplete: "Diagnostic complete",
-    confirmDiagnostic: "Run one read-only GPS timestamp format diagnostic? It will request Forth tracking data and display only sanitized format counts.",
-    diagnosticTitle: "GPS timestamp diagnostic",
-    diagnosticTimezone: "Source timezone",
-    configured: "Configured",
-    notConfigured: "Not configured",
-    valid: "Valid",
-    invalid: "Invalid",
-    unverified: "Not checked",
-    diagnosticRecords: "Records inspected",
-    timestampsPresent: "Timestamp fields present",
-    validTimestamps: "Valid timestamps",
-    invalidTimestamps: "Invalid or missing timestamps",
-    timestampCategories: "Timestamp value categories",
-    formatCategories: "Masked format categories",
-    parseFailures: "Parse failure reasons",
-    noParseFailures: "No parse failures reported",
-    diagnosticError: "Diagnostic result",
-    diagnosticUnavailable: "The sanitized diagnostic could not be loaded. No response details were displayed.",
-    diagnosticFetchedAt: "API retrieval time",
     lastSync: "Last successful API refresh",
     total: "Tracked vehicles",
     totalHelper: "Records returned by Forth",
@@ -159,28 +133,6 @@ const COPY = {
     unavailable: "ไม่สามารถเชื่อมต่อได้",
     refresh: "รีเฟรชข้อมูลติดตาม",
     refreshing: "กำลังอัปเดต…",
-    runDiagnostic: "เรียกใช้การวินิจฉัย GPS",
-    runningDiagnostic: "กำลังวินิจฉัย…",
-    diagnosticComplete: "วินิจฉัยเสร็จแล้ว",
-    confirmDiagnostic: "เรียกใช้การวินิจฉัยรูปแบบเวลา GPS แบบอ่านอย่างเดียวหนึ่งครั้งหรือไม่ ระบบจะขอข้อมูลติดตามจาก Forth และแสดงเฉพาะจำนวนข้อมูลที่ผ่านการปกปิดแล้ว",
-    diagnosticTitle: "การวินิจฉัยเวลา GPS",
-    diagnosticTimezone: "เขตเวลาต้นทาง",
-    configured: "ตั้งค่าแล้ว",
-    notConfigured: "ยังไม่ได้ตั้งค่า",
-    valid: "ถูกต้อง",
-    invalid: "ไม่ถูกต้อง",
-    unverified: "ยังไม่ได้ตรวจสอบ",
-    diagnosticRecords: "รายการที่ตรวจสอบ",
-    timestampsPresent: "ฟิลด์เวลาที่มีค่า",
-    validTimestamps: "เวลาที่ถูกต้อง",
-    invalidTimestamps: "เวลาที่ไม่ถูกต้องหรือไม่มีค่า",
-    timestampCategories: "ประเภทค่าของเวลา",
-    formatCategories: "รูปแบบที่ปกปิดแล้ว",
-    parseFailures: "สาเหตุที่แยกวิเคราะห์ไม่สำเร็จ",
-    noParseFailures: "ไม่มีรายงานสาเหตุที่แยกวิเคราะห์ไม่สำเร็จ",
-    diagnosticError: "ผลการวินิจฉัย",
-    diagnosticUnavailable: "ไม่สามารถโหลดผลการวินิจฉัยที่ผ่านการปกปิดได้ ระบบไม่ได้แสดงรายละเอียดการตอบกลับ",
-    diagnosticFetchedAt: "เวลาเรียก API",
     lastSync: "เวลารีเฟรช API สำเร็จล่าสุด",
     total: "รถที่ติดตาม",
     totalHelper: "รายการที่ Forth ส่งกลับมา",
@@ -263,97 +215,7 @@ function isFleetTrackingData(value: unknown): value is ForthFleetTrackingData {
   const data = value as Record<string, unknown>;
   return ["not_configured", "connected", "failed"].includes(String(data.connectionStatus)) &&
     Array.isArray(data.records) &&
-    (data.fetchedAt === null || typeof data.fetchedAt === "string") &&
-    typeof data.timestampDiagnosticEnabled === "boolean";
-}
-
-type DiagnosticCountKey = "current" | "stale" | "missing" | "invalid" | "timezone_unconfigured" | "timezone_invalid" | "timezone_ambiguous" | "unknown";
-type DiagnosticReasonKey = "missing_value" | "value_not_string" | "unsupported_format" | "invalid_calendar_value" | "invalid_offset" | "timezone_unconfigured" | "timezone_invalid" | "nonexistent_local_time" | "timezone_ambiguous" | "future_timestamp" | "parsed_current" | "parsed_stale" | "unknown";
-type DiagnosticValueType = "missing" | "null" | "string" | "number" | "boolean" | "object" | "array";
-type DiagnosticErrorCode = NonNullable<ForthTimestampFormatDiagnostic["error"]>["code"];
-type DisplayTimestampDiagnostic = Omit<ForthTimestampFormatDiagnostic, "error"> & {
-  error: { code: DiagnosticErrorCode } | null;
-};
-
-const diagnosticStatusKeys: readonly DiagnosticCountKey[] = ["current", "stale", "missing", "invalid", "timezone_unconfigured", "timezone_invalid", "timezone_ambiguous", "unknown"];
-const diagnosticReasonKeys: readonly DiagnosticReasonKey[] = ["missing_value", "value_not_string", "unsupported_format", "invalid_calendar_value", "invalid_offset", "timezone_unconfigured", "timezone_invalid", "nonexistent_local_time", "timezone_ambiguous", "future_timestamp", "parsed_current", "parsed_stale", "unknown"];
-const diagnosticValueTypeKeys: readonly DiagnosticValueType[] = ["missing", "null", "string", "number", "boolean", "object", "array"];
-const diagnosticErrorCodes: readonly DiagnosticErrorCode[] = ["credentials_not_configured", "oauth_protocol_unverified", "authentication_rejected", "authentication_unavailable", "authentication_failed", "tracking_auth_rejected", "tracking_http_error", "tracking_network_error", "invalid_tracking_response"];
-
-function isSafeCount(value: unknown): value is number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
-}
-
-function copyCountMap<T extends string>(value: unknown, keys: readonly T[]): Record<T, number> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const source = value as Record<string, unknown>;
-  const result = {} as Record<T, number>;
-  for (const key of keys) {
-    if (!isSafeCount(source[key])) return null;
-    result[key] = source[key];
-  }
-  return result;
-}
-
-function sanitizeTimestampDiagnostic(value: unknown): DisplayTimestampDiagnostic | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const source = value as Record<string, unknown>;
-  const dateTimeValueTypes = copyCountMap(source.dateTimeValueTypes, diagnosticValueTypeKeys);
-  const timestampStatusCounts = copyCountMap(source.timestampStatusCounts, diagnosticStatusKeys);
-  const timestampParseReasonCounts = copyCountMap(source.timestampParseReasonCounts, diagnosticReasonKeys);
-  const errorSource = source.error && typeof source.error === "object" && !Array.isArray(source.error)
-    ? source.error as Record<string, unknown>
-    : null;
-  const errorCode = errorSource?.code;
-  const formatCandidates = Array.isArray(source.formats) && source.formats.length <= 8
-    ? source.formats.map((candidate) => {
-      if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return null;
-      const format = candidate as Record<string, unknown>;
-      const parseStatusCounts = copyCountMap(format.parseStatusCounts, diagnosticStatusKeys);
-      const parseReasonCounts = copyCountMap(format.parseReasonCounts, diagnosticReasonKeys);
-      if (!diagnosticValueTypeKeys.includes(format.valueType as DiagnosticValueType) ||
-          typeof format.pattern !== "string" || format.pattern.length > 84 || !/^[9ATZ ?…:\/+().-]*$/.test(format.pattern) ||
-          !isSafeCount(format.count) || !parseStatusCounts || !parseReasonCounts) return null;
-      return {
-        valueType: format.valueType as DiagnosticValueType,
-        pattern: format.pattern,
-        count: format.count,
-        parseStatusCounts,
-        parseReasonCounts
-      };
-    })
-    : null;
-  const formats = formatCandidates && formatCandidates.every((format) => format !== null)
-    ? formatCandidates.filter((format): format is NonNullable<typeof format> => format !== null)
-    : null;
-
-  if (!(["not_configured", "connected", "failed"].includes(String(source.connectionStatus)) &&
-      (source.fetchedAt === null || (typeof source.fetchedAt === "string" && Number.isFinite(Date.parse(source.fetchedAt)))) &&
-      typeof source.sourceTimeZoneConfigured === "boolean" &&
-      (source.sourceTimeZoneValid === null || typeof source.sourceTimeZoneValid === "boolean") &&
-      isSafeCount(source.recordCount) && isSafeCount(source.dateTimeFieldPresentCount) &&
-      dateTimeValueTypes && timestampStatusCounts && timestampParseReasonCounts && formats &&
-      isSafeCount(source.omittedFormatGroupCount) &&
-      (source.error === null || (errorCode !== undefined && diagnosticErrorCodes.includes(errorCode as DiagnosticErrorCode))))) return null;
-
-  return {
-    connectionStatus: source.connectionStatus as ForthTimestampFormatDiagnostic["connectionStatus"],
-    fetchedAt: source.fetchedAt as string | null,
-    sourceTimeZoneConfigured: source.sourceTimeZoneConfigured,
-    sourceTimeZoneValid: source.sourceTimeZoneValid,
-    recordCount: source.recordCount,
-    dateTimeFieldPresentCount: source.dateTimeFieldPresentCount,
-    dateTimeValueTypes,
-    timestampStatusCounts,
-    timestampParseReasonCounts,
-    formats,
-    omittedFormatGroupCount: source.omittedFormatGroupCount,
-    error: errorCode ? { code: errorCode as DiagnosticErrorCode } : null
-  };
-}
-
-function countEntries(counts: Record<string, number>) {
-  return Object.entries(counts).filter(([, count]) => count > 0);
+    (data.fetchedAt === null || typeof data.fetchedAt === "string");
 }
 
 function statusText(status: ForthFleetStatus, copy: Copy) {
@@ -424,12 +286,7 @@ export function ForthTrackingCentre() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<ForthFleetFilter>("all");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const [timestampDiagnostic, setTimestampDiagnostic] = useState<DisplayTimestampDiagnostic | null>(null);
-  const [timestampDiagnosticRunning, setTimestampDiagnosticRunning] = useState(false);
-  const [timestampDiagnosticAttempted, setTimestampDiagnosticAttempted] = useState(false);
-  const [timestampDiagnosticError, setTimestampDiagnosticError] = useState(false);
   const refreshRef = useRef<() => Promise<void>>(async () => undefined);
-  const timestampDiagnosticAttemptedRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -502,39 +359,6 @@ export function ForthTrackingCentre() {
     };
   }, []);
 
-  const runTimestampDiagnostic = async () => {
-    if (timestampDiagnosticAttemptedRef.current || data?.timestampDiagnosticEnabled !== true) return;
-    if (!window.confirm(copy.confirmDiagnostic)) return;
-
-    timestampDiagnosticAttemptedRef.current = true;
-    setTimestampDiagnosticAttempted(true);
-    setTimestampDiagnosticRunning(true);
-    setTimestampDiagnosticError(false);
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-    try {
-      const { data: authData, error: authError } = await supabase.auth.getSession();
-      const accessToken = authData.session?.access_token;
-      if (authError || !accessToken) throw new Error("session_unavailable");
-
-      const response = await fetch("/api/admin/forth-tracking/timestamp-format-diagnostic?confirm=format-only", {
-        method: "GET",
-        cache: "no-store",
-        signal: controller.signal,
-        headers: { Authorization: `Bearer ${accessToken}` }
-      });
-      if (!response.ok) throw new Error("diagnostic_unavailable");
-      const sanitized = sanitizeTimestampDiagnostic(await response.json());
-      if (!sanitized) throw new Error("invalid_diagnostic_response");
-      setTimestampDiagnostic(sanitized);
-    } catch {
-      setTimestampDiagnosticError(true);
-    } finally {
-      window.clearTimeout(timeout);
-      setTimestampDiagnosticRunning(false);
-    }
-  };
-
   const connected = data?.connectionStatus === "connected";
   const summary = useMemo(() => summarizeForthFleet(data?.records ?? []), [data?.records]);
   const visibleRecords = useMemo(
@@ -587,76 +411,8 @@ export function ForthTrackingCentre() {
             <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
             {refreshing ? copy.refreshing : copy.refresh}
           </button>
-          {data?.timestampDiagnosticEnabled === true ? (
-            <button
-              type="button"
-              className="btn-secondary justify-center gap-2"
-              onClick={() => void runTimestampDiagnostic()}
-              disabled={timestampDiagnosticRunning || timestampDiagnosticAttempted}
-            >
-              <Activity className={`h-4 w-4 ${timestampDiagnosticRunning ? "animate-pulse" : ""}`} />
-              {timestampDiagnosticRunning ? copy.runningDiagnostic : timestampDiagnosticAttempted ? copy.diagnosticComplete : copy.runDiagnostic}
-            </button>
-          ) : null}
         </div>
       </header>
-
-      {timestampDiagnostic || timestampDiagnosticError ? (
-        <section className="surface-card space-y-4 p-4 sm:p-5" aria-labelledby="forth-timestamp-diagnostic-title" aria-live="polite">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 id="forth-timestamp-diagnostic-title" className="text-base font-bold text-slate-950">{copy.diagnosticTitle}</h2>
-              {timestampDiagnostic?.fetchedAt ? <p className="mt-1 text-xs text-slate-500">{copy.diagnosticFetchedAt}: {formatForthTrackingTime(timestampDiagnostic.fetchedAt, language) ?? "—"}</p> : null}
-            </div>
-            {timestampDiagnostic?.error ? <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">{copy.diagnosticError}: {timestampDiagnostic.error.code.replaceAll("_", " ")}</span> : null}
-          </div>
-          {timestampDiagnosticError ? <p className="text-sm text-rose-700" role="status">{copy.diagnosticUnavailable}</p> : null}
-          {timestampDiagnostic ? (
-            <>
-              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                <DetailValue label={copy.diagnosticTimezone} value={`${timestampDiagnostic.sourceTimeZoneConfigured ? copy.configured : copy.notConfigured} · ${timestampDiagnostic.sourceTimeZoneValid === null ? copy.unverified : timestampDiagnostic.sourceTimeZoneValid ? copy.valid : copy.invalid}`} />
-                <DetailValue label={copy.diagnosticRecords} value={timestampDiagnostic.recordCount} />
-                <DetailValue label={copy.timestampsPresent} value={timestampDiagnostic.dateTimeFieldPresentCount} />
-                <DetailValue label={copy.diagnosticError} value={timestampDiagnostic.connectionStatus.replaceAll("_", " ")} />
-                <DetailValue label={copy.validTimestamps} value={timestampDiagnostic.timestampStatusCounts.current + timestampDiagnostic.timestampStatusCounts.stale} />
-                <DetailValue label={copy.invalidTimestamps} value={Math.max(0, timestampDiagnostic.recordCount - timestampDiagnostic.timestampStatusCounts.current - timestampDiagnostic.timestampStatusCounts.stale)} />
-              </div>
-
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-3">
-                  <h3 className="text-xs font-bold uppercase tracking-wide text-slate-600">{copy.timestampCategories}</h3>
-                  <ul className="mt-2 flex flex-wrap gap-2 text-xs text-slate-700">
-                    {countEntries(timestampDiagnostic.dateTimeValueTypes).map(([category, count]) => <li key={category} className="rounded-lg bg-white px-2.5 py-1.5">{category}: {count}</li>)}
-                  </ul>
-                </div>
-                <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-3">
-                  <h3 className="text-xs font-bold uppercase tracking-wide text-slate-600">{copy.parseFailures}</h3>
-                  {countEntries(timestampDiagnostic.timestampParseReasonCounts).filter(([reason]) => reason !== "parsed_current" && reason !== "parsed_stale").length ? (
-                    <ul className="mt-2 flex flex-wrap gap-2 text-xs text-slate-700">
-                      {countEntries(timestampDiagnostic.timestampParseReasonCounts).filter(([reason]) => reason !== "parsed_current" && reason !== "parsed_stale").map(([reason, count]) => <li key={reason} className="rounded-lg bg-white px-2.5 py-1.5">{reason.replaceAll("_", " ")}: {count}</li>)}
-                    </ul>
-                  ) : <p className="mt-2 text-xs text-slate-500">{copy.noParseFailures}</p>}
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-3">
-                <h3 className="text-xs font-bold uppercase tracking-wide text-slate-600">{copy.formatCategories}</h3>
-                {timestampDiagnostic.formats.length ? (
-                  <ul className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                    {timestampDiagnostic.formats.map((format, index) => (
-                      <li key={`${format.pattern}-${index}`} className="min-w-0 rounded-lg bg-white px-3 py-2 text-xs text-slate-700">
-                        <span className="block truncate font-semibold">{format.valueType} · <code>{format.pattern || "(empty)"}</code></span>
-                        <span className="mt-1 block">{format.count} · {countEntries(format.parseStatusCounts).map(([status, count]) => `${status.replaceAll("_", " ")}: ${count}`).join(" · ") || "0"}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : <p className="mt-2 text-xs text-slate-500">0</p>}
-                {timestampDiagnostic.omittedFormatGroupCount > 0 ? <p className="mt-2 text-xs text-slate-500">{timestampDiagnostic.omittedFormatGroupCount} additional format categories omitted.</p> : null}
-              </div>
-            </>
-          ) : null}
-        </section>
-      ) : null}
 
       {data?.connectionStatus === "not_configured" || data?.connectionStatus === "failed" || requestError ? (
         <section className={`flex items-start gap-3 rounded-2xl border p-4 sm:p-5 ${data?.connectionStatus === "not_configured" ? "border-amber-200 bg-amber-50/80" : "border-rose-200 bg-rose-50/80"}`} role="status">

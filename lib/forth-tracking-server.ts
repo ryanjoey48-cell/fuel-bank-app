@@ -1,6 +1,5 @@
 import {
   normalizeForthTrackingResponse,
-  type ForthTimestampParseReason,
   type ForthTrackingRecord
 } from "@/lib/forth-tracking";
 
@@ -60,7 +59,6 @@ export type ForthFleetTrackingRecord = Pick<
 export type ForthFleetTrackingData = {
   connectionStatus: ForthTrackingDiagnostic["connectionStatus"];
   fetchedAt: string | null;
-  timestampDiagnosticEnabled: boolean;
   records: ForthFleetTrackingRecord[];
   error: ForthTrackingDiagnostic["error"];
 };
@@ -85,41 +83,6 @@ type TrackingResult = {
   requestProfileConfigured: boolean;
   fetchedAt: string | null;
   records: ForthTrackingRecord[];
-  timestampFormatProfile?: TimestampFormatProfile;
-  error: ForthTrackingDiagnostic["error"];
-};
-
-type TimestampValueType = "missing" | "null" | "string" | "number" | "boolean" | "object" | "array";
-type TimestampParseCounts = Record<ForthTrackingRecord["timestampStatus"] | "unknown", number>;
-type TimestampParseReasonCounts = Record<ForthTimestampParseReason | "unknown", number>;
-type TimestampFormatProfile = {
-  recordCount: number;
-  dateTimeFieldPresentCount: number;
-  dateTimeValueTypes: Record<TimestampValueType, number>;
-  timestampStatusCounts: TimestampParseCounts;
-  timestampParseReasonCounts: TimestampParseReasonCounts;
-  formats: Array<{
-    valueType: TimestampValueType;
-    pattern: string;
-    count: number;
-    parseStatusCounts: TimestampParseCounts;
-    parseReasonCounts: TimestampParseReasonCounts;
-  }>;
-  omittedFormatGroupCount: number;
-};
-
-export type ForthTimestampFormatDiagnostic = {
-  connectionStatus: ForthTrackingDiagnostic["connectionStatus"];
-  fetchedAt: string | null;
-  sourceTimeZoneConfigured: boolean;
-  sourceTimeZoneValid: boolean | null;
-  recordCount: number;
-  dateTimeFieldPresentCount: number;
-  dateTimeValueTypes: Record<TimestampValueType, number>;
-  timestampStatusCounts: TimestampParseCounts;
-  timestampParseReasonCounts: TimestampParseReasonCounts;
-  formats: TimestampFormatProfile["formats"];
-  omittedFormatGroupCount: number;
   error: ForthTrackingDiagnostic["error"];
 };
 
@@ -207,132 +170,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function safeTimestampShape(value: string) {
-  const maxCharacters = 80;
-  const visible = [...value.slice(0, maxCharacters)].map((character) => {
-    if (/[0-9]/.test(character)) return "9";
-    if (character === "T") return "T";
-    if (character === "Z") return "Z";
-    if (/[A-Za-z]/.test(character)) return "A";
-    if (/[-/:.+() ]/.test(character)) return character;
-    return "?";
-  }).join("");
-  return value.length > maxCharacters ? `${visible}…` : visible;
-}
-
-function emptyTimestampParseCounts(): TimestampParseCounts {
-  return {
-    current: 0,
-    stale: 0,
-    missing: 0,
-    invalid: 0,
-    timezone_unconfigured: 0,
-    timezone_invalid: 0,
-    timezone_ambiguous: 0,
-    unknown: 0
-  };
-}
-
-function emptyTimestampParseReasonCounts(): TimestampParseReasonCounts {
-  return {
-    missing_value: 0,
-    value_not_string: 0,
-    unsupported_format: 0,
-    invalid_calendar_value: 0,
-    invalid_offset: 0,
-    timezone_unconfigured: 0,
-    timezone_invalid: 0,
-    nonexistent_local_time: 0,
-    timezone_ambiguous: 0,
-    future_timestamp: 0,
-    parsed_current: 0,
-    parsed_stale: 0,
-    unknown: 0
-  };
-}
-
-function createTimestampFormatProfile(payload: unknown, records: ForthTrackingRecord[]): TimestampFormatProfile {
-  const dateTimeValueTypes: Record<TimestampValueType, number> = {
-    missing: 0,
-    null: 0,
-    string: 0,
-    number: 0,
-    boolean: 0,
-    object: 0,
-    array: 0
-  };
-  const timestampStatusCounts = emptyTimestampParseCounts();
-  const timestampParseReasonCounts = emptyTimestampParseReasonCounts();
-  const groups = new Map<string, TimestampFormatProfile["formats"][number]>();
-  const values = Array.isArray(payload) ? payload : [];
-  let dateTimeFieldPresentCount = 0;
-
-  values.forEach((entry, index) => {
-    const hasRecord = isRecord(entry);
-    const hasDateTime = hasRecord && Object.prototype.hasOwnProperty.call(entry, "dateTime");
-    const rawValue = hasDateTime ? entry.dateTime : undefined;
-    const valueType: TimestampValueType = !hasDateTime
-      ? "missing"
-      : rawValue === null ? "null"
-        : Array.isArray(rawValue) ? "array"
-          : typeof rawValue === "string" ? "string"
-            : typeof rawValue === "number" ? "number"
-              : typeof rawValue === "boolean" ? "boolean"
-                : "object";
-    if (hasDateTime) dateTimeFieldPresentCount++;
-    dateTimeValueTypes[valueType]++;
-
-    const pattern = typeof rawValue === "string"
-      ? safeTimestampShape(rawValue)
-      : typeof rawValue === "number" && Number.isFinite(rawValue)
-        ? safeTimestampShape(String(rawValue))
-        : valueType;
-    const key = `${valueType}:${pattern}`;
-    const status = records[index]?.timestampStatus ?? "unknown";
-    const reason = records[index]?.timestampParseReason ?? "unknown";
-    timestampStatusCounts[status]++;
-    timestampParseReasonCounts[reason]++;
-
-    let group = groups.get(key);
-    if (!group) {
-      group = {
-        valueType,
-        pattern,
-        count: 0,
-        parseStatusCounts: emptyTimestampParseCounts(),
-        parseReasonCounts: emptyTimestampParseReasonCounts()
-      };
-      groups.set(key, group);
-    }
-    group.count++;
-    group.parseStatusCounts[status]++;
-    group.parseReasonCounts[reason]++;
-  });
-
-  const sortedGroups = [...groups.values()].sort((a, b) => b.count - a.count || a.pattern.localeCompare(b.pattern));
-  const maxFormatGroups = 8;
-  return {
-    recordCount: values.length,
-    dateTimeFieldPresentCount,
-    dateTimeValueTypes,
-    timestampStatusCounts,
-    timestampParseReasonCounts,
-    formats: sortedGroups.slice(0, maxFormatGroups),
-    omittedFormatGroupCount: Math.max(0, sortedGroups.length - maxFormatGroups)
-  };
-}
-
-function sourceTimeZoneValidity(value: string | undefined): boolean | null {
-  const zone = value?.trim();
-  if (!zone) return null;
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: zone });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function isNetworkOrTimeoutError(error: unknown) {
   return error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError" || error.name === "TypeError");
 }
@@ -405,7 +242,7 @@ export function createForthTrackingService(options: {
     return tokenInFlight;
   }
 
-  async function requestTracking(includeTimestampFormatProfile = false): Promise<TrackingResult> {
+  async function requestTracking(): Promise<TrackingResult> {
     const credentials = readCredentials(environment);
     const profile = configuredTokenRequestProfile(environment);
     if (!credentials) {
@@ -452,7 +289,6 @@ export function createForthTrackingService(options: {
         requestProfileConfigured: true,
         fetchedAt: new Date(now()).toISOString(),
         records,
-        ...(includeTimestampFormatProfile ? { timestampFormatProfile: createTimestampFormatProfile(payload, records) } : {}),
         error: null
       };
     } catch {
@@ -522,42 +358,12 @@ export function createForthTrackingService(options: {
     return {
       connectionStatus: result.connectionStatus,
       fetchedAt: result.fetchedAt,
-      timestampDiagnosticEnabled: environment.FORTH_TIMESTAMP_DIAGNOSTIC_ENABLED === "true",
       records,
       error: result.error
     };
   }
 
-  async function diagnoseTimestampFormat(): Promise<ForthTimestampFormatDiagnostic> {
-    const result = await requestTracking(true);
-    const profile = result.timestampFormatProfile;
-    const emptyTypes: Record<TimestampValueType, number> = {
-      missing: 0,
-      null: 0,
-      string: 0,
-      number: 0,
-      boolean: 0,
-      object: 0,
-      array: 0
-    };
-    const emptyStatuses = emptyTimestampParseCounts();
-    return {
-      connectionStatus: result.connectionStatus,
-      fetchedAt: result.fetchedAt,
-      sourceTimeZoneConfigured: Boolean(environment.FORTH_SOURCE_TIME_ZONE?.trim()),
-      sourceTimeZoneValid: sourceTimeZoneValidity(environment.FORTH_SOURCE_TIME_ZONE),
-      recordCount: profile?.recordCount ?? 0,
-      dateTimeFieldPresentCount: profile?.dateTimeFieldPresentCount ?? 0,
-      dateTimeValueTypes: profile?.dateTimeValueTypes ?? emptyTypes,
-      timestampStatusCounts: profile?.timestampStatusCounts ?? emptyStatuses,
-      timestampParseReasonCounts: profile?.timestampParseReasonCounts ?? emptyTimestampParseReasonCounts(),
-      formats: profile?.formats ?? [],
-      omittedFormatGroupCount: profile?.omittedFormatGroupCount ?? 0,
-      error: result.error
-    };
-  }
-
-  return { diagnose, diagnoseTimestampFormat, getFleetData };
+  return { diagnose, getFleetData };
 }
 
 export function createForthTrackingDiagnosticService(options: {
@@ -576,8 +382,4 @@ export async function getForthTrackingDiagnostic() {
 
 export async function getForthTrackingFleetData() {
   return forthTrackingService.getFleetData();
-}
-
-export async function getForthTimestampFormatDiagnostic() {
-  return forthTrackingService.diagnoseTimestampFormat();
 }

@@ -147,6 +147,88 @@ test("parses timezone-less Forth timestamps only with a configured source timezo
   assert.equal(invalidZone.lastGpsTimestamp, null);
 });
 
+test("parses Forth DD-MM-YYYY local timestamps in Bangkok and preserves the original value", () => {
+  const raw = "21-10-2026 11:55:00";
+  const [record] = normalizeForthTrackingResponse([{ dateTime: raw }], {
+    now: baseNow,
+    sourceTimeZone: "Asia/Bangkok"
+  });
+
+  assert.equal(record.sourceTimestampRaw, raw);
+  assert.equal(record.lastGpsTimestamp, "2026-10-21T04:55:00.000Z");
+  assert.equal(record.timestampStatus, "current");
+});
+
+test("validates DD-MM-YYYY calendar fields without swapping day and month", () => {
+  const now = Date.parse("2026-11-03T01:05:00.000Z");
+  const records = normalizeForthTrackingResponse([
+    { dateTime: "03-11-2026 08:00:00" },
+    { dateTime: "31-11-2026 08:00:00" },
+    { dateTime: "29-02-2026 08:00:00" },
+    { dateTime: "03-11-2026 24:00:00" }
+  ], { now, sourceTimeZone: "Asia/Bangkok" });
+
+  assert.equal(records[0].lastGpsTimestamp, "2026-11-03T01:00:00.000Z");
+  assert.equal(records[0].timestampStatus, "current");
+  assert.equal(records[1].timestampStatus, "invalid");
+  assert.equal(records[1].lastGpsTimestamp, null);
+  assert.equal(records[2].timestampStatus, "invalid");
+  assert.equal(records[3].timestampStatus, "invalid");
+});
+
+test("converts DD-MM-YYYY local midnight across the UTC day boundary", () => {
+  const [record] = normalizeForthTrackingResponse([{ dateTime: "22-10-2026 00:15:00" }], {
+    now: Date.parse("2026-10-21T17:25:00.000Z"),
+    sourceTimeZone: "Asia/Bangkok"
+  });
+  assert.equal(record.lastGpsTimestamp, "2026-10-21T17:15:00.000Z");
+  assert.equal(record.timestampStatus, "current");
+});
+
+test("stale DD-MM-YYYY GPS positions stay offline even with a positive speed reading", () => {
+  const [record] = normalizeForthTrackingResponse([{
+    dateTime: "21-10-2026 11:44:59",
+    GPS: "Online",
+    GPRS: "Connected",
+    Latitude: 13.7,
+    Longitude: 100.5,
+    positionSource: "GPS",
+    Speed: 55
+  }], { now: baseNow, sourceTimeZone: "Asia/Bangkok" });
+  const { getForthFleetStatus, summarizeForthFleet } = loadTypeScript("lib/forth-tracking-view.ts");
+
+  assert.equal(record.lastGpsTimestamp, "2026-10-21T04:44:59.000Z");
+  assert.equal(record.timestampStatus, "stale");
+  assert.equal(getForthFleetStatus(record), "offline_stale");
+  assert.deepEqual(summarizeForthFleet([record]), {
+    total: 1,
+    moving: 0,
+    parked: 0,
+    offline_stale: 1,
+    unknown: 0,
+    lastUpdate: "2026-10-21T04:44:59.000Z"
+  });
+});
+
+test("normalized Forth positions produce accurate fleet counts and latest valid GPS time", () => {
+  const records = normalizeForthTrackingResponse([
+    { gpsID: "D1", dateTime: "21-10-2026 11:59:00", GPS: "Online", GPRS: "Connected", Latitude: 13.7, Longitude: 100.5, positionSource: "GPS", Speed: 18 },
+    { gpsID: "D2", dateTime: "21-10-2026 11:58:00", GPS: "Online", GPRS: "Connected", Latitude: 13.8, Longitude: 100.6, positionSource: "GPS", Speed: 0 },
+    { gpsID: "D3", dateTime: "21-10-2026 11:44:59", GPS: "Online", GPRS: "Connected", Latitude: 13.9, Longitude: 100.7, positionSource: "GPS", Speed: 60 },
+    { gpsID: "D4", dateTime: "21-10-2026 11:59:00", GPS: "Online", GPRS: "Connected", Speed: 35 }
+  ], { now: baseNow, sourceTimeZone: "Asia/Bangkok" });
+  const { summarizeForthFleet } = loadTypeScript("lib/forth-tracking-view.ts");
+
+  assert.deepEqual(summarizeForthFleet(records), {
+    total: 4,
+    moving: 1,
+    parked: 1,
+    offline_stale: 1,
+    unknown: 1,
+    lastUpdate: "2026-10-21T04:59:00.000Z"
+  });
+});
+
 test("rejects daylight-saving gaps and ambiguities instead of guessing an instant", () => {
   const records = normalizeForthTrackingResponse([
     { dateTime: "2026-11-01T01:30:00" },
@@ -222,27 +304,6 @@ function createFleetDataRoute(fleetData, { permission = true, authError = null }
   return loadTypeScript("app/api/admin/forth-tracking/vehicles/route.ts", mocks);
 }
 
-function createTimestampFormatRoute(diagnostic, { permission = true, authError = null } = {}) {
-  let diagnosticCalls = 0;
-  const mocks = {
-    "next/server": { NextResponse: { json: (body, options = {}) => new Response(JSON.stringify(body), { status: options.status ?? 200, headers: options.headers }) } },
-    "@/lib/authorization": { hasPermission: (_access, name) => permission && name === "business:read" },
-    "@/lib/admin-user-management-server": {
-      AdminApiError: TestAdminApiError,
-      createServerSupabaseAdmin: () => ({}),
-      requireVerifiedUser: async () => { if (authError) throw authError; return { id: "office-user" }; },
-      resolveAccountAccess: async () => ({ role: "office_staff", status: "active" })
-    },
-    "@/lib/forth-tracking-server": {
-      getForthTimestampFormatDiagnostic: async () => { diagnosticCalls++; return diagnostic; }
-    }
-  };
-  return {
-    route: loadTypeScript("app/api/admin/forth-tracking/timestamp-format-diagnostic/route.ts", mocks),
-    getDiagnosticCalls: () => diagnosticCalls
-  };
-}
-
 test("protected fleet data endpoint requires verified EES business-read access and is no-store", async () => {
   const unauthenticated = createFleetDataRoute({ records: [] }, { authError: new TestAdminApiError(401, "Authentication required.") });
   const noUser = await unauthenticated.GET(new Request("https://ees.test/api/admin/forth-tracking/vehicles"));
@@ -253,11 +314,11 @@ test("protected fleet data endpoint requires verified EES business-read access a
   const denied = await unauthorized.GET(new Request("https://ees.test/api/admin/forth-tracking/vehicles"));
   assert.equal(denied.status, 403);
 
-  const connected = createFleetDataRoute({ connectionStatus: "connected", fetchedAt: "2026-10-21T05:00:00.000Z", timestampDiagnosticEnabled: true, records: [{ vehicleRegistration: "1กข2345" }], error: null });
+  const connected = createFleetDataRoute({ connectionStatus: "connected", fetchedAt: "2026-10-21T05:00:00.000Z", records: [{ vehicleRegistration: "1กข2345" }], error: null });
   const response = await connected.GET(new Request("https://ees.test/api/admin/forth-tracking/vehicles"));
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("cache-control"), "private, no-store");
-  assert.deepEqual(await response.json(), { connectionStatus: "connected", fetchedAt: "2026-10-21T05:00:00.000Z", timestampDiagnosticEnabled: true, records: [{ vehicleRegistration: "1กข2345" }], error: null });
+  assert.deepEqual(await response.json(), { connectionStatus: "connected", fetchedAt: "2026-10-21T05:00:00.000Z", records: [{ vehicleRegistration: "1กข2345" }], error: null });
 });
 
 test("protected diagnostic rejects unauthenticated and unauthorized EES callers", async () => {
@@ -279,38 +340,6 @@ test("protected diagnostic returns private no-store results for an authorized of
   assert.equal(response.headers.get("cache-control"), "private, no-store");
   assert.deepEqual(await response.json(), { connectionStatus: "not_configured", authenticationStatus: "protocol_unverified" });
   assert.equal(fixture.getDiagnosticCalls(), 1);
-});
-
-test("temporary timestamp-format endpoint requires office access, feature enablement, and explicit confirmation", async () => {
-  const previous = process.env.FORTH_TIMESTAMP_DIAGNOSTIC_ENABLED;
-  try {
-    delete process.env.FORTH_TIMESTAMP_DIAGNOSTIC_ENABLED;
-    const disabled = createTimestampFormatRoute({ connectionStatus: "connected" });
-    const disabledResponse = await disabled.route.GET(new Request("https://ees.test/api/admin/forth-tracking/timestamp-format-diagnostic?confirm=format-only"));
-    assert.equal(disabledResponse.status, 404);
-    assert.equal(disabled.getDiagnosticCalls(), 0);
-
-    process.env.FORTH_TIMESTAMP_DIAGNOSTIC_ENABLED = "true";
-    const denied = createTimestampFormatRoute({ connectionStatus: "connected" }, { permission: false });
-    const unauthorized = await denied.route.GET(new Request("https://ees.test/api/admin/forth-tracking/timestamp-format-diagnostic?confirm=format-only"));
-    assert.equal(unauthorized.status, 403);
-    assert.equal(denied.getDiagnosticCalls(), 0);
-
-    const noConfirmation = createTimestampFormatRoute({ connectionStatus: "connected" });
-    const confirmationRequired = await noConfirmation.route.GET(new Request("https://ees.test/api/admin/forth-tracking/timestamp-format-diagnostic"));
-    assert.equal(confirmationRequired.status, 400);
-    assert.equal(confirmationRequired.headers.get("cache-control"), "private, no-store");
-    assert.equal(noConfirmation.getDiagnosticCalls(), 0);
-
-    const enabled = createTimestampFormatRoute({ connectionStatus: "connected", formats: [] });
-    const response = await enabled.route.GET(new Request("https://ees.test/api/admin/forth-tracking/timestamp-format-diagnostic?confirm=format-only"));
-    assert.equal(response.status, 200);
-    assert.equal(response.headers.get("cache-control"), "private, no-store");
-    assert.equal(enabled.getDiagnosticCalls(), 1);
-  } finally {
-    if (previous === undefined) delete process.env.FORTH_TIMESTAMP_DIAGNOSTIC_ENABLED;
-    else process.env.FORTH_TIMESTAMP_DIAGNOSTIC_ENABLED = previous;
-  }
 });
 
 const credentials = {
@@ -404,7 +433,7 @@ test("authenticates once, validates tracking data, and returns aggregate counts 
 
 test("fleet endpoint service exposes normalized vehicle fields only and reuses its OAuth token", async () => {
   const requests = [];
-  const service = makeFleetService({ ...credentials, FORTH_SOURCE_TIME_ZONE: "Asia/Bangkok", FORTH_TIMESTAMP_DIAGNOSTIC_ENABLED: "true" }, async (url, init) => {
+  const service = makeFleetService({ ...credentials, FORTH_SOURCE_TIME_ZONE: "Asia/Bangkok" }, async (url, init) => {
     requests.push(String(url));
     if (String(url).endsWith("/token")) return Response.json({ access_token: "bearer-test-token", token_type: "Bearer", expires_in: 3600 });
     assert.equal(new Headers(init.headers).get("authorization"), "Bearer bearer-test-token");
@@ -429,7 +458,6 @@ test("fleet endpoint service exposes normalized vehicle fields only and reuses i
 
   const result = await service.getFleetData();
   assert.equal(result.connectionStatus, "connected");
-  assert.equal(result.timestampDiagnosticEnabled, true);
   assert.equal(result.records.length, 1);
   assert.equal(result.records[0].reportedDriver, "Driver A");
   assert.equal(result.records[0].gprsConnectivity, "connected");
@@ -446,58 +474,6 @@ test("fleet endpoint service exposes normalized vehicle fields only and reuses i
   const disconnected = await service.diagnose();
   assert.equal(disconnected.connectionStatus, "connected");
   assert.equal(requests.filter((url) => url.endsWith("/token")).length, 1);
-});
-
-test("fleet data exposes timestamp diagnostic enablement only for the exact server flag value", async () => {
-  const { createForthTrackingService } = loadTypeScript("lib/forth-tracking-server.ts");
-  for (const [flag, expected] of [["true", true], ["TRUE", false], ["false", false], [undefined, false]]) {
-    const environment = flag === undefined ? {} : { FORTH_TIMESTAMP_DIAGNOSTIC_ENABLED: flag };
-    const service = createForthTrackingService({ environment, fetcher: async () => { throw new Error("should_not_request"); } });
-    const result = await service.getFleetData();
-    assert.equal(result.timestampDiagnosticEnabled, expected);
-  }
-});
-
-test("timestamp format diagnostic returns masked format shapes and status counts from one mocked fetch", async () => {
-  const requests = [];
-  const service = makeFleetService({ ...credentials, FORTH_SOURCE_TIME_ZONE: "Asia/Bangkok" }, async (url) => {
-    requests.push(String(url));
-    if (String(url).endsWith("/token")) return Response.json({ access_token: "private-access-token", token_type: "Bearer", expires_in: 3600 });
-    return Response.json([
-      { gpsID: "private-device-id", plateNumber: "private-registration", driver: "Private Driver", Latitude: 13.7, Longitude: 100.5, dateTime: "2026-10-21 11:55:00" },
-      { gpsID: "private-device-id-2", Latitude: 13.8, Longitude: 100.6, dateTime: "/Date(1761030000000+0700)/" },
-      { gpsID: "private-device-id-3", Latitude: 13.9, Longitude: 100.7, dateTime: "21/10/2026 11:55:00" },
-      { gpsID: "private-device-id-4", Latitude: 14, Longitude: 100.8 },
-      { gpsID: "private-device-id-5", Latitude: 14.1, Longitude: 100.9, dateTime: "2026-10-21 13:00:00" }
-    ]);
-  });
-
-  const diagnostic = await service.diagnoseTimestampFormat();
-  const serialized = JSON.stringify(diagnostic);
-  assert.equal(diagnostic.connectionStatus, "connected");
-  assert.equal(diagnostic.fetchedAt, "2026-10-21T05:00:00.000Z");
-  assert.equal(diagnostic.sourceTimeZoneConfigured, true);
-  assert.equal(diagnostic.sourceTimeZoneValid, true);
-  assert.equal(diagnostic.recordCount, 5);
-  assert.equal(diagnostic.dateTimeFieldPresentCount, 4);
-  assert.equal(diagnostic.dateTimeValueTypes.string, 4);
-  assert.equal(diagnostic.dateTimeValueTypes.missing, 1);
-  assert.equal(diagnostic.timestampStatusCounts.current, 1);
-  assert.equal(diagnostic.timestampStatusCounts.invalid, 3);
-  assert.equal(diagnostic.timestampStatusCounts.missing, 1);
-  assert.equal(diagnostic.timestampParseReasonCounts.parsed_current, 1);
-  assert.equal(diagnostic.timestampParseReasonCounts.parsed_stale, 0);
-  assert.equal(diagnostic.timestampParseReasonCounts.unsupported_format, 2);
-  assert.equal(diagnostic.timestampParseReasonCounts.future_timestamp, 1);
-  assert.equal(diagnostic.timestampParseReasonCounts.missing_value, 1);
-  assert.ok(diagnostic.formats.some((format) => format.pattern === "9999-99-99 99:99:99" && format.parseReasonCounts.parsed_current === 1 && format.parseReasonCounts.future_timestamp === 1));
-  assert.ok(diagnostic.formats.some((format) => format.pattern === "/AAAA(9999999999999+9999)/" && format.parseStatusCounts.invalid === 1));
-  assert.ok(diagnostic.formats.some((format) => format.pattern === "99/99/9999 99:99:99" && format.parseStatusCounts.invalid === 1));
-  for (const secret of ["private-device-id", "private-registration", "Private Driver", "private-access-token", "client-test", "secret-test", "13.7", "100.5", "2026-10-21 11:55:00", "1761030000000"]) {
-    assert.equal(serialized.includes(secret), false, `diagnostic must not include ${secret}`);
-  }
-  assert.equal(requests.filter((url) => url.endsWith("/token")).length, 1);
-  assert.equal(requests.filter((url) => url.endsWith("/tracking")).length, 1);
 });
 
 test("accepts an empty vehicle array and distinguishes Forth network failures", async () => {
@@ -555,10 +531,11 @@ test("fleet view classification and filters use current GPS data and avoid infer
   assert.equal(filterForthFleetRecords(records, "driver a", "all").length, 1);
   assert.equal(filterForthFleetRecords(records, "", "parked")[0].vehicleRegistration, "PARKED-1");
   const formattedTime = formatForthTrackingTime("2026-10-21T04:59:00.000Z", "en");
-  const zoneLabel = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", timeZoneName: "short", hourCycle: "h23" })
+  const zoneLabel = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok", timeZoneName: "short", hourCycle: "h23" })
     .formatToParts(new Date("2026-10-21T04:59:00.000Z"))
     .find((part) => part.type === "timeZoneName").value;
   assert.ok(formattedTime.includes(zoneLabel));
+  assert.match(formattedTime, /11:59/);
 });
 
 test("classifies lost, stale, ambiguous, invalid, and incomplete GPS records safely", () => {
@@ -642,19 +619,4 @@ test("Fleet Tracking appears once in the permission-gated Fleet group used by de
   assert.ok(fleetGroup.includes('href: "/fleet-tracking"'));
   assert.equal(source.split("groups.map(").length - 1, 2);
   assert.ok(source.includes("routeIsActive(pathname, item.href)"));
-});
-
-test("temporary Fleet Tracking timestamp control is server-gated, confirmed, authenticated, sanitized, and one-shot", () => {
-  const source = fs.readFileSync(path.join(root, "components/forth-tracking-centre.tsx"), "utf8");
-  const endpoint = "/api/admin/forth-tracking/timestamp-format-diagnostic?confirm=format-only";
-  assert.equal(source.split(endpoint).length - 1, 1);
-  assert.ok(source.includes("data?.timestampDiagnosticEnabled === true"));
-  assert.ok(source.includes("onClick={() => void runTimestampDiagnostic()}"));
-  assert.ok(source.includes("window.confirm(copy.confirmDiagnostic)"));
-  assert.ok(source.includes("timestampDiagnosticAttemptedRef.current"));
-  assert.ok(source.includes("disabled={timestampDiagnosticRunning || timestampDiagnosticAttempted}"));
-  assert.ok(source.includes("headers: { Authorization: `Bearer ${accessToken}` }"));
-  assert.ok(source.includes("sanitizeTimestampDiagnostic(await response.json())"));
-  assert.ok(source.indexOf(endpoint) > source.indexOf("const runTimestampDiagnostic = async () =>"));
-  assert.equal(source.includes("console.log"), false);
 });
