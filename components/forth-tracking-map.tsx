@@ -13,8 +13,14 @@ import type { ForthFleetTrackingRecord } from "@/lib/forth-tracking-server";
 type Copy = {
   moving: string;
   parked: string;
-  offline: string;
   unknown: string;
+  gpsQuality: string;
+  wifiQuality: string;
+  lbsQuality: string;
+  otherQuality: string;
+  unknownQuality: string;
+  current: string;
+  stale: string;
   noPositions: string;
   loading: string;
   mapUnavailable: string;
@@ -35,22 +41,28 @@ const tileUrl = process.env.NEXT_PUBLIC_EES_MAP_TILE_URL || "https://tile.openst
 
 function statusLabel(status: ForthFleetStatus, copy: Copy) {
   if (status === "moving") return copy.moving;
-  if (status === "parked") return copy.parked;
-  if (status === "offline_stale") return copy.offline;
+  if (status === "stationary") return copy.parked;
   return copy.unknown;
 }
 
-function markerIcon(Leaflet: LeafletModule, status: ForthFleetStatus, selected: boolean) {
+function positionQualityLabel(record: ForthFleetTrackingRecord, copy: Copy) {
+  if (record.positionQuality === "gps") return copy.gpsQuality;
+  if (record.positionQuality === "wifi") return copy.wifiQuality;
+  if (record.positionQuality === "lbs") return copy.lbsQuality;
+  if (record.positionQuality === "other") return copy.otherQuality;
+  return copy.unknownQuality;
+}
+
+function markerIcon(Leaflet: LeafletModule, status: ForthFleetStatus, selected: boolean, approximate: boolean) {
   const statusClass = status === "moving"
     ? styles.vehicleMarkerMoving
-    : status === "parked"
+    : status === "stationary"
       ? styles.vehicleMarkerParked
-      : status === "offline_stale"
-        ? styles.vehicleMarkerOffline
-        : styles.vehicleMarkerUnknown;
+      : styles.vehicleMarkerUnknown;
   return Leaflet.divIcon({
     className: styles.vehicleMarker,
     html: "<span class=\"" + styles.vehicleMarkerDot + " " + statusClass +
+      (approximate ? " " + styles.vehicleMarkerApproximate : "") +
       (selected ? " " + styles.vehicleMarkerSelected : "") + "\"></span>",
     iconSize: [30, 30],
     iconAnchor: [15, 15],
@@ -63,7 +75,7 @@ export function ForthTrackingMap({ records, selectedKey, onSelect, language, cop
   const mapNodeRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<import("leaflet").Map | null>(null);
   const markerLayerRef = useRef<import("leaflet").LayerGroup | null>(null);
-  const markersByKeyRef = useRef(new Map<string, { marker: import("leaflet").Marker; status: ForthFleetStatus }>());
+  const markersByKeyRef = useRef(new Map<string, { marker: import("leaflet").Marker; status: ForthFleetStatus; approximate: boolean }>());
   const leafletRef = useRef<LeafletModule | null>(null);
   const onSelectRef = useRef(onSelect);
   const fittedBoundsRef = useRef(false);
@@ -138,9 +150,10 @@ export function ForthTrackingMap({ records, selectedKey, onSelect, language, cop
 
     for (const { record, key, position } of positionedRecords) {
       const status = getForthFleetStatus(record);
+      const approximate = record.positionQuality !== "gps";
       const markerTitle = record.vehicleRegistration || record.gpsDeviceId || copy.unknown;
       const marker = Leaflet.marker(position, {
-        icon: markerIcon(Leaflet, status, false),
+        icon: markerIcon(Leaflet, status, false, approximate),
         title: markerTitle,
         alt: markerTitle,
         keyboard: true,
@@ -152,14 +165,18 @@ export function ForthTrackingMap({ records, selectedKey, onSelect, language, cop
       title.textContent = markerTitle;
       const state = document.createElement("span");
       state.textContent = statusLabel(status, copy);
-      content.append(title, state);
+      const quality = document.createElement("span");
+      quality.textContent = positionQualityLabel(record, copy);
+      const freshness = document.createElement("span");
+      freshness.textContent = record.timestampStatus === "current" ? copy.current : record.timestampStatus === "stale" ? copy.stale : copy.unknown;
+      content.append(title, state, quality, freshness);
       marker.bindPopup(content, { closeButton: true, autoPanPadding: [24, 24] });
       const tooltip = document.createElement("span");
-      tooltip.textContent = `${record.vehicleRegistration || record.gpsDeviceId || copy.unknown} · ${statusLabel(status, copy)}`;
+      tooltip.textContent = `${record.vehicleRegistration || record.gpsDeviceId || copy.unknown} · ${statusLabel(status, copy)} · ${positionQualityLabel(record, copy)}`;
       marker.bindTooltip(tooltip, { direction: "top", offset: [0, -8], opacity: 0.96 });
       marker.on("click", () => onSelectRef.current(key));
       marker.addTo(markerLayer);
-      markersByKeyRef.current.set(key, { marker, status });
+      markersByKeyRef.current.set(key, { marker, status, approximate });
       bounds.push(position);
     }
 
@@ -186,7 +203,7 @@ export function ForthTrackingMap({ records, selectedKey, onSelect, language, cop
     let selectedMarker: import("leaflet").Marker | null = null;
     for (const [key, entry] of markersByKeyRef.current) {
       const selected = key === selectedKey;
-      entry.marker.setIcon(markerIcon(Leaflet, entry.status, selected));
+      entry.marker.setIcon(markerIcon(Leaflet, entry.status, selected, entry.approximate));
       entry.marker.setZIndexOffset(selected ? 1000 : 0);
       if (selected) selectedMarker = entry.marker;
     }

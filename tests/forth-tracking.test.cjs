@@ -78,7 +78,7 @@ test("normalizes a valid tracking response without inferring movement", () => {
   assert.equal(record.engineOn, false);
   assert.equal(record.speed, 0);
   assert.equal(record.timestampStatus, "current");
-  assert.equal(record.positionStatus, "gps");
+  assert.equal(record.positionQuality, "gps");
   assert.equal(record.optionalSensors.sensor1, "available");
   assert.equal(Object.hasOwn(record, "IDCard"), false);
 });
@@ -94,7 +94,7 @@ test("accepts missing optional fields and distinguishes missing from invalid coo
   assert.equal(records[1].coordinateStatus, "invalid");
 });
 
-test("normalizes Forth ON/OFF values without conflating GPS status and position source", () => {
+test("normalizes Forth ON/OFF values without conflating GPS signal and GPRS communications", () => {
   const { getForthFleetStatus } = loadTypeScript("lib/forth-tracking-view.ts");
   const [gpsFallback, communicationLost, gpsSignalLost, missingValues] = normalizeForthTrackingResponse([
     {
@@ -137,7 +137,7 @@ test("normalizes Forth ON/OFF values without conflating GPS status and position 
 
   assert.equal(gpsFallback.gpsConnectivity, "connected");
   assert.equal(gpsFallback.gprsConnectivity, "connected");
-  assert.equal(gpsFallback.positionStatus, "non_gps");
+  assert.equal(gpsFallback.positionQuality, "unknown");
   assert.equal(gpsFallback.engineOn, false);
   assert.equal(gpsFallback.speed, 0);
   assert.equal(gpsFallback.coordinateStatus, "valid");
@@ -145,18 +145,61 @@ test("normalizes Forth ON/OFF values without conflating GPS status and position 
 
   assert.equal(communicationLost.gpsConnectivity, "connected");
   assert.equal(communicationLost.gprsConnectivity, "disconnected");
-  assert.equal(getForthFleetStatus(communicationLost), "offline_stale");
+  assert.equal(communicationLost.positionQuality, "gps");
+  assert.equal(getForthFleetStatus(communicationLost), "stationary");
 
   assert.equal(gpsSignalLost.gpsConnectivity, "disconnected");
   assert.equal(gpsSignalLost.gprsConnectivity, "connected");
-  assert.equal(gpsSignalLost.positionStatus, "non_gps");
+  assert.equal(gpsSignalLost.positionQuality, "lbs");
   assert.equal(getForthFleetStatus(gpsSignalLost), "unknown");
 
   assert.equal(missingValues.gpsConnectivity, "unknown");
   assert.equal(missingValues.gprsConnectivity, "unknown");
   assert.equal(missingValues.engineOn, null);
-  assert.equal(missingValues.positionStatus, "unknown");
+  assert.equal(missingValues.positionQuality, "unknown");
   assert.equal(getForthFleetStatus(missingValues), "unknown");
+});
+
+test("Forth fields map independently to communications, freshness, position quality, motion, and engine state", () => {
+  const { getForthFleetStatus, getForthMotionReason, summarizeForthFleet } = loadTypeScript("lib/forth-tracking-view.ts");
+  const records = normalizeForthTrackingResponse([
+    { dateTime: "21-10-2026 11:59:00", GPS: " ON ", GPRS: " ON ", Engine: "OFF", Speed: "12", Latitude: 13.7, Longitude: 100.5, positionSource: " GPS " },
+    { dateTime: "21-10-2026 11:59:00", GPS: "ON", GPRS: "ON", Engine: "ON", Speed: "0", Latitude: 13.7, Longitude: 100.5, positionSource: "GPS" },
+    { dateTime: "21-10-2026 11:59:00", GPS: "OFF", GPRS: "ON", Engine: "ON", Speed: "0", Latitude: 13.7, Longitude: 100.5, positionSource: "Wi-Fi" },
+    { dateTime: "21-10-2026 11:59:00", GPS: "OFF", GPRS: "ON", Engine: "OFF", Speed: "0", Latitude: 13.7, Longitude: 100.5, positionSource: "LBS" },
+    { dateTime: "21-10-2026 11:59:00", GPS: "ON", GPRS: "OFF", Engine: "ON", Speed: "4", Latitude: 13.7, Longitude: 100.5, positionSource: "GPS" },
+    { dateTime: "21-10-2026 11:59:00", GPS: "ON", GPRS: "ON", Engine: "ON", Speed: "4", Latitude: 13.7, Longitude: 100.5 },
+    { dateTime: "21-10-2026 11:59:00", GPS: "ON", GPRS: "ON", Engine: "ON", Latitude: 13.7, Longitude: 100.5, positionSource: "GPS" },
+    { dateTime: "21-10-2026 11:44:59", GPS: "ON", GPRS: "ON", Engine: "ON", Speed: "45", Latitude: 13.7, Longitude: 100.5, positionSource: "GPS" },
+    { dateTime: "21-10-2026 11:59:00", GPS: "ON", GPRS: "ON", Engine: "ON", Speed: "0", positionSource: "GPS" },
+    { dateTime: "21-10-2026 11:59:00", GPS: "ON", GPRS: "ON", Engine: "ON", Speed: "0", Latitude: 13.7, Longitude: 100.5, positionSource: "GPS signal lost" },
+    { dateTime: "21-10-2026 11:59:00", GPRS: "ON", Speed: "0", Latitude: 13.7, Longitude: 100.5, positionSource: "GPS" }
+  ], { now: baseNow, sourceTimeZone: "Asia/Bangkok" });
+
+  assert.deepEqual(records.map(getForthFleetStatus), [
+    "moving", "stationary", "unknown", "unknown", "moving", "unknown",
+    "unknown", "unknown", "unknown", "unknown", "unknown"
+  ]);
+  assert.equal(getForthMotionReason(records[2]), "gps_signal_unavailable");
+  assert.equal(records[2].gpsConnectivity, "disconnected");
+  assert.equal(records[2].gprsConnectivity, "connected");
+  assert.equal(records[2].positionQuality, "wifi");
+  assert.equal(records[3].positionQuality, "lbs");
+  assert.equal(getForthMotionReason(records[5]), "position_source_unknown");
+  assert.equal(getForthMotionReason(records[6]), "speed_unavailable");
+  assert.equal(getForthMotionReason(records[7]), "stale_position");
+  assert.equal(getForthMotionReason(records[8]), "coordinates_missing");
+  assert.equal(records[0].engineOn, false);
+  assert.equal(records[1].engineOn, true);
+  assert.equal(records[10].gpsConnectivity, "unknown");
+
+  const summary = summarizeForthFleet(records);
+  assert.deepEqual(summary.communications, { online: 10, offline: 1, unknown: 0 });
+  assert.deepEqual(summary.gpsSignal, { available: 8, unavailable: 2, unknown: 1 });
+  assert.deepEqual(summary.positionQuality, { gps: 7, wifi: 1, lbs: 1, other: 0, unknown: 2 });
+  assert.equal(summary.engineState.off, 2);
+  assert.equal(summary.engineState.on, 8);
+  assert.equal(summary.engineState.unknown, 1);
 });
 
 test("EES movement stays speed-based when the engine is on while parked", () => {
@@ -185,7 +228,7 @@ test("EES movement stays speed-based when the engine is on while parked", () => 
   ], { now: baseNow, sourceTimeZone: "Asia/Bangkok" });
 
   assert.equal(getForthFleetStatus(engineOnMoving), "moving");
-  assert.equal(getForthFleetStatus(engineOnStationary), "parked");
+  assert.equal(getForthFleetStatus(engineOnStationary), "stationary");
 });
 
 test("returns only a safe text driver label and omits identifier-like values", () => {
@@ -212,10 +255,10 @@ test("distinguishes stale, unconfigured-timezone, and non-GPS positions", () => 
   ], { now: baseNow });
   assert.equal(stale.timestampStatus, "stale");
   assert.equal(ambiguous.timestampStatus, "timezone_unconfigured");
-  assert.equal(ambiguous.positionStatus, "non_gps");
+  assert.equal(ambiguous.positionQuality, "lbs");
   assert.equal(noGps.gpsConnectivity, "disconnected");
   assert.equal(lostGps.gpsConnectivity, "connected");
-  assert.equal(lostGps.positionStatus, "non_gps");
+  assert.equal(lostGps.positionQuality, "unknown");
 });
 
 test("parses timezone-less Forth timestamps only with a configured source timezone and preserves the source text", () => {
@@ -279,7 +322,7 @@ test("converts DD-MM-YYYY local midnight across the UTC day boundary", () => {
   assert.equal(record.timestampStatus, "current");
 });
 
-test("stale DD-MM-YYYY GPS positions stay offline even with a positive speed reading", () => {
+test("stale DD-MM-YYYY positions stay out of current activity counts", () => {
   const [record] = normalizeForthTrackingResponse([{
     dateTime: "21-10-2026 11:44:59",
     GPS: "Online",
@@ -293,15 +336,12 @@ test("stale DD-MM-YYYY GPS positions stay offline even with a positive speed rea
 
   assert.equal(record.lastGpsTimestamp, "2026-10-21T04:44:59.000Z");
   assert.equal(record.timestampStatus, "stale");
-  assert.equal(getForthFleetStatus(record), "offline_stale");
-  assert.deepEqual(summarizeForthFleet([record]), {
-    total: 1,
-    moving: 0,
-    parked: 0,
-    offline_stale: 1,
-    unknown: 0,
-    lastUpdate: "2026-10-21T04:44:59.000Z"
-  });
+  assert.equal(getForthFleetStatus(record), "unknown");
+  const summary = summarizeForthFleet([record]);
+  assert.deepEqual(summary.motion, { moving: 0, stationary: 0, unknown: 1 });
+  assert.deepEqual(summary.positionFreshness, { current: 0, stale: 1, unknown: 0 });
+  assert.equal(summary.classificationReason.stale_position, 1);
+  assert.equal(summary.lastVerifiedGpsPosition, "2026-10-21T04:44:59.000Z");
 });
 
 test("normalized Forth positions produce accurate fleet counts and latest valid GPS time", () => {
@@ -313,14 +353,12 @@ test("normalized Forth positions produce accurate fleet counts and latest valid 
   ], { now: baseNow, sourceTimeZone: "Asia/Bangkok" });
   const { summarizeForthFleet } = loadTypeScript("lib/forth-tracking-view.ts");
 
-  assert.deepEqual(summarizeForthFleet(records), {
-    total: 4,
-    moving: 1,
-    parked: 1,
-    offline_stale: 1,
-    unknown: 1,
-    lastUpdate: "2026-10-21T04:59:00.000Z"
-  });
+  const summary = summarizeForthFleet(records);
+  assert.deepEqual(summary.motion, { moving: 1, stationary: 1, unknown: 2 });
+  assert.deepEqual(summary.positionFreshness, { current: 3, stale: 1, unknown: 0 });
+  assert.equal(summary.classificationReason.coordinates_missing, 1);
+  assert.equal(summary.classificationReason.stale_position, 1);
+  assert.equal(summary.lastVerifiedGpsPosition, "2026-10-21T04:59:00.000Z");
 });
 
 test("rejects daylight-saving gaps and ambiguities instead of guessing an instant", () => {
@@ -398,6 +436,22 @@ function createFleetDataRoute(fleetData, { permission = true, authError = null }
   return loadTypeScript("app/api/admin/forth-tracking/vehicles/route.ts", mocks);
 }
 
+function createStatusDiagnosticRoute(result, { permission = true, authError = null } = {}) {
+  let calls = 0;
+  const mocks = {
+    "next/server": { NextResponse: { json: (body, options = {}) => new Response(JSON.stringify(body), { status: options.status ?? 200, headers: options.headers }) } },
+    "@/lib/authorization": { hasPermission: (_access, name) => permission && name === "business:read" },
+    "@/lib/admin-user-management-server": {
+      AdminApiError: TestAdminApiError,
+      createServerSupabaseAdmin: () => ({}),
+      requireVerifiedUser: async () => { if (authError) throw authError; return { id: "office-user" }; },
+      resolveAccountAccess: async () => ({ role: "office_staff", status: "active" })
+    },
+    "@/lib/forth-tracking-server": { getForthTrackingStatusDiagnostic: async () => { calls++; return result; } }
+  };
+  return { route: loadTypeScript("app/api/admin/forth-tracking/status-diagnostic/route.ts", mocks), getCalls: () => calls };
+}
+
 test("protected fleet data endpoint requires verified EES business-read access and is no-store", async () => {
   const unauthenticated = createFleetDataRoute({ records: [] }, { authError: new TestAdminApiError(401, "Authentication required.") });
   const noUser = await unauthenticated.GET(new Request("https://ees.test/api/admin/forth-tracking/vehicles"));
@@ -413,6 +467,28 @@ test("protected fleet data endpoint requires verified EES business-read access a
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("cache-control"), "private, no-store");
   assert.deepEqual(await response.json(), { connectionStatus: "connected", fetchedAt: "2026-10-21T05:00:00.000Z", records: [{ vehicleRegistration: "1กข2345" }], error: null });
+});
+
+test("one-shot status diagnostic requires explicit confirmation and business-read access", async () => {
+  const result = { connectionStatus: "connected", recordCount: 2, communications: { online: 2, offline: 0, unknown: 0 } };
+  const noPermission = createStatusDiagnosticRoute(result, { permission: false });
+  assert.equal((await noPermission.route.GET(new Request("https://ees.test/api/admin/forth-tracking/status-diagnostic?confirm=aggregate-only"))).status, 403);
+  assert.equal(noPermission.getCalls(), 0);
+
+  const unauthenticated = createStatusDiagnosticRoute(result, { authError: new TestAdminApiError(401, "Authentication required.") });
+  assert.equal((await unauthenticated.route.GET(new Request("https://ees.test/api/admin/forth-tracking/status-diagnostic?confirm=aggregate-only"))).status, 401);
+  assert.equal(unauthenticated.getCalls(), 0);
+
+  const noConfirmation = createStatusDiagnosticRoute(result);
+  assert.equal((await noConfirmation.route.GET(new Request("https://ees.test/api/admin/forth-tracking/status-diagnostic"))).status, 400);
+  assert.equal(noConfirmation.getCalls(), 0);
+
+  const confirmed = createStatusDiagnosticRoute(result);
+  const response = await confirmed.route.GET(new Request("https://ees.test/api/admin/forth-tracking/status-diagnostic?confirm=aggregate-only"));
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "private, no-store");
+  assert.deepEqual(await response.json(), result);
+  assert.equal(confirmed.getCalls(), 1);
 });
 
 test("protected diagnostic rejects unauthenticated and unauthorized EES callers", async () => {
@@ -453,6 +529,39 @@ function makeFleetService(environment, fetcher, now = () => baseNow) {
   const { createForthTrackingService } = loadTypeScript("lib/forth-tracking-server.ts");
   return createForthTrackingService({ environment, fetcher, now });
 }
+
+test("status diagnostic returns aggregate counts only and omits all source identifiers and location data", async () => {
+  const calls = [];
+  const service = makeFleetService({ ...credentials, FORTH_SOURCE_TIME_ZONE: "Asia/Bangkok" }, async (url, init) => {
+    calls.push(String(url));
+    if (String(url).endsWith("/token")) return Response.json({ access_token: "mock-access-token", expires_in: 3600 });
+    return Response.json([{
+      gpsID: "SENSITIVE-DEVICE-ID",
+      plateNumber: "PRIVATE-REGISTRATION",
+      driver: "Private Driver Name",
+      dateTime: "21-10-2026 11:59:00",
+      GPS: "ON",
+      GPRS: "ON",
+      Engine: "ON",
+      Speed: "12",
+      Latitude: 13.7563,
+      Longitude: 100.5018,
+      positionSource: "GPS"
+    }]);
+  });
+
+  const result = await service.diagnoseStatus();
+  assert.equal(calls.length, 2);
+  assert.equal(result.connectionStatus, "connected");
+  assert.equal(result.recordCount, 1);
+  assert.deepEqual(result.communications, { online: 1, offline: 0, unknown: 0 });
+  assert.deepEqual(result.positionFreshness, { current: 1, stale: 0, unknown: 0 });
+  assert.deepEqual(result.positionQuality, { gps: 1, wifi: 0, lbs: 0, other: 0, unknown: 0 });
+  const serialized = JSON.stringify(result);
+  for (const sensitive of ["SENSITIVE-DEVICE-ID", "PRIVATE-REGISTRATION", "Private Driver Name", "13.7563", "100.5018", "11:59", "mock-access-token", "secret-test", "password-test"]) {
+    assert.equal(serialized.includes(sensitive), false);
+  }
+});
 
 test("does not call Forth until credentials and the verified Basic token profile are configured", async () => {
   for (const profile of ["", "oauth-password-form-v1"]) {
@@ -504,9 +613,9 @@ test("authenticates once, validates tracking data, and returns aggregate counts 
     assert.equal(init.method, "GET");
     assert.equal(new Headers(init.headers).get("authorization"), "Bearer bearer-test-token");
     return Response.json([
-      { Latitude: 13.7, Longitude: 100.5, dateTime: "2026-10-21T04:55:00Z" },
-      { Latitude: "bad", Longitude: 100.5, dateTime: "2026-10-21T04:50:00Z" },
-      { Latitude: 13.7, Longitude: null }
+      { Latitude: 13.7, Longitude: 100.5, dateTime: "2026-10-21T04:55:00Z", GPS: "ON", GPRS: "ON", positionSource: "GPS" },
+      { Latitude: "bad", Longitude: 100.5, dateTime: "2026-10-21T04:50:00Z", GPS: "ON", GPRS: "ON", positionSource: "GPS" },
+      { Latitude: 13.7, Longitude: null, GPS: "OFF", GPRS: "ON" }
     ]);
   });
   const result = await service();
@@ -611,19 +720,23 @@ test("does not expose invalid JSON or upstream error bodies", async () => {
   assert.equal(JSON.stringify(failed).includes("private error body"), false);
 });
 
-test("fleet view classification and filters use current GPS data and avoid inferring movement", () => {
+test("fleet view separates motion from communications and filters activity states", () => {
   const { getForthFleetStatus, summarizeForthFleet, filterForthFleetRecords, formatForthTrackingTime } = loadTypeScript("lib/forth-tracking-view.ts");
   const records = [
-    { vehicleRegistration: "MOVING-1", reportedDriver: "Driver A", gpsDeviceId: "D1", gpsConnectivity: "connected", gprsConnectivity: "connected", timestampStatus: "current", coordinateStatus: "valid", positionStatus: "unknown", speed: 12, lastGpsTimestamp: "2026-10-21T04:59:00.000Z" },
-    { vehicleRegistration: "PARKED-1", gpsDeviceId: "D2", gpsConnectivity: "connected", gprsConnectivity: "connected", timestampStatus: "current", coordinateStatus: "valid", positionStatus: "gps", speed: 0, lastGpsTimestamp: "2026-10-21T04:58:00.000Z" },
-    { vehicleRegistration: "STALE-1", gpsDeviceId: "D3", gpsConnectivity: "connected", gprsConnectivity: "connected", timestampStatus: "stale", coordinateStatus: "valid", positionStatus: "gps", speed: 50, lastGpsTimestamp: "2026-10-20T04:58:00.000Z" },
-    { vehicleRegistration: "UNKNOWN-1", gpsDeviceId: "D4", gpsConnectivity: "unknown", gprsConnectivity: "unknown", timestampStatus: "missing", coordinateStatus: "missing", positionStatus: "unknown", speed: null, lastGpsTimestamp: null }
+    { vehicleRegistration: "MOVING-1", reportedDriver: "Driver A", gpsDeviceId: "D1", gpsConnectivity: "connected", gprsConnectivity: "connected", timestampStatus: "current", coordinateStatus: "valid", positionQuality: "gps", speed: 12, lastGpsTimestamp: "2026-10-21T04:59:00.000Z" },
+    { vehicleRegistration: "STATIONARY-1", gpsDeviceId: "D2", gpsConnectivity: "connected", gprsConnectivity: "connected", timestampStatus: "current", coordinateStatus: "valid", positionQuality: "gps", speed: 0, lastGpsTimestamp: "2026-10-21T04:58:00.000Z" },
+    { vehicleRegistration: "STALE-1", gpsDeviceId: "D3", gpsConnectivity: "connected", gprsConnectivity: "connected", timestampStatus: "stale", coordinateStatus: "valid", positionQuality: "gps", speed: 50, lastGpsTimestamp: "2026-10-20T04:58:00.000Z" },
+    { vehicleRegistration: "UNKNOWN-1", gpsDeviceId: "D4", gpsConnectivity: "unknown", gprsConnectivity: "unknown", timestampStatus: "missing", coordinateStatus: "missing", positionQuality: "unknown", speed: null, lastGpsTimestamp: null }
   ];
 
-  assert.deepEqual(records.map(getForthFleetStatus), ["moving", "parked", "offline_stale", "unknown"]);
-  assert.deepEqual(summarizeForthFleet(records), { total: 4, moving: 1, parked: 1, offline_stale: 1, unknown: 1, lastUpdate: "2026-10-21T04:59:00.000Z" });
+  assert.deepEqual(records.map(getForthFleetStatus), ["moving", "stationary", "unknown", "unknown"]);
+  const summary = summarizeForthFleet(records);
+  assert.deepEqual(summary.motion, { moving: 1, stationary: 1, unknown: 2 });
+  assert.deepEqual(summary.communications, { online: 3, offline: 0, unknown: 1 });
+  assert.deepEqual(summary.positionFreshness, { current: 2, stale: 1, unknown: 1 });
+  assert.equal(summary.lastVerifiedGpsPosition, "2026-10-21T04:59:00.000Z");
   assert.equal(filterForthFleetRecords(records, "driver a", "all").length, 1);
-  assert.equal(filterForthFleetRecords(records, "", "parked")[0].vehicleRegistration, "PARKED-1");
+  assert.equal(filterForthFleetRecords(records, "", "stationary")[0].vehicleRegistration, "STATIONARY-1");
   const formattedTime = formatForthTrackingTime("2026-10-21T04:59:00.000Z", "en");
   const zoneLabel = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok", timeZoneName: "short", hourCycle: "h23" })
     .formatToParts(new Date("2026-10-21T04:59:00.000Z"))
@@ -639,7 +752,7 @@ test("classifies lost, stale, ambiguous, invalid, and incomplete GPS records saf
     gprsConnectivity: "connected",
     timestampStatus: "current",
     coordinateStatus: "valid",
-    positionStatus: "gps",
+    positionQuality: "gps",
     speed: 10,
     latitude: 13.7,
     longitude: 100.5,
@@ -656,14 +769,14 @@ test("classifies lost, stale, ambiguous, invalid, and incomplete GPS records saf
     { ...base, speed: null },
     { ...base, speed: -1 },
     { ...base, speed: Number.NaN },
-    { ...base, positionStatus: "non_gps" }
+    { ...base, positionQuality: "other" }
   ];
 
   assert.deepEqual(records.map(getForthFleetStatus), [
-    "moving", "unknown", "offline_stale", "offline_stale", "unknown", "unknown",
+    "moving", "unknown", "moving", "unknown", "unknown", "unknown",
     "unknown", "unknown", "unknown", "unknown", "unknown"
   ]);
-  assert.equal(summarizeForthFleet(records).lastUpdate, "2026-10-21T04:59:00.000Z");
+  assert.equal(summarizeForthFleet(records).lastVerifiedGpsPosition, "2026-10-21T04:59:00.000Z");
 });
 
 test("map coordinate projection excludes missing, invalid, non-finite, and out-of-range values", () => {
@@ -701,9 +814,22 @@ test("Leaflet map builds visible status markers above tiles, fits locations, and
   assert.ok(source.includes("map.fitBounds("));
   assert.ok(source.includes("map.panTo(position"));
   assert.ok(source.includes("setZIndexOffset(selected ? 1000 : 0)"));
+  assert.ok(source.includes("record.positionQuality !== \"gps\""));
+  assert.ok(source.includes("styles.vehicleMarkerApproximate"));
+  assert.ok(source.includes("positionQualityLabel(record, copy)"));
   assert.ok(styles.includes(".mapCanvas :global(.leaflet-pane.leaflet-marker-pane)"));
   assert.ok(styles.includes(".vehicleMarkerDot"));
+  assert.ok(styles.includes(".vehicleMarkerApproximate"));
   assert.ok(styles.includes(".vehicleMarkerSelected"));
+});
+
+test("status aggregate control is business-read gated, confirmed, and single-use per tab session", () => {
+  const source = fs.readFileSync(path.join(root, "components/forth-tracking-centre.tsx"), "utf8");
+  assert.ok(source.includes('can("business:read")'));
+  assert.ok(source.includes("window.confirm(copy.diagnosticConfirm)"));
+  assert.ok(source.includes('fetch("/api/admin/forth-tracking/status-diagnostic?confirm=aggregate-only"'));
+  assert.ok(source.includes("sessionStorage.setItem(STATUS_DIAGNOSTIC_SESSION_KEY, \"1\")"));
+  assert.ok(source.includes("disabled={statusDiagnosticBusy || statusDiagnosticAttempted}"));
 });
 
 test("Fleet Tracking appears once in the permission-gated Fleet group used by desktop and mobile navigation", () => {

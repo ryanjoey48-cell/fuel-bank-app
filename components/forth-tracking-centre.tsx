@@ -22,9 +22,11 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { StatCard } from "@/components/stat-card";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/lib/language-provider";
+import { useAccountAccess } from "@/lib/use-account-access";
 import {
   filterForthFleetRecords,
   formatForthTrackingTime,
+  getForthMotionReason,
   getForthFleetRecordKey,
   getForthFleetStatus,
   summarizeForthFleet,
@@ -40,6 +42,20 @@ const ForthTrackingMap = dynamic(
 
 const POLL_INTERVAL_MS = 60_000;
 const REQUEST_TIMEOUT_MS = 15_000;
+const STATUS_DIAGNOSTIC_SESSION_KEY = "ees-forth-status-diagnostic-used";
+
+type StatusDiagnosticResult = {
+  connectionStatus: "connected" | "failed" | "not_configured";
+  recordCount: number;
+  communications: Record<"online" | "offline" | "unknown", number>;
+  positionFreshness: Record<"current" | "stale" | "unknown", number>;
+  gpsSignal: Record<"available" | "unavailable" | "unknown", number>;
+  positionQuality: Record<"gps" | "wifi" | "lbs" | "other" | "unknown", number>;
+  speedAvailability: Record<"available" | "unavailable", number>;
+  engineState: Record<"on" | "off" | "unknown", number>;
+  classificationReason: Record<string, number>;
+  error: string | null;
+};
 
 const COPY = {
   en: {
@@ -56,13 +72,48 @@ const COPY = {
     totalHelper: "Records returned by Forth",
     moving: "Moving",
     movingHelper: "Current GPS and positive reported speed",
-    parked: "Parked",
-    parkedHelper: "Current GPS and zero reported speed",
-    offline: "Offline / stale",
-    offlineHelper: "GPRS disconnected or reporting an old position",
-    latestGps: "Latest valid GPS position",
-    latestGpsHelper: "Position time from Forth, separate from API refresh time",
-    unknownSummary: "Other vehicles have incomplete status data and are not classified as moving or parked.",
+    parked: "Stationary",
+    parkedHelper: "Stationary: fresh GPS position and zero reported speed",
+    offline: "GPRS online",
+    offlineHelper: "GPRS communication state reported by Forth",
+    latestGps: "Latest verified GPS position",
+    latestGpsHelper: "Forth position time, separate from API refresh time",
+    unknownSummary: "Motion stays unknown when the position, time, GPS signal or speed cannot support a reliable activity reading.",
+    freshnessNote: "Current means the reported position is no more than 15 minutes old.",
+    stationary: "Stationary",
+    activityUnknown: "Motion unknown",
+    communications: "Tracker communications",
+    positionFreshness: "Position age",
+    positionQuality: "Position quality",
+    gpsSignal: "GPS signal",
+    speedAvailability: "Speed report",
+    available: "Available",
+    unavailableStatus: "Unavailable",
+    gpsQuality: "GPS",
+    wifiQuality: "Wi-Fi (approximate)",
+    lbsQuality: "LBS (approximate)",
+    otherQuality: "Other non-GPS source",
+    unknownQuality: "Unknown source",
+    motionReasonMoving: "Fresh GPS position with positive reported speed",
+    motionReasonStationary: "Fresh GPS position with zero reported speed",
+    motionReasonStale: "Position is older than the 15-minute freshness window",
+    motionReasonTime: "Position time is missing or could not be interpreted",
+    motionReasonCoordinates: "Coordinates are missing",
+    motionReasonInvalidCoordinates: "Coordinates are invalid",
+    motionReasonGpsUnavailable: "GPS signal unavailable; GPRS may still be online",
+    motionReasonGpsUnknown: "GPS signal state was not reported",
+    motionReasonSourceUnknown: "Position source was not reported or is unrecognized",
+    motionReasonNonGps: "Position is not confirmed as GPS; motion is not inferred",
+    motionReasonSpeed: "Speed was not reported",
+    motionReasonInvalidSpeed: "Speed value is invalid",
+    diagnosticTitle: "One-time status breakdown",
+    diagnosticButton: "Run one-time status diagnostic",
+    diagnosticConfirm: "Run one read-only Forth request and return aggregate counts only? No vehicle identifiers, coordinates, timestamps, driver details, or raw values will be returned.",
+    diagnosticDone: "This diagnostic can run once per browser tab session.",
+    diagnosticFailure: "The status diagnostic could not be completed.",
+    diagnosticConnection: "Forth request status",
+    diagnosticRecords: "Records analyzed",
+    diagnosticClassification: "Motion classification reasons",
     configurationTitle: "Forth Tracking is awaiting configuration",
     configurationBody: "This environment is not returning tracking data yet. Fleet counts and map positions will appear after the server is configured.",
     failureTitle: "Forth tracking is temporarily unavailable",
@@ -79,7 +130,7 @@ const COPY = {
     search: "Search vehicles",
     filter: "Filter by status",
     all: "All statuses",
-    unknown: "Status unavailable",
+    unknown: "Motion unknown",
     noVehicles: "Forth returned no tracking records.",
     noMatches: "No vehicles match this search and filter.",
     detailsTitle: "Vehicle details",
@@ -93,10 +144,10 @@ const COPY = {
     engineOn: "On",
     engineOff: "Off",
     unknownValue: "Unknown",
-    gps: "GPS status",
-    gprs: "GPRS status",
-    online: "Connected",
-    offlineStatus: "Disconnected",
+    gps: "GPS signal",
+    gprs: "Tracker communications (GPRS)",
+    online: "Online",
+    offlineStatus: "Offline",
     gpsNoFix: "No GPS fix",
     position: "Last known position",
     coordinates: "Coordinates",
@@ -107,8 +158,8 @@ const COPY = {
     invalidLocation: "Coordinates invalid",
     timestamp: "Reported location time",
     sourceTimestamp: "Original Forth timestamp",
-    current: "Current report",
-    stale: "Stale report",
+    current: "Current",
+    stale: "Stale",
     noTimestamp: "Time unavailable",
     timezoneUnconfigured: "Source timezone not configured",
     timezoneInvalid: "Source timezone is invalid",
@@ -121,9 +172,9 @@ const COPY = {
     degrees: "degrees",
     lastUpdated: "Data refreshed",
     mapMoving: "Moving",
-    mapParked: "Parked",
-    mapOffline: "Offline / stale",
-    mapUnknown: "Status unavailable"
+    mapParked: "Stationary",
+    mapOffline: "Offline",
+    mapUnknown: "Motion unknown"
   },
   th: {
     eyebrow: "การปฏิบัติงานยานพาหนะ",
@@ -139,13 +190,48 @@ const COPY = {
     totalHelper: "รายการที่ Forth ส่งกลับมา",
     moving: "กำลังเคลื่อนที่",
     movingHelper: "GPS ปัจจุบันและมีความเร็วมากกว่าศูนย์",
-    parked: "จอดอยู่",
-    parkedHelper: "GPS ปัจจุบันและความเร็วเป็นศูนย์",
-    offline: "ออฟไลน์ / ข้อมูลเก่า",
-    offlineHelper: "GPRS ขาดการเชื่อมต่อหรือรายงานตำแหน่งเก่า",
-    latestGps: "เวลาตำแหน่ง GPS ที่ถูกต้องล่าสุด",
-    latestGpsHelper: "เวลาจาก Forth แยกจากเวลารีเฟรช API",
-    unknownSummary: "รถบางรายการมีข้อมูลสถานะไม่ครบ จึงยังจัดเป็นกำลังเคลื่อนที่หรือจอดอยู่ไม่ได้",
+    parked: "หยุดนิ่ง",
+    parkedHelper: "ตำแหน่ง GPS ใหม่และความเร็วที่รายงานเป็นศูนย์",
+    offline: "GPRS ออนไลน์",
+    offlineHelper: "สถานะการสื่อสาร GPRS ที่ Forth รายงาน",
+    latestGps: "ตำแหน่ง GPS ที่ยืนยันล่าสุด",
+    latestGpsHelper: "เวลาตำแหน่งจาก Forth แยกจากเวลารีเฟรช API",
+    unknownSummary: "จะไม่สรุปการเคลื่อนที่เมื่อข้อมูลตำแหน่ง เวลา สัญญาณ GPS หรือความเร็วไม่เพียงพอ",
+    freshnessNote: "ข้อมูลปัจจุบันหมายถึงตำแหน่งที่รายงานภายใน 15 นาที",
+    stationary: "หยุดนิ่ง",
+    activityUnknown: "ไม่ทราบการเคลื่อนที่",
+    communications: "การสื่อสารตัวติดตาม",
+    positionFreshness: "อายุข้อมูลตำแหน่ง",
+    positionQuality: "คุณภาพตำแหน่ง",
+    gpsSignal: "สัญญาณ GPS",
+    speedAvailability: "ข้อมูลความเร็ว",
+    available: "มีข้อมูล",
+    unavailableStatus: "ไม่มีข้อมูล",
+    gpsQuality: "GPS",
+    wifiQuality: "Wi-Fi (โดยประมาณ)",
+    lbsQuality: "LBS (โดยประมาณ)",
+    otherQuality: "แหล่งอื่นที่ไม่ใช่ GPS",
+    unknownQuality: "ไม่ทราบแหล่งที่มา",
+    motionReasonMoving: "ตำแหน่ง GPS ใหม่และรายงานความเร็วมากกว่าศูนย์",
+    motionReasonStationary: "ตำแหน่ง GPS ใหม่และรายงานความเร็วเป็นศูนย์",
+    motionReasonStale: "ตำแหน่งเก่ากว่าช่วงความสดใหม่ 15 นาที",
+    motionReasonTime: "ไม่มีเวลาตำแหน่งหรือแปลผลไม่ได้",
+    motionReasonCoordinates: "ไม่มีพิกัด",
+    motionReasonInvalidCoordinates: "พิกัดไม่ถูกต้อง",
+    motionReasonGpsUnavailable: "ไม่มีสัญญาณ GPS แต่อาจยังเชื่อมต่อ GPRS",
+    motionReasonGpsUnknown: "ไม่มีรายงานสถานะสัญญาณ GPS",
+    motionReasonSourceUnknown: "ไม่มีรายงานแหล่งที่มาหรือไม่รู้จัก",
+    motionReasonNonGps: "ยังยืนยันว่าเป็นตำแหน่ง GPS ไม่ได้ จึงไม่สรุปการเคลื่อนที่",
+    motionReasonSpeed: "ไม่มีรายงานความเร็ว",
+    motionReasonInvalidSpeed: "ค่าความเร็วไม่ถูกต้อง",
+    diagnosticTitle: "สรุปสถานะแบบครั้งเดียว",
+    diagnosticButton: "เรียกใช้การวินิจฉัยครั้งเดียว",
+    diagnosticConfirm: "เรียก Forth แบบอ่านอย่างเดียวหนึ่งครั้งและแสดงเฉพาะจำนวนรวมใช่หรือไม่ จะไม่ส่งกลับทะเบียน พิกัด เวลา รายละเอียดผู้ขับ หรือค่าดิบ",
+    diagnosticDone: "การวินิจฉัยนี้เรียกใช้ได้หนึ่งครั้งต่อเซสชันแท็บเบราว์เซอร์",
+    diagnosticFailure: "ไม่สามารถวินิจฉัยสถานะได้",
+    diagnosticConnection: "สถานะคำขอ Forth",
+    diagnosticRecords: "จำนวนรายการที่วิเคราะห์",
+    diagnosticClassification: "เหตุผลการจัดประเภทการเคลื่อนที่",
     configurationTitle: "รอการตั้งค่า Forth Tracking",
     configurationBody: "สภาพแวดล้อมนี้ยังไม่ได้ส่งข้อมูลติดตาม จำนวนรถและตำแหน่งบนแผนที่จะปรากฏเมื่อตั้งค่าเซิร์ฟเวอร์แล้ว",
     failureTitle: "Forth Tracking ไม่พร้อมใช้งานชั่วคราว",
@@ -162,7 +248,7 @@ const COPY = {
     search: "ค้นหารถ",
     filter: "กรองตามสถานะ",
     all: "ทุกสถานะ",
-    unknown: "ไม่ทราบสถานะ",
+    unknown: "ไม่ทราบการเคลื่อนที่",
     noVehicles: "Forth ไม่ได้ส่งรายการติดตามกลับมา",
     noMatches: "ไม่พบรถที่ตรงกับการค้นหาและตัวกรองนี้",
     detailsTitle: "รายละเอียดรถ",
@@ -176,10 +262,10 @@ const COPY = {
     engineOn: "เปิด",
     engineOff: "ปิด",
     unknownValue: "ไม่ทราบ",
-    gps: "สถานะ GPS",
-    gprs: "สถานะ GPRS",
-    online: "เชื่อมต่อแล้ว",
-    offlineStatus: "ขาดการเชื่อมต่อ",
+    gps: "สัญญาณ GPS",
+    gprs: "การสื่อสารตัวติดตาม (GPRS)",
+    online: "ออนไลน์",
+    offlineStatus: "ออฟไลน์",
     gpsNoFix: "ไม่มีสัญญาณ GPS",
     position: "ตำแหน่งล่าสุด",
     coordinates: "พิกัด",
@@ -190,8 +276,8 @@ const COPY = {
     invalidLocation: "พิกัดไม่ถูกต้อง",
     timestamp: "เวลาที่รายงานตำแหน่ง",
     sourceTimestamp: "เวลาต้นฉบับจาก Forth",
-    current: "ข้อมูลปัจจุบัน",
-    stale: "ข้อมูลเก่า",
+    current: "ปัจจุบัน",
+    stale: "เก่า",
     noTimestamp: "ไม่มีเวลา",
     timezoneUnconfigured: "ยังไม่ได้ตั้งค่าเขตเวลาต้นทาง",
     timezoneInvalid: "เขตเวลาต้นทางไม่ถูกต้อง",
@@ -204,9 +290,9 @@ const COPY = {
     degrees: "องศา",
     lastUpdated: "อัปเดตข้อมูล",
     mapMoving: "กำลังเคลื่อนที่",
-    mapParked: "จอดอยู่",
-    mapOffline: "ออฟไลน์ / ข้อมูลเก่า",
-    mapUnknown: "ไม่ทราบสถานะ"
+    mapParked: "หยุดนิ่ง",
+    mapOffline: "ออฟไลน์",
+    mapUnknown: "ไม่ทราบการเคลื่อนที่"
   }
 } as const;
 
@@ -220,17 +306,35 @@ function isFleetTrackingData(value: unknown): value is ForthFleetTrackingData {
     (data.fetchedAt === null || typeof data.fetchedAt === "string");
 }
 
+function isCountObject(value: unknown): value is Record<string, number> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value) &&
+    Object.values(value as Record<string, unknown>).every((count) => Number.isInteger(count) && Number(count) >= 0);
+}
+
+function isStatusDiagnosticResult(value: unknown): value is StatusDiagnosticResult {
+  if (!value || typeof value !== "object") return false;
+  const result = value as Record<string, unknown>;
+  return ["connected", "failed", "not_configured"].includes(String(result.connectionStatus)) &&
+    Number.isInteger(result.recordCount) && Number(result.recordCount) >= 0 &&
+    isCountObject(result.communications) &&
+    isCountObject(result.positionFreshness) &&
+    isCountObject(result.gpsSignal) &&
+    isCountObject(result.positionQuality) &&
+    isCountObject(result.speedAvailability) &&
+    isCountObject(result.engineState) &&
+    isCountObject(result.classificationReason) &&
+    (result.error === null || typeof result.error === "string");
+}
+
 function statusText(status: ForthFleetStatus, copy: Copy) {
   if (status === "moving") return copy.moving;
-  if (status === "parked") return copy.parked;
-  if (status === "offline_stale") return copy.offline;
-  return copy.unknown;
+  if (status === "stationary") return copy.stationary;
+  return copy.activityUnknown;
 }
 
 function statusStyle(status: ForthFleetStatus) {
   if (status === "moving") return "border-emerald-200 bg-emerald-50 text-emerald-800";
-  if (status === "parked") return "border-indigo-200 bg-indigo-50 text-indigo-800";
-  if (status === "offline_stale") return "border-amber-200 bg-amber-50 text-amber-800";
+  if (status === "stationary") return "border-indigo-200 bg-indigo-50 text-indigo-800";
   return "border-slate-200 bg-slate-100 text-slate-700";
 }
 
@@ -256,9 +360,30 @@ function DetailValue({ label, value, icon }: { label: string; value: ReactNode; 
 function recordLocationLabel(record: ForthFleetTrackingRecord, copy: Copy) {
   if (record.coordinateStatus === "missing") return copy.missingLocation;
   if (record.coordinateStatus === "invalid") return copy.invalidLocation;
-  if (record.timestampStatus === "stale") return copy.stale;
-  if (record.positionStatus === "non_gps") return `${copy.validLocation} · ${copy.nonGpsSource}`;
-  return copy.validLocation;
+  if (record.positionQuality === "gps") return `${copy.gpsQuality} · ${record.timestampStatus === "stale" ? copy.stale : record.timestampStatus === "current" ? copy.current : copy.unknownValue}`;
+  if (record.positionQuality === "wifi") return copy.wifiQuality;
+  if (record.positionQuality === "lbs") return copy.lbsQuality;
+  if (record.positionQuality === "other") return copy.otherQuality;
+  return copy.unknownQuality;
+}
+
+function motionReasonLabel(record: ForthFleetTrackingRecord, copy: Copy) {
+  const labels: Record<string, string> = {
+    moving: copy.motionReasonMoving,
+    stationary: copy.motionReasonStationary,
+    stale_position: copy.motionReasonStale,
+    position_time_unknown: copy.motionReasonTime,
+    coordinates_missing: copy.motionReasonCoordinates,
+    coordinates_invalid: copy.motionReasonInvalidCoordinates,
+    coordinates_unknown: copy.motionReasonCoordinates,
+    gps_signal_unavailable: copy.motionReasonGpsUnavailable,
+    gps_signal_unknown: copy.motionReasonGpsUnknown,
+    position_source_unknown: copy.motionReasonSourceUnknown,
+    non_gps_position: copy.motionReasonNonGps,
+    speed_unavailable: copy.motionReasonSpeed,
+    speed_invalid: copy.motionReasonInvalidSpeed
+  };
+  return labels[getForthMotionReason(record)] ?? copy.activityUnknown;
 }
 
 function timestampStatusLabel(record: ForthFleetTrackingRecord, copy: Copy) {
@@ -271,18 +396,20 @@ function timestampStatusLabel(record: ForthFleetTrackingRecord, copy: Copy) {
   return copy.noTimestamp;
 }
 
-function ConnectivityValue({ connected, copy, disconnectedLabel }: {
+function ConnectivityValue({ connected, copy, connectedLabel, disconnectedLabel }: {
   connected: "connected" | "disconnected" | "unknown";
   copy: Copy;
+  connectedLabel?: string;
   disconnectedLabel?: string;
 }) {
-  if (connected === "connected") return <span className="inline-flex items-center gap-1.5 text-emerald-700"><Wifi className="h-4 w-4" />{copy.online}</span>;
+  if (connected === "connected") return <span className="inline-flex items-center gap-1.5 text-emerald-700"><Wifi className="h-4 w-4" />{connectedLabel ?? copy.online}</span>;
   if (connected === "disconnected") return <span className="inline-flex items-center gap-1.5 text-rose-700"><WifiOff className="h-4 w-4" />{disconnectedLabel ?? copy.offlineStatus}</span>;
   return <span className="inline-flex items-center gap-1.5 text-slate-500"><SignalZero className="h-4 w-4" />{copy.unknownValue}</span>;
 }
 
 export function ForthTrackingCentre() {
   const { language } = useLanguage();
+  const { can } = useAccountAccess();
   const copy = COPY[language];
   const [data, setData] = useState<ForthFleetTrackingData | null>(null);
   const [lastSuccessfulRefreshAt, setLastSuccessfulRefreshAt] = useState<string | null>(null);
@@ -292,7 +419,61 @@ export function ForthTrackingCentre() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<ForthFleetFilter>("all");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [statusDiagnostic, setStatusDiagnostic] = useState<StatusDiagnosticResult | null>(null);
+  const [statusDiagnosticBusy, setStatusDiagnosticBusy] = useState(false);
+  const [statusDiagnosticAttempted, setStatusDiagnosticAttempted] = useState(false);
+  const [statusDiagnosticError, setStatusDiagnosticError] = useState(false);
   const refreshRef = useRef<() => Promise<void>>(async () => undefined);
+  const statusDiagnosticStartedRef = useRef(false);
+
+  useEffect(() => {
+    try {
+      if (window.sessionStorage.getItem(STATUS_DIAGNOSTIC_SESSION_KEY) === "1") {
+        setStatusDiagnosticAttempted(true);
+      }
+    } catch {
+      // The in-memory guard still prevents duplicate activation if storage is unavailable.
+    }
+  }, []);
+
+  const runStatusDiagnostic = async () => {
+    if (statusDiagnosticStartedRef.current) return;
+    try {
+      if (window.sessionStorage.getItem(STATUS_DIAGNOSTIC_SESSION_KEY) === "1") {
+        setStatusDiagnosticAttempted(true);
+        return;
+      }
+    } catch {
+      // Fall through to the in-memory single-use guard.
+    }
+    if (!window.confirm(copy.diagnosticConfirm)) return;
+    statusDiagnosticStartedRef.current = true;
+    setStatusDiagnosticAttempted(true);
+    setStatusDiagnosticBusy(true);
+    setStatusDiagnosticError(false);
+    try {
+      window.sessionStorage.setItem(STATUS_DIAGNOSTIC_SESSION_KEY, "1");
+    } catch {
+      // The in-memory guard still applies for this page when storage is unavailable.
+    }
+    try {
+      const { data: authData, error: authError } = await supabase.auth.getSession();
+      if (authError || !authData.session?.access_token) throw new Error("session_unavailable");
+      const response = await fetch("/api/admin/forth-tracking/status-diagnostic?confirm=aggregate-only", {
+        method: "GET",
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${authData.session.access_token}` }
+      });
+      if (!response.ok) throw new Error("diagnostic_unavailable");
+      const payload: unknown = await response.json();
+      if (!isStatusDiagnosticResult(payload)) throw new Error("invalid_diagnostic");
+      setStatusDiagnostic(payload);
+    } catch {
+      setStatusDiagnosticError(true);
+    } finally {
+      setStatusDiagnosticBusy(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -375,7 +556,7 @@ export function ForthTrackingCentre() {
     if (!data || !selectedKey) return null;
     return data.records.find((record, index) => getForthFleetRecordKey(record, index) === selectedKey) ?? null;
   }, [data, selectedKey]);
-  const lastGpsUpdate = formatForthTrackingTime(summary.lastUpdate, language);
+  const lastGpsUpdate = formatForthTrackingTime(summary.lastVerifiedGpsPosition, language);
   const lastChecked = formatForthTrackingTime(
     lastSuccessfulRefreshAt ?? (data?.connectionStatus === "connected" ? data.fetchedAt : null),
     language
@@ -383,8 +564,14 @@ export function ForthTrackingCentre() {
   const mapCopy = useMemo(() => ({
     moving: copy.mapMoving,
     parked: copy.mapParked,
-    offline: copy.mapOffline,
     unknown: copy.mapUnknown,
+    gpsQuality: copy.gpsQuality,
+    wifiQuality: copy.wifiQuality,
+    lbsQuality: copy.lbsQuality,
+    otherQuality: copy.otherQuality,
+    unknownQuality: copy.unknownQuality,
+    current: copy.current,
+    stale: copy.stale,
     noPositions: copy.noPositions,
     loading: copy.mapLoading,
     mapUnavailable: copy.mapUnavailable,
@@ -432,16 +619,50 @@ export function ForthTrackingCentre() {
         </section>
       ) : null}
 
-      <section aria-label={language === "th" ? "สรุปสถานะกองรถ" : "Fleet overview"} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <section aria-label={language === "th" ? "สรุปสถานะกองรถ" : "Fleet overview"} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
         <StatCard label={copy.total} value={connected ? String(summary.total) : "—"} helper={copy.totalHelper} icon={<Truck className="h-5 w-5" />} />
-        <StatCard label={copy.moving} value={connected ? String(summary.moving) : "—"} helper={copy.movingHelper} icon={<Activity className="h-5 w-5" />} />
-        <StatCard label={copy.parked} value={connected ? String(summary.parked) : "—"} helper={copy.parkedHelper} icon={<Gauge className="h-5 w-5" />} />
-        <StatCard label={copy.offline} value={connected ? String(summary.offline_stale) : "—"} helper={copy.offlineHelper} icon={<SignalZero className="h-5 w-5" />} />
+        <StatCard label={copy.moving} value={connected ? String(summary.motion.moving) : "—"} helper={copy.movingHelper} icon={<Activity className="h-5 w-5" />} />
+        <StatCard label={copy.parked} value={connected ? String(summary.motion.stationary) : "—"} helper={copy.parkedHelper} icon={<Gauge className="h-5 w-5" />} />
+        <StatCard label={copy.offline} value={connected ? String(summary.communications.online) : "—"} helper={copy.offlineHelper} icon={<Wifi className="h-5 w-5" />} />
+        <StatCard label={copy.positionFreshness} value={connected ? String(summary.positionFreshness.current) : "—"} helper={copy.freshnessNote} icon={<Clock3 className="h-5 w-5" />} />
         <StatCard label={copy.latestGps} value={connected ? lastGpsUpdate ?? "—" : "—"} helper={copy.latestGpsHelper} icon={<Clock3 className="h-5 w-5" />} valueVariant="date" />
       </section>
 
-      {connected && summary.unknown > 0 ? (
-        <p className="-mt-3 px-1 text-xs leading-5 text-slate-500">{summary.unknown} {copy.unknownSummary}</p>
+      {connected ? (
+        <section className="-mt-3 grid gap-2 rounded-2xl border border-slate-100 bg-white/80 p-3 text-xs leading-5 text-slate-600 sm:grid-cols-2 xl:grid-cols-4" aria-label={language === "th" ? "สรุปคุณภาพข้อมูล" : "Tracking data dimensions"}>
+          <p><strong className="text-slate-800">{copy.communications}:</strong> {copy.online} {summary.communications.online} · {copy.offlineStatus} {summary.communications.offline} · {copy.unknownValue} {summary.communications.unknown}</p>
+          <p><strong className="text-slate-800">{copy.positionFreshness}:</strong> {copy.current} {summary.positionFreshness.current} · {copy.stale} {summary.positionFreshness.stale} · {copy.unknownValue} {summary.positionFreshness.unknown} <span className="block text-[11px] text-slate-500">{copy.freshnessNote}</span></p>
+          <p><strong className="text-slate-800">{copy.positionQuality}:</strong> GPS {summary.positionQuality.gps} · Wi-Fi {summary.positionQuality.wifi} · LBS {summary.positionQuality.lbs} · {copy.otherQuality} {summary.positionQuality.other} · {copy.unknownValue} {summary.positionQuality.unknown}</p>
+          <p><strong className="text-slate-800">{copy.gpsSignal}:</strong> {copy.available} {summary.gpsSignal.available} · {copy.unavailableStatus} {summary.gpsSignal.unavailable} · {copy.unknownValue} {summary.gpsSignal.unknown}<span className="block">{copy.activityUnknown}: {summary.motion.unknown}</span></p>
+        </section>
+      ) : null}
+
+      {connected && can("business:read") ? (
+        <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5" aria-label={copy.diagnosticTitle}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">{copy.diagnosticTitle}</h2>
+              <p className="mt-1 text-xs leading-5 text-slate-500">{copy.diagnosticConfirm}</p>
+            </div>
+            <button type="button" className="btn-secondary shrink-0 justify-center gap-2" onClick={() => void runStatusDiagnostic()} disabled={statusDiagnosticBusy || statusDiagnosticAttempted}>
+              <Activity className={`h-4 w-4 ${statusDiagnosticBusy ? "animate-pulse" : ""}`} />
+              {statusDiagnosticBusy ? copy.refreshing : copy.diagnosticButton}
+            </button>
+          </div>
+          {statusDiagnostic ? (
+            <div className="mt-4 grid gap-2 border-t border-slate-100 pt-3 text-xs leading-5 text-slate-600 sm:grid-cols-2 lg:grid-cols-3" aria-live="polite">
+              <p><strong>{copy.diagnosticConnection}:</strong> {statusDiagnostic.connectionStatus}</p>
+              <p><strong>{copy.diagnosticRecords}:</strong> {statusDiagnostic.recordCount}</p>
+              <p><strong>{copy.communications}:</strong> {Object.entries(statusDiagnostic.communications).map(([key, count]) => `${key} ${count}`).join(" · ")}</p>
+              <p><strong>{copy.positionFreshness}:</strong> {Object.entries(statusDiagnostic.positionFreshness).map(([key, count]) => `${key} ${count}`).join(" · ")}</p>
+              <p><strong>{copy.gpsSignal}:</strong> {Object.entries(statusDiagnostic.gpsSignal).map(([key, count]) => `${key} ${count}`).join(" · ")}</p>
+              <p><strong>{copy.positionQuality}:</strong> {Object.entries(statusDiagnostic.positionQuality).map(([key, count]) => `${key} ${count}`).join(" · ")}</p>
+              <p><strong>{copy.speedAvailability}:</strong> {Object.entries(statusDiagnostic.speedAvailability).map(([key, count]) => `${key} ${count}`).join(" · ")}</p>
+              <p><strong>{copy.engine}:</strong> {Object.entries(statusDiagnostic.engineState).map(([key, count]) => `${key} ${count}`).join(" · ")}</p>
+              <p className="sm:col-span-2 lg:col-span-3"><strong>{copy.diagnosticClassification}:</strong> {Object.entries(statusDiagnostic.classificationReason).filter(([, count]) => count > 0).map(([key, count]) => `${key.replaceAll("_", " ")} ${count}`).join(" · ") || "—"}</p>
+            </div>
+          ) : statusDiagnosticError ? <p className="mt-3 text-xs text-rose-700" role="status">{copy.diagnosticFailure}</p> : statusDiagnosticAttempted ? <p className="mt-3 text-xs text-slate-600" role="status">{copy.diagnosticDone}</p> : null}
+        </section>
       ) : null}
 
       <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.65fr)_minmax(340px,0.9fr)]">
@@ -469,8 +690,8 @@ export function ForthTrackingCentre() {
             <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 border-t border-slate-100 px-1 pt-3 text-[11px] text-slate-600" aria-label={language === "th" ? "คำอธิบายสถานะหมุด" : "Map marker status legend"}>
               <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-emerald-600" />{copy.mapMoving}</span>
               <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-indigo-600" />{copy.mapParked}</span>
-              <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-amber-600" />{copy.mapOffline}</span>
               <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-slate-500" />{copy.mapUnknown}</span>
+              <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-full border-2 border-dashed border-amber-700" />{copy.wifiQuality} / {copy.lbsQuality} / {copy.unknownQuality}</span>
             </div>
           ) : null}
         </section>
@@ -506,8 +727,7 @@ export function ForthTrackingCentre() {
             >
               <option value="all">{copy.all}</option>
               <option value="moving">{copy.moving}</option>
-              <option value="parked">{copy.parked}</option>
-              <option value="offline_stale">{copy.offline}</option>
+              <option value="stationary">{copy.stationary}</option>
               <option value="unknown">{copy.unknown}</option>
             </select>
           </div>
@@ -540,10 +760,12 @@ export function ForthTrackingCentre() {
                     </span>
                     <StatusPill status={status} copy={copy} />
                   </span>
+                  <span className="mt-1 block text-left text-[11px] leading-4 text-slate-500">{motionReasonLabel(record, copy)}</span>
                   <span className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-slate-600">
                     <span className="inline-flex min-w-0 items-center gap-1.5"><Gauge className="h-3.5 w-3.5 shrink-0 text-slate-400" />{record.speed === null ? copy.unknownValue : `${record.speed} km/h`}</span>
                     <span className="inline-flex min-w-0 items-center gap-1.5"><Activity className="h-3.5 w-3.5 shrink-0 text-slate-400" />{copy.engine}: {record.engineOn === null ? copy.unknownValue : record.engineOn ? copy.engineOn : copy.engineOff}</span>
-                    <span className="inline-flex min-w-0 items-center gap-1.5">{record.gpsConnectivity === "connected" ? <Wifi className="h-3.5 w-3.5 shrink-0 text-emerald-600" /> : <SignalZero className="h-3.5 w-3.5 shrink-0 text-slate-400" />}{record.gpsConnectivity === "connected" ? copy.online : record.gpsConnectivity === "disconnected" ? copy.gpsNoFix : copy.unknownValue}</span>
+                    <span className="inline-flex min-w-0 items-center gap-1.5">{record.gpsConnectivity === "connected" ? <Wifi className="h-3.5 w-3.5 shrink-0 text-emerald-600" /> : <SignalZero className="h-3.5 w-3.5 shrink-0 text-slate-400" />}{record.gpsConnectivity === "connected" ? copy.available : record.gpsConnectivity === "disconnected" ? copy.gpsNoFix : copy.unknownValue}</span>
+                    <span className="inline-flex min-w-0 items-center gap-1.5">{record.gprsConnectivity === "connected" ? <Wifi className="h-3.5 w-3.5 shrink-0 text-emerald-600" /> : <WifiOff className="h-3.5 w-3.5 shrink-0 text-slate-400" />}{copy.gprs}: {record.gprsConnectivity === "connected" ? copy.online : record.gprsConnectivity === "disconnected" ? copy.offlineStatus : copy.unknownValue}</span>
                     <span className="inline-flex min-w-0 items-center gap-1.5"><Clock3 className="h-3.5 w-3.5 shrink-0 text-slate-400" />{updateTime ?? timestampStatusLabel(record, copy)}</span>
                     <span className="inline-flex min-w-0 items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0 text-slate-400" />{recordLocationLabel(record, copy)}</span>
                   </span>
@@ -568,12 +790,13 @@ export function ForthTrackingCentre() {
             </div>
             <StatusPill status={getForthFleetStatus(selectedRecord)} copy={copy} />
           </div>
+          <p className="mt-2 text-xs leading-5 text-slate-500">{motionReasonLabel(selectedRecord, copy)}</p>
 
           <dl className="mt-4 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <DetailValue label={copy.device} icon={<Signal className="h-3.5 w-3.5" />} value={selectedRecord.gpsDeviceId || copy.unknownValue} />
             <DetailValue label={copy.speed} icon={<Gauge className="h-3.5 w-3.5" />} value={selectedRecord.speed === null ? copy.unknownValue : `${selectedRecord.speed} km/h`} />
             <DetailValue label={copy.engine} icon={<Activity className="h-3.5 w-3.5" />} value={selectedRecord.engineOn === null ? copy.unknownValue : selectedRecord.engineOn ? copy.engineOn : copy.engineOff} />
-            <DetailValue label={copy.gps} icon={<Signal className="h-3.5 w-3.5" />} value={<ConnectivityValue connected={selectedRecord.gpsConnectivity} copy={copy} disconnectedLabel={copy.gpsNoFix} />} />
+            <DetailValue label={copy.gps} icon={<Signal className="h-3.5 w-3.5" />} value={<ConnectivityValue connected={selectedRecord.gpsConnectivity} copy={copy} connectedLabel={copy.available} disconnectedLabel={copy.gpsNoFix} />} />
             <DetailValue label={copy.gprs} icon={<Wifi className="h-3.5 w-3.5" />} value={<ConnectivityValue connected={selectedRecord.gprsConnectivity} copy={copy} />} />
             <DetailValue label={copy.locationStatus} icon={<MapPin className="h-3.5 w-3.5" />} value={recordLocationLabel(selectedRecord, copy)} />
             <DetailValue
@@ -592,7 +815,7 @@ export function ForthTrackingCentre() {
             />
             <DetailValue label={copy.timestamp} icon={<Clock3 className="h-3.5 w-3.5" />} value={<span>{formatForthTrackingTime(selectedRecord.lastGpsTimestamp, language) ?? copy.unknownValue}<span className="mt-1 block text-xs font-medium text-slate-500">{timestampStatusLabel(selectedRecord, copy)}</span></span>} />
             <DetailValue label={copy.sourceTimestamp} icon={<Clock3 className="h-3.5 w-3.5" />} value={selectedRecord.sourceTimestampRaw || copy.unknownValue} />
-            <DetailValue label={copy.positionSource} icon={<MapPinned className="h-3.5 w-3.5" />} value={selectedRecord.positionSource || (selectedRecord.positionStatus === "gps" ? copy.gpsSource : selectedRecord.positionStatus === "non_gps" ? copy.nonGpsSource : copy.unknownValue)} />
+            <DetailValue label={copy.positionQuality} icon={<MapPinned className="h-3.5 w-3.5" />} value={<span>{selectedRecord.positionSource || recordLocationLabel(selectedRecord, copy)}</span>} />
             <DetailValue label={copy.heading} icon={<Navigation className="h-3.5 w-3.5" />} value={selectedRecord.heading === null ? copy.unknownValue : `${selectedRecord.heading} ${copy.degrees}`} />
           </dl>
         </section>

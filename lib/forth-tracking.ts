@@ -1,5 +1,6 @@
 export type ForthCoordinateStatus = "valid" | "missing" | "invalid";
 export type ForthGpsConnectivity = "connected" | "disconnected" | "unknown";
+export type ForthPositionQuality = "gps" | "wifi" | "lbs" | "other" | "unknown";
 export type ForthTimestampStatus =
   | "current"
   | "stale"
@@ -8,7 +9,6 @@ export type ForthTimestampStatus =
   | "timezone_unconfigured"
   | "timezone_invalid"
   | "timezone_ambiguous";
-export type ForthPositionStatus = "gps" | "non_gps" | "unknown";
 
 /** Fields returned by the upstream API are optional and may vary by device. */
 export type ForthRawTrackingRecord = {
@@ -60,7 +60,7 @@ export type ForthTrackingRecord = {
   timestampStatus: ForthTimestampStatus;
   heading: number | null;
   positionSource: string | null;
-  positionStatus: ForthPositionStatus;
+  positionQuality: ForthPositionQuality;
   optionalSensors: {
     sensor1: unknown;
     sensor2: unknown;
@@ -271,10 +271,14 @@ function parseTimestamp(value: unknown, now: number, staleAfterMs: number, sourc
   return { timestamp: new Date(milliseconds).toISOString(), status };
 }
 
-function sourceStatus(value: string | null): ForthPositionStatus {
+function sourceQuality(value: string | null): ForthPositionQuality {
   if (!value) return "unknown";
-  if (/\b(?:no|lost|unavailable|disconnected|invalid)\b/i.test(value)) return "non_gps";
-  return /\bgps\b/i.test(value) && !/\bnon[-\s]?gps\b/i.test(value) ? "gps" : "non_gps";
+  const normalized = value.trim().toLocaleLowerCase().replace(/[\s_-]+/g, "");
+  if (normalized === "gps") return "gps";
+  if (normalized === "wifi") return "wifi";
+  if (normalized === "lbs") return "lbs";
+  if (normalized === "nongps") return "other";
+  return "unknown";
 }
 
 function normalizeRecord(value: unknown, now: number, staleAfterMs: number, sourceTimeZone?: string | null): ForthTrackingRecord {
@@ -320,7 +324,7 @@ function normalizeRecord(value: unknown, now: number, staleAfterMs: number, sour
     timestampStatus: timestamp.status,
     heading: heading !== null && heading >= 0 && heading <= 360 ? heading : null,
     positionSource,
-    positionStatus: sourceStatus(positionSource),
+    positionQuality: sourceQuality(positionSource),
     optionalSensors: {
       sensor1: raw.Sensor1,
       sensor2: raw.Sensor2,

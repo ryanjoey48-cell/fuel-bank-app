@@ -2,6 +2,7 @@ import {
   normalizeForthTrackingResponse,
   type ForthTrackingRecord
 } from "@/lib/forth-tracking";
+import { summarizeForthFleet } from "@/lib/forth-tracking-view";
 
 const TOKEN_ENDPOINT = "https://webapi.forthtrack.com/authorizationserver/token";
 const TRACKING_ENDPOINT = "https://webapi.forthtrack.com/trackingresource/api/tracking";
@@ -53,7 +54,7 @@ export type ForthFleetTrackingRecord = Pick<
   | "timestampStatus"
   | "heading"
   | "positionSource"
-  | "positionStatus"
+  | "positionQuality"
 >;
 
 export type ForthFleetTrackingData = {
@@ -301,7 +302,7 @@ export function createForthTrackingService(options: {
       .filter((record) =>
         record.coordinateStatus === "valid" &&
         record.gpsConnectivity !== "disconnected" &&
-        record.positionStatus !== "non_gps" &&
+        record.positionQuality === "gps" &&
         (record.timestampStatus === "current" || record.timestampStatus === "stale")
       )
       .map((record) => record.lastGpsTimestamp)
@@ -352,7 +353,7 @@ export function createForthTrackingService(options: {
       timestampStatus: record.timestampStatus,
       heading: record.heading,
       positionSource: record.positionSource,
-      positionStatus: record.positionStatus
+      positionQuality: record.positionQuality
     }));
 
     return {
@@ -363,7 +364,42 @@ export function createForthTrackingService(options: {
     };
   }
 
-  return { diagnose, getFleetData };
+  async function diagnoseStatus() {
+    const result = await requestTracking();
+    const summary = summarizeForthFleet(result.records.map((record) => ({
+      gpsDeviceId: null,
+      vehicleRegistration: null,
+      reportedDriver: null,
+      latitude: record.latitude,
+      longitude: record.longitude,
+      coordinateStatus: record.coordinateStatus,
+      speed: record.speed,
+      engineOn: record.engineOn,
+      gpsConnectivity: record.gpsConnectivity,
+      gprsConnectivity: record.gprsConnectivity,
+      sourceTimestampRaw: null,
+      lastGpsTimestamp: record.lastGpsTimestamp,
+      timestampStatus: record.timestampStatus,
+      heading: null,
+      positionSource: null,
+      positionQuality: record.positionQuality
+    })));
+
+    return {
+      connectionStatus: result.connectionStatus,
+      recordCount: result.connectionStatus === "connected" ? result.records.length : 0,
+      communications: summary.communications,
+      positionFreshness: summary.positionFreshness,
+      gpsSignal: summary.gpsSignal,
+      positionQuality: summary.positionQuality,
+      speedAvailability: summary.speedAvailability,
+      engineState: summary.engineState,
+      classificationReason: summary.classificationReason,
+      error: result.connectionStatus === "connected" ? null : result.error?.message ?? "Forth tracking is unavailable."
+    };
+  }
+
+  return { diagnose, getFleetData, diagnoseStatus };
 }
 
 export function createForthTrackingDiagnosticService(options: {
@@ -382,4 +418,8 @@ export async function getForthTrackingDiagnostic() {
 
 export async function getForthTrackingFleetData() {
   return forthTrackingService.getFleetData();
+}
+
+export async function getForthTrackingStatusDiagnostic() {
+  return forthTrackingService.diagnoseStatus();
 }
