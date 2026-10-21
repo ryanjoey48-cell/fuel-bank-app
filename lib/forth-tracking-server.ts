@@ -1,5 +1,6 @@
 import {
   normalizeForthTrackingResponse,
+  type ForthPositionSourceShape,
   type ForthTrackingRecord
 } from "@/lib/forth-tracking";
 import { summarizeForthFleet } from "@/lib/forth-tracking-view";
@@ -36,6 +37,21 @@ export type ForthTrackingDiagnostic = {
   mostRecentGpsUpdateAt: string | null;
   error: { code: ForthDiagnosticErrorCode; message: string } | null;
 };
+
+type ForthPositionSourceShapeCounts = Record<ForthPositionSourceShape, number>;
+
+function emptyPositionSourceShapeCounts(): ForthPositionSourceShapeCounts {
+  return {
+    missing: 0,
+    null: 0,
+    empty: 0,
+    number: 0,
+    boolean: 0,
+    recognized_string: 0,
+    unrecognized_string: 0,
+    other: 0
+  };
+}
 
 export type ForthFleetTrackingRecord = Pick<
   ForthTrackingRecord,
@@ -366,6 +382,16 @@ export function createForthTrackingService(options: {
 
   async function diagnoseStatus() {
     const result = await requestTracking();
+    const positionSourceShape = emptyPositionSourceShapeCounts();
+    const alternateSourceCandidateShapes = emptyPositionSourceShapeCounts();
+    let recordsWithAlternateSourceCandidate = 0;
+    for (const record of result.records) {
+      positionSourceShape[record.positionSourceShape] += 1;
+      if (record.alternatePositionSourceCandidates.length > 0) recordsWithAlternateSourceCandidate += 1;
+      for (const shape of record.alternatePositionSourceCandidates) {
+        alternateSourceCandidateShapes[shape] += 1;
+      }
+    }
     const summary = summarizeForthFleet(result.records.map((record) => ({
       gpsDeviceId: null,
       vehicleRegistration: null,
@@ -395,6 +421,11 @@ export function createForthTrackingService(options: {
       speedAvailability: summary.speedAvailability,
       engineState: summary.engineState,
       classificationReason: summary.classificationReason,
+      positionSourceShape: {
+        canonicalField: positionSourceShape,
+        alternateCandidateRecords: recordsWithAlternateSourceCandidate,
+        alternateCandidateValues: alternateSourceCandidateShapes
+      },
       error: result.connectionStatus === "connected" ? null : result.error?.message ?? "Forth tracking is unavailable."
     };
   }

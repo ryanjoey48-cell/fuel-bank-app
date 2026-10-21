@@ -79,8 +79,51 @@ test("normalizes a valid tracking response without inferring movement", () => {
   assert.equal(record.speed, 0);
   assert.equal(record.timestampStatus, "current");
   assert.equal(record.positionQuality, "gps");
+  assert.equal(record.positionSourceShape, "recognized_string");
+  assert.deepEqual(record.alternatePositionSourceCandidates, []);
   assert.equal(record.optionalSensors.sensor1, "available");
   assert.equal(Object.hasOwn(record, "IDCard"), false);
+});
+
+test("classifies positionSource presence and type without guessing alternate field mappings", () => {
+  const records = normalizeForthTrackingResponse([
+    {},
+    { positionSource: null },
+    { positionSource: "   " },
+    { positionSource: 3 },
+    { positionSource: false },
+    { positionSource: " GPS " },
+    { positionSource: "Cellular" },
+    { positionSource: { source: "GPS" } },
+    { Position_Source: "Wi-Fi" },
+    { position: { source: "LBS" } }
+  ], { now: baseNow });
+
+  assert.deepEqual(records.map((record) => record.positionSourceShape), [
+    "missing", "null", "empty", "number", "boolean",
+    "recognized_string", "unrecognized_string", "other", "missing", "missing"
+  ]);
+  assert.deepEqual(records[8].alternatePositionSourceCandidates, ["recognized_string"]);
+  assert.deepEqual(records[9].alternatePositionSourceCandidates, ["recognized_string"]);
+  assert.equal(records[8].positionQuality, "unknown");
+  assert.equal(records[9].positionQuality, "unknown");
+});
+
+test("recognizes only the documented EES source labels across case and separator variants", () => {
+  const records = normalizeForthTrackingResponse([
+    { positionSource: "GPS" },
+    { positionSource: " wifi " },
+    { positionSource: "Wi-Fi" },
+    { positionSource: "LBS" },
+    { positionSource: "Non-GPS" },
+    { positionSource: "Non GPS" },
+    { positionSource: "GPS signal lost" },
+    { positionSource: "Cellular" }
+  ], { now: baseNow });
+
+  assert.deepEqual(records.map((record) => record.positionQuality), [
+    "gps", "wifi", "wifi", "lbs", "other", "other", "unknown", "unknown"
+  ]);
 });
 
 test("accepts missing optional fields and distinguishes missing from invalid coordinates", () => {
@@ -200,6 +243,26 @@ test("Forth fields map independently to communications, freshness, position qual
   assert.equal(summary.engineState.off, 2);
   assert.equal(summary.engineState.on, 8);
   assert.equal(summary.engineState.unknown, 1);
+});
+
+test("unknown position quality exposes provisional fresh positive speed without changing verified motion", () => {
+  const { getForthFleetStatus, isProvisionalReportedMovement, summarizeForthFleet } = loadTypeScript("lib/forth-tracking-view.ts");
+  const records = normalizeForthTrackingResponse([
+    { dateTime: "21-10-2026 11:59:00", GPS: "ON", GPRS: "ON", Speed: "24", Latitude: 13.7, Longitude: 100.5 },
+    { dateTime: "21-10-2026 11:59:00", GPS: "ON", GPRS: "ON", Speed: "0", Latitude: 13.7, Longitude: 100.5 },
+    { dateTime: "21-10-2026 11:59:00", GPS: "OFF", GPRS: "ON", Speed: "24", Latitude: 13.7, Longitude: 100.5 },
+    { dateTime: "21-10-2026 11:59:00", GPS: "ON", GPRS: "OFF", Speed: "24", Latitude: 13.7, Longitude: 100.5 },
+    { dateTime: "21-10-2026 11:44:59", GPS: "ON", GPRS: "ON", Speed: "24", Latitude: 13.7, Longitude: 100.5 },
+    { dateTime: "21-10-2026 11:59:00", GPS: "ON", GPRS: "ON", Speed: "24", Latitude: 91, Longitude: 100.5 },
+    { dateTime: "21-10-2026 11:59:00", GPS: "ON", GPRS: "ON", Latitude: 13.7, Longitude: 100.5 },
+    { dateTime: "21-10-2026 11:59:00", GPS: "ON", GPRS: "ON", Speed: "-1", Latitude: 13.7, Longitude: 100.5 }
+  ], { now: baseNow, sourceTimeZone: "Asia/Bangkok" });
+
+  assert.deepEqual(records.map(isProvisionalReportedMovement), [true, false, true, true, false, false, false, false]);
+  assert.deepEqual(records.map(getForthFleetStatus), Array(8).fill("unknown"));
+  const summary = summarizeForthFleet(records);
+  assert.equal(summary.provisionalMotion.reportedMoving, 3);
+  assert.deepEqual(summary.motion, { moving: 0, stationary: 0, unknown: 8 });
 });
 
 test("EES movement stays speed-based when the engine is on while parked", () => {
@@ -546,7 +609,8 @@ test("status diagnostic returns aggregate counts only and omits all source ident
       Speed: "12",
       Latitude: 13.7563,
       Longitude: 100.5018,
-      positionSource: "GPS"
+      positionSource: "GPS",
+      Position_Source: "PRIVATE-SOURCE-VALUE"
     }]);
   });
 
@@ -557,8 +621,17 @@ test("status diagnostic returns aggregate counts only and omits all source ident
   assert.deepEqual(result.communications, { online: 1, offline: 0, unknown: 0 });
   assert.deepEqual(result.positionFreshness, { current: 1, stale: 0, unknown: 0 });
   assert.deepEqual(result.positionQuality, { gps: 1, wifi: 0, lbs: 0, other: 0, unknown: 0 });
+  assert.deepEqual(result.positionSourceShape.canonicalField, {
+    missing: 0, null: 0, empty: 0, number: 0, boolean: 0,
+    recognized_string: 1, unrecognized_string: 0, other: 0
+  });
+  assert.equal(result.positionSourceShape.alternateCandidateRecords, 1);
+  assert.deepEqual(result.positionSourceShape.alternateCandidateValues, {
+    missing: 0, null: 0, empty: 0, number: 0, boolean: 0,
+    recognized_string: 0, unrecognized_string: 1, other: 0
+  });
   const serialized = JSON.stringify(result);
-  for (const sensitive of ["SENSITIVE-DEVICE-ID", "PRIVATE-REGISTRATION", "Private Driver Name", "13.7563", "100.5018", "11:59", "mock-access-token", "secret-test", "password-test"]) {
+  for (const sensitive of ["SENSITIVE-DEVICE-ID", "PRIVATE-REGISTRATION", "Private Driver Name", "13.7563", "100.5018", "11:59", "PRIVATE-SOURCE-VALUE", "Position_Source", "mock-access-token", "secret-test", "password-test"]) {
     assert.equal(serialized.includes(sensitive), false);
   }
 });
@@ -828,8 +901,18 @@ test("status aggregate control is business-read gated, confirmed, and single-use
   assert.ok(source.includes('can("business:read")'));
   assert.ok(source.includes("window.confirm(copy.diagnosticConfirm)"));
   assert.ok(source.includes('fetch("/api/admin/forth-tracking/status-diagnostic?confirm=aggregate-only"'));
+  assert.ok(source.includes("ees-forth-status-diagnostic-source-shape-v2-used"));
+  assert.ok(source.includes("positionSourceShape"));
   assert.ok(source.includes("sessionStorage.setItem(STATUS_DIAGNOSTIC_SESSION_KEY, \"1\")"));
   assert.ok(source.includes("disabled={statusDiagnosticBusy || statusDiagnosticAttempted}"));
+});
+
+test("unknown-quality speed indications are labelled provisional and excluded from verified moving status", () => {
+  const view = fs.readFileSync(path.join(root, "lib/forth-tracking-view.ts"), "utf8");
+  const component = fs.readFileSync(path.join(root, "components/forth-tracking-centre.tsx"), "utf8");
+  assert.ok(view.includes("isProvisionalReportedMovement"));
+  assert.ok(component.includes("Speed suggests movement · provisional"));
+  assert.ok(component.includes("summary.provisionalMotion.reportedMoving"));
 });
 
 test("Fleet Tracking appears once in the permission-gated Fleet group used by desktop and mobile navigation", () => {

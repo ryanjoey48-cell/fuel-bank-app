@@ -45,10 +45,32 @@ export function getForthFleetStatus(record: ForthFleetTrackingRecord): ForthFlee
   return "unknown";
 }
 
+/**
+ * A positive speed on a fresh record with valid coordinates can be surfaced as
+ * a provisional report when position quality is unknown. It is not a verified
+ * movement classification and is never used for incident or alert decisions.
+ */
+export function isProvisionalReportedMovement(record: ForthFleetTrackingRecord) {
+  return record.timestampStatus === "current" &&
+    record.coordinateStatus === "valid" &&
+    typeof record.latitude === "number" &&
+    Number.isFinite(record.latitude) &&
+    record.latitude >= -90 &&
+    record.latitude <= 90 &&
+    typeof record.longitude === "number" &&
+    Number.isFinite(record.longitude) &&
+    record.longitude >= -180 &&
+    record.longitude <= 180 &&
+    record.positionQuality === "unknown" &&
+    isUsableSpeed(record.speed) &&
+    record.speed > 0;
+}
+
 export function summarizeForthFleet(records: ForthFleetTrackingRecord[]) {
   const summary = {
     total: records.length,
     motion: { moving: 0, stationary: 0, unknown: 0 } as CountMap<ForthFleetStatus>,
+    provisionalMotion: { reportedMoving: 0 },
     communications: { online: 0, offline: 0, unknown: 0 } as CountMap<"online" | "offline" | "unknown">,
     positionFreshness: { current: 0, stale: 0, unknown: 0 } as CountMap<"current" | "stale" | "unknown">,
     gpsSignal: { available: 0, unavailable: 0, unknown: 0 } as CountMap<"available" | "unavailable" | "unknown">,
@@ -77,6 +99,7 @@ export function summarizeForthFleet(records: ForthFleetTrackingRecord[]) {
     const reason = getForthMotionReason(record);
     summary.classificationReason[reason] += 1;
     summary.motion[getForthFleetStatus(record)] += 1;
+    if (isProvisionalReportedMovement(record)) summary.provisionalMotion.reportedMoving += 1;
     summary.communications[record.gprsConnectivity === "connected" ? "online" : record.gprsConnectivity === "disconnected" ? "offline" : "unknown"] += 1;
     summary.positionFreshness[record.timestampStatus === "current" ? "current" : record.timestampStatus === "stale" ? "stale" : "unknown"] += 1;
     summary.gpsSignal[record.gpsConnectivity === "connected" ? "available" : record.gpsConnectivity === "disconnected" ? "unavailable" : "unknown"] += 1;

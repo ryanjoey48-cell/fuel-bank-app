@@ -29,6 +29,7 @@ import {
   getForthMotionReason,
   getForthFleetRecordKey,
   getForthFleetStatus,
+  isProvisionalReportedMovement,
   summarizeForthFleet,
   type ForthFleetFilter,
   type ForthFleetStatus
@@ -42,7 +43,11 @@ const ForthTrackingMap = dynamic(
 
 const POLL_INTERVAL_MS = 60_000;
 const REQUEST_TIMEOUT_MS = 15_000;
-const STATUS_DIAGNOSTIC_SESSION_KEY = "ees-forth-status-diagnostic-used";
+const STATUS_DIAGNOSTIC_SESSION_KEY = "ees-forth-status-diagnostic-source-shape-v2-used";
+type PositionSourceShapeCounts = Record<
+  "missing" | "null" | "empty" | "number" | "boolean" | "recognized_string" | "unrecognized_string" | "other",
+  number
+>;
 
 type StatusDiagnosticResult = {
   connectionStatus: "connected" | "failed" | "not_configured";
@@ -54,6 +59,11 @@ type StatusDiagnosticResult = {
   speedAvailability: Record<"available" | "unavailable", number>;
   engineState: Record<"on" | "off" | "unknown", number>;
   classificationReason: Record<string, number>;
+  positionSourceShape: {
+    canonicalField: PositionSourceShapeCounts;
+    alternateCandidateRecords: number;
+    alternateCandidateValues: PositionSourceShapeCounts;
+  };
   error: string | null;
 };
 
@@ -79,6 +89,9 @@ const COPY = {
     latestGps: "Latest verified GPS position",
     latestGpsHelper: "Forth position time, separate from API refresh time",
     unknownSummary: "Motion stays unknown when the position, time, GPS signal or speed cannot support a reliable activity reading.",
+    provisionalMovement: "Provisional speed indications",
+    provisionalMovementNote: "Fresh positive speed with unknown position quality; not GPS-verified movement.",
+    provisionalBadge: "Speed suggests movement · provisional",
     freshnessNote: "Current means the reported position is no more than 15 minutes old.",
     stationary: "Stationary",
     activityUnknown: "Motion unknown",
@@ -108,11 +121,13 @@ const COPY = {
     motionReasonInvalidSpeed: "Speed value is invalid",
     diagnosticTitle: "One-time status breakdown",
     diagnosticButton: "Run one-time status diagnostic",
-    diagnosticConfirm: "Run one read-only Forth request and return aggregate counts only? No vehicle identifiers, coordinates, timestamps, driver details, or raw values will be returned.",
+    diagnosticConfirm: "Run one read-only Forth request and return aggregate counts only? It will include position-source field presence/type counts, but no vehicle identifiers, coordinates, timestamps, driver details, raw keys, or values.",
     diagnosticDone: "This diagnostic can run once per browser tab session.",
     diagnosticFailure: "The status diagnostic could not be completed.",
     diagnosticConnection: "Forth request status",
     diagnosticRecords: "Records analyzed",
+    diagnosticSourceShape: "Position-source field shape",
+    diagnosticAlternateSources: "Records with alternate source-like fields",
     diagnosticClassification: "Motion classification reasons",
     configurationTitle: "Forth Tracking is awaiting configuration",
     configurationBody: "This environment is not returning tracking data yet. Fleet counts and map positions will appear after the server is configured.",
@@ -197,6 +212,9 @@ const COPY = {
     latestGps: "ตำแหน่ง GPS ที่ยืนยันล่าสุด",
     latestGpsHelper: "เวลาตำแหน่งจาก Forth แยกจากเวลารีเฟรช API",
     unknownSummary: "จะไม่สรุปการเคลื่อนที่เมื่อข้อมูลตำแหน่ง เวลา สัญญาณ GPS หรือความเร็วไม่เพียงพอ",
+    provisionalMovement: "ความเร็วที่บ่งชี้การเคลื่อนที่เบื้องต้น",
+    provisionalMovementNote: "ความเร็วมากกว่าศูนย์และตำแหน่งใหม่ แต่ไม่ทราบคุณภาพตำแหน่ง จึงยังไม่ยืนยันด้วย GPS",
+    provisionalBadge: "ความเร็วบ่งชี้ว่าอาจเคลื่อนที่ · เบื้องต้น",
     freshnessNote: "ข้อมูลปัจจุบันหมายถึงตำแหน่งที่รายงานภายใน 15 นาที",
     stationary: "หยุดนิ่ง",
     activityUnknown: "ไม่ทราบการเคลื่อนที่",
@@ -226,11 +244,13 @@ const COPY = {
     motionReasonInvalidSpeed: "ค่าความเร็วไม่ถูกต้อง",
     diagnosticTitle: "สรุปสถานะแบบครั้งเดียว",
     diagnosticButton: "เรียกใช้การวินิจฉัยครั้งเดียว",
-    diagnosticConfirm: "เรียก Forth แบบอ่านอย่างเดียวหนึ่งครั้งและแสดงเฉพาะจำนวนรวมใช่หรือไม่ จะไม่ส่งกลับทะเบียน พิกัด เวลา รายละเอียดผู้ขับ หรือค่าดิบ",
+    diagnosticConfirm: "เรียก Forth แบบอ่านอย่างเดียวหนึ่งครั้งและแสดงเฉพาะจำนวนรวมใช่หรือไม่ จะแสดงประเภท/การมีอยู่ของฟิลด์แหล่งตำแหน่ง แต่ไม่ส่งทะเบียน พิกัด เวลา รายละเอียดผู้ขับ ชื่อฟิลด์ดิบ หรือค่า",
     diagnosticDone: "การวินิจฉัยนี้เรียกใช้ได้หนึ่งครั้งต่อเซสชันแท็บเบราว์เซอร์",
     diagnosticFailure: "ไม่สามารถวินิจฉัยสถานะได้",
     diagnosticConnection: "สถานะคำขอ Forth",
     diagnosticRecords: "จำนวนรายการที่วิเคราะห์",
+    diagnosticSourceShape: "รูปแบบฟิลด์แหล่งตำแหน่ง",
+    diagnosticAlternateSources: "รายการที่มีฟิลด์แหล่งตำแหน่งอื่นที่เป็นไปได้",
     diagnosticClassification: "เหตุผลการจัดประเภทการเคลื่อนที่",
     configurationTitle: "รอการตั้งค่า Forth Tracking",
     configurationBody: "สภาพแวดล้อมนี้ยังไม่ได้ส่งข้อมูลติดตาม จำนวนรถและตำแหน่งบนแผนที่จะปรากฏเมื่อตั้งค่าเซิร์ฟเวอร์แล้ว",
@@ -323,6 +343,12 @@ function isStatusDiagnosticResult(value: unknown): value is StatusDiagnosticResu
     isCountObject(result.speedAvailability) &&
     isCountObject(result.engineState) &&
     isCountObject(result.classificationReason) &&
+    Boolean(result.positionSourceShape) &&
+    typeof result.positionSourceShape === "object" &&
+    isCountObject((result.positionSourceShape as Record<string, unknown>).canonicalField) &&
+    Number.isInteger((result.positionSourceShape as Record<string, unknown>).alternateCandidateRecords) &&
+    Number((result.positionSourceShape as Record<string, unknown>).alternateCandidateRecords) >= 0 &&
+    isCountObject((result.positionSourceShape as Record<string, unknown>).alternateCandidateValues) &&
     (result.error === null || typeof result.error === "string");
 }
 
@@ -634,6 +660,7 @@ export function ForthTrackingCentre() {
           <p><strong className="text-slate-800">{copy.positionFreshness}:</strong> {copy.current} {summary.positionFreshness.current} · {copy.stale} {summary.positionFreshness.stale} · {copy.unknownValue} {summary.positionFreshness.unknown} <span className="block text-[11px] text-slate-500">{copy.freshnessNote}</span></p>
           <p><strong className="text-slate-800">{copy.positionQuality}:</strong> GPS {summary.positionQuality.gps} · Wi-Fi {summary.positionQuality.wifi} · LBS {summary.positionQuality.lbs} · {copy.otherQuality} {summary.positionQuality.other} · {copy.unknownValue} {summary.positionQuality.unknown}</p>
           <p><strong className="text-slate-800">{copy.gpsSignal}:</strong> {copy.available} {summary.gpsSignal.available} · {copy.unavailableStatus} {summary.gpsSignal.unavailable} · {copy.unknownValue} {summary.gpsSignal.unknown}<span className="block">{copy.activityUnknown}: {summary.motion.unknown}</span></p>
+          <p><strong className="text-slate-800">{copy.provisionalMovement}:</strong> {summary.provisionalMotion.reportedMoving}<span className="block text-[11px] text-slate-500">{copy.provisionalMovementNote}</span></p>
         </section>
       ) : null}
 
@@ -659,6 +686,8 @@ export function ForthTrackingCentre() {
               <p><strong>{copy.positionQuality}:</strong> {Object.entries(statusDiagnostic.positionQuality).map(([key, count]) => `${key} ${count}`).join(" · ")}</p>
               <p><strong>{copy.speedAvailability}:</strong> {Object.entries(statusDiagnostic.speedAvailability).map(([key, count]) => `${key} ${count}`).join(" · ")}</p>
               <p><strong>{copy.engine}:</strong> {Object.entries(statusDiagnostic.engineState).map(([key, count]) => `${key} ${count}`).join(" · ")}</p>
+              <p><strong>{copy.diagnosticSourceShape}:</strong> {Object.entries(statusDiagnostic.positionSourceShape.canonicalField).map(([key, count]) => `${key.replaceAll("_", " ")} ${count}`).join(" · ")}</p>
+              <p><strong>{copy.diagnosticAlternateSources}:</strong> {statusDiagnostic.positionSourceShape.alternateCandidateRecords} records; {Object.entries(statusDiagnostic.positionSourceShape.alternateCandidateValues).map(([key, count]) => `${key.replaceAll("_", " ")} ${count}`).join(" · ")}</p>
               <p className="sm:col-span-2 lg:col-span-3"><strong>{copy.diagnosticClassification}:</strong> {Object.entries(statusDiagnostic.classificationReason).filter(([, count]) => count > 0).map(([key, count]) => `${key.replaceAll("_", " ")} ${count}`).join(" · ") || "—"}</p>
             </div>
           ) : statusDiagnosticError ? <p className="mt-3 text-xs text-rose-700" role="status">{copy.diagnosticFailure}</p> : statusDiagnosticAttempted ? <p className="mt-3 text-xs text-slate-600" role="status">{copy.diagnosticDone}</p> : null}
@@ -761,6 +790,7 @@ export function ForthTrackingCentre() {
                     <StatusPill status={status} copy={copy} />
                   </span>
                   <span className="mt-1 block text-left text-[11px] leading-4 text-slate-500">{motionReasonLabel(record, copy)}</span>
+                  {isProvisionalReportedMovement(record) ? <span className="mt-1 inline-flex rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-800">{copy.provisionalBadge}</span> : null}
                   <span className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-slate-600">
                     <span className="inline-flex min-w-0 items-center gap-1.5"><Gauge className="h-3.5 w-3.5 shrink-0 text-slate-400" />{record.speed === null ? copy.unknownValue : `${record.speed} km/h`}</span>
                     <span className="inline-flex min-w-0 items-center gap-1.5"><Activity className="h-3.5 w-3.5 shrink-0 text-slate-400" />{copy.engine}: {record.engineOn === null ? copy.unknownValue : record.engineOn ? copy.engineOn : copy.engineOff}</span>
@@ -791,6 +821,7 @@ export function ForthTrackingCentre() {
             <StatusPill status={getForthFleetStatus(selectedRecord)} copy={copy} />
           </div>
           <p className="mt-2 text-xs leading-5 text-slate-500">{motionReasonLabel(selectedRecord, copy)}</p>
+          {isProvisionalReportedMovement(selectedRecord) ? <p className="mt-2 inline-flex rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-800">{copy.provisionalBadge}</p> : null}
 
           <dl className="mt-4 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
             <DetailValue label={copy.device} icon={<Signal className="h-3.5 w-3.5" />} value={selectedRecord.gpsDeviceId || copy.unknownValue} />

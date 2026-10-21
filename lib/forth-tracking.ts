@@ -1,6 +1,15 @@
 export type ForthCoordinateStatus = "valid" | "missing" | "invalid";
 export type ForthGpsConnectivity = "connected" | "disconnected" | "unknown";
 export type ForthPositionQuality = "gps" | "wifi" | "lbs" | "other" | "unknown";
+export type ForthPositionSourceShape =
+  | "missing"
+  | "null"
+  | "empty"
+  | "number"
+  | "boolean"
+  | "recognized_string"
+  | "unrecognized_string"
+  | "other";
 export type ForthTimestampStatus =
   | "current"
   | "stale"
@@ -61,6 +70,10 @@ export type ForthTrackingRecord = {
   heading: number | null;
   positionSource: string | null;
   positionQuality: ForthPositionQuality;
+  /** Sanitized raw-field shape used only by the protected aggregate diagnostic. */
+  positionSourceShape: ForthPositionSourceShape;
+  /** Shape categories for source-like alternate keys; no names or values are retained. */
+  alternatePositionSourceCandidates: ForthPositionSourceShape[];
   optionalSensors: {
     sensor1: unknown;
     sensor2: unknown;
@@ -281,6 +294,49 @@ function sourceQuality(value: string | null): ForthPositionQuality {
   return "unknown";
 }
 
+function positionSourceShape(value: unknown, present: boolean): ForthPositionSourceShape {
+  if (!present) return "missing";
+  if (value === null) return "null";
+  if (typeof value === "string") {
+    if (!value.trim()) return "empty";
+    return sourceQuality(value) === "unknown" ? "unrecognized_string" : "recognized_string";
+  }
+  if (typeof value === "number") return "number";
+  if (typeof value === "boolean") return "boolean";
+  return "other";
+}
+
+function isAlternatePositionSourceKey(key: string, insidePositionContext: boolean) {
+  const normalized = key.toLocaleLowerCase().replace(/[^a-z0-9]/g, "");
+  return /^(?:position|location)(?:gps)?source$/.test(normalized) ||
+    /^source(?:position|location)(?:gps)?$/.test(normalized) ||
+    /^gpsposition(?:source|quality|type|method|mode)$/.test(normalized) ||
+    /^position(?:source)?(?:quality|type|method|mode)$/.test(normalized) ||
+    (insidePositionContext && ["source", "sourcetype", "sourcequality", "type", "quality", "method", "mode"].includes(normalized));
+}
+
+function alternatePositionSourceShapes(
+  value: Record<string, unknown>,
+  depth = 0,
+  insidePositionContext = false
+): ForthPositionSourceShape[] {
+  if (depth > 2) return [];
+  const shapes: ForthPositionSourceShape[] = [];
+  for (const [key, entry] of Object.entries(value)) {
+    const isCanonicalField = depth === 0 && key === "positionSource";
+    if (!isCanonicalField && isAlternatePositionSourceKey(key, insidePositionContext)) {
+      shapes.push(positionSourceShape(entry, true));
+    }
+    if (entry !== null && typeof entry === "object" && !Array.isArray(entry)) {
+      const normalizedKey = key.toLocaleLowerCase().replace(/[^a-z0-9]/g, "");
+      const nestedContext = insidePositionContext ||
+        /^(?:position|location|coordinates?|gpsposition)$/.test(normalizedKey);
+      shapes.push(...alternatePositionSourceShapes(entry as Record<string, unknown>, depth + 1, nestedContext));
+    }
+  }
+  return shapes;
+}
+
 function normalizeRecord(value: unknown, now: number, staleAfterMs: number, sourceTimeZone?: string | null): ForthTrackingRecord {
   const raw = recordValue(value);
   if (!raw) throw new ForthTrackingPayloadError();
@@ -297,6 +353,7 @@ function normalizeRecord(value: unknown, now: number, staleAfterMs: number, sour
   const gpsValue = parseBoolean(raw.GPS);
   const timestamp = parseTimestamp(raw.dateTime, now, staleAfterMs, sourceTimeZone);
   const positionSource = optionalText(raw.positionSource);
+  const hasPositionSource = Object.hasOwn(raw, "positionSource");
   const speed = numericValue(raw.Speed);
   const heading = numericValue(raw.COG);
   const gprsValue = parseBoolean(raw.GPRS);
@@ -325,6 +382,8 @@ function normalizeRecord(value: unknown, now: number, staleAfterMs: number, sour
     heading: heading !== null && heading >= 0 && heading <= 360 ? heading : null,
     positionSource,
     positionQuality: sourceQuality(positionSource),
+    positionSourceShape: positionSourceShape(raw.positionSource, hasPositionSource),
+    alternatePositionSourceCandidates: alternatePositionSourceShapes(raw),
     optionalSensors: {
       sensor1: raw.Sensor1,
       sensor2: raw.Sensor2,
