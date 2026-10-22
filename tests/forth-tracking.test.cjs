@@ -84,6 +84,34 @@ test("normalizes a valid tracking response without inferring movement", () => {
   assert.deepEqual(record.alternatePositionSourceCandidates, []);
   assert.equal(record.optionalSensors.sensor1, "available");
   assert.equal(Object.hasOwn(record, "IDCard"), false);
+  assert.deepEqual(record.sourceAudit.speed, { shape: "string", value: "0.0", truncated: false });
+  assert.deepEqual(record.sourceAudit.engine, { shape: "string", value: "off", truncated: false });
+  assert.deepEqual(record.sourceAudit.positionTimestamp, { shape: "string", value: "2026-10-21T04:55:00+00:00", truncated: false });
+  assert.equal(Object.hasOwn(record.sourceAudit, "IDCard"), false);
+  assert.equal(Object.hasOwn(record.sourceAudit, "Sensor1"), false);
+});
+
+test("accuracy source snapshots are allowlisted, bounded, and omit unsupported or unsafe driver values", () => {
+  const [record, unsafeDriver, longValue, unsupported] = normalizeForthTrackingResponse([
+    { gpsID: "device-7", plateNumber: " 1กข-2345 ", driver: " Driver A ", Speed: " 66.0 ", GPS: " ON ", GPRS: "Connected", Engine: "OFF", Latitude: "13.7", Longitude: 100.5, COG: "090", positionSource: " No GPS ", dateTime: "21-10-2026 11:55:00", IDCard: "PRIVATE-ID", Sensor1: "PRIVATE-SENSOR" },
+    { driver: "Driver-12345678" },
+    { positionSource: "x".repeat(200) + "\u0000\nGPS" },
+    { Latitude: { nested: "must not serialize" }, Speed: Number.NaN }
+  ], { now: baseNow, sourceTimeZone: "Asia/Bangkok" });
+
+  assert.deepEqual(record.sourceAudit.speed, { shape: "string", value: " 66.0 ", truncated: false });
+  assert.deepEqual(record.sourceAudit.engine, { shape: "string", value: "OFF", truncated: false });
+  assert.equal(record.sourceAudit.latitude.value, "13.7");
+  assert.equal(record.sourceAudit.positionSource.value, " No GPS ");
+  assert.equal(unsafeDriver.sourceAudit.driver.shape, "unsupported");
+  assert.equal(unsafeDriver.sourceAudit.driver.value, null);
+  assert.equal(longValue.sourceAudit.positionSource.truncated, true);
+  assert.equal(Array.from(longValue.sourceAudit.positionSource.value).length, 160);
+  assert.equal(unsupported.sourceAudit.latitude.shape, "unsupported");
+  assert.equal(unsupported.sourceAudit.latitude.value, null);
+  assert.equal(JSON.stringify(record.sourceAudit).includes("PRIVATE-ID"), false);
+  assert.equal(JSON.stringify(record.sourceAudit).includes("PRIVATE-SENSOR"), false);
+  assert.equal(JSON.stringify(unsupported.sourceAudit).includes("must not serialize"), false);
 });
 
 test("captures raw unknown positionSource text only when explicitly requested for the diagnostic", () => {
@@ -875,10 +903,14 @@ test("fleet endpoint service exposes normalized vehicle fields only and reuses i
   assert.equal(result.records[0].reportedDriver, "Driver A");
   assert.equal(result.records[0].gprsConnectivity, "connected");
   assert.equal(result.records[0].speed, 42);
+  assert.deepEqual(result.records[0].sourceAudit.speed, { shape: "number", value: 42, truncated: false });
+  assert.equal(result.records[0].sourceAudit.positionSource.value, "GPS");
+  assert.equal(result.records[0].sourceAudit.latitude.value, 13.7);
   assert.equal(result.records[0].sourceTimestampRaw, "2026-10-21 11:55:00");
   assert.equal(result.records[0].lastGpsTimestamp, "2026-10-21T04:55:00.000Z");
   assert.equal(result.fetchedAt, "2026-10-21T05:00:00.000Z");
   assert.equal(Object.hasOwn(result.records[0], "optionalSensors"), false);
+  assert.equal(Object.hasOwn(result.records[0], "IDCard"), false);
   assert.equal(JSON.stringify(result).includes("private-id"), false);
   assert.equal(JSON.stringify(result).includes("private-sensor-value"), false);
   assert.equal(JSON.stringify(result).includes("bearer-test-token"), false);
@@ -953,6 +985,68 @@ test("fleet view separates motion from communications and filters activity state
     .find((part) => part.type === "timeZoneName").value;
   assert.ok(formattedTime.includes(zoneLabel));
   assert.match(formattedTime, /11:59/);
+});
+
+test("accuracy comparisons show allowlisted Forth source fields beside normalized values and distinct timestamps", () => {
+  const { getForthAccuracyComparisons, getForthNormalizationWarnings } = loadTypeScript("lib/forth-tracking-view.ts");
+  const [record] = normalizeForthTrackingResponse([{
+    gpsID: "device-7",
+    plateNumber: " 1กข-2345 ",
+    driver: " Driver A ",
+    Latitude: "13.700000",
+    Longitude: "100.500000",
+    Speed: "66.0",
+    Engine: " ON ",
+    COG: "90",
+    GPS: "ON",
+    GPRS: "Connected",
+    positionSource: "No GPS",
+    dateTime: "21-10-2026 11:55:00"
+  }], { now: baseNow, sourceTimeZone: "Asia/Bangkok" });
+  const comparisons = getForthAccuracyComparisons(record, "2026-10-21T05:00:00.000Z");
+  const get = (field) => comparisons.find((entry) => entry.field === field);
+
+  assert.equal(get("registration").sourceField, "plateNumber");
+  assert.equal(get("registration").source.value, " 1กข-2345 ");
+  assert.equal(get("registration").normalized, "1กข-2345");
+  assert.equal(get("speed").sourceField, "Speed");
+  assert.equal(get("speed").source.value, "66.0");
+  assert.equal(get("speed").normalized, "66 km/h");
+  assert.equal(get("gps_signal").source.value, "ON");
+  assert.equal(get("gps_signal").normalized, "connected");
+  assert.equal(get("position_source").source.value, "No GPS");
+  assert.equal(get("position_source").normalized, "No GPS (no_gps)");
+  assert.equal(get("position_time").source.value, "21-10-2026 11:55:00");
+  assert.match(get("position_time").normalized, /GMT\+7.*current.*2026-10-21T04:55:00\.000Z/);
+  assert.equal(get("retrieval_time").source, null);
+  assert.match(get("retrieval_time").normalized, /2026-10-21T05:00:00\.000Z/);
+  assert.equal(get("activity_status").sourceField, null);
+  assert.equal(get("activity_status").normalized, "Reported driving; EES derives this from Speed and Engine.");
+  assert.deepEqual(getForthNormalizationWarnings(record), []);
+});
+
+test("accuracy warnings distinguish missing, invalid, stale and unrecognized source data", () => {
+  const { getForthNormalizationWarnings } = loadTypeScript("lib/forth-tracking-view.ts");
+  const [missing, invalid, stale] = normalizeForthTrackingResponse([
+    {},
+    { Speed: "fast", Engine: "maybe", GPS: "maybe", GPRS: "maybe", Latitude: "bad", Longitude: "100.5", COG: "999", positionSource: "Vendor-Q", dateTime: "bad" },
+    { Speed: "12", Engine: "ON", Latitude: 13.7, Longitude: 100.5, dateTime: "21-10-2026 11:44:00", positionSource: "GPS" }
+  ], { now: baseNow, sourceTimeZone: "Asia/Bangkok" });
+  const missingWarnings = getForthNormalizationWarnings(missing);
+  assert.ok(missingWarnings.includes("registration_missing"));
+  assert.ok(missingWarnings.includes("device_id_missing"));
+  assert.ok(missingWarnings.includes("speed_missing"));
+  assert.ok(missingWarnings.includes("position_time_unavailable"));
+  const invalidWarnings = getForthNormalizationWarnings(invalid);
+  assert.ok(invalidWarnings.includes("speed_invalid"));
+  assert.ok(invalidWarnings.includes("engine_unavailable"));
+  assert.ok(invalidWarnings.includes("coordinates_invalid"));
+  assert.ok(invalidWarnings.includes("heading_invalid"));
+  assert.ok(invalidWarnings.includes("gps_signal_unknown"));
+  assert.ok(invalidWarnings.includes("gprs_unknown"));
+  assert.ok(invalidWarnings.includes("position_source_unknown"));
+  assert.ok(invalidWarnings.includes("position_time_unavailable"));
+  assert.ok(getForthNormalizationWarnings(stale).includes("position_time_stale"));
 });
 
 test("reported activity is independent from GPS confidence and summary counts match activity filters", () => {
@@ -1317,6 +1411,26 @@ test("dashboard separates reported activity, GPS confidence, diagnostics and exi
   assert.ok(map.includes("activityLabel(activity, copy)"));
   assert.ok(component.includes("const POLL_INTERVAL_MS = 60_000;"));
   assert.ok(component.includes('can("business:read")'));
+});
+
+test("office accuracy review is protected in the UI and reuses the existing normalized fleet response", () => {
+  const component = fs.readFileSync(path.join(root, "components/forth-tracking-centre.tsx"), "utf8");
+  const server = fs.readFileSync(path.join(root, "lib/forth-tracking-server.ts"), "utf8");
+  const panelStart = component.indexOf("{connected && can(\"business:read\") ? (", component.indexOf("accuracyTitle"));
+  const panelEnd = component.indexOf("{connected && can(\"business:read\") ? (", panelStart + 1);
+  assert.ok(panelStart >= 0);
+  assert.ok(panelEnd > panelStart);
+  const panel = component.slice(panelStart, panelEnd);
+  assert.ok(panel.includes("getForthAccuracyComparisons(record, data.fetchedAt)"));
+  assert.ok(panel.includes("getForthNormalizationWarnings(record)"));
+  assert.ok(panel.includes("comparison.sourceField"));
+  assert.ok(panel.includes("copy.accuracySourceColumn"));
+  assert.ok(panel.includes("copy.accuracyNormalizedColumn"));
+  assert.ok(panel.includes("copy.accuracyActivityNotMapped"));
+  assert.equal(panel.includes("fetch("), false);
+  assert.equal(panel.includes("createServerSupabaseAdmin"), false);
+  assert.match(server, /sourceAudit:\s*record\.sourceAudit/);
+  assert.equal(component.includes('const POLL_INTERVAL_MS = 60_000;'), true);
 });
 
 test("Fleet Tracking appears once in the permission-gated Fleet group used by desktop and mobile navigation", () => {

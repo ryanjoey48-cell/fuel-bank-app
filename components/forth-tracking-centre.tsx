@@ -32,16 +32,21 @@ import {
 import {
   filterForthFleetRecords,
   formatForthTrackingTime,
+  getForthAccuracyComparisons,
   getForthFleetRecordKey,
+  getForthNormalizationWarnings,
   getForthReportedActivity,
   isForthGpsPositionVerified,
   summarizeForthFleet,
   sortForthFleetRecords,
   type ForthFleetFilter,
+  type ForthAccuracyField,
+  type ForthNormalizationWarning,
   type ForthFleetSort,
   type ForthReportedActivity
 } from "@/lib/forth-tracking-view";
 import type { ForthFleetTrackingData, ForthFleetTrackingRecord } from "@/lib/forth-tracking-server";
+import type { ForthSourceFieldSnapshot } from "@/lib/forth-tracking";
 
 const ForthTrackingMap = dynamic(
   () => import("@/components/forth-tracking-map").then((module) => module.ForthTrackingMap),
@@ -195,6 +200,43 @@ const COPY = {
     diagnosticUnknownSourceLabels: "Unrecognized positionSource labels",
     diagnosticUnknownSourceNote: "These are untrusted source labels; no positioning meaning is inferred.",
     diagnosticClassification: "Motion classification reasons",
+    accuracyTitle: "Tracking accuracy review",
+    accuracyIntro: "Compare the allowlisted Forth API fields with EES-normalized values from the current tracking refresh. This view is read-only, is not saved, and does not make another Forth request.",
+    accuracySearch: "Find a vehicle in the accuracy review",
+    accuracySearchPlaceholder: "Registration, device ID or reported driver",
+    accuracySourceColumn: "Forth API value",
+    accuracyNormalizedColumn: "EES value",
+    accuracyNotApplicable: "Not an upstream field",
+    accuracyNoMatches: "No vehicles match this review search.",
+    accuracyMissing: "Missing",
+    accuracyNull: "Null",
+    accuracyEmpty: "Empty",
+    accuracyUnsupported: "Unsupported value type; value omitted",
+    accuracyTruncated: "Value shortened for safe display",
+    accuracyNoWarnings: "No normalization warnings for these fields.",
+    accuracyWarnings: "Normalization warnings",
+    accuracyActivityStatus: "Forth activity/status",
+    accuracyLatitude: "Latitude",
+    accuracyLongitude: "Longitude",
+    accuracyActivityNotMapped: "EES does not currently map an explicit Forth activity field; its presence in this API response has not been verified.",
+    accuracyActivityDerived: "EES shows reported activity derived from fresh Speed and Engine fields; this is not a Forth Working/Parking status.",
+    accuracySignalExplanation: "GPS signal and position source are separate Forth fields. A reported GPS signal does not turn a No GPS source into GPS-verified positioning.",
+    accuracySpeedUnitNote: "EES currently displays Speed as km/h without conversion. This matched one reviewed Forth screen (66 km/h); the public API schema does not specify the unit.",
+    warningRegistrationMissing: "Registration missing or empty",
+    warningDeviceMissing: "GPS device ID missing or empty",
+    warningDriverFiltered: "Driver value was omitted by the safe display filter",
+    warningSpeedMissing: "Speed missing or empty",
+    warningSpeedInvalid: "Speed could not be normalized as a valid non-negative number",
+    warningEngineUnknown: "Engine state missing or unrecognized",
+    warningCoordinatesMissing: "Coordinates missing",
+    warningCoordinatesInvalid: "Coordinates invalid or out of range",
+    warningHeadingInvalid: "Heading could not be normalized to 0–360 degrees",
+    warningGpsUnknown: "GPS signal is missing or unrecognized",
+    warningGprsUnknown: "GPRS communication state is missing or unrecognized",
+    warningTimestampStale: "Position report is older than the 15-minute freshness window",
+    warningTimestampUnknown: "Position timestamp is missing or could not be parsed",
+    warningSourceUnknown: "Position source is missing or not in the recognized list",
+    warningTruncated: "One or more source text values were shortened to a safe display length",
     configurationTitle: "Forth Tracking is awaiting configuration",
     configurationBody: "This environment is not returning tracking data yet. Fleet counts and map positions will appear after the server is configured.",
     failureTitle: "Forth tracking is temporarily unavailable",
@@ -368,6 +410,43 @@ const COPY = {
     diagnosticUnknownSourceLabels: "ป้าย positionSource ที่ไม่รู้จัก",
     diagnosticUnknownSourceNote: "ป้ายเหล่านี้เป็นข้อมูลที่ยังไม่ยืนยัน และจะไม่อนุมานความหมาย",
     diagnosticClassification: "เหตุผลการจัดประเภทการเคลื่อนที่",
+    accuracyTitle: "ตรวจสอบความถูกต้องของข้อมูลติดตาม",
+    accuracyIntro: "เปรียบเทียบฟิลด์ API ของ Forth ที่อนุญาตให้แสดงกับค่าที่ EES ปรับรูปแบบจากการรีเฟรชปัจจุบัน หน้านี้อ่านอย่างเดียว ไม่บันทึก และไม่ส่งคำขอ Forth เพิ่ม",
+    accuracySearch: "ค้นหารถในหน้าตรวจสอบความถูกต้อง",
+    accuracySearchPlaceholder: "ทะเบียน รหัสอุปกรณ์ หรือผู้ขับที่รายงาน",
+    accuracySourceColumn: "ค่าจาก Forth API",
+    accuracyNormalizedColumn: "ค่าใน EES",
+    accuracyNotApplicable: "ไม่ใช่ฟิลด์จากระบบต้นทาง",
+    accuracyNoMatches: "ไม่พบรถที่ตรงกับการค้นหา",
+    accuracyMissing: "ไม่มีฟิลด์",
+    accuracyNull: "ค่า Null",
+    accuracyEmpty: "ค่าว่าง",
+    accuracyUnsupported: "ไม่รองรับชนิดข้อมูล จึงไม่แสดงค่า",
+    accuracyTruncated: "ย่อค่าเพื่อแสดงอย่างปลอดภัย",
+    accuracyNoWarnings: "ไม่พบคำเตือนการปรับรูปแบบในฟิลด์เหล่านี้",
+    accuracyWarnings: "คำเตือนการปรับรูปแบบ",
+    accuracyActivityStatus: "สถานะกิจกรรมจาก Forth",
+    accuracyLatitude: "ละติจูด",
+    accuracyLongitude: "ลองจิจูด",
+    accuracyActivityNotMapped: "ขณะนี้ EES ยังไม่ได้แมปฟิลด์กิจกรรมจาก Forth โดยตรง และยังไม่ได้ยืนยันว่าฟิลด์นี้มีอยู่ในการตอบกลับ API",
+    accuracyActivityDerived: "EES แสดงกิจกรรมที่คำนวณจาก Speed และ Engine ที่ยังใหม่ ซึ่งไม่ใช่สถานะ Working/Parking ของ Forth",
+    accuracySignalExplanation: "สัญญาณ GPS และแหล่งตำแหน่งเป็นคนละฟิลด์จาก Forth สัญญาณ GPS ที่รายงานไม่ได้เปลี่ยนแหล่ง No GPS ให้เป็นตำแหน่งที่ยืนยันด้วย GPS",
+    accuracySpeedUnitNote: "ขณะนี้ EES แสดง Speed เป็น กม./ชม. โดยไม่แปลงหน่วย ค่าตรงกับหน้าจอ Forth ที่ตรวจหนึ่งรายการ (66 กม./ชม.) แต่สคีมา API สาธารณะไม่ได้ระบุหน่วย",
+    warningRegistrationMissing: "ไม่มีทะเบียนหรือเป็นค่าว่าง",
+    warningDeviceMissing: "ไม่มีรหัสอุปกรณ์ GPS หรือเป็นค่าว่าง",
+    warningDriverFiltered: "ละค่าผู้ขับเนื่องจากไม่ผ่านตัวกรองการแสดงผลที่ปลอดภัย",
+    warningSpeedMissing: "ไม่มีความเร็วหรือเป็นค่าว่าง",
+    warningSpeedInvalid: "ไม่สามารถปรับความเร็วเป็นตัวเลขไม่ติดลบที่ถูกต้อง",
+    warningEngineUnknown: "ไม่มีสถานะเครื่องยนต์หรือไม่รู้จักค่า",
+    warningCoordinatesMissing: "ไม่มีพิกัด",
+    warningCoordinatesInvalid: "พิกัดไม่ถูกต้องหรืออยู่นอกช่วง",
+    warningHeadingInvalid: "ไม่สามารถปรับทิศทางเป็น 0–360 องศาได้",
+    warningGpsUnknown: "ไม่มีสัญญาณ GPS หรือไม่รู้จักค่า",
+    warningGprsUnknown: "ไม่มีสถานะการสื่อสาร GPRS หรือไม่รู้จักค่า",
+    warningTimestampStale: "เวลารายงานตำแหน่งเก่ากว่าช่วง 15 นาที",
+    warningTimestampUnknown: "ไม่มีเวลาตำแหน่งหรือแยกวิเคราะห์ไม่ได้",
+    warningSourceUnknown: "ไม่มีแหล่งตำแหน่งหรือไม่อยู่ในรายการที่รู้จัก",
+    warningTruncated: "ข้อความต้นทางอย่างน้อยหนึ่งค่าถูกตัดให้สั้นเพื่อแสดงอย่างปลอดภัย",
     configurationTitle: "รอการตั้งค่า Forth Tracking",
     configurationBody: "สภาพแวดล้อมนี้ยังไม่ได้ส่งข้อมูลติดตาม จำนวนรถและตำแหน่งบนแผนที่จะปรากฏเมื่อตั้งค่าเซิร์ฟเวอร์แล้ว",
     failureTitle: "Forth Tracking ไม่พร้อมใช้งานชั่วคราว",
@@ -445,11 +524,28 @@ const COPY = {
 
 type Copy = { [Key in keyof typeof COPY.en]: string };
 
+const SOURCE_AUDIT_FIELDS = ["registration", "deviceId", "driver", "latitude", "longitude", "speed", "engine", "heading", "gpsSignal", "gprs", "positionSource", "positionTimestamp"] as const;
+
+function isSourceFieldSnapshot(value: unknown): value is ForthSourceFieldSnapshot {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const snapshot = value as Record<string, unknown>;
+  return ["missing", "null", "empty", "string", "number", "boolean", "unsupported"].includes(String(snapshot.shape)) &&
+    (snapshot.value === null || typeof snapshot.value === "string" || typeof snapshot.value === "boolean" || (typeof snapshot.value === "number" && Number.isFinite(snapshot.value))) &&
+    typeof snapshot.truncated === "boolean";
+}
+
 function isFleetTrackingData(value: unknown): value is ForthFleetTrackingData {
   if (!value || typeof value !== "object") return false;
   const data = value as Record<string, unknown>;
   return ["not_configured", "connected", "failed"].includes(String(data.connectionStatus)) &&
     Array.isArray(data.records) &&
+    data.records.every((entry) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
+      const sourceAudit = (entry as Record<string, unknown>).sourceAudit;
+      if (!sourceAudit || typeof sourceAudit !== "object" || Array.isArray(sourceAudit)) return false;
+      const source = sourceAudit as Record<string, unknown>;
+      return SOURCE_AUDIT_FIELDS.every((field) => isSourceFieldSnapshot(source[field]));
+    }) &&
     (data.fetchedAt === null || typeof data.fetchedAt === "string");
 }
 
@@ -515,6 +611,80 @@ function activityStyle(activity: ForthReportedActivity) {
   if (activity === "driving") return "border-emerald-200 bg-emerald-50 text-emerald-800";
   if (activity.startsWith("stopped_")) return "border-indigo-200 bg-indigo-50 text-indigo-800";
   return "border-slate-200 bg-slate-100 text-slate-700";
+}
+
+function accuracyFieldLabel(field: ForthAccuracyField, copy: Copy) {
+  const labels: Record<ForthAccuracyField, string> = {
+    registration: copy.registration,
+    device_id: copy.device,
+    driver: copy.driver,
+    speed: copy.speed,
+    engine: copy.engine,
+    latitude: copy.accuracyLatitude,
+    longitude: copy.accuracyLongitude,
+    heading: copy.heading,
+    gps_signal: copy.gps,
+    gprs: copy.gprs,
+    position_source: copy.positionSource,
+    position_time: copy.timestamp,
+    retrieval_time: copy.lastSync,
+    activity_status: copy.accuracyActivityStatus
+  };
+  return labels[field];
+}
+
+function accuracyWarningLabel(warning: ForthNormalizationWarning, copy: Copy) {
+  const labels: Record<ForthNormalizationWarning, string> = {
+    registration_missing: copy.warningRegistrationMissing,
+    device_id_missing: copy.warningDeviceMissing,
+    driver_not_displayable: copy.warningDriverFiltered,
+    speed_missing: copy.warningSpeedMissing,
+    speed_invalid: copy.warningSpeedInvalid,
+    engine_unavailable: copy.warningEngineUnknown,
+    coordinates_missing: copy.warningCoordinatesMissing,
+    coordinates_invalid: copy.warningCoordinatesInvalid,
+    heading_invalid: copy.warningHeadingInvalid,
+    gps_signal_unknown: copy.warningGpsUnknown,
+    gprs_unknown: copy.warningGprsUnknown,
+    position_time_stale: copy.warningTimestampStale,
+    position_time_unavailable: copy.warningTimestampUnknown,
+    position_source_unknown: copy.warningSourceUnknown,
+    source_value_truncated: copy.warningTruncated
+  };
+  return labels[warning];
+}
+
+function sourceAuditValue(snapshot: ForthSourceFieldSnapshot, copy: Copy) {
+  if (snapshot.shape === "missing") return copy.accuracyMissing;
+  if (snapshot.shape === "null") return copy.accuracyNull;
+  if (snapshot.shape === "empty") return copy.accuracyEmpty;
+  if (snapshot.shape === "unsupported") return copy.accuracyUnsupported;
+  return (
+    <span className="inline-flex max-w-full flex-wrap items-baseline gap-1">
+      <code className="break-all rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] text-slate-800">
+        {typeof snapshot.value === "string" ? JSON.stringify(snapshot.value) : String(snapshot.value)}
+      </code>
+      {snapshot.truncated ? <span className="text-[10px] text-amber-800">{copy.accuracyTruncated}</span> : null}
+    </span>
+  );
+}
+
+function normalizedAccuracyValue(
+  field: ForthAccuracyField,
+  normalized: string | null,
+  record: ForthFleetTrackingRecord,
+  fetchedAt: string | null,
+  copy: Copy,
+  language: "en" | "th"
+) {
+  if (field === "engine") return record.engineOn === null ? copy.unknownValue : record.engineOn ? copy.engineOn : copy.engineOff;
+  if (field === "gps_signal") return record.gpsConnectivity === "connected" ? copy.available : record.gpsConnectivity === "disconnected" ? copy.gpsNoFix : copy.unknownValue;
+  if (field === "gprs") return record.gprsConnectivity === "connected" ? copy.online : record.gprsConnectivity === "disconnected" ? copy.offlineStatus : copy.unknownValue;
+  if (field === "position_source") return <span>{gpsConfidenceLabel(record, copy)}{record.positionSource ? <span className="mt-1 block text-[11px] text-slate-500">{record.positionSource}</span> : null}</span>;
+  if (field === "position_time") return <span>{formatForthTrackingTime(record.lastGpsTimestamp, language) ?? timestampStatusLabel(record, copy)}{record.lastGpsTimestamp ? <span className="mt-1 block text-[10px] font-normal text-slate-500">{record.lastGpsTimestamp} · {timestampStatusLabel(record, copy)}</span> : null}</span>;
+  if (field === "retrieval_time") return <span>{formatForthTrackingTime(fetchedAt, language) ?? copy.unknownValue}{fetchedAt ? <span className="mt-1 block text-[10px] font-normal text-slate-500">{fetchedAt}</span> : null}</span>;
+  if (field === "activity_status") return <span>{activityText(getForthReportedActivity(record), copy)}<span className="mt-1 block text-[10px] font-normal text-slate-500">{copy.accuracyActivityDerived}</span></span>;
+  return normalized ?? copy.unknownValue;
 }
 
 function ActivityPill({ activity, copy }: { activity: ForthReportedActivity; copy: Copy }) {
@@ -584,6 +754,7 @@ export function ForthTrackingCentre() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
+  const [accuracySearch, setAccuracySearch] = useState("");
   const [filter, setFilter] = useState<ForthFleetFilter>("all");
   const [sort, setSort] = useState<ForthFleetSort>("registration");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -807,6 +978,20 @@ export function ForthTrackingCentre() {
     () => sortForthFleetRecords(filterForthFleetRecords(data?.records ?? [], search, filter), sort),
     [data?.records, filter, search, sort]
   );
+  const accuracyRecords = useMemo(() => {
+    const query = accuracySearch.trim().toLocaleLowerCase();
+    const records = data?.records ?? [];
+    return sortForthFleetRecords(records.filter((record) => {
+      if (!query) return true;
+      return [
+        record.vehicleRegistration,
+        record.gpsDeviceId,
+        record.reportedDriver,
+        typeof record.sourceAudit.registration.value === "string" ? record.sourceAudit.registration.value : null,
+        typeof record.sourceAudit.deviceId.value === "string" ? record.sourceAudit.deviceId.value : null
+      ].some((value) => value?.toLocaleLowerCase().includes(query));
+    }), "registration");
+  }, [accuracySearch, data?.records]);
   const selectedRecord = useMemo(() => {
     if (!data || !selectedKey) return null;
     return data.records.find((record, index) => getForthFleetRecordKey(record, index) === selectedKey) ?? null;
@@ -1142,6 +1327,85 @@ export function ForthTrackingCentre() {
           <p className="text-sm text-slate-600">{copy.chooseVehicle}</p>
         </section>
       )}
+      {connected && can("business:read") ? (
+        <details className="rounded-2xl border border-slate-200 bg-white px-4 py-3 sm:px-5">
+          <summary className="cursor-pointer text-sm font-semibold text-slate-700">{copy.accuracyTitle}</summary>
+          <section className="mt-4 space-y-4" aria-label={copy.accuracyTitle}>
+            <div className="space-y-2 text-xs leading-5 text-slate-600">
+              <p>{copy.accuracyIntro}</p>
+              <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-amber-950"><strong>{copy.accuracyActivityStatus}:</strong> {copy.accuracyActivityNotMapped} {copy.accuracyActivityDerived}</p>
+              <p>{copy.accuracySignalExplanation}</p>
+              <p>{copy.accuracySpeedUnitNote}</p>
+            </div>
+            <label className="block max-w-lg">
+              <span className="sr-only">{copy.accuracySearch}</span>
+              <span className="relative block">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="search"
+                  value={accuracySearch}
+                  onChange={(event) => setAccuracySearch(event.target.value)}
+                  placeholder={copy.accuracySearchPlaceholder}
+                  aria-label={copy.accuracySearch}
+                  className="min-h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-700 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+                />
+              </span>
+            </label>
+            <p className="text-[11px] text-slate-500">{copy.showingVehicles} {accuracyRecords.length} {copy.ofVehicles} {summary.total} · {copy.lastSync}: {formatForthTrackingTime(data.fetchedAt, language) ?? copy.unknownValue}</p>
+            {accuracyRecords.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-500">{copy.accuracyNoMatches}</p>
+            ) : (
+              <div className="space-y-2">
+                {accuracyRecords.map((record) => {
+                  const comparisons = getForthAccuracyComparisons(record, data.fetchedAt);
+                  const warnings = getForthNormalizationWarnings(record);
+                  const key = getForthFleetRecordKey(record, data.records.indexOf(record));
+                  return (
+                    <details key={key} className="rounded-xl border border-slate-200 bg-slate-50/60">
+                      <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 px-3 py-3 text-sm font-semibold text-slate-800">
+                        <span>{record.vehicleRegistration || copy.unknownValue} <span className="font-normal text-slate-500">· {record.gpsDeviceId || copy.unknownValue}</span></span>
+                        <ActivityPill activity={getForthReportedActivity(record)} copy={copy} />
+                      </summary>
+                      <div className="grid gap-2 border-t border-slate-200 p-3 sm:grid-cols-2 xl:grid-cols-3">
+                        {comparisons.map((comparison) => (
+                          <div key={comparison.field} className="min-w-0 rounded-lg border border-slate-200 bg-white p-2.5">
+                            <h3 className="text-[11px] font-bold uppercase tracking-wide text-slate-600">{accuracyFieldLabel(comparison.field, copy)}</h3>
+                            <div className="mt-2 grid grid-cols-2 gap-2">
+                              <div className="min-w-0">
+                                <p className="text-[10px] font-semibold text-slate-500">{copy.accuracySourceColumn}</p>
+                                <p className="mb-1 break-all font-mono text-[10px] text-slate-400">
+                                  {comparison.field === "activity_status" ? copy.accuracyActivityNotMapped : comparison.sourceField}
+                                </p>
+                                <div className="break-words text-xs text-slate-700">
+                                  {comparison.source
+                                    ? sourceAuditValue(comparison.source, copy)
+                                    : comparison.field === "activity_status" ? copy.accuracyActivityNotMapped : copy.accuracyNotApplicable}
+                                </div>
+                              </div>
+                              <div className="min-w-0 border-l border-slate-100 pl-2">
+                                <p className="text-[10px] font-semibold text-slate-500">{copy.accuracyNormalizedColumn}</p>
+                                <p className="mt-2 break-words text-xs font-medium text-slate-800">
+                                  {normalizedAccuracyValue(comparison.field, comparison.normalized, record, data.fetchedAt, copy, language)}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="border-t border-slate-200 px-3 py-2.5 text-xs leading-5">
+                        <strong className="text-slate-700">{copy.accuracyWarnings}: </strong>
+                        {warnings.length
+                          ? <span className="text-amber-900">{warnings.map((warning) => accuracyWarningLabel(warning, copy)).join(" · ")}</span>
+                          : <span className="text-emerald-800">{copy.accuracyNoWarnings}</span>}
+                      </div>
+                    </details>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </details>
+      ) : null}
       {connected && can("business:read") ? (
         <details className="rounded-2xl border border-slate-200 bg-white px-4 py-3 sm:px-5">
         <summary className="cursor-pointer text-sm font-semibold text-slate-700">{copy.diagnosticAdvancedTitle}</summary>

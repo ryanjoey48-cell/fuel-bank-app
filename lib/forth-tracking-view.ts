@@ -1,4 +1,5 @@
 import type { ForthFleetTrackingRecord } from "@/lib/forth-tracking-server";
+import type { ForthSourceFieldSnapshot } from "@/lib/forth-tracking";
 
 export type ForthFleetStatus = "moving" | "stationary" | "unknown";
 export type ForthReportedActivity =
@@ -24,11 +25,109 @@ export type ForthMotionReason =
   | "non_gps_position"
   | "speed_unavailable"
   | "speed_invalid";
+export type ForthNormalizationWarning =
+  | "registration_missing"
+  | "device_id_missing"
+  | "driver_not_displayable"
+  | "speed_missing"
+  | "speed_invalid"
+  | "engine_unavailable"
+  | "coordinates_missing"
+  | "coordinates_invalid"
+  | "heading_invalid"
+  | "gps_signal_unknown"
+  | "gprs_unknown"
+  | "position_time_stale"
+  | "position_time_unavailable"
+  | "position_source_unknown"
+  | "source_value_truncated";
+export type ForthAccuracyField =
+  | "registration"
+  | "device_id"
+  | "driver"
+  | "speed"
+  | "engine"
+  | "latitude"
+  | "longitude"
+  | "heading"
+  | "gps_signal"
+  | "gprs"
+  | "position_source"
+  | "position_time"
+  | "retrieval_time"
+  | "activity_status";
+export type ForthAccuracyComparison = {
+  field: ForthAccuracyField;
+  sourceField: string | null;
+  source: ForthSourceFieldSnapshot | null;
+  normalized: string | null;
+};
 
 type CountMap<Keys extends string> = Record<Keys, number>;
 
 function isUsableSpeed(speed: number | null): speed is number {
   return typeof speed === "number" && Number.isFinite(speed) && speed >= 0;
+}
+
+/** Explain missing or lossy normalization in the protected accuracy view. */
+export function getForthNormalizationWarnings(record: ForthFleetTrackingRecord): ForthNormalizationWarning[] {
+  const warnings: ForthNormalizationWarning[] = [];
+  const snapshot = record.sourceAudit;
+  if (snapshot.registration.shape === "missing" || snapshot.registration.shape === "null" || snapshot.registration.shape === "empty") warnings.push("registration_missing");
+  if (snapshot.deviceId.shape === "missing" || snapshot.deviceId.shape === "null" || snapshot.deviceId.shape === "empty") warnings.push("device_id_missing");
+  if (snapshot.driver.shape === "unsupported") warnings.push("driver_not_displayable");
+  if (record.speed === null) {
+    warnings.push(["missing", "null", "empty"].includes(snapshot.speed.shape) ? "speed_missing" : "speed_invalid");
+  }
+  if (record.engineOn === null) warnings.push("engine_unavailable");
+  if (record.coordinateStatus === "missing") warnings.push("coordinates_missing");
+  if (record.coordinateStatus === "invalid") warnings.push("coordinates_invalid");
+  if (snapshot.heading.shape !== "missing" && snapshot.heading.shape !== "null" && snapshot.heading.shape !== "empty" && record.heading === null) warnings.push("heading_invalid");
+  if (record.gpsConnectivity === "unknown") warnings.push("gps_signal_unknown");
+  if (record.gprsConnectivity === "unknown") warnings.push("gprs_unknown");
+  if (record.timestampStatus === "stale") warnings.push("position_time_stale");
+  else if (record.timestampStatus !== "current") warnings.push("position_time_unavailable");
+  if (record.positionQuality === "unknown") warnings.push("position_source_unknown");
+  if (Object.values(snapshot).some((field) => field.truncated)) warnings.push("source_value_truncated");
+  return warnings;
+}
+
+/** Build a deliberately narrow source-to-display comparison; no raw response object is retained. */
+export function getForthAccuracyComparisons(record: ForthFleetTrackingRecord, fetchedAt: string | null): ForthAccuracyComparison[] {
+  const validCoordinates = record.coordinateStatus === "valid" &&
+    typeof record.latitude === "number" && typeof record.longitude === "number";
+  const engineLabel = record.engineOn === null ? "Unknown" : record.engineOn ? "On" : "Off";
+  const connectivityLabel = (value: ForthFleetTrackingRecord["gpsConnectivity"]) => value;
+  const positionSourceValue = record.positionSource
+    ? `${record.positionSource} (${record.positionQuality})`
+    : record.positionQuality;
+  const localTime = (value: string | null) => value
+    ? new Intl.DateTimeFormat("en-GB", { year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23", timeZone: "Asia/Bangkok", timeZoneName: "short" }).format(new Date(value))
+    : null;
+
+  return [
+    { field: "registration", sourceField: "plateNumber", source: record.sourceAudit.registration, normalized: record.vehicleRegistration },
+    { field: "device_id", sourceField: "gpsID", source: record.sourceAudit.deviceId, normalized: record.gpsDeviceId },
+    { field: "driver", sourceField: "driver", source: record.sourceAudit.driver, normalized: record.reportedDriver },
+    { field: "speed", sourceField: "Speed", source: record.sourceAudit.speed, normalized: record.speed === null ? null : `${record.speed} km/h` },
+    { field: "engine", sourceField: "Engine", source: record.sourceAudit.engine, normalized: engineLabel },
+    { field: "latitude", sourceField: "Latitude", source: record.sourceAudit.latitude, normalized: validCoordinates ? String(record.latitude) : null },
+    { field: "longitude", sourceField: "Longitude", source: record.sourceAudit.longitude, normalized: validCoordinates ? String(record.longitude) : null },
+    { field: "heading", sourceField: "COG", source: record.sourceAudit.heading, normalized: record.heading === null ? null : `${record.heading}°` },
+    { field: "gps_signal", sourceField: "GPS", source: record.sourceAudit.gpsSignal, normalized: connectivityLabel(record.gpsConnectivity) },
+    { field: "gprs", sourceField: "GPRS", source: record.sourceAudit.gprs, normalized: record.gprsConnectivity },
+    { field: "position_source", sourceField: "positionSource", source: record.sourceAudit.positionSource, normalized: positionSourceValue },
+    {
+      field: "position_time",
+      sourceField: "dateTime",
+      source: record.sourceAudit.positionTimestamp,
+      normalized: record.lastGpsTimestamp
+        ? `${localTime(record.lastGpsTimestamp)} · ${record.timestampStatus} · ${record.lastGpsTimestamp}`
+        : record.timestampStatus
+    },
+    { field: "retrieval_time", sourceField: "EES fetchedAt", source: null, normalized: fetchedAt ? `${localTime(fetchedAt)} · ${fetchedAt}` : null },
+    { field: "activity_status", sourceField: null, source: null, normalized: `Reported ${getForthReportedActivity(record)}; EES derives this from Speed and Engine.` }
+  ];
 }
 
 /** Operational activity uses only a fresh timestamp and a valid reported speed. */

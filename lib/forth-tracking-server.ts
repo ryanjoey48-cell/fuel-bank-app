@@ -120,6 +120,7 @@ function summarizeUnknownPositionSourceStrings(records: ForthTrackingRecord[]) {
 
 export type ForthFleetTrackingRecord = Pick<
   ForthTrackingRecord,
+  | "sourceAudit"
   | "gpsDeviceId"
   | "vehicleRegistration"
   | "reportedDriver"
@@ -420,6 +421,7 @@ export function createForthTrackingService(options: {
   async function getFleetData(): Promise<ForthFleetTrackingData> {
     const result = await requestTracking();
     const records = result.records.map((record): ForthFleetTrackingRecord => ({
+      sourceAudit: record.sourceAudit,
       gpsDeviceId: record.gpsDeviceId,
       vehicleRegistration: record.vehicleRegistration,
       reportedDriver: record.reportedDriver,
@@ -460,6 +462,7 @@ export function createForthTrackingService(options: {
     }
     const unknownPositionSourceStrings = summarizeUnknownPositionSourceStrings(result.records);
     const summary = summarizeForthFleet(result.records.map((record) => ({
+      sourceAudit: record.sourceAudit,
       gpsDeviceId: null,
       vehicleRegistration: null,
       reportedDriver: null,

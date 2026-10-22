@@ -10,6 +10,25 @@ export type ForthPositionSourceShape =
   | "recognized_string"
   | "unrecognized_string"
   | "other";
+export type ForthSourceFieldSnapshot = {
+  shape: "missing" | "null" | "empty" | "string" | "number" | "boolean" | "unsupported";
+  value: string | number | boolean | null;
+  truncated: boolean;
+};
+export type ForthTrackingSourceAudit = {
+  registration: ForthSourceFieldSnapshot;
+  deviceId: ForthSourceFieldSnapshot;
+  driver: ForthSourceFieldSnapshot;
+  latitude: ForthSourceFieldSnapshot;
+  longitude: ForthSourceFieldSnapshot;
+  speed: ForthSourceFieldSnapshot;
+  engine: ForthSourceFieldSnapshot;
+  heading: ForthSourceFieldSnapshot;
+  gpsSignal: ForthSourceFieldSnapshot;
+  gprs: ForthSourceFieldSnapshot;
+  positionSource: ForthSourceFieldSnapshot;
+  positionTimestamp: ForthSourceFieldSnapshot;
+};
 export type ForthTimestampStatus =
   | "current"
   | "stale"
@@ -54,6 +73,8 @@ export type ForthRawTrackingRecord = {
 export type ForthRawTrackingResponse = ForthRawTrackingRecord[];
 
 export type ForthTrackingRecord = {
+  /** Allowlisted scalar source values for the protected, read-only accuracy view. */
+  sourceAudit: ForthTrackingSourceAudit;
   gpsDeviceId: string | null;
   vehicleRegistration: string | null;
   reportedDriver: string | null;
@@ -105,6 +126,37 @@ function optionalText(value: unknown) {
   if (typeof value === "string") return value.trim() || null;
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
   return null;
+}
+
+const MAX_SOURCE_AUDIT_TEXT_LENGTH = 160;
+
+function sourceFieldSnapshot(value: unknown, present: boolean): ForthSourceFieldSnapshot {
+  if (!present || value === undefined) return { shape: "missing", value: null, truncated: false };
+  if (value === null) return { shape: "null", value: null, truncated: false };
+  if (typeof value === "boolean") return { shape: "boolean", value, truncated: false };
+  if (typeof value === "number") {
+    return Number.isFinite(value)
+      ? { shape: "number", value, truncated: false }
+      : { shape: "unsupported", value: null, truncated: false };
+  }
+  if (typeof value !== "string") return { shape: "unsupported", value: null, truncated: false };
+  const safeCharacters = Array.from(value, (character) =>
+    /[\p{Cc}\p{Cf}]/u.test(character) ? " " : character
+  );
+  const truncated = safeCharacters.length > MAX_SOURCE_AUDIT_TEXT_LENGTH;
+  const safeValue = safeCharacters.slice(0, MAX_SOURCE_AUDIT_TEXT_LENGTH).join("");
+  return {
+    shape: safeValue.trim() ? "string" : "empty",
+    value: safeValue,
+    truncated
+  };
+}
+
+function driverSourceFieldSnapshot(value: unknown, present: boolean): ForthSourceFieldSnapshot {
+  if (typeof value === "string" && value.trim() && !optionalDriverLabel(value)) {
+    return { shape: "unsupported", value: null, truncated: false };
+  }
+  return sourceFieldSnapshot(value, present);
 }
 
 function optionalDriverLabel(value: unknown) {
@@ -369,6 +421,20 @@ function normalizeRecord(
   const gprsValue = parseBoolean(raw.GPRS);
 
   return {
+    sourceAudit: {
+      registration: sourceFieldSnapshot(raw.plateNumber, Object.hasOwn(raw, "plateNumber")),
+      deviceId: sourceFieldSnapshot(raw.gpsID, Object.hasOwn(raw, "gpsID")),
+      driver: driverSourceFieldSnapshot(raw.driver, Object.hasOwn(raw, "driver")),
+      latitude: sourceFieldSnapshot(raw.Latitude, Object.hasOwn(raw, "Latitude")),
+      longitude: sourceFieldSnapshot(raw.Longitude, Object.hasOwn(raw, "Longitude")),
+      speed: sourceFieldSnapshot(raw.Speed, Object.hasOwn(raw, "Speed")),
+      engine: sourceFieldSnapshot(raw.Engine, Object.hasOwn(raw, "Engine")),
+      heading: sourceFieldSnapshot(raw.COG, Object.hasOwn(raw, "COG")),
+      gpsSignal: sourceFieldSnapshot(raw.GPS, Object.hasOwn(raw, "GPS")),
+      gprs: sourceFieldSnapshot(raw.GPRS, Object.hasOwn(raw, "GPRS")),
+      positionSource: sourceFieldSnapshot(raw.positionSource, Object.hasOwn(raw, "positionSource")),
+      positionTimestamp: sourceFieldSnapshot(raw.dateTime, Object.hasOwn(raw, "dateTime"))
+    },
     gpsDeviceId: optionalText(raw.gpsID),
     vehicleRegistration: optionalText(raw.plateNumber),
     reportedDriver: optionalDriverLabel(raw.driver),

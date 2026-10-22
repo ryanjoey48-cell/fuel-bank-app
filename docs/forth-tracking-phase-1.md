@@ -54,7 +54,7 @@ Tracking normalization is in `lib/forth-tracking.ts`. It preserves the exact sou
 | `GPS` | `gpsConnectivity` (`connected`, `disconnected`, `unknown`) | GPS signal/fix state only. Missing, blank, or unrecognized input stays Unknown. |
 | `GPRS` | `gprsConnectivity` (`connected`, `disconnected`, `unknown`) | Tracker communications. It is the input to Online/Offline/Unknown; GPS loss does not make GPRS Offline. |
 | `Engine` | `engineOn` (`true`, `false`, `null`) | Engine On/Off/Unknown, independent of motion. |
-| `Speed` | finite non-negative number, otherwise `null` | Reported speed. Fresh positive speed is shown as Reported driving; fresh zero speed is Reported stopped and is split by the independently reported Engine field. GPS confidence is shown separately. |
+| `Speed` | finite non-negative number, otherwise `null` | Reported speed. The current UI displays the value as km/h without conversion. One manual comparison matched Forth at 66 km/h; the public API material does not specify the field's unit. Fresh positive speed is shown as Reported driving; fresh zero speed is Reported stopped and is split by the independently reported Engine field. GPS confidence is shown separately. |
 | `dateTime` | preserved `sourceTimestampRaw`, normalized `lastGpsTimestamp`, `timestampStatus` | Position report time. Current is within 15 minutes; Stale is older; parse failures are Unknown freshness. |
 | `Latitude`, `Longitude` | validated coordinate pair/status | Mappable position if both are finite and in range. Valid coordinates alone do not establish GPS quality. |
 | top-level positionSource | preserved source text plus positionQuality | Exact GPS, Wi-Fi and LBS labels map to their respective categories. The observed `No GPS` label (case and whitespace normalized) maps to the separate `no_gps` category and is never treated as verified GPS. Explicit Non-GPS/Other maps to Other. Missing or other unrecognized values stay Unknown. The adapter does not map aliases or nested fields. |
@@ -66,6 +66,42 @@ EES reports tracker communications from GPRS, position freshness from dateTime, 
 GPS confidence is separate. A position is GPS-verified only when its timestamp is current, coordinates are valid, GPS reports connected, and positionSource explicitly resolves to GPS. EES counts positive speed as GPS-verified driving only when those checks pass; a No GPS, Wi-Fi, LBS, other, unknown, stale or incomplete position never upgrades reported speed to GPS-verified movement. Zero speed is a reported stop, not proof of a precise fixed location. GPRS Online/Offline/Unknown, GPS signal, position source, and position freshness remain independently visible. The latest verified GPS time uses only an explicitly GPS-quality position with GPS signal, valid coordinates, and a parsed current or stale time. API retrieval time remains separate.
 
 Forth's [vehicle status feature update](https://www.forthtrack.co.th/2019/11/06/21624/) lists “moving,” parked with engine on/off, GPS signal failure, and communication failure as separate states. The public material does not define “Working” and “Parking” as API fields or map those dashboard categories one-to-one to EES activity. EES does not force its counts to match those labels.
+
+### Office accuracy review
+
+Authorized office users with `business:read` can expand **Tracking accuracy review** in the Fleet Tracking Centre. It compares a narrow allowlist of upstream scalar values with their EES-normalized values for each vehicle. It uses the same `/api/admin/forth-tracking/vehicles` response already used by the dashboard, so it adds no Forth request and does not change the 60-second refresh interval. The response remains private and `no-store`; the view keeps values only in current page memory and creates no database records.
+
+The source projection contains only `plateNumber`, `gpsID`, `driver`, `Latitude`, `Longitude`, `Speed`, `Engine`, `COG`, `GPS`, `GPRS`, `positionSource`, and `dateTime`. Strings have control/format characters replaced with spaces and are limited to 160 Unicode code points. Unsupported object/array values are not serialized. Driver source text is omitted when it fails the existing safe driver-label validation. Fields such as `IDCard`, `IDTransport`, sensor values, token data, credentials, and any other upstream properties are not included. The audit panel displays normalization warnings for missing, invalid, stale, unrecognized, and shortened values.
+
+Source-to-EES transformations shown in the panel:
+
+| Source field | EES display/normalization | What remains unverified |
+| --- | --- | --- |
+| `plateNumber` | Trimmed string; no registration record is changed. | Whether Forth's source formatting is canonical. |
+| `gpsID` | String; finite numeric values are stringified. | The API contract's formal type. |
+| `driver` | A safe display label; invalid or identifier-like values are omitted. | Whether the source label is current or assigned to the vehicle at the same moment. |
+| `Speed` | Strict finite non-negative number; no numeric unit conversion. UI labels it km/h. | The published API unit. A single 66 km/h screen comparison is evidence for that record only. |
+| `Engine` | Boolean On/Off/Unknown from observed boolean, 0/1, and common ON/OFF strings. | Complete source enum. |
+| `Latitude`, `Longitude` | Numeric parse, validated as a coordinate pair and geographic ranges; audit shows full normalized numeric values. | Upstream precision and stated coordinate datum. |
+| `COG` | Numeric parse; accepted only from 0 through 360; displayed in degrees. | Formal field definition/unit in the API schema. |
+| `GPS`, `GPRS` | Independently parsed into connected/disconnected/unknown. GPS signal is not position quality; GPRS is communications state. | Complete source enum for either field. |
+| `positionSource` | Preserved as a text value and classified only by existing explicit labels. `No GPS` stays separate from GPS-verified. | Full enum and the exact meaning of `No GPS` in the API. |
+| `dateTime` | Original text is shown beside parsed UTC ISO time, Thailand local time, and freshness. | Timezone convention beyond the configured source timezone used by EES. |
+| EES `fetchedAt` | API refresh/response-processing time, shown separately from `dateTime`. | It is not a position timestamp and should not be compared as one. |
+
+GPS signal available alongside `positionSource: No GPS` is a real cross-field difference in the values EES receives. EES maps them independently: `GPS` sets `gpsConnectivity`; `positionSource` sets `positionQuality`. The [Forth GPS FAQ](https://www.forthtrack.co.th/gps-faq/) describes GPS → Wi-Fi → LBS fallback when GPS is unavailable, but does not publish the tracking API enum or define the `No GPS` label. The dashboard therefore does not force these values to agree. Compare the API fields in the accuracy view with the Forth website at near-matching report times; until the source field semantics are documented, a website/API disagreement remains unresolved rather than a confirmed EES normalization defect.
+
+Forth's [public FAQ](https://www.forthtrack.co.th/gps-faq/) says its Open API can provide driving status, but it does not identify a response property, value mapping, or relation to the website's Working/Parking labels. The current EES normalizer does not map an explicit activity/status field. It derives **Reported driving/stopped** from `Speed` and `Engine`, and labels this as EES-derived. The current typed adapter also knows about a `statusCardReader` field but does not interpret it as vehicle activity. Because the normalizer is an allowlist, this establishes what EES currently consumes, not whether Forth's live response contains an additional unmapped status field. Verifying that would require Forth's response schema/sample or a separately approved, one-shot diagnostic that returns only upstream field names and aggregate presence/type counts.
+
+#### Repeatable comparison checklist
+
+1. Sign in as an authorized EES office user and open **Fleet Tracking Centre → Tracking accuracy review**. Search for `63-3543`, then `61-2835`, then `64-0359`.
+2. Expand one vehicle row. Compare the source `dateTime` to EES's Thailand-local/UTC normalized time first; use records whose source report times are near the Forth screen observation. Record the API refresh time separately.
+3. Compare registration, device ID, safe reported-driver label, speed, engine, latitude/longitude, heading, GPS, GPRS, and position source. Use the shown raw source scalar and EES value; note any warnings and whether a displayed location is GPS-verified.
+4. For each discrepancy, note the vehicle, observation time, source field, source value, EES value, and whether it appears to be timing, formatting, normalization, semantics, or missing data. Do not treat the Forth website as data EES has accessed; compare it manually in the authorized Forth session.
+5. Repeat for each of the 21 vehicles. Mark only individually checked records as verified; do not report fleet-wide verification until the full comparison is complete.
+
+Do not use this audit view to alter registrations, maintenance, mileage, service records, or other operational data. No telemetry is synchronized to Supabase.
 
 ### One-shot status aggregate
 
