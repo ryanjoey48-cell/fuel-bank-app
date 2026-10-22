@@ -36,6 +36,7 @@ import {
   filterForthFleetRecords,
   formatForthRelativeAge,
   formatForthTrackingTime,
+  getForthFleetMapInitialFrame,
   getForthAccuracyComparisons,
   getForthFleetRecordKey,
   findForthFleetRecord,
@@ -56,7 +57,7 @@ import type { ForthSourceFieldSnapshot } from "@/lib/forth-tracking";
 
 const ForthTrackingMap = dynamic(
   () => import("@/components/forth-tracking-map").then((module) => module.ForthTrackingMap),
-  { ssr: false, loading: () => <div className="h-[clamp(400px,calc(100dvh-300px),900px)] min-h-[400px] animate-pulse rounded-2xl bg-slate-100 max-sm:h-[min(50svh,520px)] max-sm:min-h-[320px]" /> }
+  { ssr: false, loading: () => <div className="min-h-0 flex-1 animate-pulse rounded-2xl bg-slate-100" /> }
 );
 
 const POLL_INTERVAL_MS = 60_000;
@@ -966,6 +967,9 @@ export function ForthTrackingCentre() {
   const [filter, setFilter] = useState<ForthFleetFilter>("all");
   const [sort, setSort] = useState<ForthFleetSort>("registration");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [mobileListOpen, setMobileListOpen] = useState(false);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [mobileInspectorOpen, setMobileInspectorOpen] = useState(false);
   const [mapCommand, setMapCommand] = useState<MapViewCommand>({ type: "fit", sequence: 0 });
@@ -980,6 +984,14 @@ export function ForthTrackingCentre() {
   const refreshRef = useRef<() => Promise<void>>(async () => undefined);
   const statusDiagnosticRunnerRef = useRef<StatusDiagnosticRunner | null>(null);
   const statusDiagnosticTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const diagnosticsTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const diagnosticsCloseRef = useRef<HTMLButtonElement | null>(null);
+  const diagnosticsDialogRef = useRef<HTMLElement | null>(null);
+  const mobileListTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const mobileListSearchRef = useRef<HTMLInputElement | null>(null);
+  const mobileListDialogRef = useRef<HTMLElement | null>(null);
+  const diagnosticsWasOpenRef = useRef(false);
+  const mobileListWasOpenRef = useRef(false);
   const statusDiagnosticCancelRef = useRef<HTMLButtonElement | null>(null);
   const statusDiagnosticDialogRef = useRef<HTMLDivElement | null>(null);
   const statusDiagnosticMessageRef = useRef<HTMLParagraphElement | null>(null);
@@ -988,6 +1000,75 @@ export function ForthTrackingCentre() {
   const statusDiagnosticConfirmationReturnStateRef = useRef<"ready" | "failed">("ready");
   const statusDiagnosticConfirmStartedRef = useRef(false);
   const statusDiagnosticInteractedRef = useRef(false);
+
+  useEffect(() => {
+    if (diagnosticsOpen) {
+      diagnosticsWasOpenRef.current = true;
+      diagnosticsCloseRef.current?.focus();
+    } else if (diagnosticsWasOpenRef.current) {
+      diagnosticsWasOpenRef.current = false;
+      diagnosticsTriggerRef.current?.focus();
+    }
+  }, [diagnosticsOpen]);
+
+  useEffect(() => {
+    if (mobileListOpen) {
+      mobileListWasOpenRef.current = true;
+      mobileListSearchRef.current?.focus();
+    } else if (mobileListWasOpenRef.current) {
+      mobileListWasOpenRef.current = false;
+      mobileListTriggerRef.current?.focus();
+    }
+  }, [mobileListOpen]);
+
+  useEffect(() => {
+    if (!diagnosticsOpen && !mobileListOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        if (statusDiagnosticConfirmationOpen) return;
+        if (diagnosticsOpen) {
+          setDiagnosticsOpen(false);
+        } else {
+          setMobileListOpen(false);
+        }
+        return;
+      }
+      if (mobileListOpen && !diagnosticsOpen && event.key === "Tab") {
+        const dialog = mobileListDialogRef.current;
+        const focusable = dialog?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), summary, [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (!focusable?.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+        return;
+      }
+      if (!diagnosticsOpen || statusDiagnosticConfirmationOpen || event.key !== "Tab") return;
+      const dialog = diagnosticsDialogRef.current;
+      const focusable = dialog?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), summary, [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (!focusable?.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [diagnosticsOpen, mobileListOpen, statusDiagnosticConfirmationOpen]);
 
   const applyFleetFilter = (nextFilter: ForthFleetFilter) => {
     setFilter(nextFilter);
@@ -1002,6 +1083,7 @@ export function ForthTrackingCentre() {
   };
 
   const focusVehicle = useCallback((key: string) => {
+    setMobileListOpen(false);
     setSelectedKey(key);
     setInspectorOpen(true);
     setMobileInspectorOpen(true);
@@ -1015,8 +1097,12 @@ export function ForthTrackingCentre() {
     setMapCommand((current) => ({ type: "fit", sequence: current.sequence + 1 }));
   };
 
-  const browseVehicles = () => {
-    document.getElementById("forth-vehicle-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const toggleVehicleList = () => {
+    if (window.matchMedia("(min-width: 1280px)").matches) {
+      setSidebarOpen((open) => !open);
+      return;
+    }
+    setMobileListOpen(true);
   };
 
   if (!statusDiagnosticRunnerRef.current) {
@@ -1142,6 +1228,11 @@ export function ForthTrackingCentre() {
     setStatusDiagnosticState(statusDiagnosticConfirmationReturnStateRef.current);
   };
 
+  const closeDiagnostics = () => {
+    if (statusDiagnosticConfirmationOpen) cancelStatusDiagnosticConfirmation();
+    setDiagnosticsOpen(false);
+  };
+
   useEffect(() => {
     let active = true;
     let inFlight = false;
@@ -1258,6 +1349,11 @@ export function ForthTrackingCentre() {
     () => filterForthFleetRecords(data?.records ?? [], "", filter),
     [data?.records, filter]
   );
+  const mapInitialFrame = useMemo(
+    () => getForthFleetMapInitialFrame(getForthFleetMapRecords(mapRecords).map(({ position }) => position)),
+    [mapRecords]
+  );
+  const unplottableRecordCount = Math.max(0, mapRecords.length - mapInitialFrame.allPositions.length);
   const accuracyRecords = useMemo(() => {
     const query = accuracySearch.trim().toLocaleLowerCase();
     const records = data?.records ?? [];
@@ -1280,6 +1376,11 @@ export function ForthTrackingCentre() {
   const selectedHasMapPosition = selectedRecord ? getForthFleetMapRecords([selectedRecord]).length > 0 : false;
   const lastChecked = formatForthTrackingTime(
     lastSuccessfulRefreshAt ?? (data?.connectionStatus === "connected" ? data.fetchedAt : null),
+    language
+  );
+  const lastRefreshAge = formatForthRelativeAge(
+    lastSuccessfulRefreshAt ?? (data?.connectionStatus === "connected" ? data.fetchedAt : null),
+    Date.now(),
     language
   );
   const mapCopy = useMemo(() => ({
@@ -1375,46 +1476,48 @@ export function ForthTrackingCentre() {
         : "border-slate-200 bg-slate-50 text-slate-700";
 
   return (
-    <main className="mx-auto w-full max-w-[1920px] space-y-2.5 px-3 pb-6 pt-3 sm:px-5 lg:px-6">
-      <header className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-[0_4px_16px_rgba(15,23,42,0.035)] sm:flex-row sm:items-center sm:justify-between sm:px-4">
+    <main className="forth-tracking-workspace mx-auto w-full max-w-[1920px] px-3 pb-6 pt-3 sm:px-5 lg:px-6">
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 shadow-[0_4px_16px_rgba(15,23,42,0.035)] sm:px-4">
         <div className="min-w-0">
-          <p className="hidden text-[9px] font-bold uppercase tracking-[0.16em] text-violet-700 sm:block">{copy.eyebrow}</p>
-          <h1 className="text-xl font-bold tracking-tight text-slate-950 sm:text-[22px]">{copy.title}</h1>
-          <p className="mt-0.5 truncate text-[10px] leading-4 text-slate-500 sm:text-[11px]">{copy.description} · {copy.freshnessShort}</p>
+          <h1 className="text-base font-bold tracking-tight text-slate-950 sm:text-lg">{copy.title}</h1>
+          <p className="hidden truncate text-[10px] leading-4 text-slate-500 sm:block">{copy.description} · {copy.freshnessShort}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-          {lastChecked ? <span className="hidden text-right text-[10px] leading-4 text-slate-500 sm:block">{copy.lastSync}<strong className="ml-1 font-semibold text-slate-700">{lastChecked}</strong></span> : null}
+          {lastRefreshAge ? <span title={lastChecked ?? undefined} className="hidden text-right text-[10px] leading-4 text-slate-500 sm:block">{copy.lastSync}<strong className="ml-1 font-semibold text-slate-700">{lastRefreshAge}</strong></span> : null}
           <span className={`inline-flex min-h-8 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] font-semibold ${connected ? "border-emerald-200 bg-emerald-50 text-emerald-800" : data?.connectionStatus === "not_configured" ? "border-amber-200 bg-amber-50 text-amber-800" : "border-slate-200 bg-white text-slate-600"}`}>
             {connected ? <CheckCircle2 className="h-4 w-4" /> : data?.connectionStatus === "not_configured" ? <AlertTriangle className="h-4 w-4" /> : <Signal className="h-4 w-4" />}
             {connected ? copy.connected : data?.connectionStatus === "not_configured" ? copy.disconnected : data?.connectionStatus === "failed" || requestError ? copy.unavailable : copy.mapLoading}
           </span>
           <button
             type="button"
-            className="btn-secondary min-h-8 justify-center gap-1.5 px-2.5 py-1.5 text-[11px]"
+            className="btn-secondary min-h-10 justify-center gap-1.5 px-2.5 py-1.5 text-[11px]"
             onClick={() => void refreshRef.current()}
             disabled={refreshing || loading}
           >
             <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
             {refreshing ? copy.refreshing : copy.refresh}
           </button>
+          {connected && can("business:read") ? <button ref={diagnosticsTriggerRef} type="button" className="btn-secondary min-h-10 justify-center gap-1.5 px-2.5 py-1.5 text-[11px]" onClick={() => setDiagnosticsOpen(true)}>
+            <Activity className="h-3.5 w-3.5" />{language === "th" ? "การวินิจฉัย" : "Diagnostics"}
+          </button> : null}
         </div>
       </header>
 
       {data?.connectionStatus === "not_configured" || data?.connectionStatus === "failed" || requestError ? (
-        <section className={`flex items-start gap-3 rounded-2xl border p-4 sm:p-5 ${data?.connectionStatus === "not_configured" ? "border-amber-200 bg-amber-50/80" : "border-rose-200 bg-rose-50/80"}`} role="status">
-          <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${data?.connectionStatus === "not_configured" ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>
-            {data?.connectionStatus === "not_configured" ? <SignalZero className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
+        <section className={`forth-tracking-alert flex shrink-0 items-center gap-2 rounded-lg border px-2.5 py-1.5 ${data?.connectionStatus === "not_configured" ? "border-amber-200 bg-amber-50/80" : "border-rose-200 bg-rose-50/80"}`} role="status">
+          <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${data?.connectionStatus === "not_configured" ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>
+            {data?.connectionStatus === "not_configured" ? <SignalZero className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
           </span>
-          <div>
-            <h2 className="font-semibold text-slate-900">{data?.connectionStatus === "not_configured" ? copy.configurationTitle : copy.failureTitle}</h2>
-            <p className="mt-1 text-sm leading-6 text-slate-700">{data?.connectionStatus === "not_configured" ? copy.configurationBody : trackingMessage}</p>
-            {requestError && lastChecked ? <p className="mt-1 text-xs leading-5 text-slate-600">{copy.staleSnapshotHidden} {lastChecked}</p> : null}
+          <div className="min-w-0 text-[11px] leading-4 text-slate-700">
+            <strong className="mr-1 text-slate-900">{data?.connectionStatus === "not_configured" ? copy.configurationTitle : copy.failureTitle}</strong>
+            <span>{data?.connectionStatus === "not_configured" ? copy.configurationBody : trackingMessage}</span>
+            {requestError && lastChecked ? <span className="ml-1 text-slate-600">{copy.staleSnapshotHidden} {lastChecked}</span> : null}
           </div>
         </section>
       ) : null}
 
-      <section aria-label={language === "th" ? "สรุปสถานะกองรถ" : "Fleet overview"} className="rounded-xl border border-slate-200 bg-white p-2 shadow-[0_3px_12px_rgba(15,23,42,0.025)]">
-        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 xl:grid-cols-6">
+      <section aria-label={language === "th" ? "สรุปสถานะกองรถ" : "Fleet overview"} className="forth-tracking-kpi-scroll shrink-0 rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_3px_12px_rgba(15,23,42,0.025)]">
+        <div className="forth-tracking-kpis flex gap-1.5">
         <OverviewMetric label={copy.total} value={connected ? String(summary.total) : "—"} tone="violet" icon={<Truck className="h-4 w-4" />} active={filter === "all"} disabled={!connected} onClick={() => applyFleetFilter("all")} />
         <OverviewMetric label={copy.moving} value={connected ? String(summary.reportedActivity.driving) : "—"} tone="emerald" icon={<Activity className="h-4 w-4" />} active={filter === "driving"} disabled={!connected} onClick={() => applyFleetFilter(filter === "driving" ? "all" : "driving")} />
         <OverviewMetric label={copy.parked} value={connected ? String(summary.reportedActivity.stopped) : "—"} tone="violet" icon={<Gauge className="h-4 w-4" />} active={filter === "stopped"} disabled={!connected} onClick={() => applyFleetFilter(filter === "stopped" ? "all" : "stopped")} />
@@ -1423,12 +1526,9 @@ export function ForthTrackingCentre() {
         <OverviewMetric label={copy.locationNotGpsVerified} value={connected ? String(summary.positionConfidence.notGpsVerified) : "—"} tone="amber" icon={<MapPin className="h-4 w-4" />} active={filter === "unverified"} disabled={!connected} onClick={() => applyFleetFilter(filter === "unverified" ? "all" : "unverified")} />
         </div>
 
-      {connected ? (
-        <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-1 pt-1.5" role="group" aria-label={copy.attention}>
-          <p className="min-w-0 flex-1 text-[10px] leading-4 text-slate-500">{copy.noGpsSourceNote}</p>
-          <div className="flex shrink-0 items-center gap-2">
-            {filter !== "all" ? (
-              <div className="flex items-center gap-1.5 text-[10px] text-slate-600" aria-live="polite">
+      {connected && filter !== "all" ? (
+        <div className="mt-1 flex min-h-6 items-center justify-end border-t border-slate-100 px-1 pt-1" role="group" aria-label={copy.attention}>
+          <div className="flex items-center gap-1.5 text-[10px] text-slate-600" aria-live="polite">
                 <span className="max-w-[40vw] truncate sm:max-w-none">{copy.activeFilter}: {({
                   all: copy.all,
                   online: copy.filterOnline,
@@ -1442,32 +1542,32 @@ export function ForthTrackingCentre() {
                   engine_on_stopped: copy.filterEngineOnStopped
                 } satisfies Record<ForthFleetFilter, string>)[filter]}</span>
                 <button type="button" onClick={() => applyFleetFilter("all")} className="min-h-7 whitespace-nowrap rounded-md px-1.5 font-semibold text-violet-800 hover:bg-violet-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300">{copy.resetFilter}</button>
-              </div>
-            ) : null}
           </div>
         </div>
       ) : null}
       </section>
 
-      <div className="relative grid items-start gap-3 xl:grid-cols-[minmax(0,2.35fr)_minmax(300px,0.85fr)]">
-        <section className="surface-card order-1 min-w-0 overflow-hidden p-2.5 sm:p-3 xl:col-start-1 xl:row-start-1" aria-labelledby="forth-live-map-title">
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1 pt-0.5">
+      <div className={`forth-tracking-grid relative grid grid-cols-1 items-stretch gap-2 ${sidebarOpen ? "xl:grid-cols-[minmax(0,2.35fr)_minmax(300px,0.85fr)]" : "xl:grid-cols-1"}`}>
+        <section className="forth-map-panel surface-card order-1 min-w-0 overflow-hidden p-2 xl:col-start-1 xl:row-start-1" aria-labelledby="forth-live-map-title">
+          <div className="mb-1.5 flex shrink-0 flex-wrap items-center justify-between gap-2 px-1 pt-0.5">
             <div className="min-w-0">
               <h2 id="forth-live-map-title" className="flex items-center gap-1.5 text-sm font-bold text-slate-950"><MapPinned className="h-4 w-4 shrink-0 text-violet-700" />{copy.mapTitle}</h2>
-              <p className="mt-0.5 text-[10px] leading-4 text-slate-500">{copy.mapDescription}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <button type="button" className="btn-secondary min-h-8 justify-center gap-1 px-2.5 py-1 text-[11px]" onClick={browseVehicles}>
+              <button type="button" className="btn-secondary hidden min-h-8 justify-center gap-1 px-2.5 py-1 text-[11px] xl:inline-flex" onClick={toggleVehicleList} aria-expanded={sidebarOpen} aria-controls="forth-vehicle-list">
+                <List className="h-4 w-4" />{sidebarOpen ? (language === "th" ? "ซ่อนรายการ" : "Hide list") : (language === "th" ? "แสดงรายการ" : "Show list")}
+              </button>
+              <button ref={mobileListTriggerRef} type="button" className="btn-secondary min-h-10 justify-center gap-1 px-2.5 py-1 text-[11px] xl:hidden" onClick={toggleVehicleList} aria-expanded={mobileListOpen} aria-controls="forth-vehicle-list">
                 <List className="h-4 w-4" />{copy.mapBrowseVehicles}
               </button>
-              <button type="button" className="btn-primary min-h-8 justify-center gap-1 px-2.5 py-1 text-[11px]" onClick={fitAllVehicles} disabled={!connected}>
+              <button type="button" className="btn-primary min-h-10 justify-center gap-1 px-2.5 py-1 text-[11px]" onClick={fitAllVehicles} disabled={!connected}>
                 <MapPinned className="h-4 w-4" />{copy.mapFitFleet}
               </button>
               {selectedRecord ? <button type="button" className="btn-secondary hidden min-h-8 justify-center gap-1 px-2.5 py-1 text-[11px] xl:inline-flex" onClick={() => setInspectorOpen((open) => !open)} aria-expanded={inspectorOpen}>
                 {inspectorOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
                 {inspectorOpen ? copy.mapHideInspector : copy.mapShowInspector}
               </button> : null}
-              {selectedRecord ? <button type="button" className="btn-secondary min-h-8 justify-center gap-1 px-2.5 py-1 text-[11px] xl:hidden" onClick={() => setMobileInspectorOpen((open) => !open)} aria-expanded={mobileInspectorOpen}>
+              {selectedRecord ? <button type="button" className="btn-secondary min-h-10 justify-center gap-1 px-2.5 py-1 text-[11px] xl:hidden" onClick={() => setMobileInspectorOpen((open) => !open)} aria-expanded={mobileInspectorOpen}>
                 {mobileInspectorOpen ? <X className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
                 {mobileInspectorOpen ? copy.mapCloseInspector : copy.mapShowInspector}
               </button> : null}
@@ -1476,17 +1576,21 @@ export function ForthTrackingCentre() {
           {connected ? (
             <ForthTrackingMap records={mapRecords} selectedKey={selectedKey} onSelect={focusVehicle} command={mapCommand} language={language} copy={mapCopy} />
           ) : (
-            <div className="flex min-h-[460px] flex-col items-center justify-center rounded-[1.25rem] border border-dashed border-slate-200 bg-slate-50 px-5 text-center">
+            <div className="forth-map-viewport flex flex-col items-center justify-center rounded-[1.25rem] border border-dashed border-slate-200 bg-slate-50 px-5 text-center">
               <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-violet-700 shadow-sm"><MapPin className="h-7 w-7" /></span>
               <p className="mt-4 max-w-sm text-sm font-medium leading-6 text-slate-600">{data?.connectionStatus === "not_configured" ? copy.configurationBody : copy.noPositions}</p>
             </div>
           )}
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 px-1 text-[10px] text-slate-500">
-            <span className="inline-flex min-w-0 items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0" />{copy.latestGps}: {lastGpsUpdate ?? copy.unknownValue} · {summary.currentGpsVerifiedPositions}/{summary.total}</span>
-            <span>{language === "th" ? "อัปเดตทุก 60 วินาที" : "Refreshes every 60 seconds"}</span>
+          {(filter === "all" && mapInitialFrame.outlierCount > 0) || unplottableRecordCount > 0 ? <p className="mt-1 shrink-0 rounded-md bg-amber-50 px-2 py-1 text-[10px] leading-4 text-amber-900">
+            {filter === "all" && mapInitialFrame.outlierCount > 0 ? <span>{language === "th" ? `โฟกัสแผนที่ที่กลุ่มหลัก มีตำแหน่งรายงานอีก ${mapInitialFrame.outlierCount} จุดนอกกลุ่ม · กด “${copy.mapFitFleet}” เพื่อแสดงทั้งหมด` : `Initial view focuses on the main cluster; ${mapInitialFrame.outlierCount} reported position${mapInitialFrame.outlierCount === 1 ? " is" : "s are"} outside it. ${copy.mapFitFleet} shows all.`}</span> : null}
+            {unplottableRecordCount > 0 ? <span className={filter === "all" && mapInitialFrame.outlierCount > 0 ? "ml-2" : ""}>{language === "th" ? `${unplottableRecordCount} รายงานไม่มีพิกัดที่ถูกต้อง แสดงข้อมูลต่อในรายการรถ` : `${unplottableRecordCount} report${unplottableRecordCount === 1 ? " has" : "s have"} missing or invalid coordinates and remains in the vehicle list.`}</span> : null}
+          </p> : null}
+          <div className="mt-1 flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-0.5 px-1 text-[10px] text-slate-500">
+            <span className="inline-flex min-w-0 items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0" />{language === "th" ? "ตำแหน่ง GPS ที่ยืนยันล่าสุด" : "Latest GPS-verified position"}: {lastGpsUpdate ?? copy.unknownValue} · {summary.currentGpsVerifiedPositions}/{summary.total}</span>
+            <span>{language === "th" ? `รายงานตำแหน่งบนแผนที่ ${mapInitialFrame.allPositions.length} จุด · รีเฟรชทุก 60 วินาที` : `${mapInitialFrame.allPositions.length} plotted reports · refreshes every 60 seconds`}</span>
           </div>
           {connected ? (
-            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 border-t border-slate-100 px-1 pt-2 text-[9px] leading-4 text-slate-600 sm:text-[10px]" aria-label={language === "th" ? "คำอธิบายสัญลักษณ์แผนที่" : "Map marker legend"}>
+            <div className="mt-1 flex shrink-0 flex-wrap gap-x-3 gap-y-1 border-t border-slate-100 px-1 pt-1 text-[9px] leading-4 text-slate-600 sm:text-[10px]" aria-label={language === "th" ? "คำอธิบายสัญลักษณ์แผนที่" : "Map marker legend"}>
               <span className="inline-flex items-center gap-1"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-emerald-600" />{copy.mapMoving}</span>
               <span className="inline-flex items-center gap-1"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-amber-600" />{copy.mapEngineOnStop}</span>
               <span className="inline-flex items-center gap-1"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-indigo-600" />{copy.mapEngineOffStop}</span>
@@ -1499,25 +1603,30 @@ export function ForthTrackingCentre() {
           ) : null}
         </section>
 
-        <section id="forth-vehicle-list" className="surface-card order-2 min-w-0 p-2.5 scroll-mt-4 sm:p-3 xl:col-start-2 xl:row-start-1" aria-labelledby="forth-vehicle-list-title">
-          <div className="flex items-start justify-between gap-3">
+        {mobileListOpen ? <button type="button" className="fixed inset-0 z-[840] bg-slate-950/45 xl:hidden" aria-label={language === "th" ? "ปิดรายการรถ" : "Close vehicle list"} onClick={() => setMobileListOpen(false)} /> : null}
+        <section ref={mobileListDialogRef} id="forth-vehicle-list" className={`forth-vehicle-sidebar surface-card order-2 min-w-0 p-2.5 sm:p-3 xl:col-start-2 xl:row-start-1 ${mobileListOpen ? "fixed inset-y-0 right-0 z-[850] block w-[min(26rem,92vw)] overflow-hidden rounded-l-2xl rounded-r-none shadow-2xl" : "hidden"} ${sidebarOpen ? "xl:flex" : "xl:hidden"} xl:relative xl:inset-auto xl:z-auto xl:w-auto xl:rounded-2xl xl:shadow-none`} aria-labelledby="forth-vehicle-list-title" role={mobileListOpen ? "dialog" : undefined} aria-modal={mobileListOpen ? true : undefined}>
+          <div className="flex shrink-0 items-start justify-between gap-3">
             <div>
               <h2 id="forth-vehicle-list-title" className="text-base font-bold text-slate-950">{copy.listTitle}</h2>
               <p className="mt-0.5 text-[10px] leading-4 text-slate-500">{copy.listDescription}</p>
             </div>
-            {connected ? <span className="rounded-full bg-violet-50 px-2.5 py-1 text-[11px] font-bold text-violet-800">{visibleRecords.length}</span> : null}
+            <div className="flex shrink-0 items-center gap-1.5">
+              {connected ? <span className="rounded-full bg-violet-50 px-2.5 py-1 text-[11px] font-bold text-violet-800">{visibleRecords.length}</span> : null}
+              <button type="button" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 xl:hidden" aria-label={language === "th" ? "ปิดรายการรถ" : "Close vehicle list"} onClick={() => setMobileListOpen(false)}><X className="h-4 w-4" /></button>
+            </div>
           </div>
 
-          <div className="mt-2 grid grid-cols-2 gap-1.5">
+          <div className="forth-vehicle-controls mt-2 grid grid-cols-2 gap-1.5">
             <label className="relative col-span-2 block">
               <span className="sr-only">{copy.search}</span>
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
+                ref={mobileListSearchRef}
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder={copy.search}
                 type="search"
-                className="min-h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-xs text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+                className="min-h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-xs text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
               />
             </label>
             <label className="sr-only" htmlFor="forth-fleet-filter">{copy.filter}</label>
@@ -1544,9 +1653,9 @@ export function ForthTrackingCentre() {
               <option value="updated_desc">{copy.sortUpdated}</option>
             </select>
           </div>
-          <p className="mt-1.5 text-[10px] text-slate-500">{copy.showingVehicles} {visibleRecords.length} {copy.ofVehicles} {summary.total} {copy.listCount}</p>
+          <p className="forth-vehicle-count mt-1.5 text-[10px] text-slate-500">{copy.showingVehicles} {visibleRecords.length} {copy.ofVehicles} {summary.total} {copy.listCount}</p>
 
-          <div className="mt-2 max-h-[54vh] min-h-[220px] space-y-1 overflow-y-auto pr-1 xl:max-h-[calc(100dvh-13rem)]">
+          <div className="forth-vehicle-results mt-2 space-y-1 pr-1">
             {connected && data.records.length === 0 ? <div className="rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">{copy.noVehicles}</div> : null}
             {connected && data.records.length > 0 && visibleRecords.length === 0 ? <div className="rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">{copy.noMatches}</div> : null}
             {connected ? visibleRecords.map((record) => {
@@ -1560,8 +1669,7 @@ export function ForthTrackingCentre() {
 
         {selectedRecord ? (
           <>
-            {mobileInspectorOpen ? <button type="button" aria-label={copy.mapCloseInspector} onClick={() => setMobileInspectorOpen(false)} className="fixed inset-0 z-[800] bg-slate-950/40 xl:hidden" /> : null}
-            <section className={`surface-card min-w-0 p-3.5 sm:p-4 ${mobileInspectorOpen ? "fixed inset-x-3 bottom-3 top-14 z-[810] block max-h-[calc(100dvh-4rem)] overflow-y-auto shadow-2xl xl:absolute xl:inset-x-auto xl:bottom-3 xl:right-[calc(27%+0.75rem)] xl:top-16 xl:z-[810] xl:w-[min(22rem,42%)] xl:max-h-[calc(100%-5rem)] xl:shadow-2xl" : "hidden"} ${inspectorOpen ? "xl:block" : "xl:hidden"}`} aria-labelledby="forth-vehicle-details-title">
+            <section className={`surface-card min-w-0 p-3.5 sm:p-4 ${mobileInspectorOpen ? `fixed inset-x-2 bottom-2 top-auto z-[810] block max-h-[55dvh] overflow-y-auto shadow-2xl xl:absolute xl:inset-x-auto xl:bottom-3 ${sidebarOpen ? "xl:right-[calc(27%+0.75rem)]" : "xl:right-3"} xl:top-16 xl:z-[810] xl:w-[min(22rem,42%)] xl:max-h-[calc(100%-5rem)] xl:shadow-2xl` : "hidden"} ${inspectorOpen ? "xl:block" : "xl:hidden"}`} aria-labelledby="forth-vehicle-details-title">
             <>
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0">
@@ -1620,7 +1728,18 @@ export function ForthTrackingCentre() {
           </>
         ) : null}
       </div>
-      {connected && can("business:read") ? (
+      {connected && can("business:read") && diagnosticsOpen ? (
+        <div className="fixed inset-0 z-[900] flex justify-end bg-slate-950/45">
+          <button type="button" className="absolute inset-0" aria-label={language === "th" ? "ปิดการวินิจฉัย" : "Close diagnostics"} onClick={closeDiagnostics} />
+          <aside ref={diagnosticsDialogRef} role="dialog" aria-modal="true" aria-labelledby="forth-diagnostics-title" className="relative z-[901] flex h-full w-full max-w-3xl flex-col border-l border-slate-200 bg-slate-50 shadow-2xl">
+            <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-violet-700">{language === "th" ? "สิทธิ์สำนักงาน" : "Office access"}</p>
+                <h2 id="forth-diagnostics-title" className="text-base font-bold text-slate-950">{language === "th" ? "การวินิจฉัยการติดตาม" : "Tracking diagnostics"}</h2>
+              </div>
+              <button ref={diagnosticsCloseRef} type="button" className="btn-secondary min-h-9 justify-center gap-1.5 px-3 text-xs" onClick={closeDiagnostics}><X className="h-4 w-4" />{language === "th" ? "ปิด" : "Close"}</button>
+            </header>
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3 sm:p-5">
         <details className="rounded-2xl border border-slate-200 bg-white px-4 py-3 sm:px-5">
           <summary className="cursor-pointer text-sm font-semibold text-slate-700">{copy.accuracyTitle}</summary>
           <section className="mt-4 space-y-4" aria-label={copy.accuracyTitle}>
@@ -1698,8 +1817,6 @@ export function ForthTrackingCentre() {
             )}
           </section>
         </details>
-      ) : null}
-      {connected && can("business:read") ? (
         <details className="rounded-2xl border border-slate-200 bg-white px-4 py-3 sm:px-5">
         <summary className="cursor-pointer text-sm font-semibold text-slate-700">{copy.diagnosticAdvancedTitle}</summary>
         <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5" aria-label={copy.diagnosticTitle}>
@@ -1798,6 +1915,9 @@ export function ForthTrackingCentre() {
           ) : null}
         </section>
         </details>
+            </div>
+          </aside>
+        </div>
       ) : null}
 
     </main>

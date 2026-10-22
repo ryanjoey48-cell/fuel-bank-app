@@ -7,10 +7,13 @@ import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import styles from "./forth-tracking-map.module.css";
 import {
   getForthFleetMapRecords,
+  getForthFleetMapInitialFrame,
   getForthReportedActivity,
+  getForthTrackingMapVehicleClass,
   getVisibleForthMarkerLabelKeys,
   isForthGpsPositionVerified,
-  type ForthReportedActivity
+  type ForthReportedActivity,
+  type ForthTrackingMapVehicleClass
 } from "@/lib/forth-tracking-view";
 import type { ForthFleetTrackingRecord } from "@/lib/forth-tracking-server";
 
@@ -55,6 +58,7 @@ type FleetMarkerEntry = {
   approximate: boolean;
   offline: boolean;
   selected: boolean;
+  vehicleClass: ForthTrackingMapVehicleClass;
   title: string;
   popupSignature: string;
   tooltipSignature: string;
@@ -80,7 +84,8 @@ function markerIcon(
   selected: boolean,
   approximate: boolean,
   offline: boolean,
-  registration: string
+  registration: string,
+  vehicleClass: ForthTrackingMapVehicleClass
 ) {
   const statusClass = activity === "driving"
     ? styles.vehicleMarkerDriving
@@ -91,12 +96,19 @@ function markerIcon(
         : activity === "stopped_engine_unknown"
           ? styles.vehicleMarkerStoppedEngineUnknown
       : styles.vehicleMarkerUnavailable;
+  const truckSvg = vehicleClass === "six_wheeler"
+    ? "<path d=\"M3 7.5h11v9H3zM14 10h4l3 3v3h-7z\"/><circle cx=\"6\" cy=\"18\" r=\"1.7\"/><circle cx=\"14\" cy=\"18\" r=\"1.7\"/><circle cx=\"20\" cy=\"18\" r=\"1.7\"/>"
+    : vehicleClass === "eighteen_wheeler"
+      ? "<path d=\"M1 8h13v8H1zM14 10h5l4 3v3h-9z\"/><circle cx=\"3\" cy=\"18\" r=\"1.5\"/><circle cx=\"8\" cy=\"18\" r=\"1.5\"/><circle cx=\"13\" cy=\"18\" r=\"1.5\"/><circle cx=\"18\" cy=\"18\" r=\"1.5\"/><circle cx=\"22\" cy=\"18\" r=\"1.5\"/>"
+      : vehicleClass === "four_wheeler"
+        ? "<path d=\"M3 9h10l3 4h5v3H3z\"/><circle cx=\"7\" cy=\"18\" r=\"1.7\"/><circle cx=\"18\" cy=\"18\" r=\"1.7\"/>"
+        : "<path d=\"M3 7.5h11v9H3zM14 10h4l3 3v3h-7z\"/><circle cx=\"7\" cy=\"18\" r=\"1.7\"/><circle cx=\"18\" cy=\"18\" r=\"1.7\"/>";
   return Leaflet.divIcon({
     className: styles.vehicleMarker,
     html: "<span class=\"" + styles.vehicleMarkerDot + " " + statusClass +
       (approximate ? " " + styles.vehicleMarkerApproximate : "") +
       (offline ? " " + styles.vehicleMarkerOffline : "") +
-      (selected ? " " + styles.vehicleMarkerSelected : "") + "\"><svg class=\"" + styles.vehicleMarkerTruck + "\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M3 7.5h11v9H3zM14 10h4l3 3v3h-7z\"/><circle cx=\"7\" cy=\"18\" r=\"1.7\"/><circle cx=\"18\" cy=\"18\" r=\"1.7\"/></svg></span><span class=\"" + styles.vehicleMarkerLabel + "\">" + escapeHtml(registration) + "</span>",
+      (selected ? " " + styles.vehicleMarkerSelected : "") + "\"><svg class=\"" + styles.vehicleMarkerTruck + "\" viewBox=\"0 0 24 24\" aria-hidden=\"true\">" + truckSvg + "</svg></span><span class=\"" + styles.vehicleMarkerLabel + "\">" + escapeHtml(registration) + "</span>",
     iconSize: [220, 36],
     iconAnchor: [17, 17],
     popupAnchor: [0, -18],
@@ -271,6 +283,7 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
 
     for (const { record, key, position } of positionedRecords) {
       const activity = getForthReportedActivity(record);
+      const vehicleClass = getForthTrackingMapVehicleClass(record.vehicleRegistration);
       const approximate = !isForthGpsPositionVerified(record);
       const offline = record.gprsConnectivity === "disconnected";
       const markerTitle = record.vehicleRegistration || record.gpsDeviceId || copy.unknownValue;
@@ -281,7 +294,7 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
       if (!entry) {
         const selected = key === selectedKeyRef.current;
         const marker = Leaflet.marker(position, {
-          icon: markerIcon(Leaflet, activity, selected, approximate, offline, markerTitle),
+          icon: markerIcon(Leaflet, activity, selected, approximate, offline, markerTitle, vehicleClass),
           title: markerTitle,
           alt: markerTitle,
           zIndexOffset: selected ? 1200 : 0,
@@ -293,7 +306,7 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
         marker.on("blur", () => marker.closeTooltip());
         markerMetadataRef.current.set(marker, { activity, approximate, offline });
         cluster.addLayer(marker);
-        entry = { marker, activity, approximate, offline, selected, title: markerTitle, popupSignature: "", tooltipSignature: "" };
+        entry = { marker, activity, approximate, offline, selected, title: markerTitle, vehicleClass, popupSignature: "", tooltipSignature: "" };
         markersByKeyRef.current.set(key, entry);
         clusterNeedsRefresh = true;
       } else {
@@ -306,19 +319,21 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
         }
         const activityChanged = entry.activity !== activity;
         const confidenceChanged = entry.approximate !== approximate;
-        const markerStateChanged = activityChanged || confidenceChanged || entry.offline !== offline;
+        const classChanged = entry.vehicleClass !== vehicleClass;
+        const markerStateChanged = activityChanged || confidenceChanged || entry.offline !== offline || classChanged;
         if (markerStateChanged) {
           entry.activity = activity;
           entry.approximate = approximate;
           entry.offline = offline;
+          entry.vehicleClass = vehicleClass;
           markerMetadataRef.current.set(entry.marker, { activity, approximate, offline });
-          entry.marker.setIcon(markerIcon(Leaflet, activity, entry.selected, approximate, offline, markerTitle));
+          entry.marker.setIcon(markerIcon(Leaflet, activity, entry.selected, approximate, offline, markerTitle, vehicleClass));
           // Cluster badges summarize activity and position confidence.
           if (activityChanged || confidenceChanged) clusterNeedsRefresh = true;
         }
         if (entry.title !== markerTitle) {
           entry.title = markerTitle;
-          entry.marker.setIcon(markerIcon(Leaflet, activity, entry.selected, approximate, offline, markerTitle));
+          entry.marker.setIcon(markerIcon(Leaflet, activity, entry.selected, approximate, offline, markerTitle, vehicleClass));
           entry.marker.options.title = markerTitle;
           entry.marker.options.alt = markerTitle;
           entry.marker.getElement()?.setAttribute("aria-label", markerTitle);
@@ -368,7 +383,8 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
     const map = mapRef.current;
     const Leaflet = leafletRef.current;
     if (!mapReady || !map || !Leaflet || initialFitCompleteRef.current || positionedRecords.length === 0) return;
-    fitFleet(map, Leaflet, positionedRecords.map(({ position }) => position));
+    const initialFrame = getForthFleetMapInitialFrame(positionedRecords.map(({ position }) => position));
+    fitFleet(map, Leaflet, initialFrame.focusPositions);
     initialFitCompleteRef.current = true;
   }, [mapReady, positionedRecords]);
 
@@ -405,7 +421,7 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
       const selected = key === selectedKey;
       if (entry.selected !== selected) {
         entry.selected = selected;
-        entry.marker.setIcon(markerIcon(Leaflet, entry.activity, selected, entry.approximate, entry.offline, entry.title));
+        entry.marker.setIcon(markerIcon(Leaflet, entry.activity, selected, entry.approximate, entry.offline, entry.title, entry.vehicleClass));
         entry.marker.setZIndexOffset(selected ? 1200 : 0);
       }
     }

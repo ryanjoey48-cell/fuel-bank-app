@@ -199,8 +199,26 @@ function DashboardShell({
   }, [pathname, refresh, retryCount, router, t.serviceUnavailable.connectionFailed]);
 
   useEffect(() => {
-    document.body.style.overflow = "";
-    document.documentElement.style.overflow = "";
+    if (pathname !== "/fleet-tracking") {
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
+      return;
+    }
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousDocumentOverflow = document.documentElement.style.overflow;
+    const previousBodyPaddingTop = document.body.style.paddingTop;
+    const previousBodyPaddingBottom = document.body.style.paddingBottom;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.paddingTop = "0";
+    document.body.style.paddingBottom = "0";
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousDocumentOverflow;
+      document.body.style.paddingTop = previousBodyPaddingTop;
+      document.body.style.paddingBottom = previousBodyPaddingBottom;
+    };
   }, [pathname]);
 
   if (checkingAuth) {
@@ -224,7 +242,7 @@ function DashboardShell({
   }
 
   return (
-    <div className="min-h-[100dvh]">
+    <div className={pathname === "/fleet-tracking" ? "dashboard-dispatch-shell" : "min-h-[100dvh]"}>
       <TopNavigation />
       <div className="dashboard-content-frame !pl-0">
         <main className="dashboard-mobile-shell mx-auto flex min-h-[calc(100dvh-68px)] w-full max-w-full flex-col gap-3.5 px-4 pb-5 !pt-4 sm:gap-4 sm:px-5 sm:pb-6 md:px-6 md:pb-7 lg:px-8">

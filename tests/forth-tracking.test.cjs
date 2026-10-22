@@ -1235,6 +1235,33 @@ test("map coordinate projection excludes missing, invalid, non-finite, and out-o
   assert.equal(mapped[0].key, "device:GPS-1");
 });
 
+test("initial fleet framing focuses a clear spatial majority and retains every valid point for Fit Fleet", () => {
+  const { getForthFleetMapInitialFrame } = loadTypeScript("lib/forth-tracking-view.ts");
+  const mainCluster = Array.from({ length: 20 }, (_, index) => [13.75 + index * 0.001, 100.50 + index * 0.001]);
+  const distantReport = [18.79, 98.98];
+  const frame = getForthFleetMapInitialFrame([...mainCluster, distantReport, [91, 181]]);
+
+  assert.equal(frame.allPositions.length, 21);
+  assert.equal(frame.focusPositions.length, 20);
+  assert.equal(frame.outlierCount, 1);
+  assert.ok(frame.allPositions.some(([latitude, longitude]) => latitude === distantReport[0] && longitude === distantReport[1]));
+
+  const splitFleet = getForthFleetMapInitialFrame([[13.75, 100.5], [13.76, 100.51], [18.79, 98.98], [18.8, 98.99]]);
+  assert.equal(splitFleet.outlierCount, 0);
+  assert.equal(splitFleet.focusPositions.length, 4);
+});
+
+test("vehicle class overrides are map-only and 79-2945 uses a six-wheel marker", () => {
+  const { getForthTrackingMapVehicleClass } = loadTypeScript("lib/forth-tracking-view.ts");
+  const map = fs.readFileSync(path.join(root, "components/forth-tracking-map.tsx"), "utf8");
+  assert.equal(getForthTrackingMapVehicleClass("79-2945"), "six_wheeler");
+  assert.equal(getForthTrackingMapVehicleClass(" 79-2945 "), "six_wheeler");
+  assert.equal(getForthTrackingMapVehicleClass("unknown"), "unclassified");
+  assert.ok(map.includes("getForthTrackingMapVehicleClass(record.vehicleRegistration)"));
+  assert.ok(map.includes('vehicleClass === "six_wheeler"'));
+  assert.equal(map.includes("createServerSupabaseAdmin"), false);
+});
+
 test("fleet selection keys remain stable across data refreshes and match map marker keys", () => {
   const { findForthFleetRecord, getForthFleetMapRecords, getForthFleetRecordKey } = loadTypeScript("lib/forth-tracking-view.ts");
   const selected = { gpsDeviceId: "GPS-700", vehicleRegistration: "700-4145", coordinateStatus: "valid", latitude: 13.7, longitude: 100.5 };
@@ -1329,7 +1356,7 @@ test("premium tracking workspace keeps selection and map controls with responsiv
   assert.ok(source.includes('summary.positionConfidence.notGpsVerified'));
   assert.ok(source.includes('label={copy.engineOnStops}'));
   assert.ok(source.includes('label={copy.locationNotGpsVerified}'));
-  assert.ok(source.includes('className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 xl:grid-cols-6"'));
+  assert.ok(source.includes('className="forth-tracking-kpis flex gap-1.5"'));
   assert.ok(source.includes('records={mapRecords}'));
   assert.ok(source.includes("formatForthRelativeAge(record.lastGpsTimestamp, Date.now(), language)"));
   assert.ok(source.includes("aria-label={accessibleUpdateTime}"));
@@ -1590,9 +1617,15 @@ test("dashboard separates reported activity, GPS confidence, diagnostics and exi
   assert.ok(component.includes("value=\"driving\""));
   assert.ok(component.includes("value=\"stopped\""));
   assert.ok(component.includes("sortForthFleetRecords"));
-  assert.ok(component.includes("<details className=\"rounded-2xl border border-slate-200 bg-white px-4 py-3 sm:px-5\">"));
-  const diagnosticDetailsIndex = component.indexOf("<details className=\"rounded-2xl border border-slate-200 bg-white px-4 py-3 sm:px-5\">");
-  assert.ok(component.lastIndexOf('{connected && can("business:read") ? (', diagnosticDetailsIndex) >= 0);
+  assert.ok(component.includes("{connected && can(\"business:read\") && diagnosticsOpen ? ("));
+  assert.ok(component.includes('role="dialog" aria-modal="true" aria-labelledby="forth-diagnostics-title"'));
+  assert.ok(component.includes('ref={diagnosticsTriggerRef}'));
+  assert.ok(component.includes("setDiagnosticsOpen(true)"));
+  assert.ok(component.includes("shows all."));
+  assert.ok(component.includes("sidebarOpen ? \"xl:grid-cols-[minmax(0,2.35fr)_minmax(300px,0.85fr)]\" : \"xl:grid-cols-1\""));
+  assert.ok(component.includes('className="forth-vehicle-results mt-2 space-y-1 pr-1"'));
+  assert.ok(component.includes("setMobileListOpen(true)"));
+  assert.ok(component.includes("getForthFleetMapInitialFrame"));
   assert.ok(map.includes("isForthGpsPositionVerified"));
   assert.ok(map.includes("activityLabel(activity, copy)"));
   assert.ok(component.includes("const POLL_INTERVAL_MS = 60_000;"));
@@ -1602,8 +1635,9 @@ test("dashboard separates reported activity, GPS confidence, diagnostics and exi
 test("office accuracy review is protected in the UI and reuses the existing normalized fleet response", () => {
   const component = fs.readFileSync(path.join(root, "components/forth-tracking-centre.tsx"), "utf8");
   const server = fs.readFileSync(path.join(root, "lib/forth-tracking-server.ts"), "utf8");
-  const panelStart = component.indexOf("{connected && can(\"business:read\") ? (", component.indexOf("accuracyTitle"));
-  const panelEnd = component.indexOf("{connected && can(\"business:read\") ? (", panelStart + 1);
+  const comparisonsIndex = component.indexOf("getForthAccuracyComparisons(record, data.fetchedAt)");
+  const panelStart = component.lastIndexOf("<details", comparisonsIndex);
+  const panelEnd = component.indexOf("</details>", comparisonsIndex) + "</details>".length;
   assert.ok(panelStart >= 0);
   assert.ok(panelEnd > panelStart);
   const panel = component.slice(panelStart, panelEnd);
@@ -1615,8 +1649,23 @@ test("office accuracy review is protected in the UI and reuses the existing norm
   assert.ok(panel.includes("copy.accuracyActivityNotMapped"));
   assert.equal(panel.includes("fetch("), false);
   assert.equal(panel.includes("createServerSupabaseAdmin"), false);
+  assert.ok(component.includes("{connected && can(\"business:read\") && diagnosticsOpen ? ("));
   assert.match(server, /sourceAudit:\s*record\.sourceAudit/);
   assert.equal(component.includes('const POLL_INTERVAL_MS = 60_000;'), true);
+});
+
+test("Fleet Tracking uses the viewport below the shared navigation and keeps its own list scroll", () => {
+  const layout = fs.readFileSync(path.join(root, "app/(dashboard)/layout.tsx"), "utf8");
+  const css = fs.readFileSync(path.join(root, "app/globals.css"), "utf8");
+  assert.ok(layout.includes('pathname === "/fleet-tracking" ? "dashboard-dispatch-shell"'));
+  assert.ok(layout.includes('if (pathname !== "/fleet-tracking")'));
+  assert.ok(css.includes(".dashboard-dispatch-shell {"));
+  assert.ok(css.includes("height: 100dvh;"));
+  assert.ok(css.includes("overflow: hidden;"));
+  assert.ok(css.includes(".forth-tracking-workspace .forth-tracking-grid"));
+  assert.ok(css.includes(".forth-tracking-workspace .forth-vehicle-results"));
+  assert.ok(css.includes("grid-template-rows: minmax(0, 1fr);"));
+  assert.ok(css.includes("overscroll-behavior: contain;"));
 });
 
 test("Fleet Tracking appears once in the permission-gated Fleet group used by desktop and mobile navigation", () => {

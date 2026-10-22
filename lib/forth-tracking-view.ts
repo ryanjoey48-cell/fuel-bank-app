@@ -439,6 +439,15 @@ export type ForthFleetMapRecord = {
   position: [number, number];
 };
 
+export type ForthTrackingMapVehicleClass = "four_wheeler" | "six_wheeler" | "eighteen_wheeler" | "unclassified";
+
+/** Visual map override only. It intentionally does not read or write EES vehicle records. */
+export function getForthTrackingMapVehicleClass(registration: string | null): ForthTrackingMapVehicleClass {
+  const normalized = registration?.trim().toLocaleUpperCase().replace(/\s+/g, " ");
+  if (normalized === "79-2945") return "six_wheeler";
+  return "unclassified";
+}
+
 export function getForthFleetMapRecords(records: ForthFleetTrackingRecord[]): ForthFleetMapRecord[] {
   return records.flatMap((record, index) => {
     const { latitude, longitude } = record;
@@ -459,6 +468,57 @@ export function getForthFleetMapRecords(records: ForthFleetTrackingRecord[]): Fo
       position: [latitude, longitude] as [number, number]
     }];
   });
+}
+
+export type ForthFleetMapInitialFrame = {
+  allPositions: [number, number][];
+  focusPositions: [number, number][];
+  outlierCount: number;
+};
+
+function median(values: number[]) {
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+function distanceKm(left: [number, number], right: [number, number]) {
+  const radians = (degrees: number) => degrees * Math.PI / 180;
+  const latitudeDelta = radians(right[0] - left[0]);
+  const longitudeDelta = radians(right[1] - left[1]);
+  const haversine = Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(radians(left[0])) * Math.cos(radians(right[0])) * Math.sin(longitudeDelta / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(Math.max(0, 1 - haversine)));
+}
+
+/**
+ * Center the first view on a clear spatial majority when a small number of
+ * valid reports are exceptionally distant. Every valid point remains in the
+ * returned full set and in the marker layer; callers must disclose outliers
+ * and keep an explicit fit-all action available.
+ */
+export function getForthFleetMapInitialFrame(positions: [number, number][]): ForthFleetMapInitialFrame {
+  const allPositions = positions.filter(([latitude, longitude]) =>
+    Number.isFinite(latitude) && latitude >= -90 && latitude <= 90 &&
+    Number.isFinite(longitude) && longitude >= -180 && longitude <= 180
+  );
+  if (allPositions.length < 4) return { allPositions, focusPositions: allPositions, outlierCount: 0 };
+
+  const center: [number, number] = [
+    median(allPositions.map(([latitude]) => latitude)),
+    median(allPositions.map(([, longitude]) => longitude))
+  ];
+  const distances = allPositions.map((position) => distanceKm(center, position));
+  const medianDistance = median(distances);
+  const medianDeviation = median(distances.map((distance) => Math.abs(distance - medianDistance)));
+  const thresholdKm = medianDistance + Math.max(15, medianDeviation * 4.5);
+  const focusPositions = allPositions.filter((_, index) => distances[index] <= thresholdKm);
+  const requiredMajority = Math.ceil(allPositions.length * 0.75);
+
+  if (focusPositions.length < requiredMajority || focusPositions.length === allPositions.length) {
+    return { allPositions, focusPositions: allPositions, outlierCount: 0 };
+  }
+  return { allPositions, focusPositions, outlierCount: allPositions.length - focusPositions.length };
 }
 
 export function formatForthTrackingTime(value: string | null, language: "en" | "th") {
