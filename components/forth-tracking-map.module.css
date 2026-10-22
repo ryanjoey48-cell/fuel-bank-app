@@ -104,6 +104,86 @@
   line-height: 34px;
 }
 
+.vehicleCluster {
+  border: 0;
+  background: transparent;
+}
+
+.vehicleClusterFrame {
+  position: relative;
+  display: grid;
+  width: 64px;
+  height: 54px;
+  place-items: center;
+}
+
+.vehicleClusterQuality {
+  position: absolute;
+  inset: 2px 5px;
+  border: 2px solid #047857;
+  border-radius: 999px;
+}
+
+.vehicleClusterQualityApproximate {
+  border-style: dashed;
+  border-color: #b45309;
+}
+
+.vehicleClusterQualityVerified {
+  border-color: #047857;
+}
+
+.vehicleClusterCore {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: 42px;
+  height: 42px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: #5b238e;
+  color: #fff;
+  box-shadow: 0 2px 7px rgba(15, 23, 42, 0.32);
+  line-height: 1;
+}
+
+.vehicleClusterCore strong {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.vehicleClusterCounts {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 3px;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.vehicleClusterCounts i {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+}
+
+.vehicleClusterDriving {
+  background: #10b981;
+}
+
+.vehicleClusterStopped {
+  background: #818cf8;
+}
+
+.vehicleClusterUnavailable {
+  background: #94a3b8;
+}
+
 .mapCanvas :global(.leaflet-control-attribution) {
   border: 1px solid rgba(148, 163, 184, 0.45);
   border-radius: 8px 0 0;
@@ -136,8 +216,8 @@
 
 .mapCanvas :global(.forth-tracking-popup) {
   display: grid;
-  min-width: 150px;
-  gap: 4px;
+  width: min(220px, 62vw);
+  gap: 6px;
   color: #475569;
   font-size: 12px;
 }
@@ -169,6 +249,19 @@
 .mapCanvas :global(.forth-tracking-popup-action:focus-visible) {
   outline: 2px solid #7c3aed;
   outline-offset: 2px;
+}
+
+.mapCanvas :global(.leaflet-tooltip) {
+  z-index: 760;
+  max-width: 260px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.97);
+  color: #0f172a;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: normal;
+  box-shadow: 0 5px 16px rgba(15, 23, 42, 0.2);
 }
 
 @media (max-width: 639px) {

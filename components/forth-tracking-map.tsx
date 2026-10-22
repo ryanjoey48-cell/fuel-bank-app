@@ -9,7 +9,6 @@ import {
   getForthFleetMapRecords,
   getForthReportedActivity,
   isForthGpsPositionVerified,
-  formatForthTrackingTime,
   type ForthReportedActivity
 } from "@/lib/forth-tracking-view";
 import type { ForthFleetTrackingRecord } from "@/lib/forth-tracking-server";
@@ -20,24 +19,18 @@ type Copy = {
   unavailable: string;
   gpsVerified: string;
   notGpsVerified: string;
-  speed: string;
-  engine: string;
+  clusterUnverified: string;
+  clusterVerified: string;
+  clusterDriving: string;
+  clusterStopped: string;
+  clusterUnavailable: string;
   engineOn: string;
   engineOff: string;
   unknownValue: string;
-  gpsQuality: string;
-  noGpsQuality: string;
-  wifiQuality: string;
-  lbsQuality: string;
-  otherQuality: string;
-  unknownQuality: string;
-  current: string;
-  stale: string;
   noPositions: string;
   loading: string;
   mapUnavailable: string;
   mapRegionLabel: string;
-  lastVehicleUpdate: string;
   openDetails: string;
 };
 
@@ -54,6 +47,7 @@ type Props = {
 
 type LeafletModule = typeof import("leaflet");
 type FleetMarker = import("leaflet").Marker;
+type MarkerMetadata = { activity: ForthReportedActivity; approximate: boolean; offline: boolean };
 
 const tileUrl = process.env.NEXT_PUBLIC_EES_MAP_TILE_URL || "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
@@ -63,15 +57,6 @@ function activityLabel(activity: ForthReportedActivity, copy: Copy) {
   if (activity === "stopped_engine_off") return copy.stopped + " · " + copy.engineOff;
   if (activity === "stopped_engine_unknown") return copy.stopped + " · " + copy.unknownValue;
   return copy.unavailable;
-}
-
-function positionQualityLabel(record: ForthFleetTrackingRecord, copy: Copy) {
-  if (record.positionQuality === "gps") return copy.gpsQuality;
-  if (record.positionQuality === "no_gps") return copy.noGpsQuality;
-  if (record.positionQuality === "wifi") return copy.wifiQuality;
-  if (record.positionQuality === "lbs") return copy.lbsQuality;
-  if (record.positionQuality === "other") return copy.otherQuality;
-  return copy.unknownQuality;
 }
 
 function markerIcon(
@@ -113,6 +98,9 @@ export function ForthTrackingMap({ records, selectedKey, onSelect, command, lang
   const markerClusterRef = useRef<import("leaflet").MarkerClusterGroup | null>(null);
   const markersByKeyRef = useRef(new Map<string, { marker: FleetMarker; activity: ForthReportedActivity; approximate: boolean; offline: boolean }>());
   const leafletRef = useRef<LeafletModule | null>(null);
+  const markerMetadataRef = useRef(new WeakMap<FleetMarker, MarkerMetadata>());
+  const copyRef = useRef(copy);
+  copyRef.current = copy;
   const onSelectRef = useRef(onSelect);
   const initialFitCompleteRef = useRef(false);
   const lastCommandSequenceRef = useRef(0);
@@ -161,7 +149,21 @@ export function ForthTrackingMap({ records, selectedKey, onSelect, command, lang
           showCoverageOnHover: false,
           spiderfyOnMaxZoom: true,
           zoomToBoundsOnClick: true,
-          animate: true
+          animate: true,
+          iconCreateFunction: (cluster) => {
+            const children = cluster.getAllChildMarkers();
+            const metadata = children.map((marker) => markerMetadataRef.current.get(marker)).filter((item): item is MarkerMetadata => Boolean(item));
+            const driving = metadata.filter((item) => item.activity === "driving").length;
+            const stopped = metadata.filter((item) => item.activity.startsWith("stopped_")).length;
+            const unavailable = Math.max(0, children.length - driving - stopped);
+            const unverified = metadata.some((item) => item.approximate);
+            const copy = copyRef.current;
+            const escapeAttribute = (value: string) => value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+            const accessibleLabel = `${children.length} vehicles. ${copy.clusterDriving}: ${driving}; ${copy.clusterStopped}: ${stopped}; ${copy.clusterUnavailable}: ${unavailable}. ${unverified ? copy.clusterUnverified : copy.clusterVerified}.`;
+            const qualityClass = unverified ? styles.vehicleClusterQualityApproximate : styles.vehicleClusterQualityVerified;
+            const html = `<span class="${styles.vehicleClusterFrame}" role="img" aria-label="${escapeAttribute(accessibleLabel)}"><span class="${styles.vehicleClusterQuality} ${qualityClass}"></span><span class="${styles.vehicleClusterCore}"><strong>${children.length}</strong><span class="${styles.vehicleClusterCounts}"><i class="${styles.vehicleClusterDriving}"></i>${driving}<i class="${styles.vehicleClusterStopped}"></i>${stopped}<i class="${styles.vehicleClusterUnavailable}"></i>${unavailable}</span></span></span>`;
+            return Leaflet.divIcon({ className: styles.vehicleCluster, html, iconSize: [64, 54], iconAnchor: [32, 27] });
+          }
         }).addTo(map);
         leafletRef.current = Leaflet;
         if (mapNodeRef.current && typeof ResizeObserver !== "undefined") {
@@ -218,6 +220,9 @@ export function ForthTrackingMap({ records, selectedKey, onSelect, command, lang
           riseOnHover: true
         });
         marker.on("click", () => onSelectRef.current(key));
+        marker.on("focus", () => marker.openTooltip());
+        marker.on("blur", () => marker.closeTooltip());
+        markerMetadataRef.current.set(marker, { activity, approximate, offline });
         cluster.addLayer(marker);
         entry = { marker, activity, approximate, offline };
         markersByKeyRef.current.set(key, entry);
@@ -231,6 +236,7 @@ export function ForthTrackingMap({ records, selectedKey, onSelect, command, lang
         entry.activity = activity;
         entry.approximate = approximate;
         entry.offline = offline;
+        markerMetadataRef.current.set(entry.marker, { activity, approximate, offline });
       }
 
       entry.marker.setIcon(markerIcon(Leaflet, activity, key === selectedKey, approximate, offline));
@@ -240,20 +246,8 @@ export function ForthTrackingMap({ records, selectedKey, onSelect, command, lang
       content.className = "forth-tracking-popup";
       const title = document.createElement("strong");
       title.textContent = markerTitle;
-      const state = document.createElement("span");
-      state.textContent = activityLabel(activity, copy);
-      const speed = document.createElement("span");
-      speed.textContent = copy.speed + ": " + (record.speed === null ? copy.unknownValue : record.speed + " km/h");
-      const engine = document.createElement("span");
-      engine.textContent = copy.engine + ": " + (record.engineOn === null ? copy.unknownValue : record.engineOn ? copy.engineOn : copy.engineOff);
       const confidence = document.createElement("span");
       confidence.textContent = approximate ? copy.notGpsVerified : copy.gpsVerified;
-      const quality = document.createElement("span");
-      quality.textContent = positionQualityLabel(record, copy);
-      const freshness = document.createElement("span");
-      freshness.textContent = record.timestampStatus === "current" ? copy.current : record.timestampStatus === "stale" ? copy.stale : copy.unknownValue;
-      const update = document.createElement("span");
-      update.textContent = copy.lastVehicleUpdate + ": " + (formatForthTrackingTime(record.lastGpsTimestamp, language) ?? copy.unknownValue);
       const details = document.createElement("button");
       details.type = "button";
       details.className = "forth-tracking-popup-action";
@@ -262,7 +256,7 @@ export function ForthTrackingMap({ records, selectedKey, onSelect, command, lang
         event.stopPropagation();
         onSelectRef.current(key);
       });
-      content.append(title, state, speed, engine, update, confidence, quality, freshness, details);
+      content.append(title, confidence, details);
       if (entry.marker.getPopup()) entry.marker.setPopupContent(content);
       else entry.marker.bindPopup(content, { closeButton: true, autoPanPadding: [24, 24] });
 
@@ -271,6 +265,7 @@ export function ForthTrackingMap({ records, selectedKey, onSelect, command, lang
       if (entry.marker.getTooltip()) entry.marker.setTooltipContent(tooltip);
       else entry.marker.bindTooltip(tooltip, { direction: "top", offset: [0, -8], opacity: 0.96 });
     }
+    cluster.refreshClusters();
   }, [copy, language, mapReady, positionedRecords, selectedKey]);
 
   // The fleet is fit once after its first usable positions arrive. Later data

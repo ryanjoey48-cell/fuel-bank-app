@@ -422,6 +422,33 @@ test("missing drivers do not block fleet search or valid map locations", () => {
   assert.equal(getForthFleetMapRecords(records)[0].record.vehicleRegistration, "BUS-1");
 });
 
+test("formats relative position age in English and Thai while rejecting invalid timestamps", () => {
+  const { formatForthRelativeAge } = loadTypeScript("lib/forth-tracking-view.ts");
+  const now = Date.parse("2026-10-21T05:00:00.000Z");
+  assert.equal(formatForthRelativeAge("2026-10-21T04:59:25.000Z", now, "en"), "Updated 35 sec ago");
+  assert.equal(formatForthRelativeAge("2026-10-21T04:53:00.000Z", now, "en"), "Updated 7 min ago");
+  assert.equal(formatForthRelativeAge("2026-10-21T03:00:00.000Z", now, "en"), "Updated 2 hr ago");
+  assert.equal(formatForthRelativeAge("2026-10-21T04:59:25.000Z", now, "th"), "อัปเดต 35 วินาทีที่แล้ว");
+  assert.equal(formatForthRelativeAge("2026-10-21T05:00:02.000Z", now, "en"), "Updated just now");
+  assert.equal(formatForthRelativeAge("not-a-time", now, "en"), null);
+  assert.equal(formatForthRelativeAge(null, now, "en"), null);
+});
+
+test("online and activity counter filters match the full fleet summary and attention union", () => {
+  const { filterForthFleetRecords, summarizeForthFleet } = loadTypeScript("lib/forth-tracking-view.ts");
+  const records = normalizeForthTrackingResponse([
+    { plateNumber: "BUS-1", gpsID: "D1", dateTime: "21-10-2026 12:00:00", GPRS: "ON", GPS: "ON", positionSource: "GPS", Speed: "22", Engine: "ON", Latitude: 13.7, Longitude: 100.5 },
+    { plateNumber: "BUS-2", gpsID: "D2", dateTime: "21-10-2026 12:00:00", GPRS: "ON", GPS: "ON", positionSource: "GPS", Speed: "0", Engine: "OFF", Latitude: 13.7, Longitude: 100.5 },
+    { plateNumber: "BUS-3", gpsID: "D3", dateTime: "21-10-2026 11:44:59", GPRS: "OFF", GPS: "OFF", positionSource: "No GPS", Speed: "0", Engine: "OFF", Latitude: 13.7, Longitude: 100.5 }
+  ], { now: baseNow, sourceTimeZone: "Asia/Bangkok" });
+  const summary = summarizeForthFleet(records);
+  assert.equal(filterForthFleetRecords(records, "", "online").length, summary.communications.online);
+  assert.equal(filterForthFleetRecords(records, "", "driving").length, summary.reportedActivity.driving);
+  assert.equal(filterForthFleetRecords(records, "", "stopped").length, summary.reportedActivity.stopped);
+  assert.equal(filterForthFleetRecords(records, "", "attention").length, summary.needsAttention);
+  assert.equal(filterForthFleetRecords(records, "", "stale").length, summary.positionFreshness.stale);
+});
+
 test("rejects out-of-range coordinates and treats an empty array as a valid response", () => {
   const [record] = normalizeForthTrackingResponse([{ Latitude: 91, Longitude: 181 }], { now: baseNow });
   assert.equal(record.coordinateStatus, "invalid");
@@ -1245,12 +1272,9 @@ test("Leaflet map keeps selection focus explicit, clusters overlaps, and preserv
   assert.ok(source.includes("styles.vehicleMarkerDriving"));
   assert.ok(source.includes("styles.vehicleMarkerStopped"));
   assert.ok(source.includes("styles.vehicleMarkerUnavailable"));
-  assert.ok(source.includes('record.positionQuality === "no_gps"'));
-  assert.ok(source.includes("copy.noGpsQuality"));
   assert.ok(source.includes("styles.vehicleMarkerApproximate"));
   assert.ok(source.includes("styles.vehicleMarkerOffline"));
-  assert.ok(source.includes("positionQualityLabel(record, copy)"));
-  assert.ok(source.includes("copy.lastVehicleUpdate"));
+  assert.ok(source.includes("copy.notGpsVerified"));
   assert.ok(source.includes("copy.openDetails"));
   assert.ok(source.includes("forth-tracking-popup-action"));
   assert.ok(source.includes("onSelectRef.current(key)"));
@@ -1261,6 +1285,12 @@ test("Leaflet map keeps selection focus explicit, clusters overlaps, and preserv
   assert.ok(styles.includes(".vehicleMarkerApproximate"));
   assert.ok(styles.includes(".vehicleMarkerOffline::after"));
   assert.ok(styles.includes(".vehicleMarkerSelected"));
+  assert.ok(source.includes("iconCreateFunction: (cluster)"));
+  assert.ok(source.includes("cluster.refreshClusters()"));
+  assert.ok(source.includes('marker.on("focus", () => marker.openTooltip())'));
+  assert.ok(source.includes("styles.vehicleClusterQualityApproximate"));
+  assert.ok(source.includes("styles.vehicleClusterQualityVerified"));
+  assert.ok(styles.includes(".vehicleClusterCounts"));
 
   const reconcileStart = source.indexOf("// Reconcile markers in place");
   const initialFitStart = source.indexOf("// The fleet is fit once");
@@ -1277,26 +1307,29 @@ test("premium tracking workspace keeps selection and map controls with responsiv
   assert.ok(source.includes("setMapCommand((current) => ({ type: \"fit\""));
   assert.ok(source.includes("setMapCommand((current) => ({ type: \"focus\""));
   assert.ok(source.includes('xl:grid-cols-[minmax(270px,0.82fr)_minmax(0,2.15fr)]'));
-  assert.ok(source.includes('2xl:grid-cols-[minmax(285px,0.82fr)_minmax(0,2.1fr)_minmax(290px,0.96fr)]'));
-  assert.ok(source.includes('xl:col-start-2 xl:row-start-2 2xl:col-start-3 2xl:row-start-1'));
+  assert.ok(source.includes('xl:grid-cols-[minmax(250px,0.78fr)_minmax(0,1.8fr)_minmax(255px,0.82fr)]'));
+  assert.ok(source.includes('xl:col-start-3 xl:row-start-1'));
   assert.ok(source.includes('id="forth-vehicle-list"'));
   assert.ok(source.includes("aria-label={copy.attention}"));
   assert.ok(source.includes("function AttentionFilterButton"));
-  assert.ok(source.includes('filter="offline"'));
-  assert.ok(source.includes('filter="stale"'));
+  assert.ok(source.includes('value="offline"'));
+  assert.ok(source.includes('value="stale"'));
   assert.ok(source.includes('filter="unverified"'));
   assert.ok(source.includes('filter="engine_on_stopped"'));
   assert.ok(source.includes('value="attention"'));
+  assert.ok(source.includes('active={filter === "online"}'));
+  assert.ok(source.includes('records={mapRecords}'));
+  assert.ok(source.includes("formatForthRelativeAge(record.lastGpsTimestamp, Date.now(), language)"));
+  assert.ok(source.includes("onClick={() => applyFleetFilter(filter === \"driving\" ? \"all\" : \"driving\")}"));
   assert.ok(source.includes("summary.needsAttention"));
   assert.ok(source.includes("summary.latestCurrentGpsPosition"));
-  assert.ok(source.includes("summary.positionFreshness.stale"));
   assert.ok(source.includes("summary.positionConfidence.notGpsVerified"));
   assert.ok(source.includes("summary.reportedActivity.stoppedEngineOn"));
   assert.ok(source.includes("copy.mapOfflineLegend"));
   assert.ok(source.includes("selectedRecord.reportedDriver || copy.driverUnavailable"));
-  assert.ok(source.includes("record.reportedDriver || copy.driverUnavailable"));
   assert.ok(source.includes("copy.locationSection"));
   assert.ok(source.includes("copy.connectionTimingSection"));
+  assert.ok(source.includes("copy.sourceSection"));
   assert.ok(source.includes("copy.focusOnMap"));
   assert.ok(source.includes("copy.approximateCoordinatesNote"));
   const inspectorStart = source.indexOf('aria-labelledby="forth-vehicle-details-title"');
@@ -1305,7 +1338,17 @@ test("premium tracking workspace keeps selection and map controls with responsiv
   assert.equal(inspector.includes("sourceTimestampRaw"), false);
   assert.equal(inspector.includes("selectedRecord.positionSource"), false);
   assert.ok(source.includes("setSelectedKey(null)"));
-  assert.ok(source.includes("copy.attentionNote"));
+  assert.ok(source.includes("copy.noGpsSourceNote"));
+  assert.ok(source.includes("const [inspectorOpen, setInspectorOpen] = useState(false)"));
+  assert.ok(source.includes("{selectedRecord ? ("));
+});
+
+test("a failed refresh hides the previous telemetry snapshot and identifies its last successful refresh", () => {
+  const source = fs.readFileSync(path.join(root, "components/forth-tracking-centre.tsx"), "utf8");
+  assert.ok(source.includes("setData(null);\n          setRequestError(true);"));
+  assert.ok(source.includes('const connected = !requestError && data?.connectionStatus === "connected"'));
+  assert.ok(source.includes("requestError && lastChecked ?"));
+  assert.ok(source.includes("copy.staleSnapshotHidden"));
 });
 
 test("status diagnostic UI exposes accessible ready, confirmation, running and prior-attempt states", () => {

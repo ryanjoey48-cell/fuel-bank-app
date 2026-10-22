@@ -10,6 +10,7 @@ export type ForthReportedActivity =
   | "unavailable";
 export type ForthFleetFilter =
   | "all"
+  | "online"
   | "driving"
   | "stopped"
   | "unavailable"
@@ -146,6 +147,34 @@ export function getForthReportedActivity(record: ForthFleetTrackingRecord): Fort
   if (record.engineOn === true) return "stopped_engine_on";
   if (record.engineOn === false) return "stopped_engine_off";
   return "stopped_engine_unknown";
+}
+
+/** Show position age without replacing the exact source timestamp shown in details. */
+export function formatForthRelativeAge(
+  timestamp: string | null,
+  nowMs: number,
+  language: "en" | "th"
+) {
+  if (!timestamp) return null;
+  const parsed = Date.parse(timestamp);
+  if (!Number.isFinite(parsed)) return null;
+  const elapsedSeconds = Math.max(0, Math.floor((nowMs - parsed) / 1000));
+  if (language === "en") {
+    if (elapsedSeconds < 60) return elapsedSeconds < 5 ? "Updated just now" : `Updated ${elapsedSeconds} sec ago`;
+    const minutes = Math.floor(elapsedSeconds / 60);
+    if (minutes < 60) return `Updated ${minutes} min ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `Updated ${hours} hr ago`;
+    const days = Math.floor(hours / 24);
+    return `Updated ${days} day${days === 1 ? "" : "s"} ago`;
+  }
+  if (elapsedSeconds < 60) return elapsedSeconds < 5 ? "อัปเดตเมื่อสักครู่" : `อัปเดต ${elapsedSeconds} วินาทีที่แล้ว`;
+  const minutes = Math.floor(elapsedSeconds / 60);
+  if (minutes < 60) return `อัปเดต ${minutes} นาทีที่แล้ว`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `อัปเดต ${hours} ชั่วโมงที่แล้ว`;
+  const days = Math.floor(hours / 24);
+  return `อัปเดต ${days} วันที่แล้ว`;
 }
 
 export function getForthFleetFilterCategory(record: ForthFleetTrackingRecord): ForthFleetFilter {
@@ -310,6 +339,7 @@ export function filterForthFleetRecords(
   const query = search.trim().toLocaleLowerCase();
   return records.filter((record) => {
     const matchesFilter = filter === "all" ||
+      (filter === "online" && record.gprsConnectivity === "connected") ||
       (filter === "attention" && (record.gprsConnectivity === "disconnected" || record.timestampStatus === "stale")) ||
       (filter === "offline" && record.gprsConnectivity === "disconnected") ||
       (filter === "stale" && record.timestampStatus === "stale") ||
