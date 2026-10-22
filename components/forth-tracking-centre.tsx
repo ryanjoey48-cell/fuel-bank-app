@@ -56,7 +56,7 @@ import type { ForthSourceFieldSnapshot } from "@/lib/forth-tracking";
 
 const ForthTrackingMap = dynamic(
   () => import("@/components/forth-tracking-map").then((module) => module.ForthTrackingMap),
-  { ssr: false, loading: () => <div className="h-[min(72vh,820px)] min-h-[360px] animate-pulse rounded-2xl bg-slate-100 sm:min-h-[460px]" /> }
+  { ssr: false, loading: () => <div className="h-[clamp(400px,calc(100dvh-300px),900px)] min-h-[400px] animate-pulse rounded-2xl bg-slate-100 max-sm:h-[min(50svh,520px)] max-sm:min-h-[320px]" /> }
 );
 
 const POLL_INTERVAL_MS = 60_000;
@@ -119,7 +119,7 @@ const COPY = {
     refresh: "Refresh tracking",
     refreshing: "Updating…",
     lastSync: "Last EES refresh",
-    total: "Vehicles online",
+    total: "Fleet vehicles",
     totalHelper: "of tracked vehicles",
     moving: "Driving now",
     movingHelper: "Fresh reported speed above zero",
@@ -327,7 +327,7 @@ const COPY = {
     mapParked: "Stopped now",
     mapOffline: "Activity unavailable",
     mapUnknown: "Activity unavailable",
-    mapConfidence: "Amber dashed ring means this position is not GPS-verified; one or more in a cluster are unverified",
+    mapConfidence: "Dashed amber ring = position not GPS-verified; a cluster shows it if any member is unverified",
     mapClusterUnverified: "At least one position in this group is not GPS-verified",
     mapClusterVerified: "All positions in this group are GPS-verified",
     mapClusterDriving: "Driving",
@@ -335,6 +335,11 @@ const COPY = {
     mapClusterUnavailable: "Activity unavailable",
     mapOfflineLegend: "Red corner dot means GPRS is reported offline",
     mapSelectedLegend: "Purple ring marks the selected vehicle",
+    mapEngineOnStop: "Amber = stopped, engine on",
+    mapEngineOffStop: "Indigo = stopped, engine off",
+    mapEngineUnknownStop: "Grey = engine state unknown",
+    mapLabelHint: "Vehicle labels declutter as markers overlap; select a vehicle to prioritize its label",
+    freshnessShort: "Freshness window: 15 min",
     lastVehicleUpdate: "Last vehicle update",
     exactPositionTime: "Exact Bangkok time",
     openDetails: "Open details",
@@ -389,7 +394,7 @@ const COPY = {
     refresh: "รีเฟรชข้อมูลติดตาม",
     refreshing: "กำลังอัปเดต…",
     lastSync: "รีเฟรช EES ล่าสุด",
-    total: "รถออนไลน์",
+    total: "รถทั้งหมด",
     totalHelper: "จากรถที่ติดตาม",
     moving: "กำลังขับ",
     movingHelper: "ความเร็วรายงานใหม่มากกว่าศูนย์",
@@ -597,7 +602,7 @@ const COPY = {
     mapParked: "หยุดอยู่",
     mapOffline: "ไม่มีกิจกรรมที่ยืนยันได้",
     mapUnknown: "ไม่มีกิจกรรมที่ยืนยันได้",
-    mapConfidence: "วงประสีเหลืองหมายถึงตำแหน่งยังไม่ยืนยันด้วย GPS; ในกลุ่มหมายถึงมีอย่างน้อยหนึ่งตำแหน่งที่ยังไม่ยืนยัน",
+    mapConfidence: "วงประสีเหลือง = ตำแหน่งยังไม่ยืนยัน GPS; กลุ่มจะแสดงเมื่อมีสมาชิกที่ยังไม่ยืนยัน",
     mapClusterUnverified: "อย่างน้อยหนึ่งตำแหน่งในกลุ่มนี้ยังไม่ยืนยันด้วย GPS",
     mapClusterVerified: "ทุกตำแหน่งในกลุ่มนี้ยืนยันด้วย GPS แล้ว",
     mapClusterDriving: "กำลังขับ",
@@ -605,6 +610,11 @@ const COPY = {
     mapClusterUnavailable: "ไม่มีกิจกรรมที่ยืนยันได้",
     mapOfflineLegend: "จุดสีแดงที่มุมหมายถึงรายงานว่า GPRS ออฟไลน์",
     mapSelectedLegend: "วงสีม่วงแสดงรถที่เลือก",
+    mapEngineOnStop: "สีเหลืองอำพัน = หยุด เครื่องยนต์เปิด",
+    mapEngineOffStop: "สีคราม = หยุด เครื่องยนต์ปิด",
+    mapEngineUnknownStop: "สีเทา = ไม่ทราบสถานะเครื่องยนต์",
+    mapLabelHint: "ซ่อนป้ายทะเบียนเมื่อหมุดทับกัน; เลือกรถเพื่อจัดลำดับป้ายทะเบียนก่อน",
+    freshnessShort: "ช่วงข้อมูลปัจจุบัน: 15 นาที",
     lastVehicleUpdate: "อัปเดตรถล่าสุด",
     exactPositionTime: "เวลาประเทศไทย",
     openDetails: "เปิดรายละเอียด",
@@ -738,7 +748,9 @@ function activityText(activity: ForthReportedActivity, copy: Copy) {
 
 function activityStyle(activity: ForthReportedActivity) {
   if (activity === "driving") return "border-emerald-200 bg-emerald-50 text-emerald-800";
-  if (activity.startsWith("stopped_")) return "border-indigo-200 bg-indigo-50 text-indigo-800";
+  if (activity === "stopped_engine_on") return "border-amber-200 bg-amber-50 text-amber-900";
+  if (activity === "stopped_engine_off") return "border-indigo-200 bg-indigo-50 text-indigo-800";
+  if (activity === "stopped_engine_unknown") return "border-slate-300 bg-slate-100 text-slate-700";
   return "border-slate-200 bg-slate-100 text-slate-700";
 }
 
@@ -854,7 +866,7 @@ const FleetVehicleRow = memo(function FleetVehicleRow({
       </span>
       <span className="mt-1 flex min-w-0 items-center justify-between gap-2">
         <span className="inline-flex items-baseline gap-1.5 text-slate-950"><Gauge className="h-3.5 w-3.5 self-center text-slate-400" /><strong className="text-base leading-5">{record.speed === null ? "—" : record.speed}</strong><span className="text-[10px] text-slate-500">km/h</span></span>
-        <span className="inline-flex max-w-[58%] min-w-0 items-center gap-1 rounded-md bg-slate-50 px-1.5 py-1 text-[10px] font-semibold text-slate-700"><Activity className="h-3 w-3 shrink-0 text-slate-400" /><span className="truncate">{record.engineOn === null ? copy.unknownValue : record.engineOn ? copy.engineOnLabel : copy.engineOffLabel}</span></span>
+        <span className={`inline-flex max-w-[58%] min-w-0 items-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-semibold ${record.engineOn === true ? "bg-amber-50 text-amber-900" : record.engineOn === false ? "bg-indigo-50 text-indigo-800" : "bg-slate-100 text-slate-600"}`}><Activity className="h-3 w-3 shrink-0 opacity-70" /><span className="truncate">{record.engineOn === null ? copy.unknownValue : record.engineOn ? copy.engineOnLabel : copy.engineOffLabel}</span></span>
       </span>
       <span className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1 text-[10px] leading-4">
         <span title={exactUpdateTime ?? undefined} aria-label={accessibleUpdateTime} className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-slate-600"><Clock3 className="h-3 w-3 shrink-0 text-slate-400" /><span>{updateTime ?? copy.unknownValue}</span></span>
@@ -866,10 +878,9 @@ const FleetVehicleRow = memo(function FleetVehicleRow({
   );
 });
 
-function OverviewMetric({ label, value, detail, icon, tone, active, disabled, onClick }: {
+function OverviewMetric({ label, value, icon, tone, active, disabled, onClick }: {
   label: string;
   value: string;
-  detail: string;
   icon: ReactNode;
   tone: "emerald" | "violet" | "amber" | "rose";
   active: boolean;
@@ -883,51 +894,12 @@ function OverviewMetric({ label, value, detail, icon, tone, active, disabled, on
     rose: "bg-rose-50 text-rose-700 ring-rose-100"
   };
   return (
-    <button type="button" aria-pressed={active} onClick={onClick} disabled={disabled} className={`flex min-h-[82px] min-w-0 items-center gap-3 rounded-2xl border bg-white px-3.5 py-3 text-left shadow-[0_3px_12px_rgba(15,23,42,0.035)] transition hover:border-violet-200 hover:bg-slate-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 disabled:cursor-not-allowed disabled:opacity-60 sm:px-4 ${active ? "border-violet-400 ring-2 ring-violet-200" : "border-slate-200/90"}`}>
-      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ${tones[tone]}`}>{icon}</span>
+    <button type="button" aria-pressed={active} onClick={onClick} disabled={disabled} className={`flex min-h-[58px] min-w-0 items-center gap-2 rounded-xl border bg-white px-2.5 py-2 text-left transition hover:border-violet-200 hover:bg-slate-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 disabled:cursor-not-allowed disabled:opacity-60 sm:px-3 ${active ? "border-violet-400 bg-violet-50/70 ring-1 ring-violet-200" : "border-slate-200/90"}`}>
+      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ring-1 ${tones[tone]}`}>{icon}</span>
       <div className="min-w-0">
-        <p className="truncate text-[11px] font-semibold text-slate-500">{label}</p>
-        <p className="mt-0.5 text-[25px] font-bold leading-7 tracking-tight text-slate-950">{value}</p>
-        <p className="mt-0.5 truncate text-[10px] leading-4 text-slate-500">{detail}</p>
+        <p className="truncate text-[10px] font-semibold text-slate-500 sm:text-[11px]">{label}</p>
+        <p className="text-xl font-bold leading-5 tracking-tight text-slate-950">{value}</p>
       </div>
-    </button>
-  );
-}
-
-function AttentionFilterButton({
-  category,
-  categoryLabel,
-  filter,
-  count,
-  label,
-  active,
-  onSelect
-}: {
-  category: "operational" | "quality" | "normal";
-  categoryLabel: string;
-  filter: ForthFleetFilter;
-  count: number;
-  label: string;
-  active: boolean;
-  onSelect: (filter: ForthFleetFilter) => void;
-}) {
-  const tone = category === "operational"
-    ? "border-rose-100 bg-rose-50/70 text-rose-800 hover:border-rose-200"
-    : category === "quality"
-      ? "border-amber-100 bg-amber-50/70 text-amber-900 hover:border-amber-200"
-      : "border-violet-100 bg-violet-50/70 text-violet-900 hover:border-violet-200";
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={() => onSelect(active ? "all" : filter)}
-      className={`min-w-0 rounded-xl border px-3 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 ${tone} ${active ? "ring-2 ring-violet-400 ring-offset-1" : ""}`}
-    >
-      <span className="block truncate text-[9px] font-bold uppercase tracking-[0.12em] opacity-70">{categoryLabel}</span>
-      <span className="mt-0.5 flex items-center justify-between gap-2">
-        <span className="truncate text-[11px] font-semibold">{label}</span>
-        <strong className="text-base leading-5">{count}</strong>
-      </span>
     </button>
   );
 }
@@ -1306,7 +1278,6 @@ export function ForthTrackingCentre() {
   }, [data, selectedKey]);
   const lastGpsUpdate = formatForthTrackingTime(summary.latestCurrentGpsPosition, language);
   const selectedHasMapPosition = selectedRecord ? getForthFleetMapRecords([selectedRecord]).length > 0 : false;
-  const hasVisibleInspector = Boolean(selectedRecord && inspectorOpen);
   const lastChecked = formatForthTrackingTime(
     lastSuccessfulRefreshAt ?? (data?.connectionStatus === "connected" ? data.fetchedAt : null),
     language
@@ -1404,21 +1375,22 @@ export function ForthTrackingCentre() {
         : "border-slate-200 bg-slate-50 text-slate-700";
 
   return (
-    <main className="mx-auto w-full max-w-[1800px] space-y-4 px-3 pb-8 pt-4 sm:px-5 lg:px-7 lg:pt-5">
-      <header className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.045)] sm:flex-row sm:items-center sm:justify-between sm:p-5">
+    <main className="mx-auto w-full max-w-[1920px] space-y-2.5 px-3 pb-6 pt-3 sm:px-5 lg:px-6">
+      <header className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-[0_4px_16px_rgba(15,23,42,0.035)] sm:flex-row sm:items-center sm:justify-between sm:px-4">
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-violet-700">{copy.eyebrow}</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950 sm:text-[28px]">{copy.title}</h1>
-          <p className="mt-1.5 max-w-3xl text-sm leading-5 text-slate-600">{copy.description}</p>
+          <p className="hidden text-[9px] font-bold uppercase tracking-[0.16em] text-violet-700 sm:block">{copy.eyebrow}</p>
+          <h1 className="text-xl font-bold tracking-tight text-slate-950 sm:text-[22px]">{copy.title}</h1>
+          <p className="mt-0.5 truncate text-[10px] leading-4 text-slate-500 sm:text-[11px]">{copy.description} · {copy.freshnessShort}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-          <span className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold ${connected ? "border-emerald-200 bg-emerald-50 text-emerald-800" : data?.connectionStatus === "not_configured" ? "border-amber-200 bg-amber-50 text-amber-800" : "border-slate-200 bg-white text-slate-600"}`}>
+          {lastChecked ? <span className="hidden text-right text-[10px] leading-4 text-slate-500 sm:block">{copy.lastSync}<strong className="ml-1 font-semibold text-slate-700">{lastChecked}</strong></span> : null}
+          <span className={`inline-flex min-h-8 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] font-semibold ${connected ? "border-emerald-200 bg-emerald-50 text-emerald-800" : data?.connectionStatus === "not_configured" ? "border-amber-200 bg-amber-50 text-amber-800" : "border-slate-200 bg-white text-slate-600"}`}>
             {connected ? <CheckCircle2 className="h-4 w-4" /> : data?.connectionStatus === "not_configured" ? <AlertTriangle className="h-4 w-4" /> : <Signal className="h-4 w-4" />}
             {connected ? copy.connected : data?.connectionStatus === "not_configured" ? copy.disconnected : data?.connectionStatus === "failed" || requestError ? copy.unavailable : copy.mapLoading}
           </span>
           <button
             type="button"
-            className="btn-secondary justify-center gap-2"
+            className="btn-secondary min-h-8 justify-center gap-1.5 px-2.5 py-1.5 text-[11px]"
             onClick={() => void refreshRef.current()}
             disabled={refreshing || loading}
           >
@@ -1441,24 +1413,23 @@ export function ForthTrackingCentre() {
         </section>
       ) : null}
 
-      <section aria-label={language === "th" ? "สรุปสถานะกองรถ" : "Fleet overview"} className="rounded-2xl border border-slate-200 bg-white p-2.5 shadow-[0_3px_14px_rgba(15,23,42,0.03)] sm:p-3">
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        <OverviewMetric label={copy.total} value={connected ? String(summary.communications.online) : "—"} detail={connected ? `${copy.countOf} ${summary.total} ${copy.tracked}` : copy.totalHelper} tone="emerald" icon={<Wifi className="h-5 w-5" />} active={filter === "online"} disabled={!connected} onClick={() => applyFleetFilter(filter === "online" ? "all" : "online")} />
-        <OverviewMetric label={copy.moving} value={connected ? String(summary.reportedActivity.driving) : "—"} detail={copy.movingHelper} tone="emerald" icon={<Activity className="h-5 w-5" />} active={filter === "driving"} disabled={!connected} onClick={() => applyFleetFilter(filter === "driving" ? "all" : "driving")} />
-        <OverviewMetric label={copy.parked} value={connected ? String(summary.reportedActivity.stopped) : "—"} detail={copy.parkedHelper} tone="violet" icon={<Gauge className="h-5 w-5" />} active={filter === "stopped"} disabled={!connected} onClick={() => applyFleetFilter(filter === "stopped" ? "all" : "stopped")} />
-        <OverviewMetric label={copy.needsAttention} value={connected ? String(summary.needsAttention) : "—"} detail={copy.needsAttentionHelper} tone={summary.needsAttention > 0 ? "amber" : "violet"} icon={<AlertTriangle className="h-5 w-5" />} active={filter === "attention"} disabled={!connected} onClick={() => applyFleetFilter(filter === "attention" ? "all" : "attention")} />
+      <section aria-label={language === "th" ? "สรุปสถานะกองรถ" : "Fleet overview"} className="rounded-xl border border-slate-200 bg-white p-2 shadow-[0_3px_12px_rgba(15,23,42,0.025)]">
+        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 xl:grid-cols-6">
+        <OverviewMetric label={copy.total} value={connected ? String(summary.total) : "—"} tone="violet" icon={<Truck className="h-4 w-4" />} active={filter === "all"} disabled={!connected} onClick={() => applyFleetFilter("all")} />
+        <OverviewMetric label={copy.moving} value={connected ? String(summary.reportedActivity.driving) : "—"} tone="emerald" icon={<Activity className="h-4 w-4" />} active={filter === "driving"} disabled={!connected} onClick={() => applyFleetFilter(filter === "driving" ? "all" : "driving")} />
+        <OverviewMetric label={copy.parked} value={connected ? String(summary.reportedActivity.stopped) : "—"} tone="violet" icon={<Gauge className="h-4 w-4" />} active={filter === "stopped"} disabled={!connected} onClick={() => applyFleetFilter(filter === "stopped" ? "all" : "stopped")} />
+        <OverviewMetric label={copy.engineOnStops} value={connected ? String(summary.reportedActivity.stoppedEngineOn) : "—"} tone="amber" icon={<Activity className="h-4 w-4" />} active={filter === "engine_on_stopped"} disabled={!connected} onClick={() => applyFleetFilter(filter === "engine_on_stopped" ? "all" : "engine_on_stopped")} />
+        <OverviewMetric label={copy.offline} value={connected ? String(summary.communications.offline) : "—"} tone="rose" icon={<WifiOff className="h-4 w-4" />} active={filter === "offline"} disabled={!connected} onClick={() => applyFleetFilter(filter === "offline" ? "all" : "offline")} />
+        <OverviewMetric label={copy.locationNotGpsVerified} value={connected ? String(summary.positionConfidence.notGpsVerified) : "—"} tone="amber" icon={<MapPin className="h-4 w-4" />} active={filter === "unverified"} disabled={!connected} onClick={() => applyFleetFilter(filter === "unverified" ? "all" : "unverified")} />
         </div>
 
       {connected ? (
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-1 pt-2" role="group" aria-label={copy.attention}>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <AttentionFilterButton category="quality" categoryLabel={copy.attentionDataQuality} filter="unverified" count={summary.positionConfidence.notGpsVerified} label={copy.attentionUnverified} active={filter === "unverified"} onSelect={applyFleetFilter} />
-              <AttentionFilterButton category="normal" categoryLabel={copy.attentionNormal} filter="engine_on_stopped" count={summary.reportedActivity.stoppedEngineOn} label={copy.attentionEngineStopped} active={filter === "engine_on_stopped"} onSelect={applyFleetFilter} />
-            </div>
+        <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-1 pt-1.5" role="group" aria-label={copy.attention}>
+          <p className="min-w-0 flex-1 text-[10px] leading-4 text-slate-500">{copy.noGpsSourceNote}</p>
+          <div className="flex shrink-0 items-center gap-2">
             {filter !== "all" ? (
-              <div className="flex items-center gap-2 text-xs text-slate-600" aria-live="polite">
-                <span>{copy.activeFilter}: {({
+              <div className="flex items-center gap-1.5 text-[10px] text-slate-600" aria-live="polite">
+                <span className="max-w-[40vw] truncate sm:max-w-none">{copy.activeFilter}: {({
                   all: copy.all,
                   online: copy.filterOnline,
                   driving: copy.drivingFilter,
@@ -1470,34 +1441,33 @@ export function ForthTrackingCentre() {
                   unverified: copy.filterUnverified,
                   engine_on_stopped: copy.filterEngineOnStopped
                 } satisfies Record<ForthFleetFilter, string>)[filter]}</span>
-                <button type="button" onClick={() => applyFleetFilter("all")} className="min-h-8 rounded-lg px-2 font-semibold text-violet-800 hover:bg-violet-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300">{copy.resetFilter}</button>
+                <button type="button" onClick={() => applyFleetFilter("all")} className="min-h-7 whitespace-nowrap rounded-md px-1.5 font-semibold text-violet-800 hover:bg-violet-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300">{copy.resetFilter}</button>
               </div>
             ) : null}
           </div>
-          <p className="mt-1.5 w-full text-[10px] leading-4 text-slate-500">{copy.noGpsSourceNote}{summary.reportedActivity.stoppedEngineOn > 0 ? ` · ${copy.attentionEngineNote}` : ""}</p>
         </div>
       ) : null}
       </section>
 
-      <div className={`grid items-start gap-3 ${hasVisibleInspector ? "xl:grid-cols-[minmax(250px,0.78fr)_minmax(0,1.8fr)_minmax(255px,0.82fr)]" : "xl:grid-cols-[minmax(270px,0.82fr)_minmax(0,2.15fr)]"}`}>
-        <section className="surface-card order-1 min-w-0 overflow-hidden p-3 sm:p-4 xl:col-start-2 xl:row-start-1" aria-labelledby="forth-live-map-title">
-          <div className="mb-3 flex flex-wrap items-start justify-between gap-3 px-1 pt-1">
+      <div className="relative grid items-start gap-3 xl:grid-cols-[minmax(0,2.35fr)_minmax(300px,0.85fr)]">
+        <section className="surface-card order-1 min-w-0 overflow-hidden p-2.5 sm:p-3 xl:col-start-1 xl:row-start-1" aria-labelledby="forth-live-map-title">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1 pt-0.5">
             <div className="min-w-0">
-              <h2 id="forth-live-map-title" className="flex items-center gap-2 text-base font-bold text-slate-950"><MapPinned className="h-5 w-5 shrink-0 text-violet-700" />{copy.mapTitle}</h2>
-              <p className="mt-1 text-xs leading-5 text-slate-500">{copy.mapDescription}</p>
+              <h2 id="forth-live-map-title" className="flex items-center gap-1.5 text-sm font-bold text-slate-950"><MapPinned className="h-4 w-4 shrink-0 text-violet-700" />{copy.mapTitle}</h2>
+              <p className="mt-0.5 text-[10px] leading-4 text-slate-500">{copy.mapDescription}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <button type="button" className="btn-secondary min-h-9 justify-center gap-1.5 px-3 text-xs" onClick={browseVehicles}>
+              <button type="button" className="btn-secondary min-h-8 justify-center gap-1 px-2.5 py-1 text-[11px]" onClick={browseVehicles}>
                 <List className="h-4 w-4" />{copy.mapBrowseVehicles}
               </button>
-              <button type="button" className="btn-primary min-h-9 justify-center gap-1.5 px-3 text-xs" onClick={fitAllVehicles} disabled={!connected}>
+              <button type="button" className="btn-primary min-h-8 justify-center gap-1 px-2.5 py-1 text-[11px]" onClick={fitAllVehicles} disabled={!connected}>
                 <MapPinned className="h-4 w-4" />{copy.mapFitFleet}
               </button>
-              {selectedRecord ? <button type="button" className="btn-secondary hidden min-h-9 justify-center gap-1.5 px-3 text-xs xl:inline-flex" onClick={() => setInspectorOpen((open) => !open)} aria-expanded={inspectorOpen}>
+              {selectedRecord ? <button type="button" className="btn-secondary hidden min-h-8 justify-center gap-1 px-2.5 py-1 text-[11px] xl:inline-flex" onClick={() => setInspectorOpen((open) => !open)} aria-expanded={inspectorOpen}>
                 {inspectorOpen ? <PanelRightClose className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
                 {inspectorOpen ? copy.mapHideInspector : copy.mapShowInspector}
               </button> : null}
-              {selectedRecord ? <button type="button" className="btn-secondary min-h-9 justify-center gap-1.5 px-3 text-xs xl:hidden" onClick={() => setMobileInspectorOpen((open) => !open)} aria-expanded={mobileInspectorOpen}>
+              {selectedRecord ? <button type="button" className="btn-secondary min-h-8 justify-center gap-1 px-2.5 py-1 text-[11px] xl:hidden" onClick={() => setMobileInspectorOpen((open) => !open)} aria-expanded={mobileInspectorOpen}>
                 {mobileInspectorOpen ? <X className="h-4 w-4" /> : <PanelRightOpen className="h-4 w-4" />}
                 {mobileInspectorOpen ? copy.mapCloseInspector : copy.mapShowInspector}
               </button> : null}
@@ -1511,34 +1481,34 @@ export function ForthTrackingCentre() {
               <p className="mt-4 max-w-sm text-sm font-medium leading-6 text-slate-600">{data?.connectionStatus === "not_configured" ? copy.configurationBody : copy.noPositions}</p>
             </div>
           )}
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-1 text-[11px] text-slate-500">
-            <span className="inline-flex min-w-0 items-center gap-1.5"><Clock3 className="h-3.5 w-3.5 shrink-0" />{copy.lastSync}: {lastChecked ?? copy.unknownValue}</span>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 px-1 text-[10px] text-slate-500">
             <span className="inline-flex min-w-0 items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0" />{copy.latestGps}: {lastGpsUpdate ?? copy.unknownValue} · {summary.currentGpsVerifiedPositions}/{summary.total}</span>
-            <span>{language === "th" ? "อัปเดตอัตโนมัติทุก 60 วินาที" : "Auto-refreshes every 60 seconds"}</span>
+            <span>{language === "th" ? "อัปเดตทุก 60 วินาที" : "Refreshes every 60 seconds"}</span>
           </div>
           {connected ? (
-            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 border-t border-slate-100 px-1 pt-3 text-[11px] text-slate-600" aria-label={language === "th" ? "คำอธิบายสัญลักษณ์แผนที่" : "Map marker legend"}>
-              <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-emerald-600" />{copy.mapMoving}</span>
-              <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-indigo-600" />{copy.mapParked}</span>
-              <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-slate-500" />{copy.mapUnknown}</span>
-              <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="h-3 w-3 rounded-full border-2 border-dashed border-amber-700" />{copy.mapConfidence}</span>
-              <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="h-3 w-3 rounded-full border-2 border-emerald-700" />{copy.mapClusterVerified}</span>
-              <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="relative h-2.5 w-2.5 rounded-full border border-slate-800 after:absolute after:-right-1 after:-top-1 after:h-1.5 after:w-1.5 after:rounded-full after:border after:border-white after:bg-rose-600" />{copy.mapOfflineLegend}</span>
-              <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="h-3 w-3 rounded-full border-2 border-violet-700" />{copy.mapSelectedLegend}</span>
+            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 border-t border-slate-100 px-1 pt-2 text-[9px] leading-4 text-slate-600 sm:text-[10px]" aria-label={language === "th" ? "คำอธิบายสัญลักษณ์แผนที่" : "Map marker legend"}>
+              <span className="inline-flex items-center gap-1"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-emerald-600" />{copy.mapMoving}</span>
+              <span className="inline-flex items-center gap-1"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-amber-600" />{copy.mapEngineOnStop}</span>
+              <span className="inline-flex items-center gap-1"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-indigo-600" />{copy.mapEngineOffStop}</span>
+              <span className="inline-flex items-center gap-1"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-slate-500" />{copy.mapEngineUnknownStop} / {copy.mapUnknown}</span>
+              <span className="inline-flex items-center gap-1"><i aria-hidden="true" className="h-3 w-3 rounded-full border-2 border-dashed border-amber-700" />{copy.mapConfidence}</span>
+              <span className="inline-flex items-center gap-1"><i aria-hidden="true" className="relative h-2.5 w-2.5 rounded-full border border-slate-800 after:absolute after:-right-1 after:-top-1 after:h-1.5 after:w-1.5 after:rounded-full after:border after:border-white after:bg-rose-600" />{copy.mapOfflineLegend}</span>
+              <span className="inline-flex items-center gap-1"><i aria-hidden="true" className="h-3 w-3 rounded-full border-2 border-violet-700" />{copy.mapSelectedLegend}</span>
+              <span className="basis-full text-slate-500">{copy.mapLabelHint}</span>
             </div>
           ) : null}
         </section>
 
-        <section id="forth-vehicle-list" className="surface-card order-2 min-w-0 p-3 scroll-mt-4 sm:p-4 xl:col-start-1 xl:row-start-1" aria-labelledby="forth-vehicle-list-title">
+        <section id="forth-vehicle-list" className="surface-card order-2 min-w-0 p-2.5 scroll-mt-4 sm:p-3 xl:col-start-2 xl:row-start-1" aria-labelledby="forth-vehicle-list-title">
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 id="forth-vehicle-list-title" className="text-base font-bold text-slate-950">{copy.listTitle}</h2>
-              <p className="mt-1 text-xs leading-5 text-slate-500">{copy.listDescription}</p>
+              <p className="mt-0.5 text-[10px] leading-4 text-slate-500">{copy.listDescription}</p>
             </div>
             {connected ? <span className="rounded-full bg-violet-50 px-2.5 py-1 text-[11px] font-bold text-violet-800">{visibleRecords.length}</span> : null}
           </div>
 
-          <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="mt-2 grid grid-cols-2 gap-1.5">
             <label className="relative col-span-2 block">
               <span className="sr-only">{copy.search}</span>
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -1547,7 +1517,7 @@ export function ForthTrackingCentre() {
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder={copy.search}
                 type="search"
-                className="min-h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+                className="min-h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-xs text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
               />
             </label>
             <label className="sr-only" htmlFor="forth-fleet-filter">{copy.filter}</label>
@@ -1574,9 +1544,9 @@ export function ForthTrackingCentre() {
               <option value="updated_desc">{copy.sortUpdated}</option>
             </select>
           </div>
-          <p className="mt-2 text-[10px] text-slate-500">{copy.showingVehicles} {visibleRecords.length} {copy.ofVehicles} {summary.total} {copy.listCount}</p>
+          <p className="mt-1.5 text-[10px] text-slate-500">{copy.showingVehicles} {visibleRecords.length} {copy.ofVehicles} {summary.total} {copy.listCount}</p>
 
-          <div className="mt-3 max-h-[54vh] min-h-[220px] space-y-1.5 overflow-y-auto pr-1 xl:max-h-[calc(100vh-15rem)]">
+          <div className="mt-2 max-h-[54vh] min-h-[220px] space-y-1 overflow-y-auto pr-1 xl:max-h-[calc(100dvh-13rem)]">
             {connected && data.records.length === 0 ? <div className="rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">{copy.noVehicles}</div> : null}
             {connected && data.records.length > 0 && visibleRecords.length === 0 ? <div className="rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">{copy.noMatches}</div> : null}
             {connected ? visibleRecords.map((record) => {
@@ -1591,13 +1561,13 @@ export function ForthTrackingCentre() {
         {selectedRecord ? (
           <>
             {mobileInspectorOpen ? <button type="button" aria-label={copy.mapCloseInspector} onClick={() => setMobileInspectorOpen(false)} className="fixed inset-0 z-[800] bg-slate-950/40 xl:hidden" /> : null}
-            <section className={`surface-card order-3 min-w-0 p-3.5 sm:p-4 xl:col-start-3 xl:row-start-1 ${mobileInspectorOpen ? "fixed inset-x-3 bottom-3 top-14 z-[810] block max-h-[calc(100dvh-4rem)] overflow-y-auto shadow-2xl xl:static xl:max-h-none xl:overflow-visible xl:shadow-none" : "hidden"} ${inspectorOpen ? "xl:block" : "xl:hidden"}`} aria-labelledby="forth-vehicle-details-title">
+            <section className={`surface-card min-w-0 p-3.5 sm:p-4 ${mobileInspectorOpen ? "fixed inset-x-3 bottom-3 top-14 z-[810] block max-h-[calc(100dvh-4rem)] overflow-y-auto shadow-2xl xl:absolute xl:inset-x-auto xl:bottom-3 xl:right-[calc(27%+0.75rem)] xl:top-16 xl:z-[810] xl:w-[min(22rem,42%)] xl:max-h-[calc(100%-5rem)] xl:shadow-2xl" : "hidden"} ${inspectorOpen ? "xl:block" : "xl:hidden"}`} aria-labelledby="forth-vehicle-details-title">
             <>
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-violet-700">{copy.detailsTitle}</p>
                   <h2 id="forth-vehicle-details-title" className="mt-1 text-lg font-bold tracking-tight text-slate-950">{selectedRecord.vehicleRegistration || copy.unknownValue}</h2>
-                  <p className="mt-0.5 text-xs text-slate-500">{selectedRecord.reportedDriver || copy.driverUnavailable}</p>
+                  {selectedRecord.reportedDriver ? <p className="mt-0.5 text-xs text-slate-500">{selectedRecord.reportedDriver}</p> : null}
                   <p className="mt-0.5 text-[10px] text-slate-400">{copy.device}: {selectedRecord.gpsDeviceId || copy.unknownValue}</p>
                 </div>
                 <div className="flex items-center gap-2">

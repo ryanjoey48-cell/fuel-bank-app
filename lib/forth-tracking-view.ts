@@ -73,6 +73,48 @@ export type ForthAccuracyComparison = {
   normalized: string | null;
 };
 
+export type ForthMarkerLabelPlacement = {
+  key: string;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  selected: boolean;
+  priority?: number;
+};
+
+/** Select visible marker labels at close zoom while prioritizing the selected vehicle. */
+export function getVisibleForthMarkerLabelKeys(
+  placements: ForthMarkerLabelPlacement[],
+  zoom: number,
+  minimumZoom = 8
+): Set<string> {
+  if (!Number.isFinite(zoom) || zoom < minimumZoom) return new Set();
+
+  const ordered = [...placements].sort((left, right) => {
+    if (left.selected !== right.selected) return left.selected ? -1 : 1;
+    if ((left.priority ?? 0) !== (right.priority ?? 0)) return (right.priority ?? 0) - (left.priority ?? 0);
+    return left.key.localeCompare(right.key);
+  });
+  const visible = new Set<string>();
+  const occupied: ForthMarkerLabelPlacement[] = [];
+
+  for (const candidate of ordered) {
+    if (![candidate.left, candidate.top, candidate.width, candidate.height].every(Number.isFinite) || candidate.width <= 0 || candidate.height <= 0) continue;
+    const overlaps = occupied.some((placed) =>
+      candidate.left < placed.left + placed.width &&
+      candidate.left + candidate.width > placed.left &&
+      candidate.top < placed.top + placed.height &&
+      candidate.top + candidate.height > placed.top
+    );
+    if (overlaps && !candidate.selected) continue;
+    visible.add(candidate.key);
+    occupied.push(candidate);
+  }
+
+  return visible;
+}
+
 type CountMap<Keys extends string> = Record<Keys, number>;
 
 function isUsableSpeed(speed: number | null): speed is number {

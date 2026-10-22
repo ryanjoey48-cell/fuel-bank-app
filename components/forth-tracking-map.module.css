@@ -1,8 +1,8 @@
 .mapFrame {
   position: relative;
   isolation: isolate;
-  height: min(72vh, 820px);
-  min-height: 360px;
+  height: clamp(400px, calc(100dvh - 300px), 900px);
+  min-height: 400px;
   overflow: hidden;
   border: 1px solid #d8dee8;
   border-radius: 1rem;
@@ -13,7 +13,7 @@
 .mapCanvas {
   width: 100%;
   height: 100%;
-  min-height: 360px;
+  min-height: 400px;
   background: #f1f4f8;
 }
 
@@ -21,7 +21,7 @@
   z-index: 0;
   width: 100%;
   height: 100%;
-  min-height: 360px;
+  min-height: 400px;
   color: #1e293b;
   font: inherit;
   background: #eef2f7;
@@ -36,16 +36,26 @@
 }
 
 .vehicleMarker {
+  position: relative;
+  width: 220px !important;
+  height: 36px !important;
+  overflow: visible;
   border: 0;
   background: transparent;
+  pointer-events: none;
 }
 
 .vehicleMarkerDot {
-  position: relative;
+  position: absolute;
+  top: 3px;
+  left: 3px;
   box-sizing: border-box;
-  display: block;
+  display: grid;
   width: 28px;
   height: 28px;
+  place-items: center;
+  pointer-events: auto;
+  cursor: pointer;
   border: 2px solid #fff;
   border-radius: 9999px;
   box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.28), 0 2px 7px rgba(15, 23, 42, 0.26);
@@ -56,8 +66,16 @@
   background: #059669;
 }
 
-.vehicleMarkerStopped {
+.vehicleMarkerStoppedEngineOn {
+  background: #d97706;
+}
+
+.vehicleMarkerStoppedEngineOff {
   background: #4f46e5;
+}
+
+.vehicleMarkerStoppedEngineUnknown {
+  background: #64748b;
 }
 
 .vehicleMarkerUnavailable {
@@ -85,6 +103,51 @@
 .vehicleMarkerSelected {
   transform: scale(1.14);
   box-shadow: 0 0 0 2px #fff, 0 0 0 4px #6d28d9, 0 3px 9px rgba(15, 23, 42, 0.34);
+}
+
+.vehicleMarkerTruck {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: #fff;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.vehicleMarkerTruck circle {
+  fill: #fff;
+}
+
+.vehicleMarkerLabel {
+  position: absolute;
+  top: 5px;
+  left: 37px;
+  display: block;
+  max-width: 158px;
+  overflow: hidden;
+  border: 1px solid rgba(71, 85, 105, 0.3);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.96);
+  padding: 3px 6px;
+  color: #0f172a;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  box-shadow: 0 1px 5px rgba(15, 23, 42, 0.24);
+  pointer-events: none;
+}
+
+.vehicleMarkerLabelHidden {
+  visibility: hidden;
+  opacity: 0;
+}
+
+.vehicleMarkerLabelLeft {
+  right: 223px;
+  left: auto;
 }
 
 .mapCanvas :global(.marker-cluster) {
@@ -268,7 +331,7 @@
   .mapFrame,
   .mapCanvas,
   .mapCanvas :global(.leaflet-container) {
-    min-height: 360px;
-    height: min(58vh, 560px);
+    min-height: 320px;
+    height: min(50svh, 520px);
   }
 }

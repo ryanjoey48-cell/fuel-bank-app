@@ -1287,7 +1287,7 @@ test("Leaflet map keeps selection focus explicit, clusters overlaps, and preserv
   assert.ok(styles.includes(".vehicleMarkerSelected"));
   assert.ok(source.includes("iconCreateFunction: (cluster)"));
   assert.ok(source.includes("cluster.refreshClusters()"));
-  assert.ok(source.includes("if (clusterNeedsRefresh) cluster.refreshClusters()"));
+  assert.ok(source.includes("if (clusterNeedsRefresh) {\n      cluster.refreshClusters();"));
   assert.ok(source.includes("if (entry.popupSignature !== popupSignature)"));
   assert.ok(source.includes("if (entry.tooltipSignature !== tooltipSignature)"));
   assert.ok(source.includes("const markerStateChanged = activityChanged || confidenceChanged || entry.offline !== offline"));
@@ -1314,29 +1314,32 @@ test("premium tracking workspace keeps selection and map controls with responsiv
   assert.ok(source.includes("onClick={fitAllVehicles}"));
   assert.ok(source.includes("setMapCommand((current) => ({ type: \"fit\""));
   assert.ok(source.includes("setMapCommand((current) => ({ type: \"focus\""));
-  assert.ok(source.includes('xl:grid-cols-[minmax(270px,0.82fr)_minmax(0,2.15fr)]'));
-  assert.ok(source.includes('xl:grid-cols-[minmax(250px,0.78fr)_minmax(0,1.8fr)_minmax(255px,0.82fr)]'));
-  assert.ok(source.includes('xl:col-start-3 xl:row-start-1'));
+  assert.ok(source.includes('xl:grid-cols-[minmax(0,2.35fr)_minmax(300px,0.85fr)]'));
+  assert.ok(source.includes('xl:absolute xl:inset-x-auto'));
+  assert.ok(source.includes('xl:right-[calc(27%+0.75rem)]'));
   assert.ok(source.includes('id="forth-vehicle-list"'));
   assert.ok(source.includes("aria-label={copy.attention}"));
-  assert.ok(source.includes("function AttentionFilterButton"));
   assert.ok(source.includes('value="offline"'));
   assert.ok(source.includes('value="stale"'));
-  assert.ok(source.includes('filter="unverified"'));
-  assert.ok(source.includes('filter="engine_on_stopped"'));
+  assert.ok(source.includes('filter === "unverified" ? "all" : "unverified"'));
+  assert.ok(source.includes('filter === "engine_on_stopped" ? "all" : "engine_on_stopped"'));
   assert.ok(source.includes('value="attention"'));
-  assert.ok(source.includes('active={filter === "online"}'));
+  assert.ok(source.includes('active={filter === "all"}'));
+  assert.ok(source.includes('summary.communications.offline'));
+  assert.ok(source.includes('summary.positionConfidence.notGpsVerified'));
+  assert.ok(source.includes('label={copy.engineOnStops}'));
+  assert.ok(source.includes('label={copy.locationNotGpsVerified}'));
+  assert.ok(source.includes('className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 xl:grid-cols-6"'));
   assert.ok(source.includes('records={mapRecords}'));
   assert.ok(source.includes("formatForthRelativeAge(record.lastGpsTimestamp, Date.now(), language)"));
   assert.ok(source.includes("aria-label={accessibleUpdateTime}"));
   assert.ok(source.includes("copy.exactPositionTime"));
   assert.ok(source.includes("onClick={() => applyFleetFilter(filter === \"driving\" ? \"all\" : \"driving\")}"));
-  assert.ok(source.includes("summary.needsAttention"));
   assert.ok(source.includes("summary.latestCurrentGpsPosition"));
   assert.ok(source.includes("summary.positionConfidence.notGpsVerified"));
   assert.ok(source.includes("summary.reportedActivity.stoppedEngineOn"));
   assert.ok(source.includes("copy.mapOfflineLegend"));
-  assert.ok(source.includes("selectedRecord.reportedDriver || copy.driverUnavailable"));
+  assert.ok(source.includes("selectedRecord.reportedDriver ?"));
   assert.ok(source.includes("copy.locationSection"));
   assert.ok(source.includes("copy.connectionTimingSection"));
   assert.ok(source.includes("copy.sourceSection"));
@@ -1351,6 +1354,34 @@ test("premium tracking workspace keeps selection and map controls with responsiv
   assert.ok(source.includes("copy.noGpsSourceNote"));
   assert.ok(source.includes("const [inspectorOpen, setInspectorOpen] = useState(false)"));
   assert.ok(source.includes("{selectedRecord ? ("));
+  assert.ok(source.includes("setMobileInspectorOpen(false)"));
+});
+
+test("marker labels declutter at fleet zoom and prioritize selected Thai registrations when labels overlap", () => {
+  const { getVisibleForthMarkerLabelKeys } = loadTypeScript("lib/forth-tracking-view.ts");
+  const placements = [
+    { key: "รถ-๑", left: 20, top: 20, width: 110, height: 24, selected: false },
+    { key: "รถ-๒", left: 55, top: 22, width: 104, height: 24, selected: true },
+    { key: "รถ-๓", left: 260, top: 22, width: 96, height: 24, selected: false }
+  ];
+
+  assert.deepEqual([...getVisibleForthMarkerLabelKeys(placements, 7)], []);
+  assert.deepEqual([...getVisibleForthMarkerLabelKeys(placements, 8)], ["รถ-๒", "รถ-๓"]);
+  assert.deepEqual([...getVisibleForthMarkerLabelKeys(placements, Number.NaN)], []);
+});
+
+test("fleet tracking map renders escaped registration labels and activity-specific marker colors", () => {
+  const source = fs.readFileSync(path.join(root, "components/forth-tracking-map.tsx"), "utf8");
+  const styles = fs.readFileSync(path.join(root, "components/forth-tracking-map.module.css"), "utf8");
+
+  assert.ok(source.includes("styles.vehicleMarkerLabel"));
+  assert.ok(source.includes("escapeHtml(registration)"));
+  assert.ok(source.includes("getVisibleForthMarkerLabelKeys"));
+  assert.ok(source.includes("labelUpdateRef.current()"));
+  assert.ok(styles.includes(".vehicleMarkerLabelHidden"));
+  assert.ok(styles.includes(".vehicleMarkerStoppedEngineOn"));
+  assert.ok(styles.includes(".vehicleMarkerStoppedEngineOff"));
+  assert.ok(styles.includes(".vehicleMarkerStoppedEngineUnknown"));
 });
 
 test("a failed refresh hides the previous telemetry snapshot and identifies its last successful refresh", () => {
