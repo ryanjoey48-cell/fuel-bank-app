@@ -1,7 +1,14 @@
 import type { ForthFleetTrackingRecord } from "@/lib/forth-tracking-server";
 
 export type ForthFleetStatus = "moving" | "stationary" | "unknown";
-export type ForthFleetFilter = "all" | ForthFleetStatus;
+export type ForthReportedActivity =
+  | "driving"
+  | "stopped_engine_on"
+  | "stopped_engine_off"
+  | "stopped_engine_unknown"
+  | "unavailable";
+export type ForthFleetFilter = "all" | "driving" | "stopped" | "unavailable";
+export type ForthFleetSort = "registration" | "speed_desc" | "updated_desc";
 export type ForthMotionReason =
   | "moving"
   | "stationary"
@@ -22,6 +29,41 @@ type CountMap<Keys extends string> = Record<Keys, number>;
 
 function isUsableSpeed(speed: number | null): speed is number {
   return typeof speed === "number" && Number.isFinite(speed) && speed >= 0;
+}
+
+/** Operational activity uses only a fresh timestamp and a valid reported speed. */
+export function getForthReportedActivity(record: ForthFleetTrackingRecord): ForthReportedActivity {
+  if (record.timestampStatus !== "current" || !isUsableSpeed(record.speed)) return "unavailable";
+  if (record.speed > 0) return "driving";
+  if (record.engineOn === true) return "stopped_engine_on";
+  if (record.engineOn === false) return "stopped_engine_off";
+  return "stopped_engine_unknown";
+}
+
+export function getForthFleetFilterCategory(record: ForthFleetTrackingRecord): ForthFleetFilter {
+  const activity = getForthReportedActivity(record);
+  if (activity === "driving") return "driving";
+  if (activity === "unavailable") return "unavailable";
+  return "stopped";
+}
+
+export function isForthGpsPositionVerified(record: ForthFleetTrackingRecord) {
+  return record.timestampStatus === "current" &&
+    record.coordinateStatus === "valid" &&
+    typeof record.latitude === "number" &&
+    Number.isFinite(record.latitude) &&
+    record.latitude >= -90 &&
+    record.latitude <= 90 &&
+    typeof record.longitude === "number" &&
+    Number.isFinite(record.longitude) &&
+    record.longitude >= -180 &&
+    record.longitude <= 180 &&
+    record.gpsConnectivity === "connected" &&
+    record.positionQuality === "gps";
+}
+
+export function isForthGpsVerifiedDriving(record: ForthFleetTrackingRecord) {
+  return isForthGpsPositionVerified(record) && isUsableSpeed(record.speed) && record.speed > 0;
 }
 
 export function getForthMotionReason(record: ForthFleetTrackingRecord): ForthMotionReason {
@@ -71,6 +113,16 @@ export function isProvisionalReportedMovement(record: ForthFleetTrackingRecord) 
 export function summarizeForthFleet(records: ForthFleetTrackingRecord[]) {
   const summary = {
     total: records.length,
+    reportedActivity: {
+      driving: 0,
+      stopped: 0,
+      stoppedEngineOn: 0,
+      stoppedEngineOff: 0,
+      stoppedEngineUnknown: 0,
+      unavailable: 0
+    },
+    positionConfidence: { gpsVerified: 0, notGpsVerified: 0 },
+    gpsVerifiedDriving: 0,
     motion: { moving: 0, stationary: 0, unknown: 0 } as CountMap<ForthFleetStatus>,
     provisionalMotion: { reportedMoving: 0 },
     communications: { online: 0, offline: 0, unknown: 0 } as CountMap<"online" | "offline" | "unknown">,
@@ -99,6 +151,13 @@ export function summarizeForthFleet(records: ForthFleetTrackingRecord[]) {
   };
 
   for (const record of records) {
+    const reportedActivity = getForthReportedActivity(record);
+    summary.reportedActivity[reportedActivity === "stopped_engine_on" ? "stoppedEngineOn" :
+      reportedActivity === "stopped_engine_off" ? "stoppedEngineOff" :
+        reportedActivity === "stopped_engine_unknown" ? "stoppedEngineUnknown" : reportedActivity] += 1;
+    if (reportedActivity.startsWith("stopped_")) summary.reportedActivity.stopped += 1;
+    summary.positionConfidence[isForthGpsPositionVerified(record) ? "gpsVerified" : "notGpsVerified"] += 1;
+    if (isForthGpsVerifiedDriving(record)) summary.gpsVerifiedDriving += 1;
     const reason = getForthMotionReason(record);
     summary.classificationReason[reason] += 1;
     summary.motion[getForthFleetStatus(record)] += 1;
@@ -131,10 +190,32 @@ export function filterForthFleetRecords(
 ) {
   const query = search.trim().toLocaleLowerCase();
   return records.filter((record) => {
-    if (filter !== "all" && getForthFleetStatus(record) !== filter) return false;
+    if (filter !== "all" && getForthFleetFilterCategory(record) !== filter) return false;
     if (!query) return true;
     return [record.vehicleRegistration, record.reportedDriver, record.gpsDeviceId]
       .some((value) => value?.toLocaleLowerCase().includes(query));
+  });
+}
+
+export function sortForthFleetRecords(records: ForthFleetTrackingRecord[], sort: ForthFleetSort) {
+  const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+  return [...records].sort((left, right) => {
+    if (sort === "speed_desc") {
+      const leftSpeed = isUsableSpeed(left.speed) ? left.speed : null;
+      const rightSpeed = isUsableSpeed(right.speed) ? right.speed : null;
+      if (leftSpeed === null && rightSpeed !== null) return 1;
+      if (rightSpeed === null && leftSpeed !== null) return -1;
+      if (leftSpeed !== null && rightSpeed !== null && leftSpeed !== rightSpeed) return rightSpeed - leftSpeed;
+    } else if (sort === "updated_desc") {
+      const leftTime = left.timestampStatus === "current" || left.timestampStatus === "stale"
+        ? Date.parse(left.lastGpsTimestamp ?? "") : Number.NaN;
+      const rightTime = right.timestampStatus === "current" || right.timestampStatus === "stale"
+        ? Date.parse(right.lastGpsTimestamp ?? "") : Number.NaN;
+      if (!Number.isFinite(leftTime) && Number.isFinite(rightTime)) return 1;
+      if (!Number.isFinite(rightTime) && Number.isFinite(leftTime)) return -1;
+      if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) return rightTime - leftTime;
+    }
+    return collator.compare(left.vehicleRegistration ?? "", right.vehicleRegistration ?? "");
   });
 }
 

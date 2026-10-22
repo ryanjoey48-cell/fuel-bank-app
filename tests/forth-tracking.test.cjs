@@ -946,13 +946,89 @@ test("fleet view separates motion from communications and filters activity state
   assert.deepEqual(summary.positionFreshness, { current: 2, stale: 1, unknown: 1 });
   assert.equal(summary.lastVerifiedGpsPosition, "2026-10-21T04:59:00.000Z");
   assert.equal(filterForthFleetRecords(records, "driver a", "all").length, 1);
-  assert.equal(filterForthFleetRecords(records, "", "stationary")[0].vehicleRegistration, "STATIONARY-1");
+  assert.equal(filterForthFleetRecords(records, "", "stopped")[0].vehicleRegistration, "STATIONARY-1");
   const formattedTime = formatForthTrackingTime("2026-10-21T04:59:00.000Z", "en");
   const zoneLabel = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok", timeZoneName: "short", hourCycle: "h23" })
     .formatToParts(new Date("2026-10-21T04:59:00.000Z"))
     .find((part) => part.type === "timeZoneName").value;
   assert.ok(formattedTime.includes(zoneLabel));
   assert.match(formattedTime, /11:59/);
+});
+
+test("reported activity is independent from GPS confidence and summary counts match activity filters", () => {
+  const {
+    getForthReportedActivity,
+    isForthGpsPositionVerified,
+    isForthGpsVerifiedDriving,
+    summarizeForthFleet,
+    filterForthFleetRecords,
+    sortForthFleetRecords
+  } = loadTypeScript("lib/forth-tracking-view.ts");
+  const current = {
+    gpsConnectivity: "connected",
+    gprsConnectivity: "connected",
+    timestampStatus: "current",
+    coordinateStatus: "valid",
+    positionQuality: "no_gps",
+    latitude: 13.7,
+    longitude: 100.5,
+    lastGpsTimestamp: "2026-10-21T04:59:00.000Z",
+    speed: 12,
+    engineOn: true
+  };
+  const records = [
+    { ...current, vehicleRegistration: "NO-GPS-DRIVING" },
+    { ...current, vehicleRegistration: "STOP-ON", speed: 0, engineOn: true },
+    { ...current, vehicleRegistration: "STOP-OFF", speed: 0, engineOn: false },
+    { ...current, vehicleRegistration: "STOP-UNKNOWN", speed: 0, engineOn: null },
+    { ...current, vehicleRegistration: "STALE", timestampStatus: "stale", speed: 11 },
+    { ...current, vehicleRegistration: "NO-SPEED", speed: null },
+    {
+      ...current,
+      vehicleRegistration: "GPS-VERIFIED-DRIVING",
+      positionQuality: "gps",
+      speed: 30
+    },
+    { ...current, vehicleRegistration: "GPS-LOST-DRIVING", gpsConnectivity: "disconnected", positionQuality: "gps" },
+    { ...current, vehicleRegistration: "GPRS-OFFLINE-DRIVING", gprsConnectivity: "disconnected" },
+    { ...current, vehicleRegistration: "NO-COORDINATES-DRIVING", coordinateStatus: "missing", latitude: null, longitude: null },
+    { ...current, vehicleRegistration: "INVALID-SPEED", speed: -1 }
+  ];
+
+  assert.deepEqual(records.map(getForthReportedActivity), [
+    "driving", "stopped_engine_on", "stopped_engine_off", "stopped_engine_unknown",
+    "unavailable", "unavailable", "driving", "driving", "driving", "driving", "unavailable"
+  ]);
+  assert.equal(isForthGpsPositionVerified(records[0]), false);
+  assert.equal(isForthGpsVerifiedDriving(records[0]), false);
+  assert.equal(isForthGpsPositionVerified(records[6]), true);
+  assert.equal(isForthGpsVerifiedDriving(records[6]), true);
+  assert.equal(getForthReportedActivity(records[7]), "driving");
+  assert.equal(isForthGpsPositionVerified(records[7]), false);
+  assert.equal(getForthReportedActivity(records[8]), "driving");
+  assert.equal(getForthReportedActivity(records[9]), "driving");
+  assert.equal(getForthReportedActivity(records[10]), "unavailable");
+
+  const summary = summarizeForthFleet(records);
+  assert.deepEqual(summary.reportedActivity, {
+    driving: 5,
+    stopped: 3,
+    stoppedEngineOn: 1,
+    stoppedEngineOff: 1,
+    stoppedEngineUnknown: 1,
+    unavailable: 3
+  });
+  assert.deepEqual(summary.positionConfidence, { gpsVerified: 1, notGpsVerified: 10 });
+  assert.equal(summary.gpsVerifiedDriving, 1);
+  assert.equal(filterForthFleetRecords(records, "", "all").length, summary.total);
+  assert.equal(filterForthFleetRecords(records, "", "driving").length, summary.reportedActivity.driving);
+  assert.equal(filterForthFleetRecords(records, "", "stopped").length, summary.reportedActivity.stopped);
+  assert.equal(filterForthFleetRecords(records, "", "unavailable").length, summary.reportedActivity.unavailable);
+  assert.equal(filterForthFleetRecords(records, "NO-GPS", "driving")[0].vehicleRegistration, "NO-GPS-DRIVING");
+  assert.deepEqual(
+    sortForthFleetRecords(records, "speed_desc").slice(0, 2).map((record) => record.vehicleRegistration),
+    ["GPS-VERIFIED-DRIVING", "GPRS-OFFLINE-DRIVING"]
+  );
 });
 
 test("classifies lost, stale, ambiguous, invalid, and incomplete GPS records safely", () => {
@@ -1024,7 +1100,14 @@ test("Leaflet map builds visible status markers above tiles, fits locations, and
   assert.ok(source.includes("map.fitBounds("));
   assert.ok(source.includes("map.panTo(position"));
   assert.ok(source.includes("setZIndexOffset(selected ? 1000 : 0)"));
-  assert.ok(source.includes("record.positionQuality !== \"gps\""));
+  assert.ok(source.includes("isForthGpsPositionVerified(record)"));
+  assert.ok(source.includes("const approximate = !gpsVerified"));
+  assert.ok(source.includes("activityLabel(activity, copy)"));
+  assert.ok(source.includes("copy.gpsVerified"));
+  assert.ok(source.includes("copy.notGpsVerified"));
+  assert.ok(source.includes("styles.vehicleMarkerDriving"));
+  assert.ok(source.includes("styles.vehicleMarkerStopped"));
+  assert.ok(source.includes("styles.vehicleMarkerUnavailable"));
   assert.ok(source.includes('record.positionQuality === "no_gps"'));
   assert.ok(source.includes("copy.noGpsQuality"));
   assert.ok(source.includes("styles.vehicleMarkerApproximate"));
@@ -1210,16 +1293,30 @@ test("network and malformed-response failures consume the attempt without exposi
   }
 });
 
-test("unverified source speeds are provisional and the GPS/source disagreement is explained", () => {
+test("dashboard separates reported activity, GPS confidence, diagnostics and existing request cadence", () => {
   const view = fs.readFileSync(path.join(root, "lib/forth-tracking-view.ts"), "utf8");
   const component = fs.readFileSync(path.join(root, "components/forth-tracking-centre.tsx"), "utf8");
-  assert.ok(view.includes("isProvisionalReportedMovement"));
-  assert.ok(component.includes("Speed suggests movement · provisional"));
-  assert.ok(component.includes("summary.provisionalMotion.reportedMoving"));
+  const map = fs.readFileSync(path.join(root, "components/forth-tracking-map.tsx"), "utf8");
+  assert.ok(view.includes("getForthReportedActivity"));
+  assert.ok(component.includes("summary.reportedActivity.driving"));
+  assert.ok(component.includes("summary.reportedActivity.stopped"));
+  assert.ok(component.includes("summary.reportedActivity.stoppedEngineOn"));
+  assert.ok(component.includes("summary.positionConfidence.notGpsVerified"));
+  assert.ok(component.includes("isForthGpsPositionVerified(record) ? copy.provisionalMovement : copy.provisionalBadge"));
   assert.ok(component.includes("summary.positionQuality.no_gps"));
   assert.ok(component.includes("gpsSourceSignalNote"));
-  assert.ok(component.includes("No GPS · GPS position unverified"));
+  assert.ok(component.includes("Reported driving · position not GPS-verified"));
   assert.ok(component.includes("ไม่มี GPS · ยังยืนยันตำแหน่งด้วย GPS ไม่ได้"));
+  assert.ok(component.includes("value=\"driving\""));
+  assert.ok(component.includes("value=\"stopped\""));
+  assert.ok(component.includes("sortForthFleetRecords"));
+  assert.ok(component.includes("<details className=\"rounded-2xl border border-slate-200 bg-white px-4 py-3 sm:px-5\">"));
+  const diagnosticDetailsIndex = component.indexOf("<details className=\"rounded-2xl border border-slate-200 bg-white px-4 py-3 sm:px-5\">");
+  assert.ok(component.lastIndexOf('{connected && can("business:read") ? (', diagnosticDetailsIndex) >= 0);
+  assert.ok(map.includes("isForthGpsPositionVerified"));
+  assert.ok(map.includes("activityLabel(activity, copy)"));
+  assert.ok(component.includes("const POLL_INTERVAL_MS = 60_000;"));
+  assert.ok(component.includes('can("business:read")'));
 });
 
 test("Fleet Tracking appears once in the permission-gated Fleet group used by desktop and mobile navigation", () => {

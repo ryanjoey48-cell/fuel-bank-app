@@ -48,15 +48,15 @@
   transition: transform 120ms ease, box-shadow 120ms ease;
 }
 
-.vehicleMarkerMoving {
+.vehicleMarkerDriving {
   background: #059669;
 }
 
-.vehicleMarkerParked {
+.vehicleMarkerStopped {
   background: #4f46e5;
 }
 
-.vehicleMarkerUnknown {
+.vehicleMarkerUnavailable {
   background: #475569;
 }
 
