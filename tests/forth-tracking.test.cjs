@@ -409,6 +409,19 @@ test("returns only a safe text driver label and omits identifier-like values", (
   assert.equal(identifier.reportedDriver, null);
 });
 
+test("missing drivers do not block fleet search or valid map locations", () => {
+  const { filterForthFleetRecords, getForthFleetMapRecords } = loadTypeScript("lib/forth-tracking-view.ts");
+  const records = normalizeForthTrackingResponse([
+    { gpsID: "DEVICE-1", plateNumber: "BUS-1", Latitude: 13.7, Longitude: 100.5 },
+    { gpsID: "DEVICE-2", plateNumber: "BUS-2", Latitude: null, Longitude: null }
+  ], { now: baseNow });
+
+  assert.equal(records[0].reportedDriver, null);
+  assert.equal(filterForthFleetRecords(records, "BUS-1", "all").length, 1);
+  assert.equal(getForthFleetMapRecords(records).length, 1);
+  assert.equal(getForthFleetMapRecords(records)[0].record.vehicleRegistration, "BUS-1");
+});
+
 test("rejects out-of-range coordinates and treats an empty array as a valid response", () => {
   const [record] = normalizeForthTrackingResponse([{ Latitude: 91, Longitude: 181 }], { now: baseNow });
   assert.equal(record.coordinateStatus, "invalid");
@@ -1180,22 +1193,40 @@ test("map coordinate projection excludes missing, invalid, non-finite, and out-o
   ]);
 
   assert.deepEqual(mapped.map(({ position }) => position), [[0, 0], [-90, 180]]);
-  assert.equal(mapped[0].key, "GPS-1:0");
+  assert.equal(mapped[0].key, "device:GPS-1");
 });
 
-test("Leaflet map builds visible status markers above tiles, fits locations, and focuses selection", () => {
+test("fleet selection keys remain stable across data refreshes and match map marker keys", () => {
+  const { findForthFleetRecord, getForthFleetMapRecords, getForthFleetRecordKey } = loadTypeScript("lib/forth-tracking-view.ts");
+  const selected = { gpsDeviceId: "GPS-700", vehicleRegistration: "700-4145", coordinateStatus: "valid", latitude: 13.7, longitude: 100.5 };
+  const other = { gpsDeviceId: "GPS-701", vehicleRegistration: "700-4146", coordinateStatus: "valid", latitude: 13.8, longitude: 100.6 };
+  const selectionKey = getForthFleetRecordKey(selected, 0);
+  const refreshed = [{ ...other }, { ...selected, latitude: 13.71, longitude: 100.51 }];
+  const refreshedMap = getForthFleetMapRecords(refreshed);
+
+  assert.equal(selectionKey, "device:GPS-700");
+  assert.equal(findForthFleetRecord(refreshed, selectionKey).vehicleRegistration, "700-4145");
+  assert.equal(refreshedMap.find(({ record }) => record.vehicleRegistration === "700-4145").key, selectionKey);
+  assert.equal(getForthFleetRecordKey({ vehicleRegistration: " 1กข - 2345 " }, 8), "registration:1กข2345");
+});
+
+test("Leaflet map keeps selection focus explicit, clusters overlaps, and preserves manual map navigation on refresh", () => {
   const source = fs.readFileSync(path.join(root, "components/forth-tracking-map.tsx"), "utf8");
   const styles = fs.readFileSync(path.join(root, "components/forth-tracking-map.module.css"), "utf8");
   assert.ok(source.includes('import "leaflet/dist/leaflet.css"'));
+  assert.ok(source.includes('import "leaflet.markercluster/dist/MarkerCluster.css"'));
+  assert.ok(source.includes("await import(\"leaflet.markercluster\")"));
+  assert.ok(source.includes("Leaflet.markerClusterGroup("));
   assert.ok(source.includes("Leaflet.divIcon("));
   assert.ok(source.includes("Leaflet.marker(position"));
   assert.ok(source.includes('setProperty("z-index", "650")'));
   assert.ok(source.includes('setProperty("z-index", "200")'));
   assert.ok(source.includes("map.fitBounds("));
-  assert.ok(source.includes("map.panTo(position"));
-  assert.ok(source.includes("setZIndexOffset(selected ? 1000 : 0)"));
+  assert.ok(source.includes("cluster.zoomToShowLayer(marker"));
+  assert.ok(source.includes("map.flyTo(position"));
+  assert.ok(source.includes("setZIndexOffset(selected ? 1200 : 0)"));
   assert.ok(source.includes("isForthGpsPositionVerified(record)"));
-  assert.ok(source.includes("const approximate = !gpsVerified"));
+  assert.ok(source.includes("const approximate = !isForthGpsPositionVerified(record)"));
   assert.ok(source.includes("activityLabel(activity, copy)"));
   assert.ok(source.includes("copy.gpsVerified"));
   assert.ok(source.includes("copy.notGpsVerified"));
@@ -1205,11 +1236,40 @@ test("Leaflet map builds visible status markers above tiles, fits locations, and
   assert.ok(source.includes('record.positionQuality === "no_gps"'));
   assert.ok(source.includes("copy.noGpsQuality"));
   assert.ok(source.includes("styles.vehicleMarkerApproximate"));
+  assert.ok(source.includes("styles.vehicleMarkerOffline"));
   assert.ok(source.includes("positionQualityLabel(record, copy)"));
+  assert.ok(source.includes("initialFitCompleteRef.current"));
+  assert.ok(source.includes('command.type === "fit"'));
   assert.ok(styles.includes(".mapCanvas :global(.leaflet-pane.leaflet-marker-pane)"));
   assert.ok(styles.includes(".vehicleMarkerDot"));
   assert.ok(styles.includes(".vehicleMarkerApproximate"));
+  assert.ok(styles.includes(".vehicleMarkerOffline::after"));
   assert.ok(styles.includes(".vehicleMarkerSelected"));
+
+  const reconcileStart = source.indexOf("// Reconcile markers in place");
+  const initialFitStart = source.indexOf("// The fleet is fit once");
+  const markerRefreshEffect = source.slice(reconcileStart, initialFitStart);
+  assert.equal(/fitFleet\(|fitBounds\(|map\.flyTo\(|map\.panTo\(/.test(markerRefreshEffect), false);
+});
+
+test("tracking workspace links list and markers to one selection and exposes Fit Fleet and inspector controls", () => {
+  const source = fs.readFileSync(path.join(root, "components/forth-tracking-centre.tsx"), "utf8");
+  assert.ok(source.includes("onSelect={focusVehicle}"));
+  assert.ok(source.includes("onClick={() => focusVehicle(key)}"));
+  assert.ok(source.includes("setSelectedKey((current) => current && payload.records.some"));
+  assert.ok(source.includes("onClick={fitAllVehicles}"));
+  assert.ok(source.includes("setMapCommand((current) => ({ type: \"fit\""));
+  assert.ok(source.includes("setMapCommand((current) => ({ type: \"focus\""));
+  assert.ok(source.includes('xl:grid-cols-[minmax(250px,0.82fr)_minmax(0,2.15fr)_minmax(300px,1fr)]'));
+  assert.ok(source.includes('id="forth-vehicle-list"'));
+  assert.ok(source.includes("aria-label={copy.attention}"));
+  assert.ok(source.includes("summary.positionFreshness.stale"));
+  assert.ok(source.includes("summary.positionConfidence.notGpsVerified"));
+  assert.ok(source.includes("summary.reportedActivity.stoppedEngineOn"));
+  assert.ok(source.includes("copy.mapOfflineLegend"));
+  assert.ok(source.includes("selectedRecord.reportedDriver || copy.noDriver"));
+  assert.ok(source.includes("setSelectedKey(null)"));
+  assert.ok(source.includes("copy.attentionNote"));
 });
 
 test("status diagnostic UI exposes accessible ready, confirmation, running and prior-attempt states", () => {
@@ -1397,8 +1457,8 @@ test("dashboard separates reported activity, GPS confidence, diagnostics and exi
   assert.ok(component.includes("summary.reportedActivity.stoppedEngineOn"));
   assert.ok(component.includes("summary.positionConfidence.notGpsVerified"));
   assert.ok(component.includes("isForthGpsPositionVerified(record) ? copy.provisionalMovement : copy.provisionalBadge"));
-  assert.ok(component.includes("summary.positionQuality.no_gps"));
-  assert.ok(component.includes("gpsSourceSignalNote"));
+  assert.ok(component.includes("label={copy.positionQuality}"));
+  assert.ok(component.includes("copy.mapConfidence"));
   assert.ok(component.includes("Reported driving · position not GPS-verified"));
   assert.ok(component.includes("ไม่มี GPS · ยังยืนยันตำแหน่งด้วย GPS ไม่ได้"));
   assert.ok(component.includes("value=\"driving\""));

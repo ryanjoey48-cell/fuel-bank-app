@@ -319,7 +319,19 @@ export function sortForthFleetRecords(records: ForthFleetTrackingRecord[], sort:
 }
 
 export function getForthFleetRecordKey(record: ForthFleetTrackingRecord, index: number) {
-  return `${record.gpsDeviceId || record.vehicleRegistration || "vehicle"}:${index}`;
+  const deviceId = record.gpsDeviceId?.trim();
+  if (deviceId) return `device:${deviceId}`;
+
+  const registration = record.vehicleRegistration
+    ?.trim()
+    .toLocaleUpperCase()
+    .replace(/[^\p{L}\p{N}]/gu, "");
+  return registration ? `registration:${registration}` : `record:${index}`;
+}
+
+export function findForthFleetRecord(records: ForthFleetTrackingRecord[], key: string | null) {
+  if (!key) return null;
+  return records.find((record, index) => getForthFleetRecordKey(record, index) === key) ?? null;
 }
 
 export type ForthFleetMapRecord = {
