@@ -2,14 +2,14 @@
 
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
-import "leaflet.markercluster/dist/MarkerCluster.css";
-import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import styles from "./forth-tracking-map.module.css";
 import {
   getForthFleetMapRecords,
   getForthFleetMapInitialFrame,
   getForthReportedActivity,
-  getForthTrackingMapVehicleClass,
+  getForthTrackingVehicleIdentity,
+  getForthMarkerCollisionGroups,
+  getForthMarkerFanOutOffsets,
   getVisibleForthMarkerLabelKeys,
   isForthGpsPositionVerified,
   type ForthReportedActivity,
@@ -23,11 +23,8 @@ type Copy = {
   unavailable: string;
   gpsVerified: string;
   notGpsVerified: string;
-  clusterUnverified: string;
-  clusterVerified: string;
-  clusterDriving: string;
-  clusterStopped: string;
-  clusterUnavailable: string;
+  groupVehicles: string;
+  expandGroup: string;
   engineOn: string;
   engineOff: string;
   unknownValue: string;
@@ -35,7 +32,6 @@ type Copy = {
   loading: string;
   mapUnavailable: string;
   mapRegionLabel: string;
-  openDetails: string;
 };
 
 type ViewCommand = { type: "fit" | "focus"; sequence: number; key?: string | null };
@@ -45,13 +41,14 @@ type Props = {
   selectedKey: string | null;
   onSelect: (key: string) => void;
   command: ViewCommand;
+  filterKey: string;
   language: "en" | "th";
   copy: Copy;
 };
 
 type LeafletModule = typeof import("leaflet");
 type FleetMarker = import("leaflet").Marker;
-type MarkerMetadata = { activity: ForthReportedActivity; approximate: boolean; offline: boolean };
+type FleetPolyline = import("leaflet").Polyline;
 type FleetMarkerEntry = {
   marker: FleetMarker;
   activity: ForthReportedActivity;
@@ -59,10 +56,13 @@ type FleetMarkerEntry = {
   offline: boolean;
   selected: boolean;
   vehicleClass: ForthTrackingMapVehicleClass;
+  make: string | null;
   title: string;
-  popupSignature: string;
   tooltipSignature: string;
+  onMap: boolean;
 };
+type GroupMarkerEntry = { marker: FleetMarker; memberKeys: string[]; renderSignature: string };
+type FanOutMarkerEntry = { marker: FleetMarker; connector: FleetPolyline; groupKey: string; signature: string };
 
 const tileUrl = process.env.NEXT_PUBLIC_EES_MAP_TILE_URL || "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
@@ -78,6 +78,12 @@ function escapeHtml(value: string) {
   return value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll("'", "&#39;");
 }
 
+function safeTooltipText(value: string) {
+  const element = document.createElement("span");
+  element.textContent = value;
+  return element;
+}
+
 function markerIcon(
   Leaflet: LeafletModule,
   activity: ForthReportedActivity,
@@ -85,7 +91,9 @@ function markerIcon(
   approximate: boolean,
   offline: boolean,
   registration: string,
-  vehicleClass: ForthTrackingMapVehicleClass
+  vehicleClass: ForthTrackingMapVehicleClass,
+  make: string | null,
+  labelOnLeft = false
 ) {
   const statusClass = activity === "driving"
     ? styles.vehicleMarkerDriving
@@ -97,22 +105,34 @@ function markerIcon(
           ? styles.vehicleMarkerStoppedEngineUnknown
       : styles.vehicleMarkerUnavailable;
   const truckSvg = vehicleClass === "six_wheeler"
-    ? "<path d=\"M3 7.5h11v9H3zM14 10h4l3 3v3h-7z\"/><circle cx=\"6\" cy=\"18\" r=\"1.7\"/><circle cx=\"14\" cy=\"18\" r=\"1.7\"/><circle cx=\"20\" cy=\"18\" r=\"1.7\"/>"
+    ? "<path d=\"M2.5 7.5h11.5v9H2.5zM14 10h4l3 3v3h-7z\"/><circle cx=\"6\" cy=\"18\" r=\"1.7\"/><circle cx=\"14\" cy=\"18\" r=\"1.7\"/><circle cx=\"20\" cy=\"18\" r=\"1.7\"/>"
     : vehicleClass === "eighteen_wheeler"
       ? "<path d=\"M1 8h13v8H1zM14 10h5l4 3v3h-9z\"/><circle cx=\"3\" cy=\"18\" r=\"1.5\"/><circle cx=\"8\" cy=\"18\" r=\"1.5\"/><circle cx=\"13\" cy=\"18\" r=\"1.5\"/><circle cx=\"18\" cy=\"18\" r=\"1.5\"/><circle cx=\"22\" cy=\"18\" r=\"1.5\"/>"
       : vehicleClass === "four_wheeler"
         ? "<path d=\"M3 9h10l3 4h5v3H3z\"/><circle cx=\"7\" cy=\"18\" r=\"1.7\"/><circle cx=\"18\" cy=\"18\" r=\"1.7\"/>"
-        : "<path d=\"M3 7.5h11v9H3zM14 10h4l3 3v3h-7z\"/><circle cx=\"7\" cy=\"18\" r=\"1.7\"/><circle cx=\"18\" cy=\"18\" r=\"1.7\"/>";
+      : "<path d=\"M2.5 7.5h11.5v9H2.5zM14 10h4l3 3v3h-7z\"/><circle cx=\"6\" cy=\"18\" r=\"1.7\"/><circle cx=\"19\" cy=\"18\" r=\"1.7\"/>";
+  const makeAccent = make === "Toyota" ? "#bfdbfe" : make === "Isuzu" ? "#a5f3fc" : make === "Nissan" ? "#fecdd3" : make === "Hino" ? "#fde68a" : "#e2e8f0";
   return Leaflet.divIcon({
     className: styles.vehicleMarker,
     html: "<span class=\"" + styles.vehicleMarkerDot + " " + statusClass +
       (approximate ? " " + styles.vehicleMarkerApproximate : "") +
       (offline ? " " + styles.vehicleMarkerOffline : "") +
-      (selected ? " " + styles.vehicleMarkerSelected : "") + "\"><svg class=\"" + styles.vehicleMarkerTruck + "\" viewBox=\"0 0 24 24\" aria-hidden=\"true\">" + truckSvg + "</svg></span><span class=\"" + styles.vehicleMarkerLabel + "\">" + escapeHtml(registration) + "</span>",
+      (selected ? " " + styles.vehicleMarkerSelected : "") + "\"><svg class=\"" + styles.vehicleMarkerTruck + "\" viewBox=\"0 0 24 24\" aria-hidden=\"true\">" + truckSvg + "<path d=\"M15.5 10h1.8\" style=\"stroke:" + makeAccent + "\"/></svg></span><span class=\"" + styles.vehicleMarkerLabel + (labelOnLeft ? " " + styles.vehicleMarkerLabelLeft : "") + "\">" + escapeHtml(registration) + "</span>",
     iconSize: [220, 36],
     iconAnchor: [17, 17],
-    popupAnchor: [0, -18],
     tooltipAnchor: [0, -18]
+  });
+}
+
+function groupIcon(Leaflet: LeafletModule, registrations: string[], copy: Copy) {
+  const shown = registrations.slice(0, 2).join(" · ");
+  const extra = registrations.length - Math.min(registrations.length, 2);
+  const preview = extra > 0 ? `${shown} +${extra}` : shown;
+  return Leaflet.divIcon({
+    className: styles.vehicleGroupIcon,
+    html: `<span class="${styles.vehicleGroupCard}"><strong>${registrations.length} ${escapeHtml(copy.groupVehicles)}</strong><span>${escapeHtml(preview)}</span><i>${escapeHtml(copy.expandGroup)}</i></span>`,
+    iconSize: [174, 58],
+    iconAnchor: [87, 29]
   });
 }
 
@@ -124,27 +144,31 @@ function fitFleet(map: import("leaflet").Map, Leaflet: LeafletModule, positions:
   else map.fitBounds(Leaflet.latLngBounds(positions), { padding: [44, 44], maxZoom: 13, animate: true });
 }
 
-export const ForthTrackingMap = memo(function ForthTrackingMap({ records, selectedKey, onSelect, command, language, copy }: Props) {
+export const ForthTrackingMap = memo(function ForthTrackingMap({ records, selectedKey, onSelect, command, filterKey, language, copy }: Props) {
   const mapNodeRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<import("leaflet").Map | null>(null);
-  const markerClusterRef = useRef<import("leaflet").MarkerClusterGroup | null>(null);
   const markersByKeyRef = useRef(new Map<string, FleetMarkerEntry>());
+  const groupMarkersRef = useRef(new Map<string, GroupMarkerEntry>());
+  const fanOutMarkersRef = useRef(new Map<string, FanOutMarkerEntry>());
   const leafletRef = useRef<LeafletModule | null>(null);
-  const markerMetadataRef = useRef(new WeakMap<FleetMarker, MarkerMetadata>());
   const copyRef = useRef(copy);
+  const languageRef = useRef(language);
   const selectedKeyRef = useRef(selectedKey);
   const labelUpdateRef = useRef<() => void>(() => undefined);
-  const clusterLanguageRef = useRef(language);
-  copyRef.current = copy;
-  selectedKeyRef.current = selectedKey;
+  const spatialUpdateRef = useRef<() => void>(() => undefined);
   const onSelectRef = useRef(onSelect);
+  const expandedGroupRef = useRef<string | null>(null);
   const initialFitCompleteRef = useRef(false);
   const lastCommandSequenceRef = useRef(0);
   const lastSelectedKeyRef = useRef<string | null>(null);
+  const lastFilterKeyRef = useRef(filterKey);
   const [mapReady, setMapReady] = useState(false);
   const [mapFailed, setMapFailed] = useState(false);
 
   const positionedRecords = useMemo(() => getForthFleetMapRecords(records), [records]);
+  copyRef.current = copy;
+  languageRef.current = language;
+  selectedKeyRef.current = selectedKey;
 
   useEffect(() => {
     onSelectRef.current = onSelect;
@@ -158,7 +182,6 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
     async function initializeMap() {
       try {
         const leafletModule = await import("leaflet");
-        await import("leaflet.markercluster");
         const Leaflet = (leafletModule as unknown as { default?: LeafletModule }).default ?? leafletModule;
         if (disposed || !mapNodeRef.current) return;
 
@@ -179,29 +202,9 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
           updateWhenZooming: false,
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>'
         }).addTo(map);
-
         mapRef.current = map;
-        markerClusterRef.current = Leaflet.markerClusterGroup({
-          maxClusterRadius: 62,
-          showCoverageOnHover: false,
-          spiderfyOnMaxZoom: true,
-          zoomToBoundsOnClick: true,
-          animate: true,
-          iconCreateFunction: (cluster) => {
-            const children = cluster.getAllChildMarkers();
-            const metadata = children.map((marker) => markerMetadataRef.current.get(marker)).filter((item): item is MarkerMetadata => Boolean(item));
-            const driving = metadata.filter((item) => item.activity === "driving").length;
-            const stopped = metadata.filter((item) => item.activity.startsWith("stopped_")).length;
-            const unavailable = Math.max(0, children.length - driving - stopped);
-            const unverified = metadata.some((item) => item.approximate);
-            const copy = copyRef.current;
-            const escapeAttribute = (value: string) => value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-            const accessibleLabel = `${children.length} vehicles. ${copy.clusterDriving}: ${driving}; ${copy.clusterStopped}: ${stopped}; ${copy.clusterUnavailable}: ${unavailable}. ${unverified ? copy.clusterUnverified : copy.clusterVerified}.`;
-            const qualityClass = unverified ? styles.vehicleClusterQualityApproximate : styles.vehicleClusterQualityVerified;
-            const html = `<span class="${styles.vehicleClusterFrame}" role="img" aria-label="${escapeAttribute(accessibleLabel)}"><span class="${styles.vehicleClusterQuality} ${qualityClass}"></span><span class="${styles.vehicleClusterCore}"><strong>${children.length}</strong><span class="${styles.vehicleClusterCounts}"><i class="${styles.vehicleClusterDriving}"></i>${driving}<i class="${styles.vehicleClusterStopped}"></i>${stopped}<i class="${styles.vehicleClusterUnavailable}"></i>${unavailable}</span></span></span>`;
-            return Leaflet.divIcon({ className: styles.vehicleCluster, html, iconSize: [64, 54], iconAnchor: [32, 27] });
-          }
-        }).addTo(map);
+        leafletRef.current = Leaflet;
+
         const updateMarkerLabels = () => {
           const currentMap = mapRef.current;
           if (!currentMap) return;
@@ -214,16 +217,14 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
             const labelOnLeft = point.x + 20 + labelWidth > currentMap.getSize().x;
             label.classList.toggle(styles.vehicleMarkerLabelLeft, labelOnLeft);
             const labelLeft = labelOnLeft ? point.x - 20 - labelWidth : point.x + 20;
-            const occupiedLeft = Math.min(point.x - 14, labelLeft);
-            const occupiedRight = Math.max(point.x + 14, labelLeft + labelWidth);
             return [{
               key,
               label,
               placement: {
                 key,
-                left: occupiedLeft,
+                left: Math.min(point.x - 14, labelLeft),
                 top: point.y - 13,
-                width: occupiedRight - occupiedLeft,
+                width: Math.max(point.x + 14, labelLeft + labelWidth) - Math.min(point.x - 14, labelLeft),
                 height: Math.max(26, label.offsetHeight),
                 selected: entry.selected,
                 priority: entry.activity === "driving" ? 2 : entry.activity.startsWith("stopped_") ? 1 : 0
@@ -236,8 +237,181 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
           }
         };
         labelUpdateRef.current = updateMarkerLabels;
-        map.on("zoomend", updateMarkerLabels);
-        leafletRef.current = Leaflet;
+
+        const updateSpatialPresentation = () => {
+          const currentMap = mapRef.current;
+          if (!currentMap || !leafletRef.current) return;
+          const currentLeaflet = leafletRef.current;
+          const entries = [...markersByKeyRef.current.entries()]
+            .filter(([key]) => key !== selectedKeyRef.current)
+            .map(([key, entry]) => {
+              const point = currentMap.latLngToContainerPoint(entry.marker.getLatLng());
+              return { key, entry, point };
+            });
+          const groups = getForthMarkerCollisionGroups(entries.map(({ key, point }) => ({ key, x: point.x, y: point.y })), 72);
+          const groupDetails = groups.map((keys) => {
+            const memberKeys = [...keys].sort((left, right) => {
+              const a = markersByKeyRef.current.get(left)?.title ?? left;
+              const b = markersByKeyRef.current.get(right)?.title ?? right;
+              return a.localeCompare(b, undefined, { numeric: true });
+            });
+            const signature = [...memberKeys].sort((left, right) => left.localeCompare(right)).join("\u0000");
+            const memberPoints = memberKeys.map((key) => entries.find((entry) => entry.key === key)?.point).filter((point): point is import("leaflet").Point => Boolean(point));
+            const anchorPoint = currentLeaflet.point(
+              memberPoints.reduce((sum, point) => sum + point.x, 0) / memberPoints.length,
+              memberPoints.reduce((sum, point) => sum + point.y, 0) / memberPoints.length
+            );
+            return { signature, memberKeys, anchorPoint };
+          });
+          if (expandedGroupRef.current && !groupDetails.some(({ signature }) => signature === expandedGroupRef.current)) {
+            expandedGroupRef.current = null;
+          }
+
+          const collapsedGroups = groupDetails.filter(({ signature }) => signature !== expandedGroupRef.current);
+          const expandedGroup = groupDetails.find(({ signature }) => signature === expandedGroupRef.current) ?? null;
+          const groupSignatures = new Set(collapsedGroups.map(({ signature }) => signature));
+          const groupedKeys = new Set(groupDetails.flatMap(({ memberKeys }) => memberKeys));
+          const fanKeys = new Set(expandedGroup?.memberKeys ?? []);
+
+          for (const [signature, group] of groupMarkersRef.current) {
+            if (!groupSignatures.has(signature)) {
+              group.marker.remove();
+              groupMarkersRef.current.delete(signature);
+            }
+          }
+          for (const group of collapsedGroups) {
+            const registrations = group.memberKeys.map((key) => markersByKeyRef.current.get(key)?.title ?? key);
+            const renderSignature = [registrations.join("\u0000"), copyRef.current.groupVehicles, copyRef.current.expandGroup].join("\u0001");
+            let entry = groupMarkersRef.current.get(group.signature);
+            if (!entry) {
+              const marker = currentLeaflet.marker(currentMap.containerPointToLatLng(group.anchorPoint), {
+                icon: groupIcon(currentLeaflet, registrations, copyRef.current),
+                title: `${registrations.join(", ")}. ${copyRef.current.expandGroup}`,
+                alt: `${registrations.join(", ")}. ${copyRef.current.expandGroup}`,
+                keyboard: true,
+                riseOnHover: true
+              }).addTo(currentMap);
+              marker.on("click", () => {
+                expandedGroupRef.current = group.signature;
+                spatialUpdateRef.current();
+              });
+              marker.on("focus", () => marker.openTooltip());
+              marker.on("blur", () => marker.closeTooltip());
+              const tooltip = document.createElement("span");
+              tooltip.textContent = registrations.join(" · ");
+              marker.bindTooltip(tooltip, { direction: "top", opacity: 0.98 });
+              marker.getElement()?.setAttribute("aria-label", `${registrations.join(", ")}. ${copyRef.current.expandGroup}`);
+              entry = { marker, memberKeys: group.memberKeys, renderSignature };
+              groupMarkersRef.current.set(group.signature, entry);
+            } else {
+              if (entry.renderSignature !== renderSignature) {
+                entry.marker.setIcon(groupIcon(currentLeaflet, registrations, copyRef.current));
+                entry.marker.setTooltipContent(safeTooltipText(registrations.join(" · ")));
+                entry.memberKeys = group.memberKeys;
+                entry.renderSignature = renderSignature;
+              }
+              const groupPosition = currentMap.containerPointToLatLng(group.anchorPoint);
+              const previousGroupPosition = entry.marker.getLatLng();
+              if (previousGroupPosition.lat !== groupPosition.lat || previousGroupPosition.lng !== groupPosition.lng) {
+                entry.marker.setLatLng(groupPosition);
+              }
+              const accessibleName = `${registrations.join(", ")}. ${copyRef.current.expandGroup}`;
+              entry.marker.options.title = accessibleName;
+              entry.marker.options.alt = accessibleName;
+              entry.marker.getElement()?.setAttribute("aria-label", accessibleName);
+              entry.marker.getElement()?.setAttribute("title", accessibleName);
+            }
+          }
+
+          for (const [key, entry] of markersByKeyRef.current) {
+            const shouldShowOriginal = !groupedKeys.has(key);
+            if (shouldShowOriginal && !entry.onMap) {
+              entry.marker.addTo(currentMap);
+              entry.onMap = true;
+            } else if (!shouldShowOriginal && entry.onMap) {
+              entry.marker.remove();
+              entry.onMap = false;
+            }
+          }
+
+          for (const [key, fan] of fanOutMarkersRef.current) {
+            if (!fanKeys.has(key)) {
+              fan.marker.remove();
+              fan.connector.remove();
+              fanOutMarkersRef.current.delete(key);
+            }
+          }
+          if (expandedGroup) {
+            const offsets = getForthMarkerFanOutOffsets(expandedGroup.memberKeys.length);
+            const mapSize = currentMap.getSize();
+            expandedGroup.memberKeys.forEach((key, index) => {
+              const source = markersByKeyRef.current.get(key);
+              const offset = offsets[index];
+              if (!source || !offset) return;
+              const truePosition = source.marker.getLatLng();
+              const displayPosition = currentMap.containerPointToLatLng(currentLeaflet.point(
+                expandedGroup.anchorPoint.x + offset.x,
+                expandedGroup.anchorPoint.y + offset.y
+              ));
+              const displayPoint = currentMap.latLngToContainerPoint(displayPosition);
+              const labelOnLeft = displayPoint.x + 20 + Math.min(158, 16 + source.title.length * 7) > mapSize.x;
+              const confidence = source.approximate ? copyRef.current.notGpsVerified : copyRef.current.gpsVerified;
+              const identitySignature = [source.activity, source.selected, source.approximate, source.offline, source.title, source.vehicleClass, source.make, confidence, labelOnLeft, languageRef.current].join("\u0000");
+              let fan = fanOutMarkersRef.current.get(key);
+              if (!fan) {
+                const connector = currentLeaflet.polyline([truePosition, displayPosition], {
+                  color: "#475569",
+                  opacity: 0.68,
+                  weight: 1.25,
+                  dashArray: "3 4",
+                  interactive: false
+                }).addTo(currentMap);
+                const marker = currentLeaflet.marker(displayPosition, {
+                  icon: markerIcon(currentLeaflet, source.activity, source.selected, source.approximate, source.offline, source.title, source.vehicleClass, source.make, labelOnLeft),
+                  title: source.title,
+                  alt: `${source.title} · ${confidence}`,
+                  zIndexOffset: 1300,
+                  keyboard: true,
+                  riseOnHover: true
+                }).addTo(currentMap);
+                marker.on("click", () => onSelectRef.current(key));
+                marker.on("focus", () => marker.openTooltip());
+                marker.on("blur", () => marker.closeTooltip());
+                const tooltip = document.createElement("span");
+                tooltip.textContent = `${source.title} · ${activityLabel(source.activity, copyRef.current)} · ${confidence}`;
+                marker.bindTooltip(tooltip, { direction: "top", offset: [0, -8], opacity: 0.96 });
+                fan = { marker, connector, groupKey: expandedGroup.signature, signature: identitySignature };
+                fanOutMarkersRef.current.set(key, fan);
+              } else {
+                const previousDisplayPosition = fan.marker.getLatLng();
+                if (previousDisplayPosition.lat !== displayPosition.lat || previousDisplayPosition.lng !== displayPosition.lng) {
+                  fan.marker.setLatLng(displayPosition);
+                }
+                fan.connector.setLatLngs([truePosition, displayPosition]);
+                if (fan.signature !== identitySignature) {
+                  fan.marker.setIcon(markerIcon(currentLeaflet, source.activity, source.selected, source.approximate, source.offline, source.title, source.vehicleClass, source.make, labelOnLeft));
+                  fan.marker.options.title = source.title;
+                  fan.marker.options.alt = `${source.title} · ${confidence}`;
+                  fan.marker.setTooltipContent(safeTooltipText(`${source.title} · ${activityLabel(source.activity, copyRef.current)} · ${confidence}`));
+                  fan.marker.getElement()?.setAttribute("aria-label", `${source.title} · ${confidence}`);
+                  fan.signature = identitySignature;
+                }
+                fan.groupKey = expandedGroup.signature;
+              }
+            });
+          }
+          window.requestAnimationFrame(() => labelUpdateRef.current());
+        };
+        spatialUpdateRef.current = updateSpatialPresentation;
+
+        map.on("zoomstart", () => {
+          expandedGroupRef.current = null;
+          updateSpatialPresentation();
+        });
+        map.on("zoomend", updateSpatialPresentation);
+        map.on("moveend", updateSpatialPresentation);
+        map.on("resize", updateSpatialPresentation);
+
         if (mapNodeRef.current && typeof ResizeObserver !== "undefined") {
           resizeObserver = new ResizeObserver(() => {
             window.requestAnimationFrame(() => map?.invalidateSize({ pan: false }));
@@ -258,127 +432,82 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
       map?.remove();
       mapRef.current = null;
       labelUpdateRef.current = () => undefined;
-      markerClusterRef.current = null;
+      spatialUpdateRef.current = () => undefined;
       markersByKeyRef.current.clear();
+      groupMarkersRef.current.clear();
+      fanOutMarkersRef.current.clear();
       leafletRef.current = null;
     };
   }, []);
 
-  // Reconcile markers in place so each 60-second data refresh leaves the map's
-  // current pan and zoom untouched and does not recreate the marker layer.
+  // Keep original Leaflet markers and their Forth coordinates stable across polling.
   useEffect(() => {
-    const cluster = markerClusterRef.current;
+    const map = mapRef.current;
     const Leaflet = leafletRef.current;
-    if (!mapReady || !cluster || !Leaflet) return;
+    if (!mapReady || !map || !Leaflet) return;
 
-    let clusterNeedsRefresh = clusterLanguageRef.current !== language;
-    clusterLanguageRef.current = language;
     const currentKeys = new Set(positionedRecords.map(({ key }) => key));
     for (const [key, entry] of markersByKeyRef.current) {
       if (currentKeys.has(key)) continue;
-      cluster.removeLayer(entry.marker);
+      entry.marker.remove();
       markersByKeyRef.current.delete(key);
-      clusterNeedsRefresh = true;
     }
 
     for (const { record, key, position } of positionedRecords) {
       const activity = getForthReportedActivity(record);
-      const vehicleClass = getForthTrackingMapVehicleClass(record.vehicleRegistration);
+      const identity = getForthTrackingVehicleIdentity(record.vehicleRegistration);
       const approximate = !isForthGpsPositionVerified(record);
       const offline = record.gprsConnectivity === "disconnected";
       const markerTitle = record.vehicleRegistration || record.gpsDeviceId || copy.unknownValue;
       const confidenceLabel = approximate ? copy.notGpsVerified : copy.gpsVerified;
-      const popupSignature = [markerTitle, confidenceLabel, copy.openDetails].join("\u0000");
       const tooltipSignature = [markerTitle, activityLabel(activity, copy), confidenceLabel].join("\u0000");
       let entry = markersByKeyRef.current.get(key);
       if (!entry) {
         const selected = key === selectedKeyRef.current;
         const marker = Leaflet.marker(position, {
-          icon: markerIcon(Leaflet, activity, selected, approximate, offline, markerTitle, vehicleClass),
+          icon: markerIcon(Leaflet, activity, selected, approximate, offline, markerTitle, identity.vehicleClass, identity.make),
           title: markerTitle,
-          alt: markerTitle,
+          alt: `${markerTitle} · ${confidenceLabel}`,
           zIndexOffset: selected ? 1200 : 0,
           keyboard: true,
           riseOnHover: true
-        });
+        }).addTo(map);
         marker.on("click", () => onSelectRef.current(key));
         marker.on("focus", () => marker.openTooltip());
         marker.on("blur", () => marker.closeTooltip());
-        markerMetadataRef.current.set(marker, { activity, approximate, offline });
-        cluster.addLayer(marker);
-        entry = { marker, activity, approximate, offline, selected, title: markerTitle, vehicleClass, popupSignature: "", tooltipSignature: "" };
+        entry = { marker, activity, approximate, offline, selected, title: markerTitle, vehicleClass: identity.vehicleClass, make: identity.make, tooltipSignature: "", onMap: true };
         markersByKeyRef.current.set(key, entry);
-        clusterNeedsRefresh = true;
       } else {
         const previousPosition = entry.marker.getLatLng();
-        if (previousPosition.lat !== position[0] || previousPosition.lng !== position[1]) {
-          cluster.removeLayer(entry.marker);
-          entry.marker.setLatLng(position);
-          cluster.addLayer(entry.marker);
-          clusterNeedsRefresh = true;
-        }
-        const activityChanged = entry.activity !== activity;
-        const confidenceChanged = entry.approximate !== approximate;
-        const classChanged = entry.vehicleClass !== vehicleClass;
-        const markerStateChanged = activityChanged || confidenceChanged || entry.offline !== offline || classChanged;
-        if (markerStateChanged) {
+        if (previousPosition.lat !== position[0] || previousPosition.lng !== position[1]) entry.marker.setLatLng(position);
+        const changed = entry.activity !== activity || entry.approximate !== approximate || entry.offline !== offline || entry.vehicleClass !== identity.vehicleClass || entry.make !== identity.make || entry.title !== markerTitle;
+        if (changed) {
           entry.activity = activity;
           entry.approximate = approximate;
           entry.offline = offline;
-          entry.vehicleClass = vehicleClass;
-          markerMetadataRef.current.set(entry.marker, { activity, approximate, offline });
-          entry.marker.setIcon(markerIcon(Leaflet, activity, entry.selected, approximate, offline, markerTitle, vehicleClass));
-          // Cluster badges summarize activity and position confidence.
-          if (activityChanged || confidenceChanged) clusterNeedsRefresh = true;
-        }
-        if (entry.title !== markerTitle) {
+          entry.vehicleClass = identity.vehicleClass;
+          entry.make = identity.make;
           entry.title = markerTitle;
-          entry.marker.setIcon(markerIcon(Leaflet, activity, entry.selected, approximate, offline, markerTitle, vehicleClass));
+          entry.marker.setIcon(markerIcon(Leaflet, activity, entry.selected, approximate, offline, markerTitle, identity.vehicleClass, identity.make));
           entry.marker.options.title = markerTitle;
-          entry.marker.options.alt = markerTitle;
-          entry.marker.getElement()?.setAttribute("aria-label", markerTitle);
+          entry.marker.options.alt = `${markerTitle} · ${confidenceLabel}`;
+          entry.marker.getElement()?.setAttribute("aria-label", `${markerTitle} · ${confidenceLabel}`);
           entry.marker.getElement()?.setAttribute("title", markerTitle);
-          clusterNeedsRefresh = true;
         }
-      }
-
-      if (entry.popupSignature !== popupSignature) {
-        const content = document.createElement("div");
-        content.className = "forth-tracking-popup";
-        const title = document.createElement("strong");
-        title.textContent = markerTitle;
-        const confidence = document.createElement("span");
-        confidence.textContent = confidenceLabel;
-        const details = document.createElement("button");
-        details.type = "button";
-        details.className = "forth-tracking-popup-action";
-        details.textContent = copy.openDetails;
-        details.addEventListener("click", (event) => {
-          event.stopPropagation();
-          onSelectRef.current(key);
-        });
-        content.append(title, confidence, details);
-        if (entry.marker.getPopup()) entry.marker.setPopupContent(content);
-        else entry.marker.bindPopup(content, { closeButton: true, autoPanPadding: [24, 24] });
-        entry.popupSignature = popupSignature;
       }
 
       if (entry.tooltipSignature !== tooltipSignature) {
-        const tooltip = document.createElement("span");
-        tooltip.textContent = markerTitle + " · " + activityLabel(activity, copy) + " · " + confidenceLabel;
+        const tooltip = safeTooltipText(`${markerTitle} · ${activityLabel(activity, copy)} · ${confidenceLabel}`);
         if (entry.marker.getTooltip()) entry.marker.setTooltipContent(tooltip);
         else entry.marker.bindTooltip(tooltip, { direction: "top", offset: [0, -8], opacity: 0.96 });
         entry.tooltipSignature = tooltipSignature;
       }
     }
-    if (clusterNeedsRefresh) {
-      cluster.refreshClusters();
-      window.requestAnimationFrame(() => labelUpdateRef.current());
-    }
+
+    spatialUpdateRef.current();
   }, [copy, language, mapReady, positionedRecords]);
 
-  // The fleet is fit once after its first usable positions arrive. Later data
-  // updates never invoke fitBounds; only an explicit map command can move it.
+  // Fit once on first data. Routine polling does not pan or zoom the map.
   useEffect(() => {
     const map = mapRef.current;
     const Leaflet = leafletRef.current;
@@ -390,26 +519,30 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
 
   useEffect(() => {
     const map = mapRef.current;
-    const cluster = markerClusterRef.current;
     const Leaflet = leafletRef.current;
-    if (!mapReady || !map || !cluster || !Leaflet || command.sequence === 0 || command.sequence === lastCommandSequenceRef.current) return;
+    if (!mapReady || !map || !Leaflet || command.sequence === 0 || command.sequence === lastCommandSequenceRef.current) return;
     lastCommandSequenceRef.current = command.sequence;
 
     if (command.type === "fit") {
+      expandedGroupRef.current = null;
       fitFleet(map, Leaflet, positionedRecords.map(({ position }) => position));
       return;
     }
-
     if (command.type === "focus" && command.key) {
       const marker = markersByKeyRef.current.get(command.key)?.marker;
       if (!marker) return;
-      cluster.zoomToShowLayer(marker, () => {
-        const position = marker.getLatLng();
-        map.flyTo(position, Math.min(16, Math.max(13, map.getZoom())), { duration: 0.35 });
-        marker.openPopup();
-      });
+      const position = marker.getLatLng();
+      expandedGroupRef.current = null;
+      map.flyTo(position, Math.min(16, Math.max(13, map.getZoom())), { duration: 0.35 });
     }
   }, [command, mapReady, positionedRecords]);
+
+  useEffect(() => {
+    if (lastFilterKeyRef.current === filterKey) return;
+    lastFilterKeyRef.current = filterKey;
+    expandedGroupRef.current = null;
+    spatialUpdateRef.current();
+  }, [filterKey, mapReady]);
 
   useEffect(() => {
     const Leaflet = leafletRef.current;
@@ -421,26 +554,22 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
       const selected = key === selectedKey;
       if (entry.selected !== selected) {
         entry.selected = selected;
-        entry.marker.setIcon(markerIcon(Leaflet, entry.activity, selected, entry.approximate, entry.offline, entry.title, entry.vehicleClass));
+        entry.marker.setIcon(markerIcon(Leaflet, entry.activity, selected, entry.approximate, entry.offline, entry.title, entry.vehicleClass, entry.make));
         entry.marker.setZIndexOffset(selected ? 1200 : 0);
       }
     }
+    if (previousSelectedKey !== selectedKey) expandedGroupRef.current = null;
     lastSelectedKeyRef.current = selectedKey;
+    spatialUpdateRef.current();
     window.requestAnimationFrame(() => labelUpdateRef.current());
   }, [mapReady, selectedKey]);
 
   return (
     <div className={styles.mapFrame} role="region" aria-label={copy.mapRegionLabel} data-map-language={language}>
       <div ref={mapNodeRef} className={styles.mapCanvas} />
-      {!mapReady && !mapFailed ? (
-        <div className={styles.mapNotice} role="status">{copy.loading}</div>
-      ) : null}
-      {mapFailed ? (
-        <div className={styles.mapNotice} role="alert">{copy.mapUnavailable}</div>
-      ) : null}
-      {mapReady && positionedRecords.length === 0 ? (
-        <div className={styles.mapNotice} role="status">{copy.noPositions}</div>
-      ) : null}
+      {!mapReady && !mapFailed ? <div className={styles.mapNotice} role="status">{copy.loading}</div> : null}
+      {mapFailed ? <div className={styles.mapNotice} role="alert">{copy.mapUnavailable}</div> : null}
+      {mapReady && positionedRecords.length === 0 ? <div className={styles.mapNotice} role="status">{copy.noPositions}</div> : null}
     </div>
   );
 });

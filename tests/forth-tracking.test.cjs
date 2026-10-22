@@ -1251,14 +1251,33 @@ test("initial fleet framing focuses a clear spatial majority and retains every v
   assert.equal(splitFleet.focusPositions.length, 4);
 });
 
-test("vehicle class overrides are map-only and 79-2945 uses a six-wheel marker", () => {
-  const { getForthTrackingMapVehicleClass } = loadTypeScript("lib/forth-tracking-view.ts");
+test("approved roster classifies all 21 map vehicles without changing EES records", () => {
+  const { getForthTrackingMapVehicleClass, getForthTrackingVehicleIdentity } = loadTypeScript("lib/forth-tracking-view.ts");
   const map = fs.readFileSync(path.join(root, "components/forth-tracking-map.tsx"), "utf8");
+  const fourWheelers = ["3ฒน-9565", "3ฒล-4565", "ฒอ-8453"];
+  const sixWheelers = ["61-2835", "61-6672", "62-1085", "62-4337", "64-0359", "64-5954", "64-5956", "74-8969", "78-6996", "79-2945", "700-4145", "700-6659", "701-1654", "701-5145"];
+  const eighteenWheelers = ["63-3543", "64-8665", "68-7154", "79-5318"];
+
+  assert.equal(fourWheelers.length + sixWheelers.length + eighteenWheelers.length, 21);
+  assert.deepEqual(fourWheelers.map(getForthTrackingMapVehicleClass), Array(3).fill("four_wheeler"));
+  assert.deepEqual(sixWheelers.map(getForthTrackingMapVehicleClass), Array(14).fill("six_wheeler"));
+  assert.deepEqual(eighteenWheelers.map(getForthTrackingMapVehicleClass), Array(4).fill("eighteen_wheeler"));
   assert.equal(getForthTrackingMapVehicleClass("79-2945"), "six_wheeler");
   assert.equal(getForthTrackingMapVehicleClass(" 79-2945 "), "six_wheeler");
   assert.equal(getForthTrackingMapVehicleClass("unknown"), "unclassified");
-  assert.ok(map.includes("getForthTrackingMapVehicleClass(record.vehicleRegistration)"));
+  assert.deepEqual(getForthTrackingVehicleIdentity(" 3ฒน 9565 "), {
+    vehicleClass: "four_wheeler", classLabel: "4W", make: "Toyota", model: "Hilux Revo"
+  });
+  assert.deepEqual(getForthTrackingVehicleIdentity("64-0359"), {
+    vehicleClass: "six_wheeler", classLabel: "6W", make: "Isuzu", model: null
+  });
+  assert.deepEqual(getForthTrackingVehicleIdentity("not-in-roster"), {
+    vehicleClass: "unclassified", classLabel: null, make: null, model: null
+  });
+  assert.ok(map.includes("getForthTrackingVehicleIdentity(record.vehicleRegistration)"));
   assert.ok(map.includes('vehicleClass === "six_wheeler"'));
+  assert.ok(map.includes('vehicleClass === "eighteen_wheeler"'));
+  assert.ok(map.includes('vehicleClass === "four_wheeler"'));
   assert.equal(map.includes("createServerSupabaseAdmin"), false);
 });
 
@@ -1276,34 +1295,36 @@ test("fleet selection keys remain stable across data refreshes and match map mar
   assert.equal(getForthFleetRecordKey({ vehicleRegistration: " 1กข - 2345 " }, 8), "registration:1กข2345");
 });
 
-test("Leaflet map keeps selection focus explicit, clusters overlaps, and preserves manual map navigation on refresh", () => {
+test("Leaflet map groups screen collisions by registration, fans them out and preserves navigation on refresh", () => {
   const source = fs.readFileSync(path.join(root, "components/forth-tracking-map.tsx"), "utf8");
   const styles = fs.readFileSync(path.join(root, "components/forth-tracking-map.module.css"), "utf8");
   assert.ok(source.includes('import "leaflet/dist/leaflet.css"'));
-  assert.ok(source.includes('import "leaflet.markercluster/dist/MarkerCluster.css"'));
-  assert.ok(source.includes("await import(\"leaflet.markercluster\")"));
-  assert.ok(source.includes("Leaflet.markerClusterGroup("));
   assert.ok(source.includes("Leaflet.divIcon("));
   assert.ok(source.includes("Leaflet.marker(position"));
   assert.ok(source.includes('setProperty("z-index", "650")'));
   assert.ok(source.includes('setProperty("z-index", "200")'));
   assert.ok(source.includes("map.fitBounds("));
-  assert.ok(source.includes("cluster.zoomToShowLayer(marker"));
   assert.ok(source.includes("map.flyTo(position"));
   assert.ok(source.includes("setZIndexOffset(selected ? 1200 : 0)"));
+  assert.ok(source.includes("getForthMarkerCollisionGroups("));
+  assert.ok(source.includes("getForthMarkerFanOutOffsets("));
+  assert.ok(source.includes("containerPointToLatLng("));
+  assert.ok(source.includes("Leaflet.polyline([truePosition, displayPosition]"));
+  assert.ok(source.includes("const truePosition = source.marker.getLatLng()"));
+  assert.ok(source.includes("fan.connector.setLatLngs([truePosition, displayPosition])"));
+  assert.ok(source.includes("marker.setLatLng(position)"));
   assert.ok(source.includes("isForthGpsPositionVerified(record)"));
   assert.ok(source.includes("const approximate = !isForthGpsPositionVerified(record)"));
   assert.ok(source.includes("activityLabel(activity, copy)"));
   assert.ok(source.includes("copy.gpsVerified"));
   assert.ok(source.includes("copy.notGpsVerified"));
+  assert.ok(source.includes("copyRef.current.expandGroup"));
   assert.ok(source.includes("styles.vehicleMarkerDriving"));
-  assert.ok(source.includes("styles.vehicleMarkerStopped"));
+  assert.ok(source.includes("styles.vehicleMarkerStoppedEngineOn"));
   assert.ok(source.includes("styles.vehicleMarkerUnavailable"));
   assert.ok(source.includes("styles.vehicleMarkerApproximate"));
   assert.ok(source.includes("styles.vehicleMarkerOffline"));
   assert.ok(source.includes("copy.notGpsVerified"));
-  assert.ok(source.includes("copy.openDetails"));
-  assert.ok(source.includes("forth-tracking-popup-action"));
   assert.ok(source.includes("onSelectRef.current(key)"));
   assert.ok(source.includes("initialFitCompleteRef.current"));
   assert.ok(source.includes('command.type === "fit"'));
@@ -1312,22 +1333,41 @@ test("Leaflet map keeps selection focus explicit, clusters overlaps, and preserv
   assert.ok(styles.includes(".vehicleMarkerApproximate"));
   assert.ok(styles.includes(".vehicleMarkerOffline::after"));
   assert.ok(styles.includes(".vehicleMarkerSelected"));
-  assert.ok(source.includes("iconCreateFunction: (cluster)"));
-  assert.ok(source.includes("cluster.refreshClusters()"));
-  assert.ok(source.includes("if (clusterNeedsRefresh) {\n      cluster.refreshClusters();"));
-  assert.ok(source.includes("if (entry.popupSignature !== popupSignature)"));
+  assert.ok(styles.includes(".vehicleGroupCard"));
+  assert.equal(source.includes("bindPopup("), false);
+  assert.equal(source.includes("openPopup("), false);
   assert.ok(source.includes("if (entry.tooltipSignature !== tooltipSignature)"));
-  assert.ok(source.includes("const markerStateChanged = activityChanged || confidenceChanged || entry.offline !== offline"));
+  assert.ok(source.includes("const changed = entry.activity !== activity"));
   assert.ok(source.includes("export const ForthTrackingMap = memo(function ForthTrackingMap"));
   assert.ok(source.includes('marker.on("focus", () => marker.openTooltip())'));
-  assert.ok(source.includes("styles.vehicleClusterQualityApproximate"));
-  assert.ok(source.includes("styles.vehicleClusterQualityVerified"));
-  assert.ok(styles.includes(".vehicleClusterCounts"));
 
-  const reconcileStart = source.indexOf("// Reconcile markers in place");
-  const initialFitStart = source.indexOf("// The fleet is fit once");
+  const reconcileStart = source.indexOf("// Keep original Leaflet markers");
+  const initialFitStart = source.indexOf("// Fit once on first data");
   const markerRefreshEffect = source.slice(reconcileStart, initialFitStart);
   assert.equal(/fitFleet\(|fitBounds\(|map\.flyTo\(|map\.panTo\(/.test(markerRefreshEffect), false);
+});
+
+test("overlapping positions are grouped by screen distance and fan-out offsets stay distinct without changing reported coordinates", () => {
+  const { getForthMarkerCollisionGroups, getForthMarkerFanOutOffsets } = loadTypeScript("lib/forth-tracking-view.ts");
+  const reportedPositions = [
+    { key: "device:A", latitude: 13.75, longitude: 100.5 },
+    { key: "device:B", latitude: 13.75, longitude: 100.5 },
+    { key: "device:C", latitude: 13.7501, longitude: 100.5001 }
+  ];
+  const before = structuredClone(reportedPositions);
+  const groups = getForthMarkerCollisionGroups([
+    { key: "device:A", x: 10, y: 10 },
+    { key: "device:B", x: 20, y: 12 },
+    { key: "device:C", x: 200, y: 180 },
+    { key: "invalid", x: Number.NaN, y: 1 }
+  ], 32);
+  const offsets = getForthMarkerFanOutOffsets(21);
+  const uniqueOffsets = new Set(offsets.map(({ x, y }) => `${x},${y}`));
+
+  assert.deepEqual(groups, [["device:A", "device:B"]]);
+  assert.equal(offsets.length, 21);
+  assert.equal(uniqueOffsets.size, 21);
+  assert.deepEqual(reportedPositions, before);
 });
 
 test("premium tracking workspace keeps selection and map controls with responsive details and actionable fleet signals", () => {
@@ -1358,6 +1398,7 @@ test("premium tracking workspace keeps selection and map controls with responsiv
   assert.ok(source.includes('label={copy.locationNotGpsVerified}'));
   assert.ok(source.includes('className="forth-tracking-kpis flex gap-1.5"'));
   assert.ok(source.includes('records={mapRecords}'));
+  assert.ok(source.includes('filterKey={filter}'));
   assert.ok(source.includes("formatForthRelativeAge(record.lastGpsTimestamp, Date.now(), language)"));
   assert.ok(source.includes("aria-label={accessibleUpdateTime}"));
   assert.ok(source.includes("copy.exactPositionTime"));
@@ -1372,11 +1413,21 @@ test("premium tracking workspace keeps selection and map controls with responsiv
   assert.ok(source.includes("copy.sourceSection"));
   assert.ok(source.includes("copy.focusOnMap"));
   assert.ok(source.includes("copy.approximateCoordinatesNote"));
+  assert.ok(source.includes("getForthTrackingVehicleIdentity(record.vehicleRegistration)"));
+  assert.ok(source.includes("getForthTrackingVehicleIdentity(selectedRecord.vehicleRegistration)"));
+  assert.ok(source.includes("onClick={() => { setSelectedKey(null); setInspectorOpen(false); setMobileInspectorOpen(false); }}"));
+  assert.ok(source.includes("copy.mapLegendHelp"));
+  assert.ok(source.includes("copy.mapGroupHelp"));
   const inspectorStart = source.indexOf('aria-labelledby="forth-vehicle-details-title"');
-  const accuracyStart = source.indexOf('{connected && can("business:read") ?');
-  const inspector = source.slice(inspectorStart, accuracyStart);
+  const inspectorEnd = source.indexOf('{connected && can("business:read") && diagnosticsOpen ?', inspectorStart);
+  const inspector = source.slice(inspectorStart, inspectorEnd);
+  const technicalDetailsStart = inspector.indexOf("{copy.sourceSection}");
   assert.equal(inspector.includes("sourceTimestampRaw"), false);
   assert.equal(inspector.includes("selectedRecord.positionSource"), false);
+  assert.ok(technicalDetailsStart >= 0);
+  assert.equal(inspector.slice(0, technicalDetailsStart).includes("selectedRecord.gpsDeviceId"), false);
+  assert.ok(inspector.slice(technicalDetailsStart).includes("selectedRecord.gpsDeviceId"));
+  assert.ok(inspector.slice(technicalDetailsStart).includes("{copy.device}"));
   assert.ok(source.includes("setSelectedKey(null)"));
   assert.ok(source.includes("copy.noGpsSourceNote"));
   assert.ok(source.includes("const [inspectorOpen, setInspectorOpen] = useState(false)"));
@@ -1406,6 +1457,7 @@ test("fleet tracking map renders escaped registration labels and activity-specif
   assert.ok(source.includes("getVisibleForthMarkerLabelKeys"));
   assert.ok(source.includes("labelUpdateRef.current()"));
   assert.ok(styles.includes(".vehicleMarkerLabelHidden"));
+  assert.match(styles, /\.vehicleMarkerLabel\s*\{[\s\S]*?pointer-events:\s*auto/);
   assert.ok(styles.includes(".vehicleMarkerStoppedEngineOn"));
   assert.ok(styles.includes(".vehicleMarkerStoppedEngineOff"));
   assert.ok(styles.includes(".vehicleMarkerStoppedEngineUnknown"));

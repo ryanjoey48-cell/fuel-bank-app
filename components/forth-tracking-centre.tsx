@@ -39,6 +39,7 @@ import {
   getForthFleetMapInitialFrame,
   getForthAccuracyComparisons,
   getForthFleetRecordKey,
+  getForthTrackingVehicleIdentity,
   findForthFleetRecord,
   getForthFleetMapRecords,
   getForthNormalizationWarnings,
@@ -328,12 +329,11 @@ const COPY = {
     mapParked: "Stopped now",
     mapOffline: "Activity unavailable",
     mapUnknown: "Activity unavailable",
-    mapConfidence: "Dashed amber ring = position not GPS-verified; a cluster shows it if any member is unverified",
-    mapClusterUnverified: "At least one position in this group is not GPS-verified",
-    mapClusterVerified: "All positions in this group are GPS-verified",
-    mapClusterDriving: "Driving",
-    mapClusterStopped: "Stopped",
-    mapClusterUnavailable: "Activity unavailable",
+    mapConfidence: "Dashed amber ring = position not GPS-verified",
+    groupVehicles: "vehicles",
+    expandGroup: "Click to expand and identify vehicles",
+    mapLegendHelp: "Legend",
+    mapGroupHelp: "Select a nearby-vehicle group to fan out each registration. Dashed amber rings mark positions that are not GPS-verified.",
     mapOfflineLegend: "Red corner dot means GPRS is reported offline",
     mapSelectedLegend: "Purple ring marks the selected vehicle",
     mapEngineOnStop: "Amber = stopped, engine on",
@@ -342,6 +342,7 @@ const COPY = {
     mapLabelHint: "Vehicle labels declutter as markers overlap; select a vehicle to prioritize its label",
     freshnessShort: "Freshness window: 15 min",
     lastVehicleUpdate: "Last vehicle update",
+    latestPosition: "Latest position",
     exactPositionTime: "Exact Bangkok time",
     openDetails: "Open details",
     mapFitFleet: "Fit fleet",
@@ -603,12 +604,11 @@ const COPY = {
     mapParked: "หยุดอยู่",
     mapOffline: "ไม่มีกิจกรรมที่ยืนยันได้",
     mapUnknown: "ไม่มีกิจกรรมที่ยืนยันได้",
-    mapConfidence: "วงประสีเหลือง = ตำแหน่งยังไม่ยืนยัน GPS; กลุ่มจะแสดงเมื่อมีสมาชิกที่ยังไม่ยืนยัน",
-    mapClusterUnverified: "อย่างน้อยหนึ่งตำแหน่งในกลุ่มนี้ยังไม่ยืนยันด้วย GPS",
-    mapClusterVerified: "ทุกตำแหน่งในกลุ่มนี้ยืนยันด้วย GPS แล้ว",
-    mapClusterDriving: "กำลังขับ",
-    mapClusterStopped: "หยุดอยู่",
-    mapClusterUnavailable: "ไม่มีกิจกรรมที่ยืนยันได้",
+    mapConfidence: "วงประสีเหลืองหมายถึงตำแหน่งที่ยังไม่ยืนยันด้วย GPS",
+    groupVehicles: "คัน",
+    expandGroup: "กดเพื่อขยายและดูทะเบียนรถ",
+    mapLegendHelp: "คำอธิบาย",
+    mapGroupHelp: "เลือกกลุ่มรถที่อยู่ใกล้กันเพื่อแสดงทะเบียนแต่ละคัน วงประสีเหลืองหมายถึงตำแหน่งที่ยังไม่ยืนยันด้วย GPS",
     mapOfflineLegend: "จุดสีแดงที่มุมหมายถึงรายงานว่า GPRS ออฟไลน์",
     mapSelectedLegend: "วงสีม่วงแสดงรถที่เลือก",
     mapEngineOnStop: "สีเหลืองอำพัน = หยุด เครื่องยนต์เปิด",
@@ -617,6 +617,7 @@ const COPY = {
     mapLabelHint: "ซ่อนป้ายทะเบียนเมื่อหมุดทับกัน; เลือกรถเพื่อจัดลำดับป้ายทะเบียนก่อน",
     freshnessShort: "ช่วงข้อมูลปัจจุบัน: 15 นาที",
     lastVehicleUpdate: "อัปเดตรถล่าสุด",
+    latestPosition: "ตำแหน่งล่าสุด",
     exactPositionTime: "เวลาประเทศไทย",
     openDetails: "เปิดรายละเอียด",
     mapFitFleet: "แสดงรถทั้งหมด",
@@ -853,6 +854,7 @@ const FleetVehicleRow = memo(function FleetVehicleRow({
   onSelect: (key: string) => void;
 }) {
   const activity = getForthReportedActivity(record);
+  const identity = getForthTrackingVehicleIdentity(record.vehicleRegistration);
   const updateTime = formatForthRelativeAge(record.lastGpsTimestamp, Date.now(), language);
   const exactUpdateTime = formatForthTrackingTime(record.lastGpsTimestamp, language);
   const accessibleUpdateTime = updateTime
@@ -862,9 +864,10 @@ const FleetVehicleRow = memo(function FleetVehicleRow({
   return (
     <button type="button" aria-pressed={active} onClick={() => onSelect(recordKey)} className={`block w-full rounded-xl border px-2.5 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 ${active ? "border-violet-300 bg-violet-50/80 shadow-[0_2px_10px_rgba(91,35,142,0.1)]" : "border-slate-200/80 bg-white hover:border-violet-200 hover:bg-slate-50/70"}`}>
       <span className="flex min-w-0 items-center justify-between gap-2">
-        <span className="min-w-0 truncate text-[14px] font-bold tracking-tight text-slate-950">{record.vehicleRegistration || copy.unknownValue}</span>
+        <span className="flex min-w-0 items-center gap-1.5"><span className="min-w-0 truncate text-[14px] font-bold tracking-tight text-slate-950">{record.vehicleRegistration || copy.unknownValue}</span>{identity.classLabel ? <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-extrabold text-slate-600">{identity.classLabel}</span> : null}</span>
         <ActivityPill activity={activity} copy={copy} />
       </span>
+      {identity.make ? <span className="mt-0.5 block truncate text-[10px] font-medium text-slate-500">{identity.make}{identity.model ? ` ${identity.model}` : ""}</span> : null}
       <span className="mt-1 flex min-w-0 items-center justify-between gap-2">
         <span className="inline-flex items-baseline gap-1.5 text-slate-950"><Gauge className="h-3.5 w-3.5 self-center text-slate-400" /><strong className="text-base leading-5">{record.speed === null ? "—" : record.speed}</strong><span className="text-[10px] text-slate-500">km/h</span></span>
         <span className={`inline-flex max-w-[58%] min-w-0 items-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-semibold ${record.engineOn === true ? "bg-amber-50 text-amber-900" : record.engineOn === false ? "bg-indigo-50 text-indigo-800" : "bg-slate-100 text-slate-600"}`}><Activity className="h-3 w-3 shrink-0 opacity-70" /><span className="truncate">{record.engineOn === null ? copy.unknownValue : record.engineOn ? copy.engineOnLabel : copy.engineOffLabel}</span></span>
@@ -1372,6 +1375,9 @@ export function ForthTrackingCentre() {
     if (!data || !selectedKey) return null;
     return findForthFleetRecord(data.records, selectedKey);
   }, [data, selectedKey]);
+  const selectedVehicleIdentity = selectedRecord
+    ? getForthTrackingVehicleIdentity(selectedRecord.vehicleRegistration)
+    : null;
   const lastGpsUpdate = formatForthTrackingTime(summary.latestCurrentGpsPosition, language);
   const selectedHasMapPosition = selectedRecord ? getForthFleetMapRecords([selectedRecord]).length > 0 : false;
   const lastChecked = formatForthTrackingTime(
@@ -1389,19 +1395,15 @@ export function ForthTrackingCentre() {
     unavailable: copy.mapUnknown,
     gpsVerified: copy.gpsPositionVerified,
     notGpsVerified: copy.gpsPositionUnverified,
-    clusterUnverified: copy.mapClusterUnverified,
-    clusterVerified: copy.mapClusterVerified,
-    clusterDriving: copy.mapClusterDriving,
-    clusterStopped: copy.mapClusterStopped,
-    clusterUnavailable: copy.mapClusterUnavailable,
+    groupVehicles: copy.groupVehicles,
+    expandGroup: copy.expandGroup,
     engineOn: copy.engineOn,
     engineOff: copy.engineOff,
     unknownValue: copy.unknownValue,
     noPositions: copy.noPositions,
     loading: copy.mapLoading,
     mapUnavailable: copy.mapUnavailable,
-    mapRegionLabel: copy.mapRegionLabel,
-    openDetails: copy.openDetails
+    mapRegionLabel: copy.mapRegionLabel
   }), [copy]);
 
   const trackingMessage = requestError
@@ -1574,7 +1576,7 @@ export function ForthTrackingCentre() {
             </div>
           </div>
           {connected ? (
-            <ForthTrackingMap records={mapRecords} selectedKey={selectedKey} onSelect={focusVehicle} command={mapCommand} language={language} copy={mapCopy} />
+            <ForthTrackingMap records={mapRecords} selectedKey={selectedKey} onSelect={focusVehicle} command={mapCommand} filterKey={filter} language={language} copy={mapCopy} />
           ) : (
             <div className="forth-map-viewport flex flex-col items-center justify-center rounded-[1.25rem] border border-dashed border-slate-200 bg-slate-50 px-5 text-center">
               <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-violet-700 shadow-sm"><MapPin className="h-7 w-7" /></span>
@@ -1582,7 +1584,7 @@ export function ForthTrackingCentre() {
             </div>
           )}
           {(filter === "all" && mapInitialFrame.outlierCount > 0) || unplottableRecordCount > 0 ? <p className="mt-1 shrink-0 rounded-md bg-amber-50 px-2 py-1 text-[10px] leading-4 text-amber-900">
-            {filter === "all" && mapInitialFrame.outlierCount > 0 ? <span>{language === "th" ? `โฟกัสแผนที่ที่กลุ่มหลัก มีตำแหน่งรายงานอีก ${mapInitialFrame.outlierCount} จุดนอกกลุ่ม · กด “${copy.mapFitFleet}” เพื่อแสดงทั้งหมด` : `Initial view focuses on the main cluster; ${mapInitialFrame.outlierCount} reported position${mapInitialFrame.outlierCount === 1 ? " is" : "s are"} outside it. ${copy.mapFitFleet} shows all.`}</span> : null}
+            {filter === "all" && mapInitialFrame.outlierCount > 0 ? <span>{language === "th" ? `โฟกัสแผนที่บริเวณหลัก มีตำแหน่งรายงานอีก ${mapInitialFrame.outlierCount} จุดนอกบริเวณ · กด “${copy.mapFitFleet}” เพื่อแสดงทั้งหมด` : `Initial view focuses on the main fleet area; ${mapInitialFrame.outlierCount} reported position${mapInitialFrame.outlierCount === 1 ? " is" : "s are"} outside it. ${copy.mapFitFleet} shows all.`}</span> : null}
             {unplottableRecordCount > 0 ? <span className={filter === "all" && mapInitialFrame.outlierCount > 0 ? "ml-2" : ""}>{language === "th" ? `${unplottableRecordCount} รายงานไม่มีพิกัดที่ถูกต้อง แสดงข้อมูลต่อในรายการรถ` : `${unplottableRecordCount} report${unplottableRecordCount === 1 ? " has" : "s have"} missing or invalid coordinates and remains in the vehicle list.`}</span> : null}
           </p> : null}
           <div className="mt-1 flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-0.5 px-1 text-[10px] text-slate-500">
@@ -1590,15 +1592,19 @@ export function ForthTrackingCentre() {
             <span>{language === "th" ? `รายงานตำแหน่งบนแผนที่ ${mapInitialFrame.allPositions.length} จุด · รีเฟรชทุก 60 วินาที` : `${mapInitialFrame.allPositions.length} plotted reports · refreshes every 60 seconds`}</span>
           </div>
           {connected ? (
-            <div className="mt-1 flex shrink-0 flex-wrap gap-x-3 gap-y-1 border-t border-slate-100 px-1 pt-1 text-[9px] leading-4 text-slate-600 sm:text-[10px]" aria-label={language === "th" ? "คำอธิบายสัญลักษณ์แผนที่" : "Map marker legend"}>
+            <div className="mt-1 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-100 px-1 pt-1 text-[9px] leading-4 text-slate-600 sm:text-[10px]" aria-label={language === "th" ? "คำอธิบายสัญลักษณ์แผนที่" : "Map marker legend"}>
               <span className="inline-flex items-center gap-1"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-emerald-600" />{copy.mapMoving}</span>
-              <span className="inline-flex items-center gap-1"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-amber-600" />{copy.mapEngineOnStop}</span>
-              <span className="inline-flex items-center gap-1"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-indigo-600" />{copy.mapEngineOffStop}</span>
-              <span className="inline-flex items-center gap-1"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-slate-500" />{copy.mapEngineUnknownStop} / {copy.mapUnknown}</span>
-              <span className="inline-flex items-center gap-1"><i aria-hidden="true" className="h-3 w-3 rounded-full border-2 border-dashed border-amber-700" />{copy.mapConfidence}</span>
-              <span className="inline-flex items-center gap-1"><i aria-hidden="true" className="relative h-2.5 w-2.5 rounded-full border border-slate-800 after:absolute after:-right-1 after:-top-1 after:h-1.5 after:w-1.5 after:rounded-full after:border after:border-white after:bg-rose-600" />{copy.mapOfflineLegend}</span>
-              <span className="inline-flex items-center gap-1"><i aria-hidden="true" className="h-3 w-3 rounded-full border-2 border-violet-700" />{copy.mapSelectedLegend}</span>
-              <span className="basis-full text-slate-500">{copy.mapLabelHint}</span>
+              <span className="inline-flex items-center gap-1"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-amber-600" />{copy.mapParked}</span>
+              <span className="inline-flex items-center gap-1"><i aria-hidden="true" className="h-3 w-3 rounded-full border-2 border-dashed border-amber-700" />{copy.gpsPositionUnverified}</span>
+              <details className="relative ml-auto">
+                <summary className="cursor-pointer list-none rounded-md px-1.5 py-0.5 font-semibold text-violet-800 hover:bg-violet-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300">{copy.mapLegendHelp}</summary>
+                <div className="absolute bottom-full right-0 z-[500] mb-1 w-[min(22rem,80vw)] rounded-xl border border-slate-200 bg-white p-3 text-[10px] leading-4 text-slate-700 shadow-xl">
+                  <p>{copy.mapGroupHelp}</p>
+                  <p className="mt-1">{copy.mapEngineOnStop} · {copy.mapEngineOffStop} · {copy.mapEngineUnknownStop}</p>
+                  <p className="mt-1">{copy.mapOfflineLegend} · {copy.mapSelectedLegend}</p>
+                  <p className="mt-1">{copy.mapUnknown} · {copy.mapConfidence}</p>
+                </div>
+              </details>
             </div>
           ) : null}
         </section>
@@ -1675,12 +1681,12 @@ export function ForthTrackingCentre() {
                 <div className="min-w-0">
                   <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-violet-700">{copy.detailsTitle}</p>
                   <h2 id="forth-vehicle-details-title" className="mt-1 text-lg font-bold tracking-tight text-slate-950">{selectedRecord.vehicleRegistration || copy.unknownValue}</h2>
+                  {selectedVehicleIdentity?.make ? <p className="mt-0.5 text-xs font-semibold text-slate-600">{selectedVehicleIdentity.make}{selectedVehicleIdentity.model ? ` ${selectedVehicleIdentity.model}` : ""}{selectedVehicleIdentity.classLabel ? ` · ${selectedVehicleIdentity.classLabel}` : ""}</p> : selectedVehicleIdentity?.classLabel ? <p className="mt-0.5 text-xs font-semibold text-slate-600">{selectedVehicleIdentity.classLabel}</p> : null}
                   {selectedRecord.reportedDriver ? <p className="mt-0.5 text-xs text-slate-500">{selectedRecord.reportedDriver}</p> : null}
-                  <p className="mt-0.5 text-[10px] text-slate-400">{copy.device}: {selectedRecord.gpsDeviceId || copy.unknownValue}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <ActivityPill activity={getForthReportedActivity(selectedRecord)} copy={copy} />
-                  <button type="button" aria-label={copy.mapCloseInspector} onClick={() => setMobileInspectorOpen(false)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 xl:hidden"><X className="h-4 w-4" /></button>
+                  <button type="button" aria-label={copy.mapCloseInspector} title={copy.mapCloseInspector} onClick={() => { setSelectedKey(null); setInspectorOpen(false); setMobileInspectorOpen(false); }} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"><X className="h-4 w-4" /></button>
                 </div>
               </div>
               <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
@@ -1695,6 +1701,10 @@ export function ForthTrackingCentre() {
               </div>
               <p className="mt-1.5 text-[10px] text-slate-500">{copy.activityBasis} · {timestampStatusLabel(selectedRecord, copy)}</p>
               <span className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold ${isForthGpsPositionVerified(selectedRecord) ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900"}`}><MapPin className="h-3 w-3" />{gpsConfidenceLabel(selectedRecord, copy)}</span>
+              <div className="mt-2 grid grid-cols-2 gap-2 text-[10px]">
+                <p className="min-w-0"><span className="block font-semibold uppercase text-slate-500">{copy.lastVehicleUpdate}</span><span title={selectedRecord.lastGpsTimestamp ?? undefined} className="mt-0.5 block break-words font-medium text-slate-800">{formatForthTrackingTime(selectedRecord.lastGpsTimestamp, language) ?? copy.unknownValue} · {timestampStatusLabel(selectedRecord, copy)}</span></p>
+                <p className="min-w-0"><span className="block font-semibold uppercase text-slate-500">{copy.latestPosition}</span><span className="mt-0.5 block break-words font-medium text-slate-800">{recordLocationLabel(selectedRecord, copy)}</span></p>
+              </div>
 
               <details className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
                 <summary className="cursor-pointer text-xs font-semibold text-slate-800">{copy.locationSection}</summary>
@@ -1711,7 +1721,6 @@ export function ForthTrackingCentre() {
                 <div className="mt-2 grid gap-x-3 gap-y-2 border-t border-slate-100 pt-2 text-xs sm:grid-cols-2 2xl:grid-cols-1">
                   <p className="min-w-0"><span className="block text-[10px] font-semibold uppercase text-slate-500">{copy.communications}</span><span className="mt-0.5"><ConnectivityValue connected={selectedRecord.gprsConnectivity} copy={copy} /></span></p>
                   <p className="min-w-0"><span className="block text-[10px] font-semibold uppercase text-slate-500">{copy.gps}</span><span className="mt-0.5"><ConnectivityValue connected={selectedRecord.gpsConnectivity} copy={copy} connectedLabel={copy.available} disconnectedLabel={copy.gpsNoFix} /></span></p>
-                  <p className="min-w-0"><span className="block text-[10px] font-semibold uppercase text-slate-500">{copy.lastVehicleUpdate}</span><span className="mt-0.5 block break-words text-slate-700">{formatForthTrackingTime(selectedRecord.lastGpsTimestamp, language) ?? copy.unknownValue} · {timestampStatusLabel(selectedRecord, copy)}</span></p>
                   <p className="min-w-0"><span className="block text-[10px] font-semibold uppercase text-slate-500">{copy.lastSync}</span><span className="mt-0.5 block break-words text-slate-700">{lastChecked ?? copy.unknownValue}</span></p>
                 </div>
               </details>
@@ -1719,6 +1728,7 @@ export function ForthTrackingCentre() {
               <details className="mt-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
                 <summary className="cursor-pointer text-xs font-semibold text-slate-800">{copy.sourceSection}</summary>
                 <div className="mt-2 space-y-2 border-t border-slate-100 pt-2 text-xs">
+                  <p className="font-semibold text-slate-700">{copy.device}: <span className="break-all font-mono font-medium text-slate-600">{selectedRecord.gpsDeviceId || copy.unknownValue}</span></p>
                   <p className="font-semibold text-slate-700">{copy.positionSource}: <span className="font-medium text-slate-600">{shortPositionQualityLabel(selectedRecord, copy)}</span></p>
                   {selectedRecord.positionQuality === "no_gps" ? <p className="text-[10px] leading-4 text-amber-800">{copy.noGpsSourceNote}</p> : null}
                 </div>

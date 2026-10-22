@@ -441,11 +441,105 @@ export type ForthFleetMapRecord = {
 
 export type ForthTrackingMapVehicleClass = "four_wheeler" | "six_wheeler" | "eighteen_wheeler" | "unclassified";
 
-/** Visual map override only. It intentionally does not read or write EES vehicle records. */
+export type ForthTrackingVehicleIdentity = {
+  vehicleClass: ForthTrackingMapVehicleClass;
+  classLabel: "4W" | "6W" | "18W" | null;
+  make: "Toyota" | "Hino" | "Isuzu" | "Nissan" | null;
+  model: "Hilux Revo" | "Hilux Vigo" | null;
+};
+
+const approvedFleetDisplayData: Record<string, ForthTrackingVehicleIdentity> = {
+  "3ฒน9565": { vehicleClass: "four_wheeler", classLabel: "4W", make: "Toyota", model: "Hilux Revo" },
+  "3ฒล4565": { vehicleClass: "four_wheeler", classLabel: "4W", make: "Toyota", model: "Hilux Revo" },
+  "ฒอ8453": { vehicleClass: "four_wheeler", classLabel: "4W", make: "Toyota", model: "Hilux Vigo" },
+  "612835": { vehicleClass: "six_wheeler", classLabel: "6W", make: "Hino", model: null },
+  "616672": { vehicleClass: "six_wheeler", classLabel: "6W", make: "Hino", model: null },
+  "621085": { vehicleClass: "six_wheeler", classLabel: "6W", make: "Hino", model: null },
+  "624337": { vehicleClass: "six_wheeler", classLabel: "6W", make: "Hino", model: null },
+  "640359": { vehicleClass: "six_wheeler", classLabel: "6W", make: "Isuzu", model: null },
+  "645954": { vehicleClass: "six_wheeler", classLabel: "6W", make: "Hino", model: null },
+  "645956": { vehicleClass: "six_wheeler", classLabel: "6W", make: "Hino", model: null },
+  "748969": { vehicleClass: "six_wheeler", classLabel: "6W", make: "Nissan", model: null },
+  "786996": { vehicleClass: "six_wheeler", classLabel: "6W", make: "Hino", model: null },
+  "792945": { vehicleClass: "six_wheeler", classLabel: "6W", make: "Hino", model: null },
+  "7004145": { vehicleClass: "six_wheeler", classLabel: "6W", make: "Hino", model: null },
+  "7006659": { vehicleClass: "six_wheeler", classLabel: "6W", make: "Hino", model: null },
+  "7011654": { vehicleClass: "six_wheeler", classLabel: "6W", make: "Hino", model: null },
+  "7015145": { vehicleClass: "six_wheeler", classLabel: "6W", make: "Isuzu", model: null },
+  "633543": { vehicleClass: "eighteen_wheeler", classLabel: "18W", make: "Hino", model: null },
+  "648665": { vehicleClass: "eighteen_wheeler", classLabel: "18W", make: "Hino", model: null },
+  "687154": { vehicleClass: "eighteen_wheeler", classLabel: "18W", make: "Hino", model: null },
+  "795318": { vehicleClass: "eighteen_wheeler", classLabel: "18W", make: "Hino", model: null }
+};
+
+function normalizedMapRegistration(registration: string | null) {
+  return registration?.trim().toLocaleUpperCase().replace(/[^\p{L}\p{N}]/gu, "") ?? "";
+}
+
+/** Approved display-only roster metadata. It never reads or writes EES vehicle records. */
+export function getForthTrackingVehicleIdentity(registration: string | null): ForthTrackingVehicleIdentity {
+  return approvedFleetDisplayData[normalizedMapRegistration(registration)] ?? {
+    vehicleClass: "unclassified",
+    classLabel: null,
+    make: null,
+    model: null
+  };
+}
+
 export function getForthTrackingMapVehicleClass(registration: string | null): ForthTrackingMapVehicleClass {
-  const normalized = registration?.trim().toLocaleUpperCase().replace(/\s+/g, " ");
-  if (normalized === "79-2945") return "six_wheeler";
-  return "unclassified";
+  return getForthTrackingVehicleIdentity(registration).vehicleClass;
+}
+
+export type ForthMarkerScreenPoint = { key: string; x: number; y: number };
+
+/** Connected components of markers whose screen-space points would collide. */
+export function getForthMarkerCollisionGroups(points: ForthMarkerScreenPoint[], radius = 54): string[][] {
+  const valid = points.filter((point) => point.key && Number.isFinite(point.x) && Number.isFinite(point.y));
+  const parent = valid.map((_, index) => index);
+  const find = (index: number): number => {
+    if (parent[index] !== index) parent[index] = find(parent[index]);
+    return parent[index];
+  };
+  const union = (left: number, right: number) => {
+    const leftRoot = find(left);
+    const rightRoot = find(right);
+    if (leftRoot !== rightRoot) parent[rightRoot] = leftRoot;
+  };
+  const radiusSquared = Math.max(0, radius) ** 2;
+  for (let left = 0; left < valid.length; left += 1) {
+    for (let right = left + 1; right < valid.length; right += 1) {
+      const dx = valid[left].x - valid[right].x;
+      const dy = valid[left].y - valid[right].y;
+      if (dx * dx + dy * dy <= radiusSquared) union(left, right);
+    }
+  }
+  const components = new Map<number, string[]>();
+  valid.forEach((point, index) => {
+    const root = find(index);
+    const component = components.get(root) ?? [];
+    component.push(point.key);
+    components.set(root, component);
+  });
+  return [...components.values()]
+    .filter((keys) => keys.length > 1)
+    .map((keys) => keys.sort((left, right) => left.localeCompare(right)))
+    .sort((left, right) => left[0].localeCompare(right[0]));
+}
+
+/** Pixel offsets used to fan a collision group into individually labelled markers. */
+export function getForthMarkerFanOutOffsets(count: number, columnSpacing = 160, rowSpacing = 44) {
+  if (!Number.isInteger(count) || count < 1) return [];
+  const columns = Math.min(5, Math.ceil(Math.sqrt(count)));
+  const rows = Math.ceil(count / columns);
+  return Array.from({ length: count }, (_, index) => {
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    const rowCount = Math.min(columns, count - row * columns);
+    return {
+      x: (column - (rowCount - 1) / 2) * columnSpacing,
+      y: (row - (rows - 1) / 2) * rowSpacing
+    };
+  });
 }
 
 export function getForthFleetMapRecords(records: ForthFleetTrackingRecord[]): ForthFleetMapRecord[] {
