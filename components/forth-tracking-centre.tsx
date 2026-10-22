@@ -24,6 +24,12 @@ import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/lib/language-provider";
 import { useAccountAccess } from "@/lib/use-account-access";
 import {
+  createForthStatusDiagnosticRunner,
+  FORTH_STATUS_DIAGNOSTIC_SESSION_KEY,
+  type ForthStatusDiagnosticFailure,
+  type ForthStatusDiagnosticOutcome
+} from "@/lib/forth-status-diagnostic-client";
+import {
   filterForthFleetRecords,
   formatForthTrackingTime,
   getForthMotionReason,
@@ -43,7 +49,6 @@ const ForthTrackingMap = dynamic(
 
 const POLL_INTERVAL_MS = 60_000;
 const REQUEST_TIMEOUT_MS = 15_000;
-const STATUS_DIAGNOSTIC_SESSION_KEY = "ees-forth-status-diagnostic-unknown-labels-v3-used";
 type PositionSourceShapeCounts = Record<
   "missing" | "null" | "empty" | "number" | "boolean" | "recognized_string" | "unrecognized_string" | "other",
   number
@@ -72,6 +77,20 @@ type StatusDiagnosticResult = {
     labels: Array<{ label: string; occurrences: number }>;
   };
   error: string | null;
+};
+
+type StatusDiagnosticUiState =
+  | "checking"
+  | "ready"
+  | "awaiting_confirmation"
+  | "running"
+  | "completed"
+  | "failed"
+  | "previously_attempted";
+
+type StatusDiagnosticRunner = {
+  run(): Promise<ForthStatusDiagnosticOutcome<StatusDiagnosticResult>>;
+  isAttemptUsed(): boolean;
 };
 
 const COPY = {
@@ -128,9 +147,32 @@ const COPY = {
     motionReasonInvalidSpeed: "Speed value is invalid",
     diagnosticTitle: "One-time status breakdown",
     diagnosticButton: "Run one-time status diagnostic",
-    diagnosticConfirm: "Run one read-only Forth request? It returns only unknown positionSource labels (up to 20 labels, 80 characters each) with occurrence counts, plus aggregate field-shape counts. No other vehicle, driver, location, timestamp, credential, or token data is returned.",
-    diagnosticDone: "This diagnostic can run once per browser tab session.",
-    diagnosticFailure: "The status diagnostic could not be completed.",
+    diagnosticRetryButton: "Try again after sign-in",
+    diagnosticIntro: "One protected, read-only request. You will confirm before it starts; results are not saved.",
+    diagnosticStateChecking: "Checking this tab",
+    diagnosticStateReady: "Ready",
+    diagnosticStateAwaiting: "Awaiting confirmation",
+    diagnosticStateRunning: "Running",
+    diagnosticStateCompleted: "Completed",
+    diagnosticStateFailed: "Failed",
+    diagnosticStatePreviouslyAttempted: "Attempt already used",
+    diagnosticReadyBody: "Ready. No diagnostic request is sent until you confirm. It can run once in this browser tab session.",
+    diagnosticAwaitingBody: "Review the details and choose Confirm to run. Cancel leaves the one-time attempt available.",
+    diagnosticRunningBody: "One protected, read-only request is in progress. This attempt will not be retried automatically.",
+    diagnosticCompletedBody: "The diagnostic completed. Its sanitized results are shown below and are not saved across a page refresh.",
+    diagnosticPreviouslyAttemptedBody: "A one-time marker already exists for this tab. An earlier page version could set it before checking your EES session, so we cannot verify whether its protected request started. This tab stays locked for safety; results are not saved across refreshes.",
+    diagnosticSessionError: "Could not verify your EES sign-in. No diagnostic request was sent and the one-time attempt remains available. Sign in again, then start and confirm a new attempt.",
+    diagnosticUnauthorizedError: "The protected endpoint rejected your EES session. This request attempt is used; check your sign-in before another authorized attempt.",
+    diagnosticForbiddenError: "This EES account lacks the required office business:read permission. The request attempt is used; ask an EES administrator to review access.",
+    diagnosticHttpError: "The protected diagnostic endpoint returned an error. This request attempt is used; no automatic retry was made.",
+    diagnosticNetworkError: "The protected diagnostic request could not be completed. This request attempt is used; no automatic retry was made.",
+    diagnosticInvalidResponseError: "The endpoint response did not match the sanitized diagnostic format. This request attempt is used; no automatic retry was made.",
+    diagnosticDuplicateError: "A diagnostic request is already in progress.",
+    diagnosticDialogTitle: "Confirm one-time Forth diagnostic",
+    diagnosticDialogBody: "This sends one protected, read-only request. It returns aggregate counts and bounded unknown positionSource labels only. No coordinates, vehicle or driver details, credentials, or tokens are displayed or saved.",
+    diagnosticDialogCancel: "Cancel",
+    diagnosticDialogRun: "Confirm and run diagnostic",
+    diagnosticEndpointError: "The diagnostic endpoint ran but could not retrieve a complete Forth result:",
     diagnosticConnection: "Forth request status",
     diagnosticRecords: "Records analyzed",
     diagnosticSourceShape: "Position-source field shape",
@@ -253,9 +295,32 @@ const COPY = {
     motionReasonInvalidSpeed: "ค่าความเร็วไม่ถูกต้อง",
     diagnosticTitle: "สรุปสถานะแบบครั้งเดียว",
     diagnosticButton: "เรียกใช้การวินิจฉัยครั้งเดียว",
-    diagnosticConfirm: "เรียก Forth แบบอ่านอย่างเดียวหนึ่งครั้งใช่หรือไม่ จะแสดงเฉพาะป้าย positionSource ที่ไม่รู้จัก (สูงสุด 20 ป้าย ป้ายละ 80 ตัวอักษร) พร้อมจำนวนครั้งและสรุปรูปแบบฟิลด์ โดยไม่ส่งข้อมูลรถ ผู้ขับ ตำแหน่ง เวลา ข้อมูลรับรอง หรือโทเค็นอื่น",
-    diagnosticDone: "การวินิจฉัยนี้เรียกใช้ได้หนึ่งครั้งต่อเซสชันแท็บเบราว์เซอร์",
-    diagnosticFailure: "ไม่สามารถวินิจฉัยสถานะได้",
+    diagnosticRetryButton: "ลองอีกครั้งหลังเข้าสู่ระบบ",
+    diagnosticIntro: "คำขอแบบอ่านอย่างเดียวที่ได้รับการป้องกันหนึ่งครั้ง คุณจะยืนยันก่อนเริ่ม และไม่มีการบันทึกผลลัพธ์",
+    diagnosticStateChecking: "กำลังตรวจสอบแท็บนี้",
+    diagnosticStateReady: "พร้อม",
+    diagnosticStateAwaiting: "รอการยืนยัน",
+    diagnosticStateRunning: "กำลังทำงาน",
+    diagnosticStateCompleted: "เสร็จสิ้น",
+    diagnosticStateFailed: "ไม่สำเร็จ",
+    diagnosticStatePreviouslyAttempted: "ใช้สิทธิ์ครั้งเดียวแล้ว",
+    diagnosticReadyBody: "พร้อม ระบบจะไม่ส่งคำขอวินิจฉัยจนกว่าคุณจะยืนยัน ใช้งานได้หนึ่งครั้งในเซสชันแท็บนี้",
+    diagnosticAwaitingBody: "ตรวจสอบรายละเอียดแล้วเลือกยืนยันเพื่อดำเนินการ การยกเลิกจะยังไม่ใช้สิทธิ์ครั้งเดียว",
+    diagnosticRunningBody: "กำลังส่งคำขอแบบอ่านอย่างเดียวที่ได้รับการป้องกันหนึ่งครั้ง ระบบจะไม่ลองซ้ำโดยอัตโนมัติ",
+    diagnosticCompletedBody: "การวินิจฉัยเสร็จสิ้น ผลลัพธ์ที่ผ่านการจำกัดข้อมูลจะแสดงด้านล่างและไม่บันทึกหลังรีเฟรชหน้า",
+    diagnosticPreviouslyAttemptedBody: "พบเครื่องหมายการใช้สิทธิ์ครั้งเดียวในแท็บนี้ หน้าเวอร์ชันก่อนอาจตั้งเครื่องหมายก่อนตรวจสอบเซสชัน EES จึงยืนยันไม่ได้ว่าคำขอเริ่มแล้วหรือไม่ เพื่อความปลอดภัย แท็บนี้จะไม่ส่งซ้ำ และผลลัพธ์จะไม่ถูกบันทึกหลังรีเฟรช",
+    diagnosticSessionError: "ตรวจสอบการเข้าสู่ระบบ EES ไม่ได้ จึงยังไม่ได้ส่งคำขอวินิจฉัยและสิทธิ์ครั้งเดียวยังไม่ถูกใช้ โปรดเข้าสู่ระบบใหม่ แล้วเริ่มและยืนยันคำขออีกครั้ง",
+    diagnosticUnauthorizedError: "ปลายทางที่ได้รับการป้องกันปฏิเสธเซสชัน EES คำขอครั้งนี้ถูกใช้แล้ว โปรดตรวจสอบการเข้าสู่ระบบก่อนขอให้ผู้มีสิทธิ์ดำเนินการอีกครั้ง",
+    diagnosticForbiddenError: "บัญชี EES นี้ไม่มีสิทธิ์สำนักงาน business:read ที่กำหนด คำขอครั้งนี้ถูกใช้แล้ว โปรดให้ผู้ดูแล EES ตรวจสอบสิทธิ์",
+    diagnosticHttpError: "ปลายทางวินิจฉัยส่งข้อผิดพลาด คำขอครั้งนี้ถูกใช้แล้วและไม่มีการลองซ้ำโดยอัตโนมัติ",
+    diagnosticNetworkError: "ดำเนินการคำขอวินิจฉัยที่ได้รับการป้องกันไม่สำเร็จ คำขอครั้งนี้ถูกใช้แล้วและไม่มีการลองซ้ำโดยอัตโนมัติ",
+    diagnosticInvalidResponseError: "รูปแบบคำตอบจากปลายทางไม่ตรงกับข้อมูลวินิจฉัยที่จำกัดไว้ คำขอครั้งนี้ถูกใช้แล้วและไม่มีการลองซ้ำโดยอัตโนมัติ",
+    diagnosticDuplicateError: "มีคำขอวินิจฉัยกำลังทำงานอยู่",
+    diagnosticDialogTitle: "ยืนยันการวินิจฉัย Forth แบบครั้งเดียว",
+    diagnosticDialogBody: "จะส่งคำขอแบบอ่านอย่างเดียวที่ได้รับการป้องกันหนึ่งครั้ง โดยส่งกลับเฉพาะจำนวนรวมและป้าย positionSource ที่ไม่รู้จักตามขีดจำกัด ไม่มีพิกัด ข้อมูลรถหรือผู้ขับ ข้อมูลรับรอง หรือโทเค็นแสดงหรือบันทึก",
+    diagnosticDialogCancel: "ยกเลิก",
+    diagnosticDialogRun: "ยืนยันและเริ่มวินิจฉัย",
+    diagnosticEndpointError: "ปลายทางวินิจฉัยทำงานแล้ว แต่ไม่สามารถรับข้อมูล Forth ได้ครบถ้วน:",
     diagnosticConnection: "สถานะคำขอ Forth",
     diagnosticRecords: "จำนวนรายการที่วิเคราะห์",
     diagnosticSourceShape: "รูปแบบฟิลด์แหล่งตำแหน่ง",
@@ -481,59 +546,146 @@ export function ForthTrackingCentre() {
   const [filter, setFilter] = useState<ForthFleetFilter>("all");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [statusDiagnostic, setStatusDiagnostic] = useState<StatusDiagnosticResult | null>(null);
-  const [statusDiagnosticBusy, setStatusDiagnosticBusy] = useState(false);
-  const [statusDiagnosticAttempted, setStatusDiagnosticAttempted] = useState(false);
-  const [statusDiagnosticError, setStatusDiagnosticError] = useState(false);
+  const [statusDiagnosticState, setStatusDiagnosticState] = useState<StatusDiagnosticUiState>("checking");
+  const [statusDiagnosticFailure, setStatusDiagnosticFailure] = useState<{
+    reason: ForthStatusDiagnosticFailure;
+    attemptUsed: boolean;
+    httpStatus?: number;
+  } | null>(null);
+  const [statusDiagnosticConfirmationOpen, setStatusDiagnosticConfirmationOpen] = useState(false);
   const refreshRef = useRef<() => Promise<void>>(async () => undefined);
-  const statusDiagnosticStartedRef = useRef(false);
+  const statusDiagnosticRunnerRef = useRef<StatusDiagnosticRunner | null>(null);
+  const statusDiagnosticTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const statusDiagnosticCancelRef = useRef<HTMLButtonElement | null>(null);
+  const statusDiagnosticDialogRef = useRef<HTMLDivElement | null>(null);
+  const statusDiagnosticMessageRef = useRef<HTMLParagraphElement | null>(null);
+  const statusDiagnosticReturnFocusRef = useRef<HTMLElement | null>(null);
+  const restoreStatusDiagnosticFocusRef = useRef(false);
+  const statusDiagnosticConfirmationReturnStateRef = useRef<"ready" | "failed">("ready");
+  const statusDiagnosticConfirmStartedRef = useRef(false);
+  const statusDiagnosticInteractedRef = useRef(false);
+
+  if (!statusDiagnosticRunnerRef.current) {
+    statusDiagnosticRunnerRef.current = createForthStatusDiagnosticRunner<StatusDiagnosticResult>({
+      storage: {
+        read: () => window.sessionStorage.getItem(FORTH_STATUS_DIAGNOSTIC_SESSION_KEY),
+        write: (value) => window.sessionStorage.setItem(FORTH_STATUS_DIAGNOSTIC_SESSION_KEY, value)
+      },
+      getAccessToken: async () => {
+        try {
+          const { data: authData, error: authError } = await supabase.auth.getSession();
+          return authError ? null : authData.session?.access_token ?? null;
+        } catch {
+          return null;
+        }
+      },
+      isValidResult: isStatusDiagnosticResult
+    });
+  }
+  const statusDiagnosticRunner = statusDiagnosticRunnerRef.current;
 
   useEffect(() => {
-    try {
-      if (window.sessionStorage.getItem(STATUS_DIAGNOSTIC_SESSION_KEY) === "1") {
-        setStatusDiagnosticAttempted(true);
-      }
-    } catch {
-      // The in-memory guard still prevents duplicate activation if storage is unavailable.
+    setStatusDiagnosticState(statusDiagnosticRunner.isAttemptUsed() ? "previously_attempted" : "ready");
+  }, [statusDiagnosticRunner]);
+
+  useEffect(() => {
+    if (statusDiagnosticConfirmationOpen) {
+      statusDiagnosticCancelRef.current?.focus();
+      const onKeyDown = (event: KeyboardEvent) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          setStatusDiagnosticConfirmationOpen(false);
+          setStatusDiagnosticState(statusDiagnosticConfirmationReturnStateRef.current);
+          return;
+        }
+        if (event.key !== "Tab") return;
+        const dialog = statusDiagnosticDialogRef.current;
+        const focusable = dialog?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (!focusable?.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      };
+      document.addEventListener("keydown", onKeyDown);
+      return () => document.removeEventListener("keydown", onKeyDown);
     }
-  }, []);
+    if (restoreStatusDiagnosticFocusRef.current) {
+      restoreStatusDiagnosticFocusRef.current = false;
+      statusDiagnosticReturnFocusRef.current?.focus();
+    }
+  }, [statusDiagnosticConfirmationOpen]);
+
+  useEffect(() => {
+    if (statusDiagnosticInteractedRef.current &&
+      ["completed", "failed", "previously_attempted"].includes(statusDiagnosticState)) {
+      statusDiagnosticMessageRef.current?.focus();
+    }
+  }, [statusDiagnosticState]);
 
   const runStatusDiagnostic = async () => {
-    if (statusDiagnosticStartedRef.current) return;
+    if (!statusDiagnosticConfirmationOpen || statusDiagnosticConfirmStartedRef.current) return;
+    statusDiagnosticConfirmStartedRef.current = true;
+    restoreStatusDiagnosticFocusRef.current = false;
+    setStatusDiagnosticConfirmationOpen(false);
+    setStatusDiagnosticFailure(null);
+    setStatusDiagnostic(null);
+    setStatusDiagnosticState("running");
+
     try {
-      if (window.sessionStorage.getItem(STATUS_DIAGNOSTIC_SESSION_KEY) === "1") {
-        setStatusDiagnosticAttempted(true);
-        return;
+      const outcome = await statusDiagnosticRunner.run();
+      if (outcome.kind === "completed") {
+        setStatusDiagnostic(outcome.result);
+        setStatusDiagnosticState("completed");
+      } else if (outcome.reason === "already_attempted") {
+        setStatusDiagnosticFailure({ reason: outcome.reason, attemptUsed: true });
+        setStatusDiagnosticState("previously_attempted");
+      } else {
+        setStatusDiagnosticFailure({
+          reason: outcome.reason,
+          attemptUsed: outcome.attemptUsed,
+          httpStatus: outcome.httpStatus
+        });
+        setStatusDiagnosticState("failed");
       }
     } catch {
-      // Fall through to the in-memory single-use guard.
-    }
-    if (!window.confirm(copy.diagnosticConfirm)) return;
-    statusDiagnosticStartedRef.current = true;
-    setStatusDiagnosticAttempted(true);
-    setStatusDiagnosticBusy(true);
-    setStatusDiagnosticError(false);
-    try {
-      window.sessionStorage.setItem(STATUS_DIAGNOSTIC_SESSION_KEY, "1");
-    } catch {
-      // The in-memory guard still applies for this page when storage is unavailable.
-    }
-    try {
-      const { data: authData, error: authError } = await supabase.auth.getSession();
-      if (authError || !authData.session?.access_token) throw new Error("session_unavailable");
-      const response = await fetch("/api/admin/forth-tracking/status-diagnostic?confirm=aggregate-only", {
-        method: "GET",
-        cache: "no-store",
-        headers: { Authorization: `Bearer ${authData.session.access_token}` }
+      setStatusDiagnosticFailure({
+        reason: "network_error",
+        attemptUsed: statusDiagnosticRunner.isAttemptUsed()
       });
-      if (!response.ok) throw new Error("diagnostic_unavailable");
-      const payload: unknown = await response.json();
-      if (!isStatusDiagnosticResult(payload)) throw new Error("invalid_diagnostic");
-      setStatusDiagnostic(payload);
-    } catch {
-      setStatusDiagnosticError(true);
+      setStatusDiagnosticState("failed");
     } finally {
-      setStatusDiagnosticBusy(false);
+      statusDiagnosticConfirmStartedRef.current = false;
     }
+  };
+
+  const openStatusDiagnosticConfirmation = () => {
+    const mayStart = statusDiagnosticState === "ready" ||
+      (statusDiagnosticState === "failed" && statusDiagnosticFailure?.attemptUsed === false);
+    if (!mayStart) return;
+    if (statusDiagnosticRunner.isAttemptUsed()) {
+      setStatusDiagnosticState("previously_attempted");
+      return;
+    }
+    statusDiagnosticInteractedRef.current = true;
+    statusDiagnosticConfirmationReturnStateRef.current =
+      statusDiagnosticState === "failed" ? "failed" : "ready";
+    statusDiagnosticReturnFocusRef.current = statusDiagnosticTriggerRef.current;
+    restoreStatusDiagnosticFocusRef.current = true;
+    setStatusDiagnosticConfirmationOpen(true);
+    setStatusDiagnosticState("awaiting_confirmation");
+  };
+
+  const cancelStatusDiagnosticConfirmation = () => {
+    setStatusDiagnosticConfirmationOpen(false);
+    setStatusDiagnosticState(statusDiagnosticConfirmationReturnStateRef.current);
   };
 
   useEffect(() => {
@@ -642,6 +794,63 @@ export function ForthTrackingCentre() {
   const trackingMessage = requestError
     ? copy.requestFailure
     : data?.error?.message ?? copy.failureBody;
+  const diagnosticStateLabels: Record<StatusDiagnosticUiState, string> = {
+    checking: copy.diagnosticStateChecking,
+    ready: copy.diagnosticStateReady,
+    awaiting_confirmation: copy.diagnosticStateAwaiting,
+    running: copy.diagnosticStateRunning,
+    completed: copy.diagnosticStateCompleted,
+    failed: copy.diagnosticStateFailed,
+    previously_attempted: copy.diagnosticStatePreviouslyAttempted
+  };
+  const diagnosticStatusBody = statusDiagnosticState === "checking"
+    ? copy.diagnosticStateChecking
+    : statusDiagnosticState === "ready"
+      ? copy.diagnosticReadyBody
+      : statusDiagnosticState === "awaiting_confirmation"
+        ? copy.diagnosticAwaitingBody
+        : statusDiagnosticState === "running"
+          ? copy.diagnosticRunningBody
+          : statusDiagnosticState === "completed"
+            ? copy.diagnosticCompletedBody
+            : statusDiagnosticState === "previously_attempted"
+              ? copy.diagnosticPreviouslyAttemptedBody
+              : statusDiagnosticFailure?.reason === "session_unavailable"
+                ? copy.diagnosticSessionError
+                : statusDiagnosticFailure?.reason === "unauthorized"
+                  ? copy.diagnosticUnauthorizedError
+                  : statusDiagnosticFailure?.reason === "forbidden"
+                    ? copy.diagnosticForbiddenError
+                    : statusDiagnosticFailure?.reason === "http_error"
+                      ? copy.diagnosticHttpError + (statusDiagnosticFailure.httpStatus ? " (HTTP " + statusDiagnosticFailure.httpStatus + ")" : "")
+                      : statusDiagnosticFailure?.reason === "network_error"
+                        ? copy.diagnosticNetworkError
+                        : statusDiagnosticFailure?.reason === "invalid_response"
+                          ? copy.diagnosticInvalidResponseError
+                          : copy.diagnosticDuplicateError;
+  const diagnosticCanStart = statusDiagnosticState === "ready" ||
+    (statusDiagnosticState === "failed" && statusDiagnosticFailure?.attemptUsed === false);
+  const diagnosticButtonLabel = statusDiagnosticState === "checking"
+    ? copy.diagnosticStateChecking + "…"
+    : statusDiagnosticState === "awaiting_confirmation"
+      ? copy.diagnosticStateAwaiting
+      : statusDiagnosticState === "running"
+        ? copy.diagnosticStateRunning + "…"
+        : statusDiagnosticState === "completed"
+          ? copy.diagnosticStateCompleted
+          : statusDiagnosticState === "previously_attempted" ||
+              (statusDiagnosticState === "failed" && statusDiagnosticFailure?.attemptUsed)
+            ? copy.diagnosticStatePreviouslyAttempted
+            : statusDiagnosticState === "failed"
+              ? copy.diagnosticRetryButton
+              : copy.diagnosticButton;
+  const diagnosticStateClass = statusDiagnosticState === "completed"
+    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+    : statusDiagnosticState === "failed" || statusDiagnosticState === "previously_attempted"
+      ? "border-rose-200 bg-rose-50 text-rose-800"
+      : statusDiagnosticState === "running" || statusDiagnosticState === "awaiting_confirmation"
+        ? "border-violet-200 bg-violet-50 text-violet-800"
+        : "border-slate-200 bg-slate-50 text-slate-700";
 
   return (
     <main className="mx-auto w-full max-w-[1720px] space-y-6 px-3 pb-10 pt-4 sm:px-5 lg:px-7 lg:pt-6">
@@ -704,13 +913,33 @@ export function ForthTrackingCentre() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-sm font-bold text-slate-900">{copy.diagnosticTitle}</h2>
-              <p className="mt-1 text-xs leading-5 text-slate-500">{copy.diagnosticConfirm}</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">{copy.diagnosticIntro}</p>
             </div>
-            <button type="button" className="btn-secondary shrink-0 justify-center gap-2" onClick={() => void runStatusDiagnostic()} disabled={statusDiagnosticBusy || statusDiagnosticAttempted}>
-              <Activity className={`h-4 w-4 ${statusDiagnosticBusy ? "animate-pulse" : ""}`} />
-              {statusDiagnosticBusy ? copy.refreshing : copy.diagnosticButton}
+            <button
+              ref={statusDiagnosticTriggerRef}
+              type="button"
+              className="btn-secondary shrink-0 justify-center gap-2"
+              onClick={openStatusDiagnosticConfirmation}
+              disabled={!diagnosticCanStart || statusDiagnosticConfirmationOpen}
+            >
+              <Activity className={"h-4 w-4 " + (statusDiagnosticState === "running" ? "animate-pulse" : "")} />
+              {diagnosticButtonLabel}
             </button>
           </div>
+          <p
+            ref={statusDiagnosticMessageRef}
+            tabIndex={-1}
+            role={statusDiagnosticState === "failed" ? "alert" : "status"}
+            aria-live={statusDiagnosticState === "failed" ? "assertive" : "polite"}
+            className={"mt-3 rounded-xl border px-3 py-2 text-xs leading-5 " + diagnosticStateClass}
+          >
+            <strong>{diagnosticStateLabels[statusDiagnosticState]}:</strong> {diagnosticStatusBody}
+          </p>
+          {statusDiagnosticState === "completed" && statusDiagnostic?.error ? (
+            <p className="mt-2 text-xs leading-5 text-amber-800" role="status">
+              {copy.diagnosticEndpointError} {statusDiagnostic.error}
+            </p>
+          ) : null}
           {statusDiagnostic ? (
             <div className="mt-4 grid gap-2 border-t border-slate-100 pt-3 text-xs leading-5 text-slate-600 sm:grid-cols-2 lg:grid-cols-3" aria-live="polite">
               <p><strong>{copy.diagnosticConnection}:</strong> {statusDiagnostic.connectionStatus}</p>
@@ -736,7 +965,44 @@ export function ForthTrackingCentre() {
               </div>
               <p className="sm:col-span-2 lg:col-span-3"><strong>{copy.diagnosticClassification}:</strong> {Object.entries(statusDiagnostic.classificationReason).filter(([, count]) => count > 0).map(([key, count]) => `${key.replaceAll("_", " ")} ${count}`).join(" · ") || "—"}</p>
             </div>
-          ) : statusDiagnosticError ? <p className="mt-3 text-xs text-rose-700" role="status">{copy.diagnosticFailure}</p> : statusDiagnosticAttempted ? <p className="mt-3 text-xs text-slate-600" role="status">{copy.diagnosticDone}</p> : null}
+          ) : null}
+          {statusDiagnosticConfirmationOpen ? (
+            <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/45 p-4">
+              <div
+                ref={statusDiagnosticDialogRef}
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby="forth-status-diagnostic-dialog-title"
+                aria-describedby="forth-status-diagnostic-dialog-description"
+                className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"
+              >
+                <h3 id="forth-status-diagnostic-dialog-title" className="text-base font-bold text-slate-950">
+                  {copy.diagnosticDialogTitle}
+                </h3>
+                <p id="forth-status-diagnostic-dialog-description" className="mt-2 text-sm leading-6 text-slate-600">
+                  {copy.diagnosticDialogBody}
+                </p>
+                <div className="mt-5 flex flex-wrap justify-end gap-2">
+                  <button
+                    ref={statusDiagnosticCancelRef}
+                    type="button"
+                    className="btn-secondary justify-center"
+                    onClick={cancelStatusDiagnosticConfirmation}
+                  >
+                    {copy.diagnosticDialogCancel}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-primary justify-center"
+                    onClick={() => void runStatusDiagnostic()}
+                    disabled={statusDiagnosticConfirmStartedRef.current}
+                  >
+                    {copy.diagnosticDialogRun}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </section>
       ) : null}
 

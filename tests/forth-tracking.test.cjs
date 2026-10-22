@@ -971,19 +971,179 @@ test("Leaflet map builds visible status markers above tiles, fits locations, and
   assert.ok(styles.includes(".vehicleMarkerSelected"));
 });
 
-test("status aggregate control is business-read gated, confirmed, and single-use per tab session", () => {
+test("status diagnostic UI exposes accessible ready, confirmation, running and prior-attempt states", () => {
   const source = fs.readFileSync(path.join(root, "components/forth-tracking-centre.tsx"), "utf8");
+  const runner = fs.readFileSync(path.join(root, "lib/forth-status-diagnostic-client.ts"), "utf8");
   assert.ok(source.includes('can("business:read")'));
-  assert.ok(source.includes("window.confirm(copy.diagnosticConfirm)"));
-  assert.ok(source.includes('fetch("/api/admin/forth-tracking/status-diagnostic?confirm=aggregate-only"'));
-  assert.ok(source.includes("ees-forth-status-diagnostic-unknown-labels-v3-used"));
+  assert.ok(source.includes('useState<StatusDiagnosticUiState>("checking")'));
+  assert.ok(source.includes('setStatusDiagnosticState(statusDiagnosticRunner.isAttemptUsed() ? "previously_attempted" : "ready")'));
+  assert.ok(source.includes('statusDiagnosticState === "ready"'));
+  assert.ok(source.includes('disabled={!diagnosticCanStart || statusDiagnosticConfirmationOpen}'));
+  assert.ok(source.includes('setStatusDiagnosticState("awaiting_confirmation")'));
+  assert.ok(source.includes('setStatusDiagnosticState("running")'));
+  assert.ok(source.includes('setStatusDiagnosticState("completed")'));
+  assert.ok(source.includes('role="alertdialog"'));
+  assert.ok(source.includes('aria-modal="true"'));
+  assert.ok(source.includes("cancelStatusDiagnosticConfirmation"));
+  assert.ok(source.includes("diagnosticPreviouslyAttemptedBody"));
+  assert.ok(runner.includes("FORTH_STATUS_DIAGNOSTIC_SESSION_KEY"));
+  assert.ok(runner.includes('"/api/admin/forth-tracking/status-diagnostic?confirm=aggregate-only"'));
+  assert.ok(runner.includes('reason: "already_attempted"'));
+  assert.ok(runner.includes("Consume the attempt only immediately before initiating the protected request."));
   assert.ok(source.includes("positionSourceShape"));
   assert.ok(source.includes("unknownPositionSourceStrings"));
   assert.ok(source.includes("diagnosticUnknownSourceNote"));
-  assert.ok(source.includes("<code className=\"break-all font-mono text-[11px]\">{entry.label}</code>"));
+  assert.ok(source.includes("<code className=\"break-all font-mono text-[11px]\">{entry.label}</code> · {entry.occurrences}"));
+  assert.equal(source.includes("window.confirm"), false);
   assert.equal(source.includes("dangerouslySetInnerHTML"), false);
-  assert.ok(source.includes("sessionStorage.setItem(STATUS_DIAGNOSTIC_SESSION_KEY, \"1\")"));
-  assert.ok(source.includes("disabled={statusDiagnosticBusy || statusDiagnosticAttempted}"));
+  const openHandler = source.slice(source.indexOf("const openStatusDiagnosticConfirmation"), source.indexOf("const cancelStatusDiagnosticConfirmation"));
+  const cancelHandler = source.slice(source.indexOf("const cancelStatusDiagnosticConfirmation"), source.indexOf("useEffect", source.indexOf("const cancelStatusDiagnosticConfirmation")));
+  assert.equal(openHandler.includes("statusDiagnosticRunner.run()"), false);
+  assert.equal(cancelHandler.includes("statusDiagnosticRunner.run()"), false);
+});
+
+test("one-time diagnostic runner starts ready without sending a request", () => {
+  const { createForthStatusDiagnosticRunner } = loadTypeScript("lib/forth-status-diagnostic-client.ts");
+  let requests = 0;
+  const runner = createForthStatusDiagnosticRunner({
+    storage: { read: () => null, write: () => assert.fail("must not lock before request confirmation") },
+    getAccessToken: async () => "session-token",
+    fetcher: async () => { requests++; throw new Error("not expected"); },
+    isValidResult: (value) => Boolean(value)
+  });
+  assert.equal(runner.isAttemptUsed(), false);
+  assert.equal(requests, 0);
+});
+
+test("cancelling the in-page confirmation leaves the one-time request available", () => {
+  const source = fs.readFileSync(path.join(root, "components/forth-tracking-centre.tsx"), "utf8");
+  const openHandler = source.slice(source.indexOf("const openStatusDiagnosticConfirmation"), source.indexOf("const cancelStatusDiagnosticConfirmation"));
+  const cancelHandler = source.slice(source.indexOf("const cancelStatusDiagnosticConfirmation"), source.indexOf("useEffect", source.indexOf("const cancelStatusDiagnosticConfirmation")));
+  const confirmHandler = source.slice(source.indexOf("const runStatusDiagnostic"), source.indexOf("const openStatusDiagnosticConfirmation"));
+  assert.ok(openHandler.includes("setStatusDiagnosticConfirmationOpen(true)"));
+  assert.ok(cancelHandler.includes("setStatusDiagnosticConfirmationOpen(false)"));
+  assert.ok(cancelHandler.includes("statusDiagnosticConfirmationReturnStateRef.current"));
+  assert.equal(cancelHandler.includes("statusDiagnosticRunner.run()"), false);
+  assert.ok(confirmHandler.includes("if (!statusDiagnosticConfirmationOpen || statusDiagnosticConfirmStartedRef.current) return"));
+});
+
+test("existing session lock prevents a repeat and is surfaced by the component", async () => {
+  const { createForthStatusDiagnosticRunner } = loadTypeScript("lib/forth-status-diagnostic-client.ts");
+  let authCalls = 0;
+  let fetchCalls = 0;
+  const runner = createForthStatusDiagnosticRunner({
+    storage: { read: () => "1", write: () => assert.fail("must retain existing lock") },
+    getAccessToken: async () => { authCalls++; return "session-token"; },
+    fetcher: async () => { fetchCalls++; return Response.json({}); },
+    isValidResult: (value) => Boolean(value)
+  });
+  assert.equal(runner.isAttemptUsed(), true);
+  assert.deepEqual(await runner.run(), { kind: "failed", reason: "already_attempted", attemptUsed: true });
+  assert.equal(authCalls, 0);
+  assert.equal(fetchCalls, 0);
+});
+
+test("duplicate clicks produce one protected request and apply the lock at request initiation", async () => {
+  const { createForthStatusDiagnosticRunner, FORTH_STATUS_DIAGNOSTIC_URL } = loadTypeScript("lib/forth-status-diagnostic-client.ts");
+  let marker = null;
+  let resolveToken;
+  let fetchCalls = 0;
+  const runner = createForthStatusDiagnosticRunner({
+    storage: { read: () => marker, write: (value) => { marker = value; } },
+    getAccessToken: () => new Promise((resolve) => { resolveToken = resolve; }),
+    fetcher: async (url, init) => {
+      fetchCalls++;
+      assert.equal(url, FORTH_STATUS_DIAGNOSTIC_URL);
+      assert.equal(init.method, "GET");
+      assert.equal(init.cache, "no-store");
+      assert.equal(new Headers(init.headers).get("authorization"), "Bearer test-session-token");
+      assert.equal(marker, "1");
+      return Response.json({ safe: true });
+    },
+    isValidResult: (value) => Boolean(value && value.safe === true)
+  });
+  const first = runner.run();
+  const second = await runner.run();
+  assert.deepEqual(second, { kind: "failed", reason: "duplicate", attemptUsed: false });
+  assert.equal(fetchCalls, 0);
+  assert.equal(marker, null);
+  resolveToken("test-session-token");
+  assert.deepEqual(await first, { kind: "completed", result: { safe: true } });
+  assert.equal(fetchCalls, 1);
+  assert.equal(marker, "1");
+});
+
+test("EES session failure sends no request and leaves the attempt available", async () => {
+  const { createForthStatusDiagnosticRunner } = loadTypeScript("lib/forth-status-diagnostic-client.ts");
+  let marker = null;
+  let fetchCalls = 0;
+  const runner = createForthStatusDiagnosticRunner({
+    storage: { read: () => marker, write: (value) => { marker = value; } },
+    getAccessToken: async () => null,
+    fetcher: async () => { fetchCalls++; return Response.json({}); },
+    isValidResult: (value) => Boolean(value)
+  });
+  assert.deepEqual(await runner.run(), { kind: "failed", reason: "session_unavailable", attemptUsed: false });
+  assert.equal(runner.isAttemptUsed(), false);
+  assert.equal(marker, null);
+  assert.equal(fetchCalls, 0);
+});
+
+test("endpoint authentication and API failures are useful and never automatically retried", async () => {
+  const { createForthStatusDiagnosticRunner } = loadTypeScript("lib/forth-status-diagnostic-client.ts");
+  for (const [status, reason] of [[401, "unauthorized"], [403, "forbidden"], [503, "http_error"]]) {
+    let marker = null;
+    let fetchCalls = 0;
+    const runner = createForthStatusDiagnosticRunner({
+      storage: { read: () => marker, write: (value) => { marker = value; } },
+      getAccessToken: async () => "session-token",
+      fetcher: async () => { fetchCalls++; return new Response("ignored", { status }); },
+      isValidResult: (value) => Boolean(value)
+    });
+    const first = await runner.run();
+    assert.equal(first.kind, "failed");
+    assert.equal(first.reason, reason);
+    assert.equal(first.attemptUsed, true);
+    assert.equal(runner.isAttemptUsed(), true);
+    assert.deepEqual(await runner.run(), { kind: "failed", reason: "already_attempted", attemptUsed: true });
+    assert.equal(fetchCalls, 1);
+  }
+});
+
+test("successful diagnostic returns sanitized labels and the component displays label counts as text", async () => {
+  const { createForthStatusDiagnosticRunner } = loadTypeScript("lib/forth-status-diagnostic-client.ts");
+  const result = { labels: [{ label: "Vendor-A", occurrences: 2 }, { label: "Vendor-B", occurrences: 1 }] };
+  const runner = createForthStatusDiagnosticRunner({
+    storage: { read: () => null, write: () => undefined },
+    getAccessToken: async () => "session-token",
+    fetcher: async () => Response.json(result),
+    isValidResult: (value) => Boolean(value && Array.isArray(value.labels))
+  });
+  assert.deepEqual(await runner.run(), { kind: "completed", result });
+  const source = fs.readFileSync(path.join(root, "components/forth-tracking-centre.tsx"), "utf8");
+  assert.ok(source.includes("statusDiagnostic.unknownPositionSourceStrings.labels.map"));
+  assert.ok(source.includes("{entry.label}</code> · {entry.occurrences}"));
+});
+
+test("network and malformed-response failures consume the attempt without exposing error details", async () => {
+  const { createForthStatusDiagnosticRunner } = loadTypeScript("lib/forth-status-diagnostic-client.ts");
+  for (const [fetcher, reason] of [
+    [async () => { throw new Error("network secret should not surface"); }, "network_error"],
+    [async () => new Response("{", { status: 200 }), "invalid_response"]
+  ]) {
+    let marker = null;
+    const runner = createForthStatusDiagnosticRunner({
+      storage: { read: () => marker, write: (value) => { marker = value; } },
+      getAccessToken: async () => "session-token",
+      fetcher,
+      isValidResult: (value) => Boolean(value && value.valid === true)
+    });
+    const outcome = await runner.run();
+    assert.equal(outcome.kind, "failed");
+    assert.equal(outcome.reason, reason);
+    assert.equal(outcome.attemptUsed, true);
+    assert.equal(JSON.stringify(outcome).includes("network secret"), false);
+  }
 });
 
 test("unknown-quality speed indications are labelled provisional and excluded from verified moving status", () => {
