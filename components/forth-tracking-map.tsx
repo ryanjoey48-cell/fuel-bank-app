@@ -15,6 +15,7 @@ type Copy = {
   parked: string;
   unknown: string;
   gpsQuality: string;
+  noGpsQuality: string;
   wifiQuality: string;
   lbsQuality: string;
   otherQuality: string;
@@ -47,6 +48,7 @@ function statusLabel(status: ForthFleetStatus, copy: Copy) {
 
 function positionQualityLabel(record: ForthFleetTrackingRecord, copy: Copy) {
   if (record.positionQuality === "gps") return copy.gpsQuality;
+  if (record.positionQuality === "no_gps") return copy.noGpsQuality;
   if (record.positionQuality === "wifi") return copy.wifiQuality;
   if (record.positionQuality === "lbs") return copy.lbsQuality;
   if (record.positionQuality === "other") return copy.otherQuality;

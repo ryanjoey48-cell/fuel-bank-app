@@ -13,6 +13,7 @@ export type ForthMotionReason =
   | "gps_signal_unavailable"
   | "gps_signal_unknown"
   | "position_source_unknown"
+  | "no_gps_position"
   | "non_gps_position"
   | "speed_unavailable"
   | "speed_invalid";
@@ -32,6 +33,7 @@ export function getForthMotionReason(record: ForthFleetTrackingRecord): ForthMot
   if (record.gpsConnectivity === "disconnected") return "gps_signal_unavailable";
   if (record.gpsConnectivity !== "connected") return "gps_signal_unknown";
   if (record.positionQuality === "unknown") return "position_source_unknown";
+  if (record.positionQuality === "no_gps") return "no_gps_position";
   if (record.positionQuality !== "gps") return "non_gps_position";
   if (record.speed === null) return "speed_unavailable";
   if (!isUsableSpeed(record.speed)) return "speed_invalid";
@@ -47,8 +49,8 @@ export function getForthFleetStatus(record: ForthFleetTrackingRecord): ForthFlee
 
 /**
  * A positive speed on a fresh record with valid coordinates can be surfaced as
- * a provisional report when position quality is unknown. It is not a verified
- * movement classification and is never used for incident or alert decisions.
+ * provisional unless the signals support GPS-verified movement. It is never a
+ * verified movement classification or an input to incident/alert decisions.
  */
 export function isProvisionalReportedMovement(record: ForthFleetTrackingRecord) {
   return record.timestampStatus === "current" &&
@@ -61,9 +63,9 @@ export function isProvisionalReportedMovement(record: ForthFleetTrackingRecord) 
     Number.isFinite(record.longitude) &&
     record.longitude >= -180 &&
     record.longitude <= 180 &&
-    record.positionQuality === "unknown" &&
     isUsableSpeed(record.speed) &&
-    record.speed > 0;
+    record.speed > 0 &&
+    getForthFleetStatus(record) !== "moving";
 }
 
 export function summarizeForthFleet(records: ForthFleetTrackingRecord[]) {
@@ -74,7 +76,7 @@ export function summarizeForthFleet(records: ForthFleetTrackingRecord[]) {
     communications: { online: 0, offline: 0, unknown: 0 } as CountMap<"online" | "offline" | "unknown">,
     positionFreshness: { current: 0, stale: 0, unknown: 0 } as CountMap<"current" | "stale" | "unknown">,
     gpsSignal: { available: 0, unavailable: 0, unknown: 0 } as CountMap<"available" | "unavailable" | "unknown">,
-    positionQuality: { gps: 0, wifi: 0, lbs: 0, other: 0, unknown: 0 } as CountMap<"gps" | "wifi" | "lbs" | "other" | "unknown">,
+    positionQuality: { gps: 0, no_gps: 0, wifi: 0, lbs: 0, other: 0, unknown: 0 } as CountMap<"gps" | "no_gps" | "wifi" | "lbs" | "other" | "unknown">,
     speedAvailability: { available: 0, unavailable: 0 } as CountMap<"available" | "unavailable">,
     engineState: { on: 0, off: 0, unknown: 0 } as CountMap<"on" | "off" | "unknown">,
     classificationReason: {
@@ -88,6 +90,7 @@ export function summarizeForthFleet(records: ForthFleetTrackingRecord[]) {
       gps_signal_unavailable: 0,
       gps_signal_unknown: 0,
       position_source_unknown: 0,
+      no_gps_position: 0,
       non_gps_position: 0,
       speed_unavailable: 0,
       speed_invalid: 0

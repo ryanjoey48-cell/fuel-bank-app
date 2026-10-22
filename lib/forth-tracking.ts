@@ -1,6 +1,6 @@
 export type ForthCoordinateStatus = "valid" | "missing" | "invalid";
 export type ForthGpsConnectivity = "connected" | "disconnected" | "unknown";
-export type ForthPositionQuality = "gps" | "wifi" | "lbs" | "other" | "unknown";
+export type ForthPositionQuality = "gps" | "no_gps" | "wifi" | "lbs" | "other" | "unknown";
 export type ForthPositionSourceShape =
   | "missing"
   | "null"
@@ -288,7 +288,9 @@ function parseTimestamp(value: unknown, now: number, staleAfterMs: number, sourc
 
 function sourceQuality(value: string | null): ForthPositionQuality {
   if (!value) return "unknown";
-  const normalized = value.trim().toLocaleLowerCase().replace(/[\s_-]+/g, "");
+  const trimmed = value.trim().toLocaleLowerCase();
+  if (/^no\s+gps$/.test(trimmed)) return "no_gps";
+  const normalized = trimmed.replace(/[\s_-]+/g, "");
   if (normalized === "gps") return "gps";
   if (normalized === "wifi") return "wifi";
   if (normalized === "lbs") return "lbs";

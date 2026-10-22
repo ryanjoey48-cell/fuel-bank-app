@@ -60,7 +60,7 @@ type StatusDiagnosticResult = {
   communications: Record<"online" | "offline" | "unknown", number>;
   positionFreshness: Record<"current" | "stale" | "unknown", number>;
   gpsSignal: Record<"available" | "unavailable" | "unknown", number>;
-  positionQuality: Record<"gps" | "wifi" | "lbs" | "other" | "unknown", number>;
+  positionQuality: Record<"gps" | "no_gps" | "wifi" | "lbs" | "other" | "unknown", number>;
   speedAvailability: Record<"available" | "unavailable", number>;
   engineState: Record<"on" | "off" | "unknown", number>;
   classificationReason: Record<string, number>;
@@ -125,10 +125,12 @@ const COPY = {
     positionFreshness: "Position age",
     positionQuality: "Position quality",
     gpsSignal: "GPS signal",
+    gpsSourceSignalNote: "Forth reports GPS signal and position source separately. “No GPS” remains unverified even when the GPS signal field reports available.",
     speedAvailability: "Speed report",
     available: "Available",
     unavailableStatus: "Unavailable",
     gpsQuality: "GPS",
+    noGpsQuality: "No GPS · GPS position unverified",
     wifiQuality: "Wi-Fi (approximate)",
     lbsQuality: "LBS (approximate)",
     otherQuality: "Other non-GPS source",
@@ -142,6 +144,7 @@ const COPY = {
     motionReasonGpsUnavailable: "GPS signal unavailable; GPRS may still be online",
     motionReasonGpsUnknown: "GPS signal state was not reported",
     motionReasonSourceUnknown: "Position source was not reported or is unrecognized",
+    motionReasonNoGps: "Forth reports “No GPS” for this position source; motion is not GPS-verified",
     motionReasonNonGps: "Position is not confirmed as GPS; motion is not inferred",
     motionReasonSpeed: "Speed was not reported",
     motionReasonInvalidSpeed: "Speed value is invalid",
@@ -273,10 +276,12 @@ const COPY = {
     positionFreshness: "อายุข้อมูลตำแหน่ง",
     positionQuality: "คุณภาพตำแหน่ง",
     gpsSignal: "สัญญาณ GPS",
+    gpsSourceSignalNote: "Forth รายงานสัญญาณ GPS และแหล่งตำแหน่งแยกกัน รายการ “No GPS” จะยังไม่ยืนยันด้วย GPS แม้ฟิลด์สัญญาณ GPS จะรายงานว่ามีสัญญาณ",
     speedAvailability: "ข้อมูลความเร็ว",
     available: "มีข้อมูล",
     unavailableStatus: "ไม่มีข้อมูล",
     gpsQuality: "GPS",
+    noGpsQuality: "ไม่มี GPS · ยังยืนยันตำแหน่งด้วย GPS ไม่ได้",
     wifiQuality: "Wi-Fi (โดยประมาณ)",
     lbsQuality: "LBS (โดยประมาณ)",
     otherQuality: "แหล่งอื่นที่ไม่ใช่ GPS",
@@ -290,6 +295,7 @@ const COPY = {
     motionReasonGpsUnavailable: "ไม่มีสัญญาณ GPS แต่อาจยังเชื่อมต่อ GPRS",
     motionReasonGpsUnknown: "ไม่มีรายงานสถานะสัญญาณ GPS",
     motionReasonSourceUnknown: "ไม่มีรายงานแหล่งที่มาหรือไม่รู้จัก",
+    motionReasonNoGps: "Forth รายงานแหล่งตำแหน่งเป็น “No GPS” จึงยังไม่ยืนยันการเคลื่อนที่ด้วย GPS",
     motionReasonNonGps: "ยังยืนยันว่าเป็นตำแหน่ง GPS ไม่ได้ จึงไม่สรุปการเคลื่อนที่",
     motionReasonSpeed: "ไม่มีรายงานความเร็ว",
     motionReasonInvalidSpeed: "ค่าความเร็วไม่ถูกต้อง",
@@ -487,6 +493,7 @@ function recordLocationLabel(record: ForthFleetTrackingRecord, copy: Copy) {
   if (record.coordinateStatus === "missing") return copy.missingLocation;
   if (record.coordinateStatus === "invalid") return copy.invalidLocation;
   if (record.positionQuality === "gps") return `${copy.gpsQuality} · ${record.timestampStatus === "stale" ? copy.stale : record.timestampStatus === "current" ? copy.current : copy.unknownValue}`;
+  if (record.positionQuality === "no_gps") return copy.noGpsQuality;
   if (record.positionQuality === "wifi") return copy.wifiQuality;
   if (record.positionQuality === "lbs") return copy.lbsQuality;
   if (record.positionQuality === "other") return copy.otherQuality;
@@ -505,6 +512,7 @@ function motionReasonLabel(record: ForthFleetTrackingRecord, copy: Copy) {
     gps_signal_unavailable: copy.motionReasonGpsUnavailable,
     gps_signal_unknown: copy.motionReasonGpsUnknown,
     position_source_unknown: copy.motionReasonSourceUnknown,
+    no_gps_position: copy.motionReasonNoGps,
     non_gps_position: copy.motionReasonNonGps,
     speed_unavailable: copy.motionReasonSpeed,
     speed_invalid: copy.motionReasonInvalidSpeed
@@ -779,6 +787,7 @@ export function ForthTrackingCentre() {
     parked: copy.mapParked,
     unknown: copy.mapUnknown,
     gpsQuality: copy.gpsQuality,
+    noGpsQuality: copy.noGpsQuality,
     wifiQuality: copy.wifiQuality,
     lbsQuality: copy.lbsQuality,
     otherQuality: copy.otherQuality,
@@ -902,8 +911,8 @@ export function ForthTrackingCentre() {
         <section className="-mt-3 grid gap-2 rounded-2xl border border-slate-100 bg-white/80 p-3 text-xs leading-5 text-slate-600 sm:grid-cols-2 xl:grid-cols-4" aria-label={language === "th" ? "สรุปคุณภาพข้อมูล" : "Tracking data dimensions"}>
           <p><strong className="text-slate-800">{copy.communications}:</strong> {copy.online} {summary.communications.online} · {copy.offlineStatus} {summary.communications.offline} · {copy.unknownValue} {summary.communications.unknown}</p>
           <p><strong className="text-slate-800">{copy.positionFreshness}:</strong> {copy.current} {summary.positionFreshness.current} · {copy.stale} {summary.positionFreshness.stale} · {copy.unknownValue} {summary.positionFreshness.unknown} <span className="block text-[11px] text-slate-500">{copy.freshnessNote}</span></p>
-          <p><strong className="text-slate-800">{copy.positionQuality}:</strong> GPS {summary.positionQuality.gps} · Wi-Fi {summary.positionQuality.wifi} · LBS {summary.positionQuality.lbs} · {copy.otherQuality} {summary.positionQuality.other} · {copy.unknownValue} {summary.positionQuality.unknown}</p>
-          <p><strong className="text-slate-800">{copy.gpsSignal}:</strong> {copy.available} {summary.gpsSignal.available} · {copy.unavailableStatus} {summary.gpsSignal.unavailable} · {copy.unknownValue} {summary.gpsSignal.unknown}<span className="block">{copy.activityUnknown}: {summary.motion.unknown}</span></p>
+          <p><strong className="text-slate-800">{copy.positionQuality}:</strong> {copy.gpsQuality} {summary.positionQuality.gps} · {copy.noGpsQuality} {summary.positionQuality.no_gps} · {copy.wifiQuality} {summary.positionQuality.wifi} · {copy.lbsQuality} {summary.positionQuality.lbs} · {copy.otherQuality} {summary.positionQuality.other} · {copy.unknownValue} {summary.positionQuality.unknown}</p>
+          <p><strong className="text-slate-800">{copy.gpsSignal}:</strong> {copy.available} {summary.gpsSignal.available} · {copy.unavailableStatus} {summary.gpsSignal.unavailable} · {copy.unknownValue} {summary.gpsSignal.unknown}<span className="block">{copy.activityUnknown}: {summary.motion.unknown}</span><span className="mt-1 block text-[11px] text-slate-500">{copy.gpsSourceSignalNote}</span></p>
           <p><strong className="text-slate-800">{copy.provisionalMovement}:</strong> {summary.provisionalMotion.reportedMoving}<span className="block text-[11px] text-slate-500">{copy.provisionalMovementNote}</span></p>
         </section>
       ) : null}
@@ -1032,7 +1041,7 @@ export function ForthTrackingCentre() {
               <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-emerald-600" />{copy.mapMoving}</span>
               <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-indigo-600" />{copy.mapParked}</span>
               <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-slate-500" />{copy.mapUnknown}</span>
-              <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-full border-2 border-dashed border-amber-700" />{copy.wifiQuality} / {copy.lbsQuality} / {copy.unknownQuality}</span>
+              <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-full border-2 border-dashed border-amber-700" />{copy.noGpsQuality} / {copy.wifiQuality} / {copy.lbsQuality} / {copy.otherQuality} / {copy.unknownQuality}</span>
             </div>
           ) : null}
         </section>
@@ -1158,7 +1167,7 @@ export function ForthTrackingCentre() {
             />
             <DetailValue label={copy.timestamp} icon={<Clock3 className="h-3.5 w-3.5" />} value={<span>{formatForthTrackingTime(selectedRecord.lastGpsTimestamp, language) ?? copy.unknownValue}<span className="mt-1 block text-xs font-medium text-slate-500">{timestampStatusLabel(selectedRecord, copy)}</span></span>} />
             <DetailValue label={copy.sourceTimestamp} icon={<Clock3 className="h-3.5 w-3.5" />} value={selectedRecord.sourceTimestampRaw || copy.unknownValue} />
-            <DetailValue label={copy.positionQuality} icon={<MapPinned className="h-3.5 w-3.5" />} value={<span>{selectedRecord.positionSource || recordLocationLabel(selectedRecord, copy)}</span>} />
+            <DetailValue label={copy.positionQuality} icon={<MapPinned className="h-3.5 w-3.5" />} value={<span>{selectedRecord.positionQuality === "no_gps" ? copy.noGpsQuality : selectedRecord.positionSource || recordLocationLabel(selectedRecord, copy)}</span>} />
             <DetailValue label={copy.heading} icon={<Navigation className="h-3.5 w-3.5" />} value={selectedRecord.heading === null ? copy.unknownValue : `${selectedRecord.heading} ${copy.degrees}`} />
           </dl>
         </section>

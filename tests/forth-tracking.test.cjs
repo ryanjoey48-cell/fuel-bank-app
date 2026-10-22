@@ -125,7 +125,7 @@ test("classifies positionSource presence and type without guessing alternate fie
   assert.equal(records[9].positionQuality, "unknown");
 });
 
-test("recognizes only the documented EES source labels across case and separator variants", () => {
+test("recognizes canonical source labels across case and separator variants", () => {
   const records = normalizeForthTrackingResponse([
     { positionSource: "GPS" },
     { positionSource: " wifi " },
@@ -140,6 +140,29 @@ test("recognizes only the documented EES source labels across case and separator
   assert.deepEqual(records.map((record) => record.positionQuality), [
     "gps", "wifi", "wifi", "lbs", "other", "other", "unknown", "unknown"
   ]);
+});
+
+test("recognizes the observed No GPS source with case and whitespace variations only", () => {
+  const records = normalizeForthTrackingResponse([
+    { positionSource: "No GPS" },
+    { positionSource: " no gps " },
+    { positionSource: "NO   GPS" },
+    { positionSource: "No-GPS" },
+    { positionSource: "No_GPS" },
+    { positionSource: "GPS signal lost" }
+  ], { now: baseNow, includeDiagnosticUnknownPositionSourceText: true });
+
+  assert.deepEqual(records.map((record) => record.positionQuality), [
+    "no_gps", "no_gps", "no_gps", "unknown", "unknown", "unknown"
+  ]);
+  assert.deepEqual(records.map((record) => record.positionSourceShape), [
+    "recognized_string", "recognized_string", "recognized_string",
+    "unrecognized_string", "unrecognized_string", "unrecognized_string"
+  ]);
+  assert.deepEqual(records.slice(0, 3).map((record) => record.positionSourceRaw), [null, null, null]);
+  assert.equal(records[0].positionSource, "No GPS");
+  const [ordinary] = normalizeForthTrackingResponse([{ positionSource: "No GPS" }], { now: baseNow });
+  assert.equal(ordinary.positionSourceRaw, null);
 });
 
 test("accepts missing optional fields and distinguishes missing from invalid coordinates", () => {
@@ -255,7 +278,7 @@ test("Forth fields map independently to communications, freshness, position qual
   const summary = summarizeForthFleet(records);
   assert.deepEqual(summary.communications, { online: 10, offline: 1, unknown: 0 });
   assert.deepEqual(summary.gpsSignal, { available: 8, unavailable: 2, unknown: 1 });
-  assert.deepEqual(summary.positionQuality, { gps: 7, wifi: 1, lbs: 1, other: 0, unknown: 2 });
+  assert.deepEqual(summary.positionQuality, { gps: 7, no_gps: 0, wifi: 1, lbs: 1, other: 0, unknown: 2 });
   assert.equal(summary.engineState.off, 2);
   assert.equal(summary.engineState.on, 8);
   assert.equal(summary.engineState.unknown, 1);
@@ -279,6 +302,45 @@ test("unknown position quality exposes provisional fresh positive speed without 
   const summary = summarizeForthFleet(records);
   assert.equal(summary.provisionalMotion.reportedMoving, 3);
   assert.deepEqual(summary.motion, { moving: 0, stationary: 0, unknown: 8 });
+});
+
+test("No GPS source and GPS signal disagreement stay separate in the 21-vehicle summary", () => {
+  const { getForthFleetStatus, getForthMotionReason, isProvisionalReportedMovement, summarizeForthFleet } = loadTypeScript("lib/forth-tracking-view.ts");
+  const base = {
+    dateTime: "21-10-2026 11:59:00",
+    GPS: "ON",
+    GPRS: "ON",
+    Latitude: 13.7,
+    Longitude: 100.5
+  };
+  const gpsVerifiedStationary = Array.from({ length: 6 }, () => ({ ...base, Engine: "OFF", Speed: "0", positionSource: "GPS" }));
+  const noGpsRecords = Array.from({ length: 15 }, (_, index) => ({
+    ...base,
+    Engine: index < 8 ? "ON" : "OFF",
+    Speed: index < 7 ? "24" : "0",
+    positionSource: index % 2 === 0 ? "No GPS" : " no gps "
+  }));
+  const records = normalizeForthTrackingResponse([...gpsVerifiedStationary, ...noGpsRecords], {
+    now: baseNow,
+    sourceTimeZone: "Asia/Bangkok"
+  });
+  const summary = summarizeForthFleet(records);
+
+  assert.deepEqual(summary.communications, { online: 21, offline: 0, unknown: 0 });
+  assert.deepEqual(summary.positionFreshness, { current: 21, stale: 0, unknown: 0 });
+  assert.deepEqual(summary.gpsSignal, { available: 21, unavailable: 0, unknown: 0 });
+  assert.deepEqual(summary.positionQuality, { gps: 6, no_gps: 15, wifi: 0, lbs: 0, other: 0, unknown: 0 });
+  assert.deepEqual(summary.motion, { moving: 0, stationary: 6, unknown: 15 });
+  assert.equal(summary.provisionalMotion.reportedMoving, 7);
+  assert.deepEqual(summary.engineState, { on: 8, off: 13, unknown: 0 });
+  assert.equal(summary.classificationReason.no_gps_position, 15);
+  assert.equal(records[6].gpsConnectivity, "connected");
+  assert.equal(records[6].gprsConnectivity, "connected");
+  assert.equal(getForthMotionReason(records[6]), "no_gps_position");
+  assert.equal(getForthFleetStatus(records[6]), "unknown");
+  assert.equal(isProvisionalReportedMovement(records[6]), true);
+  assert.equal(getForthFleetStatus(records[14]), "unknown");
+  assert.equal(isProvisionalReportedMovement(records[14]), false);
 });
 
 test("EES movement stays speed-based when the engine is on while parked", () => {
@@ -636,7 +698,7 @@ test("status diagnostic returns aggregate counts only and omits all source ident
   assert.equal(result.recordCount, 1);
   assert.deepEqual(result.communications, { online: 1, offline: 0, unknown: 0 });
   assert.deepEqual(result.positionFreshness, { current: 1, stale: 0, unknown: 0 });
-  assert.deepEqual(result.positionQuality, { gps: 1, wifi: 0, lbs: 0, other: 0, unknown: 0 });
+  assert.deepEqual(result.positionQuality, { gps: 1, no_gps: 0, wifi: 0, lbs: 0, other: 0, unknown: 0 });
   assert.deepEqual(result.positionSourceShape.canonicalField, {
     missing: 0, null: 0, empty: 0, number: 0, boolean: 0,
     recognized_string: 1, unrecognized_string: 0, other: 0
@@ -963,6 +1025,8 @@ test("Leaflet map builds visible status markers above tiles, fits locations, and
   assert.ok(source.includes("map.panTo(position"));
   assert.ok(source.includes("setZIndexOffset(selected ? 1000 : 0)"));
   assert.ok(source.includes("record.positionQuality !== \"gps\""));
+  assert.ok(source.includes('record.positionQuality === "no_gps"'));
+  assert.ok(source.includes("copy.noGpsQuality"));
   assert.ok(source.includes("styles.vehicleMarkerApproximate"));
   assert.ok(source.includes("positionQualityLabel(record, copy)"));
   assert.ok(styles.includes(".mapCanvas :global(.leaflet-pane.leaflet-marker-pane)"));
@@ -1146,12 +1210,16 @@ test("network and malformed-response failures consume the attempt without exposi
   }
 });
 
-test("unknown-quality speed indications are labelled provisional and excluded from verified moving status", () => {
+test("unverified source speeds are provisional and the GPS/source disagreement is explained", () => {
   const view = fs.readFileSync(path.join(root, "lib/forth-tracking-view.ts"), "utf8");
   const component = fs.readFileSync(path.join(root, "components/forth-tracking-centre.tsx"), "utf8");
   assert.ok(view.includes("isProvisionalReportedMovement"));
   assert.ok(component.includes("Speed suggests movement · provisional"));
   assert.ok(component.includes("summary.provisionalMotion.reportedMoving"));
+  assert.ok(component.includes("summary.positionQuality.no_gps"));
+  assert.ok(component.includes("gpsSourceSignalNote"));
+  assert.ok(component.includes("No GPS · GPS position unverified"));
+  assert.ok(component.includes("ไม่มี GPS · ยังยืนยันตำแหน่งด้วย GPS ไม่ได้"));
 });
 
 test("Fleet Tracking appears once in the permission-gated Fleet group used by desktop and mobile navigation", () => {
