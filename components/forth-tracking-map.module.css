@@ -1,25 +1,27 @@
 .mapFrame {
   position: relative;
   isolation: isolate;
-  height: min(70vh, 820px);
-  min-height: 460px;
+  height: min(72vh, 820px);
+  min-height: 360px;
   overflow: hidden;
-  border-radius: 1.25rem;
-  background: #eef2f7;
+  border: 1px solid #d8dee8;
+  border-radius: 1rem;
+  background: #f1f4f8;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .mapCanvas {
   width: 100%;
   height: 100%;
-  min-height: 460px;
-  background: #eef2f7;
+  min-height: 360px;
+  background: #f1f4f8;
 }
 
 .mapCanvas :global(.leaflet-container) {
   z-index: 0;
   width: 100%;
   height: 100%;
-  min-height: 460px;
+  min-height: 360px;
   color: #1e293b;
   font: inherit;
   background: #eef2f7;
@@ -44,9 +46,9 @@
   display: block;
   width: 28px;
   height: 28px;
-  border: 3px solid #fff;
+  border: 2px solid #fff;
   border-radius: 9999px;
-  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.75), 0 3px 9px rgba(15, 23, 42, 0.4);
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.28), 0 2px 7px rgba(15, 23, 42, 0.26);
   transition: transform 140ms ease, box-shadow 140ms ease;
 }
 
@@ -65,7 +67,7 @@
 .vehicleMarkerApproximate {
   border-style: dashed;
   border-color: #b45309;
-  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #b45309, 0 3px 9px rgba(15, 23, 42, 0.4);
+  box-shadow: 0 0 0 1px #fff, 0 0 0 2px #b45309, 0 2px 7px rgba(15, 23, 42, 0.24);
 }
 
 .vehicleMarkerOffline::after {
@@ -81,8 +83,8 @@
 }
 
 .vehicleMarkerSelected {
-  transform: scale(1.28);
-  box-shadow: 0 0 0 3px #111827, 0 0 0 6px rgba(255, 255, 255, 0.92), 0 4px 12px rgba(15, 23, 42, 0.55);
+  transform: scale(1.14);
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #6d28d9, 0 3px 9px rgba(15, 23, 42, 0.34);
 }
 
 .mapCanvas :global(.marker-cluster) {
@@ -143,4 +145,37 @@
 .mapCanvas :global(.forth-tracking-popup strong) {
   color: #0f172a;
   font-size: 14px;
+}
+
+.mapCanvas :global(.forth-tracking-popup-action) {
+  justify-self: start;
+  margin-top: 5px;
+  border: 1px solid #ddd6fe;
+  border-radius: 7px;
+  background: #f5f3ff;
+  padding: 5px 9px;
+  color: #5b238e;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mapCanvas :global(.forth-tracking-popup-action:hover) {
+  border-color: #c4b5fd;
+  background: #ede9fe;
+}
+
+.mapCanvas :global(.forth-tracking-popup-action:focus-visible) {
+  outline: 2px solid #7c3aed;
+  outline-offset: 2px;
+}
+
+@media (max-width: 639px) {
+  .mapFrame,
+  .mapCanvas,
+  .mapCanvas :global(.leaflet-container) {
+    min-height: 360px;
+    height: min(58vh, 560px);
+  }
 }

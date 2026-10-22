@@ -23,7 +23,6 @@ import {
   X
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { StatCard } from "@/components/stat-card";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/lib/language-provider";
 import { useAccountAccess } from "@/lib/use-account-access";
@@ -39,6 +38,7 @@ import {
   getForthAccuracyComparisons,
   getForthFleetRecordKey,
   findForthFleetRecord,
+  getForthFleetMapRecords,
   getForthNormalizationWarnings,
   getForthReportedActivity,
   isForthGpsPositionVerified,
@@ -55,7 +55,7 @@ import type { ForthSourceFieldSnapshot } from "@/lib/forth-tracking";
 
 const ForthTrackingMap = dynamic(
   () => import("@/components/forth-tracking-map").then((module) => module.ForthTrackingMap),
-  { ssr: false, loading: () => <div className="h-[min(70vh,820px)] min-h-[460px] animate-pulse rounded-[1.25rem] bg-slate-100" /> }
+  { ssr: false, loading: () => <div className="h-[min(72vh,820px)] min-h-[360px] animate-pulse rounded-2xl bg-slate-100 sm:min-h-[460px]" /> }
 );
 
 const POLL_INTERVAL_MS = 60_000;
@@ -110,27 +110,31 @@ const COPY = {
   en: {
     eyebrow: "Fleet operations",
     title: "Fleet Tracking Centre",
-    description: "Live GPS visibility from Forth, separate from vehicle records and mileage workflows.",
+    description: "Live fleet activity from Forth, with GPS confidence shown separately.",
     connected: "Connected",
     disconnected: "Awaiting configuration",
     unavailable: "Connection unavailable",
     refresh: "Refresh tracking",
     refreshing: "Updating…",
-    lastSync: "Last successful API refresh",
-    total: "Tracked vehicles",
-    totalHelper: "Records returned by Forth",
-    moving: "Reported driving",
-    movingHelper: "Fresh reported speed above 0 km/h",
-    parked: "Reported stopped",
-    parkedHelper: "Fresh reported speed is 0 km/h; location may be unverified",
-    engineOnStops: "Engine-on stops",
-    engineOnStopsHelper: "Stopped reports with engine on",
-    offline: "GPRS offline",
-    offlineHelper: "Tracker communication reported offline by Forth",
-    locationNotGpsVerified: "Location not GPS-verified",
-    locationNotGpsVerifiedHelper: "Position source, signal, time or coordinates do not meet GPS confidence checks",
-    latestGps: "Latest verified GPS position",
-    latestGpsHelper: "Forth position time, separate from API refresh time",
+    lastSync: "Last EES refresh",
+    total: "Vehicles online",
+    totalHelper: "of tracked vehicles",
+    moving: "Driving now",
+    movingHelper: "Fresh reported speed above zero",
+    parked: "Stopped now",
+    parkedHelper: "Fresh reported speed is zero",
+    engineOnStops: "Stopped · engine on",
+    engineOnStopsHelper: "Latest report only; duration is not available",
+    offline: "Tracker offline",
+    offlineHelper: "Forth reports GPRS disconnected",
+    locationNotGpsVerified: "Position unverified",
+    locationNotGpsVerifiedHelper: "Position does not meet GPS confidence checks",
+    latestGps: "Latest current GPS position",
+    latestGpsHelper: "Fresh position confirmed by GPS",
+    needsAttention: "Needs attention",
+    needsAttentionHelper: "Offline or position report older than 15 minutes",
+    countOf: "of",
+    tracked: "tracked",
     unknownSummary: "Reported activity uses fresh speed and engine data. GPS confidence is assessed separately.",
     provisionalMovement: "GPS-verified driving",
     provisionalMovementNote: "Requires a fresh position explicitly identified as GPS, GPS signal and valid coordinates.",
@@ -140,10 +144,10 @@ const COPY = {
     activityUnknown: "Activity unavailable",
     activityUnavailable: "Activity unavailable",
     activityUnavailableHelper: "Speed is missing, invalid or older than 15 minutes",
-    activityDriving: "Reported driving",
-    activityStoppedEngineOn: "Reported stopped · Engine On",
-    activityStoppedEngineOff: "Reported stopped · Engine Off",
-    activityStoppedEngineUnknown: "Reported stopped · Engine Unknown",
+    activityDriving: "Driving now",
+    activityStoppedEngineOn: "Stopped now · Engine on",
+    activityStoppedEngineOff: "Stopped now · Engine off",
+    activityStoppedEngineUnknown: "Stopped now · Engine unknown",
     communications: "Tracker communications",
     positionFreshness: "Position age",
     positionQuality: "Position quality",
@@ -311,50 +315,79 @@ const COPY = {
     heading: "Heading",
     degrees: "degrees",
     lastUpdated: "Data refreshed",
-    mapMoving: "Reported driving",
-    mapParked: "Reported stopped",
+    mapMoving: "Driving now",
+    mapParked: "Stopped now",
     mapOffline: "Activity unavailable",
     mapUnknown: "Activity unavailable",
     mapConfidence: "Dashed amber outline means the position is not GPS-verified",
     mapOfflineLegend: "Red corner dot means GPRS is reported offline",
-    mapSelectedLegend: "Dark ring marks the selected vehicle",
+    mapSelectedLegend: "Purple ring marks the selected vehicle",
+    lastVehicleUpdate: "Last vehicle update",
+    openDetails: "Open details",
     mapFitFleet: "Fit fleet",
     mapHideInspector: "Hide details",
     mapShowInspector: "Show details",
     mapBrowseVehicles: "Browse vehicles",
     mapCloseInspector: "Close details",
     attention: "Fleet attention",
-    attentionNote: "Latest reported readings only; engine-on stops do not imply a duration.",
-    attentionOffline: "GPRS offline",
-    attentionStale: "Stale reports (>15 min)",
-    attentionUnverified: "Location not GPS-verified",
-    attentionEngineStopped: "Stopped, engine on",
-    attentionNone: "No current attention items"
+    attentionNote: "Offline and stale reports need action. Unverified positions and engine-on stops are context.",
+    attentionOffline: "Tracker offline",
+    attentionStale: "Position older than 15 min",
+    attentionUnverified: "Position unverified",
+    attentionEngineStopped: "Stopped · engine on",
+    attentionOperations: "Operational",
+    attentionDataQuality: "Data quality",
+    attentionNormal: "Normal stop",
+    attentionEngineNote: "Snapshot only · no duration reported",
+    attentionNone: "No offline or stale reports",
+    filterAttention: "Needs attention",
+    filterOffline: "Tracker offline",
+    filterStale: "Stale position",
+    filterUnverified: "Position unverified",
+    filterEngineOnStopped: "Stopped · engine on",
+    activityGroup: "Activity",
+    attentionGroup: "Fleet signals",
+    listCount: "vehicles",
+    driverUnavailable: "Driver unavailable",
+    onlineLabel: "Online",
+    engineOnLabel: "Engine on",
+    engineOffLabel: "Engine off",
+    currentGpsCount: "Current GPS positions",
+    locationSection: "Location and confidence",
+    connectionTimingSection: "Tracker and timing",
+    reportedCoordinates: "Reported coordinates",
+    approximateCoordinatesNote: "Position source is not GPS-verified; coordinates may be approximate.",
+    focusOnMap: "Focus on map",
+    activityBasis: "Based on a fresh reported speed"
   },
   th: {
     eyebrow: "การปฏิบัติงานยานพาหนะ",
     title: "ศูนย์ติดตามยานพาหนะ",
-    description: "ตำแหน่ง GPS จาก Forth แยกจากข้อมูลรถและงานบันทึกเลขไมล์",
+    description: "กิจกรรมรถจาก Forth พร้อมแสดงความมั่นใจ GPS แยกต่างหาก",
     connected: "เชื่อมต่อแล้ว",
     disconnected: "รอการตั้งค่า",
     unavailable: "ไม่สามารถเชื่อมต่อได้",
     refresh: "รีเฟรชข้อมูลติดตาม",
     refreshing: "กำลังอัปเดต…",
-    lastSync: "เวลารีเฟรช API สำเร็จล่าสุด",
-    total: "รถที่ติดตาม",
-    totalHelper: "รายการที่ Forth ส่งกลับมา",
-    moving: "รายงานว่ากำลังขับ",
-    movingHelper: "ความเร็วที่รายงานล่าสุดและยังอยู่ในช่วงใหม่มากกว่า 0 กม./ชม.",
-    parked: "รายงานว่าหยุด",
-    parkedHelper: "ความเร็วที่รายงานล่าสุดเป็น 0 กม./ชม. ตำแหน่งอาจยังไม่ยืนยัน",
-    engineOnStops: "หยุดแต่เครื่องยนต์เปิด",
-    engineOnStopsHelper: "รายงานว่าหยุดและเครื่องยนต์เปิด",
-    offline: "GPRS ออฟไลน์",
-    offlineHelper: "Forth รายงานว่าการสื่อสารตัวติดตามออฟไลน์",
-    locationNotGpsVerified: "ตำแหน่งยังไม่ยืนยันด้วย GPS",
-    locationNotGpsVerifiedHelper: "แหล่งตำแหน่ง สัญญาณ เวลา หรือพิกัดไม่ผ่านเงื่อนไขยืนยัน GPS",
-    latestGps: "ตำแหน่ง GPS ที่ยืนยันล่าสุด",
-    latestGpsHelper: "เวลาตำแหน่งจาก Forth แยกจากเวลารีเฟรช API",
+    lastSync: "รีเฟรช EES ล่าสุด",
+    total: "รถออนไลน์",
+    totalHelper: "จากรถที่ติดตาม",
+    moving: "กำลังขับ",
+    movingHelper: "ความเร็วรายงานใหม่มากกว่าศูนย์",
+    parked: "หยุดอยู่",
+    parkedHelper: "ความเร็วรายงานใหม่เป็นศูนย์",
+    engineOnStops: "หยุด · เครื่องยนต์เปิด",
+    engineOnStopsHelper: "เฉพาะข้อมูลรายงานล่าสุด ไม่มีระยะเวลา",
+    offline: "ตัวติดตามออฟไลน์",
+    offlineHelper: "Forth รายงานว่า GPRS ขาดการเชื่อมต่อ",
+    locationNotGpsVerified: "ตำแหน่งยังไม่ยืนยัน",
+    locationNotGpsVerifiedHelper: "ตำแหน่งไม่ผ่านเงื่อนไขความมั่นใจ GPS",
+    latestGps: "ตำแหน่ง GPS ปัจจุบันล่าสุด",
+    latestGpsHelper: "ตำแหน่งใหม่ที่ยืนยันด้วย GPS",
+    needsAttention: "ควรตรวจสอบ",
+    needsAttentionHelper: "ออฟไลน์หรือรายงานตำแหน่งเกิน 15 นาที",
+    countOf: "จาก",
+    tracked: "คันที่ติดตาม",
     unknownSummary: "กิจกรรมจากความเร็วและสถานะเครื่องยนต์ที่ยังใหม่ ส่วนความมั่นใจ GPS แสดงแยกต่างหาก",
     provisionalMovement: "รายงานว่าขับโดยยืนยันด้วย GPS",
     provisionalMovementNote: "ต้องเป็นตำแหน่งใหม่ที่ระบุแหล่ง GPS สัญญาณ GPS พร้อมพิกัดถูกต้อง",
@@ -364,10 +397,10 @@ const COPY = {
     activityUnknown: "ไม่มีกิจกรรมที่ยืนยันได้",
     activityUnavailable: "ไม่มีกิจกรรมที่ยืนยันได้",
     activityUnavailableHelper: "ไม่มีความเร็วที่ถูกต้องหรือข้อมูลเก่ากว่า 15 นาที",
-    activityDriving: "รายงานว่ากำลังขับ",
-    activityStoppedEngineOn: "รายงานว่าหยุด · เครื่องยนต์เปิด",
-    activityStoppedEngineOff: "รายงานว่าหยุด · เครื่องยนต์ปิด",
-    activityStoppedEngineUnknown: "รายงานว่าหยุด · ไม่ทราบสถานะเครื่องยนต์",
+    activityDriving: "กำลังขับ",
+    activityStoppedEngineOn: "หยุดอยู่ · เครื่องยนต์เปิด",
+    activityStoppedEngineOff: "หยุดอยู่ · เครื่องยนต์ปิด",
+    activityStoppedEngineUnknown: "หยุดอยู่ · ไม่ทราบสถานะเครื่องยนต์",
     communications: "การสื่อสารตัวติดตาม",
     positionFreshness: "อายุข้อมูลตำแหน่ง",
     positionQuality: "คุณภาพตำแหน่ง",
@@ -535,25 +568,50 @@ const COPY = {
     heading: "ทิศทาง",
     degrees: "องศา",
     lastUpdated: "อัปเดตข้อมูล",
-    mapMoving: "รายงานว่ากำลังขับ",
-    mapParked: "รายงานว่าหยุด",
+    mapMoving: "กำลังขับ",
+    mapParked: "หยุดอยู่",
     mapOffline: "ไม่มีกิจกรรมที่ยืนยันได้",
     mapUnknown: "ไม่มีกิจกรรมที่ยืนยันได้",
     mapConfidence: "เส้นขอบประสีเหลืองหมายถึงตำแหน่งยังไม่ยืนยันด้วย GPS",
     mapOfflineLegend: "จุดสีแดงที่มุมหมายถึงรายงานว่า GPRS ออฟไลน์",
-    mapSelectedLegend: "วงขอบสีเข้มแสดงรถที่เลือก",
+    mapSelectedLegend: "วงสีม่วงแสดงรถที่เลือก",
+    lastVehicleUpdate: "อัปเดตรถล่าสุด",
+    openDetails: "เปิดรายละเอียด",
     mapFitFleet: "แสดงรถทั้งหมด",
     mapHideInspector: "ซ่อนรายละเอียด",
     mapShowInspector: "แสดงรายละเอียด",
     mapBrowseVehicles: "เลือกรถ",
     mapCloseInspector: "ปิดรายละเอียด",
     attention: "รายการที่ควรตรวจสอบ",
-    attentionNote: "ใช้เฉพาะข้อมูลรายงานล่าสุด; การหยุดขณะเครื่องยนต์เปิดไม่ได้ระบุระยะเวลา",
-    attentionOffline: "GPRS ออฟไลน์",
-    attentionStale: "รายงานเกิน 15 นาที",
-    attentionUnverified: "ตำแหน่งยังไม่ยืนยันด้วย GPS",
-    attentionEngineStopped: "หยุดและเครื่องยนต์เปิด",
-    attentionNone: "ไม่มีรายการที่ควรตรวจสอบในขณะนี้"
+    attentionNote: "รถออฟไลน์และรายงานเก่าควรตรวจสอบ ส่วนตำแหน่งไม่ยืนยันและเครื่องยนต์เปิดเป็นข้อมูลประกอบ",
+    attentionOffline: "ตัวติดตามออฟไลน์",
+    attentionStale: "ตำแหน่งเกิน 15 นาที",
+    attentionUnverified: "ตำแหน่งยังไม่ยืนยัน",
+    attentionEngineStopped: "หยุด · เครื่องยนต์เปิด",
+    attentionOperations: "การปฏิบัติงาน",
+    attentionDataQuality: "คุณภาพข้อมูล",
+    attentionNormal: "หยุดตามปกติ",
+    attentionEngineNote: "ข้อมูลล่าสุด · ไม่มีระยะเวลา",
+    attentionNone: "ไม่มีรายงานออฟไลน์หรือเก่า",
+    filterAttention: "ควรตรวจสอบ",
+    filterOffline: "ตัวติดตามออฟไลน์",
+    filterStale: "ตำแหน่งเก่า",
+    filterUnverified: "ตำแหน่งยังไม่ยืนยัน",
+    filterEngineOnStopped: "หยุด · เครื่องยนต์เปิด",
+    activityGroup: "กิจกรรม",
+    attentionGroup: "สัญญาณกองรถ",
+    listCount: "คัน",
+    driverUnavailable: "ไม่มีข้อมูลผู้ขับ",
+    onlineLabel: "ออนไลน์",
+    engineOnLabel: "เครื่องยนต์เปิด",
+    engineOffLabel: "เครื่องยนต์ปิด",
+    currentGpsCount: "ตำแหน่ง GPS ปัจจุบัน",
+    locationSection: "ตำแหน่งและความมั่นใจ",
+    connectionTimingSection: "ตัวติดตามและเวลา",
+    reportedCoordinates: "พิกัดที่รายงาน",
+    approximateCoordinatesNote: "แหล่งตำแหน่งยังไม่ยืนยันด้วย GPS พิกัดอาจเป็นค่าโดยประมาณ",
+    focusOnMap: "โฟกัสบนแผนที่",
+    activityBasis: "อ้างอิงจากความเร็วที่รายงานและยังใหม่"
   }
 } as const;
 
@@ -730,14 +788,66 @@ function ActivityPill({ activity, copy }: { activity: ForthReportedActivity; cop
   );
 }
 
-function DetailValue({ label, value, icon }: { label: string; value: ReactNode; icon?: ReactNode }) {
+function OverviewMetric({ label, value, detail, icon, tone }: {
+  label: string;
+  value: string;
+  detail: string;
+  icon: ReactNode;
+  tone: "emerald" | "violet" | "amber" | "rose";
+}) {
+  const tones = {
+    emerald: "bg-emerald-50 text-emerald-700 ring-emerald-100",
+    violet: "bg-violet-50 text-violet-700 ring-violet-100",
+    amber: "bg-amber-50 text-amber-800 ring-amber-100",
+    rose: "bg-rose-50 text-rose-700 ring-rose-100"
+  };
   return (
-    <div className="min-w-0 rounded-xl border border-slate-100 bg-slate-50/80 px-3 py-3">
-      <dt className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-        {icon}{label}
-      </dt>
-      <dd className="mt-1.5 break-words text-sm font-semibold text-slate-800">{value}</dd>
+    <div className="flex min-h-[92px] min-w-0 items-center gap-3 rounded-2xl border border-slate-200/90 bg-white px-3.5 py-3 shadow-[0_3px_12px_rgba(15,23,42,0.035)] sm:px-4">
+      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ${tones[tone]}`}>{icon}</span>
+      <div className="min-w-0">
+        <p className="truncate text-[11px] font-semibold text-slate-500">{label}</p>
+        <p className="mt-0.5 text-[25px] font-bold leading-7 tracking-tight text-slate-950">{value}</p>
+        <p className="mt-0.5 truncate text-[10px] leading-4 text-slate-500">{detail}</p>
+      </div>
     </div>
+  );
+}
+
+function AttentionFilterButton({
+  category,
+  categoryLabel,
+  filter,
+  count,
+  label,
+  active,
+  onSelect
+}: {
+  category: "operational" | "quality" | "normal";
+  categoryLabel: string;
+  filter: ForthFleetFilter;
+  count: number;
+  label: string;
+  active: boolean;
+  onSelect: (filter: ForthFleetFilter) => void;
+}) {
+  const tone = category === "operational"
+    ? "border-rose-100 bg-rose-50/70 text-rose-800 hover:border-rose-200"
+    : category === "quality"
+      ? "border-amber-100 bg-amber-50/70 text-amber-900 hover:border-amber-200"
+      : "border-violet-100 bg-violet-50/70 text-violet-900 hover:border-violet-200";
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={() => onSelect(active ? "all" : filter)}
+      className={`min-w-0 rounded-xl border px-3 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 ${tone} ${active ? "ring-2 ring-violet-400 ring-offset-1" : ""}`}
+    >
+      <span className="block truncate text-[9px] font-bold uppercase tracking-[0.12em] opacity-70">{categoryLabel}</span>
+      <span className="mt-0.5 flex items-center justify-between gap-2">
+        <span className="truncate text-[11px] font-semibold">{label}</span>
+        <strong className="text-base leading-5">{count}</strong>
+      </span>
+    </button>
   );
 }
 
@@ -1051,7 +1161,8 @@ export function ForthTrackingCentre() {
     if (!data || !selectedKey) return null;
     return findForthFleetRecord(data.records, selectedKey);
   }, [data, selectedKey]);
-  const lastGpsUpdate = formatForthTrackingTime(summary.lastVerifiedGpsPosition, language);
+  const lastGpsUpdate = formatForthTrackingTime(summary.latestCurrentGpsPosition, language);
+  const selectedHasMapPosition = selectedRecord ? getForthFleetMapRecords([selectedRecord]).length > 0 : false;
   const lastChecked = formatForthTrackingTime(
     lastSuccessfulRefreshAt ?? (data?.connectionStatus === "connected" ? data.fetchedAt : null),
     language
@@ -1078,7 +1189,9 @@ export function ForthTrackingCentre() {
     noPositions: copy.noPositions,
     loading: copy.mapLoading,
     mapUnavailable: copy.mapUnavailable,
-    mapRegionLabel: copy.mapRegionLabel
+    mapRegionLabel: copy.mapRegionLabel,
+    lastVehicleUpdate: copy.lastVehicleUpdate,
+    openDetails: copy.openDetails
   }), [copy]);
 
   const trackingMessage = requestError
@@ -1143,12 +1256,12 @@ export function ForthTrackingCentre() {
         : "border-slate-200 bg-slate-50 text-slate-700";
 
   return (
-    <main className="mx-auto w-full max-w-[1720px] space-y-6 px-3 pb-10 pt-4 sm:px-5 lg:px-7 lg:pt-6">
-      <header className="flex flex-col gap-4 rounded-[1.6rem] border border-violet-100 bg-[linear-gradient(130deg,rgba(255,255,255,0.98),rgba(248,246,252,0.95))] p-5 shadow-[0_14px_38px_rgba(41,24,72,0.06)] sm:flex-row sm:items-center sm:justify-between sm:p-6">
+    <main className="mx-auto w-full max-w-[1800px] space-y-4 px-3 pb-8 pt-4 sm:px-5 lg:px-7 lg:pt-5">
+      <header className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.045)] sm:flex-row sm:items-center sm:justify-between sm:p-5">
         <div className="min-w-0">
-          <p className="text-[11px] font-bold uppercase tracking-[0.19em] text-violet-700">{copy.eyebrow}</p>
-          <h1 className="mt-1.5 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">{copy.title}</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{copy.description}</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-violet-700">{copy.eyebrow}</p>
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950 sm:text-[28px]">{copy.title}</h1>
+          <p className="mt-1.5 max-w-3xl text-sm leading-5 text-slate-600">{copy.description}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           <span className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold ${connected ? "border-emerald-200 bg-emerald-50 text-emerald-800" : data?.connectionStatus === "not_configured" ? "border-amber-200 bg-amber-50 text-amber-800" : "border-slate-200 bg-white text-slate-600"}`}>
@@ -1179,37 +1292,30 @@ export function ForthTrackingCentre() {
         </section>
       ) : null}
 
-      <section aria-label={language === "th" ? "สรุปสถานะกองรถ" : "Fleet overview"} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-        <StatCard label={copy.total} value={connected ? String(summary.total) : "—"} helper={copy.totalHelper} icon={<Truck className="h-5 w-5" />} />
-        <StatCard label={copy.moving} value={connected ? String(summary.reportedActivity.driving) : "—"} helper={copy.movingHelper} icon={<Activity className="h-5 w-5" />} />
-        <StatCard label={copy.parked} value={connected ? String(summary.reportedActivity.stopped) : "—"} helper={copy.parkedHelper} icon={<Gauge className="h-5 w-5" />} />
-        <StatCard label={copy.engineOnStops} value={connected ? String(summary.reportedActivity.stoppedEngineOn) : "—"} helper={copy.engineOnStopsHelper} icon={<Activity className="h-5 w-5" />} />
-        <StatCard label={copy.offline} value={connected ? String(summary.communications.offline) : "—"} helper={copy.offlineHelper} icon={<WifiOff className="h-5 w-5" />} />
-        <StatCard label={copy.locationNotGpsVerified} value={connected ? String(summary.positionConfidence.notGpsVerified) : "—"} helper={copy.locationNotGpsVerifiedHelper} icon={<MapPin className="h-5 w-5" />} />
+      <section aria-label={language === "th" ? "สรุปสถานะกองรถ" : "Fleet overview"} className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+        <OverviewMetric label={copy.total} value={connected ? String(summary.communications.online) : "—"} detail={connected ? `${copy.countOf} ${summary.total} ${copy.tracked}` : copy.totalHelper} tone="emerald" icon={<Wifi className="h-5 w-5" />} />
+        <OverviewMetric label={copy.moving} value={connected ? String(summary.reportedActivity.driving) : "—"} detail={copy.movingHelper} tone="emerald" icon={<Activity className="h-5 w-5" />} />
+        <OverviewMetric label={copy.parked} value={connected ? String(summary.reportedActivity.stopped) : "—"} detail={copy.parkedHelper} tone="violet" icon={<Gauge className="h-5 w-5" />} />
+        <OverviewMetric label={copy.needsAttention} value={connected ? String(summary.needsAttention) : "—"} detail={copy.needsAttentionHelper} tone={summary.needsAttention > 0 ? "amber" : "violet"} icon={<AlertTriangle className="h-5 w-5" />} />
       </section>
 
       {connected ? (
-        <section className="rounded-2xl border border-amber-100 bg-white p-3.5 shadow-[0_8px_24px_rgba(41,24,72,0.035)] sm:p-4" aria-label={copy.attention}>
-          <div className="mb-3 flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-700"><AlertTriangle className="h-4 w-4" /></span>
-            <div>
-              <h2 className="text-sm font-bold text-slate-900">{copy.attention}</h2>
-              <p className="text-[11px] leading-4 text-slate-500">{copy.attentionNote}</p>
-              {summary.communications.offline + summary.positionFreshness.stale + summary.positionConfidence.notGpsVerified + summary.reportedActivity.stoppedEngineOn === 0 ? (
-                <p className="text-[11px] text-slate-500">{copy.attentionNone}</p>
-              ) : null}
-            </div>
+        <section className="rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-[0_3px_14px_rgba(15,23,42,0.03)] sm:px-4" aria-label={copy.attention}>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-xs font-bold text-slate-900">{copy.attention}</h2>
+            <p className="text-[10px] leading-4 text-slate-500">{copy.attentionNote}</p>
           </div>
-          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-            <div className="rounded-xl border border-rose-100 bg-rose-50/50 px-3 py-2"><strong className="block text-lg leading-6 text-rose-800">{summary.communications.offline}</strong><span className="text-[11px] font-medium text-slate-600">{copy.attentionOffline}</span></div>
-            <div className="rounded-xl border border-amber-100 bg-amber-50/50 px-3 py-2"><strong className="block text-lg leading-6 text-amber-800">{summary.positionFreshness.stale}</strong><span className="text-[11px] font-medium text-slate-600">{copy.attentionStale}</span></div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2"><strong className="block text-lg leading-6 text-slate-800">{summary.positionConfidence.notGpsVerified}</strong><span className="text-[11px] font-medium text-slate-600">{copy.attentionUnverified}</span></div>
-            <div className="rounded-xl border border-violet-100 bg-violet-50/50 px-3 py-2"><strong className="block text-lg leading-6 text-violet-800">{summary.reportedActivity.stoppedEngineOn}</strong><span className="text-[11px] font-medium text-slate-600">{copy.attentionEngineStopped}</span></div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <AttentionFilterButton category="operational" categoryLabel={copy.attentionOperations} filter="offline" count={summary.communications.offline} label={copy.attentionOffline} active={filter === "offline"} onSelect={setFilter} />
+            <AttentionFilterButton category="operational" categoryLabel={copy.attentionOperations} filter="stale" count={summary.positionFreshness.stale} label={copy.attentionStale} active={filter === "stale"} onSelect={setFilter} />
+            <AttentionFilterButton category="quality" categoryLabel={copy.attentionDataQuality} filter="unverified" count={summary.positionConfidence.notGpsVerified} label={copy.attentionUnverified} active={filter === "unverified"} onSelect={setFilter} />
+            <AttentionFilterButton category="normal" categoryLabel={copy.attentionNormal} filter="engine_on_stopped" count={summary.reportedActivity.stoppedEngineOn} label={copy.attentionEngineStopped} active={filter === "engine_on_stopped"} onSelect={setFilter} />
           </div>
+          {summary.reportedActivity.stoppedEngineOn > 0 ? <p className="mt-2 text-[10px] leading-4 text-slate-500">{copy.attentionEngineNote}</p> : summary.needsAttention === 0 ? <p className="mt-2 text-[10px] leading-4 text-slate-500">{copy.attentionNone}</p> : null}
         </section>
       ) : null}
 
-      <div className={`grid items-start gap-3 ${inspectorOpen ? "xl:grid-cols-[minmax(250px,0.82fr)_minmax(0,2.15fr)_minmax(300px,1fr)]" : "xl:grid-cols-[minmax(250px,0.82fr)_minmax(0,3.15fr)]"}`}>
+      <div className={`grid items-start gap-3 ${inspectorOpen ? "xl:grid-cols-[minmax(270px,0.82fr)_minmax(0,2.15fr)] 2xl:grid-cols-[minmax(285px,0.82fr)_minmax(0,2.1fr)_minmax(290px,0.96fr)]" : "xl:grid-cols-[minmax(270px,0.82fr)_minmax(0,2.15fr)]"}`}>
         <section className="surface-card order-1 min-w-0 overflow-hidden p-3 sm:p-4 xl:col-start-2 xl:row-start-1" aria-labelledby="forth-live-map-title">
           <div className="mb-3 flex flex-wrap items-start justify-between gap-3 px-1 pt-1">
             <div className="min-w-0">
@@ -1241,8 +1347,9 @@ export function ForthTrackingCentre() {
               <p className="mt-4 max-w-sm text-sm font-medium leading-6 text-slate-600">{data?.connectionStatus === "not_configured" ? copy.configurationBody : copy.noPositions}</p>
             </div>
           )}
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] text-slate-500">
-            <span className="inline-flex items-center gap-1.5"><Clock3 className="h-3.5 w-3.5" />{copy.lastSync}: {lastChecked ?? "—"}</span>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-1 text-[11px] text-slate-500">
+            <span className="inline-flex min-w-0 items-center gap-1.5"><Clock3 className="h-3.5 w-3.5 shrink-0" />{copy.lastSync}: {lastChecked ?? copy.unknownValue}</span>
+            <span className="inline-flex min-w-0 items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0" />{copy.latestGps}: {lastGpsUpdate ?? copy.unknownValue} · {summary.currentGpsVerifiedPositions}/{summary.total}</span>
             <span>{language === "th" ? "อัปเดตอัตโนมัติทุก 60 วินาที" : "Auto-refreshes every 60 seconds"}</span>
           </div>
           {connected ? (
@@ -1252,7 +1359,7 @@ export function ForthTrackingCentre() {
               <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-slate-500" />{copy.mapUnknown}</span>
               <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="h-3 w-3 rounded-full border-2 border-dashed border-amber-700" />{copy.mapConfidence}</span>
               <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="relative h-2.5 w-2.5 rounded-full border border-slate-800 after:absolute after:-right-1 after:-top-1 after:h-1.5 after:w-1.5 after:rounded-full after:border after:border-white after:bg-rose-600" />{copy.mapOfflineLegend}</span>
-              <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="h-3 w-3 rounded-full border-2 border-slate-900" />{copy.mapSelectedLegend}</span>
+              <span className="inline-flex items-center gap-1.5"><i aria-hidden="true" className="h-3 w-3 rounded-full border-2 border-violet-700" />{copy.mapSelectedLegend}</span>
             </div>
           ) : null}
         </section>
@@ -1266,8 +1373,8 @@ export function ForthTrackingCentre() {
             {connected ? <span className="rounded-full bg-violet-50 px-2.5 py-1 text-[11px] font-bold text-violet-800">{visibleRecords.length}</span> : null}
           </div>
 
-          <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] xl:grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_auto_auto]">
-            <label className="relative block">
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <label className="relative col-span-2 block">
               <span className="sr-only">{copy.search}</span>
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
@@ -1279,20 +1386,29 @@ export function ForthTrackingCentre() {
               />
             </label>
             <label className="sr-only" htmlFor="forth-fleet-filter">{copy.filter}</label>
-            <select id="forth-fleet-filter" aria-label={copy.filter} value={filter} onChange={(event) => setFilter(event.target.value as ForthFleetFilter)} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100">
+            <select id="forth-fleet-filter" aria-label={copy.filter} value={filter} onChange={(event) => setFilter(event.target.value as ForthFleetFilter)} className="min-h-10 min-w-0 rounded-xl border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100">
               <option value="all">{copy.all}</option>
-              <option value="driving">{copy.drivingFilter}</option>
-              <option value="stopped">{copy.stoppedFilter}</option>
-              <option value="unavailable">{copy.unknown}</option>
+              <optgroup label={copy.activityGroup}>
+                <option value="driving">{copy.drivingFilter}</option>
+                <option value="stopped">{copy.stoppedFilter}</option>
+                <option value="unavailable">{copy.unknown}</option>
+              </optgroup>
+              <optgroup label={copy.attentionGroup}>
+                <option value="attention">{copy.filterAttention}</option>
+                <option value="offline">{copy.filterOffline}</option>
+                <option value="stale">{copy.filterStale}</option>
+                <option value="unverified">{copy.filterUnverified}</option>
+                <option value="engine_on_stopped">{copy.filterEngineOnStopped}</option>
+              </optgroup>
             </select>
             <label className="sr-only" htmlFor="forth-fleet-sort">{copy.sort}</label>
-            <select id="forth-fleet-sort" aria-label={copy.sort} value={sort} onChange={(event) => setSort(event.target.value as ForthFleetSort)} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100">
+            <select id="forth-fleet-sort" aria-label={copy.sort} value={sort} onChange={(event) => setSort(event.target.value as ForthFleetSort)} className="min-h-10 min-w-0 rounded-xl border border-slate-200 bg-white px-2 text-xs text-slate-700 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100">
               <option value="registration">{copy.sortRegistration}</option>
               <option value="speed_desc">{copy.sortSpeed}</option>
               <option value="updated_desc">{copy.sortUpdated}</option>
             </select>
           </div>
-          <p className="mt-2 text-[11px] text-slate-500">{copy.showingVehicles} {visibleRecords.length} {copy.ofVehicles} {summary.total}</p>
+          <p className="mt-2 text-[10px] text-slate-500">{copy.showingVehicles} {visibleRecords.length} {copy.ofVehicles} {summary.total} {copy.listCount}</p>
 
           <div className="mt-3 max-h-[54vh] min-h-[220px] space-y-1.5 overflow-y-auto pr-1 xl:max-h-[calc(100vh-18rem)]">
             {connected && data.records.length === 0 ? <div className="rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">{copy.noVehicles}</div> : null}
@@ -1304,21 +1420,20 @@ export function ForthTrackingCentre() {
               const updateTime = formatForthTrackingTime(record.lastGpsTimestamp, language);
               const active = key === selectedKey;
               return (
-                <button key={key} type="button" aria-pressed={active} onClick={() => focusVehicle(key)} className={`block w-full rounded-xl border px-2.5 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 ${active ? "border-violet-300 bg-violet-50/80 shadow-sm" : "border-slate-100 bg-white hover:border-violet-200 hover:bg-slate-50/70"}`}>
-                  <span className="flex min-w-0 items-start justify-between gap-2">
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-bold text-slate-900">{record.vehicleRegistration || copy.unknownValue}</span>
-                      <span className="mt-0.5 block truncate text-[11px] text-slate-500">{record.reportedDriver || copy.noDriver}</span>
-                    </span>
+                <button key={key} type="button" aria-pressed={active} onClick={() => focusVehicle(key)} className={`block w-full rounded-xl border px-2.5 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 ${active ? "border-violet-300 bg-violet-50/80 shadow-[0_2px_10px_rgba(91,35,142,0.1)]" : "border-slate-200/80 bg-white hover:border-violet-200 hover:bg-slate-50/70"}`}>
+                  <span className="flex min-w-0 items-center justify-between gap-2">
+                    <span className="min-w-0 truncate text-[15px] font-bold tracking-tight text-slate-950">{record.vehicleRegistration || copy.unknownValue}</span>
                     <ActivityPill activity={activity} copy={copy} />
                   </span>
-                  {activity === "driving" ? <span className={"mt-1 inline-flex rounded-md border px-2 py-0.5 text-[10px] font-semibold " + (isForthGpsPositionVerified(record) ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800")}>{isForthGpsPositionVerified(record) ? copy.provisionalMovement : copy.provisionalBadge}</span> : null}
-                  <span className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] leading-4 text-slate-600">
-                    <span className="inline-flex min-w-0 items-center gap-1"><Gauge className="h-3 w-3 shrink-0 text-slate-400" />{record.speed === null ? copy.unknownValue : `${record.speed} km/h`}</span>
-                    <span className="inline-flex min-w-0 items-center gap-1"><Activity className="h-3 w-3 shrink-0 text-slate-400" />{copy.engine}: {record.engineOn === null ? copy.unknownValue : record.engineOn ? copy.engineOn : copy.engineOff}</span>
-                    <span className="inline-flex min-w-0 items-center gap-1"><Wifi className="h-3 w-3 shrink-0 text-slate-400" />{copy.gprs}: {record.gprsConnectivity === "connected" ? copy.online : record.gprsConnectivity === "disconnected" ? copy.offlineStatus : copy.unknownValue}</span>
-                    <span className="inline-flex min-w-0 items-center gap-1"><Clock3 className="h-3 w-3 shrink-0 text-slate-400" />{updateTime ?? copy.unknownValue} · {timestampStatusLabel(record, copy)}</span>
-                    <span className="col-span-2 inline-flex min-w-0 items-center gap-1"><MapPin className="h-3 w-3 shrink-0 text-slate-400" />{gpsConfidenceLabel(record, copy)}</span>
+                  <span className="mt-1 block truncate text-[11px] text-slate-500">{record.reportedDriver || copy.driverUnavailable}</span>
+                  <span className="mt-2 flex min-w-0 items-center justify-between gap-2">
+                    <span className="inline-flex items-baseline gap-1.5 text-slate-950"><Gauge className="h-3.5 w-3.5 self-center text-slate-400" /><strong className="text-lg leading-5">{record.speed === null ? "—" : record.speed}</strong><span className="text-[10px] text-slate-500">km/h</span></span>
+                    <span className="inline-flex max-w-[58%] min-w-0 items-center gap-1 rounded-md bg-slate-50 px-1.5 py-1 text-[10px] font-semibold text-slate-600"><Activity className="h-3 w-3 shrink-0 text-slate-400" /><span className="truncate">{record.engineOn === null ? copy.unknownValue : record.engineOn ? copy.engineOnLabel : copy.engineOffLabel}</span></span>
+                  </span>
+                  <span className="mt-1.5 inline-flex max-w-full min-w-0 items-center gap-1 text-[10px] leading-4 text-slate-500"><Clock3 className="h-3 w-3 shrink-0" /><span className="truncate">{copy.lastVehicleUpdate}: {updateTime ?? copy.unknownValue} · {timestampStatusLabel(record, copy)}</span></span>
+                  <span className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1.5 text-[10px]">
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 font-semibold ${record.gprsConnectivity === "connected" ? "bg-emerald-50 text-emerald-800" : record.gprsConnectivity === "disconnected" ? "bg-rose-50 text-rose-800" : "bg-slate-100 text-slate-600"}`}><Wifi className="h-3 w-3" />{record.gprsConnectivity === "connected" ? copy.online : record.gprsConnectivity === "disconnected" ? copy.offlineStatus : copy.unknownValue}</span>
+                    <span className={`inline-flex min-w-0 items-center gap-1 rounded-full px-2 py-1 font-semibold ${isForthGpsPositionVerified(record) ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900"}`}><MapPin className="h-3 w-3 shrink-0" /><span className="truncate">{gpsConfidenceLabel(record, copy)}</span></span>
                   </span>
                 </button>
               );
@@ -1329,41 +1444,54 @@ export function ForthTrackingCentre() {
         </section>
 
         {mobileInspectorOpen ? <button type="button" aria-label={copy.mapCloseInspector} onClick={() => setMobileInspectorOpen(false)} className="fixed inset-0 z-[800] bg-slate-950/40 xl:hidden" /> : null}
-        <section className={`surface-card order-3 min-w-0 p-4 sm:p-5 xl:col-start-3 xl:row-start-1 ${mobileInspectorOpen ? "fixed inset-x-3 bottom-3 top-14 z-[810] block max-h-[calc(100dvh-4rem)] overflow-y-auto shadow-2xl xl:static xl:max-h-none xl:overflow-visible xl:shadow-none" : "hidden"} ${inspectorOpen ? "xl:block" : "xl:hidden"}`} aria-labelledby="forth-vehicle-details-title">
+        <section className={`surface-card order-3 min-w-0 p-3.5 sm:p-4 xl:col-start-2 xl:row-start-2 2xl:col-start-3 2xl:row-start-1 ${mobileInspectorOpen ? "fixed inset-x-3 bottom-3 top-14 z-[810] block max-h-[calc(100dvh-4rem)] overflow-y-auto shadow-2xl xl:static xl:max-h-none xl:overflow-visible xl:shadow-none" : "hidden"} ${inspectorOpen ? "xl:block" : "xl:hidden"}`} aria-labelledby="forth-vehicle-details-title">
           {selectedRecord ? (
             <>
-              <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-violet-700">{copy.detailsTitle}</p>
-                  <h2 id="forth-vehicle-details-title" className="mt-1 text-xl font-bold text-slate-950">{selectedRecord.vehicleRegistration || copy.unknownValue}</h2>
-                  <p className="mt-1 text-sm text-slate-500">{copy.device}: {selectedRecord.gpsDeviceId || copy.unknownValue}</p>
-                  <p className="mt-1 text-sm text-slate-500">{copy.driver}: {selectedRecord.reportedDriver || copy.noDriver}</p>
+                  <h2 id="forth-vehicle-details-title" className="mt-1 text-lg font-bold tracking-tight text-slate-950">{selectedRecord.vehicleRegistration || copy.unknownValue}</h2>
+                  <p className="mt-0.5 text-xs text-slate-500">{selectedRecord.reportedDriver || copy.driverUnavailable}</p>
+                  <p className="mt-0.5 text-[10px] text-slate-400">{copy.device}: {selectedRecord.gpsDeviceId || copy.unknownValue}</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <ActivityPill activity={getForthReportedActivity(selectedRecord)} copy={copy} />
                   <button type="button" aria-label={copy.mapCloseInspector} onClick={() => setMobileInspectorOpen(false)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 xl:hidden"><X className="h-4 w-4" /></button>
                 </div>
               </div>
-              {getForthReportedActivity(selectedRecord) === "driving" ? (
-                <p className={"mt-2 inline-flex rounded-md border px-2.5 py-1.5 text-xs font-semibold " + (isForthGpsPositionVerified(selectedRecord) ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800")}>
-                  {isForthGpsPositionVerified(selectedRecord) ? copy.provisionalMovement : copy.provisionalBadge}
-                </p>
-              ) : null}
-              <dl className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-                <DetailValue label={copy.speed} icon={<Gauge className="h-3.5 w-3.5" />} value={<span>{selectedRecord.speed === null ? copy.unknownValue : selectedRecord.speed + " km/h"}<span className="mt-1 block text-xs font-medium text-slate-500">{timestampStatusLabel(selectedRecord, copy)}</span></span>} />
-                <DetailValue label={copy.engine} icon={<Activity className="h-3.5 w-3.5" />} value={selectedRecord.engineOn === null ? copy.unknownValue : selectedRecord.engineOn ? copy.engineOn : copy.engineOff} />
-                <DetailValue label={copy.gprs} icon={<Wifi className="h-3.5 w-3.5" />} value={<ConnectivityValue connected={selectedRecord.gprsConnectivity} copy={copy} />} />
-                <DetailValue label={copy.gps} icon={<Signal className="h-3.5 w-3.5" />} value={<ConnectivityValue connected={selectedRecord.gpsConnectivity} copy={copy} connectedLabel={copy.available} disconnectedLabel={copy.gpsNoFix} />} />
-                <DetailValue label={copy.positionQuality} icon={<MapPinned className="h-3.5 w-3.5" />} value={<span>{gpsConfidenceLabel(selectedRecord, copy)}{selectedRecord.positionSource ? <span className="mt-1 block text-xs font-medium text-slate-500">{selectedRecord.positionSource}</span> : null}</span>} />
-                <DetailValue label={copy.locationStatus} icon={<MapPin className="h-3.5 w-3.5" />} value={recordLocationLabel(selectedRecord, copy)} />
-                <DetailValue label={copy.position} icon={<Navigation className="h-3.5 w-3.5" />} value={selectedRecord.coordinateStatus === "valid" && selectedRecord.latitude !== null && selectedRecord.longitude !== null ? (
-                  <a className="text-violet-700 underline decoration-violet-300 underline-offset-2 hover:text-violet-900" href={`https://www.google.com/maps/search/?api=1&query=${selectedRecord.latitude},${selectedRecord.longitude}`} target="_blank" rel="noopener noreferrer">{selectedRecord.latitude.toFixed(5)}, {selectedRecord.longitude.toFixed(5)}</a>
-                ) : copy.noPosition} />
-                <DetailValue label={copy.timestamp} icon={<Clock3 className="h-3.5 w-3.5" />} value={<span>{formatForthTrackingTime(selectedRecord.lastGpsTimestamp, language) ?? copy.unknownValue}<span className="mt-1 block text-xs font-medium text-slate-500">{timestampStatusLabel(selectedRecord, copy)}</span></span>} />
-                <DetailValue label={copy.sourceTimestamp} icon={<Clock3 className="h-3.5 w-3.5" />} value={selectedRecord.sourceTimestampRaw || copy.unknownValue} />
-                <DetailValue label={copy.lastSync} icon={<RefreshCw className="h-3.5 w-3.5" />} value={lastChecked ?? copy.unknownValue} />
-                <DetailValue label={copy.heading} icon={<Navigation className="h-3.5 w-3.5" />} value={selectedRecord.heading === null ? copy.unknownValue : `${selectedRecord.heading} ${copy.degrees}`} />
-              </dl>
+              <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{copy.speed}</p>
+                  <p className="mt-0.5 text-2xl font-bold leading-7 tracking-tight text-slate-950">{selectedRecord.speed === null ? "—" : selectedRecord.speed}<span className="ml-1 text-xs font-semibold text-slate-500">km/h</span></p>
+                </div>
+                <div className="min-w-0 text-right">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{copy.engine}</p>
+                  <p className="mt-1 text-sm font-bold text-slate-800">{selectedRecord.engineOn === null ? copy.unknownValue : selectedRecord.engineOn ? copy.engineOnLabel : copy.engineOffLabel}</p>
+                </div>
+              </div>
+              <p className="mt-1.5 text-[10px] text-slate-500">{copy.activityBasis} · {timestampStatusLabel(selectedRecord, copy)}</p>
+              <span className={`mt-2 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold ${isForthGpsPositionVerified(selectedRecord) ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900"}`}><MapPin className="h-3 w-3" />{gpsConfidenceLabel(selectedRecord, copy)}</span>
+
+              <details className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
+                <summary className="cursor-pointer text-xs font-semibold text-slate-800">{copy.locationSection}</summary>
+                <div className="mt-2 space-y-2 border-t border-slate-100 pt-2 text-xs">
+                  <p className="font-semibold text-slate-700">{copy.positionQuality}: <span className="font-medium text-slate-600">{gpsConfidenceLabel(selectedRecord, copy)}</span></p>
+                  <p className="font-semibold text-slate-700">{copy.reportedCoordinates}: <span className="font-mono font-medium text-slate-600">{selectedRecord.coordinateStatus === "valid" && selectedRecord.latitude !== null && selectedRecord.longitude !== null ? `${selectedRecord.latitude.toFixed(5)}, ${selectedRecord.longitude.toFixed(5)}` : copy.noPosition}</span></p>
+                  {!isForthGpsPositionVerified(selectedRecord) ? <p className="text-[10px] leading-4 text-amber-800">{copy.approximateCoordinatesNote}</p> : null}
+                  <p className="font-semibold text-slate-700">{copy.heading}: <span className="font-medium text-slate-600">{selectedRecord.heading === null ? copy.unknownValue : `${selectedRecord.heading} ${copy.degrees}`}</span></p>
+                  <button type="button" onClick={() => selectedKey && focusVehicle(selectedKey)} disabled={!selectedHasMapPosition} className="btn-secondary min-h-9 w-full justify-center gap-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50"><MapPinned className="h-3.5 w-3.5" />{copy.focusOnMap}</button>
+                </div>
+              </details>
+
+              <details className="mt-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
+                <summary className="cursor-pointer text-xs font-semibold text-slate-800">{copy.connectionTimingSection}</summary>
+                <div className="mt-2 grid gap-x-3 gap-y-2 border-t border-slate-100 pt-2 text-xs sm:grid-cols-2 2xl:grid-cols-1">
+                  <p className="min-w-0"><span className="block text-[10px] font-semibold uppercase text-slate-500">{copy.communications}</span><span className="mt-0.5"><ConnectivityValue connected={selectedRecord.gprsConnectivity} copy={copy} /></span></p>
+                  <p className="min-w-0"><span className="block text-[10px] font-semibold uppercase text-slate-500">{copy.gps}</span><span className="mt-0.5"><ConnectivityValue connected={selectedRecord.gpsConnectivity} copy={copy} connectedLabel={copy.available} disconnectedLabel={copy.gpsNoFix} /></span></p>
+                  <p className="min-w-0"><span className="block text-[10px] font-semibold uppercase text-slate-500">{copy.lastVehicleUpdate}</span><span className="mt-0.5 block break-words text-slate-700">{formatForthTrackingTime(selectedRecord.lastGpsTimestamp, language) ?? copy.unknownValue} · {timestampStatusLabel(selectedRecord, copy)}</span></p>
+                  <p className="min-w-0"><span className="block text-[10px] font-semibold uppercase text-slate-500">{copy.lastSync}</span><span className="mt-0.5 block break-words text-slate-700">{lastChecked ?? copy.unknownValue}</span></p>
+                </div>
+              </details>
             </>
           ) : (
             <div className="flex min-h-40 flex-col items-start justify-center gap-2">

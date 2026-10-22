@@ -1127,15 +1127,27 @@ test("reported activity is independent from GPS confidence and summary counts ma
   });
   assert.deepEqual(summary.positionConfidence, { gpsVerified: 1, notGpsVerified: 10 });
   assert.equal(summary.gpsVerifiedDriving, 1);
+  assert.equal(summary.needsAttention, 2);
+  assert.equal(summary.currentGpsVerifiedPositions, 1);
+  assert.equal(summary.latestCurrentGpsPosition, current.lastGpsTimestamp);
   assert.equal(filterForthFleetRecords(records, "", "all").length, summary.total);
   assert.equal(filterForthFleetRecords(records, "", "driving").length, summary.reportedActivity.driving);
   assert.equal(filterForthFleetRecords(records, "", "stopped").length, summary.reportedActivity.stopped);
   assert.equal(filterForthFleetRecords(records, "", "unavailable").length, summary.reportedActivity.unavailable);
+  assert.equal(filterForthFleetRecords(records, "", "attention").length, summary.needsAttention);
+  assert.equal(filterForthFleetRecords(records, "", "offline").length, summary.communications.offline);
+  assert.equal(filterForthFleetRecords(records, "", "stale").length, summary.positionFreshness.stale);
+  assert.equal(filterForthFleetRecords(records, "", "unverified").length, summary.positionConfidence.notGpsVerified);
+  assert.equal(filterForthFleetRecords(records, "", "engine_on_stopped").length, summary.reportedActivity.stoppedEngineOn);
   assert.equal(filterForthFleetRecords(records, "NO-GPS", "driving")[0].vehicleRegistration, "NO-GPS-DRIVING");
   assert.deepEqual(
     sortForthFleetRecords(records, "speed_desc").slice(0, 2).map((record) => record.vehicleRegistration),
     ["GPS-VERIFIED-DRIVING", "GPRS-OFFLINE-DRIVING"]
   );
+
+  const offlineAndStale = { ...current, gprsConnectivity: "disconnected", timestampStatus: "stale" };
+  assert.equal(summarizeForthFleet([offlineAndStale]).needsAttention, 1);
+  assert.equal(filterForthFleetRecords([offlineAndStale], "", "attention").length, 1);
 });
 
 test("classifies lost, stale, ambiguous, invalid, and incomplete GPS records safely", () => {
@@ -1238,6 +1250,10 @@ test("Leaflet map keeps selection focus explicit, clusters overlaps, and preserv
   assert.ok(source.includes("styles.vehicleMarkerApproximate"));
   assert.ok(source.includes("styles.vehicleMarkerOffline"));
   assert.ok(source.includes("positionQualityLabel(record, copy)"));
+  assert.ok(source.includes("copy.lastVehicleUpdate"));
+  assert.ok(source.includes("copy.openDetails"));
+  assert.ok(source.includes("forth-tracking-popup-action"));
+  assert.ok(source.includes("onSelectRef.current(key)"));
   assert.ok(source.includes("initialFitCompleteRef.current"));
   assert.ok(source.includes('command.type === "fit"'));
   assert.ok(styles.includes(".mapCanvas :global(.leaflet-pane.leaflet-marker-pane)"));
@@ -1252,7 +1268,7 @@ test("Leaflet map keeps selection focus explicit, clusters overlaps, and preserv
   assert.equal(/fitFleet\(|fitBounds\(|map\.flyTo\(|map\.panTo\(/.test(markerRefreshEffect), false);
 });
 
-test("tracking workspace links list and markers to one selection and exposes Fit Fleet and inspector controls", () => {
+test("premium tracking workspace keeps selection and map controls with responsive details and actionable fleet signals", () => {
   const source = fs.readFileSync(path.join(root, "components/forth-tracking-centre.tsx"), "utf8");
   assert.ok(source.includes("onSelect={focusVehicle}"));
   assert.ok(source.includes("onClick={() => focusVehicle(key)}"));
@@ -1260,14 +1276,34 @@ test("tracking workspace links list and markers to one selection and exposes Fit
   assert.ok(source.includes("onClick={fitAllVehicles}"));
   assert.ok(source.includes("setMapCommand((current) => ({ type: \"fit\""));
   assert.ok(source.includes("setMapCommand((current) => ({ type: \"focus\""));
-  assert.ok(source.includes('xl:grid-cols-[minmax(250px,0.82fr)_minmax(0,2.15fr)_minmax(300px,1fr)]'));
+  assert.ok(source.includes('xl:grid-cols-[minmax(270px,0.82fr)_minmax(0,2.15fr)]'));
+  assert.ok(source.includes('2xl:grid-cols-[minmax(285px,0.82fr)_minmax(0,2.1fr)_minmax(290px,0.96fr)]'));
+  assert.ok(source.includes('xl:col-start-2 xl:row-start-2 2xl:col-start-3 2xl:row-start-1'));
   assert.ok(source.includes('id="forth-vehicle-list"'));
   assert.ok(source.includes("aria-label={copy.attention}"));
+  assert.ok(source.includes("function AttentionFilterButton"));
+  assert.ok(source.includes('filter="offline"'));
+  assert.ok(source.includes('filter="stale"'));
+  assert.ok(source.includes('filter="unverified"'));
+  assert.ok(source.includes('filter="engine_on_stopped"'));
+  assert.ok(source.includes('value="attention"'));
+  assert.ok(source.includes("summary.needsAttention"));
+  assert.ok(source.includes("summary.latestCurrentGpsPosition"));
   assert.ok(source.includes("summary.positionFreshness.stale"));
   assert.ok(source.includes("summary.positionConfidence.notGpsVerified"));
   assert.ok(source.includes("summary.reportedActivity.stoppedEngineOn"));
   assert.ok(source.includes("copy.mapOfflineLegend"));
-  assert.ok(source.includes("selectedRecord.reportedDriver || copy.noDriver"));
+  assert.ok(source.includes("selectedRecord.reportedDriver || copy.driverUnavailable"));
+  assert.ok(source.includes("record.reportedDriver || copy.driverUnavailable"));
+  assert.ok(source.includes("copy.locationSection"));
+  assert.ok(source.includes("copy.connectionTimingSection"));
+  assert.ok(source.includes("copy.focusOnMap"));
+  assert.ok(source.includes("copy.approximateCoordinatesNote"));
+  const inspectorStart = source.indexOf('aria-labelledby="forth-vehicle-details-title"');
+  const accuracyStart = source.indexOf('{connected && can("business:read") ?');
+  const inspector = source.slice(inspectorStart, accuracyStart);
+  assert.equal(inspector.includes("sourceTimestampRaw"), false);
+  assert.equal(inspector.includes("selectedRecord.positionSource"), false);
   assert.ok(source.includes("setSelectedKey(null)"));
   assert.ok(source.includes("copy.attentionNote"));
 });
@@ -1456,8 +1492,9 @@ test("dashboard separates reported activity, GPS confidence, diagnostics and exi
   assert.ok(component.includes("summary.reportedActivity.stopped"));
   assert.ok(component.includes("summary.reportedActivity.stoppedEngineOn"));
   assert.ok(component.includes("summary.positionConfidence.notGpsVerified"));
-  assert.ok(component.includes("isForthGpsPositionVerified(record) ? copy.provisionalMovement : copy.provisionalBadge"));
-  assert.ok(component.includes("label={copy.positionQuality}"));
+  assert.ok(component.includes("gpsConfidenceLabel(record, copy)"));
+  assert.ok(component.includes("<ActivityPill activity={activity} copy={copy} />"));
+  assert.ok(component.includes("summary.currentGpsVerifiedPositions"));
   assert.ok(component.includes("copy.mapConfidence"));
   assert.ok(component.includes("Reported driving · position not GPS-verified"));
   assert.ok(component.includes("ไม่มี GPS · ยังยืนยันตำแหน่งด้วย GPS ไม่ได้"));

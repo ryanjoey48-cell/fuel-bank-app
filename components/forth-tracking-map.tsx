@@ -9,6 +9,7 @@ import {
   getForthFleetMapRecords,
   getForthReportedActivity,
   isForthGpsPositionVerified,
+  formatForthTrackingTime,
   type ForthReportedActivity
 } from "@/lib/forth-tracking-view";
 import type { ForthFleetTrackingRecord } from "@/lib/forth-tracking-server";
@@ -36,6 +37,8 @@ type Copy = {
   loading: string;
   mapUnavailable: string;
   mapRegionLabel: string;
+  lastVehicleUpdate: string;
+  openDetails: string;
 };
 
 type ViewCommand = { type: "fit" | "focus"; sequence: number; key?: string | null };
@@ -249,7 +252,17 @@ export function ForthTrackingMap({ records, selectedKey, onSelect, command, lang
       quality.textContent = positionQualityLabel(record, copy);
       const freshness = document.createElement("span");
       freshness.textContent = record.timestampStatus === "current" ? copy.current : record.timestampStatus === "stale" ? copy.stale : copy.unknownValue;
-      content.append(title, state, speed, engine, confidence, quality, freshness);
+      const update = document.createElement("span");
+      update.textContent = copy.lastVehicleUpdate + ": " + (formatForthTrackingTime(record.lastGpsTimestamp, language) ?? copy.unknownValue);
+      const details = document.createElement("button");
+      details.type = "button";
+      details.className = "forth-tracking-popup-action";
+      details.textContent = copy.openDetails;
+      details.addEventListener("click", (event) => {
+        event.stopPropagation();
+        onSelectRef.current(key);
+      });
+      content.append(title, state, speed, engine, update, confidence, quality, freshness, details);
       if (entry.marker.getPopup()) entry.marker.setPopupContent(content);
       else entry.marker.bindPopup(content, { closeButton: true, autoPanPadding: [24, 24] });
 
@@ -258,7 +271,7 @@ export function ForthTrackingMap({ records, selectedKey, onSelect, command, lang
       if (entry.marker.getTooltip()) entry.marker.setTooltipContent(tooltip);
       else entry.marker.bindTooltip(tooltip, { direction: "top", offset: [0, -8], opacity: 0.96 });
     }
-  }, [copy, mapReady, positionedRecords, selectedKey]);
+  }, [copy, language, mapReady, positionedRecords, selectedKey]);
 
   // The fleet is fit once after its first usable positions arrive. Later data
   // updates never invoke fitBounds; only an explicit map command can move it.
