@@ -1287,6 +1287,11 @@ test("Leaflet map keeps selection focus explicit, clusters overlaps, and preserv
   assert.ok(styles.includes(".vehicleMarkerSelected"));
   assert.ok(source.includes("iconCreateFunction: (cluster)"));
   assert.ok(source.includes("cluster.refreshClusters()"));
+  assert.ok(source.includes("if (clusterNeedsRefresh) cluster.refreshClusters()"));
+  assert.ok(source.includes("if (entry.popupSignature !== popupSignature)"));
+  assert.ok(source.includes("if (entry.tooltipSignature !== tooltipSignature)"));
+  assert.ok(source.includes("const markerStateChanged = activityChanged || confidenceChanged || entry.offline !== offline"));
+  assert.ok(source.includes("export const ForthTrackingMap = memo(function ForthTrackingMap"));
   assert.ok(source.includes('marker.on("focus", () => marker.openTooltip())'));
   assert.ok(source.includes("styles.vehicleClusterQualityApproximate"));
   assert.ok(source.includes("styles.vehicleClusterQualityVerified"));
@@ -1301,7 +1306,10 @@ test("Leaflet map keeps selection focus explicit, clusters overlaps, and preserv
 test("premium tracking workspace keeps selection and map controls with responsive details and actionable fleet signals", () => {
   const source = fs.readFileSync(path.join(root, "components/forth-tracking-centre.tsx"), "utf8");
   assert.ok(source.includes("onSelect={focusVehicle}"));
-  assert.ok(source.includes("onClick={() => focusVehicle(key)}"));
+  assert.ok(source.includes("onClick={() => onSelect(recordKey)}"));
+  assert.ok(source.includes("const FleetVehicleRow = memo(function FleetVehicleRow"));
+  assert.ok(source.includes("const recordKeysByReference = useMemo(() =>"));
+  assert.equal(source.includes("data.records.indexOf(record)"), false);
   assert.ok(source.includes("setSelectedKey((current) => current && payload.records.some"));
   assert.ok(source.includes("onClick={fitAllVehicles}"));
   assert.ok(source.includes("setMapCommand((current) => ({ type: \"fit\""));
@@ -1320,6 +1328,8 @@ test("premium tracking workspace keeps selection and map controls with responsiv
   assert.ok(source.includes('active={filter === "online"}'));
   assert.ok(source.includes('records={mapRecords}'));
   assert.ok(source.includes("formatForthRelativeAge(record.lastGpsTimestamp, Date.now(), language)"));
+  assert.ok(source.includes("aria-label={accessibleUpdateTime}"));
+  assert.ok(source.includes("copy.exactPositionTime"));
   assert.ok(source.includes("onClick={() => applyFleetFilter(filter === \"driving\" ? \"all\" : \"driving\")}"));
   assert.ok(source.includes("summary.needsAttention"));
   assert.ok(source.includes("summary.latestCurrentGpsPosition"));
@@ -1349,6 +1359,11 @@ test("a failed refresh hides the previous telemetry snapshot and identifies its 
   assert.ok(source.includes('const connected = !requestError && data?.connectionStatus === "connected"'));
   assert.ok(source.includes("requestError && lastChecked ?"));
   assert.ok(source.includes("copy.staleSnapshotHidden"));
+  assert.ok(source.includes("requestFailureReason === \"authorization\""));
+  assert.ok(source.includes("requestFailureReason === \"timeout\""));
+  assert.ok(source.includes("requestFailureReason === \"upstream\""));
+  assert.ok(source.includes("requestInvalidResponseFailure"));
+  assert.ok(source.includes("timedOut ? \"timeout\" : failureReason"));
 });
 
 test("status diagnostic UI exposes accessible ready, confirmation, running and prior-attempt states", () => {

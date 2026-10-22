@@ -22,7 +22,7 @@ import {
   WifiOff,
   X
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/lib/language-provider";
 import { useAccountAccess } from "@/lib/use-account-access";
@@ -104,6 +104,7 @@ type StatusDiagnosticRunner = {
   run(): Promise<ForthStatusDiagnosticOutcome<StatusDiagnosticResult>>;
   isAttemptUsed(): boolean;
 };
+type TrackingRequestFailure = "session" | "authorization" | "timeout" | "upstream" | "invalid_response" | "network";
 
 type MapViewCommand = { type: "fit" | "focus"; sequence: number; key?: string | null };
 
@@ -254,6 +255,11 @@ const COPY = {
     failureTitle: "Forth tracking is temporarily unavailable",
     failureBody: "The latest request did not return usable tracking data. Try again shortly.",
     requestFailure: "The protected tracking request could not be completed. Check your EES session and try again.",
+    requestSessionFailure: "Your EES session is unavailable. Sign in again to refresh live tracking.",
+    requestAuthorizationFailure: "Your EES account could not access live tracking. Sign in again or ask an EES administrator to review office access.",
+    requestTimeoutFailure: "The live tracking request timed out. Current vehicle data is hidden until a refresh succeeds.",
+    requestUpstreamFailure: "Forth tracking could not be reached. Current vehicle data is hidden until a refresh succeeds.",
+    requestInvalidResponseFailure: "The tracking service returned an unreadable response. Current vehicle data is hidden until a refresh succeeds.",
     staleSnapshotHidden: "Live telemetry is hidden until a refresh succeeds. Last successful refresh:",
     mapTitle: "Live vehicle map",
     mapDescription: "Select a marker or vehicle to inspect its latest reported position.",
@@ -330,6 +336,7 @@ const COPY = {
     mapOfflineLegend: "Red corner dot means GPRS is reported offline",
     mapSelectedLegend: "Purple ring marks the selected vehicle",
     lastVehicleUpdate: "Last vehicle update",
+    exactPositionTime: "Exact Bangkok time",
     openDetails: "Open details",
     mapFitFleet: "Fit fleet",
     mapHideInspector: "Hide details",
@@ -518,6 +525,11 @@ const COPY = {
     failureTitle: "Forth Tracking ไม่พร้อมใช้งานชั่วคราว",
     failureBody: "คำขอล่าสุดไม่ได้รับข้อมูลติดตามที่ใช้งานได้ โปรดลองอีกครั้งในภายหลัง",
     requestFailure: "ไม่สามารถดำเนินการคำขอติดตามที่ได้รับการป้องกันได้ โปรดตรวจสอบการเข้าสู่ระบบ EES แล้วลองอีกครั้ง",
+    requestSessionFailure: "ไม่พบเซสชัน EES โปรดเข้าสู่ระบบอีกครั้งเพื่อรีเฟรชข้อมูลติดตามสด",
+    requestAuthorizationFailure: "บัญชี EES นี้ไม่สามารถเข้าถึงข้อมูลติดตามสดได้ โปรดเข้าสู่ระบบอีกครั้งหรือติดต่อผู้ดูแลระบบเพื่อตรวจสอบสิทธิ์สำนักงาน",
+    requestTimeoutFailure: "คำขอติดตามสดหมดเวลา ซ่อนข้อมูลรถปัจจุบันจนกว่าจะรีเฟรชสำเร็จ",
+    requestUpstreamFailure: "ไม่สามารถเชื่อมต่อ Forth Tracking ได้ ซ่อนข้อมูลรถปัจจุบันจนกว่าจะรีเฟรชสำเร็จ",
+    requestInvalidResponseFailure: "บริการติดตามส่งข้อมูลที่อ่านไม่ได้ ซ่อนข้อมูลรถปัจจุบันจนกว่าจะรีเฟรชสำเร็จ",
     staleSnapshotHidden: "ซ่อนข้อมูลติดตามสดจนกว่าจะรีเฟรชสำเร็จ รีเฟรชครั้งล่าสุดที่สำเร็จ:",
     mapTitle: "แผนที่รถแบบเรียลไทม์",
     mapDescription: "เลือกหมุดหรือรถเพื่อดูตำแหน่งล่าสุดที่รายงาน",
@@ -594,6 +606,7 @@ const COPY = {
     mapOfflineLegend: "จุดสีแดงที่มุมหมายถึงรายงานว่า GPRS ออฟไลน์",
     mapSelectedLegend: "วงสีม่วงแสดงรถที่เลือก",
     lastVehicleUpdate: "อัปเดตรถล่าสุด",
+    exactPositionTime: "เวลาประเทศไทย",
     openDetails: "เปิดรายละเอียด",
     mapFitFleet: "แสดงรถทั้งหมด",
     mapHideInspector: "ซ่อนรายละเอียด",
@@ -811,6 +824,48 @@ function ActivityPill({ activity, copy }: { activity: ForthReportedActivity; cop
   );
 }
 
+const FleetVehicleRow = memo(function FleetVehicleRow({
+  record,
+  recordKey,
+  active,
+  copy,
+  language,
+  onSelect
+}: {
+  record: ForthFleetTrackingRecord;
+  recordKey: string;
+  active: boolean;
+  copy: Copy;
+  language: "en" | "th";
+  onSelect: (key: string) => void;
+}) {
+  const activity = getForthReportedActivity(record);
+  const updateTime = formatForthRelativeAge(record.lastGpsTimestamp, Date.now(), language);
+  const exactUpdateTime = formatForthTrackingTime(record.lastGpsTimestamp, language);
+  const accessibleUpdateTime = updateTime
+    ? `${updateTime}${exactUpdateTime ? `. ${copy.exactPositionTime}: ${exactUpdateTime}` : ""}`
+    : copy.unknownValue;
+
+  return (
+    <button type="button" aria-pressed={active} onClick={() => onSelect(recordKey)} className={`block w-full rounded-xl border px-2.5 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 ${active ? "border-violet-300 bg-violet-50/80 shadow-[0_2px_10px_rgba(91,35,142,0.1)]" : "border-slate-200/80 bg-white hover:border-violet-200 hover:bg-slate-50/70"}`}>
+      <span className="flex min-w-0 items-center justify-between gap-2">
+        <span className="min-w-0 truncate text-[14px] font-bold tracking-tight text-slate-950">{record.vehicleRegistration || copy.unknownValue}</span>
+        <ActivityPill activity={activity} copy={copy} />
+      </span>
+      <span className="mt-1 flex min-w-0 items-center justify-between gap-2">
+        <span className="inline-flex items-baseline gap-1.5 text-slate-950"><Gauge className="h-3.5 w-3.5 self-center text-slate-400" /><strong className="text-base leading-5">{record.speed === null ? "—" : record.speed}</strong><span className="text-[10px] text-slate-500">km/h</span></span>
+        <span className="inline-flex max-w-[58%] min-w-0 items-center gap-1 rounded-md bg-slate-50 px-1.5 py-1 text-[10px] font-semibold text-slate-700"><Activity className="h-3 w-3 shrink-0 text-slate-400" /><span className="truncate">{record.engineOn === null ? copy.unknownValue : record.engineOn ? copy.engineOnLabel : copy.engineOffLabel}</span></span>
+      </span>
+      <span className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1 text-[10px] leading-4">
+        <span title={exactUpdateTime ?? undefined} aria-label={accessibleUpdateTime} className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-slate-600"><Clock3 className="h-3 w-3 shrink-0 text-slate-400" /><span>{updateTime ?? copy.unknownValue}</span></span>
+        {record.timestampStatus === "stale" ? <span className="rounded-full bg-amber-50 px-1.5 py-0.5 font-semibold text-amber-900">{copy.stale}</span> : null}
+        <span title={record.gprsConnectivity === "connected" ? copy.online : record.gprsConnectivity === "disconnected" ? copy.offlineStatus : copy.unknownValue} className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-semibold ${record.gprsConnectivity === "connected" ? "bg-emerald-50 text-emerald-800" : record.gprsConnectivity === "disconnected" ? "bg-rose-50 text-rose-800" : "bg-slate-100 text-slate-600"}`}><Wifi className="h-3 w-3" /><span>{record.gprsConnectivity === "connected" ? copy.online : record.gprsConnectivity === "disconnected" ? copy.offlineStatus : copy.unknownValue}</span></span>
+        <span title={gpsConfidenceLabel(record, copy)} className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-semibold ${isForthGpsPositionVerified(record) ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900"}`}><MapPin className="h-3 w-3 shrink-0" /><span>{shortPositionQualityLabel(record, copy)}</span></span>
+      </span>
+    </button>
+  );
+});
+
 function OverviewMetric({ label, value, detail, icon, tone, active, disabled, onClick }: {
   label: string;
   value: string;
@@ -931,6 +986,7 @@ export function ForthTrackingCentre() {
   const [data, setData] = useState<ForthFleetTrackingData | null>(null);
   const [lastSuccessfulRefreshAt, setLastSuccessfulRefreshAt] = useState<string | null>(null);
   const [requestError, setRequestError] = useState(false);
+  const [requestFailureReason, setRequestFailureReason] = useState<TrackingRequestFailure>("network");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
@@ -973,12 +1029,12 @@ export function ForthTrackingCentre() {
     }
   };
 
-  const focusVehicle = (key: string) => {
+  const focusVehicle = useCallback((key: string) => {
     setSelectedKey(key);
     setInspectorOpen(true);
     setMobileInspectorOpen(true);
     setMapCommand((current) => ({ type: "focus", sequence: current.sequence + 1, key }));
-  };
+  }, []);
 
   const fitAllVehicles = () => {
     setSelectedKey(null);
@@ -1123,12 +1179,28 @@ export function ForthTrackingCentre() {
       if (!active || inFlight) return;
       inFlight = true;
       requestController = new AbortController();
-      const timeout = window.setTimeout(() => requestController?.abort(), REQUEST_TIMEOUT_MS);
+      let timedOut = false;
+      let failureReason: TrackingRequestFailure = "network";
+      const timeout = window.setTimeout(() => {
+        timedOut = true;
+        requestController?.abort();
+      }, REQUEST_TIMEOUT_MS);
       setRefreshing(true);
 
       try {
-        const { data: authData, error: authError } = await supabase.auth.getSession();
-        if (authError || !authData.session?.access_token) throw new Error("session_unavailable");
+        let authData: Awaited<ReturnType<typeof supabase.auth.getSession>>["data"];
+        let authError: Awaited<ReturnType<typeof supabase.auth.getSession>>["error"];
+        try {
+          ({ data: authData, error: authError } = await supabase.auth.getSession());
+        } catch {
+          failureReason = "session";
+          throw new Error("session_unavailable");
+        }
+        if (authError || !authData.session?.access_token) {
+          failureReason = "session";
+          throw new Error("session_unavailable");
+        }
+        if (!active) return;
 
         const response = await fetch("/api/admin/forth-tracking/vehicles", {
           method: "GET",
@@ -1136,25 +1208,37 @@ export function ForthTrackingCentre() {
           signal: requestController.signal,
           headers: { Authorization: `Bearer ${authData.session.access_token}` }
         });
-        if (!response.ok) throw new Error("request_unavailable");
-        const payload: unknown = await response.json();
-        if (!isFleetTrackingData(payload)) throw new Error("invalid_response");
+        if (!response.ok) {
+          failureReason = response.status === 401 || response.status === 403
+            ? "authorization"
+            : response.status >= 500 ? "upstream" : "network";
+          throw new Error("request_unavailable");
+        }
+        let payload: unknown;
+        try {
+          payload = await response.json();
+        } catch {
+          failureReason = "invalid_response";
+          throw new Error("invalid_response");
+        }
+        if (!isFleetTrackingData(payload)) {
+          failureReason = "invalid_response";
+          throw new Error("invalid_response");
+        }
         if (active) {
           if (payload.connectionStatus === "connected" && payload.fetchedAt) {
             setLastSuccessfulRefreshAt(payload.fetchedAt);
           }
           setData(payload);
           setRequestError(false);
+          setRequestFailureReason("network");
           setSelectedKey((current) => current && payload.records.some((record, index) => getForthFleetRecordKey(record, index) === current) ? current : null);
         }
       } catch {
-        if (active && !requestController.signal.aborted) {
+        if (active) {
           setData(null);
           setRequestError(true);
-          setSelectedKey(null);
-        } else if (active) {
-          setData(null);
-          setRequestError(true);
+          setRequestFailureReason(timedOut ? "timeout" : failureReason);
           setSelectedKey(null);
         }
       } finally {
@@ -1187,6 +1271,13 @@ export function ForthTrackingCentre() {
 
   const connected = !requestError && data?.connectionStatus === "connected";
   const summary = useMemo(() => summarizeForthFleet(data?.records ?? []), [data?.records]);
+  const recordKeysByReference = useMemo(() => {
+    const keys = new Map<ForthFleetTrackingRecord, string>();
+    for (const [index, record] of (data?.records ?? []).entries()) {
+      keys.set(record, getForthFleetRecordKey(record, index));
+    }
+    return keys;
+  }, [data?.records]);
   const visibleRecords = useMemo(
     () => sortForthFleetRecords(filterForthFleetRecords(data?.records ?? [], search, filter), sort),
     [data?.records, filter, search, sort]
@@ -1242,7 +1333,17 @@ export function ForthTrackingCentre() {
   }), [copy]);
 
   const trackingMessage = requestError
-    ? copy.requestFailure
+    ? requestFailureReason === "session"
+      ? copy.requestSessionFailure
+      : requestFailureReason === "authorization"
+        ? copy.requestAuthorizationFailure
+        : requestFailureReason === "timeout"
+          ? copy.requestTimeoutFailure
+          : requestFailureReason === "upstream"
+            ? copy.requestUpstreamFailure
+            : requestFailureReason === "invalid_response"
+              ? copy.requestInvalidResponseFailure
+              : copy.requestFailure
     : data?.error?.message ?? copy.failureBody;
   const diagnosticStateLabels: Record<StatusDiagnosticUiState, string> = {
     checking: copy.diagnosticStateChecking,
@@ -1479,30 +1580,8 @@ export function ForthTrackingCentre() {
             {connected && data.records.length === 0 ? <div className="rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">{copy.noVehicles}</div> : null}
             {connected && data.records.length > 0 && visibleRecords.length === 0 ? <div className="rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">{copy.noMatches}</div> : null}
             {connected ? visibleRecords.map((record) => {
-              const index = data.records.indexOf(record);
-              const key = getForthFleetRecordKey(record, index);
-              const activity = getForthReportedActivity(record);
-              const updateTime = formatForthRelativeAge(record.lastGpsTimestamp, Date.now(), language);
-              const exactUpdateTime = formatForthTrackingTime(record.lastGpsTimestamp, language);
-              const active = key === selectedKey;
-              return (
-                <button key={key} type="button" aria-pressed={active} onClick={() => focusVehicle(key)} className={`block w-full rounded-xl border px-2.5 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 ${active ? "border-violet-300 bg-violet-50/80 shadow-[0_2px_10px_rgba(91,35,142,0.1)]" : "border-slate-200/80 bg-white hover:border-violet-200 hover:bg-slate-50/70"}`}>
-                  <span className="flex min-w-0 items-center justify-between gap-2">
-                    <span className="min-w-0 truncate text-[14px] font-bold tracking-tight text-slate-950">{record.vehicleRegistration || copy.unknownValue}</span>
-                    <ActivityPill activity={activity} copy={copy} />
-                  </span>
-                  <span className="mt-1 flex min-w-0 items-center justify-between gap-2">
-                    <span className="inline-flex items-baseline gap-1.5 text-slate-950"><Gauge className="h-3.5 w-3.5 self-center text-slate-400" /><strong className="text-base leading-5">{record.speed === null ? "—" : record.speed}</strong><span className="text-[10px] text-slate-500">km/h</span></span>
-                    <span className="inline-flex max-w-[58%] min-w-0 items-center gap-1 rounded-md bg-slate-50 px-1.5 py-1 text-[10px] font-semibold text-slate-700"><Activity className="h-3 w-3 shrink-0 text-slate-400" /><span className="truncate">{record.engineOn === null ? copy.unknownValue : record.engineOn ? copy.engineOnLabel : copy.engineOffLabel}</span></span>
-                  </span>
-                  <span className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1 text-[10px] leading-4">
-                    <span title={exactUpdateTime ?? undefined} className="inline-flex min-w-0 items-center gap-1 text-slate-600"><Clock3 className="h-3 w-3 shrink-0 text-slate-400" /><span className="truncate">{updateTime ?? copy.unknownValue}</span></span>
-                    {record.timestampStatus === "stale" ? <span className="rounded-full bg-amber-50 px-1.5 py-0.5 font-semibold text-amber-900">{copy.stale}</span> : null}
-                    <span title={record.gprsConnectivity === "connected" ? copy.online : record.gprsConnectivity === "disconnected" ? copy.offlineStatus : copy.unknownValue} className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-semibold ${record.gprsConnectivity === "connected" ? "bg-emerald-50 text-emerald-800" : record.gprsConnectivity === "disconnected" ? "bg-rose-50 text-rose-800" : "bg-slate-100 text-slate-600"}`}><Wifi className="h-3 w-3" /><span>{record.gprsConnectivity === "connected" ? copy.online : record.gprsConnectivity === "disconnected" ? copy.offlineStatus : copy.unknownValue}</span></span>
-                    <span title={gpsConfidenceLabel(record, copy)} className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-semibold ${isForthGpsPositionVerified(record) ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900"}`}><MapPin className="h-3 w-3 shrink-0" /><span>{shortPositionQualityLabel(record, copy)}</span></span>
-                  </span>
-                </button>
-              );
+              const key = recordKeysByReference.get(record);
+              return key ? <FleetVehicleRow key={key} record={record} recordKey={key} active={key === selectedKey} copy={copy} language={language} onSelect={focusVehicle} /> : null;
             }) : null}
             {!connected && !loading && !requestError && data?.connectionStatus !== "not_configured" ? <div className="rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">{copy.failureBody}</div> : null}
             {loading && !data ? <div className="rounded-xl border border-slate-100 px-4 py-8 text-center text-sm text-slate-500">{copy.mapLoading}</div> : null}
@@ -1603,7 +1682,7 @@ export function ForthTrackingCentre() {
                 {accuracyRecords.map((record) => {
                   const comparisons = getForthAccuracyComparisons(record, data.fetchedAt);
                   const warnings = getForthNormalizationWarnings(record);
-                  const key = getForthFleetRecordKey(record, data.records.indexOf(record));
+                  const key = recordKeysByReference.get(record) ?? getForthFleetRecordKey(record, 0);
                   return (
                     <details key={key} className="rounded-xl border border-slate-200 bg-slate-50/60">
                       <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 px-3 py-3 text-sm font-semibold text-slate-800">
