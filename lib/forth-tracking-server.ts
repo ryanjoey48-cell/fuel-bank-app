@@ -124,6 +124,9 @@ export type ForthFleetTrackingRecord = Pick<
   | "gpsDeviceId"
   | "vehicleRegistration"
   | "reportedDriver"
+  | "locationAddressEnglish"
+  | "locationAddressThai"
+  | "locationPointOfInterest"
   | "latitude"
   | "longitude"
   | "coordinateStatus"
@@ -425,6 +428,9 @@ export function createForthTrackingService(options: {
       gpsDeviceId: record.gpsDeviceId,
       vehicleRegistration: record.vehicleRegistration,
       reportedDriver: record.reportedDriver,
+      locationAddressEnglish: record.locationAddressEnglish,
+      locationAddressThai: record.locationAddressThai,
+      locationPointOfInterest: record.locationPointOfInterest,
       latitude: record.latitude,
       longitude: record.longitude,
       coordinateStatus: record.coordinateStatus,
@@ -466,6 +472,9 @@ export function createForthTrackingService(options: {
       gpsDeviceId: null,
       vehicleRegistration: null,
       reportedDriver: null,
+      locationAddressEnglish: null,
+      locationAddressThai: null,
+      locationPointOfInterest: null,
       latitude: record.latitude,
       longitude: record.longitude,
       coordinateStatus: record.coordinateStatus,

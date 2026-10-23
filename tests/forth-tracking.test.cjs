@@ -63,6 +63,9 @@ test("normalizes a valid tracking response without inferring movement", () => {
     COG: "180",
     Latitude: "13.7563",
     Longitude: 100.5018,
+    addressE: "EES Warehouse, Bangkok",
+    addressT: "คลัง EES กรุงเทพมหานคร",
+    poi: "EES Warehouse",
     positionSource: "GPS",
     Sensor1: "available"
   }], { now: baseNow });
@@ -70,6 +73,9 @@ test("normalizes a valid tracking response without inferring movement", () => {
   assert.equal(record.gpsDeviceId, "1234");
   assert.equal(record.vehicleRegistration, "1กข - 2345");
   assert.equal(record.reportedDriver, "Driver A");
+  assert.equal(record.locationAddressEnglish, "EES Warehouse, Bangkok");
+  assert.equal(record.locationAddressThai, "คลัง EES กรุงเทพมหานคร");
+  assert.equal(record.locationPointOfInterest, "EES Warehouse");
   assert.equal(record.coordinateStatus, "valid");
   assert.equal(record.latitude, 13.7563);
   assert.equal(record.longitude, 100.5018);
@@ -89,6 +95,23 @@ test("normalizes a valid tracking response without inferring movement", () => {
   assert.deepEqual(record.sourceAudit.positionTimestamp, { shape: "string", value: "2026-10-21T04:55:00+00:00", truncated: false });
   assert.equal(Object.hasOwn(record.sourceAudit, "IDCard"), false);
   assert.equal(Object.hasOwn(record.sourceAudit, "Sensor1"), false);
+});
+
+test("Forth address and POI descriptions are bounded plain text and unsupported shapes are omitted", () => {
+  const [sanitized, unsupported, longValue] = normalizeForthTrackingResponse([
+    { addressE: "  Main\nRoad\u0000 Bangkok  ", addressT: "ถนน\tบางกอก", poi: "  Depot\u007f Gate " },
+    { addressE: { text: "must not serialize" }, addressT: "   ", poi: ["unsafe"] },
+    { poi: "x".repeat(250) }
+  ], { now: baseNow });
+
+  assert.equal(sanitized.locationAddressEnglish, "Main Road Bangkok");
+  assert.equal(sanitized.locationAddressThai, "ถนน บางกอก");
+  assert.equal(sanitized.locationPointOfInterest, "Depot Gate");
+  assert.equal(unsupported.locationAddressEnglish, null);
+  assert.equal(unsupported.locationAddressThai, null);
+  assert.equal(unsupported.locationPointOfInterest, null);
+  assert.equal(Array.from(longValue.locationPointOfInterest).length, 240);
+  assert.equal(JSON.stringify(sanitized.sourceAudit).includes("Main"), false);
 });
 
 test("accuracy source snapshots are allowlisted, bounded, and omit unsupported or unsafe driver values", () => {
@@ -287,9 +310,10 @@ test("Forth fields map independently to communications, freshness, position qual
   ], { now: baseNow, sourceTimeZone: "Asia/Bangkok" });
 
   assert.deepEqual(records.map(getForthFleetStatus), [
-    "moving", "stationary", "unknown", "unknown", "moving", "unknown",
+    "unknown", "stationary", "unknown", "unknown", "moving", "unknown",
     "unknown", "unknown", "unknown", "unknown", "unknown"
   ]);
+  assert.equal(getForthMotionReason(records[0]), "speed_engine_conflict");
   assert.equal(getForthMotionReason(records[2]), "gps_signal_unavailable");
   assert.equal(records[2].gpsConnectivity, "disconnected");
   assert.equal(records[2].gprsConnectivity, "connected");
@@ -927,6 +951,9 @@ test("fleet endpoint service exposes normalized vehicle fields only and reuses i
       Sensor1: "private-sensor-value",
       Latitude: 13.7,
       Longitude: 100.5,
+      addressE: "Warehouse Road, Bangkok",
+      addressT: "ถนนคลังสินค้า กรุงเทพฯ",
+      poi: "Bangkok depot",
       GPS: "Online",
       GPRS: "Connected",
       Engine: "On",
@@ -941,6 +968,9 @@ test("fleet endpoint service exposes normalized vehicle fields only and reuses i
   assert.equal(result.connectionStatus, "connected");
   assert.equal(result.records.length, 1);
   assert.equal(result.records[0].reportedDriver, "Driver A");
+  assert.equal(result.records[0].locationAddressEnglish, "Warehouse Road, Bangkok");
+  assert.equal(result.records[0].locationAddressThai, "ถนนคลังสินค้า กรุงเทพฯ");
+  assert.equal(result.records[0].locationPointOfInterest, "Bangkok depot");
   assert.equal(result.records[0].gprsConnectivity, "connected");
   assert.equal(result.records[0].speed, 42);
   assert.deepEqual(result.records[0].sourceAudit.speed, { shape: "number", value: 42, truncated: false });
@@ -951,6 +981,7 @@ test("fleet endpoint service exposes normalized vehicle fields only and reuses i
   assert.equal(result.fetchedAt, "2026-10-21T05:00:00.000Z");
   assert.equal(Object.hasOwn(result.records[0], "optionalSensors"), false);
   assert.equal(Object.hasOwn(result.records[0], "IDCard"), false);
+  assert.equal(Object.hasOwn(result.records[0], "poi"), false);
   assert.equal(JSON.stringify(result).includes("private-id"), false);
   assert.equal(JSON.stringify(result).includes("private-sensor-value"), false);
   assert.equal(JSON.stringify(result).includes("bearer-test-token"), false);
@@ -1094,6 +1125,8 @@ test("reported activity is independent from GPS confidence and summary counts ma
     getForthReportedActivity,
     isForthGpsPositionVerified,
     isForthGpsVerifiedDriving,
+    isProvisionalReportedMovement,
+    getForthMotionReason,
     summarizeForthFleet,
     filterForthFleetRecords,
     sortForthFleetRecords
@@ -1126,12 +1159,13 @@ test("reported activity is independent from GPS confidence and summary counts ma
     { ...current, vehicleRegistration: "GPS-LOST-DRIVING", gpsConnectivity: "disconnected", positionQuality: "gps" },
     { ...current, vehicleRegistration: "GPRS-OFFLINE-DRIVING", gprsConnectivity: "disconnected" },
     { ...current, vehicleRegistration: "NO-COORDINATES-DRIVING", coordinateStatus: "missing", latitude: null, longitude: null },
-    { ...current, vehicleRegistration: "INVALID-SPEED", speed: -1 }
+    { ...current, vehicleRegistration: "INVALID-SPEED", speed: -1 },
+    { ...current, vehicleRegistration: "74-8969", positionQuality: "gps", speed: 2, engineOn: false }
   ];
 
   assert.deepEqual(records.map(getForthReportedActivity), [
     "driving", "stopped_engine_on", "stopped_engine_off", "stopped_engine_unknown",
-    "unavailable", "unavailable", "driving", "driving", "driving", "driving", "unavailable"
+    "unavailable", "unavailable", "driving", "driving", "driving", "driving", "unavailable", "uncertain"
   ]);
   assert.equal(isForthGpsPositionVerified(records[0]), false);
   assert.equal(isForthGpsVerifiedDriving(records[0]), false);
@@ -1142,6 +1176,11 @@ test("reported activity is independent from GPS confidence and summary counts ma
   assert.equal(getForthReportedActivity(records[8]), "driving");
   assert.equal(getForthReportedActivity(records[9]), "driving");
   assert.equal(getForthReportedActivity(records[10]), "unavailable");
+  assert.equal(getForthReportedActivity(records[11]), "uncertain");
+  assert.equal(getForthMotionReason(records[11]), "speed_engine_conflict");
+  assert.equal(isForthGpsPositionVerified(records[11]), true);
+  assert.equal(isForthGpsVerifiedDriving(records[11]), false);
+  assert.equal(isProvisionalReportedMovement(records[11]), false);
 
   const summary = summarizeForthFleet(records);
   assert.deepEqual(summary.reportedActivity, {
@@ -1150,23 +1189,26 @@ test("reported activity is independent from GPS confidence and summary counts ma
     stoppedEngineOn: 1,
     stoppedEngineOff: 1,
     stoppedEngineUnknown: 1,
-    unavailable: 3
+    unavailable: 3,
+    uncertain: 1
   });
-  assert.deepEqual(summary.positionConfidence, { gpsVerified: 1, notGpsVerified: 10 });
+  assert.deepEqual(summary.positionConfidence, { gpsVerified: 2, notGpsVerified: 10 });
   assert.equal(summary.gpsVerifiedDriving, 1);
   assert.equal(summary.needsAttention, 2);
-  assert.equal(summary.currentGpsVerifiedPositions, 1);
+  assert.equal(summary.currentGpsVerifiedPositions, 2);
   assert.equal(summary.latestCurrentGpsPosition, current.lastGpsTimestamp);
   assert.equal(filterForthFleetRecords(records, "", "all").length, summary.total);
   assert.equal(filterForthFleetRecords(records, "", "driving").length, summary.reportedActivity.driving);
   assert.equal(filterForthFleetRecords(records, "", "stopped").length, summary.reportedActivity.stopped);
   assert.equal(filterForthFleetRecords(records, "", "unavailable").length, summary.reportedActivity.unavailable);
+  assert.equal(filterForthFleetRecords(records, "", "uncertain").length, summary.reportedActivity.uncertain);
   assert.equal(filterForthFleetRecords(records, "", "attention").length, summary.needsAttention);
   assert.equal(filterForthFleetRecords(records, "", "offline").length, summary.communications.offline);
   assert.equal(filterForthFleetRecords(records, "", "stale").length, summary.positionFreshness.stale);
   assert.equal(filterForthFleetRecords(records, "", "unverified").length, summary.positionConfidence.notGpsVerified);
   assert.equal(filterForthFleetRecords(records, "", "engine_on_stopped").length, summary.reportedActivity.stoppedEngineOn);
   assert.equal(filterForthFleetRecords(records, "NO-GPS", "driving")[0].vehicleRegistration, "NO-GPS-DRIVING");
+  assert.equal(filterForthFleetRecords(records, "74-8969", "uncertain")[0].vehicleRegistration, "74-8969");
   assert.deepEqual(
     sortForthFleetRecords(records, "speed_desc").slice(0, 2).map((record) => record.vehicleRegistration),
     ["GPS-VERIFIED-DRIVING", "GPRS-OFFLINE-DRIVING"]
@@ -1233,6 +1275,51 @@ test("map coordinate projection excludes missing, invalid, non-finite, and out-o
 
   assert.deepEqual(mapped.map(({ position }) => position), [[0, 0], [-90, 180]]);
   assert.equal(mapped[0].key, "device:GPS-1");
+});
+
+test("74-8969 sample preserves Forth latitude/longitude and labels positive speed with Engine OFF as uncertain", () => {
+  const { normalizeForthTrackingResponse } = loadTypeScript("lib/forth-tracking.ts");
+  const { getForthFleetMapRecords, getForthReportedActivity, getForthTrackingVehicleIdentity } = loadTypeScript("lib/forth-tracking-view.ts");
+  const [normalized] = normalizeForthTrackingResponse([{
+    gpsID: "fixture-device-74-8969",
+    plateNumber: "74-8969",
+    Latitude: "13.739421",
+    Longitude: "100.521938",
+    dateTime: "21-10-2026 12:00:00",
+    GPS: "ON",
+    GPRS: "ON",
+    positionSource: "GPS",
+    Speed: "2",
+    Engine: "OFF"
+  }], { now: Date.parse("2026-10-21T05:01:00.000Z"), sourceTimeZone: "Asia/Bangkok" });
+  const mapRecord = getForthFleetMapRecords([normalized])[0];
+
+  assert.deepEqual(getForthTrackingVehicleIdentity(normalized.vehicleRegistration), {
+    vehicleClass: "six_wheeler", classLabel: "6W", make: "Nissan", model: null
+  });
+  assert.deepEqual([normalized.latitude, normalized.longitude], [13.739421, 100.521938]);
+  assert.deepEqual(mapRecord.position, [13.739421, 100.521938]);
+  assert.equal(getForthReportedActivity(normalized), "uncertain");
+});
+
+test("Forth location descriptions use only supplied top-level address or POI text and can be searched", () => {
+  const { getForthLocationDescription, filterForthFleetRecords } = loadTypeScript("lib/forth-tracking-view.ts");
+  const records = [{
+    vehicleRegistration: "LOCATION-1",
+    locationAddressEnglish: "Warehouse Road, Bangkok",
+    locationAddressThai: "ถนนคลังสินค้า กรุงเทพฯ",
+    locationPointOfInterest: "Bangkok depot"
+  }, {
+    vehicleRegistration: "NO-ADDRESS",
+    locationAddressEnglish: null,
+    locationAddressThai: null,
+    locationPointOfInterest: null
+  }];
+
+  assert.equal(getForthLocationDescription(records[0], "en"), "Warehouse Road, Bangkok");
+  assert.equal(getForthLocationDescription(records[0], "th"), "ถนนคลังสินค้า กรุงเทพฯ");
+  assert.equal(getForthLocationDescription(records[1], "en"), null);
+  assert.equal(filterForthFleetRecords(records, "Bangkok depot", "all")[0].vehicleRegistration, "LOCATION-1");
 });
 
 test("initial fleet framing focuses a clear spatial majority and retains every valid point for Fit Fleet", () => {
@@ -1319,7 +1406,11 @@ test("Leaflet map groups screen collisions by registration, fans them out and pr
   assert.ok(source.includes("copy.gpsVerified"));
   assert.ok(source.includes("copy.notGpsVerified"));
   assert.ok(source.includes("copyRef.current.expandGroup"));
+  assert.match(source, /registrations\s*\.map\(\(registration\)\s*=>\s*`<b>\$\{escapeHtml\(registration\)\}<\/b>`\)/);
+  assert.ok(source.includes("styles.vehicleGroupRegistrations"));
+  assert.ok(source.includes("expandedGroupRef.current = group.signature"));
   assert.ok(source.includes("styles.vehicleMarkerDriving"));
+  assert.ok(source.includes("styles.vehicleMarkerUncertain"));
   assert.ok(source.includes("styles.vehicleMarkerStoppedEngineOn"));
   assert.ok(source.includes("styles.vehicleMarkerUnavailable"));
   assert.ok(source.includes("styles.vehicleMarkerApproximate"));
@@ -1334,11 +1425,14 @@ test("Leaflet map groups screen collisions by registration, fans them out and pr
   assert.ok(styles.includes(".vehicleMarkerOffline::after"));
   assert.ok(styles.includes(".vehicleMarkerSelected"));
   assert.ok(styles.includes(".vehicleGroupCard"));
+  assert.ok(styles.includes(".vehicleGroupRegistrations"));
+  assert.ok(styles.includes(".vehicleMarkerUncertain"));
   assert.equal(source.includes("bindPopup("), false);
   assert.equal(source.includes("openPopup("), false);
   assert.ok(source.includes("if (entry.tooltipSignature !== tooltipSignature)"));
   assert.ok(source.includes("const changed = entry.activity !== activity"));
   assert.ok(source.includes("export const ForthTrackingMap = memo(function ForthTrackingMap"));
+  assert.ok(source.includes("if (!entry.onMap) return [];"));
   assert.ok(source.includes('marker.on("focus", () => marker.openTooltip())'));
 
   const reconcileStart = source.indexOf("// Keep original Leaflet markers");
@@ -1396,6 +1490,13 @@ test("premium tracking workspace keeps selection and map controls with responsiv
   assert.ok(source.includes('summary.positionConfidence.notGpsVerified'));
   assert.ok(source.includes('label={copy.engineOnStops}'));
   assert.ok(source.includes('label={copy.locationNotGpsVerified}'));
+  assert.ok(source.includes('label={copy.activityConflictCount}'));
+  assert.ok(source.includes('active={filter === "uncertain"}'));
+  assert.ok(source.includes('value="uncertain"'));
+  assert.ok(source.includes("getForthLocationDescription(selectedRecord, language)"));
+  assert.ok(source.includes("copy.activityConflictNote"));
+  assert.ok(source.includes("copy.technicalDetails"));
+  assert.ok(source.includes('xl:w-[min(18rem,36%)]'));
   assert.ok(source.includes('className="forth-tracking-kpis flex gap-1.5"'));
   assert.ok(source.includes('records={mapRecords}'));
   assert.ok(source.includes('filterKey={filter}'));
@@ -1406,11 +1507,9 @@ test("premium tracking workspace keeps selection and map controls with responsiv
   assert.ok(source.includes("summary.latestCurrentGpsPosition"));
   assert.ok(source.includes("summary.positionConfidence.notGpsVerified"));
   assert.ok(source.includes("summary.reportedActivity.stoppedEngineOn"));
+  assert.ok(source.includes("summary.reportedActivity.uncertain"));
   assert.ok(source.includes("copy.mapOfflineLegend"));
   assert.ok(source.includes("selectedRecord.reportedDriver ?"));
-  assert.ok(source.includes("copy.locationSection"));
-  assert.ok(source.includes("copy.connectionTimingSection"));
-  assert.ok(source.includes("copy.sourceSection"));
   assert.ok(source.includes("copy.focusOnMap"));
   assert.ok(source.includes("copy.approximateCoordinatesNote"));
   assert.ok(source.includes("getForthTrackingVehicleIdentity(record.vehicleRegistration)"));
@@ -1421,8 +1520,12 @@ test("premium tracking workspace keeps selection and map controls with responsiv
   const inspectorStart = source.indexOf('aria-labelledby="forth-vehicle-details-title"');
   const inspectorEnd = source.indexOf('{connected && can("business:read") && diagnosticsOpen ?', inspectorStart);
   const inspector = source.slice(inspectorStart, inspectorEnd);
-  const technicalDetailsStart = inspector.indexOf("{copy.sourceSection}");
-  assert.equal(inspector.includes("sourceTimestampRaw"), false);
+  const technicalDetailsStart = inspector.indexOf("{copy.technicalDetails}");
+  assert.equal((inspector.match(/<details/g) ?? []).length, 1);
+  assert.equal(inspector.includes("copy.locationSection"), false);
+  assert.equal(inspector.includes("copy.connectionTimingSection"), false);
+  assert.equal(inspector.includes("copy.sourceSection"), false);
+  assert.ok(inspector.includes("selectedRecord.sourceTimestampRaw"));
   assert.equal(inspector.includes("selectedRecord.positionSource"), false);
   assert.ok(technicalDetailsStart >= 0);
   assert.equal(inspector.slice(0, technicalDetailsStart).includes("selectedRecord.gpsDeviceId"), false);

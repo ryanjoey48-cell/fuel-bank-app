@@ -83,6 +83,10 @@
   background: #475569;
 }
 
+.vehicleMarkerUncertain {
+  background: #9a3412;
+}
+
 .vehicleMarkerApproximate {
   border-style: dashed;
   border-color: #b45309;
@@ -160,9 +164,9 @@
 
 .vehicleGroupCard {
   display: grid;
-  width: 174px;
+  width: 220px;
   min-height: 54px;
-  gap: 2px;
+  gap: 3px;
   border: 1px solid rgba(71, 85, 105, 0.42);
   border-left: 4px solid #5b238e;
   border-radius: 10px;
@@ -181,12 +185,21 @@
 }
 
 .vehicleGroupCard > span {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px 4px;
+  min-width: 0;
+}
+
+.vehicleGroupRegistrations b {
+  min-width: 0;
   overflow: hidden;
   color: #334155;
   font-size: 9px;
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-style: normal;
 }
 
 .vehicleGroupCard i {

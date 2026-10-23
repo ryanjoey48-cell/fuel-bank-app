@@ -78,6 +78,9 @@ export type ForthTrackingRecord = {
   gpsDeviceId: string | null;
   vehicleRegistration: string | null;
   reportedDriver: string | null;
+  locationAddressEnglish: string | null;
+  locationAddressThai: string | null;
+  locationPointOfInterest: string | null;
   latitude: number | null;
   longitude: number | null;
   coordinateStatus: ForthCoordinateStatus;
@@ -126,6 +129,18 @@ function optionalText(value: unknown) {
   if (typeof value === "string") return value.trim() || null;
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
   return null;
+}
+
+const MAX_LOCATION_DESCRIPTION_LENGTH = 240;
+
+function optionalLocationDescription(value: unknown) {
+  if (typeof value !== "string") return null;
+  const normalized = value
+    .replace(/[\p{Cc}\p{Cf}]/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+  if (!normalized) return null;
+  return Array.from(normalized).slice(0, MAX_LOCATION_DESCRIPTION_LENGTH).join("") || null;
 }
 
 const MAX_SOURCE_AUDIT_TEXT_LENGTH = 160;
@@ -438,6 +453,9 @@ function normalizeRecord(
     gpsDeviceId: optionalText(raw.gpsID),
     vehicleRegistration: optionalText(raw.plateNumber),
     reportedDriver: optionalDriverLabel(raw.driver),
+    locationAddressEnglish: optionalLocationDescription(raw.addressE),
+    locationAddressThai: optionalLocationDescription(raw.addressT),
+    locationPointOfInterest: optionalLocationDescription(raw.poi),
     latitude: coordinateStatus === "valid" ? latitude.value : null,
     longitude: coordinateStatus === "valid" ? longitude.value : null,
     coordinateStatus,

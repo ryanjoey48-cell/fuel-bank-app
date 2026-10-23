@@ -3440,8 +3440,8 @@ td {
 .forth-tracking-kpis {
   display: grid;
   width: 100%;
-  min-width: 840px;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  min-width: 980px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
 }
 
 .forth-tracking-workspace .forth-map-panel,

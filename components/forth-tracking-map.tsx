@@ -19,6 +19,7 @@ import type { ForthFleetTrackingRecord } from "@/lib/forth-tracking-server";
 
 type Copy = {
   driving: string;
+  uncertain: string;
   stopped: string;
   unavailable: string;
   gpsVerified: string;
@@ -68,6 +69,7 @@ const tileUrl = process.env.NEXT_PUBLIC_EES_MAP_TILE_URL || "https://tile.openst
 
 function activityLabel(activity: ForthReportedActivity, copy: Copy) {
   if (activity === "driving") return copy.driving;
+  if (activity === "uncertain") return copy.uncertain;
   if (activity === "stopped_engine_on") return copy.stopped + " · " + copy.engineOn;
   if (activity === "stopped_engine_off") return copy.stopped + " · " + copy.engineOff;
   if (activity === "stopped_engine_unknown") return copy.stopped + " · " + copy.unknownValue;
@@ -97,7 +99,9 @@ function markerIcon(
 ) {
   const statusClass = activity === "driving"
     ? styles.vehicleMarkerDriving
-    : activity === "stopped_engine_on"
+    : activity === "uncertain"
+      ? styles.vehicleMarkerUncertain
+      : activity === "stopped_engine_on"
       ? styles.vehicleMarkerStoppedEngineOn
       : activity === "stopped_engine_off"
         ? styles.vehicleMarkerStoppedEngineOff
@@ -125,14 +129,16 @@ function markerIcon(
 }
 
 function groupIcon(Leaflet: LeafletModule, registrations: string[], copy: Copy) {
-  const shown = registrations.slice(0, 2).join(" · ");
-  const extra = registrations.length - Math.min(registrations.length, 2);
-  const preview = extra > 0 ? `${shown} +${extra}` : shown;
+  const rows = Math.ceil(registrations.length / 3);
+  const height = 48 + rows * 17;
+  const registrationMarkup = registrations
+    .map((registration) => `<b>${escapeHtml(registration)}</b>`)
+    .join("");
   return Leaflet.divIcon({
     className: styles.vehicleGroupIcon,
-    html: `<span class="${styles.vehicleGroupCard}"><strong>${registrations.length} ${escapeHtml(copy.groupVehicles)}</strong><span>${escapeHtml(preview)}</span><i>${escapeHtml(copy.expandGroup)}</i></span>`,
-    iconSize: [174, 58],
-    iconAnchor: [87, 29]
+    html: `<span class="${styles.vehicleGroupCard}"><strong>${registrations.length} ${escapeHtml(copy.groupVehicles)}</strong><span class="${styles.vehicleGroupRegistrations}">${registrationMarkup}</span><i>${escapeHtml(copy.expandGroup)}</i></span>`,
+    iconSize: [220, height],
+    iconAnchor: [110, height / 2]
   });
 }
 
@@ -209,6 +215,7 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
           const currentMap = mapRef.current;
           if (!currentMap) return;
           const candidates = Array.from(markersByKeyRef.current.entries()).flatMap(([key, entry]) => {
+            if (!entry.onMap) return [];
             const markerElement = entry.marker.getElement();
             const label = markerElement?.querySelector<HTMLElement>(`.${styles.vehicleMarkerLabel}`);
             if (!label) return [];
