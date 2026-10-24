@@ -3407,9 +3407,9 @@ td {
   min-height: 0;
   max-width: none;
   flex: 1 1 auto;
-  gap: 0.4rem;
+  gap: 0;
   overflow: hidden;
-  padding: 0.45rem 0.65rem 0.5rem !important;
+  padding: 0 !important;
 }
 
 .dashboard-dispatch-shell .forth-tracking-workspace {
@@ -3425,9 +3425,9 @@ td {
 }
 
 .forth-tracking-workspace .forth-tracking-grid {
+  display: block;
   min-height: 0;
   flex: 1 1 0%;
-  grid-template-rows: minmax(0, 1fr);
 }
 
 .forth-tracking-kpi-scroll {

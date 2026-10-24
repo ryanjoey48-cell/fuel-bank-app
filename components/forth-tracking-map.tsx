@@ -6,12 +6,16 @@ import styles from "./forth-tracking-map.module.css";
 import {
   EES_FLEET_MAP_DEFAULT_CENTER,
   EES_FLEET_MAP_DEFAULT_ZOOM,
+  FORTH_MARKER_COLLISION_RADIUS_PX,
+  FORTH_MARKER_SIZE_PX,
   getForthMapRecordsForDisplay,
   getForthTrustedFleetMapInitialFrame,
   getForthTrackingVehicleIdentity,
   getForthMarkerCollisionGroups,
+  getVisibleForthMarkerLabelKeys,
   isForthGpsConfidenceUnavailable,
   isForthGpsPositionVerified,
+  shouldOpenForthClusterPicker,
   type ForthTrackingMapVehicleClass
 } from "@/lib/forth-tracking-view";
 import type { ForthFleetTrackingRecord } from "@/lib/forth-tracking-server";
@@ -58,6 +62,7 @@ type FleetMarkerEntry = {
 type GroupMarkerEntry = { marker: FleetMarker; memberKeys: string[]; renderSignature: string };
 
 const tileUrl = process.env.NEXT_PUBLIC_EES_MAP_TILE_URL || "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const markerAnchor = Math.round(FORTH_MARKER_SIZE_PX / 2);
 
 function escapeHtml(value: string) {
   return value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll("'", "&#39;");
@@ -94,9 +99,9 @@ function markerIcon(
       (approximate ? " " + styles.vehicleMarkerApproximate : "") +
       (offline ? " " + styles.vehicleMarkerOffline : "") +
       (selected ? " " + styles.vehicleMarkerSelected : "") + "\"><svg class=\"" + styles.vehicleMarkerTruck + "\" viewBox=\"0 0 24 24\" aria-hidden=\"true\">" + truckSvg + "<path d=\"M15.5 10h1.8\" style=\"stroke:" + makeAccent + "\"/></svg></span><span class=\"" + styles.vehicleMarkerLabel + (labelOnLeft ? " " + styles.vehicleMarkerLabelLeft : "") + "\">" + escapeHtml(registration) + "</span>",
-    iconSize: [220, 36],
-    iconAnchor: [17, 17],
-    tooltipAnchor: [0, -18]
+    iconSize: [FORTH_MARKER_SIZE_PX, FORTH_MARKER_SIZE_PX],
+    iconAnchor: [markerAnchor, markerAnchor],
+    tooltipAnchor: [0, -14]
   });
 }
 
@@ -104,8 +109,8 @@ function groupIcon(Leaflet: LeafletModule, count: number, selected: boolean) {
   return Leaflet.divIcon({
     className: styles.vehicleGroupIcon,
     html: `<span class="${styles.vehicleGroupBadge}${selected ? ` ${styles.vehicleGroupBadgeSelected}` : ""}" aria-hidden="true">${count}</span>`,
-    iconSize: [40, 40],
-    iconAnchor: [20, 20]
+    iconSize: [32, 32],
+    iconAnchor: [16, 16]
   });
 }
 
@@ -117,7 +122,7 @@ function fitFleet(map: import("leaflet").Map, Leaflet: LeafletModule, positions:
   const first = positions[0];
   const allSamePosition = positions.every((position) => position[0] === first[0] && position[1] === first[1]);
   if (positions.length === 1 || allSamePosition) map.setView(first, 13, { animate: true });
-  else map.fitBounds(Leaflet.latLngBounds(positions), { padding: [44, 44], maxZoom: 13, animate: true });
+  else map.fitBounds(Leaflet.latLngBounds(positions), { padding: [48, 48], maxZoom: 13, animate: true });
 }
 
 export const ForthTrackingMap = memo(function ForthTrackingMap({
@@ -223,12 +228,35 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({
               }
             }];
           });
-          const visibleLabels = new Set(candidates.filter(({ placement }) => placement.selected).map(({ key }) => key));
+          const visibleLabels = getVisibleForthMarkerLabelKeys(
+            candidates.map(({ placement }) => placement),
+            currentMap.getZoom(),
+            12
+          );
           for (const candidate of candidates) {
             candidate.label.classList.toggle(styles.vehicleMarkerLabelHidden, !visibleLabels.has(candidate.key));
           }
         };
         labelUpdateRef.current = updateMarkerLabels;
+
+        const expandCluster = (memberKeys: string[]) => {
+          const currentMap = mapRef.current;
+          const currentLeaflet = leafletRef.current;
+          if (!currentMap || !currentLeaflet) return;
+          const positions = memberKeys.flatMap((key) => {
+            const latLng = markersByKeyRef.current.get(key)?.marker.getLatLng();
+            return latLng ? [[latLng.lat, latLng.lng] as [number, number]] : [];
+          });
+          if (shouldOpenForthClusterPicker(positions, currentMap.getZoom(), currentMap.getMaxZoom())) {
+            onOverlapGroupRef.current([...memberKeys]);
+            return;
+          }
+          currentMap.fitBounds(currentLeaflet.latLngBounds(positions), {
+            padding: [56, 56],
+            maxZoom: Math.min(18, currentMap.getMaxZoom()),
+            animate: true
+          });
+        };
 
         const updateSpatialPresentation = () => {
           const currentMap = mapRef.current;
@@ -239,7 +267,7 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({
               const point = currentMap.latLngToContainerPoint(entry.marker.getLatLng());
               return { key, entry, point };
             });
-          const groups = getForthMarkerCollisionGroups(entries.map(({ key, point }) => ({ key, x: point.x, y: point.y })), 72);
+          const groups = getForthMarkerCollisionGroups(entries.map(({ key, point }) => ({ key, x: point.x, y: point.y })), FORTH_MARKER_COLLISION_RADIUS_PX);
           const groupDetails = groups.map((keys) => {
             const memberKeys = [...keys].sort((left, right) => {
               const a = markersByKeyRef.current.get(left)?.title ?? left;
@@ -274,7 +302,7 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({
               }).addTo(currentMap);
               marker.on("click", () => {
                 const currentMembers = groupMarkersRef.current.get(group.signature)?.memberKeys ?? group.memberKeys;
-                onOverlapGroupRef.current([...currentMembers]);
+                expandCluster([...currentMembers]);
               });
               marker.on("focus", () => marker.openTooltip());
               marker.on("blur", () => marker.closeTooltip());
@@ -441,7 +469,7 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({
       const marker = markersByKeyRef.current.get(command.key)?.marker;
       if (!marker) return;
       const position = marker.getLatLng();
-      map.flyTo(position, Math.min(16, Math.max(13, map.getZoom())), { duration: 0.35 });
+      map.flyTo(position, Math.min(16, Math.max(13, map.getZoom())), { duration: 0.28 });
     }
   }, [command, mapReady, positionedRecords, records]);
 

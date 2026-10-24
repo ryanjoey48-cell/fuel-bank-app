@@ -93,7 +93,9 @@ export function getVisibleForthMarkerLabelKeys(
   zoom: number,
   minimumZoom = 8
 ): Set<string> {
-  if (!Number.isFinite(zoom) || zoom < minimumZoom) return new Set();
+  if (!Number.isFinite(zoom) || zoom < minimumZoom) {
+    return new Set(placements.filter((placement) => placement.selected).map((placement) => placement.key));
+  }
 
   const ordered = [...placements].sort((left, right) => {
     if (left.selected !== right.selected) return left.selected ? -1 : 1;
@@ -690,7 +692,26 @@ export function getForthFleetMapInitialFrame(positions: [number, number][]): For
 
 export const EES_FLEET_MAP_DEFAULT_CENTER: [number, number] = [13.7563, 100.5018];
 export const EES_FLEET_MAP_DEFAULT_ZOOM = 10;
+export const FORTH_MARKER_SIZE_PX = 26;
+export const FORTH_MARKER_COLLISION_RADIUS_PX = 30;
 const EES_FLEET_MAP_OPERATING_RADIUS_KM = 125;
+
+/** Fly the map only to a current, GPS-verified coordinate. Unverified points stay selectable. */
+export function canFocusForthMapRecord(record: ForthFleetTrackingRecord) {
+  return isForthGpsPositionVerified(record);
+}
+
+/** At max zoom, or when every member reports the same coordinate, open a picker instead of zooming. */
+export function shouldOpenForthClusterPicker(
+  positions: Array<[number, number]>,
+  zoom: number,
+  maxZoom: number
+) {
+  if (positions.length < 2) return false;
+  if (Number.isFinite(zoom) && Number.isFinite(maxZoom) && zoom >= maxZoom) return true;
+  const first = positions[0];
+  return positions.every((position) => position[0] === first[0] && position[1] === first[1]);
+}
 
 /**
  * Keep framing within the Bangkok-area EES operating region. Reports outside
