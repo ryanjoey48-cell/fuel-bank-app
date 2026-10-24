@@ -681,7 +681,7 @@ const COPY = {
     groupSearch: "ค้นหาทะเบียนในกลุ่มหมุด",
     groupSearchPlaceholder: "ค้นหาทะเบียน",
     closeGroupPicker: "ปิดรายการรถ",
-    noGroupMatches: "ไม่พบทเบียนที่ตรงกับคำค้น",
+    noGroupMatches: "ไม่พบทะเบียนที่ตรงกับคำค้น",
     selectedVehicle: "เลือกรถนี้",
     mapLegendHelp: "คำอธิบาย",
     mapGroupHelp: "กดหมุดตัวเลขเพื่อค้นหาทะเบียน การจัดกลุ่มหมายถึงหมุดซ้อนกันที่ระดับซูมนี้ ไม่ได้ยืนยันว่ารถอยู่ในตำแหน่งเดียวกัน",
