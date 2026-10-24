@@ -621,6 +621,21 @@ export function getForthFleetMapRecords(records: ForthFleetTrackingRecord[]): Fo
   });
 }
 
+/**
+ * Keep unverified source coordinates off the map until an operator asks to
+ * see all reported positions. Selecting one vehicle is an explicit request
+ * to make its own reported point available, without changing its coordinates.
+ */
+export function getForthMapRecordsForDisplay(
+  records: ForthFleetTrackingRecord[],
+  selectedKey: string | null,
+  showAllReportedPositions: boolean
+): ForthFleetMapRecord[] {
+  return getForthFleetMapRecords(records).filter(({ record, key }) =>
+    showAllReportedPositions || key === selectedKey || isForthGpsPositionVerified(record)
+  );
+}
+
 export type ForthFleetMapInitialFrame = {
   allPositions: [number, number][];
   focusPositions: [number, number][];

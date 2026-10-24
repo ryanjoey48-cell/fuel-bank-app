@@ -1,0 +1,13 @@
+.grid {
+  min-height: 0;
+  flex: 1 1 0%;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+@media (min-width: 1280px) {
+  .grid {
+    grid-template-columns: minmax(18rem, 23rem) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+}
