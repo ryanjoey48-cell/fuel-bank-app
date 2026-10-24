@@ -1082,7 +1082,7 @@ test("accuracy comparisons show allowlisted Forth source fields beside normalize
   assert.equal(get("registration").normalized, "1กข-2345");
   assert.equal(get("speed").sourceField, "Speed");
   assert.equal(get("speed").source.value, "66.0");
-  assert.equal(get("speed").normalized, "66 km/h");
+  assert.equal(get("speed").normalized, "66");
   assert.equal(get("gps_signal").source.value, "ON");
   assert.equal(get("gps_signal").normalized, "connected");
   assert.equal(get("position_source").source.value, "No GPS");
@@ -1443,7 +1443,7 @@ test("fleet selection keys remain stable across data refreshes and match map mar
   assert.equal(getForthFleetRecordKey({ vehicleRegistration: " 1กข - 2345 " }, 8), "registration:1กข2345");
 });
 
-test("Leaflet map groups screen collisions by registration, fans them out and preserves navigation on refresh", () => {
+test("Leaflet map presents overlap groups as a compact picker and preserves navigation on refresh", () => {
   const source = fs.readFileSync(path.join(root, "components/forth-tracking-map.tsx"), "utf8");
   const styles = fs.readFileSync(path.join(root, "components/forth-tracking-map.module.css"), "utf8");
   assert.ok(source.includes('import "leaflet/dist/leaflet.css"'));
@@ -1455,11 +1455,11 @@ test("Leaflet map groups screen collisions by registration, fans them out and pr
   assert.ok(source.includes("map.flyTo(position"));
   assert.ok(source.includes("setZIndexOffset(selected ? 1200 : 0)"));
   assert.ok(source.includes("getForthMarkerCollisionGroups("));
-  assert.ok(source.includes("getForthMarkerFanOutOffsets("));
-  assert.ok(source.includes("containerPointToLatLng("));
-  assert.ok(source.includes("Leaflet.polyline([truePosition, displayPosition]"));
-  assert.ok(source.includes("const truePosition = source.marker.getLatLng()"));
-  assert.ok(source.includes("fan.connector.setLatLngs([truePosition, displayPosition])"));
+  assert.ok(source.includes("visibleGroupRecords.map(({ record, key }) =>"));
+  assert.ok(source.includes("onSelect(key)"));
+  assert.ok(source.includes("aria-pressed={selectedKey === key}"));
+  assert.ok(source.includes("setActiveGroup({ signature: group.signature"));
+  assert.ok(source.includes("markersByKeyRef.current.get(memberKeys[0])?.marker.getLatLng()"));
   assert.ok(source.includes("marker.setLatLng(position)"));
   assert.ok(source.includes("isForthGpsPositionVerified(record)"));
   assert.ok(source.includes("const approximate = !isForthGpsPositionVerified(record)"));
@@ -1467,9 +1467,7 @@ test("Leaflet map groups screen collisions by registration, fans them out and pr
   assert.ok(source.includes("copy.gpsVerified"));
   assert.ok(source.includes("copy.notGpsVerified"));
   assert.ok(source.includes("copyRef.current.expandGroup"));
-  assert.match(source, /registrations\s*\.map\(\(registration\)\s*=>\s*`<b>\$\{escapeHtml\(registration\)\}<\/b>`\)/);
-  assert.ok(source.includes("styles.vehicleGroupRegistrations"));
-  assert.ok(source.includes("expandedGroupRef.current = group.signature"));
+  assert.ok(source.includes("copy.groupPickerDescription"));
   assert.ok(source.includes("styles.vehicleMarkerDriving"));
   assert.ok(source.includes("styles.vehicleMarkerUncertain"));
   assert.ok(source.includes("styles.vehicleMarkerStoppedEngineOn"));
@@ -1485,8 +1483,9 @@ test("Leaflet map groups screen collisions by registration, fans them out and pr
   assert.ok(styles.includes(".vehicleMarkerApproximate"));
   assert.ok(styles.includes(".vehicleMarkerOffline::after"));
   assert.ok(styles.includes(".vehicleMarkerSelected"));
-  assert.ok(styles.includes(".vehicleGroupCard"));
-  assert.ok(styles.includes(".vehicleGroupRegistrations"));
+  assert.ok(styles.includes(".vehicleGroupBadge"));
+  assert.ok(styles.includes(".collisionPicker"));
+  assert.ok(styles.includes(".collisionVehicleList"));
   assert.ok(styles.includes(".vehicleMarkerUncertain"));
   assert.equal(source.includes("bindPopup("), false);
   assert.equal(source.includes("openPopup("), false);
@@ -1495,6 +1494,9 @@ test("Leaflet map groups screen collisions by registration, fans them out and pr
   assert.ok(source.includes("export const ForthTrackingMap = memo(function ForthTrackingMap"));
   assert.ok(source.includes("if (!entry.onMap) return [];"));
   assert.ok(source.includes('marker.on("focus", () => marker.openTooltip())'));
+  assert.equal(source.includes("containerPointToLatLng("), false);
+  assert.equal(source.includes("Leaflet.polyline"), false);
+  assert.equal(source.includes("getForthMarkerFanOutOffsets"), false);
 
   const reconcileStart = source.indexOf("// Keep original Leaflet markers");
   const initialFitStart = source.indexOf("// Fit once on first data");
@@ -1502,8 +1504,34 @@ test("Leaflet map groups screen collisions by registration, fans them out and pr
   assert.equal(/fitFleet\(|fitBounds\(|map\.flyTo\(|map\.panTo\(/.test(markerRefreshEffect), false);
 });
 
-test("overlapping positions are grouped by screen distance and fan-out offsets stay distinct without changing reported coordinates", () => {
-  const { getForthMarkerCollisionGroups, getForthMarkerFanOutOffsets } = loadTypeScript("lib/forth-tracking-view.ts");
+test("timestamp and confidence gaps stay unknown instead of appearing as zero attention", () => {
+  const { summarizeForthFleet } = loadTypeScript("lib/forth-tracking-view.ts");
+  const unavailable = {
+    timestampStatus: "timezone_unconfigured",
+    lastGpsTimestamp: null,
+    coordinateStatus: "valid",
+    latitude: 13.75,
+    longitude: 100.5,
+    gpsConnectivity: "connected",
+    gprsConnectivity: "connected",
+    positionQuality: "gps",
+    speed: 24,
+    engineOn: true
+  };
+  const summary = summarizeForthFleet([unavailable, { ...unavailable, gpsDeviceId: "device-2" }]);
+
+  assert.equal(summary.reportedActivity.driving, 0);
+  assert.equal(summary.reportedActivity.unavailable, 2);
+  assert.equal(summary.positionConfidence.gpsVerified, 0);
+  assert.equal(summary.gpsConfidenceUnavailablePositions, 2);
+  assert.equal(summary.needsAttention, 0);
+  assert.equal(summary.needsAttentionUnknown, 2);
+});
+
+test("overlapping positions open a searchable picker without moving reported coordinates", () => {
+  const { getForthMarkerCollisionGroups } = loadTypeScript("lib/forth-tracking-view.ts");
+  const source = fs.readFileSync(path.join(root, "components/forth-tracking-map.tsx"), "utf8");
+  const styles = fs.readFileSync(path.join(root, "components/forth-tracking-map.module.css"), "utf8");
   const reportedPositions = [
     { key: "device:A", latitude: 13.75, longitude: 100.5 },
     { key: "device:B", latitude: 13.75, longitude: 100.5 },
@@ -1516,13 +1544,20 @@ test("overlapping positions are grouped by screen distance and fan-out offsets s
     { key: "device:C", x: 200, y: 180 },
     { key: "invalid", x: Number.NaN, y: 1 }
   ], 32);
-  const offsets = getForthMarkerFanOutOffsets(21);
-  const uniqueOffsets = new Set(offsets.map(({ x, y }) => `${x},${y}`));
-
   assert.deepEqual(groups, [["device:A", "device:B"]]);
-  assert.equal(offsets.length, 21);
-  assert.equal(uniqueOffsets.size, 21);
   assert.deepEqual(reportedPositions, before);
+  assert.ok(source.includes("group.markerPosition"));
+  assert.ok(source.includes("markersByKeyRef.current.get(memberKeys[0])?.marker.getLatLng()"));
+  assert.ok(source.includes("visibleGroupRecords.map(({ record, key }) =>"));
+  assert.ok(source.includes("onSelect(key)"));
+  assert.ok(source.includes("aria-pressed={selectedKey === key}"));
+  assert.ok(source.includes("copy.groupPickerDescription"));
+  assert.ok(styles.includes(".collisionPicker"));
+  assert.ok(styles.includes(".collisionVehicleList"));
+  assert.equal(source.includes("getForthMarkerFanOutOffsets"), false);
+  assert.equal(source.includes("containerPointToLatLng("), false);
+  assert.equal(source.includes("Leaflet.polyline"), false);
+  assert.equal(styles.includes(".vehicleGroupCard"), false);
 });
 
 test("premium tracking workspace keeps selection and map controls with responsive details and actionable fleet signals", () => {
@@ -1538,7 +1573,11 @@ test("premium tracking workspace keeps selection and map controls with responsiv
   assert.ok(fitAllHandler.includes('setFilter("all")'));
   assert.ok(source.includes("setMapCommand((current) => ({ type: \"fit\""));
   assert.ok(source.includes("setMapCommand((current) => ({ type: \"focus\""));
-  assert.ok(source.includes('xl:grid-cols-[minmax(300px,0.85fr)_minmax(0,2.35fr)]'));
+  assert.ok(source.includes('xl:grid-cols-[minmax(270px,0.72fr)_minmax(0,2.5fr)]'));
+  assert.ok(source.includes('xl:grid-cols-[minmax(270px,0.72fr)_minmax(0,2.05fr)_minmax(280px,0.78fr)]'));
+  assert.ok(source.includes("summary.gpsConfidenceUnavailablePositions"));
+  assert.ok(source.includes("summary.needsAttentionUnknown"));
+  assert.ok(source.includes('summary.total > 0 && unavailableActivityCount === summary.total ? "—"'));
   assert.ok(source.includes('sidebarOpen ? "xl:col-start-2" : "xl:col-start-1"'));
   assert.ok(source.includes('xl:col-start-1 xl:row-start-1'));
   assert.ok(source.includes('xl:col-start-3 xl:row-start-1'));
@@ -1847,7 +1886,7 @@ test("dashboard separates reported activity, GPS confidence, diagnostics and exi
   assert.ok(component.includes('ref={diagnosticsTriggerRef}'));
   assert.ok(component.includes("setDiagnosticsOpen(true)"));
   assert.ok(component.includes("do not widen the map"));
-  assert.ok(component.includes("sidebarOpen ? \"xl:grid-cols-[minmax(300px,0.85fr)_minmax(0,2.35fr)]\" : \"xl:grid-cols-1\""));
+  assert.ok(component.includes("sidebarOpen ? \"xl:grid-cols-[minmax(270px,0.72fr)_minmax(0,2.5fr)]\" : \"xl:grid-cols-1\""));
   assert.ok(component.includes('className="forth-vehicle-results mt-2 space-y-1 pr-1"'));
   assert.ok(component.includes("setMobileListOpen(true)"));
   assert.ok(component.includes("getForthTrustedFleetMapInitialFrame"));

@@ -169,7 +169,7 @@ export function getForthAccuracyComparisons(record: ForthFleetTrackingRecord, fe
     { field: "registration", sourceField: "plateNumber", source: record.sourceAudit.registration, normalized: record.vehicleRegistration },
     { field: "device_id", sourceField: "gpsID", source: record.sourceAudit.deviceId, normalized: record.gpsDeviceId },
     { field: "driver", sourceField: "driver", source: record.sourceAudit.driver, normalized: record.reportedDriver },
-    { field: "speed", sourceField: "Speed", source: record.sourceAudit.speed, normalized: record.speed === null ? null : `${record.speed} km/h` },
+    { field: "speed", sourceField: "Speed", source: record.sourceAudit.speed, normalized: record.speed === null ? null : String(record.speed) },
     { field: "engine", sourceField: "Engine", source: record.sourceAudit.engine, normalized: engineLabel },
     { field: "latitude", sourceField: "Latitude", source: record.sourceAudit.latitude, normalized: validCoordinates ? String(record.latitude) : null },
     { field: "longitude", sourceField: "Longitude", source: record.sourceAudit.longitude, normalized: validCoordinates ? String(record.longitude) : null },
@@ -276,6 +276,14 @@ export function isForthGpsPositionVerified(record: ForthFleetTrackingRecord) {
     record.positionQuality === "gps";
 }
 
+/** True when required source fields are missing or cannot be interpreted confidently. */
+export function isForthGpsConfidenceUnavailable(record: ForthFleetTrackingRecord) {
+  return (record.timestampStatus !== "current" && record.timestampStatus !== "stale") ||
+    !record.lastGpsTimestamp ||
+    record.gpsConnectivity === "unknown" ||
+    record.positionQuality === "unknown";
+}
+
 /** Link out only when the current report meets the fleet's GPS verification rules. */
 export function getForthTrustedGoogleMapsUrl(record: ForthFleetTrackingRecord, nowMs = Date.now()) {
   if (!isForthGpsPositionVerified(record) || record.latitude === null || record.longitude === null) return null;
@@ -342,6 +350,7 @@ export function summarizeForthFleet(records: ForthFleetTrackingRecord[]) {
   const summary = {
     total: records.length,
     needsAttention: 0,
+    needsAttentionUnknown: 0,
     reportedActivity: {
       driving: 0,
       uncertain: 0,
@@ -356,6 +365,7 @@ export function summarizeForthFleet(records: ForthFleetTrackingRecord[]) {
     motion: { moving: 0, stationary: 0, unknown: 0 } as CountMap<ForthFleetStatus>,
     provisionalMotion: { reportedMoving: 0 },
     currentGpsVerifiedPositions: 0,
+    gpsConfidenceUnavailablePositions: 0,
     latestCurrentGpsPosition: null as string | null,
     communications: { online: 0, offline: 0, unknown: 0 } as CountMap<"online" | "offline" | "unknown">,
     positionFreshness: { current: 0, stale: 0, unknown: 0 } as CountMap<"current" | "stale" | "unknown">,
@@ -390,6 +400,7 @@ export function summarizeForthFleet(records: ForthFleetTrackingRecord[]) {
         reportedActivity === "stopped_engine_unknown" ? "stoppedEngineUnknown" : reportedActivity] += 1;
     if (reportedActivity.startsWith("stopped_")) summary.reportedActivity.stopped += 1;
     summary.positionConfidence[isForthGpsPositionVerified(record) ? "gpsVerified" : "notGpsVerified"] += 1;
+    if (isForthGpsConfidenceUnavailable(record)) summary.gpsConfidenceUnavailablePositions += 1;
     if (isForthGpsVerifiedDriving(record)) summary.gpsVerifiedDriving += 1;
     const reason = getForthMotionReason(record);
     summary.classificationReason[reason] += 1;
@@ -402,6 +413,9 @@ export function summarizeForthFleet(records: ForthFleetTrackingRecord[]) {
     summary.speedAvailability[isUsableSpeed(record.speed) ? "available" : "unavailable"] += 1;
     summary.engineState[record.engineOn === true ? "on" : record.engineOn === false ? "off" : "unknown"] += 1;
     if (record.gprsConnectivity === "disconnected" || record.timestampStatus === "stale") summary.needsAttention += 1;
+    else if (record.gprsConnectivity === "unknown" || record.timestampStatus !== "current") {
+      summary.needsAttentionUnknown += 1;
+    }
 
     if (isForthGpsPositionVerified(record)) {
       summary.currentGpsVerifiedPositions += 1;
@@ -583,22 +597,6 @@ export function getForthMarkerCollisionGroups(points: ForthMarkerScreenPoint[], 
     .filter((keys) => keys.length > 1)
     .map((keys) => keys.sort((left, right) => left.localeCompare(right)))
     .sort((left, right) => left[0].localeCompare(right[0]));
-}
-
-/** Pixel offsets used to fan a collision group into individually labelled markers. */
-export function getForthMarkerFanOutOffsets(count: number, columnSpacing = 160, rowSpacing = 44) {
-  if (!Number.isInteger(count) || count < 1) return [];
-  const columns = Math.min(5, Math.ceil(Math.sqrt(count)));
-  const rows = Math.ceil(count / columns);
-  return Array.from({ length: count }, (_, index) => {
-    const column = index % columns;
-    const row = Math.floor(index / columns);
-    const rowCount = Math.min(columns, count - row * columns);
-    return {
-      x: (column - (rowCount - 1) / 2) * columnSpacing,
-      y: (row - (rows - 1) / 2) * rowSpacing
-    };
-  });
 }
 
 export function getForthFleetMapRecords(records: ForthFleetTrackingRecord[]): ForthFleetMapRecord[] {

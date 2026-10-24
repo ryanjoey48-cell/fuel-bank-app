@@ -49,6 +49,7 @@ import {
   getForthNormalizationWarnings,
   getForthReportedActivity,
   getForthTrustedGoogleMapsUrl,
+  isForthGpsConfidenceUnavailable,
   isForthGpsPositionVerified,
   summarizeForthFleet,
   sortForthFleetRecords,
@@ -144,7 +145,7 @@ const COPY = {
     latestGps: "Latest current GPS position",
     latestGpsHelper: "Fresh position confirmed by GPS",
     needsAttention: "Needs attention",
-    needsAttentionHelper: "Offline or position report older than 15 minutes",
+    needsAttentionHelper: "Confirmed offline or stale reports; unavailable status stays unknown",
     gpsVerifiedPositions: "GPS-verified positions",
     liveFleetView: "Live fleet",
     journeyHistoryView: "Journey history",
@@ -162,7 +163,11 @@ const COPY = {
     refreshFailedSnapshot: "Refresh failed. Showing the last successful fleet snapshot from",
     countOf: "of",
     tracked: "tracked",
-    unknownSummary: "Reported activity uses fresh speed and engine data. GPS confidence is assessed separately.",
+    unknownSummary: "— means the signal cannot be assessed; 0 means available reports show none. Tracker connection does not verify a GPS position.",
+    activityUnavailableCount: "{count} vehicles: activity unavailable",
+    gpsConfidenceUnavailableCount: "{count} positions: GPS confidence unavailable",
+    gpsPositionNotVerifiedCount: "{count} positions not GPS-verified",
+    attentionUnavailableCount: "Unable to assess {count} vehicles for attention",
     provisionalMovement: "GPS-verified driving",
     provisionalMovementNote: "Requires a fresh position explicitly identified as GPS, GPS signal and valid coordinates.",
     provisionalBadge: "Reported driving · position not GPS-verified",
@@ -261,7 +266,7 @@ const COPY = {
     accuracyActivityNotMapped: "EES does not currently map an explicit Forth activity field; its presence in this API response has not been verified.",
     accuracyActivityDerived: "EES shows reported activity derived from fresh Speed and Engine fields; this is not a Forth Working/Parking status.",
     accuracySignalExplanation: "GPS signal and position source are separate Forth fields. A reported GPS signal does not turn a No GPS source into GPS-verified positioning.",
-    accuracySpeedUnitNote: "EES currently displays Speed as km/h without conversion. This matched one reviewed Forth screen (66 km/h); the public API schema does not specify the unit.",
+    accuracySpeedUnitNote: "EES displays Forth-reported Speed without conversion. One reviewed Forth screen showed km/h, but the public API schema does not specify the unit.",
     warningRegistrationMissing: "Registration missing or empty",
     warningDeviceMissing: "GPS device ID missing or empty",
     warningDriverFiltered: "Driver value was omitted by the safe display filter",
@@ -316,15 +321,15 @@ const COPY = {
     driver: "Forth-reported driver",
     noDriver: "Not reported",
     device: "GPS device ID",
-    speed: "Speed",
+    speed: "Forth-reported speed",
     engine: "Engine",
     engineOn: "On",
     engineOff: "Off",
     unknownValue: "Unknown",
     gps: "GPS signal",
     gprs: "Tracker communications (GPRS)",
-    online: "Online",
-    offlineStatus: "Offline",
+    online: "Tracker connected",
+    offlineStatus: "Tracker disconnected",
     gpsNoFix: "No GPS fix",
     position: "Last known position",
     coordinates: "Coordinates",
@@ -338,6 +343,7 @@ const COPY = {
     current: "Current",
     gpsPositionVerified: "GPS position verified",
     gpsPositionUnverified: "Position not GPS-verified",
+    gpsConfidenceUnavailable: "GPS confidence unavailable",
     stale: "Stale",
     noTimestamp: "Time unavailable",
     timezoneUnconfigured: "Source timezone not configured",
@@ -355,10 +361,17 @@ const COPY = {
     mapOffline: "Activity unavailable",
     mapUnknown: "Activity unavailable",
     mapConfidence: "Dashed amber ring = position not GPS-verified",
-    groupVehicles: "vehicles",
-    expandGroup: "Select this group, then choose a vehicle",
+    groupVehicles: "overlapping markers",
+    expandGroup: "Open registration picker",
+    groupPickerTitle: "Overlapping map markers",
+    groupPickerDescription: "Markers overlap at this zoom only; this does not mean the vehicles are physically together.",
+    groupSearch: "Search overlapping registrations",
+    groupSearchPlaceholder: "Search registration",
+    closeGroupPicker: "Close vehicle picker",
+    noGroupMatches: "No registrations match this search.",
+    selectedVehicle: "Selected",
     mapLegendHelp: "Legend",
-    mapGroupHelp: "Select a group card to fan out its markers, then select the vehicle you need. Map positions remain tied to Forth coordinates.",
+    mapGroupHelp: "Click a count marker to search registrations. Grouping means marker overlap at this zoom; it does not show that vehicles share a physical location.",
     mapConflictLegend: "Orange-brown marker means positive Speed conflicts with Engine OFF.",
     mapOfflineLegend: "Red corner dot means GPRS is reported offline",
     mapSelectedLegend: "Purple ring marks the selected vehicle",
@@ -445,7 +458,7 @@ const COPY = {
     latestGps: "ตำแหน่ง GPS ปัจจุบันล่าสุด",
     latestGpsHelper: "ตำแหน่งใหม่ที่ยืนยันด้วย GPS",
     needsAttention: "ควรตรวจสอบ",
-    needsAttentionHelper: "ออฟไลน์หรือรายงานตำแหน่งเกิน 15 นาที",
+    needsAttentionHelper: "นับเฉพาะตัวติดตามออฟไลน์หรือข้อมูลตำแหน่งเก่า ส่วนสถานะที่ประเมินไม่ได้จะแสดงว่าไม่ทราบ",
     gpsVerifiedPositions: "ตำแหน่งที่ยืนยันด้วย GPS",
     liveFleetView: "รถปัจจุบัน",
     journeyHistoryView: "ประวัติการเดินทาง",
@@ -463,7 +476,11 @@ const COPY = {
     refreshFailedSnapshot: "รีเฟรชไม่สำเร็จ กำลังแสดงข้อมูลรถครั้งล่าสุดที่สำเร็จเมื่อ",
     countOf: "จาก",
     tracked: "คันที่ติดตาม",
-    unknownSummary: "กิจกรรมจากความเร็วและสถานะเครื่องยนต์ที่ยังใหม่ ส่วนความมั่นใจ GPS แสดงแยกต่างหาก",
+    unknownSummary: "— หมายถึงประเมินสัญญาณไม่ได้ ส่วน 0 หมายถึงข้อมูลที่ประเมินได้ไม่พบรายการ ตัวติดตามออนไลน์ไม่ได้ยืนยันตำแหน่ง GPS",
+    activityUnavailableCount: "รถ {count} คัน: ไม่มีกิจกรรมที่ประเมินได้",
+    gpsConfidenceUnavailableCount: "ตำแหน่ง {count} รายการ: ประเมินความมั่นใจ GPS ไม่ได้",
+    gpsPositionNotVerifiedCount: "ตำแหน่ง {count} รายการยังไม่ยืนยันด้วย GPS",
+    attentionUnavailableCount: "ประเมินรถ {count} คันว่าต้องตรวจสอบหรือไม่ไม่ได้",
     provisionalMovement: "รายงานว่าขับโดยยืนยันด้วย GPS",
     provisionalMovementNote: "ต้องเป็นตำแหน่งใหม่ที่ระบุแหล่ง GPS สัญญาณ GPS พร้อมพิกัดถูกต้อง",
     provisionalBadge: "รายงานว่าขับ · ตำแหน่งยังไม่ยืนยันด้วย GPS",
@@ -617,15 +634,15 @@ const COPY = {
     driver: "ผู้ขับที่ Forth รายงาน",
     noDriver: "ไม่มีข้อมูล",
     device: "รหัสอุปกรณ์ GPS",
-    speed: "ความเร็ว",
+    speed: "ความเร็วตามที่ Forth รายงาน",
     engine: "เครื่องยนต์",
     engineOn: "เปิด",
     engineOff: "ปิด",
     unknownValue: "ไม่ทราบ",
     gps: "สัญญาณ GPS",
     gprs: "การสื่อสารตัวติดตาม (GPRS)",
-    online: "ออนไลน์",
-    offlineStatus: "ออฟไลน์",
+    online: "เชื่อมต่อตัวติดตามแล้ว",
+    offlineStatus: "ตัวติดตามขาดการเชื่อมต่อ",
     gpsNoFix: "ไม่มีสัญญาณ GPS",
     position: "ตำแหน่งล่าสุด",
     coordinates: "พิกัด",
@@ -639,6 +656,7 @@ const COPY = {
     current: "ปัจจุบัน",
     gpsPositionVerified: "ยืนยันตำแหน่ง GPS แล้ว",
     gpsPositionUnverified: "ตำแหน่งยังไม่ยืนยันด้วย GPS",
+    gpsConfidenceUnavailable: "ประเมินความมั่นใจ GPS ไม่ได้",
     stale: "เก่า",
     noTimestamp: "ไม่มีเวลา",
     timezoneUnconfigured: "ยังไม่ได้ตั้งค่าเขตเวลาต้นทาง",
@@ -656,10 +674,17 @@ const COPY = {
     mapOffline: "ไม่มีกิจกรรมที่ยืนยันได้",
     mapUnknown: "ไม่มีกิจกรรมที่ยืนยันได้",
     mapConfidence: "วงประสีเหลืองหมายถึงตำแหน่งที่ยังไม่ยืนยันด้วย GPS",
-    groupVehicles: "คัน",
-    expandGroup: "เลือกกลุ่ม แล้วเลือกรถ",
+    groupVehicles: "หมุดที่ซ้อนกัน",
+    expandGroup: "เปิดรายการทะเบียน",
+    groupPickerTitle: "หมุดแผนที่ที่ซ้อนกัน",
+    groupPickerDescription: "หมุดซ้อนกันที่ระดับซูมนี้เท่านั้น ไม่ได้แปลว่ารถอยู่ที่เดียวกันจริง",
+    groupSearch: "ค้นหาทะเบียนในกลุ่มหมุด",
+    groupSearchPlaceholder: "ค้นหาทะเบียน",
+    closeGroupPicker: "ปิดรายการรถ",
+    noGroupMatches: "ไม่พบทเบียนที่ตรงกับคำค้น",
+    selectedVehicle: "เลือกรถนี้",
     mapLegendHelp: "คำอธิบาย",
-    mapGroupHelp: "เลือกการ์ดกลุ่มเพื่อแยกหมุด แล้วเลือกรถที่ต้องการ ตำแหน่งยังอ้างอิงพิกัดจาก Forth",
+    mapGroupHelp: "กดหมุดตัวเลขเพื่อค้นหาทะเบียน การจัดกลุ่มหมายถึงหมุดซ้อนกันที่ระดับซูมนี้ ไม่ได้ยืนยันว่ารถอยู่ในตำแหน่งเดียวกัน",
     mapConflictLegend: "หมุดสีน้ำตาลส้มหมายถึงความเร็วเป็นบวกแต่ Engine รายงานว่าปิด",
     mapOfflineLegend: "จุดสีแดงที่มุมหมายถึงรายงานว่า GPRS ออฟไลน์",
     mapSelectedLegend: "วงสีม่วงแสดงรถที่เลือก",
@@ -940,7 +965,7 @@ const FleetVehicleRow = memo(function FleetVehicleRow({
       {identity.make ? <span className="mt-0.5 block truncate text-[10px] font-medium text-slate-500">{identity.make}{identity.model ? ` ${identity.model}` : ""}</span> : null}
       {locationDescription ? <span className="mt-1 flex min-w-0 items-center gap-1 truncate text-[10px] text-slate-600" title={locationDescription}><MapPin className="h-3 w-3 shrink-0 text-slate-400" />{locationDescription}</span> : null}
       <span className="mt-1 flex min-w-0 items-center justify-between gap-2">
-        <span className="inline-flex items-baseline gap-1.5 text-slate-950"><Gauge className="h-3.5 w-3.5 self-center text-slate-400" /><strong className="text-base leading-5">{record.speed === null ? "—" : record.speed}</strong><span className="text-[10px] text-slate-500">km/h</span></span>
+        <span className="inline-flex items-baseline gap-1.5 text-slate-950" aria-label={`${copy.speed}: ${record.speed === null ? copy.unknownValue : record.speed}`} title={copy.speed}><Gauge className="h-3.5 w-3.5 self-center text-slate-400" /><span className="text-[9px] text-slate-500">Forth</span><strong className="text-base leading-5">{record.speed === null ? "—" : record.speed}</strong></span>
         <span className={`inline-flex max-w-[58%] min-w-0 items-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-semibold ${record.engineOn === true ? "bg-amber-50 text-amber-900" : record.engineOn === false ? "bg-indigo-50 text-indigo-800" : "bg-slate-100 text-slate-600"}`}><Activity className="h-3 w-3 shrink-0 opacity-70" /><span className="truncate">{record.engineOn === null ? copy.unknownValue : record.engineOn ? copy.engineOnLabel : copy.engineOffLabel}</span></span>
       </span>
       <span className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1 text-[10px] leading-4">
@@ -953,9 +978,10 @@ const FleetVehicleRow = memo(function FleetVehicleRow({
   );
 });
 
-function OverviewMetric({ label, value, icon, tone, active, disabled, onClick }: {
+function OverviewMetric({ label, value, detail, icon, tone, active, disabled, onClick }: {
   label: string;
   value: string;
+  detail?: string;
   icon: ReactNode;
   tone: "emerald" | "violet" | "amber" | "rose";
   active: boolean;
@@ -969,11 +995,12 @@ function OverviewMetric({ label, value, icon, tone, active, disabled, onClick }:
     rose: "bg-rose-50 text-rose-700 ring-rose-100"
   };
   return (
-    <button type="button" aria-pressed={active} onClick={onClick} disabled={disabled} className={`flex min-h-[58px] min-w-0 items-center gap-2 rounded-xl border bg-white px-2.5 py-2 text-left transition hover:border-violet-200 hover:bg-slate-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 disabled:cursor-not-allowed disabled:opacity-60 sm:px-3 ${active ? "border-violet-400 bg-violet-50/70 ring-1 ring-violet-200" : "border-slate-200/90"}`}>
+    <button type="button" aria-pressed={active} onClick={onClick} disabled={disabled} className={`flex min-h-[66px] min-w-0 items-center gap-2 rounded-xl border bg-white px-2.5 py-2 text-left transition hover:border-violet-200 hover:bg-slate-50/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300 disabled:cursor-not-allowed disabled:opacity-60 sm:px-3 ${active ? "border-violet-400 bg-violet-50/70 ring-1 ring-violet-200" : "border-slate-200/90"}`}>
       <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ring-1 ${tones[tone]}`}>{icon}</span>
       <div className="min-w-0">
         <p className="truncate text-[10px] font-semibold text-slate-500 sm:text-[11px]">{label}</p>
         <p className="text-xl font-bold leading-5 tracking-tight text-slate-950">{value}</p>
+        {detail ? <p className="mt-0.5 line-clamp-2 text-[9px] leading-3 text-amber-800">{detail}</p> : null}
       </div>
     </button>
   );
@@ -992,16 +1019,25 @@ function recordLocationLabel(record: ForthFleetTrackingRecord, copy: Copy) {
 
 function gpsConfidenceLabel(record: ForthFleetTrackingRecord, copy: Copy) {
   if (isForthGpsPositionVerified(record)) return copy.gpsPositionVerified;
-  if (record.positionQuality === "no_gps") return copy.noGpsQuality;
+  if (record.timestampStatus === "stale") return `${copy.gpsPositionUnverified} · ${copy.stale}`;
+  if (record.timestampStatus !== "current") {
+    return `${copy.gpsConfidenceUnavailable} · ${timestampStatusLabel(record, copy)}`;
+  }
+  if (isForthGpsConfidenceUnavailable(record)) return copy.gpsConfidenceUnavailable;
+  if (record.positionQuality === "no_gps") return `${copy.noGpsQuality} · ${copy.gpsPositionUnverified}`;
   return copy.gpsPositionUnverified + " · " + recordLocationLabel(record, copy);
 }
 
 function shortPositionQualityLabel(record: ForthFleetTrackingRecord, copy: Copy) {
-  if (record.positionQuality === "gps") return copy.gpsQuality;
+  if (isForthGpsPositionVerified(record)) return copy.gpsPositionVerified;
+  if (record.timestampStatus === "timezone_unconfigured") return copy.timezoneUnconfigured;
+  if (record.timestampStatus === "stale") return copy.stale;
+  if (record.timestampStatus !== "current" || isForthGpsConfidenceUnavailable(record)) return copy.gpsConfidenceUnavailable;
   if (record.positionQuality === "no_gps") return "No GPS";
   if (record.positionQuality === "wifi") return "Wi-Fi";
   if (record.positionQuality === "lbs") return "LBS";
   if (record.positionQuality === "other") return copy.otherQuality;
+  if (record.positionQuality === "gps") return copy.gpsPositionUnverified;
   return copy.unknownQuality;
 }
 
@@ -1567,6 +1603,30 @@ export function ForthTrackingCentre() {
     Date.now(),
     language
   );
+  const unavailableActivityCount = summary.reportedActivity.unavailable;
+  const movingValue = connected
+    ? summary.total > 0 && unavailableActivityCount === summary.total ? "—" : String(summary.reportedActivity.driving)
+    : "—";
+  const stoppedValue = connected
+    ? summary.total > 0 && unavailableActivityCount === summary.total ? "—" : String(summary.reportedActivity.stopped)
+    : "—";
+  const gpsValue = connected
+    ? summary.gpsConfidenceUnavailablePositions > 0 && summary.positionConfidence.gpsVerified === 0 ? "—" : String(summary.positionConfidence.gpsVerified)
+    : "—";
+  const needsAttentionValue = connected
+    ? summary.needsAttentionUnknown > 0 && summary.needsAttention === 0 ? "—" : String(summary.needsAttention)
+    : "—";
+  const activityMetricDetail = unavailableActivityCount > 0
+    ? copy.activityUnavailableCount.replace("{count}", String(unavailableActivityCount))
+    : undefined;
+  const knownNotGpsVerifiedCount = Math.max(0, summary.positionConfidence.notGpsVerified - summary.gpsConfidenceUnavailablePositions);
+  const gpsMetricDetail = [
+    summary.gpsConfidenceUnavailablePositions > 0 ? copy.gpsConfidenceUnavailableCount.replace("{count}", String(summary.gpsConfidenceUnavailablePositions)) : "",
+    knownNotGpsVerifiedCount > 0 ? copy.gpsPositionNotVerifiedCount.replace("{count}", String(knownNotGpsVerifiedCount)) : ""
+  ].filter(Boolean).join(" · ") || undefined;
+  const attentionMetricDetail = summary.needsAttentionUnknown > 0
+    ? copy.attentionUnavailableCount.replace("{count}", String(summary.needsAttentionUnknown))
+    : undefined;
   const mapCopy = useMemo(() => ({
     driving: copy.mapMoving,
     uncertain: copy.activityUncertain,
@@ -1576,6 +1636,13 @@ export function ForthTrackingCentre() {
     notGpsVerified: copy.gpsPositionUnverified,
     groupVehicles: copy.groupVehicles,
     expandGroup: copy.expandGroup,
+    groupPickerTitle: copy.groupPickerTitle,
+    groupPickerDescription: copy.groupPickerDescription,
+    groupSearch: copy.groupSearch,
+    groupSearchPlaceholder: copy.groupSearchPlaceholder,
+    closeGroupPicker: copy.closeGroupPicker,
+    noGroupMatches: copy.noGroupMatches,
+    selectedVehicle: copy.selectedVehicle,
     engineOn: copy.engineOn,
     engineOff: copy.engineOff,
     unknownValue: copy.unknownValue,
@@ -1715,10 +1782,10 @@ export function ForthTrackingCentre() {
       <section aria-label={language === "th" ? "สรุปสถานะกองรถ" : "Fleet overview"} className="forth-tracking-kpi-scroll shrink-0 rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_3px_12px_rgba(15,23,42,0.025)]">
         <div className="forth-tracking-kpis flex gap-1.5">
         <OverviewMetric label={copy.total} value={connected ? String(summary.total) : "—"} tone="violet" icon={<Truck className="h-4 w-4" />} active={filter === "all"} disabled={!connected} onClick={() => applyFleetFilter("all")} />
-        <OverviewMetric label={copy.moving} value={connected ? String(summary.reportedActivity.driving) : "—"} tone="emerald" icon={<Activity className="h-4 w-4" />} active={filter === "driving"} disabled={!connected} onClick={() => applyFleetFilter(filter === "driving" ? "all" : "driving")} />
-        <OverviewMetric label={copy.parked} value={connected ? String(summary.reportedActivity.stopped) : "—"} tone="violet" icon={<Gauge className="h-4 w-4" />} active={filter === "stopped"} disabled={!connected} onClick={() => applyFleetFilter(filter === "stopped" ? "all" : "stopped")} />
-        <OverviewMetric label={copy.gpsVerifiedPositions} value={connected ? String(summary.positionConfidence.gpsVerified) : "—"} tone="emerald" icon={<MapPin className="h-4 w-4" />} active={filter === "verified"} disabled={!connected} onClick={() => applyFleetFilter(filter === "verified" ? "all" : "verified")} />
-        <OverviewMetric label={copy.needsAttention} value={connected ? String(summary.needsAttention) : "—"} tone="amber" icon={<AlertTriangle className="h-4 w-4" />} active={filter === "attention"} disabled={!connected} onClick={() => applyFleetFilter(filter === "attention" ? "all" : "attention")} />
+        <OverviewMetric label={copy.moving} value={movingValue} detail={activityMetricDetail} tone="emerald" icon={<Activity className="h-4 w-4" />} active={filter === "driving"} disabled={!connected} onClick={() => applyFleetFilter(filter === "driving" ? "all" : "driving")} />
+        <OverviewMetric label={copy.parked} value={stoppedValue} detail={activityMetricDetail} tone="violet" icon={<Gauge className="h-4 w-4" />} active={filter === "stopped"} disabled={!connected} onClick={() => applyFleetFilter(filter === "stopped" ? "all" : "stopped")} />
+        <OverviewMetric label={copy.gpsVerifiedPositions} value={gpsValue} detail={gpsMetricDetail} tone="emerald" icon={<MapPin className="h-4 w-4" />} active={filter === "verified"} disabled={!connected} onClick={() => applyFleetFilter(filter === "verified" ? "all" : "verified")} />
+        <OverviewMetric label={copy.needsAttention} value={needsAttentionValue} detail={attentionMetricDetail} tone="amber" icon={<AlertTriangle className="h-4 w-4" />} active={filter === "attention"} disabled={!connected || summary.needsAttention === 0} onClick={() => applyFleetFilter(filter === "attention" ? "all" : "attention")} />
         </div>
         <p className="px-1 pt-1 text-[10px] leading-4 text-slate-500">{copy.unknownSummary}</p>
 
@@ -1745,8 +1812,8 @@ export function ForthTrackingCentre() {
       ) : null}
       </section>
 
-      <div className={`forth-tracking-grid relative grid grid-cols-1 items-stretch gap-2 ${selectedRecord && inspectorOpen ? (sidebarOpen ? "xl:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.7fr)_minmax(290px,0.85fr)]" : "xl:grid-cols-[minmax(0,1fr)_minmax(290px,0.85fr)]") : sidebarOpen ? "xl:grid-cols-[minmax(300px,0.85fr)_minmax(0,2.35fr)]" : "xl:grid-cols-1"}`}>
-        <section className={`forth-map-panel surface-card order-1 min-w-0 overflow-hidden p-2 ${sidebarOpen ? "xl:col-start-2" : "xl:col-start-1"} xl:row-start-1`} aria-labelledby="forth-live-map-title">
+      <div className={`forth-tracking-grid relative grid grid-cols-1 items-stretch gap-2 ${selectedRecord && inspectorOpen ? (sidebarOpen ? "xl:grid-cols-[minmax(270px,0.72fr)_minmax(0,2.05fr)_minmax(280px,0.78fr)]" : "xl:grid-cols-[minmax(0,1.6fr)_minmax(280px,0.75fr)]") : sidebarOpen ? "xl:grid-cols-[minmax(270px,0.72fr)_minmax(0,2.5fr)]" : "xl:grid-cols-1"}`}>
+        <section className={`forth-map-panel surface-card order-1 min-w-0 overflow-hidden p-1.5 ${sidebarOpen ? "xl:col-start-2" : "xl:col-start-1"} xl:row-start-1`} aria-labelledby="forth-live-map-title">
           <div className="mb-1.5 flex shrink-0 flex-wrap items-center justify-between gap-2 px-1 pt-0.5">
             <div className="min-w-0">
               <h2 id="forth-live-map-title" className="flex items-center gap-1.5 text-sm font-bold text-slate-950"><MapPinned className="h-4 w-4 shrink-0 text-violet-700" />{copy.mapTitle}</h2>
@@ -1784,7 +1851,7 @@ export function ForthTrackingCentre() {
             {unplottableRecordCount > 0 ? <span className={filter === "all" && (mapInitialFrame.outlierCount > 0 || mapInitialFrame.unverifiedPositionCount > 0) ? "ml-2" : ""}>{language === "th" ? `${unplottableRecordCount} รายงานไม่มีพิกัดที่ถูกต้อง แสดงข้อมูลต่อในรายการรถ` : `${unplottableRecordCount} report${unplottableRecordCount === 1 ? " has" : "s have"} missing or invalid coordinates and remains in the vehicle list.`}</span> : null}
           </p> : null}
           <div className="mt-1 flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-0.5 px-1 text-[10px] text-slate-500">
-            <span className="inline-flex min-w-0 items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0" />{language === "th" ? "ตำแหน่ง GPS ที่ยืนยันล่าสุด" : "Latest GPS-verified position"}: {lastGpsUpdate ?? copy.unknownValue} · {summary.currentGpsVerifiedPositions}/{summary.total}</span>
+            <span className="inline-flex min-w-0 items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0" />{language === "th" ? "ตำแหน่ง GPS ที่ยืนยันล่าสุด" : "Latest GPS-verified position"}: {lastGpsUpdate ?? (summary.gpsConfidenceUnavailablePositions > 0 ? copy.gpsConfidenceUnavailable : copy.unknownValue)} · {summary.currentGpsVerifiedPositions}/{summary.total}</span>
             <span>{language === "th" ? `รายงานตำแหน่งบนแผนที่ ${mapPositionRecords.length} จุด · รีเฟรชทุก 60 วินาที` : `${mapPositionRecords.length} plotted reports · refreshes every 60 seconds`}</span>
           </div>
           {connected ? (
@@ -1874,14 +1941,14 @@ export function ForthTrackingCentre() {
 
         {selectedRecord ? (
           <>
-            <section className={`surface-card min-h-0 min-w-0 p-3 ${mobileInspectorOpen ? "fixed inset-x-2 bottom-2 top-auto z-[810] block max-h-[55dvh] overflow-y-auto shadow-2xl" : "hidden"} ${inspectorOpen ? "xl:block" : "xl:hidden"} xl:relative xl:inset-auto xl:z-auto xl:h-full xl:w-auto xl:max-h-none xl:overflow-y-auto xl:shadow-none ${inspectorOpen ? (sidebarOpen ? "xl:col-start-3 xl:row-start-1" : "xl:col-start-2 xl:row-start-1") : ""}`} aria-labelledby="forth-vehicle-details-title">
+            <section className={`surface-card min-h-0 min-w-0 p-2.5 ${mobileInspectorOpen ? "fixed inset-x-2 bottom-2 top-auto z-[810] block max-h-[55dvh] overflow-y-auto shadow-2xl" : "hidden"} ${inspectorOpen ? "xl:block" : "xl:hidden"} xl:relative xl:inset-auto xl:z-auto xl:h-full xl:w-auto xl:max-h-none xl:overflow-y-auto xl:shadow-none ${inspectorOpen ? (sidebarOpen ? "xl:col-start-3 xl:row-start-1" : "xl:col-start-2 xl:row-start-1") : ""}`} aria-labelledby="forth-vehicle-details-title">
             <>
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-violet-700">{copy.detailsTitle}</p>
                   <h2 id="forth-vehicle-details-title" className="mt-1 text-lg font-bold tracking-tight text-slate-950">{selectedRecord.vehicleRegistration || copy.unknownValue}</h2>
                   {selectedVehicleIdentity?.make ? <p className="mt-0.5 text-xs font-semibold text-slate-600">{selectedVehicleIdentity.make}{selectedVehicleIdentity.model ? ` ${selectedVehicleIdentity.model}` : ""}{selectedVehicleIdentity.classLabel ? ` · ${selectedVehicleIdentity.classLabel}` : ""}</p> : selectedVehicleIdentity?.classLabel ? <p className="mt-0.5 text-xs font-semibold text-slate-600">{selectedVehicleIdentity.classLabel}</p> : null}
-                  {selectedRecord.reportedDriver ? <p className="mt-0.5 text-xs text-slate-500">{selectedRecord.reportedDriver}</p> : null}
+                  {selectedRecord.reportedDriver ? <p className="mt-0.5 text-xs text-slate-500">{copy.driver}: {selectedRecord.reportedDriver}</p> : null}
                 </div>
                 <div className="flex items-center gap-2">
                   <ActivityPill activity={getForthReportedActivity(selectedRecord)} copy={copy} />
@@ -1891,7 +1958,7 @@ export function ForthTrackingCentre() {
               <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
                 <div className="min-w-0">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{copy.speed}</p>
-                  <p className="mt-0.5 text-2xl font-bold leading-7 tracking-tight text-slate-950">{selectedRecord.speed === null ? "—" : selectedRecord.speed}<span className="ml-1 text-xs font-semibold text-slate-500">km/h</span></p>
+                  <p className="mt-0.5 text-2xl font-bold leading-7 tracking-tight text-slate-950">{selectedRecord.speed === null ? "—" : selectedRecord.speed}</p>
                 </div>
                 <div className="min-w-0 text-right">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{copy.engine}</p>

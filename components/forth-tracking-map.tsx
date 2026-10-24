@@ -11,7 +11,6 @@ import {
   getForthReportedActivity,
   getForthTrackingVehicleIdentity,
   getForthMarkerCollisionGroups,
-  getForthMarkerFanOutOffsets,
   getVisibleForthMarkerLabelKeys,
   isForthGpsPositionVerified,
   type ForthReportedActivity,
@@ -28,6 +27,13 @@ type Copy = {
   notGpsVerified: string;
   groupVehicles: string;
   expandGroup: string;
+  groupPickerTitle: string;
+  groupPickerDescription: string;
+  groupSearch: string;
+  groupSearchPlaceholder: string;
+  closeGroupPicker: string;
+  noGroupMatches: string;
+  selectedVehicle: string;
   engineOn: string;
   engineOff: string;
   unknownValue: string;
@@ -51,7 +57,6 @@ type Props = {
 
 type LeafletModule = typeof import("leaflet");
 type FleetMarker = import("leaflet").Marker;
-type FleetPolyline = import("leaflet").Polyline;
 type FleetMarkerEntry = {
   marker: FleetMarker;
   activity: ForthReportedActivity;
@@ -65,7 +70,7 @@ type FleetMarkerEntry = {
   onMap: boolean;
 };
 type GroupMarkerEntry = { marker: FleetMarker; memberKeys: string[]; renderSignature: string };
-type FanOutMarkerEntry = { marker: FleetMarker; connector: FleetPolyline; groupKey: string; signature: string };
+type ActiveGroup = { signature: string; memberKeys: string[] };
 
 const tileUrl = process.env.NEXT_PUBLIC_EES_MAP_TILE_URL || "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 
@@ -130,17 +135,12 @@ function markerIcon(
   });
 }
 
-function groupIcon(Leaflet: LeafletModule, registrations: string[], copy: Copy) {
-  const rows = Math.ceil(registrations.length / 3);
-  const height = 48 + rows * 17;
-  const registrationMarkup = registrations
-    .map((registration) => `<b>${escapeHtml(registration)}</b>`)
-    .join("");
+function groupIcon(Leaflet: LeafletModule, count: number, selected: boolean) {
   return Leaflet.divIcon({
     className: styles.vehicleGroupIcon,
-    html: `<span class="${styles.vehicleGroupCard}"><strong>${registrations.length} ${escapeHtml(copy.groupVehicles)}</strong><span class="${styles.vehicleGroupRegistrations}">${registrationMarkup}</span><i>${escapeHtml(copy.expandGroup)}</i></span>`,
-    iconSize: [220, height],
-    iconAnchor: [110, height / 2]
+    html: `<span class="${styles.vehicleGroupBadge}${selected ? ` ${styles.vehicleGroupBadgeSelected}` : ""}" aria-hidden="true">${count}</span>`,
+    iconSize: [44, 44],
+    iconAnchor: [22, 22]
   });
 }
 
@@ -157,7 +157,6 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
   const mapRef = useRef<import("leaflet").Map | null>(null);
   const markersByKeyRef = useRef(new Map<string, FleetMarkerEntry>());
   const groupMarkersRef = useRef(new Map<string, GroupMarkerEntry>());
-  const fanOutMarkersRef = useRef(new Map<string, FanOutMarkerEntry>());
   const leafletRef = useRef<LeafletModule | null>(null);
   const copyRef = useRef(copy);
   const languageRef = useRef(language);
@@ -165,7 +164,9 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
   const labelUpdateRef = useRef<() => void>(() => undefined);
   const spatialUpdateRef = useRef<() => void>(() => undefined);
   const onSelectRef = useRef(onSelect);
-  const expandedGroupRef = useRef<string | null>(null);
+  const [activeGroup, setActiveGroup] = useState<ActiveGroup | null>(null);
+  const activeGroupRef = useRef(activeGroup);
+  const [groupSearch, setGroupSearch] = useState("");
   const initialFitCompleteRef = useRef(false);
   const lastCommandSequenceRef = useRef(0);
   const lastSelectedKeyRef = useRef<string | null>(null);
@@ -174,6 +175,19 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
   const [mapFailed, setMapFailed] = useState(false);
 
   const positionedRecords = useMemo(() => getForthFleetMapRecords(records), [records]);
+  activeGroupRef.current = activeGroup;
+  const activeGroupRecords = useMemo(() => {
+    if (!activeGroup) return [];
+    const memberKeys = new Set(activeGroup.memberKeys);
+    return positionedRecords
+      .filter(({ key }) => memberKeys.has(key))
+      .sort((left, right) => (left.record.vehicleRegistration ?? "").localeCompare(right.record.vehicleRegistration ?? "", undefined, { numeric: true }));
+  }, [activeGroup, positionedRecords]);
+  const visibleGroupRecords = useMemo(() => {
+    const query = groupSearch.trim().toLocaleLowerCase();
+    if (!query) return activeGroupRecords;
+    return activeGroupRecords.filter(({ record }) => (record.vehicleRegistration ?? "").toLocaleLowerCase().includes(query));
+  }, [activeGroupRecords, groupSearch]);
   copyRef.current = copy;
   languageRef.current = language;
   selectedKeyRef.current = selectedKey;
@@ -252,7 +266,6 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
           if (!currentMap || !leafletRef.current) return;
           const currentLeaflet = leafletRef.current;
           const entries = [...markersByKeyRef.current.entries()]
-            .filter(([key]) => key !== selectedKeyRef.current)
             .map(([key, entry]) => {
               const point = currentMap.latLngToContainerPoint(entry.marker.getLatLng());
               return { key, entry, point };
@@ -265,22 +278,17 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
               return a.localeCompare(b, undefined, { numeric: true });
             });
             const signature = [...memberKeys].sort((left, right) => left.localeCompare(right)).join("\u0000");
-            const memberPoints = memberKeys.map((key) => entries.find((entry) => entry.key === key)?.point).filter((point): point is import("leaflet").Point => Boolean(point));
-            const anchorPoint = currentLeaflet.point(
-              memberPoints.reduce((sum, point) => sum + point.x, 0) / memberPoints.length,
-              memberPoints.reduce((sum, point) => sum + point.y, 0) / memberPoints.length
-            );
-            return { signature, memberKeys, anchorPoint };
-          });
-          if (expandedGroupRef.current && !groupDetails.some(({ signature }) => signature === expandedGroupRef.current)) {
-            expandedGroupRef.current = null;
+            const markerPosition = markersByKeyRef.current.get(memberKeys[0])?.marker.getLatLng();
+            return markerPosition ? { signature, memberKeys, markerPosition } : null;
+          }).filter((group): group is NonNullable<typeof group> => group !== null);
+          if (activeGroupRef.current && !groupDetails.some(({ signature }) => signature === activeGroupRef.current?.signature)) {
+            activeGroupRef.current = null;
+            setActiveGroup(null);
+            setGroupSearch("");
           }
 
-          const collapsedGroups = groupDetails.filter(({ signature }) => signature !== expandedGroupRef.current);
-          const expandedGroup = groupDetails.find(({ signature }) => signature === expandedGroupRef.current) ?? null;
-          const groupSignatures = new Set(collapsedGroups.map(({ signature }) => signature));
+          const groupSignatures = new Set(groupDetails.map(({ signature }) => signature));
           const groupedKeys = new Set(groupDetails.flatMap(({ memberKeys }) => memberKeys));
-          const fanKeys = new Set(expandedGroup?.memberKeys ?? []);
 
           for (const [signature, group] of groupMarkersRef.current) {
             if (!groupSignatures.has(signature)) {
@@ -288,43 +296,42 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
               groupMarkersRef.current.delete(signature);
             }
           }
-          for (const group of collapsedGroups) {
-            const registrations = group.memberKeys.map((key) => markersByKeyRef.current.get(key)?.title ?? key);
-            const renderSignature = [registrations.join("\u0000"), copyRef.current.groupVehicles, copyRef.current.expandGroup].join("\u0001");
+          for (const group of groupDetails) {
+            const selected = group.memberKeys.some((key) => markersByKeyRef.current.get(key)?.selected);
+            const accessibleName = `${group.memberKeys.length} ${copyRef.current.groupVehicles}. ${copyRef.current.expandGroup}`;
+            const renderSignature = [group.memberKeys.length, selected, copyRef.current.groupVehicles, copyRef.current.expandGroup].join("\u0001");
             let entry = groupMarkersRef.current.get(group.signature);
             if (!entry) {
-              const marker = currentLeaflet.marker(currentMap.containerPointToLatLng(group.anchorPoint), {
-                icon: groupIcon(currentLeaflet, registrations, copyRef.current),
-                title: `${registrations.join(", ")}. ${copyRef.current.expandGroup}`,
-                alt: `${registrations.join(", ")}. ${copyRef.current.expandGroup}`,
+              const marker = currentLeaflet.marker(group.markerPosition, {
+                icon: groupIcon(currentLeaflet, group.memberKeys.length, selected),
+                title: accessibleName,
+                alt: accessibleName,
                 keyboard: true,
                 riseOnHover: true
               }).addTo(currentMap);
               marker.on("click", () => {
-                expandedGroupRef.current = group.signature;
-                spatialUpdateRef.current();
+                const currentMembers = groupMarkersRef.current.get(group.signature)?.memberKeys ?? group.memberKeys;
+                setActiveGroup({ signature: group.signature, memberKeys: [...currentMembers] });
+                setGroupSearch("");
               });
               marker.on("focus", () => marker.openTooltip());
               marker.on("blur", () => marker.closeTooltip());
-              const tooltip = document.createElement("span");
-              tooltip.textContent = registrations.join(" · ");
+              const tooltip = safeTooltipText(accessibleName);
               marker.bindTooltip(tooltip, { direction: "top", opacity: 0.98 });
-              marker.getElement()?.setAttribute("aria-label", `${registrations.join(", ")}. ${copyRef.current.expandGroup}`);
+              marker.getElement()?.setAttribute("aria-label", accessibleName);
               entry = { marker, memberKeys: group.memberKeys, renderSignature };
               groupMarkersRef.current.set(group.signature, entry);
             } else {
               if (entry.renderSignature !== renderSignature) {
-                entry.marker.setIcon(groupIcon(currentLeaflet, registrations, copyRef.current));
-                entry.marker.setTooltipContent(safeTooltipText(registrations.join(" · ")));
-                entry.memberKeys = group.memberKeys;
+                entry.marker.setIcon(groupIcon(currentLeaflet, group.memberKeys.length, selected));
                 entry.renderSignature = renderSignature;
               }
-              const groupPosition = currentMap.containerPointToLatLng(group.anchorPoint);
+              entry.memberKeys = group.memberKeys;
               const previousGroupPosition = entry.marker.getLatLng();
-              if (previousGroupPosition.lat !== groupPosition.lat || previousGroupPosition.lng !== groupPosition.lng) {
-                entry.marker.setLatLng(groupPosition);
+              if (previousGroupPosition.lat !== group.markerPosition.lat || previousGroupPosition.lng !== group.markerPosition.lng) {
+                entry.marker.setLatLng(group.markerPosition);
               }
-              const accessibleName = `${registrations.join(", ")}. ${copyRef.current.expandGroup}`;
+              entry.marker.setTooltipContent(safeTooltipText(accessibleName));
               entry.marker.options.title = accessibleName;
               entry.marker.options.alt = accessibleName;
               entry.marker.getElement()?.setAttribute("aria-label", accessibleName);
@@ -343,78 +350,14 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
             }
           }
 
-          for (const [key, fan] of fanOutMarkersRef.current) {
-            if (!fanKeys.has(key)) {
-              fan.marker.remove();
-              fan.connector.remove();
-              fanOutMarkersRef.current.delete(key);
-            }
-          }
-          if (expandedGroup) {
-            const offsets = getForthMarkerFanOutOffsets(expandedGroup.memberKeys.length);
-            const mapSize = currentMap.getSize();
-            expandedGroup.memberKeys.forEach((key, index) => {
-              const source = markersByKeyRef.current.get(key);
-              const offset = offsets[index];
-              if (!source || !offset) return;
-              const truePosition = source.marker.getLatLng();
-              const displayPosition = currentMap.containerPointToLatLng(currentLeaflet.point(
-                expandedGroup.anchorPoint.x + offset.x,
-                expandedGroup.anchorPoint.y + offset.y
-              ));
-              const displayPoint = currentMap.latLngToContainerPoint(displayPosition);
-              const labelOnLeft = displayPoint.x + 20 + Math.min(158, 16 + source.title.length * 7) > mapSize.x;
-              const confidence = source.approximate ? copyRef.current.notGpsVerified : copyRef.current.gpsVerified;
-              const identitySignature = [source.activity, source.selected, source.approximate, source.offline, source.title, source.vehicleClass, source.make, confidence, labelOnLeft, languageRef.current].join("\u0000");
-              let fan = fanOutMarkersRef.current.get(key);
-              if (!fan) {
-                const connector = currentLeaflet.polyline([truePosition, displayPosition], {
-                  color: "#475569",
-                  opacity: 0.68,
-                  weight: 1.25,
-                  dashArray: "3 4",
-                  interactive: false
-                }).addTo(currentMap);
-                const marker = currentLeaflet.marker(displayPosition, {
-                  icon: markerIcon(currentLeaflet, source.activity, source.selected, source.approximate, source.offline, source.title, source.vehicleClass, source.make, labelOnLeft),
-                  title: source.title,
-                  alt: `${source.title} · ${confidence}`,
-                  zIndexOffset: 1300,
-                  keyboard: true,
-                  riseOnHover: true
-                }).addTo(currentMap);
-                marker.on("click", () => onSelectRef.current(key));
-                marker.on("focus", () => marker.openTooltip());
-                marker.on("blur", () => marker.closeTooltip());
-                const tooltip = document.createElement("span");
-                tooltip.textContent = `${source.title} · ${activityLabel(source.activity, copyRef.current)} · ${confidence}`;
-                marker.bindTooltip(tooltip, { direction: "top", offset: [0, -8], opacity: 0.96 });
-                fan = { marker, connector, groupKey: expandedGroup.signature, signature: identitySignature };
-                fanOutMarkersRef.current.set(key, fan);
-              } else {
-                const previousDisplayPosition = fan.marker.getLatLng();
-                if (previousDisplayPosition.lat !== displayPosition.lat || previousDisplayPosition.lng !== displayPosition.lng) {
-                  fan.marker.setLatLng(displayPosition);
-                }
-                fan.connector.setLatLngs([truePosition, displayPosition]);
-                if (fan.signature !== identitySignature) {
-                  fan.marker.setIcon(markerIcon(currentLeaflet, source.activity, source.selected, source.approximate, source.offline, source.title, source.vehicleClass, source.make, labelOnLeft));
-                  fan.marker.options.title = source.title;
-                  fan.marker.options.alt = `${source.title} · ${confidence}`;
-                  fan.marker.setTooltipContent(safeTooltipText(`${source.title} · ${activityLabel(source.activity, copyRef.current)} · ${confidence}`));
-                  fan.marker.getElement()?.setAttribute("aria-label", `${source.title} · ${confidence}`);
-                  fan.signature = identitySignature;
-                }
-                fan.groupKey = expandedGroup.signature;
-              }
-            });
-          }
           window.requestAnimationFrame(() => labelUpdateRef.current());
         };
         spatialUpdateRef.current = updateSpatialPresentation;
 
         map.on("zoomstart", () => {
-          expandedGroupRef.current = null;
+          activeGroupRef.current = null;
+          setActiveGroup(null);
+          setGroupSearch("");
           updateSpatialPresentation();
         });
         map.on("zoomend", updateSpatialPresentation);
@@ -444,7 +387,6 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
       spatialUpdateRef.current = () => undefined;
       markersByKeyRef.current.clear();
       groupMarkersRef.current.clear();
-      fanOutMarkersRef.current.clear();
       leafletRef.current = null;
     };
   }, []);
@@ -533,7 +475,9 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
     lastCommandSequenceRef.current = command.sequence;
 
     if (command.type === "fit") {
-      expandedGroupRef.current = null;
+      activeGroupRef.current = null;
+      setActiveGroup(null);
+      setGroupSearch("");
       fitFleet(map, Leaflet, getForthTrustedFleetMapInitialFrame(records).focusPositions);
       return;
     }
@@ -541,7 +485,9 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
       const marker = markersByKeyRef.current.get(command.key)?.marker;
       if (!marker) return;
       const position = marker.getLatLng();
-      expandedGroupRef.current = null;
+      activeGroupRef.current = null;
+      setActiveGroup(null);
+      setGroupSearch("");
       map.flyTo(position, Math.min(16, Math.max(13, map.getZoom())), { duration: 0.35 });
     }
   }, [command, mapReady, positionedRecords]);
@@ -549,7 +495,9 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
   useEffect(() => {
     if (lastFilterKeyRef.current === filterKey) return;
     lastFilterKeyRef.current = filterKey;
-    expandedGroupRef.current = null;
+    activeGroupRef.current = null;
+    setActiveGroup(null);
+    setGroupSearch("");
     spatialUpdateRef.current();
   }, [filterKey, mapReady]);
 
@@ -567,7 +515,11 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
         entry.marker.setZIndexOffset(selected ? 1200 : 0);
       }
     }
-    if (previousSelectedKey !== selectedKey) expandedGroupRef.current = null;
+    if (previousSelectedKey !== selectedKey) {
+      activeGroupRef.current = null;
+      setActiveGroup(null);
+      setGroupSearch("");
+    }
     lastSelectedKeyRef.current = selectedKey;
     spatialUpdateRef.current();
     window.requestAnimationFrame(() => labelUpdateRef.current());
@@ -579,6 +531,37 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
       {!mapReady && !mapFailed ? <div className={styles.mapNotice} role="status">{copy.loading}</div> : null}
       {mapFailed ? <div className={styles.mapNotice} role="alert">{copy.mapUnavailable}</div> : null}
       {mapReady && positionedRecords.length === 0 ? <div className={styles.mapNotice} role="status">{copy.noPositions}</div> : null}
+      {activeGroup ? (
+        <aside className={styles.collisionPicker} aria-label={copy.groupPickerTitle}>
+          <header className={styles.collisionPickerHeader}>
+            <div className={styles.collisionPickerHeading}>
+              <strong>{copy.groupPickerTitle}</strong>
+              <span>{copy.groupPickerDescription}</span>
+            </div>
+            <button type="button" className={styles.collisionPickerClose} onClick={() => { setActiveGroup(null); setGroupSearch(""); }} aria-label={copy.closeGroupPicker}>×</button>
+          </header>
+          <label className={styles.collisionPickerSearch}>
+            <span className="sr-only">{copy.groupSearch}</span>
+            <input type="search" value={groupSearch} onChange={(event) => setGroupSearch(event.target.value)} placeholder={copy.groupSearchPlaceholder} />
+          </label>
+          {visibleGroupRecords.length > 0 ? (
+            <ul className={styles.collisionVehicleList} aria-label={copy.groupPickerTitle}>
+              {visibleGroupRecords.map(({ record, key }) => (
+                <li key={key}>
+                  <button type="button" aria-pressed={selectedKey === key} className={`${styles.collisionVehicleRow} ${selectedKey === key ? styles.collisionVehicleSelected : ""}`} onClick={() => {
+                    setActiveGroup(null);
+                    setGroupSearch("");
+                    onSelect(key);
+                  }}>
+                    <span>{record.vehicleRegistration || copy.unknownValue}</span>
+                    {selectedKey === key ? <span className={styles.collisionVehicleCurrent}>{copy.selectedVehicle}</span> : null}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : <p className={styles.collisionPickerEmpty} role="status">{copy.noGroupMatches}</p>}
+        </aside>
+      ) : null}
     </div>
   );
 });
