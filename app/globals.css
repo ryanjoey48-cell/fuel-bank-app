@@ -3431,17 +3431,18 @@ td {
 }
 
 .forth-tracking-kpi-scroll {
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-gutter: stable;
-  -webkit-overflow-scrolling: touch;
+  min-width: 0;
 }
 
 .forth-tracking-kpis {
   display: grid;
   width: 100%;
-  min-width: 980px;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  min-width: 0;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+@media (max-width: 767px) {
+  .forth-tracking-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 .forth-tracking-workspace .forth-map-panel,
@@ -3477,10 +3478,6 @@ td {
 .forth-tracking-workspace .forth-map-viewport {
   min-height: 0;
   flex: 1 1 0%;
-}
-
-@media (min-width: 1280px) {
-  .forth-tracking-kpis { min-width: 0; }
 }
 
 @media (max-width: 767px) {

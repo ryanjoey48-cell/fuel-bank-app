@@ -6,7 +6,9 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock3,
+  ExternalLink,
   Gauge,
+  History,
   List,
   MapPin,
   MapPinned,
@@ -36,7 +38,7 @@ import {
   filterForthFleetRecords,
   formatForthRelativeAge,
   formatForthTrackingTime,
-  getForthFleetMapInitialFrame,
+  getForthTrustedFleetMapInitialFrame,
   getForthAccuracyComparisons,
   getForthFleetRecordKey,
   getForthLocationDescription,
@@ -45,6 +47,7 @@ import {
   getForthFleetMapRecords,
   getForthNormalizationWarnings,
   getForthReportedActivity,
+  getForthTrustedGoogleMapsUrl,
   isForthGpsPositionVerified,
   summarizeForthFleet,
   sortForthFleetRecords,
@@ -124,13 +127,13 @@ const COPY = {
     lastSync: "Last EES refresh",
     total: "Fleet vehicles",
     totalHelper: "of tracked vehicles",
-    moving: "Driving now",
+    moving: "Reported moving",
     movingHelper: "Fresh positive speed with no Engine OFF conflict",
     activityConflictNote: "Forth reports positive speed while Engine is OFF; movement is not confirmed.",
     activityConflictCount: "Readings conflict",
     activityConflictHelper: "Fresh positive speed and Engine OFF",
-    parked: "Stopped now",
-    parkedHelper: "Fresh reported speed is zero",
+    parked: "Reported stopped",
+    parkedHelper: "Fresh reported speed is zero; this does not confirm parking",
     engineOnStops: "Stopped · engine on",
     engineOnStopsHelper: "Latest report only; duration is not available",
     offline: "Tracker offline",
@@ -141,6 +144,21 @@ const COPY = {
     latestGpsHelper: "Fresh position confirmed by GPS",
     needsAttention: "Needs attention",
     needsAttentionHelper: "Offline or position report older than 15 minutes",
+    gpsVerifiedPositions: "GPS-verified positions",
+    liveFleetView: "Live fleet",
+    journeyHistoryView: "Journey history",
+    journeyVehicle: "Vehicle",
+    journeyDate: "Calendar date",
+    journeyHistoryTitle: "Journey History",
+    journeyHistoryDescription: "Review recorded journeys and stops for one vehicle and one completed day.",
+    journeyVerificationTitle: "History connection needs verification",
+    journeyVerificationBody: "Forth's Swagger request and response fields, required permissions, timestamp timezone, duration units and distance units are not available in this project. History is not loaded until those details are confirmed.",
+    journeyNoRequests: "No journey-history API request has been sent from this view.",
+    journeyEmptyTitle: "No verified history to show",
+    journeyEmptyBody: "No journey, stop or daily-summary values are fabricated. Once Forth's report contract is verified, this view can show only fields the API actually returns.",
+    openGoogleMaps: "Open verified position in Google Maps",
+    mapLinkRequiresVerifiedGps: "Google Maps link available for a current, GPS-verified position only.",
+    refreshFailedSnapshot: "Refresh failed. Showing the last successful fleet snapshot from",
     countOf: "of",
     tracked: "tracked",
     unknownSummary: "Reported activity uses fresh speed and engine data. GPS confidence is assessed separately.",
@@ -265,9 +283,9 @@ const COPY = {
     requestFailure: "The protected tracking request could not be completed. Check your EES session and try again.",
     requestSessionFailure: "Your EES session is unavailable. Sign in again to refresh live tracking.",
     requestAuthorizationFailure: "Your EES account could not access live tracking. Sign in again or ask an EES administrator to review office access.",
-    requestTimeoutFailure: "The live tracking request timed out. Current vehicle data is hidden until a refresh succeeds.",
-    requestUpstreamFailure: "Forth tracking could not be reached. Current vehicle data is hidden until a refresh succeeds.",
-    requestInvalidResponseFailure: "The tracking service returned an unreadable response. Current vehicle data is hidden until a refresh succeeds.",
+    requestTimeoutFailure: "The live tracking request timed out.",
+    requestUpstreamFailure: "Forth tracking could not be reached.",
+    requestInvalidResponseFailure: "The tracking service returned an unreadable response.",
     staleSnapshotHidden: "Live telemetry is hidden until a refresh succeeds. Last successful refresh:",
     mapTitle: "Live vehicle map",
     mapDescription: "Select a marker or vehicle to inspect its latest reported position.",
@@ -294,7 +312,7 @@ const COPY = {
     detailsTitle: "Vehicle details",
     chooseVehicle: "Choose a vehicle from the list or map to see its details.",
     registration: "Registration",
-    driver: "Reported driver",
+    driver: "Forth-reported driver",
     noDriver: "Not reported",
     device: "GPS device ID",
     speed: "Speed",
@@ -378,6 +396,7 @@ const COPY = {
     filterOnline: "Tracker online",
     filterOffline: "Tracker offline",
     filterStale: "Stale position",
+    filterVerified: "GPS verified",
     filterUnverified: "Position unverified",
     filterEngineOnStopped: "Stopped · engine on",
     filterUncertain: "Activity uncertain",
@@ -409,13 +428,13 @@ const COPY = {
     lastSync: "รีเฟรช EES ล่าสุด",
     total: "รถทั้งหมด",
     totalHelper: "จากรถที่ติดตาม",
-    moving: "กำลังขับ",
+    moving: "รายงานว่าเคลื่อนที่",
     movingHelper: "ความเร็วเป็นบวกและไม่มีรายงานว่าเครื่องยนต์ปิด",
     activityConflictNote: "Forth รายงานความเร็วมากกว่าศูนย์แต่ Engine เป็นปิด จึงยังยืนยันการเคลื่อนที่ไม่ได้",
     activityConflictCount: "ข้อมูลขัดแย้ง",
     activityConflictHelper: "ความเร็วใหม่เป็นบวกและ Engine ปิด",
-    parked: "หยุดอยู่",
-    parkedHelper: "ความเร็วรายงานใหม่เป็นศูนย์",
+    parked: "รายงานว่าหยุด",
+    parkedHelper: "รายงานความเร็วล่าสุดเป็นศูนย์ แต่ยังยืนยันว่าจอดไม่ได้",
     engineOnStops: "หยุด · เครื่องยนต์เปิด",
     engineOnStopsHelper: "เฉพาะข้อมูลรายงานล่าสุด ไม่มีระยะเวลา",
     offline: "ตัวติดตามออฟไลน์",
@@ -426,6 +445,21 @@ const COPY = {
     latestGpsHelper: "ตำแหน่งใหม่ที่ยืนยันด้วย GPS",
     needsAttention: "ควรตรวจสอบ",
     needsAttentionHelper: "ออฟไลน์หรือรายงานตำแหน่งเกิน 15 นาที",
+    gpsVerifiedPositions: "ตำแหน่งที่ยืนยันด้วย GPS",
+    liveFleetView: "รถปัจจุบัน",
+    journeyHistoryView: "ประวัติการเดินทาง",
+    journeyVehicle: "รถ",
+    journeyDate: "วันที่ตามปฏิทิน",
+    journeyHistoryTitle: "ประวัติการเดินทาง",
+    journeyHistoryDescription: "ตรวจสอบการเดินทางและการหยุดที่บันทึกไว้ของรถหนึ่งคันในวันที่เสร็จสิ้นแล้ว",
+    journeyVerificationTitle: "ต้องยืนยันการเชื่อมต่อประวัติก่อน",
+    journeyVerificationBody: "ยังไม่มีฟิลด์คำขอและคำตอบใน Swagger ของ Forth สิทธิ์ที่ต้องใช้ เขตเวลาของเวลา หน่วยระยะเวลาหยุด และหน่วยระยะทางในโปรเจกต์นี้ จึงยังไม่โหลดประวัติจนกว่าจะยืนยันรายละเอียดเหล่านี้",
+    journeyNoRequests: "มุมมองนี้ยังไม่ได้ส่งคำขอ API ประวัติการเดินทาง",
+    journeyEmptyTitle: "ไม่มีข้อมูลประวัติที่ยืนยันแล้ว",
+    journeyEmptyBody: "ไม่มีการสร้างข้อมูลการเดินทาง จุดหยุด หรือสรุปรายวันขึ้นมาเอง เมื่อยืนยันสัญญารายงานของ Forth แล้ว มุมมองนี้จะแสดงเฉพาะฟิลด์ที่ API ส่งกลับจริง",
+    openGoogleMaps: "เปิดตำแหน่งที่ยืนยันแล้วใน Google Maps",
+    mapLinkRequiresVerifiedGps: "เปิดลิงก์ Google Maps ได้เฉพาะตำแหน่งปัจจุบันที่ยืนยันด้วย GPS",
+    refreshFailedSnapshot: "รีเฟรชไม่สำเร็จ กำลังแสดงข้อมูลรถครั้งล่าสุดที่สำเร็จเมื่อ",
     countOf: "จาก",
     tracked: "คันที่ติดตาม",
     unknownSummary: "กิจกรรมจากความเร็วและสถานะเครื่องยนต์ที่ยังใหม่ ส่วนความมั่นใจ GPS แสดงแยกต่างหาก",
@@ -550,9 +584,9 @@ const COPY = {
     requestFailure: "ไม่สามารถดำเนินการคำขอติดตามที่ได้รับการป้องกันได้ โปรดตรวจสอบการเข้าสู่ระบบ EES แล้วลองอีกครั้ง",
     requestSessionFailure: "ไม่พบเซสชัน EES โปรดเข้าสู่ระบบอีกครั้งเพื่อรีเฟรชข้อมูลติดตามสด",
     requestAuthorizationFailure: "บัญชี EES นี้ไม่สามารถเข้าถึงข้อมูลติดตามสดได้ โปรดเข้าสู่ระบบอีกครั้งหรือติดต่อผู้ดูแลระบบเพื่อตรวจสอบสิทธิ์สำนักงาน",
-    requestTimeoutFailure: "คำขอติดตามสดหมดเวลา ซ่อนข้อมูลรถปัจจุบันจนกว่าจะรีเฟรชสำเร็จ",
-    requestUpstreamFailure: "ไม่สามารถเชื่อมต่อ Forth Tracking ได้ ซ่อนข้อมูลรถปัจจุบันจนกว่าจะรีเฟรชสำเร็จ",
-    requestInvalidResponseFailure: "บริการติดตามส่งข้อมูลที่อ่านไม่ได้ ซ่อนข้อมูลรถปัจจุบันจนกว่าจะรีเฟรชสำเร็จ",
+    requestTimeoutFailure: "คำขอติดตามสดหมดเวลา",
+    requestUpstreamFailure: "ไม่สามารถเชื่อมต่อ Forth Tracking ได้",
+    requestInvalidResponseFailure: "บริการติดตามส่งข้อมูลที่อ่านไม่ได้",
     staleSnapshotHidden: "ซ่อนข้อมูลติดตามสดจนกว่าจะรีเฟรชสำเร็จ รีเฟรชครั้งล่าสุดที่สำเร็จ:",
     mapTitle: "แผนที่รถแบบเรียลไทม์",
     mapDescription: "เลือกหมุดหรือรถเพื่อดูตำแหน่งล่าสุดที่รายงาน",
@@ -579,7 +613,7 @@ const COPY = {
     detailsTitle: "รายละเอียดรถ",
     chooseVehicle: "เลือกรถจากรายการหรือแผนที่เพื่อดูรายละเอียด",
     registration: "ทะเบียนรถ",
-    driver: "ผู้ขับที่รายงาน",
+    driver: "ผู้ขับที่ Forth รายงาน",
     noDriver: "ไม่มีข้อมูล",
     device: "รหัสอุปกรณ์ GPS",
     speed: "ความเร็ว",
@@ -663,6 +697,7 @@ const COPY = {
     filterOnline: "ตัวติดตามออนไลน์",
     filterOffline: "ตัวติดตามออฟไลน์",
     filterStale: "ตำแหน่งเก่า",
+    filterVerified: "ยืนยันด้วย GPS",
     filterUnverified: "ตำแหน่งยังไม่ยืนยัน",
     filterEngineOnStopped: "หยุด · เครื่องยนต์เปิด",
     filterUncertain: "กิจกรรมไม่แน่ชัด",
@@ -884,6 +919,7 @@ const FleetVehicleRow = memo(function FleetVehicleRow({
 }) {
   const activity = getForthReportedActivity(record);
   const identity = getForthTrackingVehicleIdentity(record.vehicleRegistration);
+  const locationDescription = getForthLocationDescription(record, language);
   const updateTime = formatForthRelativeAge(record.lastGpsTimestamp, Date.now(), language);
   const exactUpdateTime = formatForthTrackingTime(record.lastGpsTimestamp, language);
   const accessibleUpdateTime = updateTime
@@ -898,6 +934,7 @@ const FleetVehicleRow = memo(function FleetVehicleRow({
       </span>
       {activity === "uncertain" ? <span className="mt-1 block text-[10px] leading-4 text-orange-900">{copy.activityConflictNote}</span> : null}
       {identity.make ? <span className="mt-0.5 block truncate text-[10px] font-medium text-slate-500">{identity.make}{identity.model ? ` ${identity.model}` : ""}</span> : null}
+      {locationDescription ? <span className="mt-1 flex min-w-0 items-center gap-1 truncate text-[10px] text-slate-600" title={locationDescription}><MapPin className="h-3 w-3 shrink-0 text-slate-400" />{locationDescription}</span> : null}
       <span className="mt-1 flex min-w-0 items-center justify-between gap-2">
         <span className="inline-flex items-baseline gap-1.5 text-slate-950"><Gauge className="h-3.5 w-3.5 self-center text-slate-400" /><strong className="text-base leading-5">{record.speed === null ? "—" : record.speed}</strong><span className="text-[10px] text-slate-500">km/h</span></span>
         <span className={`inline-flex max-w-[58%] min-w-0 items-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-semibold ${record.engineOn === true ? "bg-amber-50 text-amber-900" : record.engineOn === false ? "bg-indigo-50 text-indigo-800" : "bg-slate-100 text-slate-600"}`}><Activity className="h-3 w-3 shrink-0 opacity-70" /><span className="truncate">{record.engineOn === null ? copy.unknownValue : record.engineOn ? copy.engineOnLabel : copy.engineOffLabel}</span></span>
@@ -985,6 +1022,88 @@ function ConnectivityValue({ connected, copy, connectedLabel, disconnectedLabel 
   return <span className="inline-flex items-center gap-1.5 text-slate-500"><SignalZero className="h-4 w-4" />{copy.unknownValue}</span>;
 }
 
+function JourneyHistoryPanel({
+  records,
+  selectedKey,
+  selectedDate,
+  onSelectVehicle,
+  onDateChange,
+  onReturnToFleet,
+  language
+}: {
+  records: ForthFleetTrackingRecord[];
+  selectedKey: string | null;
+  selectedDate: string;
+  onSelectVehicle: (key: string) => void;
+  onDateChange: (date: string) => void;
+  onReturnToFleet: () => void;
+  language: "en" | "th";
+}) {
+  const copy = COPY[language];
+  const vehicles = records.map((record, index) => ({
+    key: getForthFleetRecordKey(record, index),
+    label: record.vehicleRegistration || record.gpsDeviceId || copy.unknownValue
+  }));
+  const selectedVehicle = vehicles.find(({ key }) => key === selectedKey) ?? vehicles[0];
+
+  return (
+    <section className="surface-card min-h-0 flex-1 overflow-y-auto p-4 sm:p-6" aria-labelledby="forth-journey-history-title">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-violet-700">{copy.journeyHistoryView}</p>
+          <h2 id="forth-journey-history-title" className="mt-1 text-xl font-bold tracking-tight text-slate-950">{copy.journeyHistoryTitle}</h2>
+          <p className="mt-1 max-w-2xl text-sm leading-5 text-slate-600">{copy.journeyHistoryDescription}</p>
+        </div>
+        <button type="button" onClick={onReturnToFleet} className="btn-secondary min-h-10 justify-center gap-2 px-3 text-xs">
+          <MapPinned className="h-4 w-4" />{copy.liveFleetView}
+        </button>
+      </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+        <label className="grid gap-1 text-xs font-semibold text-slate-700">
+          {copy.journeyVehicle}
+          <select
+            value={selectedVehicle?.key ?? ""}
+            onChange={(event) => onSelectVehicle(event.target.value)}
+            disabled={vehicles.length === 0}
+            className="min-h-11 min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 disabled:bg-slate-50"
+          >
+            {vehicles.length === 0 ? <option value="">{copy.noVehicles}</option> : null}
+            {vehicles.map((vehicle) => <option key={vehicle.key} value={vehicle.key}>{vehicle.label}</option>)}
+          </select>
+        </label>
+        <label className="grid gap-1 text-xs font-semibold text-slate-700">
+          {copy.journeyDate}
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(event) => onDateChange(event.target.value)}
+            className="min-h-11 min-w-0 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100"
+          />
+        </label>
+      </div>
+
+      <div role="status" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
+        <h3 className="font-bold">{copy.journeyVerificationTitle}</h3>
+        <p className="mt-1">{copy.journeyVerificationBody}</p>
+        <p className="mt-1 font-semibold">{copy.journeyNoRequests}</p>
+        <ul className="mt-2 grid gap-1 text-xs sm:grid-cols-2">
+          <li><code>POST /api/vehicle/trips</code></li>
+          <li><code>POST /api/vehicle/tripDetails</code></li>
+          <li><code>POST /api/vehicle/parkingTrip</code></li>
+          <li><code>POST /api/vehicle/parkingEngineOverTheLimits</code></li>
+        </ul>
+      </div>
+
+      <div className="mt-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center">
+        <History className="mx-auto h-6 w-6 text-slate-400" aria-hidden="true" />
+        <h3 className="mt-2 text-sm font-bold text-slate-800">{copy.journeyEmptyTitle}</h3>
+        <p className="mx-auto mt-1 max-w-xl text-xs leading-5 text-slate-600">{copy.journeyEmptyBody}</p>
+      </div>
+    </section>
+  );
+}
+
 export function ForthTrackingCentre() {
   const { language } = useLanguage();
   const { can } = useAccountAccess();
@@ -1000,6 +1119,9 @@ export function ForthTrackingCentre() {
   const [filter, setFilter] = useState<ForthFleetFilter>("all");
   const [sort, setSort] = useState<ForthFleetSort>("registration");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState<"live" | "journey">("live");
+  const [journeyVehicleKey, setJourneyVehicleKey] = useState<string | null>(null);
+  const [journeyDate, setJourneyDate] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileListOpen, setMobileListOpen] = useState(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
@@ -1033,6 +1155,7 @@ export function ForthTrackingCentre() {
   const statusDiagnosticConfirmationReturnStateRef = useRef<"ready" | "failed">("ready");
   const statusDiagnosticConfirmStartedRef = useRef(false);
   const statusDiagnosticInteractedRef = useRef(false);
+  const lastGoodFleetDataRef = useRef<ForthFleetTrackingData | null>(null);
 
   useEffect(() => {
     if (diagnosticsOpen) {
@@ -1118,6 +1241,7 @@ export function ForthTrackingCentre() {
   const focusVehicle = useCallback((key: string) => {
     setMobileListOpen(false);
     setSelectedKey(key);
+    setJourneyVehicleKey(key);
     setInspectorOpen(true);
     setMobileInspectorOpen(true);
     setMapCommand((current) => ({ type: "focus", sequence: current.sequence + 1, key }));
@@ -1125,6 +1249,7 @@ export function ForthTrackingCentre() {
 
   const fitAllVehicles = () => {
     setSelectedKey(null);
+    setFilter("all");
     setInspectorOpen(false);
     setMobileInspectorOpen(false);
     setMapCommand((current) => ({ type: "fit", sequence: current.sequence + 1 }));
@@ -1322,20 +1447,29 @@ export function ForthTrackingCentre() {
           throw new Error("invalid_response");
         }
         if (active) {
-          if (payload.connectionStatus === "connected" && payload.fetchedAt) {
-            setLastSuccessfulRefreshAt(payload.fetchedAt);
+          if (payload.connectionStatus === "connected") {
+            lastGoodFleetDataRef.current = payload;
+            if (payload.fetchedAt) setLastSuccessfulRefreshAt(payload.fetchedAt);
+            setData(payload);
+            setRequestError(false);
+            setRequestFailureReason("network");
+            setSelectedKey((current) => current && payload.records.some((record, index) => getForthFleetRecordKey(record, index) === current) ? current : null);
+          } else if (lastGoodFleetDataRef.current) {
+            setData(lastGoodFleetDataRef.current);
+            setRequestError(true);
+            setRequestFailureReason("upstream");
+          } else {
+            setData(payload);
+            setRequestError(false);
+            setRequestFailureReason("network");
           }
-          setData(payload);
-          setRequestError(false);
-          setRequestFailureReason("network");
-          setSelectedKey((current) => current && payload.records.some((record, index) => getForthFleetRecordKey(record, index) === current) ? current : null);
         }
       } catch {
         if (active) {
-          setData(null);
+          setData(lastGoodFleetDataRef.current);
           setRequestError(true);
           setRequestFailureReason(timedOut ? "timeout" : failureReason);
-          setSelectedKey(null);
+          if (!lastGoodFleetDataRef.current) setSelectedKey(null);
         }
       } finally {
         window.clearTimeout(timeout);
@@ -1365,7 +1499,7 @@ export function ForthTrackingCentre() {
     };
   }, []);
 
-  const connected = !requestError && data?.connectionStatus === "connected";
+  const connected = data?.connectionStatus === "connected";
   const summary = useMemo(() => summarizeForthFleet(data?.records ?? []), [data?.records]);
   const recordKeysByReference = useMemo(() => {
     const keys = new Map<ForthFleetTrackingRecord, string>();
@@ -1382,11 +1516,12 @@ export function ForthTrackingCentre() {
     () => filterForthFleetRecords(data?.records ?? [], "", filter),
     [data?.records, filter]
   );
+  const mapPositionRecords = useMemo(() => getForthFleetMapRecords(mapRecords), [mapRecords]);
   const mapInitialFrame = useMemo(
-    () => getForthFleetMapInitialFrame(getForthFleetMapRecords(mapRecords).map(({ position }) => position)),
+    () => getForthTrustedFleetMapInitialFrame(mapRecords),
     [mapRecords]
   );
-  const unplottableRecordCount = Math.max(0, mapRecords.length - mapInitialFrame.allPositions.length);
+  const unplottableRecordCount = Math.max(0, mapRecords.length - mapPositionRecords.length);
   const accuracyRecords = useMemo(() => {
     const query = accuracySearch.trim().toLocaleLowerCase();
     const records = data?.records ?? [];
@@ -1419,6 +1554,7 @@ export function ForthTrackingCentre() {
     : null;
   const lastGpsUpdate = formatForthTrackingTime(summary.latestCurrentGpsPosition, language);
   const selectedHasMapPosition = selectedRecord ? getForthFleetMapRecords([selectedRecord]).length > 0 : false;
+  const selectedGoogleMapsUrl = selectedRecord ? getForthTrustedGoogleMapsUrl(selectedRecord) : null;
   const lastChecked = formatForthTrackingTime(
     lastSuccessfulRefreshAt ?? (data?.connectionStatus === "connected" ? data.fetchedAt : null),
     language
@@ -1525,10 +1661,14 @@ export function ForthTrackingCentre() {
           <p className="hidden truncate text-[10px] leading-4 text-slate-500 sm:block">{copy.description} · {copy.freshnessShort}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+          <nav aria-label={language === "th" ? "มุมมองการติดตาม" : "Tracking views"} className="inline-flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+            <button type="button" aria-pressed={activeView === "live"} onClick={() => setActiveView("live")} className={`min-h-9 rounded-md px-2.5 text-[11px] font-semibold ${activeView === "live" ? "bg-white text-violet-800 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}>{copy.liveFleetView}</button>
+            <button type="button" aria-pressed={activeView === "journey"} onClick={() => { if (selectedKey) setJourneyVehicleKey(selectedKey); setActiveView("journey"); }} className={`min-h-9 rounded-md px-2.5 text-[11px] font-semibold ${activeView === "journey" ? "bg-white text-violet-800 shadow-sm" : "text-slate-600 hover:text-slate-900"}`}><History className="mr-1 inline h-3.5 w-3.5" />{copy.journeyHistoryView}</button>
+          </nav>
           {lastRefreshAge ? <span title={lastChecked ?? undefined} className="hidden text-right text-[10px] leading-4 text-slate-500 sm:block">{copy.lastSync}<strong className="ml-1 font-semibold text-slate-700">{lastRefreshAge}</strong></span> : null}
-          <span className={`inline-flex min-h-8 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] font-semibold ${connected ? "border-emerald-200 bg-emerald-50 text-emerald-800" : data?.connectionStatus === "not_configured" ? "border-amber-200 bg-amber-50 text-amber-800" : "border-slate-200 bg-white text-slate-600"}`}>
-            {connected ? <CheckCircle2 className="h-4 w-4" /> : data?.connectionStatus === "not_configured" ? <AlertTriangle className="h-4 w-4" /> : <Signal className="h-4 w-4" />}
-            {connected ? copy.connected : data?.connectionStatus === "not_configured" ? copy.disconnected : data?.connectionStatus === "failed" || requestError ? copy.unavailable : copy.mapLoading}
+          <span className={`inline-flex min-h-8 items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-[11px] font-semibold ${requestError ? "border-amber-200 bg-amber-50 text-amber-900" : connected ? "border-emerald-200 bg-emerald-50 text-emerald-800" : data?.connectionStatus === "not_configured" ? "border-amber-200 bg-amber-50 text-amber-800" : "border-slate-200 bg-white text-slate-600"}`}>
+            {requestError ? <AlertTriangle className="h-4 w-4" /> : connected ? <CheckCircle2 className="h-4 w-4" /> : data?.connectionStatus === "not_configured" ? <AlertTriangle className="h-4 w-4" /> : <Signal className="h-4 w-4" />}
+            {requestError ? copy.unavailable : connected ? copy.connected : data?.connectionStatus === "not_configured" ? copy.disconnected : data?.connectionStatus === "failed" ? copy.unavailable : copy.mapLoading}
           </span>
           <button
             type="button"
@@ -1539,21 +1679,32 @@ export function ForthTrackingCentre() {
             <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
             {refreshing ? copy.refreshing : copy.refresh}
           </button>
-          {connected && can("business:read") ? <button ref={diagnosticsTriggerRef} type="button" className="btn-secondary min-h-10 justify-center gap-1.5 px-2.5 py-1.5 text-[11px]" onClick={() => setDiagnosticsOpen(true)}>
+          {connected && !requestError && can("business:read") ? <button ref={diagnosticsTriggerRef} type="button" className="btn-secondary min-h-10 justify-center gap-1.5 px-2.5 py-1.5 text-[11px]" onClick={() => setDiagnosticsOpen(true)}>
             <Activity className="h-3.5 w-3.5" />{language === "th" ? "การวินิจฉัย" : "Diagnostics"}
           </button> : null}
         </div>
       </header>
 
+      {activeView === "journey" ? (
+        <JourneyHistoryPanel
+          records={data?.records ?? []}
+          selectedKey={journeyVehicleKey ?? selectedKey}
+          selectedDate={journeyDate}
+          onSelectVehicle={(key) => { setJourneyVehicleKey(key); focusVehicle(key); }}
+          onDateChange={setJourneyDate}
+          onReturnToFleet={() => setActiveView("live")}
+          language={language}
+        />
+      ) : <>
       {data?.connectionStatus === "not_configured" || data?.connectionStatus === "failed" || requestError ? (
-        <section className={`forth-tracking-alert flex shrink-0 items-center gap-2 rounded-lg border px-2.5 py-1.5 ${data?.connectionStatus === "not_configured" ? "border-amber-200 bg-amber-50/80" : "border-rose-200 bg-rose-50/80"}`} role="status">
-          <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${data?.connectionStatus === "not_configured" ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>
+        <section className={`forth-tracking-alert flex shrink-0 items-center gap-2 rounded-lg border px-2.5 py-1.5 ${requestError && connected ? "border-amber-200 bg-amber-50/80" : data?.connectionStatus === "not_configured" ? "border-amber-200 bg-amber-50/80" : "border-rose-200 bg-rose-50/80"}`} role="status">
+          <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg ${data?.connectionStatus === "not_configured" || requestError && connected ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>
             {data?.connectionStatus === "not_configured" ? <SignalZero className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
           </span>
           <div className="min-w-0 text-[11px] leading-4 text-slate-700">
             <strong className="mr-1 text-slate-900">{data?.connectionStatus === "not_configured" ? copy.configurationTitle : copy.failureTitle}</strong>
             <span>{data?.connectionStatus === "not_configured" ? copy.configurationBody : trackingMessage}</span>
-            {requestError && lastChecked ? <span className="ml-1 text-slate-600">{copy.staleSnapshotHidden} {lastChecked}</span> : null}
+            {requestError && lastChecked ? <span className="ml-1 text-slate-600">{copy.refreshFailedSnapshot} {lastChecked}</span> : null}
           </div>
         </section>
       ) : null}
@@ -1562,12 +1713,11 @@ export function ForthTrackingCentre() {
         <div className="forth-tracking-kpis flex gap-1.5">
         <OverviewMetric label={copy.total} value={connected ? String(summary.total) : "—"} tone="violet" icon={<Truck className="h-4 w-4" />} active={filter === "all"} disabled={!connected} onClick={() => applyFleetFilter("all")} />
         <OverviewMetric label={copy.moving} value={connected ? String(summary.reportedActivity.driving) : "—"} tone="emerald" icon={<Activity className="h-4 w-4" />} active={filter === "driving"} disabled={!connected} onClick={() => applyFleetFilter(filter === "driving" ? "all" : "driving")} />
-        <OverviewMetric label={copy.activityConflictCount} value={connected ? String(summary.reportedActivity.uncertain) : "—"} tone="amber" icon={<AlertTriangle className="h-4 w-4" />} active={filter === "uncertain"} disabled={!connected} onClick={() => applyFleetFilter(filter === "uncertain" ? "all" : "uncertain")} />
         <OverviewMetric label={copy.parked} value={connected ? String(summary.reportedActivity.stopped) : "—"} tone="violet" icon={<Gauge className="h-4 w-4" />} active={filter === "stopped"} disabled={!connected} onClick={() => applyFleetFilter(filter === "stopped" ? "all" : "stopped")} />
-        <OverviewMetric label={copy.engineOnStops} value={connected ? String(summary.reportedActivity.stoppedEngineOn) : "—"} tone="amber" icon={<Activity className="h-4 w-4" />} active={filter === "engine_on_stopped"} disabled={!connected} onClick={() => applyFleetFilter(filter === "engine_on_stopped" ? "all" : "engine_on_stopped")} />
-        <OverviewMetric label={copy.offline} value={connected ? String(summary.communications.offline) : "—"} tone="rose" icon={<WifiOff className="h-4 w-4" />} active={filter === "offline"} disabled={!connected} onClick={() => applyFleetFilter(filter === "offline" ? "all" : "offline")} />
-        <OverviewMetric label={copy.locationNotGpsVerified} value={connected ? String(summary.positionConfidence.notGpsVerified) : "—"} tone="amber" icon={<MapPin className="h-4 w-4" />} active={filter === "unverified"} disabled={!connected} onClick={() => applyFleetFilter(filter === "unverified" ? "all" : "unverified")} />
+        <OverviewMetric label={copy.gpsVerifiedPositions} value={connected ? String(summary.positionConfidence.gpsVerified) : "—"} tone="emerald" icon={<MapPin className="h-4 w-4" />} active={filter === "verified"} disabled={!connected} onClick={() => applyFleetFilter(filter === "verified" ? "all" : "verified")} />
+        <OverviewMetric label={copy.needsAttention} value={connected ? String(summary.needsAttention) : "—"} tone="amber" icon={<AlertTriangle className="h-4 w-4" />} active={filter === "attention"} disabled={!connected} onClick={() => applyFleetFilter(filter === "attention" ? "all" : "attention")} />
         </div>
+        <p className="px-1 pt-1 text-[10px] leading-4 text-slate-500">{copy.unknownSummary}</p>
 
       {connected && filter !== "all" ? (
         <div className="mt-1 flex min-h-6 items-center justify-end border-t border-slate-100 px-1 pt-1" role="group" aria-label={copy.attention}>
@@ -1582,6 +1732,7 @@ export function ForthTrackingCentre() {
                   attention: copy.filterAttention,
                   offline: copy.filterOffline,
                   stale: copy.filterStale,
+                  verified: copy.filterVerified,
                   unverified: copy.filterUnverified,
                   engine_on_stopped: copy.filterEngineOnStopped
                 } satisfies Record<ForthFleetFilter, string>)[filter]}</span>
@@ -1591,8 +1742,8 @@ export function ForthTrackingCentre() {
       ) : null}
       </section>
 
-      <div className={`forth-tracking-grid relative grid grid-cols-1 items-stretch gap-2 ${sidebarOpen ? "xl:grid-cols-[minmax(0,2.35fr)_minmax(300px,0.85fr)]" : "xl:grid-cols-1"}`}>
-        <section className="forth-map-panel surface-card order-1 min-w-0 overflow-hidden p-2 xl:col-start-1 xl:row-start-1" aria-labelledby="forth-live-map-title">
+      <div className={`forth-tracking-grid relative grid grid-cols-1 items-stretch gap-2 ${sidebarOpen ? "xl:grid-cols-[minmax(300px,0.85fr)_minmax(0,2.35fr)]" : "xl:grid-cols-1"}`}>
+        <section className={`forth-map-panel surface-card order-1 min-w-0 overflow-hidden p-2 ${sidebarOpen ? "xl:col-start-2" : "xl:col-start-1"} xl:row-start-1`} aria-labelledby="forth-live-map-title">
           <div className="mb-1.5 flex shrink-0 flex-wrap items-center justify-between gap-2 px-1 pt-0.5">
             <div className="min-w-0">
               <h2 id="forth-live-map-title" className="flex items-center gap-1.5 text-sm font-bold text-slate-950"><MapPinned className="h-4 w-4 shrink-0 text-violet-700" />{copy.mapTitle}</h2>
@@ -1631,7 +1782,7 @@ export function ForthTrackingCentre() {
           </p> : null}
           <div className="mt-1 flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-0.5 px-1 text-[10px] text-slate-500">
             <span className="inline-flex min-w-0 items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0" />{language === "th" ? "ตำแหน่ง GPS ที่ยืนยันล่าสุด" : "Latest GPS-verified position"}: {lastGpsUpdate ?? copy.unknownValue} · {summary.currentGpsVerifiedPositions}/{summary.total}</span>
-            <span>{language === "th" ? `รายงานตำแหน่งบนแผนที่ ${mapInitialFrame.allPositions.length} จุด · รีเฟรชทุก 60 วินาที` : `${mapInitialFrame.allPositions.length} plotted reports · refreshes every 60 seconds`}</span>
+            <span>{language === "th" ? `รายงานตำแหน่งบนแผนที่ ${mapPositionRecords.length} จุด · รีเฟรชทุก 60 วินาที` : `${mapPositionRecords.length} plotted reports · refreshes every 60 seconds`}</span>
           </div>
           {connected ? (
             <div className="mt-1 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-100 px-1 pt-1 text-[9px] leading-4 text-slate-600 sm:text-[10px]" aria-label={language === "th" ? "คำอธิบายสัญลักษณ์แผนที่" : "Map marker legend"}>
@@ -1653,7 +1804,7 @@ export function ForthTrackingCentre() {
         </section>
 
         {mobileListOpen ? <button type="button" className="fixed inset-0 z-[840] bg-slate-950/45 xl:hidden" aria-label={language === "th" ? "ปิดรายการรถ" : "Close vehicle list"} onClick={() => setMobileListOpen(false)} /> : null}
-        <section ref={mobileListDialogRef} id="forth-vehicle-list" className={`forth-vehicle-sidebar surface-card order-2 min-w-0 p-2.5 sm:p-3 xl:col-start-2 xl:row-start-1 ${mobileListOpen ? "fixed inset-y-0 right-0 z-[850] block w-[min(26rem,92vw)] overflow-hidden rounded-l-2xl rounded-r-none shadow-2xl" : "hidden"} ${sidebarOpen ? "xl:flex" : "xl:hidden"} xl:relative xl:inset-auto xl:z-auto xl:w-auto xl:rounded-2xl xl:shadow-none`} aria-labelledby="forth-vehicle-list-title" role={mobileListOpen ? "dialog" : undefined} aria-modal={mobileListOpen ? true : undefined}>
+        <section ref={mobileListDialogRef} id="forth-vehicle-list" className={`forth-vehicle-sidebar surface-card order-2 min-w-0 p-2.5 sm:p-3 xl:col-start-1 xl:row-start-1 ${mobileListOpen ? "fixed inset-y-0 right-0 z-[850] block w-[min(26rem,92vw)] overflow-hidden rounded-l-2xl rounded-r-none shadow-2xl" : "hidden"} ${sidebarOpen ? "xl:flex" : "xl:hidden"} xl:relative xl:inset-auto xl:z-auto xl:w-auto xl:rounded-2xl xl:shadow-none`} aria-labelledby="forth-vehicle-list-title" role={mobileListOpen ? "dialog" : undefined} aria-modal={mobileListOpen ? true : undefined}>
           <div className="flex shrink-0 items-start justify-between gap-3">
             <div>
               <h2 id="forth-vehicle-list-title" className="text-base font-bold text-slate-950">{copy.listTitle}</h2>
@@ -1691,7 +1842,8 @@ export function ForthTrackingCentre() {
               <optgroup label={copy.attentionGroup}>
                 <option value="attention">{copy.filterAttention}</option>
                 <option value="offline">{copy.filterOffline}</option>
-                <option value="stale">{copy.filterStale}</option>
+              <option value="stale">{copy.filterStale}</option>
+              <option value="verified">{copy.filterVerified}</option>
                 <option value="unverified">{copy.filterUnverified}</option>
                 <option value="engine_on_stopped">{copy.filterEngineOnStopped}</option>
               </optgroup>
@@ -1750,9 +1902,12 @@ export function ForthTrackingCentre() {
                 <p className="min-w-0"><span className="block font-semibold uppercase text-slate-500">{copy.lastVehicleUpdate}</span><span title={selectedExactPositionTime ?? undefined} className="mt-0.5 block font-semibold text-slate-800">{selectedPositionAge ?? timestampStatusLabel(selectedRecord, copy)}</span><span className="block break-words text-slate-500">{selectedExactPositionTime ?? copy.unknownValue}</span></p>
                 <p className="min-w-0"><span className="block font-semibold uppercase text-slate-500">{copy.latestPosition}</span><span title={selectedLocationDescription ?? undefined} className="mt-0.5 block break-words font-medium text-slate-800">{selectedLocationDescription ?? (selectedHasMapPosition ? copy.reportedPositionOnMap : copy.noPlaceDescription)}</span><span className="block break-words text-slate-500">{recordLocationLabel(selectedRecord, copy)}</span></p>
               </div>
-              <div className="mt-2 flex items-center gap-2">
-                <button type="button" onClick={() => selectedKey && focusVehicle(selectedKey)} disabled={!selectedHasMapPosition} className="btn-secondary min-h-8 flex-1 justify-center gap-1.5 px-2 text-[11px] disabled:cursor-not-allowed disabled:opacity-50"><MapPinned className="h-3.5 w-3.5" />{copy.focusOnMap}</button>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <button type="button" onClick={() => selectedKey && focusVehicle(selectedKey)} disabled={!selectedHasMapPosition} className="btn-secondary min-h-10 flex-1 justify-center gap-1.5 px-2 text-[11px] disabled:cursor-not-allowed disabled:opacity-50"><MapPinned className="h-3.5 w-3.5" />{copy.focusOnMap}</button>
+                {selectedGoogleMapsUrl ? <a href={selectedGoogleMapsUrl} target="_blank" rel="noopener noreferrer" className="btn-secondary min-h-10 flex-1 justify-center gap-1.5 px-2 text-[11px]"><ExternalLink className="h-3.5 w-3.5" />{copy.openGoogleMaps}</a> : <button type="button" disabled title={copy.mapLinkRequiresVerifiedGps} className="btn-secondary min-h-10 flex-1 justify-center gap-1.5 px-2 text-[11px] opacity-60"><ExternalLink className="h-3.5 w-3.5" />{copy.openGoogleMaps}</button>}
+                <button type="button" onClick={() => { setJourneyVehicleKey(selectedKey); setActiveView("journey"); }} className="btn-secondary min-h-10 flex-1 justify-center gap-1.5 px-2 text-[11px]"><History className="h-3.5 w-3.5" />{copy.journeyHistoryView}</button>
               </div>
+              {!selectedGoogleMapsUrl ? <p className="mt-1 text-[10px] leading-4 text-slate-500">{copy.mapLinkRequiresVerifiedGps}</p> : null}
 
               <details className="mt-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
                 <summary className="cursor-pointer text-xs font-semibold text-slate-800">{copy.technicalDetails}</summary>
@@ -1774,7 +1929,8 @@ export function ForthTrackingCentre() {
           </>
         ) : null}
       </div>
-      {connected && can("business:read") && diagnosticsOpen ? (
+      </>}
+      {connected && !requestError && can("business:read") && diagnosticsOpen ? (
         <div className="fixed inset-0 z-[900] flex justify-end bg-slate-950/45">
           <button type="button" className="absolute inset-0" aria-label={language === "th" ? "ปิดการวินิจฉัย" : "Close diagnostics"} onClick={closeDiagnostics} />
           <aside ref={diagnosticsDialogRef} role="dialog" aria-modal="true" aria-labelledby="forth-diagnostics-title" className="relative z-[901] flex h-full w-full max-w-3xl flex-col border-l border-slate-200 bg-slate-50 shadow-2xl">

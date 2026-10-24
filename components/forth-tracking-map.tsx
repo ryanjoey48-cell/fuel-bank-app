@@ -5,7 +5,7 @@ import "leaflet/dist/leaflet.css";
 import styles from "./forth-tracking-map.module.css";
 import {
   getForthFleetMapRecords,
-  getForthFleetMapInitialFrame,
+  getForthTrustedFleetMapInitialFrame,
   getForthReportedActivity,
   getForthTrackingVehicleIdentity,
   getForthMarkerCollisionGroups,
@@ -519,8 +519,8 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
     const map = mapRef.current;
     const Leaflet = leafletRef.current;
     if (!mapReady || !map || !Leaflet || initialFitCompleteRef.current || positionedRecords.length === 0) return;
-    const initialFrame = getForthFleetMapInitialFrame(positionedRecords.map(({ position }) => position));
-    fitFleet(map, Leaflet, initialFrame.focusPositions);
+    const initialFrame = getForthTrustedFleetMapInitialFrame(records);
+    if (initialFrame.focusPositions.length > 0) fitFleet(map, Leaflet, initialFrame.focusPositions);
     initialFitCompleteRef.current = true;
   }, [mapReady, positionedRecords]);
 

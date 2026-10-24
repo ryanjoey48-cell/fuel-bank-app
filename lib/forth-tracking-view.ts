@@ -19,6 +19,7 @@ export type ForthFleetFilter =
   | "attention"
   | "offline"
   | "stale"
+  | "verified"
   | "unverified"
   | "engine_on_stopped";
 export type ForthFleetSort = "registration" | "speed_desc" | "updated_desc";
@@ -258,6 +259,18 @@ export function isForthGpsPositionVerified(record: ForthFleetTrackingRecord) {
     record.positionQuality === "gps";
 }
 
+/** Link out only when the current report meets the fleet's GPS verification rules. */
+export function getForthTrustedGoogleMapsUrl(record: ForthFleetTrackingRecord, nowMs = Date.now()) {
+  if (!isForthGpsPositionVerified(record) || record.latitude === null || record.longitude === null) return null;
+  const positionTimeMs = record.lastGpsTimestamp ? Date.parse(record.lastGpsTimestamp) : Number.NaN;
+  const positionAgeMs = nowMs - positionTimeMs;
+  if (!Number.isFinite(positionTimeMs) || positionAgeMs < 0 || positionAgeMs > 15 * 60 * 1000) return null;
+  const url = new URL("https://www.google.com/maps/search/");
+  url.searchParams.set("api", "1");
+  url.searchParams.set("query", `${record.latitude},${record.longitude}`);
+  return url.toString();
+}
+
 export function isForthGpsVerifiedDriving(record: ForthFleetTrackingRecord) {
   return isForthGpsPositionVerified(record) && record.engineOn !== false && isUsableSpeed(record.speed) && record.speed > 0;
 }
@@ -406,6 +419,7 @@ export function filterForthFleetRecords(
       (filter === "attention" && (record.gprsConnectivity === "disconnected" || record.timestampStatus === "stale")) ||
       (filter === "offline" && record.gprsConnectivity === "disconnected") ||
       (filter === "stale" && record.timestampStatus === "stale") ||
+      (filter === "verified" && isForthGpsPositionVerified(record)) ||
       (filter === "unverified" && !isForthGpsPositionVerified(record)) ||
       (filter === "engine_on_stopped" && getForthReportedActivity(record) === "stopped_engine_on") ||
       (["driving", "uncertain", "stopped", "unavailable"].includes(filter) && getForthFleetFilterCategory(record) === filter);
@@ -641,6 +655,14 @@ export function getForthFleetMapInitialFrame(positions: [number, number][]): For
     return { allPositions, focusPositions: allPositions, outlierCount: 0 };
   }
   return { allPositions, focusPositions, outlierCount: allPositions.length - focusPositions.length };
+}
+
+/** Initial map zoom uses only fresh GPS-verified coordinates; all map records remain available. */
+export function getForthTrustedFleetMapInitialFrame(records: ForthFleetTrackingRecord[]) {
+  const verifiedPositions = getForthFleetMapRecords(records)
+    .filter(({ record }) => isForthGpsPositionVerified(record))
+    .map(({ position }) => position);
+  return getForthFleetMapInitialFrame(verifiedPositions);
 }
 
 export function formatForthTrackingTime(value: string | null, language: "en" | "th") {
