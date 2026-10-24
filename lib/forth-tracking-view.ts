@@ -228,6 +228,23 @@ export function formatForthRelativeAge(
   return `อัปเดต ${days} วันที่แล้ว`;
 }
 
+export function getForthPositionTimeDisplay(
+  record: ForthFleetTrackingRecord,
+  nowMs: number,
+  language: "en" | "th"
+) {
+  const relative = formatForthRelativeAge(record.lastGpsTimestamp, nowMs, language);
+  const exact = formatForthTrackingTime(record.lastGpsTimestamp, language);
+  const sourceRaw = record.sourceTimestampRaw?.trim() || null;
+  return {
+    relative,
+    exact,
+    sourceRaw,
+    display: relative ?? sourceRaw,
+    sourceTimeUninterpreted: Boolean(sourceRaw && !exact)
+  };
+}
+
 export function getForthFleetFilterCategory(record: ForthFleetTrackingRecord): ForthFleetFilter {
   const activity = getForthReportedActivity(record);
   if (activity === "driving") return "driving";
@@ -610,6 +627,7 @@ export type ForthFleetMapInitialFrame = {
   allPositions: [number, number][];
   focusPositions: [number, number][];
   outlierCount: number;
+  unverifiedPositionCount: number;
 };
 
 function median(values: number[]) {
@@ -630,15 +648,15 @@ function distanceKm(left: [number, number], right: [number, number]) {
 /**
  * Center the first view on a clear spatial majority when a small number of
  * valid reports are exceptionally distant. Every valid point remains in the
- * returned full set and in the marker layer; callers must disclose outliers
- * and keep an explicit fit-all action available.
+ * returned full set and in the marker layer; callers can choose a safe subset
+ * for fitting while keeping each report available for direct selection.
  */
 export function getForthFleetMapInitialFrame(positions: [number, number][]): ForthFleetMapInitialFrame {
   const allPositions = positions.filter(([latitude, longitude]) =>
     Number.isFinite(latitude) && latitude >= -90 && latitude <= 90 &&
     Number.isFinite(longitude) && longitude >= -180 && longitude <= 180
   );
-  if (allPositions.length < 4) return { allPositions, focusPositions: allPositions, outlierCount: 0 };
+  if (allPositions.length < 4) return { allPositions, focusPositions: allPositions, outlierCount: 0, unverifiedPositionCount: 0 };
 
   const center: [number, number] = [
     median(allPositions.map(([latitude]) => latitude)),
@@ -652,17 +670,35 @@ export function getForthFleetMapInitialFrame(positions: [number, number][]): For
   const requiredMajority = Math.ceil(allPositions.length * 0.75);
 
   if (focusPositions.length < requiredMajority || focusPositions.length === allPositions.length) {
-    return { allPositions, focusPositions: allPositions, outlierCount: 0 };
+    return { allPositions, focusPositions: allPositions, outlierCount: 0, unverifiedPositionCount: 0 };
   }
-  return { allPositions, focusPositions, outlierCount: allPositions.length - focusPositions.length };
+  return { allPositions, focusPositions, outlierCount: allPositions.length - focusPositions.length, unverifiedPositionCount: 0 };
 }
 
-/** Initial map zoom uses only fresh GPS-verified coordinates; all map records remain available. */
-export function getForthTrustedFleetMapInitialFrame(records: ForthFleetTrackingRecord[]) {
-  const verifiedPositions = getForthFleetMapRecords(records)
-    .filter(({ record }) => isForthGpsPositionVerified(record))
+export const EES_FLEET_MAP_DEFAULT_CENTER: [number, number] = [13.7563, 100.5018];
+export const EES_FLEET_MAP_DEFAULT_ZOOM = 10;
+const EES_FLEET_MAP_OPERATING_RADIUS_KM = 125;
+
+/**
+ * Keep framing within the Bangkok-area EES operating region. Reports outside
+ * that radius and reports that fail GPS confidence checks stay selectable but
+ * cannot pull the map away from the useful local view.
+ */
+export function getForthTrustedFleetMapInitialFrame(records: ForthFleetTrackingRecord[]): ForthFleetMapInitialFrame {
+  const mapRecords = getForthFleetMapRecords(records);
+  const verifiedRecords = mapRecords.filter(({ record }) => isForthGpsPositionVerified(record));
+  const verifiedPositions = verifiedRecords.map(({ position }) => position);
+  const localPositions = verifiedRecords
+    .filter(({ position }) => distanceKm(EES_FLEET_MAP_DEFAULT_CENTER, position) <= EES_FLEET_MAP_OPERATING_RADIUS_KM)
     .map(({ position }) => position);
-  return getForthFleetMapInitialFrame(verifiedPositions);
+  const localFrame = getForthFleetMapInitialFrame(localPositions);
+
+  return {
+    allPositions: verifiedPositions,
+    focusPositions: localFrame.focusPositions,
+    outlierCount: verifiedPositions.length - localFrame.focusPositions.length,
+    unverifiedPositionCount: mapRecords.length - verifiedRecords.length
+  };
 }
 
 export function formatForthTrackingTime(value: string | null, language: "en" | "th") {

@@ -1298,10 +1298,22 @@ test("initial fleet map frame and Google Maps links require a current GPS-verifi
   const frame = getForthTrustedFleetMapInitialFrame([verified, stale, approximate]);
   assert.deepEqual(frame.allPositions, [[13.7563, 100.5018]]);
   assert.deepEqual(frame.focusPositions, [[13.7563, 100.5018]]);
+  assert.equal(frame.unverifiedPositionCount, 2);
   assert.equal(getForthTrustedGoogleMapsUrl(verified, baseNow), "https://www.google.com/maps/search/?api=1&query=13.7563%2C100.5018");
   assert.equal(getForthTrustedGoogleMapsUrl(stale, baseNow), null);
   assert.equal(getForthTrustedGoogleMapsUrl(agedSnapshot, baseNow), null);
   assert.equal(getForthTrustedGoogleMapsUrl(approximate, baseNow), null);
+});
+
+test("timezone-unconfigured source time stays visible without an invented age or timezone", () => {
+  const { getForthPositionTimeDisplay } = loadTypeScript("lib/forth-tracking-view.ts");
+  const raw = "24-10-2026 19:49:08";
+  const display = getForthPositionTimeDisplay({ sourceTimestampRaw: raw, lastGpsTimestamp: null }, baseNow, "en");
+
+  assert.equal(display.relative, null);
+  assert.equal(display.exact, null);
+  assert.equal(display.display, raw);
+  assert.equal(display.sourceTimeUninterpreted, true);
 });
 
 test("74-8969 sample preserves Forth latitude/longitude and labels positive speed with Engine OFF as uncertain", () => {
@@ -1349,7 +1361,7 @@ test("Forth location descriptions use only supplied top-level address or POI tex
   assert.equal(filterForthFleetRecords(records, "Bangkok depot", "all")[0].vehicleRegistration, "LOCATION-1");
 });
 
-test("initial fleet framing focuses a clear spatial majority and retains every valid point for Fit Fleet", () => {
+test("generic fleet framing isolates clear outliers while retaining every valid coordinate", () => {
   const { getForthFleetMapInitialFrame } = loadTypeScript("lib/forth-tracking-view.ts");
   const mainCluster = Array.from({ length: 20 }, (_, index) => [13.75 + index * 0.001, 100.50 + index * 0.001]);
   const distantReport = [18.79, 98.98];
@@ -1363,6 +1375,28 @@ test("initial fleet framing focuses a clear spatial majority and retains every v
   const splitFleet = getForthFleetMapInitialFrame([[13.75, 100.5], [13.76, 100.51], [18.79, 98.98], [18.8, 98.99]]);
   assert.equal(splitFleet.outlierCount, 0);
   assert.equal(splitFleet.focusPositions.length, 4);
+});
+
+test("trusted fleet framing excludes unverified and out-of-area positions from map fitting", () => {
+  const { EES_FLEET_MAP_DEFAULT_CENTER, EES_FLEET_MAP_DEFAULT_ZOOM, getForthTrustedFleetMapInitialFrame } = loadTypeScript("lib/forth-tracking-view.ts");
+  const base = {
+    coordinateStatus: "valid",
+    gpsConnectivity: "connected",
+    positionQuality: "gps",
+    timestampStatus: "current",
+    lastGpsTimestamp: new Date(baseNow - 5 * 60 * 1000).toISOString()
+  };
+  const local = { ...base, latitude: 13.75, longitude: 100.5 };
+  const far = { ...base, latitude: 35.6762, longitude: 139.6503 };
+  const unverified = { ...base, latitude: 13.76, longitude: 100.51, positionQuality: "wifi" };
+  const frame = getForthTrustedFleetMapInitialFrame([local, far, unverified]);
+
+  assert.deepEqual(EES_FLEET_MAP_DEFAULT_CENTER, [13.7563, 100.5018]);
+  assert.equal(EES_FLEET_MAP_DEFAULT_ZOOM, 10);
+  assert.deepEqual(frame.allPositions, [[13.75, 100.5], [35.6762, 139.6503]]);
+  assert.deepEqual(frame.focusPositions, [[13.75, 100.5]]);
+  assert.equal(frame.outlierCount, 1);
+  assert.equal(frame.unverifiedPositionCount, 1);
 });
 
 test("approved roster classifies all 21 map vehicles without changing EES records", () => {
@@ -1507,8 +1541,9 @@ test("premium tracking workspace keeps selection and map controls with responsiv
   assert.ok(source.includes('xl:grid-cols-[minmax(300px,0.85fr)_minmax(0,2.35fr)]'));
   assert.ok(source.includes('sidebarOpen ? "xl:col-start-2" : "xl:col-start-1"'));
   assert.ok(source.includes('xl:col-start-1 xl:row-start-1'));
-  assert.ok(source.includes('xl:absolute xl:inset-x-auto'));
-  assert.ok(source.includes('xl:right-[calc(27%+0.75rem)]'));
+  assert.ok(source.includes('xl:col-start-3 xl:row-start-1'));
+  assert.ok(source.includes('xl:col-start-2 xl:row-start-1'));
+  assert.equal(source.includes('xl:absolute xl:inset-x-auto'), false);
   assert.ok(source.includes('id="forth-vehicle-list"'));
   assert.ok(source.includes("aria-label={copy.attention}"));
   assert.ok(source.includes('value="offline"'));
@@ -1527,9 +1562,9 @@ test("premium tracking workspace keeps selection and map controls with responsiv
   assert.ok(source.includes("getForthLocationDescription(selectedRecord, language)"));
   assert.ok(source.includes("copy.activityConflictNote"));
   assert.ok(source.includes("copy.technicalDetails"));
-  assert.ok(source.includes('xl:w-[min(18rem,36%)]'));
+  assert.ok(source.includes('xl:w-auto xl:max-h-none xl:overflow-y-auto'));
   assert.ok(source.includes('className="forth-tracking-kpis flex gap-1.5"'));
-  assert.ok(source.includes('getForthTrustedFleetMapInitialFrame(mapRecords)'));
+  assert.ok(source.includes('getForthTrustedFleetMapInitialFrame(data?.records ?? [])'));
   assert.ok(source.includes('getForthTrustedGoogleMapsUrl(selectedRecord)'));
   assert.ok(source.includes('copy.openGoogleMaps'));
   assert.ok(source.includes('copy.mapLinkRequiresVerifiedGps'));
@@ -1537,7 +1572,8 @@ test("premium tracking workspace keeps selection and map controls with responsiv
   assert.ok(source.includes('selectedKey={journeyVehicleKey ?? selectedKey}'));
   assert.ok(source.includes('records={mapRecords}'));
   assert.ok(source.includes('filterKey={filter}'));
-  assert.ok(source.includes("formatForthRelativeAge(record.lastGpsTimestamp, Date.now(), language)"));
+  assert.ok(source.includes("getForthPositionTimeDisplay(record, Date.now(), language)"));
+  assert.ok(source.includes("positionTime.sourceRaw"));
   assert.ok(source.includes("aria-label={accessibleUpdateTime}"));
   assert.ok(source.includes("copy.exactPositionTime"));
   assert.ok(source.includes("onClick={() => applyFleetFilter(filter === \"driving\" ? \"all\" : \"driving\")}"));
@@ -1810,7 +1846,7 @@ test("dashboard separates reported activity, GPS confidence, diagnostics and exi
   assert.ok(component.includes('role="dialog" aria-modal="true" aria-labelledby="forth-diagnostics-title"'));
   assert.ok(component.includes('ref={diagnosticsTriggerRef}'));
   assert.ok(component.includes("setDiagnosticsOpen(true)"));
-  assert.ok(component.includes("shows all."));
+  assert.ok(component.includes("do not widen the map"));
   assert.ok(component.includes("sidebarOpen ? \"xl:grid-cols-[minmax(300px,0.85fr)_minmax(0,2.35fr)]\" : \"xl:grid-cols-1\""));
   assert.ok(component.includes('className="forth-vehicle-results mt-2 space-y-1 pr-1"'));
   assert.ok(component.includes("setMobileListOpen(true)"));
@@ -1821,7 +1857,7 @@ test("dashboard separates reported activity, GPS confidence, diagnostics and exi
   assert.ok(component.includes('can("business:read")'));
 });
 
-test("history reports stay gated until their Swagger response contract is verified", () => {
+test("history reports stay gated until their schemas and permissions are verified", () => {
   const component = fs.readFileSync(path.join(root, "components/forth-tracking-centre.tsx"), "utf8");
   const server = fs.readFileSync(path.join(root, "lib/forth-tracking-server.ts"), "utf8");
   const reportPaths = [
@@ -1834,6 +1870,7 @@ test("history reports stay gated until their Swagger response contract is verifi
   for (const endpoint of reportPaths) assert.ok(component.includes(endpoint));
   assert.ok(component.includes("journeyNoRequests"));
   assert.ok(component.includes("journeyVerificationBody"));
+  assert.ok(component.includes("separate GET Log Data operation"));
   assert.ok(component.includes("journeyEmptyBody"));
   assert.doesNotMatch(component, /fetch\s*\([^)]*\/api\/vehicle\/(?:trips|tripDetails|parkingTrip|parkingEngineOverTheLimits)/s);
   assert.doesNotMatch(server, /\/api\/vehicle\/(?:trips|tripDetails|parkingTrip|parkingEngineOverTheLimits)/);

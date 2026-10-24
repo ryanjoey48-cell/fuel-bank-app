@@ -4,6 +4,8 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
 import styles from "./forth-tracking-map.module.css";
 import {
+  EES_FLEET_MAP_DEFAULT_CENTER,
+  EES_FLEET_MAP_DEFAULT_ZOOM,
   getForthFleetMapRecords,
   getForthTrustedFleetMapInitialFrame,
   getForthReportedActivity,
@@ -196,7 +198,7 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
           scrollWheelZoom: true,
           zoomControl: true,
           preferCanvas: true
-        }).setView([13.7563, 100.5018], 6);
+        }).setView(EES_FLEET_MAP_DEFAULT_CENTER, EES_FLEET_MAP_DEFAULT_ZOOM);
         map.getPane("tilePane")?.style.setProperty("z-index", "200");
         map.getPane("markerPane")?.style.setProperty("z-index", "650");
 
@@ -532,7 +534,7 @@ export const ForthTrackingMap = memo(function ForthTrackingMap({ records, select
 
     if (command.type === "fit") {
       expandedGroupRef.current = null;
-      fitFleet(map, Leaflet, positionedRecords.map(({ position }) => position));
+      fitFleet(map, Leaflet, getForthTrustedFleetMapInitialFrame(records).focusPositions);
       return;
     }
     if (command.type === "focus" && command.key) {
