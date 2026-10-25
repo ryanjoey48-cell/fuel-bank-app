@@ -17,7 +17,8 @@ import {
   FLEET_V2_MARKER_SIZE_PX,
   FLEET_V2_OPERATING_CENTER,
   canFocusVehicle,
-  getMapVehicles,
+  canShowUnverifiedReportedPosition,
+  getVisibleMapVehicles,
   getMarkerCollisionGroups,
   getMotionState,
   getOperatingAreaPositions,
@@ -31,6 +32,7 @@ type ViewCommand = { type: "fit" | "focus"; sequence: number; key?: string | nul
 
 type Props = {
   vehicles: FleetV2Vehicle[];
+  showUnverifiedPositions?: boolean;
   selectedId: string | null;
   onSelect: (id: string) => void;
   onCluster: (ids: string[]) => void;
@@ -52,27 +54,33 @@ function markerIcon(
   Leaflet: LeafletModule,
   motion: "moving" | "stopped" | "unknown",
   selected: boolean,
-  registration: string
+  registration: string,
+  reported: boolean
 ) {
+  const stateClass = reported ? styles.reportedDot : styles[motion];
+  const selectedClass = selected ? " " + styles.selected : "";
+  const labelClass = styles.label + (reported ? " " + styles.labelReported : "") + (selected ? " " + styles.labelSelected : "");
   return Leaflet.divIcon({
     className: styles.marker,
     html:
-      `<span class="${styles.dot} ${styles[motion]}${selected ? ` ${styles.selected}` : ""}"><svg viewBox="0 0 24 24" aria-hidden="true">${truckSvg}</svg></span>` +
-      `<span class="${styles.label}${selected ? ` ${styles.labelSelected}` : ""}">${escapeHtml(registration)}</span>`,
+      "<span class=\"" + styles.dot + " " + stateClass + selectedClass + "\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\">" + truckSvg + "</svg></span>" +
+      "<span class=\"" + labelClass + "\">" + escapeHtml(registration) + "</span>",
     iconSize: [FLEET_V2_MARKER_SIZE_PX, FLEET_V2_MARKER_SIZE_PX],
     iconAnchor: [markerAnchor, markerAnchor]
   });
 }
 
-function groupIcon(Leaflet: LeafletModule, count: number, selected: boolean) {
+function groupIcon(Leaflet: LeafletModule, count: number, selected: boolean, hasReportedPosition: boolean) {
+  const classes = styles.badge +
+    (hasReportedPosition ? " " + styles.badgeReported : "") +
+    (selected ? " " + styles.badgeSelected : "");
   return Leaflet.divIcon({
     className: styles.group,
-    html: `<span class="${styles.badge}${selected ? ` ${styles.badgeSelected}` : ""}">${count}</span>`,
+    html: "<span class=\"" + classes + "\">" + String(count) + "</span>",
     iconSize: [30, 30],
     iconAnchor: [15, 15]
   });
 }
-
 function fitArea(map: import("leaflet").Map, Leaflet: LeafletModule, positions: [number, number][]) {
   if (positions.length === 0) {
     map.setView(FLEET_V2_OPERATING_CENTER, FLEET_V2_DEFAULT_ZOOM, { animate: true });
@@ -86,6 +94,7 @@ function fitArea(map: import("leaflet").Map, Leaflet: LeafletModule, positions: 
 
 export const FleetTrackingV2Map = memo(function FleetTrackingV2Map({
   vehicles,
+  showUnverifiedPositions = false,
   selectedId,
   onSelect,
   onCluster,
@@ -95,7 +104,7 @@ export const FleetTrackingV2Map = memo(function FleetTrackingV2Map({
   const nodeRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<import("leaflet").Map | null>(null);
   const leafletRef = useRef<LeafletModule | null>(null);
-  const markersRef = useRef(new Map<string, { marker: FleetMarker; motion: string; selected: boolean }>());
+  const markersRef = useRef(new Map<string, { marker: FleetMarker; motion: string; selected: boolean; reported: boolean }>());
   const groupsRef = useRef(new Map<string, { marker: FleetMarker; memberIds: string[] }>());
   const onSelectRef = useRef(onSelect);
   const onClusterRef = useRef(onCluster);
@@ -107,12 +116,17 @@ export const FleetTrackingV2Map = memo(function FleetTrackingV2Map({
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
 
-  const mapVehicles = useMemo(() => getMapVehicles(vehicles), [vehicles]);
+  const mapVehicles = useMemo(
+    () => getVisibleMapVehicles(vehicles, showUnverifiedPositions),
+    [showUnverifiedPositions, vehicles]
+  );
   onSelectRef.current = onSelect;
   onClusterRef.current = onCluster;
   selectedRef.current = selectedId;
 
   useEffect(() => {
+    const markers = markersRef.current;
+    const groups = groupsRef.current;
     let disposed = false;
     let map: import("leaflet").Map | null = null;
     let resizeObserver: ResizeObserver | null = null;
@@ -215,8 +229,9 @@ export const FleetTrackingV2Map = memo(function FleetTrackingV2Map({
             const first = markersRef.current.get(memberIds[0]);
             if (!first) continue;
             const selected = memberIds.includes(selectedRef.current ?? "");
+            const hasReportedPosition = memberIds.some((id) => markersRef.current.get(id)?.reported);
             const marker = currentLeaflet.marker(first.marker.getLatLng(), {
-              icon: groupIcon(currentLeaflet, memberIds.length, selected),
+              icon: groupIcon(currentLeaflet, memberIds.length, selected, hasReportedPosition),
               zIndexOffset: selected ? 900 : 400,
               keyboard: true,
               title: String(memberIds.length)
@@ -243,8 +258,8 @@ export const FleetTrackingV2Map = memo(function FleetTrackingV2Map({
       map?.remove();
       mapRef.current = null;
       leafletRef.current = null;
-      markersRef.current.clear();
-      groupsRef.current.clear();
+      markers.clear();
+      groups.clear();
     };
   }, []);
 
@@ -260,37 +275,41 @@ export const FleetTrackingV2Map = memo(function FleetTrackingV2Map({
       }
     }
     for (const vehicle of mapVehicles) {
-      if (!canFocusVehicle(vehicle) || vehicle.latitude === null || vehicle.longitude === null) continue;
+      const trusted = canFocusVehicle(vehicle);
+      const reported = !trusted && showUnverifiedPositions && canShowUnverifiedReportedPosition(vehicle);
+      if (!trusted && !reported) continue;
+      if (vehicle.latitude === null || vehicle.longitude === null) continue;
       const activity = getMotionState(vehicle);
       const motion = activity === "moving" || activity === "stopped" ? activity : "unknown";
       const selected = selectedId === vehicle.id;
       const existing = markersRef.current.get(vehicle.id);
       if (existing) {
         existing.marker.setLatLng([vehicle.latitude, vehicle.longitude]);
-        if (existing.motion !== motion || existing.selected !== selected) {
-          existing.marker.setIcon(markerIcon(Leaflet, motion, selected, vehicle.registration));
+        if (existing.motion !== motion || existing.selected !== selected || existing.reported !== reported) {
+          existing.marker.setIcon(markerIcon(Leaflet, motion, selected, vehicle.registration, reported));
           existing.motion = motion;
           existing.selected = selected;
+          existing.reported = reported;
         }
         existing.marker.setZIndexOffset(selected ? 1200 : 0);
       } else {
         const marker = Leaflet.marker([vehicle.latitude, vehicle.longitude], {
-          icon: markerIcon(Leaflet, motion, selected, vehicle.registration),
+          icon: markerIcon(Leaflet, motion, selected, vehicle.registration, reported),
           keyboard: true,
           title: vehicle.registration,
           zIndexOffset: selected ? 1200 : 0
         });
         marker.on("click", () => onSelectRef.current(vehicle.id));
-        markersRef.current.set(vehicle.id, { marker, motion, selected });
+        markersRef.current.set(vehicle.id, { marker, motion, selected, reported });
       }
     }
     spatialUpdateRef.current();
-  }, [mapVehicles, ready, selectedId]);
+  }, [mapVehicles, ready, selectedId, showUnverifiedPositions]);
 
   useEffect(() => {
     const map = mapRef.current;
     const Leaflet = leafletRef.current;
-    if (!ready || !map || !Leaflet || fittedRef.current) return;
+    if (!ready || !map || !Leaflet || fittedRef.current || vehicles.length === 0) return;
     fittedRef.current = true;
     fitArea(map, Leaflet, getOperatingAreaPositions(vehicles));
   }, [ready, vehicles]);

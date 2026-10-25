@@ -566,3 +566,229 @@
   .liveSummary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; }
   .summaryItem { min-width: 0; padding: 0.32rem 0.4rem; font-size: 0.62rem; }
 }
+
+/* V2 live usability refinement */
+.summaryDetail {
+  color: #766a7d;
+  font-size: 0.61rem;
+  line-height: 1.15;
+}
+
+.rowIndicator {
+  min-width: 0;
+  overflow: hidden;
+  margin-left: auto;
+  color: #746b7b;
+  font-size: 9px;
+  font-weight: 650;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mapTools {
+  position: absolute;
+  z-index: 22;
+  top: 0.7rem;
+  left: 3.45rem;
+  display: grid;
+  gap: 0.32rem;
+  max-width: calc(100% - 4.2rem);
+  border: 1px solid rgba(222, 211, 190, 0.95);
+  border-radius: 0.7rem;
+  background: rgba(255, 253, 248, 0.96);
+  padding: 0.42rem 0.56rem;
+  color: #302743;
+  box-shadow: 0 5px 16px rgba(41, 28, 52, 0.12);
+  font-size: 10px;
+}
+
+.unverifiedToggle {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.38rem;
+  color: #5b238e;
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.unverifiedToggle input {
+  flex: 0 0 auto;
+  margin: 0.06rem 0 0;
+  accent-color: #5b238e;
+}
+
+.unverifiedToggle input:disabled {
+  cursor: not-allowed;
+}
+
+.mapLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.7rem;
+  border-top: 1px solid #eee5d8;
+  padding-top: 0.3rem;
+  color: #51485a;
+  font-size: 9px;
+}
+
+.mapLegend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+}
+
+.verifiedSwatch,
+.reportedSwatch {
+  display: inline-block;
+  width: 0.62rem;
+  height: 0.62rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+
+.verifiedSwatch {
+  border: 1px solid #fff;
+  background: #0f9f6e;
+  box-shadow: 0 0 0 1px #0f9f6e;
+}
+
+.reportedSwatch {
+  border: 2px dashed #b76e00;
+  background: #fff7df;
+}
+
+.identityGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.38rem;
+  margin: 0.55rem 0 0;
+}
+
+.identityGrid > div {
+  min-width: 0;
+  border: 1px solid #eee5d8;
+  border-radius: 0.55rem;
+  background: #fffefa;
+  padding: 0.38rem 0.48rem;
+}
+
+.identityGrid > div:last-child {
+  grid-column: 1 / -1;
+}
+
+.identityGrid dt,
+.positionMeta dt {
+  color: #776f7d;
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.identityGrid dd,
+.positionMeta dd {
+  min-width: 0;
+  margin: 0.1rem 0 0;
+  color: #302743;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.positionNotice {
+  margin-top: 0.58rem;
+  border: 1px solid #b9ddca;
+  border-left: 3px solid #168454;
+  border-radius: 0.62rem;
+  background: #f4fbf6;
+  padding: 0.52rem 0.62rem;
+}
+
+.positionNoticeWarning {
+  border-color: #e5c98d;
+  border-left-color: #b76e00;
+  background: #fff8e8;
+}
+
+.positionTitleRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.4rem;
+  color: #3f2854;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.positionNotice > p {
+  margin: 0.28rem 0 0;
+  color: #302743;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.positionStale {
+  flex: 0 0 auto;
+  color: #8b5200;
+  font-size: 9px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.positionMeta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.24rem;
+  margin: 0.38rem 0 0;
+}
+
+.positionWarning {
+  color: #805100 !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+}
+
+.positionVerifiedHint {
+  color: #176242 !important;
+  font-size: 10px !important;
+  font-weight: 650 !important;
+}
+
+.googleMapsLink {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 0.42rem;
+  border: 1px solid #dbc7e7;
+  border-radius: 9999px;
+  background: #fff;
+  padding: 0.25rem 0.58rem;
+  color: #5b238e;
+  font-size: 10px;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.googleMapsLink:hover {
+  background: #f7f0fa;
+  text-decoration: underline;
+}
+
+@media (max-width: 639px) {
+  .mapTools {
+    top: 0.55rem;
+    left: 3.25rem;
+    max-width: calc(100% - 3.8rem);
+    padding: 0.36rem 0.45rem;
+  }
+
+  .mapLegend {
+    gap: 0.28rem 0.48rem;
+  }
+
+  .identityGrid {
+    gap: 0.28rem;
+  }
+}

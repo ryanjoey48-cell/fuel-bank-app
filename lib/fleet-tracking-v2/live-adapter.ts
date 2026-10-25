@@ -15,6 +15,16 @@ import {
 } from "@/lib/forth-tracking-view";
 import { matchesVehicleSearch, type FleetV2Vehicle, type MotionState } from "@/lib/fleet-tracking-v2/view";
 
+export type DriverAssignmentStatus = "confirmed" | "none" | "ambiguous" | "unavailable";
+
+export type LiveEesVehicleIdentity = EesVehicleIdentity & {
+  vehicle_name?: string | null;
+  vehicle_type?: string | null;
+  vehicle_category?: string | null;
+  assignedDriverName?: string | null;
+  driverAssignmentStatus?: DriverAssignmentStatus;
+};
+
 export type LiveEesIdentityMatch = {
   status: "matched" | "ambiguous" | "unmatched" | "unavailable";
   vehicleId: string | null;
@@ -22,10 +32,16 @@ export type LiveEesIdentityMatch = {
   matchedBy: "device_id" | "registration" | null;
   candidateVehicleIds: string[];
   reason: string;
+  vehicleModel: string | null;
+  vehicleType: string | null;
+  vehicleCategory: string | null;
+  assignedDriverName: string | null;
+  driverAssignmentStatus: DriverAssignmentStatus;
 };
 
 export type FleetTrackingV2LiveVehicle = FleetV2Vehicle & {
   source: "forth";
+  sourceRegistration: string | null;
   deviceId: string | null;
   reportedDriver: string | null;
   locationAddressEnglish: string | null;
@@ -110,7 +126,50 @@ function normalizeRecord(value: unknown): ForthFleetTrackingRecord {
   };
 }
 
-function normalizeVehicleRegistry(values: EesVehicleIdentity[] | null): EesVehicleIdentity[] | null {
+const driverAssignmentStatuses: DriverAssignmentStatus[] = ["confirmed", "none", "ambiguous", "unavailable"];
+
+export function attachUniqueActiveDriverAssignments(
+  vehicles: LiveEesVehicleIdentity[] | null,
+  driverRows: unknown[] | null
+): LiveEesVehicleIdentity[] | null {
+  if (!Array.isArray(vehicles)) return null;
+  if (!Array.isArray(driverRows)) {
+    return vehicles.map((vehicle) => ({
+      ...vehicle,
+      assignedDriverName: null,
+      driverAssignmentStatus: "unavailable"
+    }));
+  }
+
+  const assignmentsByVehicle = new Map<string, Map<string, string>>();
+  for (const value of driverRows) {
+    const row = objectValue(value);
+    const vehicleId = textValue(row?.assigned_vehicle_id);
+    const driverId = textValue(row?.id);
+    const name = textValue(row?.name);
+    if (row?.active !== true || !vehicleId || !driverId || !name) continue;
+    const assignments = assignmentsByVehicle.get(vehicleId) ?? new Map<string, string>();
+    assignments.set(driverId, name);
+    assignmentsByVehicle.set(vehicleId, assignments);
+  }
+
+  return vehicles.map((vehicle) => {
+    const assignments = assignmentsByVehicle.get(vehicle.id);
+    if (!assignments || assignments.size === 0) {
+      return { ...vehicle, assignedDriverName: null, driverAssignmentStatus: "none" };
+    }
+    if (assignments.size > 1) {
+      return { ...vehicle, assignedDriverName: null, driverAssignmentStatus: "ambiguous" };
+    }
+    return {
+      ...vehicle,
+      assignedDriverName: assignments.values().next().value ?? null,
+      driverAssignmentStatus: "confirmed"
+    };
+  });
+}
+
+function normalizeVehicleRegistry(values: LiveEesVehicleIdentity[] | null): LiveEesVehicleIdentity[] | null {
   if (!Array.isArray(values)) return null;
   return values.flatMap((value) => {
     const raw = objectValue(value);
@@ -124,7 +183,12 @@ function normalizeVehicleRegistry(values: EesVehicleIdentity[] | null): EesVehic
       gpsDeviceId: textValue(raw.gpsDeviceId),
       gps_device_id: textValue(raw.gps_device_id),
       forthGpsId: textValue(raw.forthGpsId),
-      forth_gps_id: textValue(raw.forth_gps_id)
+      forth_gps_id: textValue(raw.forth_gps_id),
+      vehicle_name: textValue(raw.vehicle_name),
+      vehicle_type: textValue(raw.vehicle_type),
+      vehicle_category: textValue(raw.vehicle_category),
+      assignedDriverName: textValue(raw.assignedDriverName),
+      driverAssignmentStatus: enumValue(raw.driverAssignmentStatus, driverAssignmentStatuses, "unavailable")
     }];
   });
 }
@@ -160,17 +224,37 @@ function unavailableMessage(value: unknown) {
   return textValue(error?.message) ?? "The Forth tracking source is unavailable.";
 }
 
+export function canOpenVerifiedGoogleMaps(vehicle: FleetTrackingV2LiveVehicle) {
+  return vehicle.gpsConfidence === "verified" &&
+    vehicle.reportFreshness === "current" &&
+    vehicle.coordinateStatus === "valid" &&
+    typeof vehicle.latitude === "number" &&
+    Number.isFinite(vehicle.latitude) &&
+    vehicle.latitude >= -90 &&
+    vehicle.latitude <= 90 &&
+    typeof vehicle.longitude === "number" &&
+    Number.isFinite(vehicle.longitude) &&
+    vehicle.longitude >= -180 &&
+    vehicle.longitude <= 180;
+}
+
 export function matchesLiveVehicleSearch(vehicle: FleetTrackingV2LiveVehicle, query: string) {
   const needle = query.trim().toLocaleLowerCase();
   if (!needle) return true;
   return matchesVehicleSearch(vehicle, needle) ||
-    [vehicle.deviceId, vehicle.reportedDriver, vehicle.eesIdentity.registration]
-      .some((value) => typeof value === "string" && value.toLocaleLowerCase().includes(needle));
+    [
+      vehicle.deviceId,
+      vehicle.reportedDriver,
+      vehicle.eesIdentity.registration,
+      vehicle.eesIdentity.vehicleModel,
+      vehicle.eesIdentity.vehicleType,
+      vehicle.eesIdentity.assignedDriverName
+    ].some((value) => typeof value === "string" && value.toLocaleLowerCase().includes(needle));
 }
 /** Adapt only the existing sanitized fleet response; this module performs no network or database writes. */
 export function adaptForthFleetResponse(
   payload: unknown,
-  vehicleRegistry: EesVehicleIdentity[] | null
+  vehicleRegistry: LiveEesVehicleIdentity[] | null
 ): FleetTrackingV2LiveResult {
   const data = objectValue(payload);
   if (!data || !Array.isArray(data.records)) {
@@ -212,19 +296,28 @@ export function adaptForthFleetResponse(
     if (!registry) {
       eesIdentity = {
         status: "unavailable", vehicleId: null, registration: null, matchedBy: null,
-        candidateVehicleIds: [], reason: "The RLS-scoped EES vehicle roster is unavailable."
+        candidateVehicleIds: [], reason: "The RLS-scoped EES vehicle roster is unavailable.",
+        vehicleModel: null, vehicleType: null, vehicleCategory: null,
+        assignedDriverName: null, driverAssignmentStatus: "unavailable"
       };
     } else if (duplicateEesMatch && match?.vehicleId) {
       eesIdentity = {
         status: "ambiguous", vehicleId: null, registration: null, matchedBy: null,
         candidateVehicleIds: [match.vehicleId],
-        reason: "Multiple Forth records resolve to the same EES vehicle; review the association."
+        reason: "Multiple Forth records resolve to the same EES vehicle; review the association.",
+        vehicleModel: null, vehicleType: null, vehicleCategory: null,
+        assignedDriverName: null, driverAssignmentStatus: "unavailable"
       };
     } else if (match?.status === "matched" && match.vehicleId) {
       const vehicle = registry.find((entry) => entry.id === match.vehicleId);
       eesIdentity = {
         ...match,
-        registration: vehicle?.vehicle_reg ?? vehicle?.registration ?? null
+        registration: vehicle?.vehicle_reg ?? vehicle?.registration ?? null,
+        vehicleModel: vehicle?.vehicle_name ?? null,
+        vehicleType: vehicle?.vehicle_type ?? null,
+        vehicleCategory: vehicle?.vehicle_category ?? null,
+        assignedDriverName: vehicle?.assignedDriverName ?? null,
+        driverAssignmentStatus: vehicle?.driverAssignmentStatus ?? "unavailable"
       };
     } else {
       eesIdentity = {
@@ -233,7 +326,9 @@ export function adaptForthFleetResponse(
         registration: null,
         matchedBy: null,
         candidateVehicleIds: match?.candidateVehicleIds ?? [],
-        reason: match?.reason ?? "The EES vehicle identity is unavailable."
+        reason: match?.reason ?? "The EES vehicle identity is unavailable.",
+        vehicleModel: null, vehicleType: null, vehicleCategory: null,
+        assignedDriverName: null, driverAssignmentStatus: "unavailable"
       };
     }
 
@@ -244,7 +339,9 @@ export function adaptForthFleetResponse(
         : record.coordinateStatus === "missing" || record.timestampStatus === "missing" || !record.lastGpsTimestamp
           ? "missing"
           : "unverified";
-    const registration = record.vehicleRegistration ?? "Registration unavailable";
+    const registration = record.vehicleRegistration ??
+      (eesIdentity.status === "matched" ? eesIdentity.registration : null) ??
+      "Registration unavailable";
     const gpsQuality: FleetV2Vehicle["gpsQuality"] = record.positionQuality === "gps"
       ? "gps"
       : record.positionQuality === "wifi"
@@ -268,6 +365,7 @@ export function adaptForthFleetResponse(
       gpsQuality,
       activityState: activityMotion(activity),
       source: "forth" as const,
+      sourceRegistration: record.vehicleRegistration,
       deviceId: record.gpsDeviceId,
       reportedDriver: record.reportedDriver,
       locationAddressEnglish: record.locationAddressEnglish,

@@ -9,6 +9,7 @@ export type FleetV2Vehicle = {
   locationNameTh: string;
   latitude: number | null;
   longitude: number | null;
+  coordinateStatus?: "valid" | "missing" | "invalid";
   speedKph: number | null;
   engineOn: boolean | null;
   reportedAt: string | null;
@@ -42,6 +43,28 @@ export function isTrustedMapPosition(vehicle: FleetV2Vehicle) {
 
 export function canFocusVehicle(vehicle: FleetV2Vehicle) {
   return isTrustedMapPosition(vehicle);
+}
+
+/** Only expose original, legal source coordinates after an explicit user opt-in. */
+export function canShowUnverifiedReportedPosition(vehicle: FleetV2Vehicle) {
+  return vehicle.gpsTrust !== "verified" &&
+    vehicle.gpsTrust !== "offline" &&
+    (vehicle.coordinateStatus === undefined || vehicle.coordinateStatus === "valid") &&
+    typeof vehicle.latitude === "number" &&
+    Number.isFinite(vehicle.latitude) &&
+    vehicle.latitude >= -90 &&
+    vehicle.latitude <= 90 &&
+    typeof vehicle.longitude === "number" &&
+    Number.isFinite(vehicle.longitude) &&
+    vehicle.longitude >= -180 &&
+    vehicle.longitude <= 180;
+}
+
+export function getVisibleMapVehicles(vehicles: FleetV2Vehicle[], showUnverifiedReportedPositions = false) {
+  return vehicles.filter((vehicle) =>
+    isTrustedMapPosition(vehicle) ||
+    (showUnverifiedReportedPositions && canShowUnverifiedReportedPosition(vehicle))
+  );
 }
 
 export function getMotionState(vehicle: FleetV2Vehicle): MotionState {

@@ -126,3 +126,26 @@
 .unknown {
   background: #64748b;
 }
+
+/* V2 live usability refinement */
+.reportedDot {
+  border: 2px dashed #a76000;
+  background: #fff7df;
+  box-shadow: 0 1px 6px rgba(15, 23, 42, 0.2);
+}
+
+.reportedDot svg {
+  stroke: #8a5200;
+}
+
+.labelReported {
+  border-style: dashed;
+  border-color: #c4871b;
+  background: #fff8e8;
+  color: #704400;
+}
+
+.badgeReported {
+  border: 2px dashed #e8b64f;
+  background: #815200;
+}

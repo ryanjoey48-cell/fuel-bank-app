@@ -36,6 +36,7 @@ function loadWithMocks(relativePath, mocks) {
 const forth = loadTypeScriptModule("lib/forth-tracking.ts");
 const forthView = loadTypeScriptModule("lib/forth-tracking-view.ts");
 const v2View = loadTypeScriptModule("lib/fleet-tracking-v2/view.ts");
+const { canShowUnverifiedReportedPosition, getVisibleMapVehicles } = v2View;
 const adapter = loadWithMocks("lib/fleet-tracking-v2/live-adapter.ts", {
   "@/lib/forth-tracking": forth,
   "@/lib/forth-tracking-view": forthView,
@@ -208,4 +209,72 @@ test("protected endpoint enforces business:read before requesting Forth and retu
   assert.equal(allowed.response.headers.get("cache-control"), "private, no-store");
   const body = await allowed.response.json();
   assert.equal(body.connectionStatus, "connected");
+});
+
+test("unverified source coordinates stay out of the default map set and remain unchanged after opt-in", () => {
+  const result = adapter.adaptForthFleetResponse(payload([
+    record({ gpsDeviceId: "fresh-position" }),
+    record({ gpsDeviceId: "unverified-position", timestampStatus: "stale" })
+  ]), []);
+  assert.equal(result.status, "ready");
+  const [verified, unverified] = result.records;
+  const original = [unverified.latitude, unverified.longitude];
+  assert.equal(canShowUnverifiedReportedPosition(unverified), true);
+  assert.deepEqual(getVisibleMapVehicles(result.records).map((vehicle) => vehicle.id), [verified.id]);
+  assert.deepEqual(getVisibleMapVehicles(result.records, true).map((vehicle) => vehicle.id), [verified.id, unverified.id]);
+  assert.deepEqual([unverified.latitude, unverified.longitude], original);
+  assert.equal(canShowUnverifiedReportedPosition({ ...unverified, coordinateStatus: "invalid" }), false);
+  assert.equal(canShowUnverifiedReportedPosition({ ...unverified, latitude: 95 }), false);
+});
+
+test("EES model, type and driver display only for a unique vehicle and one active assignment", () => {
+  const registry = [{
+    id: "ees-vehicle-1", vehicle_reg: "61-2835", vehicle_name: "Isuzu NPR", vehicle_type: "LORRY",
+    vehicle_category: "HEAVY_LORRY"
+  }];
+  const uniqueAssignment = adapter.attachUniqueActiveDriverAssignments(registry, [
+    { id: "driver-1", name: "Confirmed Driver", active: true, assigned_vehicle_id: "ees-vehicle-1" },
+    { id: "driver-2", name: "Inactive Driver", active: false, assigned_vehicle_id: "ees-vehicle-1" }
+  ]);
+  const matched = adapter.adaptForthFleetResponse(payload([record()]), uniqueAssignment);
+  assert.equal(matched.status, "ready");
+  assert.equal(matched.records[0].eesIdentity.status, "matched");
+  assert.equal(matched.records[0].eesIdentity.vehicleModel, "Isuzu NPR");
+  assert.equal(matched.records[0].eesIdentity.vehicleType, "LORRY");
+  assert.equal(matched.records[0].eesIdentity.assignedDriverName, "Confirmed Driver");
+  assert.equal(matched.records[0].sourceRegistration, "61-2835");
+
+  const ambiguousAssignments = adapter.attachUniqueActiveDriverAssignments(registry, [
+    { id: "driver-1", name: "Driver One", active: true, assigned_vehicle_id: "ees-vehicle-1" },
+    { id: "driver-2", name: "Driver Two", active: true, assigned_vehicle_id: "ees-vehicle-1" }
+  ]);
+  const ambiguous = adapter.adaptForthFleetResponse(payload([record()]), ambiguousAssignments);
+  assert.equal(ambiguous.records[0].eesIdentity.status, "matched");
+  assert.equal(ambiguous.records[0].eesIdentity.assignedDriverName, null);
+  assert.equal(ambiguous.records[0].eesIdentity.driverAssignmentStatus, "ambiguous");
+
+  const unavailableAssignments = adapter.attachUniqueActiveDriverAssignments(registry, null);
+  const unavailable = adapter.adaptForthFleetResponse(payload([record()]), unavailableAssignments);
+  assert.equal(unavailable.records[0].eesIdentity.assignedDriverName, null);
+  assert.equal(unavailable.records[0].eesIdentity.driverAssignmentStatus, "unavailable");
+});
+
+test("Google Maps is offered only for a current, verified source coordinate", () => {
+  const fresh = adapter.adaptForthFleetResponse(payload([record()]), []);
+  assert.equal(adapter.canOpenVerifiedGoogleMaps(fresh.records[0]), true);
+  const stale = adapter.adaptForthFleetResponse(payload([record({ timestampStatus: "stale" })]), []);
+  assert.equal(adapter.canOpenVerifiedGoogleMaps(stale.records[0]), false);
+  const wifi = adapter.adaptForthFleetResponse(payload([record({ positionQuality: "wifi" })]), []);
+  assert.equal(adapter.canOpenVerifiedGoogleMaps(wifi.records[0]), false);
+  const timezoneUnknown = adapter.adaptForthFleetResponse(payload([record({ timestampStatus: "timezone_unconfigured", lastGpsTimestamp: null })]), []);
+  assert.equal(adapter.canOpenVerifiedGoogleMaps(timezoneUnknown.records[0]), false);
+});
+
+test("live workspace keeps the unverified-position toggle opt-in and provides a map legend", () => {
+  const workspace = fs.readFileSync(path.join(root, "components/fleet-tracking-v2/live-workspace.tsx"), "utf8");
+  assert.ok(workspace.includes("useState(false)"));
+  assert.ok(workspace.includes("Show unverified reported positions"));
+  assert.ok(workspace.includes("Unverified reported position"));
+  assert.ok(workspace.includes("This is the last position reported by Forth"));
+  assert.ok(workspace.includes("https://www.google.com/maps/search/?api=1&query="));
 });
