@@ -36,6 +36,7 @@ function loadWithMocks(relativePath, mocks) {
 const forth = loadTypeScriptModule("lib/forth-tracking.ts");
 const forthView = loadTypeScriptModule("lib/forth-tracking-view.ts");
 const v2View = loadTypeScriptModule("lib/fleet-tracking-v2/view.ts");
+const v2Summary = loadTypeScriptModule("lib/fleet-tracking-v2/summary.ts");
 const { canShowUnverifiedReportedPosition, getVisibleMapVehicles } = v2View;
 const adapter = loadWithMocks("lib/fleet-tracking-v2/live-adapter.ts", {
   "@/lib/forth-tracking": forth,
@@ -270,6 +271,23 @@ test("Google Maps is offered only for a current, verified source coordinate", ()
   assert.equal(adapter.canOpenVerifiedGoogleMaps(timezoneUnknown.records[0]), false);
 });
 
+test("live fleet summary keeps unknown activity, GPS confidence, and source times separate from zero counts", () => {
+  const result = v2Summary.summarizeLiveFleet([
+    { activity: "driving", gpsConfidence: "verified", reportFreshness: "current" },
+    { activity: "stopped_engine_off", gpsConfidence: "unverified", reportFreshness: "stale" },
+    { activity: "uncertain", gpsConfidence: "unverified", reportFreshness: "timezone_unconfigured" },
+    { activity: "unavailable", gpsConfidence: "unavailable", reportFreshness: "missing" }
+  ]);
+  assert.deepEqual(result.activity, { driving: 1, stopped: 1, uncertain: 1, unavailable: 1 });
+  assert.deepEqual(result.gps, { verified: 1, unverified: 2, unavailable: 1 });
+  assert.deepEqual(result.reports, { current: 1, stale: 1, unknown: 2 });
+  assert.deepEqual(v2Summary.summarizeLiveFleet([]), {
+    activity: { driving: 0, stopped: 0, uncertain: 0, unavailable: 0 },
+    gps: { verified: 0, unverified: 0, unavailable: 0 },
+    reports: { current: 0, stale: 0, unknown: 0 }
+  });
+});
+
 test("live workspace keeps the unverified-position toggle opt-in and provides a map legend", () => {
   const workspace = fs.readFileSync(path.join(root, "components/fleet-tracking-v2/live-workspace.tsx"), "utf8");
   assert.ok(workspace.includes("useState(false)"));
@@ -277,4 +295,13 @@ test("live workspace keeps the unverified-position toggle opt-in and provides a 
   assert.ok(workspace.includes("Unverified reported position"));
   assert.ok(workspace.includes("This is the last position reported by Forth"));
   assert.ok(workspace.includes("https://www.google.com/maps/search/?api=1&query="));
+  assert.ok(workspace.includes("copy.journeyHistory"));
+  assert.ok(workspace.includes("copy.parkingHistory"));
+  assert.ok(workspace.includes("disabled title={copy.historyUnavailable}"));
+  assert.ok(workspace.includes("summarizeLiveFleet(vehicles)"));
+  assert.equal(workspace.includes("/api/vehicle/trips"), false);
+  assert.equal(workspace.includes("/api/vehicle/parkingTrip"), false);
+  const liveStyles = fs.readFileSync(path.join(root, "components/fleet-tracking-v2/live-workspace.module.css"), "utf8");
+  assert.ok(liveStyles.includes(".bodyWithInspector"));
+  assert.ok(liveStyles.includes("@media (max-width: 900px)"));
 });

@@ -1,14 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { Activity, Clock3, Gauge, MapPin, MapPinned, RefreshCw, Search, Truck, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/lib/language-provider";
 import { adaptForthFleetResponse, attachUniqueActiveDriverAssignments, canOpenVerifiedGoogleMaps, matchesLiveVehicleSearch, type FleetTrackingV2LiveVehicle, type LiveEesVehicleIdentity } from "@/lib/fleet-tracking-v2/live-adapter";
 import { canFocusVehicle, canShowUnverifiedReportedPosition, formatReportTime, getMotionState, type MotionState } from "@/lib/fleet-tracking-v2/view";
+import { summarizeLiveFleet } from "@/lib/fleet-tracking-v2/summary";
 import { FLEET_TRACKING_V2_COPY } from "@/lib/fleet-tracking-v2/copy";
 import { FleetTrackingV2Map } from "./fleet-map";
-import styles from "./workspace.module.css";
+import styles from "./live-workspace.module.css";
 
 type Language = "en" | "th";
 type Filter = "all" | "moving" | "stopped" | "unknown";
@@ -62,7 +64,20 @@ const LIVE_COPY = {
     openGoogleMaps: "Open verified position in Google Maps", vehicleModel: "Vehicle model", vehicleType: "Vehicle type",
     assignedDriver: "Confirmed EES driver", noUniqueAssignment: "No unique active EES assignment",
     noDriverAssignment: "No active EES driver assignment", assignmentUnavailable: "EES driver assignment unavailable",
-    sourceRegistration: "Forth-reported registration", forthReportedDriver: "Forth-reported driver"
+    sourceRegistration: "Forth-reported registration", forthReportedDriver: "Forth-reported driver",
+    metricsRecords: "Forth records", metricsActivity: "Activity reported", metricsGps: "GPS confidence", metricsReports: "Source reports",
+    movingShort: "moving", stoppedShort: "stopped", uncertainShort: "uncertain", unavailableShort: "unavailable",
+    verifiedShort: "verified", unverifiedCount: "unverified", confidenceUnknownShort: "confidence unknown",
+    reportsCurrent: "current", reportsStale: "stale", reportsUnknown: "time unknown", summaryUnavailable: "Data unavailable",
+    noConfirmedIdentity: "No confirmed EES match", emptyInspectorTitle: "Select a vehicle",
+    emptyInspectorBody: "Choose any registration from the roster or map to inspect its latest Forth report.",
+    journeyHistory: "Journey history", parkingHistory: "Parking history",
+    historyUnavailable: "History is unavailable until its Forth request contract and permissions are verified. No history request is made here.",
+    mapsUnavailable: "Google Maps is available only for a fresh, verified GPS position.",
+    showLastReported: "Show last reported position on map", reportedPositionShown: "Unverified reported position is shown on the map.",
+    mapTitle: "Fleet map", searchGroup: "Search registrations in this group", noGroupMatches: "No registrations match this search.",
+    rosterHint: "Search and select any returned vehicle", identityConfirmed: "Confirmed EES vehicle",
+    detailsActions: "Vehicle actions", device: "Forth device ID", googleMaps: "Google Maps"
   },
   th: {
     eyebrow: "ข้อมูลรถจริง · อ่านอย่างเดียว", title: "ศูนย์ติดตามรถ",
@@ -107,7 +122,20 @@ const LIVE_COPY = {
     openGoogleMaps: "เปิดตำแหน่งที่ยืนยันใน Google Maps", vehicleModel: "รุ่นรถ", vehicleType: "ประเภทรถ",
     assignedDriver: "คนขับ EES ที่ยืนยันแล้ว", noUniqueAssignment: "ไม่มีการมอบหมายคนขับที่ไม่ซ้ำ",
     noDriverAssignment: "ไม่มีการมอบหมายคนขับ EES ที่ยังใช้งาน", assignmentUnavailable: "ไม่มีข้อมูลการมอบหมายคนขับ EES",
-    sourceRegistration: "ทะเบียนที่ Forth รายงาน", forthReportedDriver: "คนขับที่ Forth รายงาน"
+    sourceRegistration: "ทะเบียนที่ Forth รายงาน", forthReportedDriver: "คนขับที่ Forth รายงาน",
+    metricsRecords: "รายการจาก Forth", metricsActivity: "สถานะที่รายงาน", metricsGps: "ความเชื่อมั่น GPS", metricsReports: "รายงานต้นทาง",
+    movingShort: "กำลังเคลื่อนที่", stoppedShort: "หยุด", uncertainShort: "ไม่แน่ชัด", unavailableShort: "ไม่พร้อมใช้งาน",
+    verifiedShort: "ยืนยันแล้ว", unverifiedCount: "ยังไม่ยืนยัน", confidenceUnknownShort: "ไม่ทราบความเชื่อมั่น",
+    reportsCurrent: "ปัจจุบัน", reportsStale: "เก่า", reportsUnknown: "ไม่ทราบเวลา", summaryUnavailable: "ข้อมูลไม่พร้อมใช้งาน",
+    noConfirmedIdentity: "ไม่มีข้อมูลรถ EES ที่ยืนยันได้", emptyInspectorTitle: "เลือกรถ",
+    emptyInspectorBody: "เลือกทะเบียนจากรายชื่อหรือแผนที่เพื่อดูรายงานล่าสุดจาก Forth",
+    journeyHistory: "ประวัติการเดินทาง", parkingHistory: "ประวัติการจอด",
+    historyUnavailable: "ยังไม่เปิดใช้จนกว่าจะยืนยันรูปแบบคำขอและสิทธิ์ Forth จะไม่มีการเรียกประวัติจากส่วนนี้",
+    mapsUnavailable: "เปิด Google Maps ได้เมื่อมีตำแหน่ง GPS ที่ยืนยันและเป็นข้อมูลปัจจุบันเท่านั้น",
+    showLastReported: "แสดงตำแหน่งรายงานล่าสุดบนแผนที่", reportedPositionShown: "กำลังแสดงตำแหน่งรายงานที่ยังไม่ยืนยันบนแผนที่",
+    mapTitle: "แผนที่รถ", searchGroup: "ค้นหาทะเบียนในกลุ่มนี้", noGroupMatches: "ไม่พบทะเบียนที่ตรงกับการค้นหา",
+    rosterHint: "ค้นหาและเลือกรถจากข้อมูลทั้งหมด", identityConfirmed: "ข้อมูลรถ EES ที่ยืนยันแล้ว",
+    detailsActions: "การดำเนินการกับรถ", device: "รหัสอุปกรณ์ Forth", googleMaps: "Google Maps"
   }
 } as const;
 
@@ -137,15 +165,6 @@ function trackerLabel(vehicle: FleetTrackingV2LiveVehicle, copy: (typeof LIVE_CO
   return copy.trackerUnknown;
 }
 
-function identityLabel(vehicle: FleetTrackingV2LiveVehicle, copy: (typeof LIVE_COPY)[Language]) {
-  if (vehicle.eesIdentity.status === "matched") {
-    return copy.identityMatched + " · " + (vehicle.eesIdentity.registration ?? vehicle.eesIdentity.vehicleId ?? "");
-  }
-  if (vehicle.eesIdentity.status === "ambiguous") return copy.identityAmbiguous;
-  if (vehicle.eesIdentity.status === "unmatched") return copy.identityUnmatched;
-  return copy.identityUnavailable;
-}
-
 function confidenceLabel(vehicle: FleetTrackingV2LiveVehicle, copy: (typeof LIVE_COPY)[Language]) {
   if (vehicle.gpsConfidence === "verified") return copy.gpsVerifiedLabel;
   if (vehicle.gpsConfidence === "unavailable") return copy.gpsConfidenceUnavailable;
@@ -157,13 +176,6 @@ function rosterFreshnessLabel(vehicle: FleetTrackingV2LiveVehicle, copy: (typeof
   if (vehicle.reportFreshness === "stale") return copy.staleShort;
   if (vehicle.reportFreshness.startsWith("timezone_")) return copy.timeUnknownShort;
   return copy.timeUnavailableShort;
-}
-
-function rosterIndicator(vehicle: FleetTrackingV2LiveVehicle, copy: (typeof LIVE_COPY)[Language]) {
-  const confidence = vehicle.gpsConfidence === "verified"
-    ? copy.gpsVerifiedShort
-    : vehicle.gpsConfidence === "unverified" ? copy.gpsUnverifiedShort : copy.gpsUnknownShort;
-  return rosterFreshnessLabel(vehicle, copy) + " · " + confidence;
 }
 
 function sourceTimeLabel(vehicle: FleetTrackingV2LiveVehicle, language: Language, copy: (typeof LIVE_COPY)[Language]) {
@@ -187,11 +199,36 @@ function engineLabel(vehicle: FleetTrackingV2LiveVehicle, copy: (typeof LIVE_COP
   return copy.engineUnknown;
 }
 
-function VehicleDetails({ vehicle, language, copy, onClose }: {
+function identitySummaryLabel(vehicle: FleetTrackingV2LiveVehicle, copy: (typeof LIVE_COPY)[Language]) {
+  if (vehicle.eesIdentity.status === "matched") {
+    return [vehicle.eesIdentity.vehicleModel, vehicle.eesIdentity.vehicleType, vehicle.eesIdentity.vehicleCategory]
+      .filter((value): value is string => Boolean(value))
+      .join(" · ") || copy.identityMatched;
+  }
+  if (vehicle.eesIdentity.status === "ambiguous") return copy.identityAmbiguous;
+  if (vehicle.eesIdentity.status === "unmatched") return copy.identityUnmatched;
+  return copy.identityUnavailable;
+}
+
+function confidenceTone(vehicle: FleetTrackingV2LiveVehicle) {
+  if (vehicle.gpsConfidence === "verified") return styles.toneVerified;
+  if (vehicle.gpsConfidence === "unverified") return styles.toneWarning;
+  return styles.toneUnknown;
+}
+
+function freshnessTone(vehicle: FleetTrackingV2LiveVehicle) {
+  if (vehicle.reportFreshness === "current") return styles.toneVerified;
+  if (vehicle.reportFreshness === "stale") return styles.toneWarning;
+  return styles.toneUnknown;
+}
+
+function VehicleDetails({ vehicle, language, copy, onClose, onShowReportedPosition, showUnverifiedPositions }: {
   vehicle: FleetTrackingV2LiveVehicle;
   language: Language;
   copy: (typeof LIVE_COPY)[Language];
   onClose: () => void;
+  onShowReportedPosition: () => void;
+  showUnverifiedPositions: boolean;
 }) {
   const hasCoordinates = vehicle.coordinateStatus === "valid" &&
     typeof vehicle.latitude === "number" && Number.isFinite(vehicle.latitude) &&
@@ -203,63 +240,103 @@ function VehicleDetails({ vehicle, language, copy, onClose }: {
   const positionTitle = verifiedFreshPosition
     ? copy.verifiedPosition
     : vehicle.gpsConfidence === "unverified" ? copy.lastReportedPosition : copy.positionNotVerified;
-  const assignedDriverLabel = vehicle.eesIdentity.driverAssignmentStatus === "ambiguous"
-    ? copy.noUniqueAssignment
-    : vehicle.eesIdentity.driverAssignmentStatus === "unavailable"
-      ? copy.assignmentUnavailable
-      : copy.noDriverAssignment;
   const mapsUrl = verifiedFreshPosition
     ? "https://www.google.com/maps/search/?api=1&query=" +
       encodeURIComponent(String(vehicle.latitude) + "," + String(vehicle.longitude))
     : null;
+  const driverAssignment = vehicle.eesIdentity.driverAssignmentStatus === "ambiguous"
+    ? copy.noUniqueAssignment
+    : vehicle.eesIdentity.driverAssignmentStatus === "unavailable"
+      ? copy.assignmentUnavailable
+      : copy.noDriverAssignment;
+  const identitySummary = identitySummaryLabel(vehicle, copy);
   return (
-    <section className={styles.details} aria-labelledby="fleet-v2-live-details-title">
-      <div className={styles.detailsHead}>
-        <div>
-          <h2 id="fleet-v2-live-details-title">{vehicle.registration}</h2>
-          <p className={styles.detailsTag}>{identityLabel(vehicle, copy)}</p>
+    <aside className={styles.inspector} aria-labelledby="fleet-v2-live-details-title">
+      <div className={styles.inspectorHeader}>
+        <div className={styles.inspectorHeading}>
+          <p className={styles.inspectorEyebrow}>{copy.identity}</p>
+          <h2 id="fleet-v2-live-details-title">{vehicle.registration || copy.registrationUnavailable}</h2>
+          <p className={styles.identityLine}>{identitySummary}</p>
         </div>
-        <button type="button" className={styles.close} onClick={onClose}>{copy.closeDetails}</button>
+        <button type="button" className={styles.iconButton} onClick={onClose} aria-label={copy.closeDetails} title={copy.closeDetails}><X size={17} /></button>
       </div>
+
       {vehicle.eesIdentity.status === "matched" ? (
-        <dl className={styles.identityGrid} aria-label={copy.identity}>
-          <div><dt>{copy.vehicleModel}</dt><dd>{vehicle.eesIdentity.vehicleModel ?? "—"}</dd></div>
-          <div><dt>{copy.vehicleType}</dt><dd>{vehicle.eesIdentity.vehicleType ?? "—"}</dd></div>
-          <div><dt>{copy.assignedDriver}</dt><dd>{vehicle.eesIdentity.assignedDriverName ?? assignedDriverLabel}</dd></div>
-        </dl>
-      ) : null}
-      <dl className={styles.coreGrid}>
-        <div className={styles.coreItem}><dt>{copy.movement}</dt><dd><span className={styles.pill + " " + pillClass(getMotionState(vehicle))}>{activityLabel(vehicle, copy)}</span></dd></div>
-        <div className={styles.coreItem}><dt>{copy.speed}</dt><dd className={styles.coreStrong}>{typeof vehicle.speedKph === "number" ? String(vehicle.speedKph) + " km/h" : "—"}</dd></div>
-        <div className={styles.coreItem}><dt>{copy.engine}</dt><dd className={styles.coreStrong}>{engineLabel(vehicle, copy)}</dd></div>
-      </dl>
-      <section className={verifiedFreshPosition ? styles.positionNotice : styles.positionNotice + " " + styles.positionNoticeWarning} aria-label={positionTitle}>
-        <div className={styles.positionTitleRow}><strong>{positionTitle}</strong>{vehicle.reportFreshness === "stale" ? <span className={styles.positionStale}>{copy.stale}</span> : null}</div>
-        <p>{locationLabel(vehicle, language, copy)}</p>
-        <dl className={styles.positionMeta}>
-          <div><dt>{copy.sourceTimestamp}</dt><dd>{sourceTimeLabel(vehicle, language, copy)}</dd></div>
-          <div><dt>{copy.coordinates}</dt><dd>{coordinates}</dd></div>
-        </dl>
-        <p className={verifiedFreshPosition ? styles.positionVerifiedHint : styles.positionWarning}>{verifiedFreshPosition ? copy.verifiedPositionNote : copy.unverifiedPositionWarning}</p>
-        {mapsUrl ? <a className={styles.googleMapsLink} href={mapsUrl} target="_blank" rel="noreferrer">{copy.openGoogleMaps}</a> : null}
+        <div className={styles.confirmedIdentity}>
+          <span><strong>{copy.vehicleModel}</strong>{vehicle.eesIdentity.vehicleModel ?? "—"}</span>
+          <span><strong>{copy.vehicleType}</strong>{vehicle.eesIdentity.vehicleType ?? vehicle.eesIdentity.vehicleCategory ?? "—"}</span>
+          <span className={styles.driverIdentity}><strong>{copy.assignedDriver}</strong>{vehicle.eesIdentity.assignedDriverName ?? driverAssignment}</span>
+        </div>
+      ) : <p className={styles.identityNotice}>{identitySummary}</p>}
+
+      <div className={styles.operationalPills}>
+        <span className={styles.activityPill + " " + pillClass(getMotionState(vehicle))}><Activity size={13} />{activityLabel(vehicle, copy)}</span>
+        <span className={styles.statusPill + " " + (vehicle.trackerConnectivity === "connected" ? styles.toneVerified : vehicle.trackerConnectivity === "disconnected" ? styles.toneWarning : styles.toneUnknown)}>{trackerLabel(vehicle, copy)}</span>
+        <span className={styles.statusPill + " " + freshnessTone(vehicle)}>{rosterFreshnessLabel(vehicle, copy)}</span>
+      </div>
+
+      <div className={styles.performanceGrid}>
+        <div className={styles.performanceCard}>
+          <span><Gauge size={14} />{copy.speed}</span>
+          <strong>{typeof vehicle.speedKph === "number" ? <>{vehicle.speedKph}<small> km/h</small></> : "—"}</strong>
+        </div>
+        <div className={styles.performanceCard}>
+          <span>{copy.engine}</span>
+          <strong>{engineLabel(vehicle, copy)}</strong>
+        </div>
+      </div>
+
+      <section className={styles.positionCard} aria-label={positionTitle}>
+        <div className={styles.positionHeading}>
+          <span className={styles.positionIcon}><MapPin size={15} /></span>
+          <div className={styles.positionTitleBlock}>
+            <strong>{copy.location}</strong>
+            <span className={styles.positionAddress}>{locationLabel(vehicle, language, copy)}</span>
+          </div>
+          <span className={styles.confidenceBadge + " " + confidenceTone(vehicle)}>{confidenceLabel(vehicle, copy)}</span>
+        </div>
+        <div className={styles.positionMeta}>
+          <div><span>{copy.sourceTimestamp}</span><strong>{sourceTimeLabel(vehicle, language, copy)}</strong></div>
+          <div><span>{copy.reportFreshnessLabel}</span><strong className={freshnessTone(vehicle)}>{rosterFreshnessLabel(vehicle, copy)}</strong></div>
+        </div>
+        <p className={verifiedFreshPosition ? styles.positionVerifiedHint : styles.positionWarning}>
+          {verifiedFreshPosition ? copy.verifiedPositionNote : copy.unverifiedPositionWarning}
+        </p>
+        {canShowUnverifiedReportedPosition(vehicle) && !showUnverifiedPositions ? (
+          <button type="button" className={styles.showReportedButton} onClick={onShowReportedPosition}>{copy.showLastReported}</button>
+        ) : null}
+        {canShowUnverifiedReportedPosition(vehicle) && showUnverifiedPositions ? (
+          <p className={styles.positionShown}>{copy.reportedPositionShown}</p>
+        ) : null}
+        {!hasCoordinates ? <p className={styles.coordinatesUnavailable}>{copy.coordinatesUnavailable}</p> : null}
       </section>
+
+      <div className={styles.actions} aria-label={copy.detailsActions}>
+        <button type="button" disabled title={copy.historyUnavailable}><Clock3 size={15} />{copy.journeyHistory}</button>
+        <button type="button" disabled title={copy.historyUnavailable}><MapPin size={15} />{copy.parkingHistory}</button>
+        {mapsUrl
+          ? <a href={mapsUrl} target="_blank" rel="noreferrer"><MapPinned size={15} />{copy.openGoogleMaps}</a>
+          : <button type="button" disabled title={copy.mapsUnavailable}><MapPinned size={15} />{copy.googleMaps}</button>}
+      </div>
+      <p className={styles.actionNote}>{copy.historyUnavailable}</p>
+
       <details className={styles.technical}>
         <summary>{copy.technical}</summary>
-        <dl className={styles.dl}>
+        <dl className={styles.technicalList}>
           <dt>{copy.tracker}</dt><dd>{trackerLabel(vehicle, copy)}</dd>
           <dt>{copy.gpsConfidenceLabel}</dt><dd>{confidenceLabel(vehicle, copy)} · {vehicle.gpsConfidenceReason}</dd>
           <dt>{copy.gpsReceiver}</dt><dd>{vehicle.gpsConnectivity}</dd>
           <dt>{copy.positionQuality}</dt><dd>{vehicle.positionQuality}</dd>
           <dt>{copy.positionSource}</dt><dd>{vehicle.positionSource ?? "—"}</dd>
-          <dt>{copy.reportFreshnessLabel}</dt><dd>{rosterFreshnessLabel(vehicle, copy)}</dd>
+          <dt>{copy.coordinates}</dt><dd>{hasCoordinates ? coordinates : copy.coordinatesUnavailable}</dd>
           <dt>{copy.rawTimestamp}</dt><dd>{vehicle.sourceTimestampRaw ?? "—"}</dd>
+          <dt>{copy.device}</dt><dd>{vehicle.deviceId ?? "—"}</dd>
           <dt>{copy.sourceRegistration}</dt><dd>{vehicle.sourceRegistration ?? "—"}</dd>
-          <dt>{copy.identity}</dt><dd>{identityLabel(vehicle, copy)}</dd>
           <dt>{copy.identityReason}</dt><dd>{vehicle.eesIdentity.reason}</dd>
           <dt>{copy.forthReportedDriver}</dt><dd>{vehicle.reportedDriver ?? copy.noDriver}</dd>
         </dl>
       </details>
-    </section>
+    </aside>
   );
 }
 
@@ -271,8 +348,8 @@ export function FleetTrackingV2LiveWorkspace({ showFixtureLink }: { showFixtureL
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [clusterIds, setClusterIds] = useState<string[] | null>(null);
+  const [clusterQuery, setClusterQuery] = useState("");
   const [command, setCommand] = useState<Command>({ type: "fit", sequence: 1 });
-  const [sheetOpen, setSheetOpen] = useState(false);
   const [showUnverifiedPositions, setShowUnverifiedPositions] = useState(false);
   const [dataState, setDataState] = useState<LoadState>({ status: "loading" });
   const startedRef = useRef(false);
@@ -339,17 +416,11 @@ export function FleetTrackingV2LiveWorkspace({ showFixtureLink }: { showFixtureL
   }), [filter, query, vehicles]);
   const selected = vehicles.find((vehicle) => vehicle.id === selectedId) ?? null;
   const clusterVehicles = clusterIds ? vehicles.filter((vehicle) => clusterIds.includes(vehicle.id)) : [];
+  const filteredClusterVehicles = clusterVehicles.filter((vehicle) => matchesLiveVehicleSearch(vehicle, clusterQuery));
   const showDetails = Boolean(selected && detailsOpen && clusterVehicles.length === 0);
-  const knownActivity = vehicles.filter((vehicle) => vehicle.activity !== "unavailable").length;
-  const gpsVerifiedCount = vehicles.filter((vehicle) => vehicle.gpsConfidence === "verified").length;
-  const gpsUnverifiedCount = vehicles.filter((vehicle) => vehicle.gpsConfidence === "unverified").length;
-  const gpsUnavailableCount = vehicles.filter((vehicle) => vehicle.gpsConfidence === "unavailable").length;
+  const fleetSummary = useMemo(() => summarizeLiveFleet(vehicles), [vehicles]);
   const reportedPositionCount = vehicles.filter((vehicle) => canShowUnverifiedReportedPosition(vehicle)).length;
-  const gpsSummaryDetail = String(gpsUnverifiedCount) + " " + copy.gpsUnverifiedShort + " · " + String(gpsUnavailableCount) + " " + copy.gpsUnknownShort;
-  const activitySummary = vehicles.length === 0
-    ? (dataState.status === "ready" ? "0" : "—")
-    : knownActivity === 0 ? copy.activityUnavailable : String(knownActivity) + "/" + String(vehicles.length);
-  const gpsSummary = vehicles.length ? String(gpsVerifiedCount) + "/" + String(vehicles.length) : "—";
+  const ready = dataState.status === "ready";
 
   function selectVehicle(id: string) {
     const vehicle = vehicles.find((entry) => entry.id === id);
@@ -357,10 +428,15 @@ export function FleetTrackingV2LiveWorkspace({ showFixtureLink }: { showFixtureL
     setSelectedId(id);
     setDetailsOpen(true);
     setClusterIds(null);
-    setSheetOpen(window.matchMedia("(max-width: 1023px)").matches);
     if (canFocusVehicle(vehicle) || (showUnverifiedPositions && canShowUnverifiedReportedPosition(vehicle))) {
       setCommand((current) => ({ type: "focus", sequence: current.sequence + 1, key: id }));
     }
+  }
+
+  function showReportedPositionOnMap() {
+    if (!selected || !canShowUnverifiedReportedPosition(selected)) return;
+    setShowUnverifiedPositions(true);
+    setCommand((current) => ({ type: "focus", sequence: current.sequence + 1, key: selected.id }));
   }
 
   function fitArea() {
@@ -376,58 +452,92 @@ export function FleetTrackingV2LiveWorkspace({ showFixtureLink }: { showFixtureL
         <div className={styles.bannerCopy}>
           <p className={styles.eyebrow}>{copy.eyebrow}</p>
           <h1 className={styles.title}>{copy.title}</h1>
-          <p className={styles.notice}>{dataState.status === "loading" ? copy.loading : dataState.status === "error" ? copy.errorTitle + ": " + dataState.message : copy.sourceNote + (dataState.fetchedAt ? " · " + copy.fetched + " " + (formatReportTime(dataState.fetchedAt, language) ?? dataState.fetchedAt) : "")}</p>
-          {showFixtureLink ? <Link className={styles.detailsTag} href="/fleet-tracking-v2/fixture">{copy.fixtureLink}</Link> : null}
+          <p className={styles.notice}>
+            <span className={styles.liveDot} aria-hidden="true" />
+            {dataState.status === "loading" ? copy.loading : dataState.status === "error" ? copy.errorTitle : copy.sourceNote}
+            {dataState.status === "ready" && dataState.fetchedAt ? <span className={styles.fetchedAt}>{copy.fetched} · {formatReportTime(dataState.fetchedAt, language) ?? dataState.fetchedAt}</span> : null}
+          </p>
         </div>
-        <div className={styles.liveSummary} aria-live="polite">
-          <div className={styles.summaryItem}><span>{copy.returned}</span><strong>{dataState.status === "ready" ? String(vehicles.length) : "—"}</strong></div>
-          <div className={styles.summaryItem}><span>{copy.activity}</span><strong>{activitySummary}</strong></div>
-          <div className={styles.summaryItem}><span>{copy.positionSummary}</span><strong>{gpsSummary} {copy.verified}</strong><small className={styles.summaryDetail}>{gpsSummaryDetail}</small></div>
+        <div className={styles.headerActions}>
+          {showFixtureLink ? <Link className={styles.fixtureLink} href="/fleet-tracking-v2/fixture">{copy.fixtureLink}</Link> : null}
           <div className={styles.lang} role="group" aria-label="Language">
             <button type="button" aria-pressed={language === "en"} onClick={() => setLanguage("en")}>{FLEET_TRACKING_V2_COPY.en.languageEn}</button>
             <button type="button" aria-pressed={language === "th"} onClick={() => setLanguage("th")}>{FLEET_TRACKING_V2_COPY.en.languageTh}</button>
           </div>
-          {dataState.status === "ready" ? <button type="button" className={styles.close} onClick={() => void loadLiveData()}>{copy.refresh}</button> : null}
-          {dataState.status === "error" ? <button type="button" className={styles.close} onClick={() => void loadLiveData()}>{copy.retry}</button> : null}
+          <button type="button" className={styles.refreshButton} onClick={() => void loadLiveData()} disabled={dataState.status === "loading"}>
+            <RefreshCw size={15} className={dataState.status === "loading" ? styles.spinning : ""} />
+            {dataState.status === "error" ? copy.retry : copy.refresh}
+          </button>
         </div>
       </header>
 
-      {dataState.status === "error" ? <section className="mx-3 mt-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-950" role="alert">{copy.errorHelp}</section> : null}
-      {dataState.status === "ready" && !dataState.vehicleRegistryAvailable ? <p className="mx-3 mt-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900" role="status">{copy.identityUnavailable}</p> : null}
+      <section className={styles.summaryStrip} aria-label={copy.metricsRecords} aria-live="polite">
+        <article className={styles.summaryCard}>
+          <span className={styles.summaryIcon}><Truck size={16} /></span>
+          <div><span className={styles.summaryLabel}>{copy.metricsRecords}</span><strong>{ready ? vehicles.length : "—"}</strong><small>{ready ? copy.sourceNote : copy.summaryUnavailable}</small></div>
+        </article>
+        <article className={styles.summaryCard}>
+          <span className={styles.summaryIcon}><Activity size={16} /></span>
+          <div><span className={styles.summaryLabel}>{copy.metricsActivity}</span><strong>{ready ? `${fleetSummary.activity.driving} ${copy.movingShort} · ${fleetSummary.activity.stopped} ${copy.stoppedShort}` : "—"}</strong><small>{ready ? `${fleetSummary.activity.uncertain} ${copy.uncertainShort} · ${fleetSummary.activity.unavailable} ${copy.unavailableShort}` : copy.summaryUnavailable}</small></div>
+        </article>
+        <article className={styles.summaryCard}>
+          <span className={styles.summaryIcon}><MapPinned size={16} /></span>
+          <div><span className={styles.summaryLabel}>{copy.metricsGps}</span><strong>{ready ? `${fleetSummary.gps.verified} / ${vehicles.length}` : "—"}</strong><small>{ready ? `${fleetSummary.gps.unverified} ${copy.unverifiedCount} · ${fleetSummary.gps.unavailable} ${copy.confidenceUnknownShort}` : copy.summaryUnavailable}</small></div>
+        </article>
+        <article className={styles.summaryCard}>
+          <span className={styles.summaryIcon}><Clock3 size={16} /></span>
+          <div><span className={styles.summaryLabel}>{copy.metricsReports}</span><strong>{ready ? `${fleetSummary.reports.current} ${copy.reportsCurrent}` : "—"}</strong><small>{ready ? `${fleetSummary.reports.stale} ${copy.reportsStale} · ${fleetSummary.reports.unknown} ${copy.reportsUnknown}` : copy.summaryUnavailable}</small></div>
+        </article>
+      </section>
 
-      <div className={sheetOpen ? styles.body + " " + styles.bodyRosterOpen : styles.body}>
-        <aside className={styles.roster + " " + (sheetOpen ? styles.rosterOpen : "")} aria-label={copy.roster}>
+      {dataState.status === "error" ? <section className={styles.errorBanner} role="alert"><strong>{copy.errorHelp}</strong><span>{dataState.message}</span></section> : null}
+      {dataState.status === "ready" && !dataState.vehicleRegistryAvailable ? <p className={styles.registryNotice} role="status">{copy.identityUnavailable}</p> : null}
+
+      <div className={showDetails ? styles.body + " " + styles.bodyWithInspector : styles.body}>
+        <aside className={styles.roster} aria-label={copy.roster}>
           <div className={styles.rosterHead}>
-            <div className={styles.rosterHeadRow}><h2 className={styles.rosterTitle}>{copy.roster}</h2><span className={styles.count}>{dataState.status === "ready" ? String(visible.length) : "—"}</span></div>
-            <input className={styles.search} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={copy.search} aria-label={copy.search} />
+            <div className={styles.rosterHeadRow}><div><h2 className={styles.rosterTitle}>{copy.roster}</h2><p className={styles.rosterHint}>{copy.rosterHint}</p></div><span className={styles.count}>{dataState.status === "ready" ? String(visible.length) : "—"}</span></div>
+            <label className={styles.searchBox}>
+              <Search size={15} aria-hidden="true" />
+              <input type="search" className={styles.search} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={copy.search} aria-label={copy.search} />
+              {query ? <button type="button" className={styles.clearSearch} onClick={() => setQuery("")} aria-label={copy.closeDetails}><X size={14} /></button> : null}
+            </label>
             <div className={styles.filters}>{filters.map((value) => <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}>{value === "all" ? copy.all : copy[value]}</button>)}</div>
           </div>
-          {clusterVehicles.length > 0 ? (
-            <div className={styles.cluster} role="group" aria-label={copy.clusterTitle}>
-              <div className={styles.clusterHeading}>
-                <div><h2>{copy.clusterTitle} · {clusterVehicles.length}</h2><p>{copy.clusterHint}</p></div>
-                <button type="button" className={styles.clusterClose} aria-label={copy.closeDetails} onClick={() => setClusterIds(null)}>×</button>
-              </div>
-              {clusterVehicles.map((vehicle) => <button key={vehicle.id} type="button" className={styles.row + " " + styles.clusterRow} aria-pressed={selectedId === vehicle.id} onClick={() => selectVehicle(vehicle.id)}><span className={styles.reg}>{vehicle.registration}</span><span className={styles.clusterAction}>{rosterIndicator(vehicle, copy)}</span></button>)}
-            </div>
-          ) : null}
           <div className={styles.results} id="fleet-v2-live-vehicle-list">
             {dataState.status === "loading" ? <p className={styles.noResults}>{copy.loading}</p> : null}
             {dataState.status === "error" ? <p className={styles.noResults}>{copy.errorTitle}</p> : null}
             {dataState.status === "ready" && visible.length === 0 ? <p className={styles.noResults}>{vehicles.length ? copy.noResults : copy.noRecords}</p> : null}
             {dataState.status === "ready" ? visible.map((vehicle) => {
               const motion = getMotionState(vehicle);
+              const identity = identitySummaryLabel(vehicle, copy);
+              const shortConfidence = vehicle.gpsConfidence === "verified" ? copy.gpsVerifiedShort : vehicle.gpsConfidence === "unverified" ? copy.gpsUnverifiedShort : copy.gpsUnknownShort;
+              const speed = typeof vehicle.speedKph === "number" ? `${vehicle.speedKph} km/h` : "—";
               return (
-                <button key={vehicle.id} type="button" className={styles.row} aria-pressed={selectedId === vehicle.id} onClick={() => selectVehicle(vehicle.id)}>
-                  <span className={styles.rowMain}><span className={styles.reg}>{vehicle.registration}</span></span>
-                  <span className={styles.rowSub}><span className={styles.pill + " " + pillClass(motion)}>{activityLabel(vehicle, copy)}</span><span className={styles.rowIndicator}>{rosterIndicator(vehicle, copy)}</span></span>
+                <button key={vehicle.id} type="button" className={styles.vehicleRow} aria-pressed={selectedId === vehicle.id} onClick={() => selectVehicle(vehicle.id)}>
+                  <span className={styles.vehicleRowHead}>
+                    <strong className={styles.reg}>{vehicle.registration || copy.registrationUnavailable}</strong>
+                    <span className={styles.activityPill + " " + pillClass(motion)}>{activityLabel(vehicle, copy)}</span>
+                  </span>
+                  <span className={styles.vehicleIdentity} data-matched={vehicle.eesIdentity.status === "matched"}>
+                    {identity}{vehicle.eesIdentity.status === "matched" && vehicle.eesIdentity.assignedDriverName ? ` · ${vehicle.eesIdentity.assignedDriverName}` : ""}
+                  </span>
+                  <span className={styles.vehicleRowFooter}>
+                    <span className={styles.rowSpeed}><Gauge size={13} />{speed}</span>
+                    <span className={styles.rowStatus + " " + freshnessTone(vehicle)}><Clock3 size={12} />{rosterFreshnessLabel(vehicle, copy)}</span>
+                    <span className={styles.rowStatus + " " + confidenceTone(vehicle)}><MapPin size={12} />{shortConfidence}</span>
+                  </span>
                 </button>
               );
             }) : null}
           </div>
         </aside>
 
-        <div className={styles.mapPane}>
+        <main className={styles.mapPane} aria-label={copy.mapTitle}>
+          <div className={styles.mapHeader}>
+            <div><h2>{copy.mapTitle}</h2><p>{ready ? `${fleetSummary.gps.verified} ${copy.verifiedShort} · ${vehicles.length} ${copy.metricsRecords.toLocaleLowerCase()}` : copy.summaryUnavailable}</p></div>
+            <button type="button" className={styles.fitButton} onClick={fitArea} disabled={!ready}><MapPinned size={15} />{copy.fitArea}</button>
+          </div>
           <div className={styles.mapTools}>
             <label className={styles.unverifiedToggle}>
               <input type="checkbox" checked={showUnverifiedPositions} disabled={reportedPositionCount === 0} onChange={(event) => {
@@ -444,18 +554,37 @@ export function FleetTrackingV2LiveWorkspace({ showFixtureLink }: { showFixtureL
               <span><i className={styles.reportedSwatch} aria-hidden="true" />{copy.reportedMarker}</span>
             </div>
           </div>
-          <FleetTrackingV2Map vehicles={vehicles} showUnverifiedPositions={showUnverifiedPositions} selectedId={selectedId} onSelect={selectVehicle} onCluster={(ids) => {
-            setClusterIds(ids);
-            setDetailsOpen(false);
-            setSheetOpen(true);
-          }} command={command} mapUnavailable={copy.unavailableGps} />
-        </div>
-        <button type="button" className={styles.fit} onClick={fitArea}>{copy.fitArea}</button>
-        <button type="button" className={styles.sheetToggle} aria-expanded={sheetOpen} aria-controls="fleet-v2-live-vehicle-list" onClick={() => {
-          setSheetOpen((open) => !open);
-          setClusterIds(null);
-        }}>{sheetOpen ? copy.hideRoster : copy.showRoster}</button>
-        {showDetails && selected ? <VehicleDetails vehicle={selected} language={language} copy={copy} onClose={() => setDetailsOpen(false)} /> : null}
+          <div className={styles.mapCanvas}>
+            <FleetTrackingV2Map vehicles={vehicles} showUnverifiedPositions={showUnverifiedPositions} selectedId={selectedId} onSelect={selectVehicle} onCluster={(ids) => {
+              setClusterIds(ids);
+              setClusterQuery("");
+              setDetailsOpen(false);
+              setSelectedId(null);
+            }} command={command} mapUnavailable={copy.unavailableGps} />
+            {clusterVehicles.length > 0 ? (
+              <section className={styles.clusterPicker} aria-label={copy.clusterTitle}>
+                <div className={styles.clusterHeading}>
+                  <div><strong>{copy.clusterTitle}</strong><span>{clusterVehicles.length} {copy.chooseVehicle.toLocaleLowerCase()}</span></div>
+                  <button type="button" className={styles.iconButton} aria-label={copy.closeDetails} onClick={() => setClusterIds(null)}><X size={15} /></button>
+                </div>
+                <label className={styles.clusterSearch}>
+                  <Search size={14} aria-hidden="true" />
+                  <input value={clusterQuery} onChange={(event) => setClusterQuery(event.target.value)} placeholder={copy.searchGroup} aria-label={copy.searchGroup} />
+                </label>
+                <div className={styles.clusterResults}>
+                  {filteredClusterVehicles.length === 0 ? <p className={styles.noResults}>{copy.noGroupMatches}</p> : filteredClusterVehicles.map((vehicle) => (
+                    <button key={vehicle.id} type="button" className={styles.clusterRow} aria-pressed={selectedId === vehicle.id} onClick={() => selectVehicle(vehicle.id)}>
+                      <span><strong>{vehicle.registration || copy.registrationUnavailable}</strong><small>{activityLabel(vehicle, copy)}</small></span>
+                      <span className={styles.clusterSelect}>{copy.chooseVehicle}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className={styles.clusterHint}>{copy.clusterHint}</p>
+              </section>
+            ) : null}
+          </div>
+        </main>
+        {showDetails && selected ? <VehicleDetails vehicle={selected} language={language} copy={copy} onClose={() => setDetailsOpen(false)} onShowReportedPosition={showReportedPositionOnMap} showUnverifiedPositions={showUnverifiedPositions} /> : null}
       </div>
     </div>
   );
