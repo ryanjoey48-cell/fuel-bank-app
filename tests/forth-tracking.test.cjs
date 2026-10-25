@@ -1567,7 +1567,7 @@ test("fleet tracking map renders escaped registration labels and activity-specif
 });
 
 test("a failed refresh hides the previous telemetry snapshot and identifies its last successful refresh", () => {
-  const source = fs.readFileSync(path.join(root, "components/forth-tracking-centre.tsx"), "utf8");
+  const source = fs.readFileSync(path.join(root, "components/forth-tracking-centre.tsx"), "utf8").replace(/\r\n/g, "\n");
   assert.ok(source.includes("setData(null);\n          setRequestError(true);"));
   assert.ok(source.includes('const connected = !requestError && data?.connectionStatus === "connected"'));
   assert.ok(source.includes("requestError && lastChecked ?"));
