@@ -8,8 +8,8 @@ import {
   FLEET_TRACKING_V2_TILE_ATTRIBUTION,
   FLEET_TRACKING_V2_TILE_URL
 } from "@/lib/fleet-tracking-v2/map-engine";
-import type { SyntheticVehicle } from "@/lib/fleet-tracking-v2/synthetic-fleet";
 import {
+  type FleetV2Vehicle,
   FLEET_V2_COLLISION_RADIUS_PX,
   FLEET_V2_DEFAULT_ZOOM,
   FLEET_V2_FOCUS_ZOOM,
@@ -30,7 +30,7 @@ type FleetMarker = import("leaflet").Marker;
 type ViewCommand = { type: "fit" | "focus"; sequence: number; key?: string | null };
 
 type Props = {
-  vehicles: SyntheticVehicle[];
+  vehicles: FleetV2Vehicle[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   onCluster: (ids: string[]) => void;
@@ -50,7 +50,7 @@ function escapeHtml(value: string) {
 
 function markerIcon(
   Leaflet: LeafletModule,
-  motion: "moving" | "stopped",
+  motion: "moving" | "stopped" | "unknown",
   selected: boolean,
   registration: string
 ) {
@@ -261,7 +261,8 @@ export const FleetTrackingV2Map = memo(function FleetTrackingV2Map({
     }
     for (const vehicle of mapVehicles) {
       if (!canFocusVehicle(vehicle) || vehicle.latitude === null || vehicle.longitude === null) continue;
-      const motion = getMotionState(vehicle) === "moving" ? "moving" : "stopped";
+      const activity = getMotionState(vehicle);
+      const motion = activity === "moving" || activity === "stopped" ? activity : "unknown";
       const selected = selectedId === vehicle.id;
       const existing = markersRef.current.get(vehicle.id);
       if (existing) {

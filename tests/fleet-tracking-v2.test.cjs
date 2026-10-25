@@ -22,7 +22,7 @@ function loadTypeScriptModule(relativePath) {
 
 function readUi() {
   return [
-    "app/fleet-tracking-v2/page.tsx",
+    "app/(dashboard)/fleet-tracking-v2/fixture/page.tsx",
     "components/fleet-tracking-v2/workspace.tsx",
     "components/fleet-tracking-v2/fleet-map.tsx",
     "lib/fleet-tracking-v2/map-engine.ts",
@@ -152,5 +152,6 @@ test("English and Thai copy exist and the prototype stays off live Forth, Supaba
   assert.equal(ui.includes("supabase"), false);
   assert.equal(ui.includes("createClient"), false);
   assert.equal(ui.includes("bindPopup"), false);
-  assert.equal(fs.existsSync(path.join(root, "app/(dashboard)/fleet-tracking/page.tsx")), false);
+  assert.equal(fs.existsSync(path.join(root, "app/(dashboard)/fleet-tracking/page.tsx")), true);
+  assert.equal(fs.existsSync(path.join(root, "app/(dashboard)/fleet-tracking-v2/page.tsx")), true);
 });

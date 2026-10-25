@@ -1,9 +1,9 @@
-type MotionState = "moving" | "stopped" | "offline" | "unknown";
+export type MotionState = "moving" | "stopped" | "offline" | "unknown";
 
-type FleetV2Vehicle = {
+export type FleetV2Vehicle = {
   id: string;
   registration: string;
-  sampleTag: "SIMULATED";
+  sampleTag?: "SIMULATED";
   trackerConnectivity: "connected" | "disconnected" | "unknown";
   locationNameEn: string;
   locationNameTh: string;
@@ -14,7 +14,8 @@ type FleetV2Vehicle = {
   reportedAt: string | null;
   gpsTrust: "verified" | "unverified" | "missing" | "stale" | "offline";
   gpsQuality: "gps" | "wifi" | "unknown" | "none";
-  scenario: string;
+  scenario?: string;
+  activityState?: MotionState;
 };
 
 export const FLEET_V2_MARKER_SIZE_PX = 24;
@@ -44,6 +45,7 @@ export function canFocusVehicle(vehicle: FleetV2Vehicle) {
 }
 
 export function getMotionState(vehicle: FleetV2Vehicle): MotionState {
+  if (vehicle.activityState) return vehicle.activityState;
   if (vehicle.gpsTrust === "offline") return "offline";
   if (vehicle.gpsTrust === "missing" || vehicle.gpsTrust === "unverified" || vehicle.gpsTrust === "stale") {
     return "unknown";
@@ -157,7 +159,8 @@ export function matchesVehicleSearch(vehicle: FleetV2Vehicle, query: string) {
     vehicle.locationNameTh,
     vehicle.id,
     vehicle.sampleTag
-  ].some((value) => value.toLocaleLowerCase().includes(needle));
+  ].filter((value): value is string => typeof value === "string" && value.length > 0)
+    .some((value) => value.toLocaleLowerCase().includes(needle));
 }
 
 export function formatReportTime(iso: string | null, language: "en" | "th") {
