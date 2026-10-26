@@ -9,7 +9,7 @@ or deployed. No historical Forth request has run.
 
 The supplied Swagger defines `POST /api/vehicle/trips` as a Reports operation
 with required `boxIds`, `startDate`, `endDate` and optional `language`. It returns
-an array of `Trips` strings. The name and schema indicate a retrieval report,
+an array of `Trips` objects with optional string fields. The name and schema indicate a retrieval report,
 but the document has no security definition, permission list, side-effect
 guarantee, retention/rate limits, error model, or timestamp timezone. Only HTTP
 200 is documented. Existing EES code uses the server-side bearer token and a
@@ -17,16 +17,23 @@ fixed report URL; whether this account can call the report is untested.
 
 ## Proposed exact bound
 
-- Registration to investigate: `3ฒน-9565`. This is a proposed label, not a
-  verified registration-to-device match.
+- Registration: `3ฒน-9565`. In the authenticated, protected V2 Preview on
+  26 October 2026 at 15:31 GMT+7, the manually refreshed 21-record Forth feed
+  showed one roster result for this registration and one for its displayed
+  Forth device ID. The inspector showed a unique normalized EES registration
+  match. The device ID is deliberately not stored in this document. This is
+  current-feed UI evidence, not approval for a historical report.
 - Report day: `2026-10-24`. Records for that day are not guaranteed.
 - Forth request: `POST /api/vehicle/trips` with `boxIds` set to the one confirmed
   Forth device ID (withheld here), `startDate: "20261024"`,
   `endDate: "20261024"`, `language: "en"`.
-- The existing protected EES route must first see that device exactly once in
-  the current authorized Forth feed and confirm the proposed registration also
-  identifies that same one device. An EES vehicle association must be reviewed
-  separately; a shared or missing registration cannot be silently accepted.
+- Before execution, the approved test mechanism must re-fetch the current
+  authorized fleet, find exactly one record for the exact device ID and exactly
+  one normalized match for the registration, and confirm both are the same
+  record. The dormant EES route currently checks unique device ID but does not
+  bind it to a nominated registration; that additional check is required in
+  the separately reviewed test mechanism. A shared or missing registration
+  cannot be silently accepted.
 
 ## Approval and activation sequence
 
@@ -49,15 +56,23 @@ actual device ID uniquely from the current authorized Forth feed; do not guess
 it or accept a duplicate or ambiguous registration/device match. Approve the
 specific Preview deployment and operator before any request is sent.
 
-For the first attempt, prefer a reviewed one-shot, server-side operator runner
-in a restricted Preview environment, with an exact device/date assertion, one
-`fetch` call, no automatic retries, no browser-exposed Forth token and no public
-history route activation. It needs a separate implementation and security review;
-none is included in this preparation commit. If an EES Preview route is required
-instead, first design and approve a shared atomic single-use claim with expiry.
-A process-local flag or environment-only switch cannot reliably enforce one
-request across Vercel function instances. The durable claim would require
-separately approved infrastructure and writes; none are made here.
+For the first attempt, propose a reviewed, owner-invoked server-side runner in a
+restricted Preview environment, with no public or generally accessible live
+history route. It must verify the operator's EES session and `business:read`,
+bind one approved operator, registration, freshly confirmed device and date,
+and consume a short-lived, shared atomic single-use grant before one `fetch`.
+No client or upstream retry is allowed: a timeout consumes the grant and needs
+fresh explicit approval for another attempt. The runner must reuse server-only
+credentials and the existing 10-second timeout and 1 MB response bound, then
+return only sanitized validation metadata. The source history gate remains
+`false` and the environment-controlled parser remains disconnected.
+
+This runner and grant store need separate implementation, security review and
+approval; none is included here. A process-local flag or environment-only
+switch cannot reliably enforce one request across Vercel function instances.
+The shared atomic grant needs separately approved infrastructure and writes;
+no such writes or configuration changes are made in this task. If that cannot
+be approved, do not execute the report through Vercel.
 
 After the approved attempt, record only HTTP status, field names, row count,
 null/missing field patterns, representative redacted time strings and response
@@ -73,3 +88,23 @@ ID, the EES route rejects the response. The route omits Forth `driver` text
 from the browser response. Raw source date/time and `routingTime` strings remain
 unconverted. Trip Details, Parking History, customer visits and route replay
 require separate evidence and approval.
+
+## Later reports and office rollout
+
+The supplied Swagger also lists `POST /api/vehicle/tripDetails`,
+`POST /api/vehicle/parkingTrip`,
+`POST /api/vehicle/parkingEngineOverTheLimits`,
+`POST /api/vehicle/accessLocations`,
+`POST /api/vehicle/accessStartDestinationLocations`, and
+`GET /api/log/{id}/{starttime}/{endtime}`. These paths are candidates only;
+their permissions, response semantics, retention, units and read-only guarantees
+need separate verification. They are not part of the first Trips test.
+
+Journey History may become available to EES office staff only after a real
+response validates identity, schema, missing-field behaviour, timestamps and
+`routingTime` interpretation or an explicit raw/uninterpreted presentation.
+Any office route must retain verified authentication, `business:read`, unique
+device/registration checks, one-day bounds, no-store responses, response limits,
+sanitized errors and manual requests without polling. Roll it out through a
+separately reviewed Preview change first. Keep Forth history read-only and
+separate from mileage, maintenance, Booking Diary and existing historical data.
