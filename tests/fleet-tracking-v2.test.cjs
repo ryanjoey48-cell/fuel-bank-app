@@ -35,13 +35,18 @@ const {
 } = loadTypeScriptModule("lib/fleet-tracking-v2/synthetic-fleet.ts");
 const {
   canFocusVehicle,
+  FLEET_V2_COLLISION_RADIUS_PX,
+  FLEET_V2_MARKER_SIZE_PX,
   formatReportAge,
   formatReportTime,
   getMapVehicles,
   getMarkerCollisionGroups,
   getMotionState,
+  getFleetFitPositions,
   getOperatingAreaPositions,
+  getVerifiedPositionsOutsideOperatingArea,
   getVisibleMarkerLabelKeys,
+  matchesFleetV2RosterFilter,
   matchesVehicleSearch,
   shouldOpenClusterPicker
 } = loadTypeScriptModule("lib/fleet-tracking-v2/view.ts");
@@ -64,6 +69,33 @@ test("prototype uses 21 labelled sample vehicles and never treats unverified coo
   assert.equal(canFocusVehicle(unverified), false);
   assert.equal(unverified.gpsQuality, "wifi");
   assert.equal(typeof unverified.latitude, "number");
+});
+
+test("remote verified vehicles stay searchable and focusable without widening Fit Fleet", () => {
+  const local = { ...SYNTHETIC_FLEET.find((vehicle) => canFocusVehicle(vehicle)), latitude: 13.7563, longitude: 100.5018 };
+  const remote = { ...local, id: "synthetic-remote-verified", registration: "SIM-REMOTE", latitude: 18.7883, longitude: 98.9853 };
+  const outlier = { ...remote, id: "synthetic-invalid-outlier", registration: "SIM-OUTLIER", latitude: 95, longitude: 181 };
+  const vehicles = [local, remote, outlier];
+  const before = vehicles.map(({ latitude, longitude }) => [latitude, longitude]);
+
+  assert.equal(canFocusVehicle(remote), true);
+  assert.deepEqual(getVerifiedPositionsOutsideOperatingArea(vehicles).map((vehicle) => vehicle.id), [remote.id]);
+  assert.deepEqual(getFleetFitPositions(vehicles).map((position) => position.join(",")), [
+    [local.latitude, local.longitude].join(",")
+  ]);
+  assert.deepEqual(vehicles.map(({ latitude, longitude }) => [latitude, longitude]), before);
+});
+
+test("offline tracker filtering stays separate from reported movement and confidence", () => {
+  const verified = SYNTHETIC_FLEET.find((vehicle) => canFocusVehicle(vehicle));
+  const movingOffline = { ...verified, activityState: "moving", trackerConnectivity: "disconnected" };
+  const unknownConnected = { ...verified, activityState: "unknown", trackerConnectivity: "connected" };
+
+  assert.equal(matchesFleetV2RosterFilter(movingOffline, "moving"), true);
+  assert.equal(matchesFleetV2RosterFilter(movingOffline, "offline"), true);
+  assert.equal(matchesFleetV2RosterFilter(movingOffline, "unknown"), false);
+  assert.equal(matchesFleetV2RosterFilter(unknownConnected, "unknown"), true);
+  assert.equal(matchesFleetV2RosterFilter(unknownConnected, "offline"), false);
 });
 
 test("depot overlap keeps identical sample coordinates and opens a picker instead of moving points", () => {
@@ -94,6 +126,14 @@ test("map labels appear at the default useful zoom and hide colliding labels", (
     { key: "selected", left: 0, top: 0, width: 90, height: 18, selected: true },
     { key: "clear", left: 180, top: 0, width: 90, height: 18, selected: false }
   ], 7)], ["selected"]);
+});
+
+test("markers remain readable and diagnostic positions retain an unverified visual treatment", () => {
+  const markerCss = fs.readFileSync(path.join(root, "components/fleet-tracking-v2/fleet-map.module.css"), "utf8");
+  assert.equal(FLEET_V2_MARKER_SIZE_PX, 28);
+  assert.equal(FLEET_V2_COLLISION_RADIUS_PX, 34);
+  assert.match(markerCss, /\.dot\s*\{[^}]*width:\s*28px;[^}]*height:\s*28px;/);
+  assert.match(markerCss, /\.labelReported\s*\{[^}]*border-style:\s*dashed;/);
 });
 
 test("motion states cover moving, stopped, offline, unknown, stale and missing GPS", () => {

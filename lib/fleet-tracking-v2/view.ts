@@ -19,8 +19,8 @@ export type FleetV2Vehicle = {
   activityState?: MotionState;
 };
 
-export const FLEET_V2_MARKER_SIZE_PX = 24;
-export const FLEET_V2_COLLISION_RADIUS_PX = 28;
+export const FLEET_V2_MARKER_SIZE_PX = 28;
+export const FLEET_V2_COLLISION_RADIUS_PX = 34;
 /** Neighbourhood scale: enough road context to see where the truck is. */
 export const FLEET_V2_FOCUS_ZOOM = 12;
 export const FLEET_V2_LABEL_ZOOM = 8;
@@ -79,6 +79,17 @@ export function getMotionState(vehicle: FleetV2Vehicle): MotionState {
   return "stopped";
 }
 
+export type FleetV2RosterFilter = "all" | "moving" | "stopped" | "unknown" | "offline";
+
+/** Tracker connectivity is an independent filter and never rewrites reported activity. */
+export function matchesFleetV2RosterFilter(vehicle: FleetV2Vehicle, filter: FleetV2RosterFilter) {
+  if (filter === "all") return true;
+  if (filter === "offline") return vehicle.trackerConnectivity === "disconnected";
+  const activity = getMotionState(vehicle);
+  if (filter === "unknown") return activity === "unknown" && vehicle.trackerConnectivity !== "disconnected";
+  return activity === filter;
+}
+
 export function getMapVehicles(vehicles: FleetV2Vehicle[]) {
   return vehicles.filter(isTrustedMapPosition);
 }
@@ -107,6 +118,12 @@ export function getFleetFitPositions(
       (includeUnverifiedReportedPositions && canShowUnverifiedReportedPosition(vehicle)))
     .map((vehicle) => [vehicle.latitude as number, vehicle.longitude as number] as [number, number])
     .filter((position) => distanceKm(FLEET_V2_OPERATING_CENTER, position) <= FLEET_V2_OPERATING_RADIUS_KM);
+}
+
+/** Keep distant, verified trucks searchable and focusable without widening Fit Fleet. */
+export function getVerifiedPositionsOutsideOperatingArea(vehicles: FleetV2Vehicle[]) {
+  return vehicles.filter((vehicle) => isTrustedMapPosition(vehicle) &&
+    distanceKm(FLEET_V2_OPERATING_CENTER, [vehicle.latitude as number, vehicle.longitude as number]) > FLEET_V2_OPERATING_RADIUS_KM);
 }
 
 export type MarkerScreenPoint = { key: string; x: number; y: number };

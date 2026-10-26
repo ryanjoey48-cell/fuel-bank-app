@@ -37,7 +37,7 @@ const forth = loadTypeScriptModule("lib/forth-tracking.ts");
 const forthView = loadTypeScriptModule("lib/forth-tracking-view.ts");
 const v2View = loadTypeScriptModule("lib/fleet-tracking-v2/view.ts");
 const v2Summary = loadTypeScriptModule("lib/fleet-tracking-v2/summary.ts");
-const { canShowUnverifiedReportedPosition, getFleetFitPositions, getVisibleMapVehicles } = v2View;
+const { canShowUnverifiedReportedPosition, getFleetFitPositions, getVerifiedPositionsOutsideOperatingArea, getVisibleMapVehicles } = v2View;
 const adapter = loadWithMocks("lib/fleet-tracking-v2/live-adapter.ts", {
   "@/lib/forth-tracking": forth,
   "@/lib/forth-tracking-view": forthView,
@@ -250,16 +250,22 @@ test("fleet fit uses only legal coordinates in the operating area and includes u
   assert.equal(optedInFit.some(([latitude]) => latitude === 18.7883 || latitude === 95), false);
   assert.deepEqual(vehicles.map((vehicle) => [vehicle.latitude, vehicle.longitude]), before);
   assert.equal(v2View.canFocusVehicle({ ...vehicles[1], gpsTrust: "verified", coordinateStatus: "invalid" }), false);
+  assert.deepEqual(getVerifiedPositionsOutsideOperatingArea(vehicles).map((vehicle) => vehicle.id), ["device:verified-outlier"]);
 });
 
-test("unverified toggle and selection preserve map position; verified selection alone requests focus", () => {
+test("daily and diagnostic mode switches preserve map view; verified selection alone requests focus", () => {
   const workspace = fs.readFileSync(path.join(root, "components/fleet-tracking-v2/live-workspace.tsx"), "utf8");
   const map = fs.readFileSync(path.join(root, "components/fleet-tracking-v2/fleet-map.tsx"), "utf8");
-  const toggleStart = workspace.indexOf('<input type="checkbox" checked={showUnverifiedPositions}');
-  const toggleEnd = workspace.indexOf("<span>{copy.showUnverified}", toggleStart);
-  const toggle = workspace.slice(toggleStart, toggleEnd);
-  assert.ok(toggle.includes("setShowUnverifiedPositions(event.target.checked)"));
-  assert.doesNotMatch(toggle, /setCommand|flyTo|fitBounds|setView/);
+  const modeStart = workspace.indexOf('<div className={styles.modeSelector}');
+  const modeEnd = workspace.indexOf('<div className={styles.mapLegend}', modeStart);
+  const modeSelector = workspace.slice(modeStart, modeEnd);
+  assert.ok(modeSelector.includes('aria-pressed={viewMode === "daily"}'));
+  assert.ok(modeSelector.includes('aria-pressed={viewMode === "diagnostic"}'));
+  assert.ok(modeSelector.includes('onClick={() => setViewMode("daily")}'));
+  assert.ok(modeSelector.includes('onClick={() => setViewMode("diagnostic")}'));
+  assert.doesNotMatch(modeSelector, /setCommand|map\.(?:flyTo|fitBounds|setView)|fitArea\(/);
+  assert.match(workspace, /useState<ViewMode>\("daily"\)/);
+  assert.match(workspace, /const showUnverifiedPositions = viewMode === "diagnostic"/);
 
   const selectStart = workspace.indexOf("function selectVehicle(id: string)");
   const selectEnd = workspace.indexOf("function showReportedPositionOnMap()", selectStart);
@@ -281,6 +287,10 @@ test("unverified toggle and selection preserve map position; verified selection 
   const refreshStart = workspace.indexOf("const loadLiveData = useCallback");
   const refreshEnd = workspace.indexOf("useEffect(() => {", refreshStart);
   assert.doesNotMatch(workspace.slice(refreshStart, refreshEnd), /setCommand|fitArea/);
+  const filterStart = workspace.indexOf("const visible = useMemo");
+  const filterEnd = workspace.indexOf("const selected =", filterStart);
+  assert.match(workspace.slice(filterStart, filterEnd), /matchesFleetV2RosterFilter\(vehicle, filter\)/);
+  assert.ok(workspace.includes("getVerifiedPositionsOutsideOperatingArea(vehicles).length"));
 });
 
 test("identity presentation prefers one readable type and keeps raw EES classifications in technical details", () => {
@@ -301,6 +311,9 @@ test("desktop workspace fills the available height and keeps a three-panel layou
   assert.match(css, /@media \(min-width: 1200px\)[\s\S]*?\.bodyWithInspector\s*\{\s*grid-template-columns: minmax\(250px, 280px\) minmax\(0, 1fr\) minmax\(320px, 350px\)/);
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.body,\s*\.bodyWithInspector\s*\{\s*display: flex/);
   assert.match(css, /\.mapPane\s*\{[^}]*height: clamp\(290px, 46dvh, 460px\)/);
+  assert.match(css, /\.mapTools\s*\{[^}]*position: relative/);
+  assert.match(css, /@media \(max-width: 480px\)[\s\S]*?\.modeButton\s*\{[^}]*min-height: 36px/);
+  assert.match(css, /@media \(max-width: 480px\)[\s\S]*?\.modeSelector\s*\{\s*width: 100%;/);
 });
 
 test("EES model, type and driver display only for a unique vehicle and one active assignment", () => {
@@ -363,10 +376,12 @@ test("live fleet summary keeps unknown activity, GPS confidence, and source time
   });
 });
 
-test("live workspace keeps the unverified-position toggle opt-in and provides a map legend", () => {
+test("live workspace keeps diagnostic positions opt-in and provides clear history and map actions", () => {
   const workspace = fs.readFileSync(path.join(root, "components/fleet-tracking-v2/live-workspace.tsx"), "utf8");
-  assert.ok(workspace.includes("useState(false)"));
-  assert.ok(workspace.includes("Show unverified reported positions"));
+  assert.ok(workspace.includes('useState<ViewMode>("daily")'));
+  assert.ok(workspace.includes("All Reported Positions"));
+  assert.ok(workspace.includes("Daily Operations"));
+  assert.ok(workspace.includes("dashed markers"));
   assert.ok(workspace.includes("Unverified reported position"));
   assert.ok(workspace.includes("This is the last position reported by Forth"));
   assert.ok(workspace.includes("https://www.google.com/maps/search/?api=1&query="));

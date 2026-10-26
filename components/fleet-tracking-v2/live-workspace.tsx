@@ -7,14 +7,15 @@ import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/lib/language-provider";
 import { getPortalVehicleTypeLabel } from "@/lib/driver-vehicle-types";
 import { adaptForthFleetResponse, attachUniqueActiveDriverAssignments, canOpenVerifiedGoogleMaps, matchesLiveVehicleSearch, type FleetTrackingV2LiveVehicle, type LiveEesVehicleIdentity } from "@/lib/fleet-tracking-v2/live-adapter";
-import { canFocusVehicle, canShowUnverifiedReportedPosition, formatReportTime, getMotionState, type MotionState } from "@/lib/fleet-tracking-v2/view";
+import { canFocusVehicle, canShowUnverifiedReportedPosition, formatReportTime, getMotionState, getVerifiedPositionsOutsideOperatingArea, matchesFleetV2RosterFilter, type FleetV2RosterFilter, type MotionState } from "@/lib/fleet-tracking-v2/view";
 import { summarizeLiveFleet } from "@/lib/fleet-tracking-v2/summary";
 import { FLEET_TRACKING_V2_COPY } from "@/lib/fleet-tracking-v2/copy";
 import { FleetTrackingV2Map } from "./fleet-map";
 import styles from "./live-workspace.module.css";
 
 type Language = "en" | "th";
-type Filter = "all" | "moving" | "stopped" | "unknown";
+type Filter = FleetV2RosterFilter;
+type ViewMode = "daily" | "diagnostic";
 type Command = { type: "fit" | "focus"; sequence: number; key?: string | null };
 type LoadState =
   | { status: "loading" }
@@ -30,7 +31,7 @@ const LIVE_COPY = {
     errorTitle: "Live fleet data is unavailable",
     errorHelp: "No simulated readings are shown. Check office access and the Forth Preview configuration, then retry.",
     retry: "Retry", refresh: "Refresh live data", search: "Search registration, device, driver or address",
-    roster: "Vehicle roster", all: "All", moving: "Moving", stopped: "Stopped", unknown: "Unavailable",
+    roster: "Vehicle roster", all: "All", moving: "Moving", stopped: "Stopped", unknown: "Unavailable", offline: "Offline",
     noRecords: "Forth returned no vehicle records.", noResults: "No vehicles match this search.",
     registrationUnavailable: "Registration unavailable", locationUnavailable: "Location unavailable",
     speed: "Source speed", engine: "Engine", engineOn: "On", engineOff: "Off", engineUnknown: "Unknown",
@@ -57,7 +58,12 @@ const LIVE_COPY = {
     gpsVerifiedShort: "GPS verified", gpsUnverifiedShort: "GPS unverified", gpsUnknownShort: "GPS unknown",
     reportFreshnessLabel: "Report freshness",
     mapLegend: "Map legend", verifiedMarker: "Verified GPS", reportedMarker: "Unverified reported position",
-    showUnverified: "Show unverified reported positions",
+    mapMode: "Map viewing mode",
+    dailyOperations: "Daily Operations", allReportedPositions: "All Reported Positions",
+    dailyModeHint: "Daily Operations plots verified GPS only. Every vehicle stays searchable; changing mode keeps the current map view.",
+    diagnosticModeHint: "For EES office users: diagnostic mode adds valid unverified reports with dashed markers. These coordinates are not confirmed locations; changing mode keeps the current map view.",
+    remoteFitHint: "verified GPS position(s) are beyond Fit Fleet’s 150 km operating area. Select a vehicle in the roster to focus its true position.",
+    trackerOffline: "Tracker offline",
     lastReportedPosition: "Last reported position · unverified", positionNotVerified: "Position not verified",
     verifiedPosition: "Verified GPS position",
     unverifiedPositionWarning: "This is the last position reported by Forth. It is not verified and may be outdated or inaccurate. Do not treat it as current.",
@@ -89,7 +95,7 @@ const LIVE_COPY = {
     errorTitle: "ไม่สามารถใช้งานข้อมูลรถจริงได้",
     errorHelp: "ไม่มีการแสดงข้อมูลจำลอง โปรดตรวจสอบสิทธิ์สำนักงานและการตั้งค่า Forth Preview แล้วลองอีกครั้ง",
     retry: "ลองอีกครั้ง", refresh: "รีเฟรชข้อมูลจริง", search: "ค้นหาทะเบียน อุปกรณ์ คนขับ หรือที่อยู่",
-    roster: "รายชื่อรถ", all: "ทั้งหมด", moving: "กำลังเคลื่อนที่", stopped: "หยุด", unknown: "ไม่พร้อมใช้งาน",
+    roster: "รายชื่อรถ", all: "ทั้งหมด", moving: "กำลังเคลื่อนที่", stopped: "หยุด", unknown: "ไม่พร้อมใช้งาน", offline: "ออฟไลน์",
     noRecords: "Forth ไม่ส่งรายการรถกลับมา", noResults: "ไม่พบรถที่ตรงกับการค้นหา",
     registrationUnavailable: "ไม่มีทะเบียนรถ", locationUnavailable: "ไม่มีข้อมูลสถานที่",
     speed: "ความเร็วจากอุปกรณ์", engine: "เครื่องยนต์", engineOn: "เปิด", engineOff: "ปิด", engineUnknown: "ไม่ทราบ",
@@ -116,7 +122,12 @@ const LIVE_COPY = {
     gpsVerifiedShort: "ยืนยัน GPS", gpsUnverifiedShort: "ยังไม่ยืนยัน GPS", gpsUnknownShort: "ไม่ทราบ GPS",
     reportFreshnessLabel: "ความสดใหม่ของรายงาน",
     mapLegend: "สัญลักษณ์แผนที่", verifiedMarker: "ยืนยัน GPS แล้ว", reportedMarker: "ตำแหน่งรายงานที่ยังไม่ยืนยัน",
-    showUnverified: "แสดงตำแหน่งรายงานที่ยังไม่ยืนยัน",
+    mapMode: "โหมดแผนที่",
+    dailyOperations: "งานประจำวัน", allReportedPositions: "ตำแหน่งที่รายงานทั้งหมด",
+    dailyModeHint: "งานประจำวันแสดงเฉพาะตำแหน่ง GPS ที่ยืนยันแล้ว รถทุกคันยังค้นหาได้ และการเปลี่ยนโหมดจะคงมุมมองแผนที่เดิม",
+    diagnosticModeHint: "สำหรับผู้ใช้สำนักงาน EES: โหมดตรวจสอบเพิ่มตำแหน่งรายงานที่ยังไม่ยืนยันและพิกัดถูกต้อง โดยใช้สัญลักษณ์เส้นประ พิกัดเหล่านี้ยังไม่ใช่ตำแหน่งที่ยืนยันแล้ว",
+    remoteFitHint: "ตำแหน่ง GPS ที่ยืนยันแล้วอยู่นอกพื้นที่แสดงรถทั้งหมด 150 กม. เลือกรถจากรายชื่อเพื่อโฟกัสตำแหน่งจริง",
+    trackerOffline: "อุปกรณ์ออฟไลน์",
     lastReportedPosition: "ตำแหน่งรายงานล่าสุด · ยังไม่ยืนยัน", positionNotVerified: "ยังไม่ยืนยันตำแหน่ง",
     verifiedPosition: "ตำแหน่ง GPS ที่ยืนยันแล้ว",
     unverifiedPositionWarning: "นี่คือตำแหน่งล่าสุดที่ Forth รายงาน ยังไม่ได้ยืนยัน และอาจเก่าหรือคลาดเคลื่อน อย่าใช้เป็นตำแหน่งปัจจุบัน",
@@ -365,7 +376,7 @@ export function FleetTrackingV2LiveWorkspace({ showFixtureLink }: { showFixtureL
   const [clusterIds, setClusterIds] = useState<string[] | null>(null);
   const [clusterQuery, setClusterQuery] = useState("");
   const [command, setCommand] = useState<Command>({ type: "fit", sequence: 0 });
-  const [showUnverifiedPositions, setShowUnverifiedPositions] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("daily");
   const [dataState, setDataState] = useState<LoadState>({ status: "loading" });
   const startedRef = useRef(false);
   const activeRef = useRef(true);
@@ -425,9 +436,10 @@ export function FleetTrackingV2LiveWorkspace({ showFixtureLink }: { showFixtureL
   }, [loadLiveData]);
 
   const vehicles = useMemo(() => dataState.status === "ready" ? dataState.records : [], [dataState]);
+  const showUnverifiedPositions = viewMode === "diagnostic";
   const visible = useMemo(() => vehicles.filter((vehicle) => {
     if (!matchesLiveVehicleSearch(vehicle, query)) return false;
-    return filter === "all" || getMotionState(vehicle) === filter;
+    return matchesFleetV2RosterFilter(vehicle, filter);
   }), [filter, query, vehicles]);
   const selected = vehicles.find((vehicle) => vehicle.id === selectedId) ?? null;
   const clusterVehicles = clusterIds ? vehicles.filter((vehicle) => clusterIds.includes(vehicle.id)) : [];
@@ -435,6 +447,7 @@ export function FleetTrackingV2LiveWorkspace({ showFixtureLink }: { showFixtureL
   const showDetails = Boolean(selected && detailsOpen && clusterVehicles.length === 0);
   const fleetSummary = useMemo(() => summarizeLiveFleet(vehicles), [vehicles]);
   const reportedPositionCount = vehicles.filter((vehicle) => canShowUnverifiedReportedPosition(vehicle)).length;
+  const remoteVerifiedPositionCount = getVerifiedPositionsOutsideOperatingArea(vehicles).length;
   const ready = dataState.status === "ready";
 
   function selectVehicle(id: string) {
@@ -450,7 +463,7 @@ export function FleetTrackingV2LiveWorkspace({ showFixtureLink }: { showFixtureL
 
   function showReportedPositionOnMap() {
     if (!selected || !canShowUnverifiedReportedPosition(selected)) return;
-    setShowUnverifiedPositions(true);
+    setViewMode("diagnostic");
     setCommand((current) => ({ type: "focus", sequence: current.sequence + 1, key: selected.id }));
   }
 
@@ -459,7 +472,7 @@ export function FleetTrackingV2LiveWorkspace({ showFixtureLink }: { showFixtureL
     setCommand((current) => ({ type: "fit", sequence: current.sequence + 1 }));
   }
 
-  const filters: Filter[] = ["all", "moving", "stopped", "unknown"];
+  const filters: Filter[] = ["all", "moving", "stopped", "unknown", "offline"];
 
   return (
     <div className={styles.shell + " " + styles.dashboardShell}>
@@ -539,8 +552,10 @@ export function FleetTrackingV2LiveWorkspace({ showFixtureLink }: { showFixtureL
                   </span>
                   <span className={styles.vehicleRowFooter}>
                     <span className={styles.rowSpeed}><Gauge size={13} />{speed}</span>
+                    <span className={styles.rowStatus}><Activity size={12} />{copy.engine} · {engineLabel(vehicle, copy)}</span>
                     <span className={styles.rowStatus + " " + freshnessTone(vehicle)}><Clock3 size={12} />{rosterFreshnessLabel(vehicle, copy)}</span>
                     <span className={styles.rowStatus + " " + confidenceTone(vehicle)}><MapPin size={12} />{shortConfidence}</span>
+                    {vehicle.trackerConnectivity === "disconnected" ? <span className={styles.rowStatus + " " + styles.toneWarning}>{copy.trackerOffline}</span> : null}
                   </span>
                 </button>
               );
@@ -554,12 +569,16 @@ export function FleetTrackingV2LiveWorkspace({ showFixtureLink }: { showFixtureL
             <button type="button" className={styles.fitButton} onClick={fitArea} disabled={!ready}><MapPinned size={15} />{copy.fitArea}</button>
           </div>
           <div className={styles.mapTools}>
-            <label className={styles.unverifiedToggle}>
-              <input type="checkbox" checked={showUnverifiedPositions} disabled={reportedPositionCount === 0} onChange={(event) => {
-                setShowUnverifiedPositions(event.target.checked);
-              }} />
-              <span>{copy.showUnverified} ({reportedPositionCount})</span>
-            </label>
+            <div className={styles.modeSelector} role="group" aria-label={copy.mapMode}>
+              <button type="button" className={styles.modeButton} aria-pressed={viewMode === "daily"} onClick={() => setViewMode("daily")}>{copy.dailyOperations}</button>
+              <button type="button" className={styles.modeButton} aria-pressed={viewMode === "diagnostic"} disabled={reportedPositionCount === 0} onClick={() => setViewMode("diagnostic")}>
+                {copy.allReportedPositions} <span>{reportedPositionCount}</span>
+              </button>
+            </div>
+            <p className={styles.modeHint} aria-live="polite">
+              {showUnverifiedPositions ? copy.diagnosticModeHint : copy.dailyModeHint}
+              {remoteVerifiedPositionCount > 0 ? <> <strong>{remoteVerifiedPositionCount}</strong> {copy.remoteFitHint}</> : null}
+            </p>
             <div className={styles.mapLegend} role="group" aria-label={copy.mapLegend}>
               <span><i className={styles.verifiedSwatch} aria-hidden="true" />{copy.verifiedMarker}</span>
               <span><i className={styles.reportedSwatch} aria-hidden="true" />{copy.reportedMarker}</span>

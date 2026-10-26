@@ -27,8 +27,8 @@
 .dot {
   box-sizing: border-box;
   display: grid;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   place-items: center;
   cursor: pointer;
   border: 2px solid #fff;
@@ -37,8 +37,8 @@
 }
 
 .dot svg {
-  width: 13px;
-  height: 13px;
+  width: 15px;
+  height: 15px;
   fill: none;
   stroke: #fff;
   stroke-width: 1.8;
@@ -61,8 +61,8 @@
 
 .label {
   position: absolute;
-  top: 2px;
-  left: 28px;
+  top: 4px;
+  left: 32px;
   max-width: 116px;
   overflow: hidden;
   padding: 2px 7px;
