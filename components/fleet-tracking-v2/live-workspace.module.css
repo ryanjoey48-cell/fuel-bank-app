@@ -10,7 +10,7 @@
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
-  background: #f2edde;
+  background: #f5f2ed;
   color: var(--ink);
 }
 
@@ -28,7 +28,7 @@
   gap: 1rem;
   border-bottom: 1px solid var(--line);
   background: linear-gradient(105deg, #fffdf8 0%, #fffaf0 72%, #f8f0fb 100%);
-  padding: 0.65rem 1rem;
+  padding: 0.55rem 0.95rem;
 }
 
 .bannerCopy,
@@ -42,7 +42,7 @@
 .inspectorEyebrow {
   margin: 0;
   color: var(--purple);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.14em;
   line-height: 1.35;
@@ -52,7 +52,7 @@
 .title {
   margin: 0.08rem 0 0;
   color: var(--purple-deep);
-  font-size: clamp(1rem, 1.4vw, 1.25rem);
+  font-size: clamp(1.2rem, 1.55vw, 1.55rem);
   font-weight: 800;
   letter-spacing: -0.035em;
   line-height: 1.1;
@@ -65,7 +65,7 @@
   gap: 0.3rem 0.45rem;
   margin: 0.28rem 0 0;
   color: #655c6b;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.35;
 }
 
@@ -164,68 +164,45 @@
 }
 
 .summaryStrip {
-  display: grid;
+  display: flex;
   flex: 0 0 auto;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.5rem;
-  border-bottom: 1px solid var(--line);
-  background: #f8f2e7;
-  padding: 0.5rem 0.75rem;
-}
-
-.summaryCard {
-  display: grid;
-  min-width: 0;
-  grid-template-columns: 29px minmax(0, 1fr);
   align-items: center;
-  gap: 0.48rem;
-  border: 1px solid #e8dece;
-  border-radius: 0.75rem;
-  background: rgba(255, 254, 250, 0.9);
-  padding: 0.35rem 0.55rem;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.35rem;
+  border-bottom: 1px solid var(--line);
+  background: #fffdf8;
+  padding: 0.4rem 0.95rem;
 }
 
-.summaryIcon {
-  display: grid;
-  width: 27px;
-  height: 27px;
-  place-items: center;
-  border-radius: 0.55rem;
-  background: #f0e5f7;
+.summaryStrip > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  color: #61576a;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.summaryStrip svg {
   color: var(--purple);
 }
 
-.summaryCard > div {
-  display: grid;
-  gap: 0.04rem;
+.summaryStrip strong {
+  color: #30203e;
+  font-size: 16px;
+  font-weight: 850;
 }
 
-.summaryLabel {
-  overflow: hidden;
-  color: #706878;
-  font-size: 9px;
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.summaryStrip b {
+  color: #b5a9bb;
+  font-weight: 500;
 }
 
-.summaryCard strong {
-  overflow: hidden;
-  color: #2a1a3a;
-  font-size: clamp(0.76rem, 1vw, 0.9rem);
-  font-weight: 800;
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.summaryCard small {
-  overflow: hidden;
-  color: #7a727e;
-  font-size: 8px;
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.summaryStrip em {
+  margin-left: 0.22rem;
+  color: #85683c;
+  font-size: 11px;
+  font-style: normal;
 }
 
 .errorBanner,
@@ -257,14 +234,14 @@
   display: grid;
   min-height: 0;
   flex: 1 1 auto;
-  grid-template-columns: minmax(245px, 280px) minmax(0, 1fr);
-  gap: 0.55rem;
+  grid-template-columns: minmax(270px, 310px) minmax(0, 1fr);
+  gap: 0.45rem;
   overflow: hidden;
-  padding: 0.55rem;
+  padding: 0.45rem;
 }
 
 .bodyWithInspector {
-  grid-template-columns: minmax(245px, 280px) minmax(0, 1fr);
+  grid-template-columns: minmax(270px, 310px) minmax(0, 1fr) minmax(300px, 345px);
 }
 
 .roster,
@@ -273,7 +250,7 @@
   min-width: 0;
   min-height: 0;
   border: 1px solid var(--line);
-  border-radius: 0.9rem;
+  border-radius: 0.7rem;
   background: var(--cream);
   box-shadow: 0 3px 10px rgba(52, 36, 28, 0.04);
 }
@@ -288,10 +265,10 @@
   display: flex;
   flex: 0 0 auto;
   flex-direction: column;
-  gap: 0.52rem;
+  gap: 0.42rem;
   border-bottom: 1px solid #e8dfd0;
   background: #fffdf8;
-  padding: 0.68rem 0.7rem 0.6rem;
+  padding: 0.65rem 0.75rem;
 }
 
 .rosterHeadRow {
@@ -304,7 +281,7 @@
 .rosterTitle {
   margin: 0;
   color: #332342;
-  font-size: 0.85rem;
+  font-size: 1rem;
   font-weight: 800;
   letter-spacing: -0.015em;
 }
@@ -323,7 +300,7 @@
   border-radius: 999px;
   background: #efe5f5;
   color: var(--purple);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -389,13 +366,13 @@
 }
 
 .filters button {
-  min-height: 25px;
+  min-height: 31px;
   border: 1px solid #e1d8cc;
   border-radius: 999px;
   background: #fff;
   color: #6a6170;
-  padding: 0.2rem 0.55rem;
-  font-size: 9px;
+  padding: 0.3rem 0.65rem;
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -418,12 +395,12 @@
   display: flex;
   width: 100%;
   flex-direction: column;
-  gap: 0.32rem;
+  gap: 0.35rem;
   border: 0;
   border-bottom: 1px solid #eee6da;
   border-left: 3px solid transparent;
   background: transparent;
-  padding: 0.58rem 0.62rem 0.56rem;
+  padding: 0.78rem 0.8rem;
   text-align: left;
   transition: background 120ms ease, border-color 120ms ease;
 }
@@ -451,7 +428,7 @@
   min-width: 0;
   overflow: hidden;
   color: #301d42;
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 850;
   letter-spacing: 0.015em;
   text-overflow: ellipsis;
@@ -468,16 +445,28 @@
 .pillUnknown { background: #eee8f2; color: #63556b; }
 
 .vehicleIdentity {
-  overflow: hidden;
   color: #766d7d;
-  font-size: 9px;
-  font-weight: 550;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
 }
 
 .vehicleIdentity[data-matched="true"] {
   color: #574264;
+}
+
+.vehicleDriver,
+.vehicleTime {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: #5f5368;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.vehicleDriver {
+  font-weight: 700;
 }
 
 .vehicleRowFooter {
@@ -485,7 +474,7 @@
   flex-wrap: wrap;
   gap: 0.35rem 0.55rem;
   color: #6e6674;
-  font-size: 8px;
+  font-size: 11px;
 }
 
 .rowSpeed,
@@ -532,14 +521,41 @@
   gap: 0.65rem;
   border-bottom: 1px solid #e3d9ca;
   background: #fffdf8;
-  padding: 0.52rem 0.7rem;
+  padding: 0.5rem 0.7rem;
 }
 
 .mapHeader h2 {
   margin: 0;
   color: #32233f;
-  font-size: 0.78rem;
+  font-size: 0.95rem;
   font-weight: 800;
+}
+
+.mapHeading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.mobileRosterButton,
+.rosterClose,
+.drawerScrim {
+  display: none;
+}
+
+.mobileRosterButton:focus-visible,
+.rosterClose:focus-visible,
+.vehicleRow:focus-visible,
+.clusterRow:focus-visible,
+.iconButton:focus-visible {
+  outline: 3px solid #9b61c2;
+  outline-offset: -3px;
+}
+
+.remoteHint {
+  color: #745426;
+  font-size: 11px;
 }
 
 .mapHeader p {
@@ -562,10 +578,10 @@
   flex: 0 0 auto;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.3rem 0.65rem;
+  gap: 0.35rem 0.8rem;
   border-bottom: 1px solid #e3d9ca;
   background: #fffdf8;
-  padding: 0.38rem 0.6rem;
+  padding: 0.4rem 0.7rem;
   color: #352841;
 }
 
@@ -582,7 +598,7 @@
 .modeButton {
   display: inline-flex;
   min-width: 0;
-  min-height: 31px;
+  min-height: 34px;
   align-items: center;
   justify-content: center;
   gap: 0.28rem;
@@ -590,7 +606,7 @@
   background: transparent;
   color: #5e5268;
   padding: 0.3rem 0.56rem;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 750;
   line-height: 1.2;
   white-space: nowrap;
@@ -632,7 +648,7 @@
   flex-wrap: wrap;
   gap: 0.18rem 0.55rem;
   color: #685f6f;
-  font-size: 8px;
+  font-size: 11px;
 }
 
 .mapLegend span {
@@ -675,8 +691,8 @@
   top: 4.2rem;
   left: 0.65rem;
   display: flex;
-  width: min(310px, calc(100% - 1.3rem));
-  max-height: min(62%, 320px);
+  width: min(340px, calc(100% - 1.3rem));
+  max-height: min(65%, 370px);
   flex-direction: column;
   overflow: hidden;
   border: 1px solid #d8c8e2;
@@ -702,13 +718,13 @@
 
 .clusterHeading strong {
   color: #352341;
-  font-size: 10px;
+  font-size: 13px;
 }
 
 .clusterHeading span,
 .clusterHint {
   color: #766d7b;
-  font-size: 8px;
+  font-size: 11px;
   line-height: 1.3;
 }
 
@@ -721,12 +737,12 @@
 .clusterSearch input {
   width: 100%;
   min-width: 0;
-  height: 29px;
+  height: 34px;
   border: 0;
   outline: 0;
   background: transparent;
   color: var(--ink);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .clusterResults {
@@ -739,7 +755,7 @@
 .clusterRow {
   display: flex;
   width: 100%;
-  min-height: 36px;
+  min-height: 44px;
   align-items: center;
   justify-content: space-between;
   gap: 0.6rem;
@@ -764,20 +780,20 @@
 .clusterRow strong {
   overflow: hidden;
   color: #352341;
-  font-size: 10px;
+  font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .clusterRow small {
   color: #776c7c;
-  font-size: 8px;
+  font-size: 11px;
 }
 
 .clusterSelect {
   flex: 0 0 auto;
   color: var(--purple);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 800;
 }
 
@@ -792,10 +808,10 @@
   z-index: 12;
   display: flex;
   flex-direction: column;
-  gap: 0.58rem;
+  gap: 0.72rem;
   overflow: auto;
   background: #fffdf8;
-  padding: 0.72rem;
+  padding: 0.9rem;
   scrollbar-color: #d1c2d9 transparent;
   scrollbar-width: thin;
 }
@@ -812,16 +828,31 @@
   overflow-wrap: anywhere;
   margin: 0.12rem 0 0;
   color: #2e1b40;
-  font-size: 1.12rem;
+  font-size: 1.55rem;
   font-weight: 850;
   letter-spacing: -0.03em;
   line-height: 1.1;
 }
 
+.driverLine {
+  display: grid;
+  gap: 0.18rem;
+  margin: 0;
+  border-left: 3px solid #5b238e;
+  padding: 0.35rem 0.6rem;
+  color: #34253f;
+  font-size: 13px;
+}
+
+.driverLine strong {
+  color: #75677a;
+  font-size: 11px;
+}
+
 .identityLine {
   margin: 0.2rem 0 0;
   color: #6d6374;
-  font-size: 9px;
+  font-size: 13px;
   font-weight: 650;
 }
 
@@ -861,7 +892,7 @@
   background: #fff7e4;
   color: #73500e;
   padding: 0.4rem 0.5rem;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -879,7 +910,7 @@
   gap: 0.2rem;
   border-radius: 999px;
   padding: 0.22rem 0.45rem;
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 800;
   line-height: 1.3;
 }
@@ -901,7 +932,7 @@
   border: 1px solid #e8dece;
   border-radius: 0.75rem;
   background: #fff;
-  padding: 0.48rem 0.58rem;
+  padding: 0.65rem 0.72rem;
 }
 
 .performanceCard span {
@@ -909,14 +940,14 @@
   align-items: center;
   gap: 0.22rem;
   color: #776d7d;
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 700;
 }
 
 .performanceCard strong {
   overflow: hidden;
   color: #30213d;
-  font-size: 17px;
+  font-size: 21px;
   font-weight: 850;
   line-height: 1.2;
   text-overflow: ellipsis;
@@ -932,7 +963,7 @@
   border: 1px solid #e5dac9;
   border-radius: 0.8rem;
   background: #fbf8f0;
-  padding: 0.58rem;
+  padding: 0.75rem;
 }
 
 .positionHeading {
@@ -956,7 +987,7 @@
 .positionTitleBlock strong {
   display: block;
   color: #655b6d;
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 750;
 }
 
@@ -965,18 +996,18 @@
   overflow-wrap: anywhere;
   margin-top: 0.05rem;
   color: #30223d;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 750;
   line-height: 1.35;
 }
 
 .confidenceBadge {
-  max-width: 100px;
+  max-width: 125px;
   flex: 0 0 auto;
   border-radius: 999px;
   background: #fff;
   padding: 0.22rem 0.38rem;
-  font-size: 7px;
+  font-size: 10px;
   font-weight: 800;
   line-height: 1.25;
   text-align: center;
@@ -999,7 +1030,7 @@
 
 .positionMeta span {
   color: #7a717d;
-  font-size: 7px;
+  font-size: 10px;
   font-weight: 750;
   text-transform: uppercase;
 }
@@ -1007,7 +1038,7 @@
 .positionMeta strong {
   overflow-wrap: anywhere;
   color: #44374d;
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 700;
   line-height: 1.35;
 }
@@ -1017,7 +1048,7 @@
 .positionShown,
 .coordinatesUnavailable {
   margin: 0.42rem 0 0;
-  font-size: 8px;
+  font-size: 11px;
   line-height: 1.45;
 }
 
@@ -1061,7 +1092,7 @@
 .actions a {
   display: flex;
   min-width: 0;
-  min-height: 38px;
+  min-height: 40px;
   align-items: center;
   justify-content: center;
   gap: 0.24rem;
@@ -1070,7 +1101,7 @@
   background: #fff;
   color: var(--purple);
   padding: 0.28rem 0.2rem;
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 750;
   line-height: 1.2;
   text-align: center;
@@ -1104,8 +1135,26 @@
 .technical summary {
   cursor: pointer;
   color: var(--purple);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 800;
+}
+
+.upcoming {
+  border-top: 1px solid #e9dfd0;
+  padding-top: 0.55rem;
+  color: #756c7b;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.upcoming summary {
+  cursor: pointer;
+  color: #5b238e;
+  font-weight: 750;
+}
+
+.upcoming p {
+  margin: 0.4rem 0;
 }
 
 .technicalList {
@@ -1115,7 +1164,7 @@
   margin: 0.48rem 0 0;
   border-top: 1px solid #f0e9dd;
   padding-top: 0.42rem;
-  font-size: 8px;
+  font-size: 11px;
 }
 
 .technicalList dt { color: #79717d; }
@@ -1157,9 +1206,9 @@
 .journeySpinner { animation: journey-spin 1s linear infinite; }
 @keyframes journey-spin { to { transform: rotate(360deg); } }
 
-@media (min-width: 1200px) {
+@media (min-width: 1151px) {
   .bodyWithInspector {
-    grid-template-columns: minmax(250px, 280px) minmax(0, 1fr) minmax(320px, 350px);
+    grid-template-columns: minmax(265px, 300px) minmax(0, 1fr) minmax(300px, 345px);
   }
 
   .inspector {
@@ -1172,19 +1221,26 @@
 
 @media (min-width: 1550px) {
   .bodyWithInspector {
-    grid-template-columns: minmax(270px, 300px) minmax(0, 1fr) minmax(340px, 380px);
+    grid-template-columns: minmax(290px, 320px) minmax(0, 1fr) minmax(330px, 370px);
   }
 }
 
-@media (min-width: 901px) and (max-width: 1199px) {
-  .bodyWithInspector .inspector {
-    position: absolute;
-    top: 0.65rem;
-    right: 0.65rem;
-    bottom: 0.65rem;
-    width: min(345px, calc(100% - 1.3rem));
+@media (min-width: 901px) and (max-width: 1150px) {
+  .dashboardShell { height: auto; min-height: calc(100dvh - 126px); }
+  .body, .bodyWithInspector {
+    grid-template-columns: minmax(255px, 285px) minmax(0, 1fr);
+    grid-template-rows: minmax(540px, 75dvh) auto;
+    overflow: visible;
+  }
+  .roster, .mapPane { grid-row: 1; }
+  .inspector {
+    position: relative;
+    inset: auto;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: auto;
     max-height: none;
-    box-shadow: 0 10px 30px rgba(43, 25, 55, 0.22);
+    overflow: visible;
   }
 }
 
@@ -1212,47 +1268,58 @@
     justify-content: space-between;
   }
 
-  .summaryStrip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.35rem;
-    padding: 0.4rem 0.55rem;
-  }
-
-  .summaryCard {
-    padding: 0.32rem 0.42rem;
-  }
+  .summaryStrip { gap: 0.3rem 0.8rem; padding: 0.4rem 0.7rem; }
+  .summaryStrip > span { font-size: 11px; }
+  .summaryStrip strong { font-size: 14px; }
 
   .body,
   .bodyWithInspector {
     display: flex;
-    flex: 0 0 auto;
+    flex: 1 1 auto;
     flex-direction: column;
     gap: 0.5rem;
-    overflow: visible;
-    padding: 0.5rem;
+    min-height: 0;
+    overflow: hidden;
+    padding: 0.35rem;
   }
 
   .mapPane {
     order: 0;
-    height: clamp(290px, 46dvh, 460px);
-    min-height: 290px;
-    flex: 0 0 auto;
+    height: clamp(410px, 64dvh, 760px);
+    min-height: 410px;
+    flex: 1 1 auto;
   }
 
   .roster {
-    order: 1;
-    min-height: 230px;
-    max-height: 42dvh;
-    flex: 0 0 auto;
+    position: fixed;
+    z-index: 60;
+    top: 0.4rem;
+    bottom: 0.4rem;
+    left: 0.4rem;
+    width: min(370px, calc(100vw - 0.8rem));
+    max-height: none;
+    transform: translateX(calc(-100% - 1rem));
+    transition: transform 180ms ease;
+    box-shadow: 12px 0 35px rgba(30, 19, 40, 0.22);
   }
 
+  .rosterOpen { transform: translateX(0); }
+  .rosterClose, .mobileRosterButton { display: inline-flex; align-items: center; justify-content: center; }
+  .rosterClose { margin-left: auto; border: 0; background: transparent; color: var(--purple); }
+  .mobileRosterButton { gap: 0.3rem; border: 1px solid #d5c2e2; border-radius: 0.55rem; background: #fff; padding: 0.35rem 0.55rem; color: var(--purple); font-size: 12px; font-weight: 750; }
+  .drawerScrim { position: fixed; z-index: 59; inset: 0; display: block; border: 0; background: rgba(29, 19, 37, 0.4); }
+
   .inspector {
-    position: relative;
-    inset: auto;
-    order: 2;
+    position: fixed;
+    z-index: 55;
+    right: 0.4rem;
+    bottom: 0.4rem;
+    left: 0.4rem;
     width: auto;
-    max-height: none;
-    overflow: visible;
+    max-height: min(62dvh, 580px);
+    overflow: auto;
+    border-radius: 1rem 1rem 0.7rem 0.7rem;
+    box-shadow: 0 -10px 35px rgba(30, 19, 40, 0.22);
   }
 
   .errorBanner,
@@ -1265,20 +1332,15 @@
 @media (max-width: 480px) {
   .fixtureLink { max-width: 36vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .refreshButton { min-height: 30px; padding-right: 0.52rem; padding-left: 0.52rem; }
-  .summaryCard { grid-template-columns: 24px minmax(0, 1fr); gap: 0.35rem; }
-  .summaryIcon { width: 23px; height: 23px; }
-  .summaryCard small { font-size: 7px; }
-  .mapHeader p { display: none; }
   .mapTools { gap: 0.32rem; padding: 0.4rem; }
   .modeSelector { width: 100%; }
-  .modeButton { min-height: 36px; flex: 1 1 0; padding-right: 0.35rem; padding-left: 0.35rem; font-size: 8px; }
-  .modeHint { flex-basis: 100%; min-width: 0; font-size: 8px; }
-  .mapLegend { width: 100%; font-size: 7px; }
+  .modeButton { min-height: 38px; flex: 1 1 0; padding-right: 0.35rem; padding-left: 0.35rem; font-size: 10px; white-space: normal; }
+  .mapLegend { width: 100%; font-size: 10px; }
   .clusterPicker { top: 4.15rem; max-height: 64%; }
   .positionHeading { flex-wrap: wrap; }
   .confidenceBadge { margin-left: 2rem; }
   .positionMeta { grid-template-columns: minmax(0, 1fr); }
-  .actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .actions { grid-template-columns: minmax(0, 1fr); }
   .actions button,
-  .actions a { flex-direction: column; min-height: 44px; font-size: 7px; }
+  .actions a { min-height: 44px; font-size: 11px; }
 }

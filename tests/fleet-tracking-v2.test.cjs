@@ -112,6 +112,15 @@ test("depot overlap keeps identical sample coordinates and opens a picker instea
   assert.equal(shouldOpenClusterPicker([[13.7, 100.5], [13.8, 100.6]], 12, 18), false);
 });
 
+test("nearby markers do not form a chain that hides distinct positions", () => {
+  const groups = getMarkerCollisionGroups([
+    { key: "truck-a", x: 0, y: 0 },
+    { key: "truck-b", x: 12, y: 0 },
+    { key: "truck-c", x: 24, y: 0 }
+  ], 15);
+  assert.deepEqual(groups, [["truck-a", "truck-b"]]);
+});
+
 
 test("map labels appear at the default useful zoom and hide colliding labels", () => {
   const visible = getVisibleMarkerLabelKeys([

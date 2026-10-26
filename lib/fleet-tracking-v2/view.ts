@@ -130,32 +130,19 @@ export type MarkerScreenPoint = { key: string; x: number; y: number };
 
 export function getMarkerCollisionGroups(points: MarkerScreenPoint[], radius = FLEET_V2_COLLISION_RADIUS_PX): string[][] {
   const valid = points.filter((point) => point.key && Number.isFinite(point.x) && Number.isFinite(point.y));
-  const parent = valid.map((_, index) => index);
-  const find = (index: number): number => {
-    if (parent[index] !== index) parent[index] = find(parent[index]);
-    return parent[index];
-  };
-  const union = (left: number, right: number) => {
-    const leftRoot = find(left);
-    const rightRoot = find(right);
-    if (leftRoot !== rightRoot) parent[rightRoot] = leftRoot;
-  };
   const radiusSquared = Math.max(0, radius) ** 2;
-  for (let left = 0; left < valid.length; left += 1) {
-    for (let right = left + 1; right < valid.length; right += 1) {
-      const dx = valid[left].x - valid[right].x;
-      const dy = valid[left].y - valid[right].y;
-      if (dx * dx + dy * dy <= radiusSquared) union(left, right);
-    }
+  const groups: MarkerScreenPoint[][] = [];
+  for (const point of valid) {
+    // A chain of merely adjacent markers must not hide distant endpoints together.
+    const group = groups.find((members) => members.every((member) => {
+      const dx = point.x - member.x;
+      const dy = point.y - member.y;
+      return dx * dx + dy * dy <= radiusSquared;
+    }));
+    if (group) group.push(point);
+    else groups.push([point]);
   }
-  const groups = new Map<number, string[]>();
-  valid.forEach((point, index) => {
-    const root = find(index);
-    const group = groups.get(root) ?? [];
-    group.push(point.key);
-    groups.set(root, group);
-  });
-  return [...groups.values()].filter((group) => group.length > 1);
+  return groups.filter((group) => group.length > 1).map((group) => group.map((point) => point.key));
 }
 
 export function shouldOpenClusterPicker(

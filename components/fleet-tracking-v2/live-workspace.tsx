@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Activity, Clock3, Gauge, MapPin, MapPinned, RefreshCw, Search, Truck, X } from "lucide-react";
+import { Activity, Clock3, Gauge, MapPin, MapPinned, Menu, RefreshCw, Search, Truck, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/lib/language-provider";
@@ -10,7 +10,6 @@ import { adaptForthFleetResponse, attachUniqueActiveDriverAssignments, canOpenVe
 import { canFocusVehicle, canShowUnverifiedReportedPosition, formatReportTime, getMotionState, getVerifiedPositionsOutsideOperatingArea, matchesFleetV2RosterFilter, type FleetV2RosterFilter, type MotionState } from "@/lib/fleet-tracking-v2/view";
 import { summarizeLiveFleet } from "@/lib/fleet-tracking-v2/summary";
 import { FLEET_TRACKING_V2_COPY } from "@/lib/fleet-tracking-v2/copy";
-import { JourneyHistoryPanel } from "./journey-history";
 import { FleetTrackingV2Map } from "./fleet-map";
 import styles from "./live-workspace.module.css";
 
@@ -50,8 +49,8 @@ const LIVE_COPY = {
     identityUnavailable: "EES vehicle roster unavailable", identityReason: "Match status",
     reportedDriver: "Forth-reported driver", noDriver: "No driver reported", technical: "Technical details",
     closeDetails: "Close details", fitArea: "Fit fleet", showRoster: "Show roster", hideRoster: "Hide roster",
-    clusterTitle: "Vehicles at this map point",
-    clusterHint: "Select a registration to open details. Original coordinates are unchanged.",
+    clusterTitle: "Vehicles near this map area",
+    clusterHint: "Choose a registration. Nearby markers do not mean the vehicles share a position.",
     chooseVehicle: "Select", gpsIssue: "GPS not verified", sourceStale: "Stale report",
     signIn: "A verified office sign-in is required.", requestFailed: "The tracking request failed.",
     unavailableGps: "No verified GPS positions are currently available.",
@@ -88,10 +87,14 @@ const LIVE_COPY = {
     journeyOrigin: "Origin", journeyDestination: "Destination", journeyTravelTimeRaw: "Forth travel-time value",
     historyLoading: "Requesting report…", historyFailed: "Journey history could not be loaded.",
     mapsUnavailable: "Google Maps is available only for a fresh, verified GPS position.",
-    showLastReported: "Show last reported position on map", reportedPositionShown: "Unverified reported position is shown on the map.",
+    showLastReported: "Show reported position on map", reportedPositionShown: "Unverified report shown on map.",
     mapTitle: "Fleet map", searchGroup: "Search registrations in this group", noGroupMatches: "No registrations match this search.",
     rosterHint: "Search and select any returned vehicle", identityConfirmed: "Confirmed EES vehicle",
-    detailsActions: "Vehicle actions", device: "Forth device ID", googleMaps: "Google Maps"
+    detailsActions: "Vehicle actions", device: "Forth device ID", googleMaps: "Google Maps",
+    openVehicles: "Find a vehicle", closeVehicles: "Close vehicle list", upcoming: "Upcoming reports",
+    positionCaution: "Reported position is unverified; it may be old or inaccurate.",
+    noVerifiedPosition: "No verified map position", lastRefresh: "Last refreshed",
+    rosterSearch: "Search vehicles", vehicleCount: "vehicles", remoteOutside: "verified outside area"
   },
   th: {
     eyebrow: "ข้อมูลรถจริง · อ่านอย่างเดียว", title: "ศูนย์ติดตามรถ",
@@ -119,8 +122,8 @@ const LIVE_COPY = {
     identityUnmatched: "ไม่มีรายการ EES ที่ไม่ซ้ำ", identityUnavailable: "ไม่มีรายชื่อรถ EES",
     identityReason: "สถานะการจับคู่", reportedDriver: "คนขับที่ Forth รายงาน", noDriver: "ไม่มีข้อมูลคนขับ",
     technical: "รายละเอียดทางเทคนิค", closeDetails: "ปิดรายละเอียด", fitArea: "แสดงรถทั้งหมด",
-    showRoster: "แสดงรายชื่อ", hideRoster: "ซ่อนรายชื่อ", clusterTitle: "รถที่ตำแหน่งแผนที่นี้",
-    clusterHint: "เลือกทะเบียนเพื่อดูรายละเอียด ระบบคงพิกัดเดิม", chooseVehicle: "เลือก",
+    showRoster: "แสดงรายชื่อ", hideRoster: "ซ่อนรายชื่อ", clusterTitle: "รถที่อยู่ใกล้กันบนแผนที่",
+    clusterHint: "เลือกทะเบียนรถ ตำแหน่งบนแผนที่ที่ใกล้กันไม่ได้หมายความว่ารถอยู่จุดเดียวกัน", chooseVehicle: "เลือก",
     gpsIssue: "ยังไม่ยืนยัน GPS", sourceStale: "รายงานเก่า",
     signIn: "ต้องเข้าสู่ระบบสำนักงานที่ยืนยันแล้ว", requestFailed: "คำขอติดตามรถไม่สำเร็จ",
     unavailableGps: "ขณะนี้ไม่มีตำแหน่ง GPS ที่ยืนยันแล้ว",
@@ -160,7 +163,11 @@ const LIVE_COPY = {
     showLastReported: "แสดงตำแหน่งรายงานล่าสุดบนแผนที่", reportedPositionShown: "กำลังแสดงตำแหน่งรายงานที่ยังไม่ยืนยันบนแผนที่",
     mapTitle: "แผนที่รถ", searchGroup: "ค้นหาทะเบียนในกลุ่มนี้", noGroupMatches: "ไม่พบทะเบียนที่ตรงกับการค้นหา",
     rosterHint: "ค้นหาและเลือกรถจากข้อมูลทั้งหมด", identityConfirmed: "ข้อมูลรถ EES ที่ยืนยันแล้ว",
-    detailsActions: "การดำเนินการกับรถ", device: "รหัสอุปกรณ์ Forth", googleMaps: "Google Maps"
+    detailsActions: "การดำเนินการกับรถ", device: "รหัสอุปกรณ์ Forth", googleMaps: "Google Maps",
+    openVehicles: "ค้นหารถ", closeVehicles: "ปิดรายชื่อรถ", upcoming: "รายงานในอนาคต",
+    positionCaution: "ตำแหน่งที่รายงานยังไม่ยืนยัน และอาจเก่าหรือคลาดเคลื่อน",
+    noVerifiedPosition: "ไม่มีตำแหน่งที่ยืนยันแล้ว", lastRefresh: "รีเฟรชล่าสุด",
+    rosterSearch: "ค้นหารถ", vehicleCount: "คัน", remoteOutside: "ตำแหน่งยืนยันนอกพื้นที่"
   }
 } as const;
 
@@ -264,7 +271,6 @@ function VehicleDetails({ vehicle, language, copy, onClose, onShowReportedPositi
   onShowReportedPosition: () => void;
   showUnverifiedPositions: boolean;
 }) {
-  const [journeyOpen, setJourneyOpen] = useState(false);
   const hasCoordinates = vehicle.coordinateStatus === "valid" &&
     typeof vehicle.latitude === "number" && Number.isFinite(vehicle.latitude) &&
     typeof vehicle.longitude === "number" && Number.isFinite(vehicle.longitude);
@@ -290,25 +296,20 @@ function VehicleDetails({ vehicle, language, copy, onClose, onShowReportedPositi
     <aside className={styles.inspector} aria-labelledby="fleet-v2-live-details-title">
       <div className={styles.inspectorHeader}>
         <div className={styles.inspectorHeading}>
-          <p className={styles.inspectorEyebrow}>{copy.identity}</p>
+          <p className={styles.inspectorEyebrow}>{copy.roster}</p>
           <h2 id="fleet-v2-live-details-title">{vehicle.registration || copy.registrationUnavailable}</h2>
-          <p className={styles.identityLine}>{identitySummary}</p>
+          <p className={styles.identityLine}>{vehicle.eesIdentity.status === "matched" ? [vehicle.eesIdentity.vehicleModel, vehicleTypeLabel].filter(Boolean).join(" · ") : identitySummary}</p>
         </div>
         <button type="button" className={styles.iconButton} onClick={onClose} aria-label={copy.closeDetails} title={copy.closeDetails}><X size={17} /></button>
       </div>
 
       {vehicle.eesIdentity.status === "matched" ? (
-        <div className={styles.confirmedIdentity}>
-          <span><strong>{copy.vehicleModel}</strong>{vehicle.eesIdentity.vehicleModel ?? "—"}</span>
-          <span><strong>{copy.vehicleType}</strong>{vehicleTypeLabel ?? "—"}</span>
-          <span className={styles.driverIdentity}><strong>{copy.assignedDriver}</strong>{vehicle.eesIdentity.assignedDriverName ?? driverAssignment}</span>
-        </div>
+        <p className={styles.driverLine}><strong>{copy.assignedDriver}</strong><span>{vehicle.eesIdentity.assignedDriverName ?? driverAssignment}</span></p>
       ) : <p className={styles.identityNotice}>{identitySummary}</p>}
 
       <div className={styles.operationalPills}>
         <span className={styles.activityPill + " " + pillClass(getMotionState(vehicle))}><Activity size={13} />{activityLabel(vehicle, copy)}</span>
-        <span className={styles.statusPill + " " + (vehicle.trackerConnectivity === "connected" ? styles.toneVerified : vehicle.trackerConnectivity === "disconnected" ? styles.toneWarning : styles.toneUnknown)}>{trackerLabel(vehicle, copy)}</span>
-        <span className={styles.statusPill + " " + freshnessTone(vehicle)}>{rosterFreshnessLabel(vehicle, copy)}</span>
+        <span className={styles.statusPill + " " + confidenceTone(vehicle)}>{confidenceLabel(vehicle, copy)}</span>
       </div>
 
       <div className={styles.performanceGrid}>
@@ -326,7 +327,7 @@ function VehicleDetails({ vehicle, language, copy, onClose, onShowReportedPositi
         <div className={styles.positionHeading}>
           <span className={styles.positionIcon}><MapPin size={15} /></span>
           <div className={styles.positionTitleBlock}>
-            <strong>{copy.location}</strong>
+            <strong>{positionTitle}</strong>
             <span className={styles.positionAddress}>{locationLabel(vehicle, language, copy)}</span>
           </div>
           <span className={styles.confidenceBadge + " " + confidenceTone(vehicle)}>{confidenceLabel(vehicle, copy)}</span>
@@ -335,9 +336,7 @@ function VehicleDetails({ vehicle, language, copy, onClose, onShowReportedPositi
           <div><span>{copy.sourceTimestamp}</span><strong>{sourceTimeLabel(vehicle, language, copy)}</strong></div>
           <div><span>{copy.reportFreshnessLabel}</span><strong className={freshnessTone(vehicle)}>{rosterFreshnessLabel(vehicle, copy)}</strong></div>
         </div>
-        <p className={verifiedFreshPosition ? styles.positionVerifiedHint : styles.positionWarning}>
-          {verifiedFreshPosition ? copy.verifiedPositionNote : copy.unverifiedPositionWarning}
-        </p>
+        {!verifiedFreshPosition ? <p className={styles.positionWarning}>{copy.positionCaution}</p> : null}
         {canShowUnverifiedReportedPosition(vehicle) && !showUnverifiedPositions ? (
           <button type="button" className={styles.showReportedButton} onClick={onShowReportedPosition}>{copy.showLastReported}</button>
         ) : null}
@@ -348,14 +347,15 @@ function VehicleDetails({ vehicle, language, copy, onClose, onShowReportedPositi
       </section>
 
       <div className={styles.actions} aria-label={copy.detailsActions}>
-        <button type="button" aria-expanded={journeyOpen} onClick={() => setJourneyOpen((open) => !open)} title={copy.historyUnavailable}><Clock3 size={15} />{copy.journeyHistory}</button>
-        <button type="button" disabled title={copy.historyUnavailable}><MapPin size={15} />{copy.parkingHistory}</button>
         {mapsUrl
           ? <a href={mapsUrl} target="_blank" rel="noreferrer"><MapPinned size={15} />{copy.openGoogleMaps}</a>
           : <button type="button" disabled title={copy.mapsUnavailable}><MapPinned size={15} />{copy.googleMaps}</button>}
       </div>
-      <p className={styles.actionNote}>{copy.historyUnavailable}</p>
-      {journeyOpen ? <JourneyHistoryPanel vehicle={vehicle} language={language} copy={copy} /> : null}
+      <details className={styles.upcoming}>
+        <summary>{copy.upcoming}</summary>
+        <p>{copy.historyUnavailable}</p>
+        <span>{copy.journeyHistory} · {copy.parkingHistory}</span>
+      </details>
 
       <details className={styles.technical}>
         <summary>{copy.technical}</summary>
@@ -386,6 +386,7 @@ export function FleetTrackingV2LiveWorkspace({ showFixtureLink }: { showFixtureL
   const [filter, setFilter] = useState<Filter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [rosterOpen, setRosterOpen] = useState(false);
   const [clusterIds, setClusterIds] = useState<string[] | null>(null);
   const [clusterQuery, setClusterQuery] = useState("");
   const [command, setCommand] = useState<Command>({ type: "fit", sequence: 0 });
@@ -393,6 +394,11 @@ export function FleetTrackingV2LiveWorkspace({ showFixtureLink }: { showFixtureL
   const [dataState, setDataState] = useState<LoadState>({ status: "loading" });
   const startedRef = useRef(false);
   const activeRef = useRef(true);
+  const rosterSearchRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (rosterOpen) rosterSearchRef.current?.focus();
+  }, [rosterOpen]);
 
   const loadLiveData = useCallback(async () => {
     setDataState({ status: "loading" });
@@ -468,6 +474,7 @@ export function FleetTrackingV2LiveWorkspace({ showFixtureLink }: { showFixtureL
     if (!vehicle) return;
     setSelectedId(id);
     setDetailsOpen(true);
+    setRosterOpen(false);
     setClusterIds(null);
     if (canFocusVehicle(vehicle)) {
       setCommand((current) => ({ type: "focus", sequence: current.sequence + 1, key: id }));
@@ -495,8 +502,8 @@ export function FleetTrackingV2LiveWorkspace({ showFixtureLink }: { showFixtureL
           <h1 className={styles.title}>{copy.title}</h1>
           <p className={styles.notice}>
             <span className={styles.liveDot} aria-hidden="true" />
-            {dataState.status === "loading" ? copy.loading : dataState.status === "error" ? copy.errorTitle : copy.sourceNote}
-            {dataState.status === "ready" && dataState.fetchedAt ? <span className={styles.fetchedAt}>{copy.fetched} · {formatReportTime(dataState.fetchedAt, language) ?? dataState.fetchedAt}</span> : null}
+            {dataState.status === "loading" ? copy.loading : dataState.status === "error" ? copy.errorTitle : copy.lastRefresh}
+            {dataState.status === "ready" ? <span className={styles.fetchedAt}>{dataState.fetchedAt ? formatReportTime(dataState.fetchedAt, language) ?? dataState.fetchedAt : "—"}</span> : null}
           </p>
         </div>
         <div className={styles.headerActions}>
@@ -513,34 +520,22 @@ export function FleetTrackingV2LiveWorkspace({ showFixtureLink }: { showFixtureL
       </header>
 
       <section className={styles.summaryStrip} aria-label={copy.metricsRecords} aria-live="polite">
-        <article className={styles.summaryCard}>
-          <span className={styles.summaryIcon}><Truck size={16} /></span>
-          <div><span className={styles.summaryLabel}>{copy.metricsRecords}</span><strong>{ready ? vehicles.length : "—"}</strong><small>{ready ? copy.sourceNote : copy.summaryUnavailable}</small></div>
-        </article>
-        <article className={styles.summaryCard}>
-          <span className={styles.summaryIcon}><Activity size={16} /></span>
-          <div><span className={styles.summaryLabel}>{copy.metricsActivity}</span><strong>{ready ? `${fleetSummary.activity.driving} ${copy.movingShort} · ${fleetSummary.activity.stopped} ${copy.stoppedShort}` : "—"}</strong><small>{ready ? `${fleetSummary.activity.uncertain} ${copy.uncertainShort} · ${fleetSummary.activity.unavailable} ${copy.unavailableShort}` : copy.summaryUnavailable}</small></div>
-        </article>
-        <article className={styles.summaryCard}>
-          <span className={styles.summaryIcon}><MapPinned size={16} /></span>
-          <div><span className={styles.summaryLabel}>{copy.metricsGps}</span><strong>{ready ? `${fleetSummary.gps.verified} / ${vehicles.length}` : "—"}</strong><small>{ready ? `${fleetSummary.gps.unverified} ${copy.unverifiedCount} · ${fleetSummary.gps.unavailable} ${copy.confidenceUnknownShort}` : copy.summaryUnavailable}</small></div>
-        </article>
-        <article className={styles.summaryCard}>
-          <span className={styles.summaryIcon}><Clock3 size={16} /></span>
-          <div><span className={styles.summaryLabel}>{copy.metricsReports}</span><strong>{ready ? `${fleetSummary.reports.current} ${copy.reportsCurrent}` : "—"}</strong><small>{ready ? `${fleetSummary.reports.stale} ${copy.reportsStale} · ${fleetSummary.reports.unknown} ${copy.reportsUnknown}` : copy.summaryUnavailable}</small></div>
-        </article>
+        <span><Truck size={16} /><strong>{ready ? vehicles.length : "—"}</strong>{copy.metricsRecords}</span>
+        <span><Activity size={16} /><strong>{ready ? fleetSummary.activity.driving : "—"}</strong>{copy.movingShort}<b aria-hidden="true">/</b><strong>{ready ? fleetSummary.activity.stopped : "—"}</strong>{copy.stoppedShort}{ready && fleetSummary.activity.uncertain > 0 ? <em>+{fleetSummary.activity.uncertain} {copy.uncertainShort}</em> : null}{ready && fleetSummary.activity.unavailable > 0 ? <em>+{fleetSummary.activity.unavailable} {copy.unavailableShort}</em> : null}</span>
+        <span><MapPinned size={16} /><strong>{ready ? fleetSummary.gps.verified : "—"}</strong>{copy.verifiedShort}{ready ? <em>{fleetSummary.gps.unverified} {copy.unverifiedCount}{fleetSummary.gps.unavailable > 0 ? ` · ${fleetSummary.gps.unavailable} ${copy.confidenceUnknownShort}` : ""}</em> : null}</span>
       </section>
 
       {dataState.status === "error" ? <section className={styles.errorBanner} role="alert"><strong>{copy.errorHelp}</strong><span>{dataState.message}</span></section> : null}
       {dataState.status === "ready" && !dataState.vehicleRegistryAvailable ? <p className={styles.registryNotice} role="status">{copy.identityUnavailable}</p> : null}
 
       <div className={showDetails ? styles.body + " " + styles.bodyWithInspector : styles.body}>
-        <aside className={styles.roster} aria-label={copy.roster}>
+        {rosterOpen ? <button type="button" className={styles.drawerScrim} aria-label={copy.closeVehicles} onClick={() => setRosterOpen(false)} /> : null}
+        <aside id="fleet-v2-live-roster" className={styles.roster + (rosterOpen ? " " + styles.rosterOpen : "")} aria-label={copy.roster}>
           <div className={styles.rosterHead}>
-            <div className={styles.rosterHeadRow}><div><h2 className={styles.rosterTitle}>{copy.roster}</h2><p className={styles.rosterHint}>{copy.rosterHint}</p></div><span className={styles.count}>{dataState.status === "ready" ? String(visible.length) : "—"}</span></div>
+            <div className={styles.rosterHeadRow}><h2 className={styles.rosterTitle}>{copy.roster}</h2><span className={styles.count}>{dataState.status === "ready" ? String(visible.length) : "—"}</span><button type="button" className={styles.rosterClose} aria-label={copy.closeVehicles} onClick={() => setRosterOpen(false)}><X size={18} /></button></div>
             <label className={styles.searchBox}>
               <Search size={15} aria-hidden="true" />
-              <input type="search" className={styles.search} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={copy.search} aria-label={copy.search} />
+              <input ref={rosterSearchRef} type="search" className={styles.search} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={copy.rosterSearch} aria-label={copy.search} />
               {query ? <button type="button" className={styles.clearSearch} onClick={() => setQuery("")} aria-label={copy.closeDetails}><X size={14} /></button> : null}
             </label>
             <div className={styles.filters}>{filters.map((value) => <button key={value} type="button" aria-pressed={filter === value} onClick={() => setFilter(value)}>{value === "all" ? copy.all : copy[value]}</button>)}</div>
@@ -560,16 +555,15 @@ export function FleetTrackingV2LiveWorkspace({ showFixtureLink }: { showFixtureL
                     <strong className={styles.reg}>{vehicle.registration || copy.registrationUnavailable}</strong>
                     <span className={styles.activityPill + " " + pillClass(motion)}>{activityLabel(vehicle, copy)}</span>
                   </span>
-                  <span className={styles.vehicleIdentity} data-matched={vehicle.eesIdentity.status === "matched"}>
-                    {identity}{vehicle.eesIdentity.status === "matched" && vehicle.eesIdentity.assignedDriverName ? ` · ${vehicle.eesIdentity.assignedDriverName}` : ""}
-                  </span>
+                  <span className={styles.vehicleIdentity} data-matched={vehicle.eesIdentity.status === "matched"}>{identity}</span>
+                  {vehicle.eesIdentity.status === "matched" && vehicle.eesIdentity.assignedDriverName ? <span className={styles.vehicleDriver}>{vehicle.eesIdentity.assignedDriverName}</span> : null}
                   <span className={styles.vehicleRowFooter}>
                     <span className={styles.rowSpeed}><Gauge size={13} />{speed}</span>
                     <span className={styles.rowStatus}><Activity size={12} />{copy.engine} · {engineLabel(vehicle, copy)}</span>
-                    <span className={styles.rowStatus + " " + freshnessTone(vehicle)}><Clock3 size={12} />{rosterFreshnessLabel(vehicle, copy)}</span>
                     <span className={styles.rowStatus + " " + confidenceTone(vehicle)}><MapPin size={12} />{shortConfidence}</span>
                     {vehicle.trackerConnectivity === "disconnected" ? <span className={styles.rowStatus + " " + styles.toneWarning}>{copy.trackerOffline}</span> : null}
                   </span>
+                  <span className={styles.vehicleTime + " " + freshnessTone(vehicle)}><Clock3 size={12} />{sourceTimeLabel(vehicle, language, copy)}{vehicle.reportFreshness !== "current" ? ` · ${rosterFreshnessLabel(vehicle, copy)}` : ""}</span>
                 </button>
               );
             }) : null}
@@ -578,7 +572,7 @@ export function FleetTrackingV2LiveWorkspace({ showFixtureLink }: { showFixtureL
 
         <main className={styles.mapPane} aria-label={copy.mapTitle}>
           <div className={styles.mapHeader}>
-            <div><h2>{copy.mapTitle}</h2><p>{ready ? `${fleetSummary.gps.verified} ${copy.verifiedShort} · ${vehicles.length} ${copy.metricsRecords.toLocaleLowerCase()}` : copy.summaryUnavailable}</p></div>
+            <div className={styles.mapHeading}><button type="button" className={styles.mobileRosterButton} onClick={() => setRosterOpen(true)} aria-label={copy.openVehicles} aria-expanded={rosterOpen} aria-controls="fleet-v2-live-roster"><Menu size={18} />{copy.openVehicles}</button><h2>{copy.mapTitle}</h2></div>
             <button type="button" className={styles.fitButton} onClick={fitArea} disabled={!ready}><MapPinned size={15} />{copy.fitArea}</button>
           </div>
           <div className={styles.mapTools}>
@@ -588,13 +582,10 @@ export function FleetTrackingV2LiveWorkspace({ showFixtureLink }: { showFixtureL
                 {copy.allReportedPositions} <span>{reportedPositionCount}</span>
               </button>
             </div>
-            <p className={styles.modeHint} aria-live="polite">
-              {showUnverifiedPositions ? copy.diagnosticModeHint : copy.dailyModeHint}
-              {remoteVerifiedPositionCount > 0 ? <> <strong>{remoteVerifiedPositionCount}</strong> {copy.remoteFitHint}</> : null}
-            </p>
+            {remoteVerifiedPositionCount > 0 ? <span className={styles.remoteHint} title={copy.remoteFitHint}>{remoteVerifiedPositionCount} {copy.remoteOutside}</span> : null}
             <div className={styles.mapLegend} role="group" aria-label={copy.mapLegend}>
               <span><i className={styles.verifiedSwatch} aria-hidden="true" />{copy.verifiedMarker}</span>
-              <span><i className={styles.reportedSwatch} aria-hidden="true" />{copy.reportedMarker}</span>
+              {showUnverifiedPositions ? <span><i className={styles.reportedSwatch} aria-hidden="true" />{copy.reportedMarker}</span> : null}
             </div>
           </div>
           <div className={styles.mapCanvas}>

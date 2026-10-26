@@ -107,7 +107,7 @@ export const FleetTrackingV2Map = memo(function FleetTrackingV2Map({
   const nodeRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<import("leaflet").Map | null>(null);
   const leafletRef = useRef<LeafletModule | null>(null);
-  const markersRef = useRef(new Map<string, { marker: FleetMarker; motion: string; selected: boolean; reported: boolean }>());
+  const markersRef = useRef(new Map<string, { marker: FleetMarker; motion: string; selected: boolean; reported: boolean; registration: string }>());
   const groupsRef = useRef(new Map<string, { marker: FleetMarker; memberIds: string[] }>());
   const onSelectRef = useRef(onSelect);
   const onClusterRef = useRef(onCluster);
@@ -201,7 +201,7 @@ export const FleetTrackingV2Map = memo(function FleetTrackingV2Map({
           }));
           const groups = getMarkerCollisionGroups(
             entries.map(({ key, point }) => ({ key, x: point.x, y: point.y })),
-            FLEET_V2_COLLISION_RADIUS_PX
+            currentMap.getZoom() >= 12 ? Math.min(15, FLEET_V2_COLLISION_RADIUS_PX) : Math.min(22, FLEET_V2_COLLISION_RADIUS_PX)
           );
           const clustered = new Set(groups.flat());
           for (const { key, entry } of entries) {
@@ -220,7 +220,7 @@ export const FleetTrackingV2Map = memo(function FleetTrackingV2Map({
               icon: groupIcon(currentLeaflet, memberIds.length, selected, hasReportedPosition),
               zIndexOffset: selected ? 900 : 400,
               keyboard: true,
-              title: String(memberIds.length)
+              title: memberIds.map((id) => markersRef.current.get(id)?.registration).filter(Boolean).join(" · ")
             }).addTo(currentMap);
             marker.on("click", () => expandCluster(memberIds));
             groupsRef.current.set(memberIds.slice().sort().join("|"), { marker, memberIds });
@@ -278,6 +278,7 @@ export const FleetTrackingV2Map = memo(function FleetTrackingV2Map({
           existing.reported = reported;
         }
         existing.marker.setZIndexOffset(selected ? 1200 : 0);
+        existing.registration = vehicle.registration;
       } else {
         const marker = Leaflet.marker([vehicle.latitude, vehicle.longitude], {
           icon: markerIcon(Leaflet, motion, selected, vehicle.registration, reported),
@@ -286,7 +287,7 @@ export const FleetTrackingV2Map = memo(function FleetTrackingV2Map({
           zIndexOffset: selected ? 1200 : 0
         });
         marker.on("click", () => onSelectRef.current(vehicle.id));
-        markersRef.current.set(vehicle.id, { marker, motion, selected, reported });
+        markersRef.current.set(vehicle.id, { marker, motion, selected, reported, registration: vehicle.registration });
       }
     }
     spatialUpdateRef.current();
@@ -312,7 +313,7 @@ export const FleetTrackingV2Map = memo(function FleetTrackingV2Map({
     if (command.type === "focus" && command.key) {
       const marker = markersRef.current.get(command.key)?.marker;
       if (!marker) return;
-      map.flyTo(marker.getLatLng(), FLEET_V2_FOCUS_ZOOM, { duration: 0.28 });
+      map.flyTo(marker.getLatLng(), Math.max(map.getZoom(), FLEET_V2_FOCUS_ZOOM), { duration: 0.28 });
     }
   }, [command, ready, showUnverifiedPositions, vehicles]);
 

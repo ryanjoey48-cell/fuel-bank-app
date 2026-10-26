@@ -305,14 +305,17 @@ test("identity presentation prefers one readable type and keeps raw EES classifi
   assert.ok(workspace.includes('vehicleCategoryRaw: "หมวดรถ EES ดิบ"'));
 });
 
-test("desktop workspace fills the available height and keeps a three-panel layout before tablet overlay", () => {
+test("desktop map dominates a readable three-panel workspace and mobile uses a drawer and bottom sheet", () => {
   const css = fs.readFileSync(path.join(root, "components/fleet-tracking-v2/live-workspace.module.css"), "utf8");
   assert.ok(css.includes("height: calc(100dvh - 126px)"));
-  assert.match(css, /@media \(min-width: 1200px\)[\s\S]*?\.bodyWithInspector\s*\{\s*grid-template-columns: minmax\(250px, 280px\) minmax\(0, 1fr\) minmax\(320px, 350px\)/);
+  assert.match(css, /@media \(min-width: 1151px\)[\s\S]*?\.bodyWithInspector\s*\{\s*grid-template-columns: minmax\(265px, 300px\) minmax\(0, 1fr\) minmax\(300px, 345px\)/);
+  assert.match(css, /@media \(min-width: 901px\) and \(max-width: 1150px\)[\s\S]*?grid-column: 1 \/ -1/);
   assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.body,\s*\.bodyWithInspector\s*\{\s*display: flex/);
-  assert.match(css, /\.mapPane\s*\{[^}]*height: clamp\(290px, 46dvh, 460px\)/);
+  assert.match(css, /\.mapPane\s*\{[^}]*height: clamp\(410px, 64dvh, 760px\)/);
+  assert.match(css, /\.rosterOpen\s*\{\s*transform: translateX\(0\)/);
+  assert.match(css, /\.inspector\s*\{[^}]*max-height: min\(62dvh, 580px\)/);
   assert.match(css, /\.mapTools\s*\{[^}]*position: relative/);
-  assert.match(css, /@media \(max-width: 480px\)[\s\S]*?\.modeButton\s*\{[^}]*min-height: 36px/);
+  assert.match(css, /@media \(max-width: 480px\)[\s\S]*?\.modeButton\s*\{[^}]*min-height: 38px/);
   assert.match(css, /@media \(max-width: 480px\)[\s\S]*?\.modeSelector\s*\{\s*width: 100%;/);
 });
 
@@ -387,7 +390,8 @@ test("live workspace keeps diagnostic positions opt-in and provides clear histor
   assert.ok(workspace.includes("https://www.google.com/maps/search/?api=1&query="));
   assert.ok(workspace.includes("copy.journeyHistory"));
   assert.ok(workspace.includes("copy.parkingHistory"));
-  assert.ok(workspace.includes("disabled title={copy.historyUnavailable}"));
+  assert.ok(workspace.includes("<details className={styles.upcoming}>"));
+  assert.equal(workspace.includes("<JourneyHistoryPanel"), false);
   assert.ok(workspace.includes("summarizeLiveFleet(vehicles)"));
   assert.equal(workspace.includes("/api/vehicle/trips"), false);
   assert.equal(workspace.includes("/api/vehicle/parkingTrip"), false);
