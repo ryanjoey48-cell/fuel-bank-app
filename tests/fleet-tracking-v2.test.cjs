@@ -141,7 +141,7 @@ test("English and Thai copy exist and the prototype stays off live Forth, Supaba
   assert.ok(ui.includes("canFocusVehicle(vehicle)"));
   assert.ok(ui.includes("setDetailsOpen(false)"));
   assert.ok(ui.includes("FLEET_V2_FOCUS_ZOOM"));
-  assert.ok(ui.includes("shouldOpenClusterPicker"));
+  assert.ok(ui.includes("const expandCluster = (memberIds: string[]) => onClusterRef.current([...memberIds])"));
   assert.ok(css.includes("grid-template-columns: 280px minmax(0, 1fr)"));
   assert.ok(css.includes("position: absolute"));
   assert.ok(css.includes(".bodyRosterOpen"));

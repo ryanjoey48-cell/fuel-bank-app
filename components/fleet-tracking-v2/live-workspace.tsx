@@ -5,6 +5,7 @@ import { Activity, Clock3, Gauge, MapPin, MapPinned, RefreshCw, Search, Truck, X
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/lib/language-provider";
+import { getPortalVehicleTypeLabel } from "@/lib/driver-vehicle-types";
 import { adaptForthFleetResponse, attachUniqueActiveDriverAssignments, canOpenVerifiedGoogleMaps, matchesLiveVehicleSearch, type FleetTrackingV2LiveVehicle, type LiveEesVehicleIdentity } from "@/lib/fleet-tracking-v2/live-adapter";
 import { canFocusVehicle, canShowUnverifiedReportedPosition, formatReportTime, getMotionState, type MotionState } from "@/lib/fleet-tracking-v2/view";
 import { summarizeLiveFleet } from "@/lib/fleet-tracking-v2/summary";
@@ -65,6 +66,7 @@ const LIVE_COPY = {
     assignedDriver: "Confirmed EES driver", noUniqueAssignment: "No unique active EES assignment",
     noDriverAssignment: "No active EES driver assignment", assignmentUnavailable: "EES driver assignment unavailable",
     sourceRegistration: "Forth-reported registration", forthReportedDriver: "Forth-reported driver",
+    vehicleTypeRaw: "Raw EES vehicle type", vehicleCategoryRaw: "Raw EES vehicle category",
     metricsRecords: "Forth records", metricsActivity: "Activity reported", metricsGps: "GPS confidence", metricsReports: "Source reports",
     movingShort: "moving", stoppedShort: "stopped", uncertainShort: "uncertain", unavailableShort: "unavailable",
     verifiedShort: "verified", unverifiedCount: "unverified", confidenceUnknownShort: "confidence unknown",
@@ -123,6 +125,7 @@ const LIVE_COPY = {
     assignedDriver: "คนขับ EES ที่ยืนยันแล้ว", noUniqueAssignment: "ไม่มีการมอบหมายคนขับที่ไม่ซ้ำ",
     noDriverAssignment: "ไม่มีการมอบหมายคนขับ EES ที่ยังใช้งาน", assignmentUnavailable: "ไม่มีข้อมูลการมอบหมายคนขับ EES",
     sourceRegistration: "ทะเบียนที่ Forth รายงาน", forthReportedDriver: "คนขับที่ Forth รายงาน",
+    vehicleTypeRaw: "ประเภทรถ EES ดิบ", vehicleCategoryRaw: "หมวดรถ EES ดิบ",
     metricsRecords: "รายการจาก Forth", metricsActivity: "สถานะที่รายงาน", metricsGps: "ความเชื่อมั่น GPS", metricsReports: "รายงานต้นทาง",
     movingShort: "กำลังเคลื่อนที่", stoppedShort: "หยุด", uncertainShort: "ไม่แน่ชัด", unavailableShort: "ไม่พร้อมใช้งาน",
     verifiedShort: "ยืนยันแล้ว", unverifiedCount: "ยังไม่ยืนยัน", confidenceUnknownShort: "ไม่ทราบความเชื่อมั่น",
@@ -199,9 +202,18 @@ function engineLabel(vehicle: FleetTrackingV2LiveVehicle, copy: (typeof LIVE_COP
   return copy.engineUnknown;
 }
 
-function identitySummaryLabel(vehicle: FleetTrackingV2LiveVehicle, copy: (typeof LIVE_COPY)[Language]) {
+function formatIdentityType(value: string | null, language: Language) {
+  if (!value) return null;
+  const knownLabel = getPortalVehicleTypeLabel(value, language);
+  if (knownLabel) return knownLabel;
+  return value.trim().split(/[_\s-]+/).filter(Boolean)
+    .map((part) => part.charAt(0) + part.slice(1).toLocaleLowerCase())
+    .join(" ");
+}
+
+function identitySummaryLabel(vehicle: FleetTrackingV2LiveVehicle, language: Language, copy: (typeof LIVE_COPY)[Language]) {
   if (vehicle.eesIdentity.status === "matched") {
-    return [vehicle.eesIdentity.vehicleModel, vehicle.eesIdentity.vehicleType, vehicle.eesIdentity.vehicleCategory]
+    return [vehicle.eesIdentity.vehicleModel, formatIdentityType(vehicle.eesIdentity.vehicleType ?? vehicle.eesIdentity.vehicleCategory, language)]
       .filter((value): value is string => Boolean(value))
       .join(" · ") || copy.identityMatched;
   }
@@ -249,7 +261,8 @@ function VehicleDetails({ vehicle, language, copy, onClose, onShowReportedPositi
     : vehicle.eesIdentity.driverAssignmentStatus === "unavailable"
       ? copy.assignmentUnavailable
       : copy.noDriverAssignment;
-  const identitySummary = identitySummaryLabel(vehicle, copy);
+  const identitySummary = identitySummaryLabel(vehicle, language, copy);
+  const vehicleTypeLabel = formatIdentityType(vehicle.eesIdentity.vehicleType ?? vehicle.eesIdentity.vehicleCategory, language);
   return (
     <aside className={styles.inspector} aria-labelledby="fleet-v2-live-details-title">
       <div className={styles.inspectorHeader}>
@@ -264,7 +277,7 @@ function VehicleDetails({ vehicle, language, copy, onClose, onShowReportedPositi
       {vehicle.eesIdentity.status === "matched" ? (
         <div className={styles.confirmedIdentity}>
           <span><strong>{copy.vehicleModel}</strong>{vehicle.eesIdentity.vehicleModel ?? "—"}</span>
-          <span><strong>{copy.vehicleType}</strong>{vehicle.eesIdentity.vehicleType ?? vehicle.eesIdentity.vehicleCategory ?? "—"}</span>
+          <span><strong>{copy.vehicleType}</strong>{vehicleTypeLabel ?? "—"}</span>
           <span className={styles.driverIdentity}><strong>{copy.assignedDriver}</strong>{vehicle.eesIdentity.assignedDriverName ?? driverAssignment}</span>
         </div>
       ) : <p className={styles.identityNotice}>{identitySummary}</p>}
@@ -332,6 +345,8 @@ function VehicleDetails({ vehicle, language, copy, onClose, onShowReportedPositi
           <dt>{copy.rawTimestamp}</dt><dd>{vehicle.sourceTimestampRaw ?? "—"}</dd>
           <dt>{copy.device}</dt><dd>{vehicle.deviceId ?? "—"}</dd>
           <dt>{copy.sourceRegistration}</dt><dd>{vehicle.sourceRegistration ?? "—"}</dd>
+          <dt>{copy.vehicleTypeRaw}</dt><dd>{vehicle.eesIdentity.vehicleType ?? "—"}</dd>
+          <dt>{copy.vehicleCategoryRaw}</dt><dd>{vehicle.eesIdentity.vehicleCategory ?? "—"}</dd>
           <dt>{copy.identityReason}</dt><dd>{vehicle.eesIdentity.reason}</dd>
           <dt>{copy.forthReportedDriver}</dt><dd>{vehicle.reportedDriver ?? copy.noDriver}</dd>
         </dl>
@@ -349,7 +364,7 @@ export function FleetTrackingV2LiveWorkspace({ showFixtureLink }: { showFixtureL
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [clusterIds, setClusterIds] = useState<string[] | null>(null);
   const [clusterQuery, setClusterQuery] = useState("");
-  const [command, setCommand] = useState<Command>({ type: "fit", sequence: 1 });
+  const [command, setCommand] = useState<Command>({ type: "fit", sequence: 0 });
   const [showUnverifiedPositions, setShowUnverifiedPositions] = useState(false);
   const [dataState, setDataState] = useState<LoadState>({ status: "loading" });
   const startedRef = useRef(false);
@@ -428,7 +443,7 @@ export function FleetTrackingV2LiveWorkspace({ showFixtureLink }: { showFixtureL
     setSelectedId(id);
     setDetailsOpen(true);
     setClusterIds(null);
-    if (canFocusVehicle(vehicle) || (showUnverifiedPositions && canShowUnverifiedReportedPosition(vehicle))) {
+    if (canFocusVehicle(vehicle)) {
       setCommand((current) => ({ type: "focus", sequence: current.sequence + 1, key: id }));
     }
   }
@@ -510,7 +525,7 @@ export function FleetTrackingV2LiveWorkspace({ showFixtureLink }: { showFixtureL
             {dataState.status === "ready" && visible.length === 0 ? <p className={styles.noResults}>{vehicles.length ? copy.noResults : copy.noRecords}</p> : null}
             {dataState.status === "ready" ? visible.map((vehicle) => {
               const motion = getMotionState(vehicle);
-              const identity = identitySummaryLabel(vehicle, copy);
+              const identity = identitySummaryLabel(vehicle, language, copy);
               const shortConfidence = vehicle.gpsConfidence === "verified" ? copy.gpsVerifiedShort : vehicle.gpsConfidence === "unverified" ? copy.gpsUnverifiedShort : copy.gpsUnknownShort;
               const speed = typeof vehicle.speedKph === "number" ? `${vehicle.speedKph} km/h` : "—";
               return (
@@ -541,11 +556,7 @@ export function FleetTrackingV2LiveWorkspace({ showFixtureLink }: { showFixtureL
           <div className={styles.mapTools}>
             <label className={styles.unverifiedToggle}>
               <input type="checkbox" checked={showUnverifiedPositions} disabled={reportedPositionCount === 0} onChange={(event) => {
-                const enabled = event.target.checked;
-                setShowUnverifiedPositions(enabled);
-                if (enabled && selected && canShowUnverifiedReportedPosition(selected)) {
-                  setCommand((current) => ({ type: "focus", sequence: current.sequence + 1, key: selected.id }));
-                }
+                setShowUnverifiedPositions(event.target.checked);
               }} />
               <span>{copy.showUnverified} ({reportedPositionCount})</span>
             </label>

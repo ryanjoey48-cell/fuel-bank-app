@@ -37,7 +37,7 @@ const forth = loadTypeScriptModule("lib/forth-tracking.ts");
 const forthView = loadTypeScriptModule("lib/forth-tracking-view.ts");
 const v2View = loadTypeScriptModule("lib/fleet-tracking-v2/view.ts");
 const v2Summary = loadTypeScriptModule("lib/fleet-tracking-v2/summary.ts");
-const { canShowUnverifiedReportedPosition, getVisibleMapVehicles } = v2View;
+const { canShowUnverifiedReportedPosition, getFleetFitPositions, getVisibleMapVehicles } = v2View;
 const adapter = loadWithMocks("lib/fleet-tracking-v2/live-adapter.ts", {
   "@/lib/forth-tracking": forth,
   "@/lib/forth-tracking-view": forthView,
@@ -226,6 +226,81 @@ test("unverified source coordinates stay out of the default map set and remain u
   assert.deepEqual([unverified.latitude, unverified.longitude], original);
   assert.equal(canShowUnverifiedReportedPosition({ ...unverified, coordinateStatus: "invalid" }), false);
   assert.equal(canShowUnverifiedReportedPosition({ ...unverified, latitude: 95 }), false);
+});
+
+test("fleet fit uses only legal coordinates in the operating area and includes unverified reports only after opt-in", () => {
+  const result = adapter.adaptForthFleetResponse(payload([
+    record({ gpsDeviceId: "verified-depot" }),
+    record({ gpsDeviceId: "stale-nearby", latitude: 13.76, longitude: 100.51, timestampStatus: "stale" }),
+    record({ gpsDeviceId: "wifi-nearby", latitude: 13.74, longitude: 100.49, positionQuality: "wifi" }),
+    record({ gpsDeviceId: "verified-outlier", latitude: 18.7883, longitude: 98.9853 }),
+    record({ gpsDeviceId: "invalid-coordinate", latitude: 95, longitude: 181 })
+  ]), []);
+  assert.equal(result.status, "ready");
+  const vehicles = result.records;
+  const before = vehicles.map((vehicle) => [vehicle.latitude, vehicle.longitude]);
+  const defaultFit = getFleetFitPositions(vehicles);
+  assert.equal(defaultFit.length, 1);
+  assert.deepEqual(defaultFit[0], [13.7563, 100.5018]);
+
+  const optedInFit = getFleetFitPositions(vehicles, true);
+  assert.equal(optedInFit.length, 3);
+  assert.ok(optedInFit.some(([latitude, longitude]) => latitude === 13.76 && longitude === 100.51));
+  assert.ok(optedInFit.some(([latitude, longitude]) => latitude === 13.74 && longitude === 100.49));
+  assert.equal(optedInFit.some(([latitude]) => latitude === 18.7883 || latitude === 95), false);
+  assert.deepEqual(vehicles.map((vehicle) => [vehicle.latitude, vehicle.longitude]), before);
+  assert.equal(v2View.canFocusVehicle({ ...vehicles[1], gpsTrust: "verified", coordinateStatus: "invalid" }), false);
+});
+
+test("unverified toggle and selection preserve map position; verified selection alone requests focus", () => {
+  const workspace = fs.readFileSync(path.join(root, "components/fleet-tracking-v2/live-workspace.tsx"), "utf8");
+  const map = fs.readFileSync(path.join(root, "components/fleet-tracking-v2/fleet-map.tsx"), "utf8");
+  const toggleStart = workspace.indexOf('<input type="checkbox" checked={showUnverifiedPositions}');
+  const toggleEnd = workspace.indexOf("<span>{copy.showUnverified}", toggleStart);
+  const toggle = workspace.slice(toggleStart, toggleEnd);
+  assert.ok(toggle.includes("setShowUnverifiedPositions(event.target.checked)"));
+  assert.doesNotMatch(toggle, /setCommand|flyTo|fitBounds|setView/);
+
+  const selectStart = workspace.indexOf("function selectVehicle(id: string)");
+  const selectEnd = workspace.indexOf("function showReportedPositionOnMap()", selectStart);
+  const select = workspace.slice(selectStart, selectEnd);
+  assert.match(select, /if \(canFocusVehicle\(vehicle\)\)/);
+  assert.doesNotMatch(select, /showUnverifiedPositions|canShowUnverifiedReportedPosition/);
+
+  assert.ok(map.includes("const expandCluster = (memberIds: string[]) => onClusterRef.current([...memberIds])"));
+  assert.match(map, /fitArea\(map, Leaflet, getFleetFitPositions\(vehicles, showUnverifiedPositions\)\)/);
+  assert.match(map, /fittedRef\.current \|\| vehicles\.length === 0/);
+  const markerUpdatePosition = map.indexOf("const nextIds = new Set(mapVehicles");
+  const markerEffectStart = map.lastIndexOf("useEffect(() => {", markerUpdatePosition);
+  const markerEffectEnd = map.indexOf("useEffect(() => {", markerEffectStart + 1);
+  const markerEffect = map.slice(markerEffectStart, markerEffectEnd);
+  assert.doesNotMatch(markerEffect, /fitBounds|flyTo|setView|fitArea/);
+  assert.equal(workspace.includes('useState<Command>({ type: "fit", sequence: 0 })'), true);
+  assert.match(workspace, /const visible = useMemo\(\(\) => vehicles\.filter/);
+  assert.match(workspace, /<FleetTrackingV2Map vehicles=\{vehicles\}/);
+  const refreshStart = workspace.indexOf("const loadLiveData = useCallback");
+  const refreshEnd = workspace.indexOf("useEffect(() => {", refreshStart);
+  assert.doesNotMatch(workspace.slice(refreshStart, refreshEnd), /setCommand|fitArea/);
+});
+
+test("identity presentation prefers one readable type and keeps raw EES classifications in technical details", () => {
+  const workspace = fs.readFileSync(path.join(root, "components/fleet-tracking-v2/live-workspace.tsx"), "utf8");
+  assert.ok(workspace.includes("getPortalVehicleTypeLabel(value, language)"));
+  assert.ok(workspace.includes("vehicle.eesIdentity.vehicleType ?? vehicle.eesIdentity.vehicleCategory"));
+  assert.ok(workspace.includes("copy.vehicleTypeRaw"));
+  assert.ok(workspace.includes("copy.vehicleCategoryRaw"));
+  assert.ok(workspace.includes('vehicleTypeRaw: "Raw EES vehicle type"'));
+  assert.ok(workspace.includes('vehicleCategoryRaw: "Raw EES vehicle category"'));
+  assert.ok(workspace.includes('vehicleTypeRaw: "ประเภทรถ EES ดิบ"'));
+  assert.ok(workspace.includes('vehicleCategoryRaw: "หมวดรถ EES ดิบ"'));
+});
+
+test("desktop workspace fills the available height and keeps a three-panel layout before tablet overlay", () => {
+  const css = fs.readFileSync(path.join(root, "components/fleet-tracking-v2/live-workspace.module.css"), "utf8");
+  assert.ok(css.includes("height: calc(100dvh - 126px)"));
+  assert.match(css, /@media \(min-width: 1200px\)[\s\S]*?\.bodyWithInspector\s*\{\s*grid-template-columns: minmax\(250px, 280px\) minmax\(0, 1fr\) minmax\(320px, 350px\)/);
+  assert.match(css, /@media \(max-width: 900px\)[\s\S]*?\.body,\s*\.bodyWithInspector\s*\{\s*display: flex/);
+  assert.match(css, /\.mapPane\s*\{[^}]*height: clamp\(290px, 46dvh, 460px\)/);
 });
 
 test("EES model, type and driver display only for a unique vehicle and one active assignment", () => {

@@ -30,6 +30,7 @@ export const FLEET_V2_DEFAULT_ZOOM = 9;
 
 export function isTrustedMapPosition(vehicle: FleetV2Vehicle) {
   return vehicle.gpsTrust === "verified" &&
+    (vehicle.coordinateStatus === undefined || vehicle.coordinateStatus === "valid") &&
     typeof vehicle.latitude === "number" &&
     typeof vehicle.longitude === "number" &&
     Number.isFinite(vehicle.latitude) &&
@@ -93,7 +94,17 @@ export function distanceKm(from: [number, number], to: [number, number]) {
 }
 
 export function getOperatingAreaPositions(vehicles: FleetV2Vehicle[]): [number, number][] {
-  return getMapVehicles(vehicles)
+  return getFleetFitPositions(vehicles);
+}
+
+/** Keep explicit fleet fits inside the useful EES operating area. */
+export function getFleetFitPositions(
+  vehicles: FleetV2Vehicle[],
+  includeUnverifiedReportedPositions = false
+): [number, number][] {
+  return vehicles
+    .filter((vehicle) => isTrustedMapPosition(vehicle) ||
+      (includeUnverifiedReportedPositions && canShowUnverifiedReportedPosition(vehicle)))
     .map((vehicle) => [vehicle.latitude as number, vehicle.longitude as number] as [number, number])
     .filter((position) => distanceKm(FLEET_V2_OPERATING_CENTER, position) <= FLEET_V2_OPERATING_RADIUS_KM);
 }

@@ -15,7 +15,7 @@
 }
 
 .dashboardShell {
-  height: calc(100dvh - 150px);
+  height: calc(100dvh - 126px);
   min-height: 440px;
 }
 
@@ -1084,9 +1084,9 @@
 .technicalList dt { color: #79717d; }
 .technicalList dd { min-width: 0; margin: 0; overflow-wrap: anywhere; color: #382b43; font-weight: 650; }
 
-@media (min-width: 1440px) {
+@media (min-width: 1200px) {
   .bodyWithInspector {
-    grid-template-columns: minmax(255px, 280px) minmax(0, 1fr) minmax(315px, 345px);
+    grid-template-columns: minmax(250px, 280px) minmax(0, 1fr) minmax(320px, 350px);
   }
 
   .inspector {
@@ -1097,7 +1097,13 @@
   }
 }
 
-@media (min-width: 901px) and (max-width: 1439px) {
+@media (min-width: 1550px) {
+  .bodyWithInspector {
+    grid-template-columns: minmax(270px, 300px) minmax(0, 1fr) minmax(340px, 380px);
+  }
+}
+
+@media (min-width: 901px) and (max-width: 1199px) {
   .bodyWithInspector .inspector {
     position: absolute;
     top: 0.65rem;

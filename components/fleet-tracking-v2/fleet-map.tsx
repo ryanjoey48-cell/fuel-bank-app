@@ -21,9 +21,8 @@ import {
   getVisibleMapVehicles,
   getMarkerCollisionGroups,
   getMotionState,
-  getOperatingAreaPositions,
+  getFleetFitPositions,
   getVisibleMarkerLabelKeys,
-  shouldOpenClusterPicker
 } from "@/lib/fleet-tracking-v2/view";
 
 type LeafletModule = typeof import("leaflet");
@@ -82,14 +81,18 @@ function groupIcon(Leaflet: LeafletModule, count: number, selected: boolean, has
   });
 }
 function fitArea(map: import("leaflet").Map, Leaflet: LeafletModule, positions: [number, number][]) {
-  if (positions.length === 0) {
+  const validPositions = positions.filter(([latitude, longitude]) =>
+    Number.isFinite(latitude) && Number.isFinite(longitude) &&
+    latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180
+  );
+  if (validPositions.length === 0) {
     map.setView(FLEET_V2_OPERATING_CENTER, FLEET_V2_DEFAULT_ZOOM, { animate: true });
     return;
   }
-  const first = positions[0];
-  const same = positions.every((position) => position[0] === first[0] && position[1] === first[1]);
+  const first = validPositions[0];
+  const same = validPositions.every((position) => position[0] === first[0] && position[1] === first[1]);
   if (same) map.setView(first, 13, { animate: true });
-  else map.fitBounds(Leaflet.latLngBounds(positions), { padding: [48, 48], maxZoom: 11, animate: true });
+  else map.fitBounds(Leaflet.latLngBounds(validPositions), { padding: [48, 48], maxZoom: 11, animate: true });
 }
 
 export const FleetTrackingV2Map = memo(function FleetTrackingV2Map({
@@ -183,24 +186,7 @@ export const FleetTrackingV2Map = memo(function FleetTrackingV2Map({
         };
         labelUpdateRef.current = updateLabels;
 
-        const expandCluster = (memberIds: string[]) => {
-          const currentMap = mapRef.current;
-          const currentLeaflet = leafletRef.current;
-          if (!currentMap || !currentLeaflet) return;
-          const positions = memberIds.flatMap((id) => {
-            const latLng = markersRef.current.get(id)?.marker.getLatLng();
-            return latLng ? [[latLng.lat, latLng.lng] as [number, number]] : [];
-          });
-          if (shouldOpenClusterPicker(positions, currentMap.getZoom(), currentMap.getMaxZoom())) {
-            onClusterRef.current([...memberIds]);
-            return;
-          }
-          currentMap.fitBounds(currentLeaflet.latLngBounds(positions), {
-            padding: [56, 56],
-            maxZoom: Math.min(18, currentMap.getMaxZoom()),
-            animate: true
-          });
-        };
+        const expandCluster = (memberIds: string[]) => onClusterRef.current([...memberIds]);
 
         const updateSpatial = () => {
           const currentMap = mapRef.current;
@@ -311,7 +297,7 @@ export const FleetTrackingV2Map = memo(function FleetTrackingV2Map({
     const Leaflet = leafletRef.current;
     if (!ready || !map || !Leaflet || fittedRef.current || vehicles.length === 0) return;
     fittedRef.current = true;
-    fitArea(map, Leaflet, getOperatingAreaPositions(vehicles));
+    fitArea(map, Leaflet, getFleetFitPositions(vehicles));
   }, [ready, vehicles]);
 
   useEffect(() => {
@@ -320,7 +306,7 @@ export const FleetTrackingV2Map = memo(function FleetTrackingV2Map({
     if (!ready || !map || !Leaflet || command.sequence === lastCommandRef.current) return;
     lastCommandRef.current = command.sequence;
     if (command.type === "fit") {
-      fitArea(map, Leaflet, getOperatingAreaPositions(vehicles));
+      fitArea(map, Leaflet, getFleetFitPositions(vehicles, showUnverifiedPositions));
       return;
     }
     if (command.type === "focus" && command.key) {
@@ -328,7 +314,7 @@ export const FleetTrackingV2Map = memo(function FleetTrackingV2Map({
       if (!marker) return;
       map.flyTo(marker.getLatLng(), FLEET_V2_FOCUS_ZOOM, { duration: 0.28 });
     }
-  }, [command, ready, vehicles]);
+  }, [command, ready, showUnverifiedPositions, vehicles]);
 
   if (failed) return <div className={styles.failed}>{mapUnavailable}</div>;
   return <div className={styles.frame}><div ref={nodeRef} className={styles.canvas} /></div>;
