@@ -1,5 +1,35 @@
 # First Forth Journey History test — preparation only
 
+## Phase 4 runner preparation
+
+`lib/forth-history-controlled-test.ts` now implements the dormant orchestration
+core with injected dependencies and no route or live-service binding. It rejects
+non-Preview context, wrong operator/deployment, missing approval references,
+expired grants, wrong date and ambiguous registration/device associations before
+consuming the grant. It never restores a consumed grant or retries a failed call.
+The existing history panel/parser can display returned sanitized raw records;
+the runner is not connected to that panel.
+
+The concurrency test uses a synthetic atomic store double. It proves the runner
+obeys the store result, not that distributed enforcement is deployed. A real
+durable atomic store, trusted Preview context, verified-user/business permission
+adapter and owner-only invocation surface still need implementation and review.
+Only trusted owner tooling may create grants after checking approval evidence;
+nonempty reference strings alone are not proof of approval. No store, migration,
+credential or environment change is included. The existing report service must
+be reused to retain its timeout and response bounds. Its normalized error status
+is not necessarily the upstream HTTP status; exact status capture must be added
+to the private test adapter before execution, without logging response bodies.
+
+The simplest way to establish provider permission is written confirmation from
+Forth support or the authorised account administrator for this account and
+`POST /api/vehicle/trips`, including read-only semantics. Do not probe the endpoint
+to establish permission. After provider confirmation, obtain explicit approval
+for one attempt by the named EES operator for the selected registration/date.
+Revalidate the device in the live fleet at execution, atomically consume the
+approved grant, inspect sanitized output, then revoke operator access and any
+unused grants. Keep the general history source gate disabled throughout.
+
 The source history gate remains `false`. The Preview scope parser in
 `lib/forth-history-preview-test.ts` is intentionally not connected to the route.
 The previously rejected environment-controlled activation must not be wired in

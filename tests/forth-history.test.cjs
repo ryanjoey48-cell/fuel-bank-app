@@ -41,6 +41,43 @@ function loadTypeScript(relativePath, mocks = {}) {
 
 const contracts = loadTypeScript("lib/forth-history-contract.ts");
 
+test("controlled runner requires approvals, exact identity and an atomic claim before a single attempt", async () => {
+  const { runControlledHistoryTest } = loadTypeScript("lib/forth-history-controlled-test.ts");
+  const now = Date.parse("2026-10-26T10:00:00Z");
+  const grant = { id: "synthetic-grant", operatorId: "operator", deploymentId: "preview-id", deviceId: "500001", registration: "3ฒน-9565", date: "2026-10-24", expiresAt: now + 60000, providerApprovalReference: "synthetic-provider-approval", executionApprovalReference: "synthetic-owner-approval" };
+  const context = { environment: "preview", deploymentId: "preview-id", grantId: grant.id };
+  let consumed = false, reports = 0;
+  const deps = {
+    now: () => now,
+    verifyOfficeUser: async () => ({ id: "operator", businessRead: true }),
+    readGrant: async () => grant,
+    consumeGrant: async () => { if (consumed) return false; consumed = true; return true; },
+    getFleet: async () => ({ connectionStatus: "connected", error: null, records: [{ gpsDeviceId: "500001", vehicleRegistration: "3ฒน-9565" }] }),
+    getTrips: async () => { reports++; return { ok: true, payload: [{ boxId: "500001", driver: "Private name", routingTime: "unknown unit" }] }; }
+  };
+  for (const changed of [{ environment: "production" }, { deploymentId: "other" }]) {
+    assert.equal((await runControlledHistoryTest({ ...context, ...changed }, deps)).ok, false);
+  }
+  for (const changed of [{ operatorId: "other" }, { providerApprovalReference: "" }, { executionApprovalReference: "" }, { date: "2026-10-25" }, { expiresAt: now }]) {
+    assert.equal((await runControlledHistoryTest(context, { ...deps, readGrant: async () => ({ ...grant, ...changed }) })).ok, false);
+  }
+  assert.equal((await runControlledHistoryTest(context, { ...deps, verifyOfficeUser: async () => ({ id: "operator", businessRead: false }) })).ok, false);
+  for (const records of [[{ gpsDeviceId: "500001", vehicleRegistration: "other" }], [{ gpsDeviceId: "500001", vehicleRegistration: grant.registration }, { gpsDeviceId: "500001", vehicleRegistration: grant.registration }]]) {
+    assert.equal((await runControlledHistoryTest(context, { ...deps, getFleet: async () => ({ connectionStatus: "connected", error: null, records }) })).ok, false);
+  }
+  assert.equal(reports, 0);
+  const results = await Promise.all([runControlledHistoryTest(context, deps), runControlledHistoryTest(context, deps)]);
+  assert.equal(reports, 1);
+  const success = results.find(result => result.ok);
+  assert.equal(success.records[0].routingTime, "unknown unit");
+  assert.equal(Object.hasOwn(success.records[0], "driver"), false);
+  consumed = false;
+  const failing = { ...deps, getTrips: async () => { reports++; throw new Error("private upstream detail"); } };
+  assert.equal((await runControlledHistoryTest(context, failing)).code, "test_unavailable");
+  assert.equal((await runControlledHistoryTest(context, failing)).code, "grant_unavailable");
+  assert.equal(reports, 2);
+});
+
 test("proposed Preview scope fails closed outside the exact branch and short test window", () => {
   const preview = loadTypeScript("lib/forth-history-preview-test.ts", {
     "@/lib/forth-history-contract": contracts,
