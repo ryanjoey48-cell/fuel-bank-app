@@ -2,6 +2,34 @@
 
 ## Phase 6 — updated administrator access and execution plan
 
+### Owner-invoked adapter prepared (offline)
+
+`lib/forth-history-owner-test.ts` now supplies the fixed-scope Method A callable.
+It reuses the existing EES bearer verification, active office access and
+`business:read` checks, current Forth fleet service and bounded Trips service.
+It requires a trusted caller-supplied approval decision for the named operator
+and environment; that decision must be based on reviewed account entitlement,
+read-only evidence and the owner's separate one-request authorization. Source
+code cannot establish those facts from a nonempty reference or boolean alone.
+The adapter resolves `3ฒน-9565` uniquely to one current device, fixes the day
+to 24 October 2026, rejects missing or mismatched returned boxIds, omits driver
+names and leaves time/duration strings uninterpreted. It claims its sole attempt
+before calling the existing service and does not retry, even after a timeout.
+This is **process-local** single-use only. It has no route, CLI, schedule or
+connection to the disabled ordinary history gate. The older durable-grant runner
+remains dormant and separate.
+
+This worktree has no `.env.local`, `.env.development.local` or linked Vercel
+project file, and the required Forth/Supabase variables are absent from this
+process (checked by name/presence only). An approved server-side process with
+those existing settings and a secure operator bearer token has not been
+identified. The known protected Vercel Preview has assigned variables, but
+that alone does not provide an owner-invoked process entrypoint or verify
+report permission. Do not copy credentials into this worktree. Once the owner
+selects an approved isolated environment, bind its trusted invocation and
+approval check to this adapter for review; do not add a generally accessible
+HTTP route simply to run the one diagnostic.
+
 The owner confirms full administrative access to the EES Forth console. This
 allows inspection of account evidence; it does not establish the permissions
 of the separate API client and service user. Preserve the earlier work and keep

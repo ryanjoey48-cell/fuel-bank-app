@@ -65,6 +65,78 @@ test("offline parking CSV keeps Thai locations raw and reconciles distinct durat
   assert.equal(parser.parseHmsDuration("100:00:01"), 360001);
 });
 
+test("owner-invoked adapter is approval-bound, checks unique identity, and makes at most one report attempt", async () => {
+  const { createOwnerInvokedHistoryTest } = loadTypeScript("lib/forth-history-owner-test.ts", {
+    "@/lib/authorization": { hasPermission: () => false },
+    "@/lib/admin-user-management-server": { requireVerifiedUser: async () => { throw Error("unbound auth"); }, createServerSupabaseAdmin: () => null, resolveAccountAccess: async () => null },
+    "@/lib/forth-tracking-server": { getForthTrackingFleetData: async () => { throw Error("unbound fleet"); }, getForthTripsReport: async () => { throw Error("unbound report"); } }
+  });
+  const request = new Request("https://example.invalid/owner-test");
+  const context = { request, environmentId: "reviewed-isolated-server" };
+  let reports = 0;
+  const oneVehicle = [{ gpsDeviceId: "synthetic-device", vehicleRegistration: "3ฒน-9565" }];
+  const deps = {
+    verifyOfficeUser: async () => ({ id: "office-user", businessRead: true }),
+    getFleet: async () => ({ connectionStatus: "connected", error: null, records: oneVehicle }),
+    getTrips: async () => { reports++; return { ok: true, payload: [{ boxId: "synthetic-device", driver: "Private name", routingTime: "raw duration", source: "raw origin" }] }; }
+  };
+  const allowed = async scope => scope.operatorId === "office-user" && scope.environmentId === context.environmentId && scope.registration === "3ฒน-9565" && scope.date === "2026-10-24";
+  assert.equal((await createOwnerInvokedHistoryTest(async () => false, deps)(context)).code, "approval_required");
+  assert.equal((await createOwnerInvokedHistoryTest(allowed, { ...deps, verifyOfficeUser: async () => ({ id: "office-user", businessRead: false }) })(context)).code, "permission_denied");
+  for (const records of [[], [{ gpsDeviceId: "synthetic-device", vehicleRegistration: "other" }], [...oneVehicle, ...oneVehicle], [...oneVehicle, { gpsDeviceId: "synthetic-device", vehicleRegistration: "other" }]]) {
+    assert.equal((await createOwnerInvokedHistoryTest(allowed, { ...deps, getFleet: async () => ({ connectionStatus: "connected", error: null, records }) })(context)).code, "identity_unverified");
+  }
+  assert.equal(reports, 0);
+  const run = createOwnerInvokedHistoryTest(allowed, deps);
+  const results = await Promise.all([run(context), run(context)]);
+  assert.equal(reports, 1);
+  const success = results.find(result => result.ok);
+  assert.equal(success.records[0].routingTime, "raw duration");
+  assert.equal(success.records[0].source, "raw origin");
+  assert.equal(Object.hasOwn(success.records[0], "driver"), false);
+  assert.equal(results.find(result => !result.ok).code, "attempt_consumed");
+  for (const boxId of [null, "another-device"]) {
+    const invalid = createOwnerInvokedHistoryTest(allowed, { ...deps, getTrips: async () => ({ ok: true, payload: [{ boxId }] }) });
+    assert.equal((await invalid(context)).code, "invalid_report");
+    assert.equal((await invalid(context)).code, "attempt_consumed");
+  }
+  const fail = createOwnerInvokedHistoryTest(allowed, { ...deps, getTrips: async () => { reports++; throw Error("private upstream body"); } });
+  assert.equal((await fail(context)).code, "test_unavailable");
+  assert.equal((await fail(context)).code, "attempt_consumed");
+  assert.equal(reports, 2);
+  const previous = process.env.VERCEL_ENV;
+  process.env.VERCEL_ENV = "production";
+  try { assert.equal((await createOwnerInvokedHistoryTest(allowed, deps)(context)).code, "environment_unapproved"); }
+  finally { if (previous === undefined) delete process.env.VERCEL_ENV; else process.env.VERCEL_ENV = previous; }
+  assert.equal(reports, 2);
+});
+
+test("owner-invoked default binding verifies EES access before touching Forth", async () => {
+  let permission = false, fleetCalls = 0, reportCalls = 0;
+  const { createOwnerInvokedHistoryTest } = loadTypeScript("lib/forth-history-owner-test.ts", {
+    "@/lib/authorization": { hasPermission: (_access, name) => name === "business:read" && permission },
+    "@/lib/admin-user-management-server": {
+      requireVerifiedUser: async () => ({ id: "verified-operator" }),
+      createServerSupabaseAdmin: () => ({}),
+      resolveAccountAccess: async () => ({ role: "office_staff", status: "active" })
+    },
+    "@/lib/forth-tracking-server": {
+      getForthTrackingFleetData: async () => { fleetCalls++; return { connectionStatus: "connected", error: null, records: [{ gpsDeviceId: "synthetic-device", vehicleRegistration: "3ฒน-9565" }] }; },
+      getForthTripsReport: async () => { reportCalls++; return { ok: true, payload: [] }; }
+    }
+  });
+  const context = { request: new Request("https://example.invalid/owner-test"), environmentId: "reviewed-isolated-server" };
+  const approve = async scope => scope.operatorId === "verified-operator";
+  assert.equal((await createOwnerInvokedHistoryTest(approve)(context)).code, "permission_denied");
+  assert.equal(fleetCalls, 0);
+  permission = true;
+  assert.equal((await createOwnerInvokedHistoryTest(async () => false)(context)).code, "approval_required");
+  assert.equal(fleetCalls, 0);
+  assert.equal((await createOwnerInvokedHistoryTest(approve)(context)).ok, true);
+  assert.equal(fleetCalls, 1);
+  assert.equal(reportCalls, 1);
+});
+
 test("controlled runner requires approvals, exact identity and an atomic claim before a single attempt", async () => {
   const { runControlledHistoryTest } = loadTypeScript("lib/forth-history-controlled-test.ts");
   const now = Date.parse("2026-10-26T10:00:00Z");
