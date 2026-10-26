@@ -41,6 +41,50 @@ function loadTypeScript(relativePath, mocks = {}) {
 
 const contracts = loadTypeScript("lib/forth-history-contract.ts");
 
+test("historical log path accepts one device and a bounded same-day window", () => {
+  const log = loadTypeScript("lib/forth-history-log.ts");
+  assert.equal(log.buildHistoricalLogPath("synthetic-device", "20261024000000", "20261024235959"),
+    "/trackingresource/api/log/synthetic-device/20261024000000/20261024235959");
+  for (const [id, start, end] of [
+    ["a,b", "20261024000000", "20261024010000"],
+    ["x", "20261024000000", "20261025000000"],
+    ["x", "20261024020000", "20261024010000"],
+    ["x", "20261032000000", "20261032010000"],
+    ["x", "20261024000000", "20261024000000"]
+  ]) assert.equal(log.buildHistoricalLogPath(id, start, end), null);
+});
+
+test("historical replay keeps source fields and only links consecutive verified GPS points", () => {
+  const log = loadTypeScript("lib/forth-history-log.ts");
+  const point = (time, latitude, longitude, overrides = {}) => ({ gpsID: "synthetic-device", dateTime: time, GPS: "1", positionSource: "GPS", Latitude: latitude, Longitude: longitude, Speed: 20, Engine: "1", Distance: 120, IDCard: "private-card", IDTransport: "private-tag", ...overrides });
+  const rows = [
+    point("2026-10-24T08:00:00+07:00", 13.73, 100.51),
+    point("2026-10-24T08:02:00+07:00", 13.735, 100.515),
+    point("2026-10-24T08:04:00+07:00", 13.74, 100.52, { GPS: "0", positionSource: "LBS" }),
+    point("2026-10-24T08:06:00+07:00", null, null),
+    point("2026-10-24T08:08:00+07:00", 13.745, 100.525),
+    point("2026-10-24T08:25:00+07:00", 13.75, 100.53),
+    point("2026-10-24T08:27:00+07:00", 13.751, 100.531)
+  ];
+  const parsed = log.normalizeHistoricalLog(rows, "synthetic-device");
+  assert.deepEqual(parsed.segments, [{ fromIndex: 0, toIndex: 1 }, { fromIndex: 5, toIndex: 6 }]);
+  assert.equal(parsed.firstVerifiedIndex, 0);
+  assert.equal(parsed.lastVerifiedIndex, 6);
+  assert.equal(parsed.points[2].verifiedGps, false);
+  assert.equal(parsed.points[2].positionQuality, "lbs");
+  assert.equal(parsed.points[3].coordinateStatus, "missing");
+  assert.equal(parsed.points[0].sourceTimestamp, rows[0].dateTime);
+  assert.equal(parsed.points[0].sourceDistanceRaw, 120);
+  assert.equal(JSON.stringify(parsed).includes("private-card"), false);
+  assert.equal(JSON.stringify(parsed).includes("private-tag"), false);
+  assert.equal(log.normalizeHistoricalLog([...rows, { ...rows[0], gpsID: "another-device" }], "synthetic-device"), null);
+  assert.deepEqual(log.normalizeHistoricalLog([point("2026-10-24T08:00:00+07:00", 13.73, 100.51), point("2026-10-24T08:01:00+07:00", 14.73, 101.51)], "synthetic-device").segments, []);
+  const unknownZone = log.normalizeHistoricalLog([point("24-10-2026 08:00:00", 13.73, 100.51), point("24-10-2026 08:02:00", 13.735, 100.515)], "synthetic-device");
+  assert.equal(unknownZone.points[0].sourceTimestamp, "24-10-2026 08:00:00");
+  assert.equal(unknownZone.points[0].verifiedGps, false);
+  assert.deepEqual(unknownZone.segments, []);
+});
+
 test("offline parking CSV keeps Thai locations raw and reconciles distinct durations", () => {
   const parser = loadTypeScript("lib/forth-parking-csv.ts");
   const header = parser.PARKING_CSV_COLUMNS.join(",");
