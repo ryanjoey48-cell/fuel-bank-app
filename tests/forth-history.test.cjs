@@ -41,6 +41,30 @@ function loadTypeScript(relativePath, mocks = {}) {
 
 const contracts = loadTypeScript("lib/forth-history-contract.ts");
 
+test("offline parking CSV keeps Thai locations raw and reconciles distinct durations", () => {
+  const parser = loadTypeScript("lib/forth-parking-csv.ts");
+  const header = parser.PARKING_CSV_COLUMNS.join(",");
+  const detail = '3ฒน-0000,synthetic-device,รถตัวอย่าง,,24-10-2026,"สถานที่ตัวอย่าง, กรุงเทพฯ",08:00:00,-,00:10:00,00:02:00,00:20:00,1.25,0,19';
+  const summary = 'Total,,,,,,,,00:10:00,00:02:00,00:20:00,1.25,0,19';
+  const parsed = parser.parseForthParkingCsv(`\ufeff\ufeff${header}\r\n${detail}\r\n${summary}\r\n`);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.reconciled, true);
+  assert.equal(parsed.details.length, 1);
+  assert.equal(parsed.details[0].source["สถานที่"], "สถานที่ตัวอย่าง, กรุงเทพฯ");
+  assert.equal(parsed.details[0].source["Parking duration"], "00:20:00");
+  assert.equal(parsed.details[0].travelSeconds, 600);
+  assert.equal(parsed.details[0].idlingSeconds, 120);
+  assert.equal(parsed.details[0].parkingSeconds, 1200);
+  assert.equal(parsed.details[0].distanceHundredthsKm, 125);
+  assert.equal(parsed.details[0].incompleteEndTime, true);
+  assert.deepEqual(parser.parseForthParkingCsv(`${header}\n${detail}\n${summary.replace("1.25", "1.26")}`).reconciled, false);
+  assert.equal(parser.parseForthParkingCsv(`${header}\n${detail.replace("00:20:00", "20 minutes")}\n${summary}`).ok, false);
+  assert.equal(parser.parseForthParkingCsv(`${header}\n${detail}\n${detail.replace("synthetic-device", "another-device")}\n${summary}`).ok, false);
+  assert.equal(parser.parseForthParkingCsv(`${header}\n${detail}\n${detail.replace("24-10-2026", "25-10-2026")}\n${summary}`).ok, false);
+  assert.equal(parser.parseHmsDuration("00:60:00"), null);
+  assert.equal(parser.parseHmsDuration("100:00:01"), 360001);
+});
+
 test("controlled runner requires approvals, exact identity and an atomic claim before a single attempt", async () => {
   const { runControlledHistoryTest } = loadTypeScript("lib/forth-history-controlled-test.ts");
   const now = Date.parse("2026-10-26T10:00:00Z");
