@@ -10,6 +10,7 @@ import { adaptForthFleetResponse, attachUniqueActiveDriverAssignments, canOpenVe
 import { canFocusVehicle, canShowUnverifiedReportedPosition, formatReportTime, getMotionState, getVerifiedPositionsOutsideOperatingArea, matchesFleetV2RosterFilter, type FleetV2RosterFilter, type MotionState } from "@/lib/fleet-tracking-v2/view";
 import { summarizeLiveFleet } from "@/lib/fleet-tracking-v2/summary";
 import { FLEET_TRACKING_V2_COPY } from "@/lib/fleet-tracking-v2/copy";
+import { JourneyHistoryPanel } from "./journey-history";
 import { FleetTrackingV2Map } from "./fleet-map";
 import styles from "./live-workspace.module.css";
 
@@ -80,7 +81,12 @@ const LIVE_COPY = {
     noConfirmedIdentity: "No confirmed EES match", emptyInspectorTitle: "Select a vehicle",
     emptyInspectorBody: "Choose any registration from the roster or map to inspect its latest Forth report.",
     journeyHistory: "Journey history", parkingHistory: "Parking history",
-    historyUnavailable: "History is unavailable until its Forth request contract and permissions are verified. No history request is made here.",
+    historyUnavailable: "The Swagger fields are documented. Live reporting stays disabled until its permission and one-day test are approved.",
+    chooseReportDay: "Choose one report day", historyTimezoneNote: "Times are shown exactly as Forth returned them; its source timezone is undocumented.",
+    historyAwaitingApproval: "Live history requests are disabled while the bounded Forth test awaits approval.",
+    loadJourneyHistory: "Load one-day report", journeyNoRecords: "Forth returned no journeys for this day.",
+    journeyOrigin: "Origin", journeyDestination: "Destination", journeyTravelTimeRaw: "Forth travel-time value",
+    historyLoading: "Requesting report…", historyFailed: "Journey history could not be loaded.",
     mapsUnavailable: "Google Maps is available only for a fresh, verified GPS position.",
     showLastReported: "Show last reported position on map", reportedPositionShown: "Unverified reported position is shown on the map.",
     mapTitle: "Fleet map", searchGroup: "Search registrations in this group", noGroupMatches: "No registrations match this search.",
@@ -144,7 +150,12 @@ const LIVE_COPY = {
     noConfirmedIdentity: "ไม่มีข้อมูลรถ EES ที่ยืนยันได้", emptyInspectorTitle: "เลือกรถ",
     emptyInspectorBody: "เลือกทะเบียนจากรายชื่อหรือแผนที่เพื่อดูรายงานล่าสุดจาก Forth",
     journeyHistory: "ประวัติการเดินทาง", parkingHistory: "ประวัติการจอด",
-    historyUnavailable: "ยังไม่เปิดใช้จนกว่าจะยืนยันรูปแบบคำขอและสิทธิ์ Forth จะไม่มีการเรียกประวัติจากส่วนนี้",
+    historyUnavailable: "มีการบันทึกฟิลด์ใน Swagger แล้ว แต่ยังปิดรายงานจริงจนกว่าจะอนุมัติสิทธิ์และทดสอบหนึ่งวัน",
+    chooseReportDay: "เลือกวันที่รายงานหนึ่งวัน", historyTimezoneNote: "แสดงเวลาตามที่ Forth ส่งมา โดยเอกสารไม่ได้ระบุเขตเวลา",
+    historyAwaitingApproval: "ปิดการเรียกประวัติจริงระหว่างรออนุมัติการทดสอบ Forth แบบจำกัด",
+    loadJourneyHistory: "โหลดรายงานหนึ่งวัน", journeyNoRecords: "Forth ไม่ส่งข้อมูลการเดินทางสำหรับวันนี้",
+    journeyOrigin: "ต้นทาง", journeyDestination: "ปลายทาง", journeyTravelTimeRaw: "ค่าเวลาเดินทางจาก Forth",
+    historyLoading: "กำลังขอรายงาน…", historyFailed: "ไม่สามารถโหลดประวัติการเดินทางได้",
     mapsUnavailable: "เปิด Google Maps ได้เมื่อมีตำแหน่ง GPS ที่ยืนยันและเป็นข้อมูลปัจจุบันเท่านั้น",
     showLastReported: "แสดงตำแหน่งรายงานล่าสุดบนแผนที่", reportedPositionShown: "กำลังแสดงตำแหน่งรายงานที่ยังไม่ยืนยันบนแผนที่",
     mapTitle: "แผนที่รถ", searchGroup: "ค้นหาทะเบียนในกลุ่มนี้", noGroupMatches: "ไม่พบทะเบียนที่ตรงกับการค้นหา",
@@ -253,6 +264,7 @@ function VehicleDetails({ vehicle, language, copy, onClose, onShowReportedPositi
   onShowReportedPosition: () => void;
   showUnverifiedPositions: boolean;
 }) {
+  const [journeyOpen, setJourneyOpen] = useState(false);
   const hasCoordinates = vehicle.coordinateStatus === "valid" &&
     typeof vehicle.latitude === "number" && Number.isFinite(vehicle.latitude) &&
     typeof vehicle.longitude === "number" && Number.isFinite(vehicle.longitude);
@@ -336,13 +348,14 @@ function VehicleDetails({ vehicle, language, copy, onClose, onShowReportedPositi
       </section>
 
       <div className={styles.actions} aria-label={copy.detailsActions}>
-        <button type="button" disabled title={copy.historyUnavailable}><Clock3 size={15} />{copy.journeyHistory}</button>
+        <button type="button" aria-expanded={journeyOpen} onClick={() => setJourneyOpen((open) => !open)} title={copy.historyUnavailable}><Clock3 size={15} />{copy.journeyHistory}</button>
         <button type="button" disabled title={copy.historyUnavailable}><MapPin size={15} />{copy.parkingHistory}</button>
         {mapsUrl
           ? <a href={mapsUrl} target="_blank" rel="noreferrer"><MapPinned size={15} />{copy.openGoogleMaps}</a>
           : <button type="button" disabled title={copy.mapsUnavailable}><MapPinned size={15} />{copy.googleMaps}</button>}
       </div>
       <p className={styles.actionNote}>{copy.historyUnavailable}</p>
+      {journeyOpen ? <JourneyHistoryPanel vehicle={vehicle} language={language} copy={copy} /> : null}
 
       <details className={styles.technical}>
         <summary>{copy.technical}</summary>
@@ -614,7 +627,7 @@ export function FleetTrackingV2LiveWorkspace({ showFixtureLink }: { showFixtureL
             ) : null}
           </div>
         </main>
-        {showDetails && selected ? <VehicleDetails vehicle={selected} language={language} copy={copy} onClose={() => setDetailsOpen(false)} onShowReportedPosition={showReportedPositionOnMap} showUnverifiedPositions={showUnverifiedPositions} /> : null}
+        {showDetails && selected ? <VehicleDetails key={selected.id} vehicle={selected} language={language} copy={copy} onClose={() => setDetailsOpen(false)} onShowReportedPosition={showReportedPositionOnMap} showUnverifiedPositions={showUnverifiedPositions} /> : null}
       </div>
     </div>
   );

@@ -3,13 +3,22 @@ import {
   type ForthPositionSourceShape,
   type ForthTrackingRecord
 } from "@/lib/forth-tracking";
+import { validateJourneyHistoryRequest } from "@/lib/forth-history-contract";
 import { summarizeForthFleet } from "@/lib/forth-tracking-view";
 
 const TOKEN_ENDPOINT = "https://webapi.forthtrack.com/authorizationserver/token";
 const TRACKING_ENDPOINT = "https://webapi.forthtrack.com/trackingresource/api/tracking";
+const HISTORY_REPORT_ENDPOINTS = {
+  trips: "https://webapi.forthtrack.com/trackingresource/api/vehicle/trips"
+} as const;
 const REQUEST_TIMEOUT_MS = 10_000;
 const AUTH_FAILURE_COOLDOWN_MS = 60_000;
 const TOKEN_EXPIRY_SKEW_MS = 30_000;
+const MAX_HISTORY_RESPONSE_BYTES = 1_000_000;
+
+export type ForthTripsReportResult =
+  | { ok: true; payload: unknown }
+  | { ok: false; status: 400 | 502 | 503; error: { code: string; message: string } };
 
 export type ForthTokenRequestProfile = "oauth-password-basic-v1";
 
@@ -256,6 +265,49 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+async function readBoundedJsonResponse(response: Response): Promise<
+  | { ok: true; payload: unknown }
+  | { ok: false; failure: "invalid_response" | "response_too_large" }
+> {
+  const contentLength = response.headers.get("content-length");
+  if (contentLength && /^\d+$/.test(contentLength) && Number(contentLength) > MAX_HISTORY_RESPONSE_BYTES) {
+    return { ok: false, failure: "response_too_large" };
+  }
+  try {
+    const reader = response.body?.getReader();
+    let text: string;
+    if (!reader) {
+      text = await response.text();
+      if (new TextEncoder().encode(text).byteLength > MAX_HISTORY_RESPONSE_BYTES) {
+        return { ok: false, failure: "response_too_large" };
+      }
+    } else {
+      const chunks: Uint8Array[] = [];
+      let total = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value.byteLength;
+        if (total > MAX_HISTORY_RESPONSE_BYTES) {
+          await reader.cancel();
+          return { ok: false, failure: "response_too_large" };
+        }
+        chunks.push(value);
+      }
+      const bytes = new Uint8Array(total);
+      let offset = 0;
+      for (const chunk of chunks) {
+        bytes.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
+      text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    }
+    return { ok: true, payload: JSON.parse(text) as unknown };
+  } catch {
+    return { ok: false, failure: "invalid_response" };
+  }
+}
+
 function isNetworkOrTimeoutError(error: unknown) {
   return error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError" || error.name === "TypeError");
 }
@@ -454,6 +506,86 @@ export function createForthTrackingService(options: {
     };
   }
 
+  async function getTripsReport(input: { deviceId: string; forthDate: string; language: "en" | "th" }): Promise<ForthTripsReportResult> {
+    const date = typeof input?.forthDate === "string" && /^\d{8}$/.test(input.forthDate)
+      ? `${input.forthDate.slice(0, 4)}-${input.forthDate.slice(4, 6)}-${input.forthDate.slice(6, 8)}`
+      : "";
+    const validated = validateJourneyHistoryRequest({ deviceId: input?.deviceId, date, language: input?.language });
+    if (!validated.ok || validated.forthDate !== input.forthDate) {
+      return { ok: false, status: 400, error: { code: "invalid_report_request", message: "Choose one Forth device and one valid calendar day." } };
+    }
+    const credentials = readCredentials(environment);
+    const profile = configuredTokenRequestProfile(environment);
+    if (!credentials) {
+      return { ok: false, status: 503, error: { code: "credentials_not_configured", message: "Forth credentials are not configured on the server." } };
+    }
+    if (!profile) {
+      return { ok: false, status: 503, error: { code: "oauth_protocol_unverified", message: "The verified Forth token request profile is not enabled on the server." } };
+    }
+
+    const tokenResult = await getAccessToken(credentials, profile);
+    if ("failure" in tokenResult) {
+      const messages = {
+        authentication_rejected: "Forth rejected the server authentication request.",
+        authentication_unavailable: "Forth authentication service could not be reached.",
+        authentication_failed: "Forth authentication response was not usable."
+      } as const;
+      return { ok: false, status: tokenResult.failure === "authentication_rejected" ? 502 : 503, error: { code: tokenResult.failure, message: messages[tokenResult.failure] } };
+    }
+
+    let response: Response;
+    try {
+      response = await fetcher(HISTORY_REPORT_ENDPOINTS.trips, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${tokenResult.token}`,
+          "Content-Type": "application/json",
+          Accept: "application/json"
+        },
+        body: JSON.stringify({
+          boxIds: input.deviceId,
+          startDate: input.forthDate,
+          endDate: input.forthDate,
+          language: input.language
+        }),
+        cache: "no-store",
+        redirect: "error",
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+      });
+    } catch (error) {
+      const unavailable = isNetworkOrTimeoutError(error);
+      return { ok: false, status: 503, error: { code: unavailable ? "report_network_error" : "report_request_failed", message: "Forth journey history could not be reached." } };
+    }
+
+    if (!response.ok) {
+      const rejected = response.status === 401 || response.status === 403;
+      const unavailable = response.status === 429 || response.status >= 500;
+      return {
+        ok: false,
+        status: unavailable ? 503 : 502,
+        error: {
+          code: rejected ? "report_auth_rejected" : "report_http_error",
+          message: rejected ? "Forth did not accept the existing authentication profile for journey history." : "Forth journey history returned an unsuccessful response."
+        }
+      };
+    }
+
+    const result = await readBoundedJsonResponse(response);
+    if (!result.ok) {
+      return {
+        ok: false,
+        status: 502,
+        error: {
+          code: result.failure,
+          message: result.failure === "response_too_large"
+            ? "Forth journey history exceeded the safe response size."
+            : "Forth journey history returned an invalid response."
+        }
+      };
+    }
+    return result;
+  }
+
   async function diagnoseStatus() {
     const result = await requestTracking(true);
     const positionSourceShape = emptyPositionSourceShapeCounts();
@@ -510,7 +642,7 @@ export function createForthTrackingService(options: {
     };
   }
 
-  return { diagnose, getFleetData, diagnoseStatus };
+  return { diagnose, getFleetData, getTripsReport, diagnoseStatus };
 }
 
 export function createForthTrackingDiagnosticService(options: {
@@ -529,6 +661,10 @@ export async function getForthTrackingDiagnostic() {
 
 export async function getForthTrackingFleetData() {
   return forthTrackingService.getFleetData();
+}
+
+export async function getForthTripsReport(input: { deviceId: string; forthDate: string; language: "en" | "th" }) {
+  return forthTrackingService.getTripsReport(input);
 }
 
 export async function getForthTrackingStatusDiagnostic() {

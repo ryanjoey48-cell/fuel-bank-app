@@ -1121,6 +1121,42 @@
 .technicalList dt { color: #79717d; }
 .technicalList dd { min-width: 0; margin: 0; overflow-wrap: anywhere; color: #382b43; font-weight: 650; }
 
+.journeyPanel {
+  display: grid;
+  gap: 0.45rem;
+  max-height: min(34dvh, 270px);
+  overflow: auto;
+  border: 1px solid #e3d8c9;
+  border-radius: 0.8rem;
+  background: #fffdf8;
+  padding: 0.62rem;
+}
+
+.journeyPanel h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  color: var(--purple-deep);
+  font-size: 11px;
+}
+
+.journeyForm { display: flex; align-items: end; gap: 0.4rem; }
+.journeyForm label { display: grid; flex: 1; gap: 0.2rem; color: #6f6573; font-size: 8px; font-weight: 700; }
+.journeyForm input { width: 100%; min-height: 34px; border: 1px solid #d9cfbf; border-radius: 0.55rem; background: #fff; padding: 0.3rem 0.4rem; color: var(--ink); font: inherit; }
+.journeyForm button { display: flex; min-height: 34px; align-items: center; justify-content: center; gap: 0.28rem; border: 1px solid #6e3995; border-radius: 0.55rem; background: #5b238e; padding: 0.3rem 0.52rem; color: #fff; font-size: 8px; font-weight: 750; }
+.journeyForm button:disabled { border-color: #cfc6d3; background: #e7e2e9; color: #786f7d; cursor: not-allowed; }
+.journeyNote, .journeyGate, .journeyError, .journeyEmpty { margin: 0; color: #706878; font-size: 8px; line-height: 1.4; }
+.journeyGate { border-left: 2px solid #c78623; padding-left: 0.4rem; color: #704d19; }
+.journeyError { color: #9d3028; }
+.journeyRows { display: grid; gap: 0.4rem; margin: 0; padding: 0; list-style: none; }
+.journeyRows li { display: grid; gap: 0.28rem; border-top: 1px solid #eee5d7; padding-top: 0.38rem; font-size: 8px; }
+.journeyRowHead, .journeyRows li > div { display: flex; justify-content: space-between; gap: 0.5rem; }
+.journeyRows span { min-width: 0; color: #77707a; overflow-wrap: anywhere; }
+.journeyRows strong { min-width: 0; color: #352641; text-align: right; overflow-wrap: anywhere; }
+.journeySpinner { animation: journey-spin 1s linear infinite; }
+@keyframes journey-spin { to { transform: rotate(360deg); } }
+
 @media (min-width: 1200px) {
   .bodyWithInspector {
     grid-template-columns: minmax(250px, 280px) minmax(0, 1fr) minmax(320px, 350px);
