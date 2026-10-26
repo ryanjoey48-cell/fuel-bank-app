@@ -41,6 +41,33 @@ function loadTypeScript(relativePath, mocks = {}) {
 
 const contracts = loadTypeScript("lib/forth-history-contract.ts");
 
+test("proposed Preview scope fails closed outside the exact branch and short test window", () => {
+  const preview = loadTypeScript("lib/forth-history-preview-test.ts", {
+    "@/lib/forth-history-contract": contracts,
+    "@/lib/forth-tracking": { normalizeForthRegistration: (value) => (value ?? "").replace(/[\s-]/g, "").toUpperCase() }
+  });
+  const now = Date.parse("2026-10-26T10:00:00Z");
+  const environment = {
+    VERCEL_ENV: "preview",
+    VERCEL_GIT_COMMIT_REF: "codex/fleet-tracking-v2-history-integration",
+    FORTH_HISTORY_PREVIEW_TEST_ENABLED: "true",
+    FORTH_HISTORY_PREVIEW_TEST_USER_ID: "11111111-1111-4111-8111-111111111111",
+    FORTH_HISTORY_PREVIEW_TEST_DEVICE_ID: "500001",
+    FORTH_HISTORY_PREVIEW_TEST_REGISTRATION: "3ฒน-9565",
+    FORTH_HISTORY_PREVIEW_TEST_DATE: "2026-10-24",
+    FORTH_HISTORY_PREVIEW_TEST_EXPIRES_AT: "2026-10-26T10:10:00Z"
+  };
+  assert.deepEqual(preview.resolveForthHistoryPreviewTestScope(environment, now), {
+    userId: environment.FORTH_HISTORY_PREVIEW_TEST_USER_ID,
+    deviceId: "500001", date: "2026-10-24", registration: "3ฒน-9565"
+  });
+  assert.equal(preview.resolveForthHistoryPreviewTestScope({ ...environment, VERCEL_ENV: "production" }, now), null);
+  assert.equal(preview.resolveForthHistoryPreviewTestScope({ ...environment, VERCEL_GIT_COMMIT_REF: "main" }, now), null);
+  assert.equal(preview.resolveForthHistoryPreviewTestScope({ ...environment, FORTH_HISTORY_PREVIEW_TEST_ENABLED: "false" }, now), null);
+  assert.equal(preview.resolveForthHistoryPreviewTestScope({ ...environment, FORTH_HISTORY_PREVIEW_TEST_EXPIRES_AT: "2026-10-26T10:30:00Z" }, now), null);
+  assert.equal(preview.resolveForthHistoryPreviewTestScope(environment, Date.parse("2026-10-26T10:11:00Z")), null);
+});
+
 test("journey request accepts only one device and one real calendar day", () => {
   assert.deepEqual(contracts.validateJourneyHistoryRequest({ deviceId: "500001", date: "2026-10-24", language: "th" }), {
     ok: true, deviceId: "500001", date: "2026-10-24", forthDate: "20261024", language: "th"
@@ -67,6 +94,9 @@ test("trip adapter keeps Forth source text raw and represents missing optional f
   assert.equal(Object.hasOwn(result.records[0], "unusedPrivateField"), false);
   assert.deepEqual(contracts.parseForthTripsResponse([{ routingTime: 42 }]), { ok: false, error: "invalid_response" });
   assert.deepEqual(contracts.parseForthTripsResponse({ records: [] }), { ok: false, error: "invalid_response" });
+  assert.deepEqual(contracts.parseForthTripsResponse([]), { ok: true, records: [] });
+  assert.deepEqual(contracts.parseForthTripsResponse([null]), { ok: false, error: "invalid_response" });
+  assert.deepEqual(contracts.parseForthTripsResponse([{ boxId: "500001", rDate: "20261024", routingTime: "unknown unit" }]).records[0].routingTime, "unknown unit");
 });
 
 test("Trip Details and parking adapters retain source values without duration conversion", () => {
@@ -152,12 +182,30 @@ test("enabled handler rejects arbitrary or duplicate device IDs before requestin
   assert.equal(counters.report, 0);
 });
 
+test("enabled handler rejects malformed, oversized and unexpected request bodies before the fleet lookup", async () => {
+  const counters = { fleet: 0, report: 0 };
+  const route = loadTypeScript("lib/forth-history-route.ts", routeMocks({ counters }));
+  const handler = route.createJourneyHistoryPostHandler({ enabled: true });
+  const requests = [
+    new Request("http://local.test/history", { method: "POST", headers: { "Content-Type": "text/plain" }, body: "{}" }),
+    new Request("http://local.test/history", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{" }),
+    new Request("http://local.test/history", { method: "POST", headers: { "Content-Type": "application/json" }, body: "x".repeat(8193) })
+  ];
+  const statuses = [415, 400, 413];
+  for (let index = 0; index < requests.length; index += 1) {
+    const response = await handler(requests[index]);
+    assert.equal(response.status, statuses[index]);
+    assert.equal(response.headers.get("cache-control"), "private, no-store");
+  }
+  assert.deepEqual(counters, { fleet: 0, report: 0 });
+});
+
 test("enabled journey handler sends only the validated one-device one-day report and returns raw fields", async () => {
   const counters = { fleet: 0, report: 0, request: null };
   const route = loadTypeScript("lib/forth-history-route.ts", routeMocks({
     counters,
     fleet: { connectionStatus: "connected", error: null, records: [{ gpsDeviceId: "500001" }] },
-    trips: { ok: true, payload: [{ boxId: "500001", rDate: "20261024", arriveTime: "08:00", routingTime: "00:30" }] }
+    trips: { ok: true, payload: [{ boxId: "500001", driver: "Private driver", rDate: "20261024", arriveTime: "08:00", routingTime: "00:30" }] }
   }));
   const response = await route.createJourneyHistoryPostHandler({ enabled: true })(request({ deviceId: "500001", date: "2026-10-24", language: "en" }));
   assert.equal(response.status, 200);
@@ -167,6 +215,93 @@ test("enabled journey handler sends only the validated one-device one-day report
   assert.equal(payload.records[0].arriveTime, "08:00");
   assert.equal(payload.records[0].routingTime, "00:30");
   assert.equal(payload.records[0].destination, null);
+  assert.equal(Object.hasOwn(payload.records[0], "driver"), false);
+});
+
+test("journey route rejects a returned record for another or unidentified device", async () => {
+  for (const boxId of ["500002", undefined]) {
+    const counters = { fleet: 0, report: 0 };
+    const route = loadTypeScript("lib/forth-history-route.ts", routeMocks({
+      counters,
+      fleet: { connectionStatus: "connected", error: null, records: [{ gpsDeviceId: "500001" }] },
+      trips: { ok: true, payload: [{ boxId, driver: "Private driver", source: "Depot" }] }
+    }));
+    const response = await route.createJourneyHistoryPostHandler({ enabled: true })(request());
+    assert.equal(response.status, 502);
+    assert.equal(response.headers.get("cache-control"), "private, no-store");
+    assert.equal(JSON.stringify(await response.json()).includes("Private driver"), false);
+  }
+});
+
+test("journey route preserves an empty report and rejects malformed report objects", async () => {
+  for (const [payload, status] of [[[], 200], [{ records: [] }, 502], [[null], 502]]) {
+    const counters = { fleet: 0, report: 0 };
+    const route = loadTypeScript("lib/forth-history-route.ts", routeMocks({
+      counters,
+      fleet: { connectionStatus: "connected", error: null, records: [{ gpsDeviceId: "500001" }] },
+      trips: { ok: true, payload }
+    }));
+    const response = await route.createJourneyHistoryPostHandler({ enabled: true })(request());
+    assert.equal(response.status, status);
+    assert.equal(counters.report, 1);
+    if (status === 200) assert.deepEqual((await response.json()).records, []);
+  }
+});
+
+function mockHistoryService(reportResponse) {
+  const { createForthTrackingService } = loadTypeScript("lib/forth-tracking-server.ts", {
+    "@/lib/forth-tracking": { normalizeForthTrackingResponse: () => [] },
+    "@/lib/forth-tracking-view": { summarizeForthFleet: () => ({}) }
+  });
+  let calls = 0;
+  const service = createForthTrackingService({
+    environment: {
+      FORTH_CLIENT_ID: "synthetic-client", FORTH_CLIENT_SECRET: "synthetic-secret",
+      FORTH_USERNAME: "synthetic-user", FORTH_PASSWORD: "synthetic-password",
+      FORTH_TOKEN_REQUEST_PROFILE: "oauth-password-basic-v1"
+    },
+    fetcher: async () => {
+      calls += 1;
+      if (calls === 1) return Response.json({ access_token: "synthetic-token", expires_in: 3600 });
+      return typeof reportResponse === "function" ? reportResponse() : reportResponse;
+    }
+  });
+  return { service, getCalls: () => calls };
+}
+
+test("report service rejects unexpected content types and malformed JSON without exposing the body", async () => {
+  for (const response of [
+    new Response('[{"boxId":"500001"}]', { headers: { "Content-Type": "text/html" } }),
+    new Response('[{"boxId":"500001"}]'),
+    new Response("private invalid body", { headers: { "Content-Type": "application/json" } })
+  ]) {
+    const { service, getCalls } = mockHistoryService(response);
+    const result = await service.getTripsReport({ deviceId: "500001", forthDate: "20261024", language: "en" });
+    assert.equal(result.ok, false);
+    assert.equal(result.error.code, "invalid_response");
+    assert.equal(JSON.stringify(result).includes("private invalid body"), false);
+    assert.equal(getCalls(), 2);
+  }
+  const { service } = mockHistoryService(new Response("[]", { headers: { "Content-Type": "text/json; charset=utf-8" } }));
+  assert.deepEqual((await service.getTripsReport({ deviceId: "500001", forthDate: "20261024", language: "th" })).payload, []);
+});
+
+test("report service bounds responses without relying on Content-Length", async () => {
+  const { service } = mockHistoryService(new Response("x".repeat(1_000_001), {
+    headers: { "Content-Type": "application/json" }
+  }));
+  const result = await service.getTripsReport({ deviceId: "500001", forthDate: "20261024", language: "en" });
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, "response_too_large");
+});
+
+test("report service treats a synthetic fetch timeout as unavailable and never retries", async () => {
+  const { service, getCalls } = mockHistoryService(() => { throw new DOMException("synthetic timeout", "TimeoutError"); });
+  const result = await service.getTripsReport({ deviceId: "500001", forthDate: "20261024", language: "en" });
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 503);
+  assert.equal(result.error.code, "report_network_error");
+  assert.equal(getCalls(), 2);
 });
 
 test("existing token service uses a fixed report URL and never returns raw credentials or upstream error bodies", async () => {

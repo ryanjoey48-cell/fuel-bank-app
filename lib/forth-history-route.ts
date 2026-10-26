@@ -105,8 +105,25 @@ export function createJourneyHistoryPostHandler(overrides: Partial<RouteDependen
       }
       const history = parseForthTripsResponse(result.payload);
       if (!history.ok) throw new AdminApiError(502, "Forth journey history returned an invalid response.");
+      if (history.records.some((record) => record.boxId !== parsedRequest.deviceId)) {
+        throw new AdminApiError(502, "Forth journey history could not be associated with the selected device.");
+      }
 
-      return NextResponse.json({ records: history.records }, { headers: privateNoStoreHeaders });
+      // The report needs journey locations and source times, not driver text.
+      const records = history.records.map((record) => ({
+        boxId: record.boxId,
+        plateNo: record.plateNo,
+        vehicleName: record.vehicleName,
+        rDate: record.rDate,
+        arriveTime: record.arriveTime,
+        source: record.source,
+        departTime: record.departTime,
+        arriveDestinationTime: record.arriveDestinationTime,
+        destination: record.destination,
+        departDestinationTime: record.departDestinationTime,
+        routingTime: record.routingTime
+      }));
+      return NextResponse.json({ records }, { headers: privateNoStoreHeaders });
     } catch (error) {
       const status = error instanceof AdminApiError ? error.status : 500;
       const message = error instanceof AdminApiError ? error.message : "Forth journey history is unavailable.";

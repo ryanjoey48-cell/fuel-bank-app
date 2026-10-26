@@ -269,6 +269,10 @@ async function readBoundedJsonResponse(response: Response): Promise<
   | { ok: true; payload: unknown }
   | { ok: false; failure: "invalid_response" | "response_too_large" }
 > {
+  const mediaType = response.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase();
+  if (mediaType !== "application/json" && mediaType !== "text/json") {
+    return { ok: false, failure: "invalid_response" };
+  }
   const contentLength = response.headers.get("content-length");
   if (contentLength && /^\d+$/.test(contentLength) && Number(contentLength) > MAX_HISTORY_RESPONSE_BYTES) {
     return { ok: false, failure: "response_too_large" };

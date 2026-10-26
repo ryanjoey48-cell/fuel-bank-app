@@ -91,7 +91,7 @@ export function JourneyHistoryPanel({ vehicle, language, copy }: {
         <ol className={styles.journeyRows}>
           {state.records.map((record, index) => (
             <li key={`${record.boxId ?? vehicle.deviceId}-${record.rDate ?? date}-${index}`}>
-              <div className={styles.journeyRowHead}><strong>{shown(record.rDate)}</strong><span>{shown(record.driver)}</span></div>
+              <div className={styles.journeyRowHead}><strong>{shown(record.rDate)}</strong></div>
               <div><span>{copy.journeyOrigin}</span><strong>{shown(record.source)}</strong></div>
               <div><span>{shown(record.arriveTime)} · {shown(record.departTime)}</span><strong>{copy.journeyDestination}: {shown(record.destination)}</strong></div>
               <div><span>{shown(record.arriveDestinationTime)} · {shown(record.departDestinationTime)}</span><strong>{copy.journeyTravelTimeRaw}: {shown(record.routingTime)}</strong></div>
