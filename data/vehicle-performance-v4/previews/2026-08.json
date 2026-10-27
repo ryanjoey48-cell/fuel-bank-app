@@ -1,0 +1,565 @@
+{
+  "reportingMonth": "2026-08",
+  "sourceFile": "EES_August_2026.pdf",
+  "sourceSha256": "82963b78522f2ea23442f1335f1af1bada3bd5ccc44cc9e4f6c594c8095ae3fa",
+  "readOnly": true,
+  "liveKpiEligible": false,
+  "publicationEnabled": false,
+  "columns": [
+    "Registration",
+    "Salary",
+    "Jobs",
+    "Trip Payments",
+    "Expenses",
+    "Parking Fees",
+    "Total Received",
+    "Fuel",
+    "LPG",
+    "Maintenance"
+  ],
+  "rowCount": 21,
+  "rows": [
+    {
+      "registration": "3ฒน-9565",
+      "salary": "6500",
+      "jobs": "68",
+      "tripPayments": "8600",
+      "expenses": null,
+      "parkingFees": "645",
+      "totalReceived": "139960",
+      "fuel": "20370",
+      "lpg": "0",
+      "maintenance": null,
+      "sourceDashes": [
+        "expenses",
+        "lpg",
+        "maintenance"
+      ],
+      "sourceRow": 1,
+      "lpgBasis": "confirmed_non_lpg_zero",
+      "sourceDashStatus": {
+        "expenses": "unresolved_source_dash",
+        "lpg": "confirmed_zero_by_owner_rule",
+        "maintenance": "unresolved_source_dash"
+      }
+    },
+    {
+      "registration": "3ฒล-4565",
+      "salary": "10000",
+      "jobs": "0",
+      "tripPayments": null,
+      "expenses": null,
+      "parkingFees": null,
+      "totalReceived": "0",
+      "fuel": "13920",
+      "lpg": "0",
+      "maintenance": null,
+      "sourceDashes": [
+        "tripPayments",
+        "expenses",
+        "parkingFees",
+        "totalReceived",
+        "lpg",
+        "maintenance"
+      ],
+      "sourceRow": 2,
+      "lpgBasis": "confirmed_non_lpg_zero",
+      "sourceDashStatus": {
+        "tripPayments": "unresolved_source_dash",
+        "expenses": "unresolved_source_dash",
+        "parkingFees": "unresolved_source_dash",
+        "totalReceived": "zero_confirmed_by_source_note",
+        "lpg": "confirmed_zero_by_owner_rule",
+        "maintenance": "unresolved_source_dash"
+      }
+    },
+    {
+      "registration": "61-2835",
+      "salary": "8000",
+      "jobs": "38",
+      "tripPayments": "14100",
+      "expenses": "2030",
+      "parkingFees": "2595",
+      "totalReceived": "157765",
+      "fuel": "66927.4",
+      "lpg": "0",
+      "maintenance": "2250",
+      "sourceDashes": [
+        "lpg"
+      ],
+      "sourceRow": 3,
+      "lpgBasis": "confirmed_non_lpg_zero",
+      "sourceDashStatus": {
+        "lpg": "confirmed_zero_by_owner_rule"
+      }
+    },
+    {
+      "registration": "61-6672",
+      "salary": "8000",
+      "jobs": "34",
+      "tripPayments": "19300",
+      "expenses": "3535",
+      "parkingFees": "2090",
+      "totalReceived": "198750",
+      "fuel": "69200.9",
+      "lpg": "0",
+      "maintenance": null,
+      "sourceDashes": [
+        "lpg",
+        "maintenance"
+      ],
+      "sourceRow": 4,
+      "lpgBasis": "confirmed_non_lpg_zero",
+      "sourceDashStatus": {
+        "lpg": "confirmed_zero_by_owner_rule",
+        "maintenance": "unresolved_source_dash"
+      }
+    },
+    {
+      "registration": "62-1085",
+      "salary": "6500",
+      "jobs": "30",
+      "tripPayments": "15900",
+      "expenses": "2985",
+      "parkingFees": "1180",
+      "totalReceived": "188491",
+      "fuel": "61950.1",
+      "lpg": "0",
+      "maintenance": null,
+      "sourceDashes": [
+        "lpg",
+        "maintenance"
+      ],
+      "sourceRow": 5,
+      "lpgBasis": "confirmed_non_lpg_zero",
+      "sourceDashStatus": {
+        "lpg": "confirmed_zero_by_owner_rule",
+        "maintenance": "unresolved_source_dash"
+      }
+    },
+    {
+      "registration": "62-4337",
+      "salary": "6500",
+      "jobs": "31",
+      "tripPayments": "17800",
+      "expenses": "2970",
+      "parkingFees": "1630",
+      "totalReceived": "219212",
+      "fuel": "68750",
+      "lpg": "0",
+      "maintenance": null,
+      "sourceDashes": [
+        "lpg",
+        "maintenance"
+      ],
+      "sourceRow": 6,
+      "lpgBasis": "confirmed_non_lpg_zero",
+      "sourceDashStatus": {
+        "lpg": "confirmed_zero_by_owner_rule",
+        "maintenance": "unresolved_source_dash"
+      }
+    },
+    {
+      "registration": "63-3543",
+      "salary": "8000",
+      "jobs": "26",
+      "tripPayments": "17200",
+      "expenses": "3280",
+      "parkingFees": "2530",
+      "totalReceived": "188109",
+      "fuel": "59800",
+      "lpg": "0",
+      "maintenance": "6500",
+      "sourceDashes": [
+        "lpg"
+      ],
+      "sourceRow": 7,
+      "lpgBasis": "confirmed_non_lpg_zero",
+      "sourceDashStatus": {
+        "lpg": "confirmed_zero_by_owner_rule"
+      }
+    },
+    {
+      "registration": "64-0359",
+      "salary": "6500",
+      "jobs": "50",
+      "tripPayments": "13300",
+      "expenses": "1460",
+      "parkingFees": "2455",
+      "totalReceived": "131676",
+      "fuel": "38581.6",
+      "lpg": "0",
+      "maintenance": null,
+      "sourceDashes": [
+        "lpg",
+        "maintenance"
+      ],
+      "sourceRow": 8,
+      "lpgBasis": "confirmed_non_lpg_zero",
+      "sourceDashStatus": {
+        "lpg": "confirmed_zero_by_owner_rule",
+        "maintenance": "unresolved_source_dash"
+      }
+    },
+    {
+      "registration": "64-5954",
+      "salary": "6500",
+      "jobs": "33",
+      "tripPayments": "12700",
+      "expenses": "2430",
+      "parkingFees": "1545",
+      "totalReceived": "155739",
+      "fuel": "54350.2",
+      "lpg": "0",
+      "maintenance": null,
+      "sourceDashes": [
+        "lpg",
+        "maintenance"
+      ],
+      "sourceRow": 9,
+      "lpgBasis": "confirmed_non_lpg_zero",
+      "sourceDashStatus": {
+        "lpg": "confirmed_zero_by_owner_rule",
+        "maintenance": "unresolved_source_dash"
+      }
+    },
+    {
+      "registration": "64-5956",
+      "salary": "8000",
+      "jobs": "27",
+      "tripPayments": "21150",
+      "expenses": "3000",
+      "parkingFees": "3040",
+      "totalReceived": "235914",
+      "fuel": "76900",
+      "lpg": "0",
+      "maintenance": null,
+      "sourceDashes": [
+        "lpg",
+        "maintenance"
+      ],
+      "sourceRow": 10,
+      "lpgBasis": "confirmed_non_lpg_zero",
+      "sourceDashStatus": {
+        "lpg": "confirmed_zero_by_owner_rule",
+        "maintenance": "unresolved_source_dash"
+      }
+    },
+    {
+      "registration": "64-8665",
+      "salary": "8000",
+      "jobs": "24",
+      "tripPayments": "16700",
+      "expenses": "1830",
+      "parkingFees": "3580",
+      "totalReceived": "172470",
+      "fuel": "59010",
+      "lpg": "0",
+      "maintenance": null,
+      "sourceDashes": [
+        "lpg",
+        "maintenance"
+      ],
+      "sourceRow": 11,
+      "lpgBasis": "confirmed_non_lpg_zero",
+      "sourceDashStatus": {
+        "lpg": "confirmed_zero_by_owner_rule",
+        "maintenance": "unresolved_source_dash"
+      }
+    },
+    {
+      "registration": "68-7154",
+      "salary": "8000",
+      "jobs": "18",
+      "tripPayments": "21900",
+      "expenses": "3265",
+      "parkingFees": "1870",
+      "totalReceived": "231850",
+      "fuel": "67970",
+      "lpg": "0",
+      "maintenance": null,
+      "sourceDashes": [
+        "lpg",
+        "maintenance"
+      ],
+      "sourceRow": 12,
+      "lpgBasis": "confirmed_non_lpg_zero",
+      "sourceDashStatus": {
+        "lpg": "confirmed_zero_by_owner_rule",
+        "maintenance": "unresolved_source_dash"
+      }
+    },
+    {
+      "registration": "700-4145",
+      "salary": "8000",
+      "jobs": "28",
+      "tripPayments": "19350",
+      "expenses": "3285",
+      "parkingFees": "2600",
+      "totalReceived": "218672",
+      "fuel": "75120.2",
+      "lpg": "0",
+      "maintenance": null,
+      "sourceDashes": [
+        "lpg",
+        "maintenance"
+      ],
+      "sourceRow": 13,
+      "lpgBasis": "confirmed_non_lpg_zero",
+      "sourceDashStatus": {
+        "lpg": "confirmed_zero_by_owner_rule",
+        "maintenance": "unresolved_source_dash"
+      }
+    },
+    {
+      "registration": "700-6659",
+      "salary": "8000",
+      "jobs": "31",
+      "tripPayments": "17200",
+      "expenses": "2730",
+      "parkingFees": "1470",
+      "totalReceived": "200863",
+      "fuel": "75540",
+      "lpg": "0",
+      "maintenance": "2700",
+      "sourceDashes": [
+        "lpg"
+      ],
+      "sourceRow": 14,
+      "lpgBasis": "confirmed_non_lpg_zero",
+      "sourceDashStatus": {
+        "lpg": "confirmed_zero_by_owner_rule"
+      }
+    },
+    {
+      "registration": "701-1654",
+      "salary": "8000",
+      "jobs": "29",
+      "tripPayments": "14200",
+      "expenses": "2485",
+      "parkingFees": "2520",
+      "totalReceived": "169497",
+      "fuel": "60000.4",
+      "lpg": "0",
+      "maintenance": "8300",
+      "sourceDashes": [
+        "lpg"
+      ],
+      "sourceRow": 15,
+      "lpgBasis": "confirmed_non_lpg_zero",
+      "sourceDashStatus": {
+        "lpg": "confirmed_zero_by_owner_rule"
+      }
+    },
+    {
+      "registration": "701-5145",
+      "salary": "8000",
+      "jobs": "34",
+      "tripPayments": "22400",
+      "expenses": "2225",
+      "parkingFees": "2235",
+      "totalReceived": "276577",
+      "fuel": "100570.1",
+      "lpg": "0",
+      "maintenance": null,
+      "sourceDashes": [
+        "lpg",
+        "maintenance"
+      ],
+      "sourceRow": 16,
+      "lpgBasis": "confirmed_non_lpg_zero",
+      "sourceDashStatus": {
+        "lpg": "confirmed_zero_by_owner_rule",
+        "maintenance": "unresolved_source_dash"
+      }
+    },
+    {
+      "registration": "74-8969",
+      "salary": "6500",
+      "jobs": "49",
+      "tripPayments": "11650",
+      "expenses": "1460",
+      "parkingFees": "2855",
+      "totalReceived": "120452",
+      "fuel": "29000",
+      "lpg": "0",
+      "maintenance": "2570",
+      "sourceDashes": [
+        "lpg"
+      ],
+      "sourceRow": 17,
+      "lpgBasis": "confirmed_non_lpg_zero",
+      "sourceDashStatus": {
+        "lpg": "confirmed_zero_by_owner_rule"
+      }
+    },
+    {
+      "registration": "78-6996",
+      "salary": "8000",
+      "jobs": "24",
+      "tripPayments": "7050",
+      "expenses": "625",
+      "parkingFees": "1615",
+      "totalReceived": "64869",
+      "fuel": "21370",
+      "lpg": "0",
+      "maintenance": "960",
+      "sourceDashes": [
+        "lpg"
+      ],
+      "sourceRow": 18,
+      "lpgBasis": "confirmed_non_lpg_zero",
+      "sourceDashStatus": {
+        "lpg": "confirmed_zero_by_owner_rule"
+      }
+    },
+    {
+      "registration": "79-2945",
+      "salary": "8000",
+      "jobs": "38",
+      "tripPayments": "19150",
+      "expenses": "3300",
+      "parkingFees": "1985",
+      "totalReceived": "216588",
+      "fuel": "69350",
+      "lpg": "0",
+      "maintenance": null,
+      "sourceDashes": [
+        "lpg",
+        "maintenance"
+      ],
+      "sourceRow": 19,
+      "lpgBasis": "confirmed_non_lpg_zero",
+      "sourceDashStatus": {
+        "lpg": "confirmed_zero_by_owner_rule",
+        "maintenance": "unresolved_source_dash"
+      }
+    },
+    {
+      "registration": "79-5318",
+      "salary": "8000",
+      "jobs": "31",
+      "tripPayments": "21300",
+      "expenses": "4425",
+      "parkingFees": "3450",
+      "totalReceived": "251007",
+      "fuel": "88039",
+      "lpg": "0",
+      "maintenance": "4380",
+      "sourceDashes": [
+        "lpg"
+      ],
+      "sourceRow": 20,
+      "lpgBasis": "confirmed_non_lpg_zero",
+      "sourceDashStatus": {
+        "lpg": "confirmed_zero_by_owner_rule"
+      }
+    },
+    {
+      "registration": "ฒอ-8453",
+      "salary": "6500",
+      "jobs": "23",
+      "tripPayments": "3600",
+      "expenses": "95",
+      "parkingFees": "240",
+      "totalReceived": "43453",
+      "fuel": "1550",
+      "lpg": "7292.1",
+      "maintenance": null,
+      "sourceDashes": [
+        "maintenance"
+      ],
+      "sourceRow": 21,
+      "lpgBasis": "separate_from_fuel",
+      "sourceDashStatus": {
+        "maintenance": "unresolved_source_dash"
+      }
+    }
+  ],
+  "sourceFooterTotals": {
+    "salary": "159500",
+    "jobs": "666",
+    "tripPayments": "314550",
+    "expenses": "47415",
+    "parkingFees": "42130",
+    "totalReceived": "3581914",
+    "fuel": "1178269.9",
+    "lpg": "7292.1",
+    "maintenance": "27660"
+  },
+  "rowSumReconciliation": {
+    "status": "matches_if_source_dashes_are_zero",
+    "differenceByField": {
+      "salary": {
+        "rowSubtotalDashAsZero": "159500",
+        "sourceFooter": "159500",
+        "difference": "0"
+      },
+      "jobs": {
+        "rowSubtotalDashAsZero": "666",
+        "sourceFooter": "666",
+        "difference": "0"
+      },
+      "tripPayments": {
+        "rowSubtotalDashAsZero": "314550",
+        "sourceFooter": "314550",
+        "difference": "0"
+      },
+      "expenses": {
+        "rowSubtotalDashAsZero": "47415",
+        "sourceFooter": "47415",
+        "difference": "0"
+      },
+      "parkingFees": {
+        "rowSubtotalDashAsZero": "42130",
+        "sourceFooter": "42130",
+        "difference": "0"
+      },
+      "totalReceived": {
+        "rowSubtotalDashAsZero": "3581914",
+        "sourceFooter": "3581914",
+        "difference": "0"
+      },
+      "fuel": {
+        "rowSubtotalDashAsZero": "1178269.9",
+        "sourceFooter": "1178269.9",
+        "difference": "0.0"
+      },
+      "lpg": {
+        "rowSubtotalDashAsZero": "7292.1",
+        "sourceFooter": "7292.1",
+        "difference": "0.0"
+      },
+      "maintenance": {
+        "rowSubtotalDashAsZero": "27660",
+        "sourceFooter": "27660",
+        "difference": "0"
+      }
+    },
+    "dashCountByField": {
+      "salary": 0,
+      "jobs": 0,
+      "tripPayments": 1,
+      "expenses": 2,
+      "parkingFees": 1,
+      "totalReceived": 1,
+      "fuel": 0,
+      "lpg": 20,
+      "maintenance": 14
+    },
+    "caveat": "All row subtotals match the printed report footer when em dashes are treated as zero for arithmetic. Individual dash cells remain null/unclear in the preview unless an owner-confirmed rule applies; no missing figures are guessed."
+  },
+  "salaryStatus": "august_control_reconciled",
+  "salaryControl": "159500",
+  "salaryControlExcludes": "DUMMY",
+  "excludedItems": [
+    "DUMMY",
+    "Overtime",
+    "Container Pickup",
+    "Goods"
+  ],
+  "lpgRule": "Only ฒอ-8453 uses LPG; LPG is separate from Fuel for Aug 2026 onward. Other vehicles are confirmed non-LPG and shown as zero LPG even where the source cell is a dash.",
+  "sourceNotes": [
+    "August salary total excludes DUMMY and reconciles to THB 159,500. PDF notes identify 3ฒล-4565 as zero jobs and zero received revenue; dash in Total Received is therefore shown as zero."
+  ]
+}

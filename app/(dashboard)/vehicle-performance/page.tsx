@@ -25,6 +25,7 @@ import { useAccountAccess } from "@/lib/use-account-access";
 import { supabase } from "@/lib/supabase";
 import { formatNumber, normalizeComparableText, normalizeVehicleRegistration } from "@/lib/utils";
 import { knownVehicleRegistrationAliases } from "@/lib/vehicle-identity";
+import { VehicleFinancialDrafts } from "@/components/vehicle-financial-drafts";
 import { summarizeTripFinancials } from "@/lib/trip-financials";
 import {
   addAppFuelToImportRows,
@@ -2245,6 +2246,7 @@ export default function VehiclePerformancePage() {
                   <button type="button" onClick={() => setPerformanceView("trips")} className={`rounded-xl px-3.5 py-2 text-sm font-semibold transition ${performanceView === "trips" ? "bg-brand-700 text-white shadow-sm" : "text-slate-600 hover:bg-brand-50"}`}>Trip performance</button>
                 ) : null}
               </div>
+              <a className="btn-secondary" href="#vehicle-performance-v4">2026 financial drafts</a>
               <button type="button" className="btn-secondary" onClick={scrollToDataManagement}>Manage data</button>
               <Link className="btn-secondary" href="/maintenance/analytics">{t.maintenance.analytics}</Link>
               <button type="button" onClick={() => void downloadVehiclePerformancePdf()} disabled={generatingPdf || loading || !!loadError || !rows.length} className="btn-primary gap-2 disabled:cursor-not-allowed disabled:opacity-50">
@@ -2285,6 +2287,16 @@ export default function VehiclePerformancePage() {
           ) : null}
         </div>
       </section>
+
+      <div id="vehicle-performance-v4" className="scroll-mt-6">
+        <VehicleFinancialDrafts
+          language={language}
+          vehicles={vehicles}
+          canImport={canWrite && can("business:import")}
+          canReview={canWrite}
+          canApprove={can("admin:user_management")}
+        />
+      </div>
 
       {loading ? <p role="status" className="surface-card p-5">{labels.loadingRecords}</p> : loadError ? (
         <div role="alert" className="surface-card p-5"><p className="form-error">Unable to load vehicle performance: {loadError}</p><button type="button" className="btn-secondary mt-3" onClick={() => void load()}>{labels.retry}</button></div>

@@ -2222,7 +2222,40 @@ export async function fetchVehicleMonthlyFuelSpend(filters: {
   return buildFuelSpendReportVehicleMonthlyFuelRows(logs, filters);
 }
 
+let legacyVehicleFinancialWriteModeCache: { accessToken: string; mode: "legacy_enabled" | "v4_only"; expiresAt: number } | null = null;
+
+/**
+ * Prevents the existing Manage Data UI from bypassing a future V4 cutover. The
+ * database trigger remains authoritative if the client cache or API is stale.
+ */
+async function assertLegacyVehicleFinancialWritesEnabled() {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) throw sessionError;
+  const accessToken = sessionData.session?.access_token;
+  if (!accessToken) throw new Error("Sign in again before changing monthly Vehicle Performance records.");
+  if (legacyVehicleFinancialWriteModeCache?.accessToken === accessToken && legacyVehicleFinancialWriteModeCache.expiresAt > Date.now()) {
+    if (legacyVehicleFinancialWriteModeCache.mode === "v4_only") throw new Error("Legacy monthly imports are closed. Create or review a V4 financial draft instead.");
+    return;
+  }
+  const response = await fetch("/api/vehicle-performance-v4/legacy-write-gate", {
+    headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store"
+  });
+  if (response.status === 404) return; // Old app deployments keep the RLS-protected legacy path.
+  if (!response.ok) throw new Error("Unable to verify the monthly Vehicle Performance write mode. Retry after an administrator checks the V4 write-control row.");
+  const control = await response.json() as { mode?: string; migrationReady?: boolean };
+  if (control.mode !== "legacy_enabled" && control.mode !== "v4_only") {
+    throw new Error("The monthly Vehicle Performance write-control row is missing or invalid. Ask an administrator to restore legacy mode before importing.");
+  }
+  if (control.migrationReady !== true && control.mode !== "legacy_enabled") {
+    throw new Error("Monthly Vehicle Performance write control is not ready.");
+  }
+  const mode = control.mode;
+  legacyVehicleFinancialWriteModeCache = { accessToken, mode, expiresAt: Date.now() + 5_000 };
+  if (mode === "v4_only") throw new Error("Legacy monthly imports are closed. Create or review a V4 financial draft instead.");
+}
+
 export async function saveVehicleMonthlyPerformance(payload: Partial<VehicleMonthlyPerformance>) {
+  await assertLegacyVehicleFinancialWritesEnabled();
   const { id, ...rest } = payload;
   const vehicleRegistration = normalizeVehicleRegistration(rest.vehicle_registration);
 
@@ -2274,6 +2307,7 @@ export async function saveVehicleMonthlyPerformance(payload: Partial<VehicleMont
 }
 
 export async function deleteVehicleMonthlyPerformance(id: string) {
+  await assertLegacyVehicleFinancialWritesEnabled();
   const { error } = await supabase.from("vehicle_monthly_performance").delete().eq("id", id);
 
   if (error) {
