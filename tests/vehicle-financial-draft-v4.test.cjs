@@ -100,6 +100,9 @@ test('January–July stay source-required while August–September remain the on
   assert.match(component, /resolveV4SourceVehicleMatch/);
   assert.match(component, /monthChipVerified/);
   assert.match(component, /detailsAndProvenance/);
+  assert.match(component, /managementAnalysis/);
+  assert.match(component, /buildVehicleFinancialV4ManagementAnalysis/);
+  assert.doesNotMatch(component, /max-h-\[min\(36rem,72vh\)\]/);
 });
 
 test('XLSX import preserves original cell values, explicit included LPG and DUMMY control rows', () => {
