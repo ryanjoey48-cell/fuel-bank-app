@@ -1,0 +1,191 @@
+{
+  "standardColumns": [
+    "Registration",
+    "Salary",
+    "Jobs",
+    "Trip Payments",
+    "Expenses",
+    "Parking Fees",
+    "Total Received",
+    "Fuel",
+    "LPG",
+    "Maintenance"
+  ],
+  "registrationReviewFlags": [
+    {
+      "registration": "3ฒล-4565",
+      "reason": "owner_to_confirm_registration_with_boss",
+      "blocking": false,
+      "note": "Keep flagged for later review. Do not rename, duplicate or block other monthly preparation."
+    }
+  ],
+  "lpgPolicy": {
+    "onlyVehicle": "ฒอ-8453",
+    "januaryToJuly": "included_in_fuel_never_deduct_twice",
+    "augustOnwards": "separate_from_fuel"
+  },
+  "months": [
+    {
+      "reportingMonth": "2026-01",
+      "status": "source_report_required",
+      "previewAvailable": false,
+      "legacyInventory": {
+        "recordCount": 20,
+        "availableCategories": ["Registration", "Salary", "Trip Payments", "Expenses", "Total Received", "Fuel", "LPG"],
+        "missingCategories": ["Jobs", "Parking Fees", "Maintenance"],
+        "notes": [
+          "Legacy vehicle_monthly_performance rows exist (read-only inventory only).",
+          "Fuel historically comes from fuel_logs, not the monthly workbook columns.",
+          "Salary/Trip values in legacy storage are not accepted as V4 source evidence without the original monthly report."
+        ]
+      },
+      "requiredFromOwner": [
+        "January 2026 monthly financial source report (PDF or Excel) with the ten standard V4 columns",
+        "Supporting maintenance and parking evidence if those columns are blank or dashed in the monthly report"
+      ],
+      "unresolvedFigures": ["Jobs", "Parking Fees", "Maintenance", "Salary provenance", "Trip Payments provenance"]
+    },
+    {
+      "reportingMonth": "2026-02",
+      "status": "source_report_required",
+      "previewAvailable": false,
+      "legacyInventory": {
+        "recordCount": 20,
+        "availableCategories": ["Registration", "Salary", "Trip Payments", "Expenses", "Total Received", "Fuel", "LPG"],
+        "missingCategories": ["Jobs", "Parking Fees", "Maintenance"],
+        "notes": [
+          "Legacy vehicle_monthly_performance rows exist (read-only inventory only).",
+          "No authorised January–July source PDF/XLSX was found locally for V4 transcription."
+        ]
+      },
+      "requiredFromOwner": [
+        "February 2026 monthly financial source report (PDF or Excel) with the ten standard V4 columns",
+        "Supporting maintenance and parking evidence if those columns are blank or dashed in the monthly report"
+      ],
+      "unresolvedFigures": ["Jobs", "Parking Fees", "Maintenance", "Salary provenance", "Trip Payments provenance"]
+    },
+    {
+      "reportingMonth": "2026-03",
+      "status": "source_report_required",
+      "previewAvailable": false,
+      "legacyInventory": {
+        "recordCount": 21,
+        "availableCategories": ["Registration", "Salary", "Trip Payments", "Expenses", "Total Received", "Fuel", "LPG"],
+        "missingCategories": ["Jobs", "Parking Fees", "Maintenance"],
+        "notes": [
+          "Legacy vehicle_monthly_performance rows exist (read-only inventory only).",
+          "Import review rows remain open for March 2026 in legacy workflow; they are not V4 source evidence."
+        ]
+      },
+      "requiredFromOwner": [
+        "March 2026 monthly financial source report (PDF or Excel) with the ten standard V4 columns",
+        "Supporting maintenance and parking evidence if those columns are blank or dashed in the monthly report"
+      ],
+      "unresolvedFigures": ["Jobs", "Parking Fees", "Maintenance", "Salary provenance", "Trip Payments provenance"]
+    },
+    {
+      "reportingMonth": "2026-04",
+      "status": "source_report_required",
+      "previewAvailable": false,
+      "legacyInventory": {
+        "recordCount": 21,
+        "availableCategories": ["Registration", "Salary", "Trip Payments", "Expenses", "Total Received", "Fuel", "LPG"],
+        "missingCategories": ["Jobs", "Parking Fees", "Maintenance"],
+        "notes": [
+          "Legacy vehicle_monthly_performance rows exist (read-only inventory only).",
+          "Import review rows remain open for April 2026 in legacy workflow; they are not V4 source evidence."
+        ]
+      },
+      "requiredFromOwner": [
+        "April 2026 monthly financial source report (PDF or Excel) with the ten standard V4 columns",
+        "Supporting maintenance and parking evidence if those columns are blank or dashed in the monthly report"
+      ],
+      "unresolvedFigures": ["Jobs", "Parking Fees", "Maintenance", "Salary provenance", "Trip Payments provenance"]
+    },
+    {
+      "reportingMonth": "2026-05",
+      "status": "source_report_required",
+      "previewAvailable": false,
+      "legacyInventory": {
+        "recordCount": 21,
+        "availableCategories": ["Registration", "Salary", "Trip Payments", "Expenses", "Total Received", "Fuel", "LPG"],
+        "missingCategories": ["Jobs", "Parking Fees", "Maintenance"],
+        "notes": [
+          "Legacy vehicle_monthly_performance rows exist (read-only inventory only).",
+          "Import review rows remain open for May 2026 in legacy workflow; they are not V4 source evidence."
+        ]
+      },
+      "requiredFromOwner": [
+        "May 2026 monthly financial source report (PDF or Excel) with the ten standard V4 columns",
+        "Supporting maintenance and parking evidence if those columns are blank or dashed in the monthly report"
+      ],
+      "unresolvedFigures": ["Jobs", "Parking Fees", "Maintenance", "Salary provenance", "Trip Payments provenance"]
+    },
+    {
+      "reportingMonth": "2026-06",
+      "status": "source_report_required",
+      "previewAvailable": false,
+      "legacyInventory": {
+        "recordCount": 21,
+        "availableCategories": ["Registration", "Salary", "Trip Payments", "Expenses", "Total Received", "Fuel", "LPG"],
+        "missingCategories": ["Jobs", "Parking Fees", "Maintenance"],
+        "notes": [
+          "Legacy vehicle_monthly_performance rows exist (read-only inventory only)."
+        ]
+      },
+      "requiredFromOwner": [
+        "June 2026 monthly financial source report (PDF or Excel) with the ten standard V4 columns",
+        "Supporting maintenance and parking evidence if those columns are blank or dashed in the monthly report"
+      ],
+      "unresolvedFigures": ["Jobs", "Parking Fees", "Maintenance", "Salary provenance", "Trip Payments provenance"]
+    },
+    {
+      "reportingMonth": "2026-07",
+      "status": "source_report_required",
+      "previewAvailable": false,
+      "legacyInventory": {
+        "recordCount": 21,
+        "availableCategories": ["Registration", "Salary", "Trip Payments", "Expenses", "Total Received", "Fuel", "LPG"],
+        "missingCategories": ["Jobs", "Parking Fees", "Maintenance"],
+        "notes": [
+          "Legacy vehicle_monthly_performance rows exist (read-only inventory only).",
+          "Import review rows remain open for July 2026 in legacy workflow; they are not V4 source evidence.",
+          "ฒอ-8453 LPG must stay included in Fuel for January–July and must never be deducted twice."
+        ]
+      },
+      "requiredFromOwner": [
+        "July 2026 monthly financial source report (PDF or Excel) with the ten standard V4 columns",
+        "Supporting maintenance and parking evidence if those columns are blank or dashed in the monthly report"
+      ],
+      "unresolvedFigures": ["Jobs", "Parking Fees", "Maintenance", "Salary provenance", "Trip Payments provenance"]
+    },
+    {
+      "reportingMonth": "2026-08",
+      "status": "source_verified_readonly",
+      "previewAvailable": true,
+      "legacyInventory": null,
+      "requiredFromOwner": [],
+      "unresolvedFigures": ["Unresolved source dashes remain unknown in Expenses / Parking / Maintenance where present"],
+      "notes": [
+        "Read-only V4 preview transcribed from EES_August_2026.pdf.",
+        "Salary control reconciled excluding DUMMY.",
+        "LPG separate from Fuel; only ฒอ-8453 has LPG."
+      ]
+    },
+    {
+      "reportingMonth": "2026-09",
+      "status": "source_verified_readonly_salary_provisional",
+      "previewAvailable": true,
+      "legacyInventory": null,
+      "requiredFromOwner": [
+        "Independent September 2026 payroll evidence to replace provisional carried-forward salary allocations"
+      ],
+      "unresolvedFigures": ["September salary remains provisional", "Unresolved source dashes remain unknown where present"],
+      "notes": [
+        "Read-only V4 preview transcribed from EES_September_2026_Registration_First.pdf.",
+        "Salary allocations carried forward from August pending independent payroll verification.",
+        "LPG separate from Fuel; only ฒอ-8453 has LPG."
+      ]
+    }
+  ]
+}

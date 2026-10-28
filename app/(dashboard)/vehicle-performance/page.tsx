@@ -2246,7 +2246,7 @@ export default function VehiclePerformancePage() {
                   <button type="button" onClick={() => setPerformanceView("trips")} className={`rounded-xl px-3.5 py-2 text-sm font-semibold transition ${performanceView === "trips" ? "bg-brand-700 text-white shadow-sm" : "text-slate-600 hover:bg-brand-50"}`}>Trip performance</button>
                 ) : null}
               </div>
-              <a className="btn-secondary" href="#vehicle-performance-v4">2026 financial drafts</a>
+              <a className="btn-secondary" href="#vehicle-performance-v4">2026 monthly financial report</a>
               <button type="button" className="btn-secondary" onClick={scrollToDataManagement}>Manage data</button>
               <Link className="btn-secondary" href="/maintenance/analytics">{t.maintenance.analytics}</Link>
               <button type="button" onClick={() => void downloadVehiclePerformancePdf()} disabled={generatingPdf || loading || !!loadError || !rows.length} className="btn-primary gap-2 disabled:cursor-not-allowed disabled:opacity-50">

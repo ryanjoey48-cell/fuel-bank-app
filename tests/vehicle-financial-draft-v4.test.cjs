@@ -55,11 +55,45 @@ test('source preview salaries are served only through an authorized server route
   assert.doesNotMatch(component, /159,?500/);
   assert.match(component, /\/api\/vehicle-performance-v4\/source-previews/);
   assert.match(component, /\{canReview \? <>/);
+  assert.match(component, /selectedPreviewMonth/);
+  assert.match(component, /c\.manageData/);
+  assert.match(component, /SourceReportRequiredPanel/);
+  assert.doesNotMatch(component, /sourcePreviews\?\.map\(report =>/);
   assert.match(route, /requireVerifiedUser/);
   assert.match(route, /canUseVehicleFinancialDrafts\(access, "read"\)/);
   assert.match(route, /Cache-Control.*private, no-store/i);
   assert.match(route, /2026-08\.json/);
   assert.match(route, /2026-09\.json/);
+  assert.match(route, /vehicleFinancialV4SourceAvailability/);
+  assert.match(route, /reports: verifiedReports/);
+});
+
+test('January–July stay source-required while August–September remain the only verified V4 previews', () => {
+  const catalog = JSON.parse(fs.readFileSync(path.resolve('data/vehicle-performance-v4/source-availability.json'), 'utf8'));
+  const expectedColumns = ['Registration', 'Salary', 'Jobs', 'Trip Payments', 'Expenses', 'Parking Fees', 'Total Received', 'Fuel', 'LPG', 'Maintenance'];
+  assert.deepEqual(catalog.standardColumns, expectedColumns);
+  assert.equal(catalog.months.length, 9);
+  assert.deepEqual(catalog.months.map(month => month.reportingMonth), [
+    '2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09'
+  ]);
+  for (const month of catalog.months.slice(0, 7)) {
+    assert.equal(month.previewAvailable, false);
+    assert.equal(month.status, 'source_report_required');
+    assert.ok(month.requiredFromOwner.length > 0);
+    assert.ok(month.legacyInventory.missingCategories.includes('Jobs'));
+    assert.ok(month.legacyInventory.missingCategories.includes('Parking Fees'));
+    assert.ok(month.legacyInventory.missingCategories.includes('Maintenance'));
+  }
+  assert.equal(catalog.months[7].previewAvailable, true);
+  assert.equal(catalog.months[8].previewAvailable, true);
+  assert.equal(catalog.months[8].status, 'source_verified_readonly_salary_provisional');
+  assert.equal(catalog.registrationReviewFlags[0].registration, '3ฒล-4565');
+  assert.equal(catalog.registrationReviewFlags[0].blocking, false);
+  assert.equal(catalog.lpgPolicy.januaryToJuly, 'included_in_fuel_never_deduct_twice');
+  assert.equal(catalog.lpgPolicy.augustOnwards, 'separate_from_fuel');
+  const component = fs.readFileSync(path.resolve('components/vehicle-financial-drafts.tsx'), 'utf8');
+  assert.match(component, /registrationReview/);
+  assert.match(component, /3ฒล-4565/);
 });
 
 test('XLSX import preserves original cell values, explicit included LPG and DUMMY control rows', () => {
@@ -275,8 +309,9 @@ test('source report PDFs are excluded from Git and Vercel deployment inputs', ()
   assert.match(gitignore, /\/data\/vehicle-performance-v4\/source-reports\//);
   assert.match(vercelignore, /data\/vehicle-performance-v4\/source-reports\//);
   const component = fs.readFileSync(path.resolve('components/vehicle-financial-drafts.tsx'), 'utf8');
-  const readOnlySection = component.slice(component.indexOf('function ReadOnlySourcePreview'), component.indexOf('function BatchDetailsPanel'));
+  const readOnlySection = component.slice(component.indexOf('function ReadOnlySourcePreview'), component.indexOf('function SourceReportRequiredPanel'));
   assert.match(component, /excluded from live KPIs, rankings and margins/);
+  assert.match(component, /sourceFiguresNote/);
   assert.doesNotMatch(readOnlySection, /recordedBalance|marginPercent|calculateDraftFinancials/);
 });
 

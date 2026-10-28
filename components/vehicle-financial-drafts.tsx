@@ -53,10 +53,32 @@ type SourcePreview = {
   sourceFile: string;
   sourceSha256: string;
   rowCount: number;
+  salaryStatus?: string;
   rows: SourcePreviewRow[];
   sourceFooterTotals: Record<string, string | null>;
   rowSumReconciliation: { caveat: string };
   sourceNotes: string[];
+};
+type SourceMonthCatalogEntry = {
+  reportingMonth: string;
+  status: "source_report_required" | "source_verified_readonly" | "source_verified_readonly_salary_provisional";
+  previewAvailable: boolean;
+  legacyInventory: {
+    recordCount: number;
+    availableCategories: string[];
+    missingCategories: string[];
+    notes: string[];
+  } | null;
+  requiredFromOwner: string[];
+  unresolvedFigures: string[];
+  notes?: string[];
+};
+type SourcePreviewPayload = {
+  reports?: SourcePreview[];
+  months?: SourceMonthCatalogEntry[];
+  catalog?: {
+    registrationReviewFlags?: Array<{ registration: string; reason: string; blocking: boolean; note: string }>;
+  };
 };
 type Props = {
   language: Language;
@@ -68,9 +90,21 @@ type Props = {
 
 const copy = {
   en: {
-    title: "V4 monthly financial drafts",
-    subtitle: "Review source figures in a versioned draft. This workflow does not change live Vehicle Performance totals.",
+    title: "2026 monthly financial report",
+    subtitle: "One standardised January–September source view. Live KPIs, rankings and approved balances stay unchanged.",
     period: "Reporting month", upload: "Choose Excel or CSV", sheets: "Source sheets", roster: "Vehicles expected for this month",
+    manageData: "Manage Data",
+    monthSelector: "January–September 2026",
+    sourceFigures: "Source figures",
+    sourceFiguresNote: "Printed source totals · not approved profit",
+    sourceReportRequired: "Source report required",
+    sourceReportRequiredHelp: "This month cannot use the V4 ten-column preview until the original monthly financial report is provided. Legacy inventory is shown only as a gap checklist.",
+    missingCategories: "Missing V4 categories",
+    legacyInventory: "Legacy inventory only",
+    requiredFromOwner: "Required from owner",
+    unresolvedFigures: "Unresolved figures",
+    registrationReview: "Registration review pending",
+    registrationReviewHelp: "Owner will confirm 3ฒล-4565 with the boss later. Do not rename or duplicate it.",
     confirmRoster: "I confirm this is the complete fleet roster for the selected month", rosterConfirmed: "Complete monthly fleet roster confirmed",
     employee: "Month-specific employee", employeeUnassigned: "Unknown / not assigned", lpg: "LPG treatment",
     lpgIncluded: "Included in Fuel", lpgSeparate: "Separate expense", lpgUnknown: "Unknown",
@@ -83,10 +117,11 @@ const copy = {
     noSheets: "Choose at least one sheet.", noRoster: "Select the vehicles expected in this reporting month.",
     warning: "Source revenue and expense relationships are not independently verified. Balance and margin stay withheld until an approved server accounting policy exists.",
     warningHistory: "Historical rows are not changed. Jan–Jul ฒอ-8453 uses LPG included in Fuel; corrections require owner evidence and independent review. An initial baseline can be proposed only for an empty V4 month.",
-    august: "August 2026 read-only preview", september: "September 2026 read-only preview",
+    august: "August 2026", september: "September 2026",
     noSource: "No V4 draft has been saved for this month.",
     augustSalary: "August salary rows reconcile to the report control excluding DUMMY.",
     septemberSalary: "September salary remains provisional pending independent payroll verification.",
+    monthlyReport: "Monthly source report",
     formulaPlaceholder: "Optional source report name or page", inactive: "inactive",
     reconciliation: "Reconciliation", imported: "Imported", declared: "Source control", status: "Status", unknown: "Unknown",
     registration: "Registration", salary: "Salary", jobs: "Jobs", trips: "Trip Payments", expenses: "Expenses", parking: "Parking Fees",
@@ -113,9 +148,21 @@ const copy = {
     policyStatus: "V4 accounting policy", policyDraft: "Draft — balances remain disabled", policyApproved: "Previously approved policy record detected", policyEvidencePending: "Accounting-policy activation remains disabled for this release.", policyApprovalConflict: "An immutable approval exists with different evidence. A new policy version requires review.", approvePolicy: "Approve v4-accounting-draft-3", policyApprovalFailed: "The policy was not approved. Check admin access, the verified evidence manifest and the saved policy version.",
   },
   th: {
-    title: "ฉบับร่างการเงินรายเดือน V4",
-    subtitle: "ตรวจสอบตัวเลขจากแหล่งข้อมูลในฉบับร่างที่มีเวอร์ชัน ขั้นตอนนี้ไม่เปลี่ยนยอด Vehicle Performance ที่ใช้งานอยู่",
+    title: "รายงานการเงินรายเดือน 2026",
+    subtitle: "มุมมองต้นฉบับมาตรฐาน ม.ค.–ก.ย. เดียวกัน KPI อันดับ และยอดคงเหลือที่อนุมัติแล้วยังไม่เปลี่ยน",
     period: "เดือนรายงาน", upload: "เลือก Excel หรือ CSV", sheets: "ชีตต้นทาง", roster: "รถที่คาดว่าจะอยู่ในเดือนนี้",
+    manageData: "จัดการข้อมูล",
+    monthSelector: "มกราคม–กันยายน 2026",
+    sourceFigures: "ตัวเลขจากต้นฉบับ",
+    sourceFiguresNote: "ยอดรวมจากรายงานต้นฉบับ · ไม่ใช่กำไรที่อนุมัติ",
+    sourceReportRequired: "ต้องมีรายงานต้นฉบับ",
+    sourceReportRequiredHelp: "เดือนนี้ยังใช้ตัวอย่าง V4 สิบคอลัมน์ไม่ได้ จนกว่าจะได้รับรายงานการเงินรายเดือนต้นฉบับ ข้อมูลเดิมแสดงไว้เพียงเพื่อตรวจช่องว่าง",
+    missingCategories: "หมวด V4 ที่ยังขาด",
+    legacyInventory: "ข้อมูลเดิมเท่านั้น",
+    requiredFromOwner: "สิ่งที่ต้องขอจากเจ้าของ",
+    unresolvedFigures: "ตัวเลขที่ยังไม่สรุป",
+    registrationReview: "รอตรวจสอบทะเบียน",
+    registrationReviewHelp: "เจ้าของจะยืนยันทะเบียน 3ฒล-4565 กับหัวหน้าภายหลัง ห้ามเปลี่ยนชื่อหรือสร้างรายการซ้ำ",
     confirmRoster: "ขอยืนยันว่ารายชื่อรถนี้ครบถ้วนสำหรับเดือนที่เลือก", rosterConfirmed: "ยืนยันรายชื่อรถประจำเดือนครบถ้วนแล้ว",
     employee: "พนักงานประจำเดือน", employeeUnassigned: "ไม่ทราบ / ยังไม่กำหนด", lpg: "วิธีบันทึก LPG",
     lpgIncluded: "รวมอยู่ใน Fuel", lpgSeparate: "ค่าใช้จ่ายแยก", lpgUnknown: "ไม่ทราบ",
@@ -128,10 +175,11 @@ const copy = {
     noSheets: "เลือกอย่างน้อยหนึ่งชีต", noRoster: "เลือกยานพาหนะที่คาดว่าจะมีในเดือนรายงานนี้",
     warning: "ยังไม่ยืนยันความสัมพันธ์ระหว่างรายรับและค่าใช้จ่าย จึงงดยอดคงเหลือและอัตรากำไรจนกว่าจะมีนโยบายบัญชีที่อนุมัติจากเซิร์ฟเวอร์",
     warningHistory: "ข้อมูลย้อนหลังจะไม่ถูกเปลี่ยน เดือน ม.ค.–ก.ค. ของ ฒอ-8453 ถือว่า LPG รวมอยู่ใน Fuel การแก้ไขต้องมีหลักฐานจากเจ้าของและการตรวจทานอิสระ เสนอข้อมูลฐานย้อนหลังได้เฉพาะเดือน V4 ที่ยังไม่มีเวอร์ชัน",
-    august: "ตัวอย่างอ่านอย่างเดียว: สิงหาคม 2026", september: "ตัวอย่างอ่านอย่างเดียว: กันยายน 2026",
+    august: "สิงหาคม 2026", september: "กันยายน 2026",
     noSource: "ยังไม่มีการบันทึกฉบับร่าง V4 สำหรับเดือนนี้",
     augustSalary: "ยอดเงินเดือนเดือนสิงหาคมตรงกับยอดควบคุมในรายงาน ไม่รวม DUMMY",
     septemberSalary: "เงินเดือนเดือนกันยายนยังเป็นข้อมูลชั่วคราว รอการตรวจสอบบัญชีเงินเดือนโดยอิสระ",
+    monthlyReport: "รายงานต้นฉบับรายเดือน",
     formulaPlaceholder: "ชื่อรายงานหรือหน้าต้นทาง (ไม่บังคับ)", inactive: "ไม่ใช้งาน",
     reconciliation: "การกระทบยอด", imported: "ยอดนำเข้า", declared: "ยอดต้นทาง", status: "สถานะ", unknown: "ไม่ทราบ",
     registration: "ทะเบียนรถ", salary: "เงินเดือน", jobs: "จำนวนงาน", trips: "ค่าเที่ยว", expenses: "ค่าใช้จ่าย", parking: "ค่าจอดรถ",
@@ -279,14 +327,32 @@ function formatSourceAmount(value: string | null) {
   return fraction === undefined ? grouped : `${grouped}.${fraction}`;
 }
 
-function ReadOnlySourcePreview({ report, language, c, vehicleIdsByAlias }: {
+const previewMonthLabels: Record<string, { en: string; th: string }> = {
+  "2026-01": { en: "January 2026", th: "มกราคม 2026" },
+  "2026-02": { en: "February 2026", th: "กุมภาพันธ์ 2026" },
+  "2026-03": { en: "March 2026", th: "มีนาคม 2026" },
+  "2026-04": { en: "April 2026", th: "เมษายน 2026" },
+  "2026-05": { en: "May 2026", th: "พฤษภาคม 2026" },
+  "2026-06": { en: "June 2026", th: "มิถุนายน 2026" },
+  "2026-07": { en: "July 2026", th: "กรกฎาคม 2026" },
+  "2026-08": { en: "August 2026", th: "สิงหาคม 2026" },
+  "2026-09": { en: "September 2026", th: "กันยายน 2026" }
+};
+
+function monthLabel(monthKey: string, language: Language) {
+  return previewMonthLabels[monthKey]?.[language] ?? monthKey;
+}
+
+function ReadOnlySourcePreview({ report, language, c, vehicleIdsByAlias, reviewRegistrations }: {
   report: SourcePreview;
   language: Language;
   c: typeof copy.en | typeof copy.th;
   vehicleIdsByAlias: Map<string, Set<string>>;
+  reviewRegistrations: Set<string>;
 }) {
   const isAugust = report.reportingMonth === "2026-08";
-  const label = isAugust ? c.august : c.september;
+  const isSeptember = report.reportingMonth === "2026-09";
+  const label = monthLabel(report.reportingMonth, language);
   const allSourceVehicles = vehicleIdsByAlias.size > 0;
   const matchedRows = report.rows.filter(row => {
     const aliases = knownVehicleRegistrationAliases(row.registration);
@@ -294,46 +360,74 @@ function ReadOnlySourcePreview({ report, language, c, vehicleIdsByAlias }: {
     return matches.size === 1;
   }).length;
   const unresolvedDashes = report.rows.reduce((sum, row) => sum + Object.values(row.sourceDashStatus).filter(value => value === "unresolved_source_dash").length, 0);
-  const salaryText = isAugust ? c.augustSalaryVerified : c.septemberSalaryProvisional;
+  const salaryText = isAugust ? c.augustSalaryVerified : isSeptember ? c.septemberSalaryProvisional : null;
   const totalValue = (field: string) => formatSourceAmount(report.sourceFooterTotals[field as keyof typeof report.sourceFooterTotals] ?? null) ?? "—";
+  const summaryCards: Array<[string, string]> = [
+    [c.revenue, totalValue("totalReceived")],
+    [c.jobs, totalValue("jobs")],
+    [c.salary, totalValue("salary")],
+    [c.fuel, totalValue("fuel")],
+    [c.maintenance, totalValue("maintenance")]
+  ];
 
   return <article className="overflow-hidden rounded-xl border border-slate-200 bg-white">
     <div className="border-b border-slate-200 bg-slate-50/80 px-3.5 py-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div><h4 className="text-sm font-bold text-slate-950">{label}</h4><p className="mt-1 text-xs text-slate-600">{report.rowCount} named vehicle rows · {allSourceVehicles ? `${matchedRows}/${report.rowCount} ${c.matchCount}` : c.matchPending}</p></div>
+        <div>
+          <h4 className="text-sm font-bold text-slate-950">{c.monthlyReport}: {label}</h4>
+          <p className="mt-1 text-xs text-slate-600">{report.rowCount} named vehicle rows · {allSourceVehicles ? `${matchedRows}/${report.rowCount} ${c.matchCount}` : c.matchPending}</p>
+        </div>
         <span className="inline-flex w-fit rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-900">{c.readOnlySource}</span>
       </div>
-      <p className={`mt-2 rounded-lg px-3 py-2 text-xs ${isAugust ? "bg-violet-50 text-violet-950" : "bg-amber-50 text-amber-950"}`}>{salaryText}</p>
+      {salaryText ? <p className={`mt-2 rounded-lg px-3 py-2 text-xs ${isAugust ? "bg-violet-50 text-violet-950" : "bg-amber-50 text-amber-950"}`}>{salaryText}</p> : null}
       <p className="mt-2 text-xs text-slate-600">{c.sourceLpgRule}</p>
       {allSourceVehicles && matchedRows !== report.rowCount ? <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-xs font-medium text-rose-900">{c.matchMissing}: {report.rowCount - matchedRows} of {report.rowCount}</p> : null}
+      <div className="mt-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{c.sourceFigures} · {c.sourceFiguresNote}</p>
+        <dl className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
+          {summaryCards.map(([title, value]) => <div key={title} className="rounded-lg border border-slate-200 bg-white px-2.5 py-2">
+            <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{title}</dt>
+            <dd className="mt-1 text-sm font-semibold tabular-nums text-slate-950">{value}</dd>
+          </div>)}
+        </dl>
+      </div>
     </div>
-    <div className="overflow-x-auto">
-      <table className="min-w-[1120px] w-full text-xs">
-        <thead className="bg-slate-100 text-left text-slate-700"><tr>{readOnlyPreviewColumns.map(([label]) => <th key={label} className="px-2.5 py-2 font-semibold">{label}</th>)}</tr></thead>
+    <div className="max-h-[34rem] overflow-auto">
+      <table className="min-w-[1080px] w-full border-separate border-spacing-0 text-[11px]">
+        <thead className="sticky top-0 z-10 bg-slate-100 text-left text-slate-700 shadow-[0_1px_0_rgba(15,23,42,0.08)]">
+          <tr>{readOnlyPreviewColumns.map(([columnLabel]) => <th key={columnLabel} className="whitespace-nowrap px-2 py-2 font-semibold">{columnLabel}</th>)}</tr>
+        </thead>
         <tbody>
           {report.rows.map(row => {
             const aliases = knownVehicleRegistrationAliases(row.registration);
             const matches = new Set(aliases.flatMap(alias => [...(vehicleIdsByAlias.get(alias) ?? [])]));
             const vehicleMatch = matches.size === 1 ? "matched" : matches.size > 1 ? "ambiguous" : "missing";
+            const needsRegistrationReview = reviewRegistrations.has(row.registration);
             const valueFor = (field: keyof typeof row) => {
               const value = row[field];
               if (typeof value !== "string") return null;
               return formatSourceAmount(value);
             };
-            return <tr key={row.registration} className="border-t border-slate-100 align-top">
+            return <tr key={row.registration} className="border-t border-slate-100 align-top odd:bg-white even:bg-slate-50/60">
               {readOnlyPreviewColumns.map(([header, field]) => {
                 const raw = valueFor(field as keyof typeof row);
                 const dashStatus = row.sourceDashStatus[field as keyof typeof row.sourceDashStatus];
-                const label = raw === null ? c.sourceDash : dashStatus === "confirmed_zero_by_owner_rule" ? c.confirmedZero : dashStatus === "zero_confirmed_by_source_note" ? c.resolvedSourceNote : undefined;
-                return <td key={`${row.registration}-${header}`} className={`px-2.5 py-2 tabular-nums ${field === "registration" ? "font-semibold text-slate-950" : "text-slate-700"}`} title={label}>
-                  {field === "registration" ? <span className="flex flex-col gap-1">{raw}<span className={`w-fit rounded px-1.5 py-0.5 text-[9px] font-semibold ${vehicleMatch === "matched" ? "bg-emerald-50 text-emerald-800" : vehicleMatch === "missing" ? "bg-rose-50 text-rose-800" : "bg-amber-50 text-amber-800"}`}>{!allSourceVehicles ? c.matchPending : vehicleMatch === "matched" ? c.matchCount : c.matchMissing}</span></span> : raw === null ? <span aria-label={c.sourceDash} className="text-amber-800">—</span> : <span>{raw}{dashStatus === "confirmed_zero_by_owner_rule" ? <sup title={c.confirmedZero}>†</sup> : null}</span>}
+                const cellLabel = raw === null ? c.sourceDash : dashStatus === "confirmed_zero_by_owner_rule" ? c.confirmedZero : dashStatus === "zero_confirmed_by_source_note" ? c.resolvedSourceNote : undefined;
+                return <td key={`${row.registration}-${header}`} className={`whitespace-nowrap px-2 py-1.5 tabular-nums ${field === "registration" ? "font-semibold text-slate-950" : "text-slate-700"}`} title={cellLabel}>
+                  {field === "registration" ? <span className="flex flex-col gap-1">
+                    <span>{raw}</span>
+                    <span className="flex flex-wrap gap-1">
+                      <span className={`w-fit rounded px-1.5 py-0.5 text-[9px] font-semibold ${vehicleMatch === "matched" ? "bg-emerald-50 text-emerald-800" : vehicleMatch === "missing" ? "bg-rose-50 text-rose-800" : "bg-amber-50 text-amber-800"}`}>{!allSourceVehicles ? c.matchPending : vehicleMatch === "matched" ? "matched" : c.matchMissing}</span>
+                      {needsRegistrationReview ? <span className="w-fit rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-950" title={c.registrationReviewHelp}>{c.registrationReview}</span> : null}
+                    </span>
+                  </span> : raw === null ? <span aria-label={c.sourceDash} className="text-amber-800">—</span> : <span>{raw}{dashStatus === "confirmed_zero_by_owner_rule" ? <sup title={c.confirmedZero}>†</sup> : null}</span>}
                 </td>;
               })}
             </tr>;
           })}
         </tbody>
         <tfoot className="border-t-2 border-slate-300 bg-slate-50 font-semibold text-slate-900"><tr>
-          {readOnlyPreviewColumns.map(([header, field]) => <td key={header} className="px-2.5 py-2 tabular-nums">{field === "registration" ? c.sourceFooter : totalValue(field)}</td>)}
+          {readOnlyPreviewColumns.map(([header, field]) => <td key={header} className="whitespace-nowrap px-2 py-2 tabular-nums">{field === "registration" ? c.sourceFooter : totalValue(field)}</td>)}
         </tr></tfoot>
       </table>
     </div>
@@ -343,6 +437,30 @@ function ReadOnlySourcePreview({ report, language, c, vehicleIdsByAlias }: {
       {report.sourceNotes.map(note => <p key={note}>{note}</p>)}
       <details className="pt-1"><summary className="cursor-pointer font-semibold text-slate-700">{report.sourceFile} · source SHA-256</summary><p className="mt-1 break-all font-mono text-[10px]">{report.sourceSha256}</p></details>
     </div>
+  </article>;
+}
+
+function SourceReportRequiredPanel({ month, language, c }: {
+  month: SourceMonthCatalogEntry;
+  language: Language;
+  c: typeof copy.en | typeof copy.th;
+}) {
+  return <article className="rounded-xl border border-amber-200 bg-amber-50/70 p-4">
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <h4 className="text-sm font-bold text-amber-950">{c.sourceReportRequired}</h4>
+        <p className="mt-1 text-xs text-amber-900">{monthLabel(month.reportingMonth, language)}</p>
+      </div>
+      <span className="inline-flex w-fit rounded-full border border-amber-300 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-900">{c.legacyInventory}</span>
+    </div>
+    <p className="mt-3 text-sm text-amber-950">{c.sourceReportRequiredHelp}</p>
+    {month.legacyInventory ? <div className="mt-3 grid gap-3 sm:grid-cols-3">
+      <div className="rounded-lg border border-amber-200 bg-white p-3"><p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{c.legacyInventory}</p><p className="mt-1 text-lg font-semibold text-slate-950">{month.legacyInventory.recordCount}</p></div>
+      <div className="rounded-lg border border-amber-200 bg-white p-3 sm:col-span-2"><p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{c.missingCategories}</p><p className="mt-1 text-xs text-slate-800">{month.legacyInventory.missingCategories.join(" · ")}</p></div>
+    </div> : null}
+    {month.requiredFromOwner.length ? <div className="mt-3"><p className="text-xs font-semibold text-amber-950">{c.requiredFromOwner}</p><ul className="mt-1 list-disc pl-5 text-xs text-amber-950">{month.requiredFromOwner.map(item => <li key={item}>{item}</li>)}</ul></div> : null}
+    {month.unresolvedFigures.length ? <div className="mt-3"><p className="text-xs font-semibold text-amber-950">{c.unresolvedFigures}</p><p className="mt-1 text-xs text-amber-900">{month.unresolvedFigures.join(" · ")}</p></div> : null}
+    {(month.legacyInventory?.notes ?? month.notes ?? []).map(note => <p key={note} className="mt-2 text-xs text-amber-900">{note}</p>)}
   </article>;
 }
 
@@ -383,6 +501,9 @@ export function VehicleFinancialDrafts({ language, vehicles: fallbackVehicles, c
   const c = copy[language];
   const [metadata, setMetadata] = useState<DraftMetadata | null>(null);
   const [sourcePreviews, setSourcePreviews] = useState<SourcePreview[] | null>(null);
+  const [sourceMonths, setSourceMonths] = useState<SourceMonthCatalogEntry[]>([]);
+  const [reviewRegistrations, setReviewRegistrations] = useState<Set<string>>(new Set());
+  const [selectedPreviewMonth, setSelectedPreviewMonth] = useState("2026-08");
   const [sourcePreviewError, setSourcePreviewError] = useState(false);
   const [batchDetails, setBatchDetails] = useState<Record<string, BatchDetail | null>>({});
   const [openBatchId, setOpenBatchId] = useState<string | null>(null);
@@ -448,11 +569,14 @@ export function VehicleFinancialDrafts({ language, vehicles: fallbackVehicles, c
   useEffect(() => {
     if (!canReview) {
       setSourcePreviews(null);
+      setSourceMonths([]);
+      setReviewRegistrations(new Set());
       setSourcePreviewError(false);
       return;
     }
     let active = true;
     setSourcePreviews(null);
+    setSourceMonths([]);
     setSourcePreviewError(false);
     void (async () => {
       try {
@@ -461,9 +585,13 @@ export function VehicleFinancialDrafts({ language, vehicles: fallbackVehicles, c
           headers: { Authorization: `Bearer ${token}` }, cache: "no-store"
         });
         if (!response.ok) throw new Error("source preview unavailable");
-        const data = await response.json() as { reports?: SourcePreview[] };
-        if (!Array.isArray(data.reports) || data.reports.length !== 2) throw new Error("source preview unavailable");
-        if (active) setSourcePreviews(data.reports);
+        const data = await response.json() as SourcePreviewPayload;
+        if (!Array.isArray(data.reports) || data.reports.length < 1) throw new Error("source preview unavailable");
+        if (active) {
+          setSourcePreviews(data.reports);
+          setSourceMonths(Array.isArray(data.months) ? data.months : []);
+          setReviewRegistrations(new Set((data.catalog?.registrationReviewFlags ?? []).filter(flag => !flag.blocking).map(flag => flag.registration)));
+        }
       } catch {
         if (active) setSourcePreviewError(true);
       }
@@ -631,7 +759,8 @@ export function VehicleFinancialDrafts({ language, vehicles: fallbackVehicles, c
 
   const fieldsForControls: FinancialField[] = ["salary", "jobs", "tripPayments", "expenses", "parking", "totalReceived", "fuel", "lpg", "maintenance"];
   const valueLabel = (field: FinancialField) => field === "tripPayments" ? c.trips : field === "totalReceived" ? c.revenue : field === "parking" ? c.parking : field === "jobs" ? c.jobs : field === "lpg" ? "LPG" : c[field as keyof typeof c] ?? field;
-  const monthSummaries = useMemo(() => ["2026-08", "2026-09"].map(key => ({ key, batches: (metadata?.batches ?? []).filter(batch => batch.reporting_month.startsWith(`${key}-`)) })), [metadata?.batches]);
+  const selectedMonthCatalog = sourceMonths.find(month => month.reportingMonth === selectedPreviewMonth) ?? null;
+  const selectedSourceReport = (sourcePreviews ?? []).find(report => report.reportingMonth === selectedPreviewMonth) ?? null;
   const registrationKey = (value: string) => value.normalize("NFKC").trim().replace(/\s+/g, " ").toUpperCase();
   const employeeVehicles = new Map<string, Set<string>>();
   for (const row of parsed?.rows.filter(sourceRow => selectedSheets.includes(sourceRow.sheet)) ?? []) {
@@ -652,9 +781,21 @@ export function VehicleFinancialDrafts({ language, vehicles: fallbackVehicles, c
     </div>
 
     {canReview ? <>
+    <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3.5">
+      <label className="block text-xs font-semibold text-slate-700">{c.monthSelector}
+        <select aria-label={c.monthSelector} value={selectedPreviewMonth} onChange={event => setSelectedPreviewMonth(event.target.value)} className="form-input mt-1 max-w-xs">
+          {(sourceMonths.length ? sourceMonths.map(month => month.reportingMonth) : ["2026-08", "2026-09"]).map(monthKey => <option key={monthKey} value={monthKey}>{monthLabel(monthKey, language)}{sourceMonths.find(entry => entry.reportingMonth === monthKey)?.previewAvailable ? "" : ` · ${c.sourceReportRequired}`}</option>)}
+        </select>
+      </label>
+      <p className="mt-2 text-xs text-slate-500">{c.registrationReviewHelp}</p>
+    </div>
+
     <div className="mt-4 space-y-3">
-      {sourcePreviews?.map(report => <ReadOnlySourcePreview key={report.reportingMonth} report={report} language={language} c={c} vehicleIdsByAlias={vehicleIdsByAlias} />)}
-      {!sourcePreviews ? <p role="status" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">{sourcePreviewError ? c.sourcePreviewUnavailable : c.sourcePreviewLoading}</p> : null}
+      {!sourcePreviews && !sourcePreviewError ? <p role="status" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">{c.sourcePreviewLoading}</p> : null}
+      {sourcePreviewError ? <p role="status" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">{c.sourcePreviewUnavailable}</p> : null}
+      {sourcePreviews && selectedSourceReport ? <ReadOnlySourcePreview report={selectedSourceReport} language={language} c={c} vehicleIdsByAlias={vehicleIdsByAlias} reviewRegistrations={reviewRegistrations} /> : null}
+      {sourcePreviews && !selectedSourceReport && selectedMonthCatalog ? <SourceReportRequiredPanel month={selectedMonthCatalog} language={language} c={c} /> : null}
+      {sourcePreviews && !selectedSourceReport && !selectedMonthCatalog ? <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">{c.sourceReportRequired}</p> : null}
     </div>
 
     <div className="mt-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
@@ -662,36 +803,16 @@ export function VehicleFinancialDrafts({ language, vehicles: fallbackVehicles, c
       {metadata?.accountingPolicy?.approvalConflict ? <p className="text-xs text-amber-800">{c.policyApprovalConflict}</p> : null}
     </div>
 
-    <div className="mt-4 grid gap-3 md:grid-cols-2">
-      {monthSummaries.map(({ key, batches }) => {
-        const isAugust = key === "2026-08";
-        const label = isAugust ? c.august : c.september;
-        const latest = batches[0];
-        return <article key={key} className="rounded-xl border border-slate-200 bg-white p-3.5">
-          <h4 className="text-sm font-bold text-slate-900">{label}</h4>
-          {latest ? <><p className="mt-1 text-xs text-slate-600">{c.status}: {statusLabel(latest.status, c)} · {c.version} {latest.version}</p><p className="mt-1 break-all text-xs text-slate-500">{latest.source_file_name}</p><p className="mt-1 text-xs text-slate-500">{c.sourceHash}: {latest.source_sha256}</p>
-            {latest.validation_issue_codes?.length ? <p className="mt-2 text-xs text-amber-800">{c.issues}: {latest.validation_issue_codes.length}</p> : null}
-          </> : <p className="mt-1 text-xs leading-5 text-slate-600">{c.noSource}</p>}
-          {isAugust ? <p className="mt-2 rounded-lg bg-violet-50 px-2.5 py-2 text-xs text-violet-900">{c.augustSalary}</p> : <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-xs text-amber-900">{c.septemberSalary}</p>}
-          {!latest ? <p className="mt-2 text-xs text-slate-500">{c.reconciliation}: {c.unknown}</p> : <div className="mt-2 overflow-x-auto"><p className="mb-1 text-xs font-semibold text-slate-700">{c.reconciliation}</p><table className="min-w-[460px] w-full text-[11px]"><thead><tr><th className="p-1 text-left">{c.reconciliation}</th><th className="p-1 text-right">{c.imported}</th><th className="p-1 text-right">{c.declared}</th><th className="p-1 text-left">{c.status}</th></tr></thead><tbody>{fieldsForControls.map(field => {
-            const importedValue = latest.calculated_totals?.[field] ?? null;
-            const declaredRaw = latest.source_totals?.[field];
-            const declaredValue = field === "jobs" ? parseFinancialValue(declaredRaw, true) : parseFinancialValue(declaredRaw, false);
-            const issue = (latest.validation_issue_codes ?? []).some(code => code === `source_total_mismatch:${field}` || code === `source_total_required:${field}`);
-            const agrees = importedValue !== null && declaredValue !== null && importedValue === declaredValue;
-            return <tr key={field} className="border-t border-slate-100"><td className="p-1">{valueLabel(field)}</td><td className="p-1 text-right">{field === "jobs" ? importedValue ?? c.unknown : formatAmount(importedValue, language)}</td><td className="p-1 text-right">{field === "jobs" ? declaredValue ?? c.unknown : formatAmount(declaredValue, language)}</td><td className="p-1">{issue ? c.statusNeedsReview : agrees ? c.statusValidated : c.unknown}</td></tr>;
-          })}</tbody></table></div>}
-        </article>;
-      })}
-    </div>
-
-    {metadataError ? <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">{metadataError}</p> : null}
-    {metadata && !metadata.migrationReady ? <p className="mt-2 rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-700">{c.requiresMigration}</p> : null}
-    {!canImport ? <p className="mt-2 text-xs text-slate-500">{c.permission}</p> : null}
-
     <details className="mt-4 rounded-xl border border-slate-200 bg-white">
-      <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-slate-900">{c.upload}</summary>
+      <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-slate-900">{c.manageData}</summary>
       <div className="space-y-4 border-t border-slate-100 p-4">
+    {metadataError ? <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">{metadataError}</p> : null}
+    {metadata && !metadata.migrationReady ? <p className="rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-700">{c.requiresMigration}</p> : null}
+    {!canImport ? <p className="text-xs text-slate-500">{c.permission}</p> : null}
+
+    <details className="rounded-xl border border-slate-200 bg-slate-50">
+      <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-slate-900">{c.upload}</summary>
+      <div className="space-y-4 border-t border-slate-100 bg-white p-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-xs font-semibold text-slate-700">{c.period}<div className="mt-1 flex gap-2">
             <select aria-label={c.period} value={year} onChange={event => { setYear(Number(event.target.value)); setPreview(null); setFleetRosterConfirmed(false); }} className="form-input">{Array.from({ length: 16 }, (_, index) => 2020 + index).map(optionYear => <option key={optionYear} value={optionYear}>{optionYear}</option>)}</select>
@@ -742,12 +863,14 @@ export function VehicleFinancialDrafts({ language, vehicles: fallbackVehicles, c
       </div>
     </details>
 
-    <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3.5">
+    <div className="rounded-xl border border-slate-200 bg-white p-3.5">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><h4 className="text-sm font-bold text-slate-900">{c.current}</h4><input aria-label={c.reason} value={reviewReason} onChange={event => setReviewReason(event.target.value)} placeholder={c.reason} className="form-input max-w-md py-1.5 text-xs" /></div>
       {(metadata?.batches ?? []).length ? <ul className="mt-3 divide-y divide-slate-100">{metadata!.batches.map(batch => <li key={batch.id} className="flex flex-col gap-2 py-2 text-xs sm:flex-row sm:items-center sm:justify-between"><div><span className="font-semibold text-slate-900">{batch.reporting_month.slice(0,7)} · v{batch.version}</span><span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-700">{statusLabel(batch.status,c)}</span><p className="mt-1 break-all text-slate-500">{batch.source_file_name}</p></div><div className="flex gap-2">{batch.status === "draft" && canReview ? <button type="button" disabled={!metadata?.writesEnabled || busy || !reviewReason.trim()} onClick={() => void transition(batch,"validate")} className="btn-secondary py-1.5 text-xs disabled:opacity-50">{c.validate}</button> : null}{batch.status === "validated" && canReview ? <button type="button" disabled={!metadata?.writesEnabled || busy || !reviewReason.trim()} onClick={() => void transition(batch,"submit_review")} className="btn-secondary py-1.5 text-xs disabled:opacity-50">{c.sendReview}</button> : null}{batch.status === "in_review" && canApprove ? <button type="button" disabled={!metadata?.writesEnabled || busy || !reviewReason.trim()} onClick={() => void transition(batch,"approve")} className="btn-primary py-1.5 text-xs disabled:opacity-50">{c.approve}</button> : null}</div></li>)}</ul> : <p className="mt-2 text-xs text-slate-500">{c.none}</p>}
       {(metadata?.batches ?? []).length ? <div className="mt-3 border-t border-slate-100 pt-3"><h5 className="text-xs font-semibold text-slate-700">{c.viewDetails}</h5><div className="mt-2 flex flex-wrap gap-2">{metadata!.batches.map(batch => <button key={batch.id} type="button" aria-expanded={openBatchId === batch.id} aria-controls={`vehicle-financial-detail-${batch.id}`} onClick={() => void showBatchDetails(batch)} className="btn-secondary py-1.5 text-xs">{openBatchId === batch.id ? c.hideDetails : `${batch.reporting_month.slice(0,7)} · v${batch.version}`}</button>)}</div>{openBatchId && batchDetails[openBatchId] ? <div id={`vehicle-financial-detail-${openBatchId}`}><p className="mt-2 text-xs text-slate-600">{c.expected}: {batchDetails[openBatchId]!.batch.validation_counts?.expected ?? 0} · {c.matched}: {batchDetails[openBatchId]!.batch.validation_counts?.matched ?? 0} · {c.missing}: {batchDetails[openBatchId]!.batch.validation_counts?.missing ?? 0} · {c.duplicates}: {batchDetails[openBatchId]!.batch.validation_counts?.duplicate ?? 0}</p><BatchDetailsPanel detail={batchDetails[openBatchId]!} language={language} copy={c} /></div> : openBatchId && batchDetails[openBatchId] === null ? <p role="status" className="mt-2 text-xs text-slate-500">{c.detailsLoading}</p> : null}</div> : null}
     </div>
-    {message ? <p role="status" aria-live="polite" className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">{message}</p> : null}{error ? <p role="alert" className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-800">{error}</p> : null}
+    {message ? <p role="status" aria-live="polite" className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800">{message}</p> : null}{error ? <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-800">{error}</p> : null}
+      </div>
+    </details>
     </> : <p role="note" className="mt-4 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">{c.financialAccessRequired}</p>}
   </section>;
 }

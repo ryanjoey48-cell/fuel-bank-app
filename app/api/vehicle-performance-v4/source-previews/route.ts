@@ -3,8 +3,11 @@ import august from "../../../../data/vehicle-performance-v4/previews/2026-08.jso
 import september from "../../../../data/vehicle-performance-v4/previews/2026-09.json";
 import { AdminApiError, createServerSupabaseAdmin, requireVerifiedUser, resolveAccountAccess } from "@/lib/admin-user-management-server";
 import { canUseVehicleFinancialDrafts } from "@/lib/vehicle-financial-draft-access";
+import { vehicleFinancialV4SourceAvailability } from "@/lib/vehicle-financial-v4-source-catalog";
 
 export const dynamic = "force-dynamic";
+
+const verifiedReports = [august, september] as const;
 
 export async function GET(request: Request) {
   try {
@@ -15,7 +18,11 @@ export async function GET(request: Request) {
       throw new AdminApiError(403, "Financial-management access is required to view monthly source previews.");
     }
 
-    return NextResponse.json({ reports: [august, september] }, {
+    return NextResponse.json({
+      catalog: vehicleFinancialV4SourceAvailability,
+      months: vehicleFinancialV4SourceAvailability.months,
+      reports: verifiedReports
+    }, {
       headers: {
         "Cache-Control": "private, no-store, max-age=0",
         "Vary": "Authorization",
