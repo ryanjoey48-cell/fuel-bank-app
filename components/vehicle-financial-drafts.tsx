@@ -6,6 +6,7 @@ import { getAccessToken } from "@/lib/account-management";
 import { FINANCIAL_COLUMNS, calculateDraftFinancials, canonicalLpgVehicleIds, parseFinancialValue, previewFinancialDraft, type FinancialField, type LpgTreatment } from "@/lib/vehicle-financial-draft";
 import { FinancialWorkbookError, listFinancialWorkbookSheets, MAX_FINANCIAL_FILE_BYTES, parseFinancialWorkbook } from "@/lib/vehicle-financial-draft-import";
 import { formatVehicleRegistrationDisplay, knownVehicleRegistrationAliases } from "@/lib/vehicle-identity";
+import { resolveV4SourceVehicleMatch } from "@/lib/vehicle-financial-v4-source-matching";
 import type { Vehicle } from "@/types/database";
 
 type Language = "en" | "th";
@@ -104,8 +105,15 @@ const copy = {
     legacyInventory: "Legacy inventory only",
     requiredFromOwner: "Required from owner",
     unresolvedFigures: "Unresolved figures",
-    registrationReview: "Registration review pending",
-    registrationReviewHelp: "Owner will confirm 3ฒล-4565 with the boss later. Do not rename or duplicate it.",
+    registrationReview: "Boss confirmation pending",
+    registrationReviewHelp: "3ฒล-4565 is technically matched to existing EES vehicle G. Owner/boss business confirmation remains pending. Duplicate directory row Aunite G is ignored for V4. Do not rename or create another vehicle.",
+    matchLabel: "Matched",
+    matchAmbiguous: "Ambiguous match",
+    detailsAndProvenance: "Reconciliation details and source provenance",
+    legacyVsV4: "Legacy Fleet Overview uses January–July stored KPIs. Financial Reports use authorised V4 source previews only.",
+    monthChipVerified: "Verified",
+    monthChipProvisional: "Provisional salary",
+    monthChipRequired: "Source required",
     tableCaption: "Ten-column V4 source report",
     amountUnit: "THB",
     confirmRoster: "I confirm this is the complete fleet roster for the selected month", rosterConfirmed: "Complete monthly fleet roster confirmed",
@@ -165,8 +173,15 @@ const copy = {
     legacyInventory: "ข้อมูลเดิมเท่านั้น",
     requiredFromOwner: "สิ่งที่ต้องขอจากเจ้าของ",
     unresolvedFigures: "ตัวเลขที่ยังไม่สรุป",
-    registrationReview: "รอตรวจสอบทะเบียน",
-    registrationReviewHelp: "เจ้าของจะยืนยันทะเบียน 3ฒล-4565 กับหัวหน้าภายหลัง ห้ามเปลี่ยนชื่อหรือสร้างรายการซ้ำ",
+    registrationReview: "รอการยืนยันจากหัวหน้า",
+    registrationReviewHelp: "ทะเบียน 3ฒล-4565 จับคู่ทางเทคนิคกับรถ EES ของ G แล้ว แต่ยังรอการยืนยันทางธุรกิจจากเจ้าของ/หัวหน้า แถวซ้ำ Aunite G ไม่ใช้ใน V4 ห้ามเปลี่ยนชื่อหรือสร้างรถใหม่",
+    matchLabel: "จับคู่แล้ว",
+    matchAmbiguous: "จับคู่ไม่ชัดเจน",
+    detailsAndProvenance: "รายละเอียดการกระทบยอดและที่มาของข้อมูล",
+    legacyVsV4: "Fleet Overview ใช้ KPI ม.ค.–ก.ค. ที่เก็บไว้ รายงานการเงินใช้ตัวอย่างต้นฉบับ V4 ที่ได้รับอนุญาตเท่านั้น",
+    monthChipVerified: "ยืนยันแล้ว",
+    monthChipProvisional: "เงินเดือนชั่วคราว",
+    monthChipRequired: "ต้องมีต้นฉบับ",
     tableCaption: "รายงานต้นฉบับ V4 สิบคอลัมน์",
     amountUnit: "บาท",
     confirmRoster: "ขอยืนยันว่ารายชื่อรถนี้ครบถ้วนสำหรับเดือนที่เลือก", rosterConfirmed: "ยืนยันรายชื่อรถประจำเดือนครบถ้วนแล้ว",
@@ -356,109 +371,128 @@ function monthLabel(monthKey: string, language: Language) {
   return previewMonthLabels[monthKey]?.[language] ?? monthKey;
 }
 
-function ReadOnlySourcePreview({ report, language, c, vehicleIdsByAlias, reviewRegistrations }: {
+function ReadOnlySourcePreview({ report, language, c, vehicles, reviewRegistrations }: {
   report: SourcePreview;
   language: Language;
   c: typeof copy.en | typeof copy.th;
-  vehicleIdsByAlias: Map<string, Set<string>>;
+  vehicles: Array<{ id: string; vehicle_reg: string }>;
   reviewRegistrations: Set<string>;
 }) {
+  const [selectedRegistration, setSelectedRegistration] = useState<string | null>(null);
   const isAugust = report.reportingMonth === "2026-08";
   const isSeptember = report.reportingMonth === "2026-09";
   const label = monthLabel(report.reportingMonth, language);
-  const allSourceVehicles = vehicleIdsByAlias.size > 0;
-  const matchedRows = report.rows.filter(row => {
-    const aliases = knownVehicleRegistrationAliases(row.registration);
-    const matches = new Set(aliases.flatMap(alias => [...(vehicleIdsByAlias.get(alias) ?? [])]));
-    return matches.size === 1;
-  }).length;
+  const directoryReady = vehicles.length > 0;
+  const rowMatches = report.rows.map(row => ({
+    row,
+    match: resolveV4SourceVehicleMatch(row.registration, vehicles)
+  }));
+  const matchedRows = rowMatches.filter(entry => entry.match.status === "matched").length;
   const unresolvedDashes = report.rows.reduce((sum, row) => sum + Object.values(row.sourceDashStatus).filter(value => value === "unresolved_source_dash").length, 0);
   const salaryText = isAugust ? c.augustSalaryVerified : isSeptember ? c.septemberSalaryProvisional : null;
   const totalValue = (field: string) => formatSourceAmount(report.sourceFooterTotals[field as keyof typeof report.sourceFooterTotals] ?? null, language) ?? "—";
-  const summaryCards: Array<[string, string]> = [
+  const summaryCards: Array<[string, string, string?]> = [
     [c.revenue, totalValue("totalReceived")],
     [c.jobs, totalValue("jobs")],
-    [c.salary, totalValue("salary")],
+    [c.salary, totalValue("salary"), isSeptember ? c.monthChipProvisional : undefined],
     [c.fuel, totalValue("fuel")],
     [c.maintenance, totalValue("maintenance")]
   ];
-  const stickyReg = "sticky left-0 z-[1] border-r border-slate-200 bg-inherit px-2 py-1.5 shadow-[4px_0_8px_rgba(15,23,42,0.04)]";
+  const stickyReg = "sticky left-0 z-[1] border-r border-brand-100/80 bg-inherit px-2.5 py-2 shadow-[4px_0_10px_rgba(76,29,149,0.06)]";
+  const statusBanner = [
+    salaryText,
+    c.sourceLpgRule,
+    unresolvedDashes > 0 ? `${c.unresolvedDashes}: ${unresolvedDashes}` : null
+  ].filter(Boolean).join(" · ");
 
-  return <article className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-    <div className="border-b border-slate-200 bg-slate-50/80 px-3.5 py-3">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+  return <article className="overflow-hidden rounded-2xl border border-brand-100 bg-white shadow-[0_10px_28px_rgba(76,29,149,0.05)]">
+    <div className="border-b border-brand-100/80 bg-[linear-gradient(135deg,#ffffff_0%,#faf7ff_100%)] px-3.5 py-3 sm:px-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h4 className="text-sm font-bold text-slate-950">{c.monthlyReport}: {label}</h4>
-          <p className="mt-1 text-xs text-slate-600">{report.rowCount} named vehicle rows · {c.amountUnit} · {allSourceVehicles ? `${matchedRows}/${report.rowCount} ${c.matchCount}` : c.matchPending}</p>
+          <p className="mt-0.5 text-xs text-slate-600">{report.rowCount} {language === "th" ? "แถว" : "rows"} · {c.amountUnit} · {directoryReady ? `${matchedRows}/${report.rowCount} ${c.matchCount}` : c.matchPending}</p>
         </div>
-        <span className="inline-flex w-fit rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-900">{c.readOnlySource}</span>
+        <span className="inline-flex w-fit rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-brand-800">{c.readOnlySource}</span>
       </div>
-      <div className={`mt-2 space-y-1 rounded-lg px-3 py-2 text-xs ${isSeptember ? "bg-amber-50 text-amber-950" : "bg-slate-100 text-slate-800"}`}>
-        {salaryText ? <p>{salaryText}</p> : null}
-        <p>{c.sourceLpgRule}</p>
-        {unresolvedDashes > 0 ? <p>{c.unresolvedDashes}: {unresolvedDashes} · {c.sourceReconcile}</p> : null}
-      </div>
-      {allSourceVehicles && matchedRows !== report.rowCount ? <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-xs font-medium text-rose-900">{c.matchMissing}: {report.rowCount - matchedRows} of {report.rowCount}</p> : null}
-      <div className="mt-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{c.sourceFigures} · {c.sourceFiguresNote}</p>
-        <dl className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-          {summaryCards.map(([title, value]) => <div key={title} className="rounded-lg border border-slate-200 bg-white px-2.5 py-2">
-            <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{title}</dt>
-            <dd className="mt-1 text-sm font-semibold tabular-nums text-slate-950">{value}</dd>
-          </div>)}
-        </dl>
-      </div>
+      {statusBanner ? <p className={`mt-2 rounded-lg px-3 py-2 text-xs leading-relaxed ${isSeptember ? "border border-amber-200 bg-amber-50 text-amber-950" : "border border-slate-200 bg-white text-slate-700"}`}>{statusBanner}</p> : null}
+      {directoryReady && matchedRows !== report.rowCount ? <p className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-900">{c.matchMissing}: {report.rowCount - matchedRows} of {report.rowCount}</p> : null}
+      <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+        {summaryCards.map(([title, value, hint]) => <div key={title} className="rounded-xl border border-brand-100/70 bg-white px-2.5 py-2 shadow-sm">
+          <dt className="text-[10px] font-semibold uppercase tracking-wide text-brand-700">{title}</dt>
+          <dd className="mt-1 text-sm font-bold tabular-nums text-slate-950">{value}</dd>
+          {hint ? <p className="mt-0.5 text-[10px] font-medium text-amber-800">{hint}</p> : null}
+        </div>)}
+      </dl>
+      <p className="mt-2 text-[10px] text-slate-500">{c.sourceFiguresNote}</p>
     </div>
-    <div className="max-h-[min(34rem,70vh)] overflow-auto overscroll-contain">
-      <table className="min-w-[1080px] w-full border-separate border-spacing-0 text-[11px]">
+    <div className="max-h-[min(36rem,72vh)] overflow-auto overscroll-contain">
+      <table className="min-w-[1100px] w-full border-separate border-spacing-0 text-[11px]">
         <caption className="sr-only">{c.tableCaption}: {label}</caption>
-        <thead className="sticky top-0 z-20 bg-slate-100 text-left text-slate-700 shadow-[0_1px_0_rgba(15,23,42,0.08)]">
-          <tr>{readOnlyPreviewColumns.map(([columnLabel, field]) => <th key={columnLabel} scope="col" className={`whitespace-nowrap px-2 py-2 font-semibold ${field === "registration" ? `${stickyReg} z-30 bg-slate-100` : ""}`}>{columnLabel}</th>)}</tr>
+        <thead className="sticky top-0 z-20 bg-brand-700 text-left text-white shadow-[0_1px_0_rgba(76,29,149,0.35)]">
+          <tr>{readOnlyPreviewColumns.map(([columnLabel, field]) => <th key={columnLabel} scope="col" className={`whitespace-nowrap px-2.5 py-2.5 font-semibold ${field === "registration" ? `${stickyReg} z-30 bg-brand-700 text-white` : ""}`}>{columnLabel}</th>)}</tr>
         </thead>
         <tbody>
-          {report.rows.map(row => {
-            const registration = formatVehicleRegistrationDisplay(row.registration);
-            const aliases = knownVehicleRegistrationAliases(row.registration);
-            const matches = new Set(aliases.flatMap(alias => [...(vehicleIdsByAlias.get(alias) ?? [])]));
-            const vehicleMatch = matches.size === 1 ? "matched" : matches.size > 1 ? "ambiguous" : "missing";
-            const needsRegistrationReview = reviewRegistrations.has(row.registration);
+          {rowMatches.map(({ row, match }) => {
+            const registration = match.displayRegistration || formatVehicleRegistrationDisplay(row.registration);
+            const vehicleMatch = match.status;
+            const needsRegistrationReview = reviewRegistrations.has(row.registration) || match.ownerConfirmed;
+            const selected = selectedRegistration === row.registration;
             const amountFor = (field: keyof typeof row) => {
               if (field === "registration") return null;
               const value = row[field];
               if (typeof value !== "string") return null;
               return formatSourceAmount(value, language);
             };
-            return <tr key={row.registration} className="border-t border-slate-100 align-top odd:bg-white even:bg-slate-50/70">
+            const rowBg = selected ? "bg-brand-50" : "odd:bg-white even:bg-slate-50/80";
+            return <tr
+              key={row.registration}
+              tabIndex={0}
+              aria-selected={selected}
+              onClick={() => setSelectedRegistration(current => current === row.registration ? null : row.registration)}
+              onKeyDown={event => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setSelectedRegistration(current => current === row.registration ? null : row.registration);
+                }
+              }}
+              className={`border-t border-slate-100 align-top outline-none transition ${rowBg} focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500 ${selected ? "ring-1 ring-inset ring-brand-300" : "hover:bg-brand-50/40"}`}
+            >
               {readOnlyPreviewColumns.map(([header, field]) => {
                 const dashStatus = row.sourceDashStatus[field as keyof typeof row.sourceDashStatus];
                 const cellLabel = field === "registration"
-                  ? (needsRegistrationReview ? c.registrationReviewHelp : undefined)
+                  ? (match.note || (needsRegistrationReview ? c.registrationReviewHelp : undefined))
                   : amountFor(field as keyof typeof row) === null ? c.sourceDash : dashStatus === "confirmed_zero_by_owner_rule" ? c.confirmedZero : dashStatus === "zero_confirmed_by_source_note" ? c.resolvedSourceNote : undefined;
-                return <td key={`${row.registration}-${header}`} className={`whitespace-nowrap ${field === "registration" ? `${stickyReg} font-semibold text-slate-950 odd:bg-white even:bg-slate-50` : "px-2 py-1.5 tabular-nums text-slate-700"}`} title={cellLabel}>
+                return <td key={`${row.registration}-${header}`} className={`whitespace-nowrap ${field === "registration" ? `${stickyReg} font-semibold text-slate-950 ${selected ? "bg-brand-50" : "odd:bg-white even:bg-slate-50/80"}` : "px-2.5 py-2 tabular-nums text-slate-700"}`} title={cellLabel}>
                   {field === "registration" ? <span className="flex flex-col gap-1">
-                    <span className="font-mono text-[12px] tracking-tight">{registration}</span>
+                    <span className="font-mono text-[12px] tracking-tight text-slate-950">{registration}</span>
                     <span className="flex flex-wrap gap-1">
-                      <span className={`w-fit rounded px-1.5 py-0.5 text-[9px] font-semibold ${vehicleMatch === "matched" ? "bg-emerald-50 text-emerald-800" : vehicleMatch === "missing" ? "bg-rose-50 text-rose-800" : "bg-amber-50 text-amber-800"}`}>{!allSourceVehicles ? c.matchPending : vehicleMatch === "matched" ? "matched" : c.matchMissing}</span>
-                      {needsRegistrationReview ? <span className="w-fit rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-950">{c.registrationReview}</span> : null}
+                      <span className={`w-fit rounded px-1.5 py-0.5 text-[9px] font-semibold ${!directoryReady ? "bg-slate-100 text-slate-600" : vehicleMatch === "matched" ? "bg-emerald-50 text-emerald-800" : vehicleMatch === "missing" ? "bg-rose-50 text-rose-800" : "bg-amber-50 text-amber-800"}`}>
+                        {!directoryReady ? c.matchPending : vehicleMatch === "matched" ? c.matchLabel : vehicleMatch === "ambiguous" ? c.matchAmbiguous : c.matchMissing}
+                      </span>
+                      {needsRegistrationReview ? <span className="w-fit rounded bg-brand-100 px-1.5 py-0.5 text-[9px] font-semibold text-brand-900">{c.registrationReview}</span> : null}
                     </span>
-                  </span> : amountFor(field as keyof typeof row) === null ? <span aria-label={c.sourceDash} className="text-amber-800">—</span> : <span>{amountFor(field as keyof typeof row)}{dashStatus === "confirmed_zero_by_owner_rule" ? <sup title={c.confirmedZero}>†</sup> : null}</span>}
+                  </span> : amountFor(field as keyof typeof row) === null ? <span aria-label={c.sourceDash} className="font-medium text-amber-800">—</span> : <span>{amountFor(field as keyof typeof row)}{dashStatus === "confirmed_zero_by_owner_rule" ? <sup title={c.confirmedZero}>†</sup> : null}</span>}
                 </td>;
               })}
             </tr>;
           })}
         </tbody>
-        <tfoot className="sticky bottom-0 z-10 border-t-2 border-slate-400 bg-slate-200/95 font-semibold text-slate-950 backdrop-blur-sm">
+        <tfoot className="sticky bottom-0 z-10 border-t-2 border-brand-200 bg-brand-50/95 font-semibold text-slate-950 backdrop-blur-sm">
           <tr>
-            {readOnlyPreviewColumns.map(([header, field]) => <td key={header} className={`whitespace-nowrap px-2 py-2.5 tabular-nums ${field === "registration" ? `${stickyReg} z-20 bg-slate-200/95` : ""}`}>{field === "registration" ? c.sourceFooter : totalValue(field)}</td>)}
+            {readOnlyPreviewColumns.map(([header, field]) => <td key={header} className={`whitespace-nowrap px-2.5 py-2.5 tabular-nums ${field === "registration" ? `${stickyReg} z-20 bg-brand-50/95` : ""}`}>{field === "registration" ? c.sourceFooter : totalValue(field)}</td>)}
           </tr>
         </tfoot>
       </table>
     </div>
-    <div className="space-y-1 border-t border-slate-200 bg-slate-50 px-3.5 py-3 text-[11px] text-slate-600">
-      <p>{report.rowSumReconciliation.caveat}</p>
-      {report.sourceNotes.map(note => <p key={note}>{note}</p>)}
-      <details className="pt-1"><summary className="cursor-pointer font-semibold text-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600">{report.sourceFile} · source SHA-256</summary><p className="mt-1 break-all font-mono text-[10px]">{report.sourceSha256}</p></details>
-    </div>
+    <details className="border-t border-brand-100 bg-slate-50/80 px-3.5 py-3 text-[11px] text-slate-600 open:pb-3">
+      <summary className="cursor-pointer font-semibold text-brand-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600">{c.detailsAndProvenance}</summary>
+      <div className="mt-2 space-y-1">
+        <p>{report.rowSumReconciliation.caveat}</p>
+        {unresolvedDashes > 0 ? <p>{c.sourceReconcile}</p> : null}
+        {report.sourceNotes.map(note => <p key={note}>{note}</p>)}
+        <p className="break-all font-mono text-[10px] text-slate-500">{report.sourceFile} · {report.sourceSha256}</p>
+      </div>
+    </details>
   </article>;
 }
 
@@ -559,13 +593,6 @@ export function VehicleFinancialDrafts({ language, vehicles: fallbackVehicles, c
   const canonicalVehicles = useMemo(() => vehicleChoices.map(vehicle => ({
     id: vehicle.id, registration: vehicle.vehicle_reg, aliases: knownVehicleRegistrationAliases(vehicle.vehicle_reg)
   })), [vehicleChoices]);
-  const vehicleIdsByAlias = useMemo(() => {
-    const map = new Map<string, Set<string>>();
-    for (const vehicle of canonicalVehicles) for (const alias of [vehicle.registration, ...(vehicle.aliases ?? [])]) {
-      const ids = map.get(alias) ?? new Set<string>(); ids.add(vehicle.id); map.set(alias, ids);
-    }
-    return map;
-  }, [canonicalVehicles]);
   const lpgVehicleIds = useMemo(() => new Set(canonicalLpgVehicleIds(canonicalVehicles)), [canonicalVehicles]);
   const driverChoices = metadata?.drivers ?? [];
   const currentMonth = `${year}-${String(month).padStart(2, "0")}`;
@@ -646,8 +673,7 @@ export function VehicleFinancialDrafts({ language, vehicles: fallbackVehicles, c
 
   function rowKey(row: { sheet: string; row: number }) { return `${row.sheet}:${row.row}`; }
   function canonicalVehicleId(row: { cells: unknown[] }) {
-    const matches = new Set(knownVehicleRegistrationAliases(String(row.cells[0] ?? "")).flatMap(alias => [...(vehicleIdsByAlias.get(alias) ?? [])]));
-    return matches.size === 1 ? [...matches][0] : null;
+    return resolveV4SourceVehicleMatch(String(row.cells[0] ?? ""), vehicleChoices).vehicleId;
   }
   function ownerTreatment(row: { cells: unknown[] }): LpgTreatment | null {
     const vehicleId = canonicalVehicleId(row);
@@ -796,31 +822,57 @@ export function VehicleFinancialDrafts({ language, vehicles: fallbackVehicles, c
   }
   const multiVehicleEmployees = [...employeeVehicles.entries()].filter(([, assignedVehicles]) => assignedVehicles.size > 1).map(([employeeId]) => employeeId);
 
-  return <section aria-labelledby="vehicle-performance-v4-heading" className="rounded-[1rem] border border-brand-200 bg-[linear-gradient(180deg,#ffffff_0%,#fbf9ff_100%)] p-4 shadow-[0_12px_32px_rgba(76,29,149,0.06)] sm:p-5">
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.13em] text-brand-700">Vehicle Performance V4</p>
-        <h3 id="vehicle-performance-v4-heading" className="mt-1 text-lg font-semibold text-slate-950">{c.title}</h3>
+  const monthOptions = sourceMonths.length ? sourceMonths : [
+    { reportingMonth: "2026-08", status: "source_verified_readonly" as const, previewAvailable: true, legacyInventory: null, requiredFromOwner: [], unresolvedFigures: [] },
+    { reportingMonth: "2026-09", status: "source_verified_readonly_salary_provisional" as const, previewAvailable: true, legacyInventory: null, requiredFromOwner: [], unresolvedFigures: [] }
+  ];
+
+  return <section aria-labelledby="vehicle-performance-v4-heading" className="rounded-2xl border border-brand-200 bg-[linear-gradient(180deg,#ffffff_0%,#faf7ff_100%)] p-3.5 shadow-[0_12px_32px_rgba(76,29,149,0.06)] sm:p-5">
+    <div className="flex flex-col gap-2.5 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-700">EES Financial Reports</p>
+        <h3 id="vehicle-performance-v4-heading" className="mt-1 text-lg font-semibold tracking-tight text-slate-950 sm:text-xl">{c.title}</h3>
         <p className="mt-1 max-w-3xl text-sm text-slate-600">{c.subtitle}</p>
+        <p className="mt-1 max-w-3xl text-xs text-slate-500">{c.legacyVsV4}</p>
       </div>
-      <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800"><ShieldAlert className="h-3.5 w-3.5" />{c.disabledPublication}</span>
+      <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-semibold text-amber-900"><ShieldAlert className="h-3.5 w-3.5" />{c.disabledPublication}</span>
     </div>
 
     {canReview ? <>
-    <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3.5">
-      <label className="block text-xs font-semibold text-slate-700" htmlFor="v4-source-month">{c.monthSelector}</label>
-      <select id="v4-source-month" aria-label={c.monthSelector} value={selectedPreviewMonth} onChange={event => setSelectedPreviewMonth(event.target.value)} className="form-input mt-1 max-w-xs">
-        {(sourceMonths.length ? sourceMonths.map(month => month.reportingMonth) : ["2026-08", "2026-09"]).map(monthKey => <option key={monthKey} value={monthKey}>{monthLabel(monthKey, language)}{sourceMonths.find(entry => entry.reportingMonth === monthKey)?.previewAvailable ? "" : ` · ${c.sourceReportRequired}`}</option>)}
-      </select>
-      <p className="mt-2 text-xs text-slate-500">{c.registrationReviewHelp}</p>
+    <div className="mt-4 rounded-2xl border border-brand-100 bg-white/90 p-3 shadow-sm">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <label className="text-xs font-semibold text-slate-700" htmlFor="v4-source-month">{c.monthSelector}</label>
+        <select id="v4-source-month" aria-label={c.monthSelector} value={selectedPreviewMonth} onChange={event => setSelectedPreviewMonth(event.target.value)} className="form-input max-w-xs py-1.5 text-sm sm:hidden">
+          {monthOptions.map(month => <option key={month.reportingMonth} value={month.reportingMonth}>{monthLabel(month.reportingMonth, language)}</option>)}
+        </select>
+      </div>
+      <div role="tablist" aria-label={c.monthSelector} className="mt-2 hidden gap-1.5 overflow-x-auto pb-1 sm:flex">
+        {monthOptions.map(month => {
+          const selected = selectedPreviewMonth === month.reportingMonth;
+          const chip = month.status === "source_verified_readonly_salary_provisional"
+            ? c.monthChipProvisional
+            : month.previewAvailable ? c.monthChipVerified : c.monthChipRequired;
+          return <button
+            key={month.reportingMonth}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            onClick={() => setSelectedPreviewMonth(month.reportingMonth)}
+            className={`min-w-[7.5rem] rounded-xl border px-3 py-2 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${selected ? "border-brand-600 bg-brand-700 text-white shadow-sm" : "border-slate-200 bg-slate-50 text-slate-700 hover:border-brand-200 hover:bg-brand-50"}`}
+          >
+            <span className="block text-xs font-semibold">{monthLabel(month.reportingMonth, language).replace(/ 2026$/, "")}</span>
+            <span className={`mt-0.5 block text-[10px] ${selected ? "text-brand-100" : "text-slate-500"}`}>{chip}</span>
+          </button>;
+        })}
+      </div>
     </div>
 
-    <div className="mt-4 space-y-3">
-      {!sourcePreviews && !sourcePreviewError ? <p role="status" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">{c.sourcePreviewLoading}</p> : null}
-      {sourcePreviewError ? <p role="status" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">{c.sourcePreviewUnavailable}</p> : null}
-      {sourcePreviews && selectedSourceReport ? <ReadOnlySourcePreview report={selectedSourceReport} language={language} c={c} vehicleIdsByAlias={vehicleIdsByAlias} reviewRegistrations={reviewRegistrations} /> : null}
+    <div className="mt-3 space-y-3">
+      {!sourcePreviews && !sourcePreviewError ? <p role="status" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">{c.sourcePreviewLoading}</p> : null}
+      {sourcePreviewError ? <p role="status" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">{c.sourcePreviewUnavailable}</p> : null}
+      {sourcePreviews && selectedSourceReport ? <ReadOnlySourcePreview report={selectedSourceReport} language={language} c={c} vehicles={vehicleChoices} reviewRegistrations={reviewRegistrations} /> : null}
       {sourcePreviews && !selectedSourceReport && selectedMonthCatalog ? <SourceReportRequiredPanel month={selectedMonthCatalog} language={language} c={c} /> : null}
-      {sourcePreviews && !selectedSourceReport && !selectedMonthCatalog ? <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">{c.sourceReportRequired}</p> : null}
+      {sourcePreviews && !selectedSourceReport && !selectedMonthCatalog ? <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">{c.sourceReportRequired}</p> : null}
     </div>
 
     <div className="mt-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">

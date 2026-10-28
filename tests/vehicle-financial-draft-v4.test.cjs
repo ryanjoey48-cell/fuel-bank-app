@@ -91,11 +91,15 @@ test('January–July stay source-required while August–September remain the on
   assert.equal(catalog.months[8].status, 'source_verified_readonly_salary_provisional');
   assert.equal(catalog.registrationReviewFlags[0].registration, '3ฒล-4565');
   assert.equal(catalog.registrationReviewFlags[0].blocking, false);
+  assert.equal(catalog.registrationReviewFlags[0].reason, 'technical_match_boss_confirmation_pending');
   assert.equal(catalog.lpgPolicy.januaryToJuly, 'included_in_fuel_never_deduct_twice');
   assert.equal(catalog.lpgPolicy.augustOnwards, 'separate_from_fuel');
   const component = fs.readFileSync(path.resolve('components/vehicle-financial-drafts.tsx'), 'utf8');
   assert.match(component, /registrationReview/);
   assert.match(component, /3ฒล-4565/);
+  assert.match(component, /resolveV4SourceVehicleMatch/);
+  assert.match(component, /monthChipVerified/);
+  assert.match(component, /detailsAndProvenance/);
 });
 
 test('XLSX import preserves original cell values, explicit included LPG and DUMMY control rows', () => {
@@ -265,8 +269,11 @@ test('server policy stays disabled without matching fixed-version approval and v
 test('V4 readiness is visible before legacy records load while migration-dependent actions stay gated', () => {
   const page = fs.readFileSync(path.resolve('app/(dashboard)/vehicle-performance/page.tsx'), 'utf8');
   const draftUi = fs.readFileSync(path.resolve('components/vehicle-financial-drafts.tsx'), 'utf8');
-  assert.ok(page.indexOf('id="vehicle-performance-v4"') < page.indexOf('{loading ? <p role="status"'));
-  assert.match(page, /href="#vehicle-performance-v4"/);
+  assert.match(page, /performanceView === "financial"/);
+  assert.match(page, /id="vehicle-performance-v4"/);
+  assert.match(page, /Financial Reports/);
+  assert.match(page, /showLegacyWorkspace/);
+  assert.ok(page.indexOf('performanceView === "financial"') < page.indexOf('showLegacyWorkspace ? (loading'));
   assert.match(draftUi, /!metadata\?\.migrationReady \|\| !preview/);
   assert.match(draftUi, /metadata && !metadata\.migrationReady/);
   assert.doesNotMatch(draftUi, /onClick=\{\(\) => void approveAccountingPolicy\(\)\}/);

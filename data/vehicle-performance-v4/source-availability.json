@@ -14,9 +14,9 @@
   "registrationReviewFlags": [
     {
       "registration": "3ฒล-4565",
-      "reason": "owner_to_confirm_registration_with_boss",
+      "reason": "technical_match_boss_confirmation_pending",
       "blocking": false,
-      "note": "Keep flagged for later review. Do not rename, duplicate or block other monthly preparation."
+      "note": "Technically matched to existing EES vehicle G (39f2dd25-0796-4297-8948-c5f639d6590e) via explicit V4 mapping. Owner/boss business confirmation remains pending. Duplicate directory row Aunite G remains unused; do not rename or create another vehicle."
     }
   ],
   "lpgPolicy": {

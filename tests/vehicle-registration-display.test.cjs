@@ -86,9 +86,10 @@ test('V4 read-only UI displays registrations as identifiers and never formats th
   assert.match(component, /formatSourceAmount\(/);
   assert.match(component, /amountFor = \(field/);
   const previewFn = component.slice(component.indexOf('function ReadOnlySourcePreview'), component.indexOf('function SourceReportRequiredPanel'));
-  assert.match(previewFn, /formatVehicleRegistrationDisplay\(row\.registration\)/);
+  assert.match(previewFn, /match\.displayRegistration|formatVehicleRegistrationDisplay\(row\.registration\)/);
   assert.doesNotMatch(previewFn, /formatSourceAmount\(row\.registration\)/);
   assert.match(previewFn, /if \(field === "registration"\) return null;/);
   assert.match(previewFn, /sticky left-0/);
   assert.match(component, /manageDataHelp/);
+  assert.match(component, /resolveV4SourceVehicleMatch/);
 });

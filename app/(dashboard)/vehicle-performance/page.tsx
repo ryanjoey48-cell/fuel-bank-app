@@ -52,7 +52,7 @@ type RankingKey = "recordedBalance" | "grossRevenue" | "marginPercent" | "fuelPe
 type ImportStatusFilter = "" | VehiclePerformanceImportRow["status"];
 type VehicleSortKey = "vehicleRegistration" | "grossRevenue" | "fuelSpend" | "fuelPercent" | "lpgCost" | "salaryCost" | "tripIncome" | "otherExpenses" | "recordedBalance" | "marginPercent" | "status";
 type TrendMetric = "grossRevenue" | "recordedBalance" | "fuelSpend" | "marginPercent";
-type VehiclePerformanceView = "fleet" | "monthly" | "trips";
+type VehiclePerformanceView = "fleet" | "monthly" | "financial" | "trips";
 type CoverageVehicleDetail = {
   registration: string;
   presentMonths: number[];
@@ -701,7 +701,7 @@ export default function VehiclePerformancePage() {
   const [coverageVehicleDetail, setCoverageVehicleDetail] = useState<CoverageVehicleDetail | null>(null);
   const [monitorDetailOpen, setMonitorDetailOpen] = useState(false);
   const [trendMetric, setTrendMetric] = useState<TrendMetric>("grossRevenue");
-  const [performanceView, setPerformanceView] = useState<VehiclePerformanceView>("fleet");
+  const [performanceView, setPerformanceView] = useState<VehiclePerformanceView>("financial");
   const [vehicleSort, setVehicleSort] = useState<{ key: VehicleSortKey; direction: "asc" | "desc" }>({
     key: "recordedBalance",
     direction: "desc"
@@ -2216,92 +2216,124 @@ export default function VehiclePerformancePage() {
     };
   }, [language, rows, selectedMonths.length, summary.grossRevenue, summary.recordedBalance, vehicleMonthCounts]);
 
-  const scrollToDataManagement = () => {
-    setDataManagementOpen((current) => !current);
+  const openManageData = () => {
+    setPerformanceView("fleet");
+    setDataManagementOpen(true);
     requestAnimationFrame(() => document.getElementById("vehicle-performance-data-management")?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.location.hash === "#vehicle-performance-v4") setPerformanceView("financial");
+  }, []);
+
+  const showLegacyWorkspace = performanceView === "fleet" || performanceView === "monthly" || performanceView === "trips";
 
   return (
     <>
       <section className="surface-card overflow-hidden border border-brand-100/80 shadow-[0_14px_38px_rgba(76,29,149,0.07)]">
-        <div className="border-b border-brand-100 bg-[radial-gradient(circle_at_top_right,rgba(124,58,237,0.10),transparent_34%),linear-gradient(135deg,#ffffff_0%,#fbf9ff_58%,#f6f2ff_100%)] px-5 py-5 sm:px-6">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="border-b border-brand-100 bg-[radial-gradient(circle_at_top_right,rgba(124,58,237,0.10),transparent_34%),linear-gradient(135deg,#ffffff_0%,#fbf9ff_58%,#f6f2ff_100%)] px-4 py-4 sm:px-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
-              <div className="inline-flex items-center gap-2 rounded-full border border-brand-100 bg-white/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-700 shadow-sm">
+              <div className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-700">
                 <TrendingUp className="h-3.5 w-3.5" />
-                Vehicle performance
+                EES Vehicle Performance
               </div>
-              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 sm:text-[1.8rem]">Vehicle Performance</h1>
-              <p className="mt-1 max-w-3xl text-sm text-slate-500">Understand fleet revenue, direct costs, fuel share and recorded balance without turning the page into a wall of reports.</p>
+              <h1 className="mt-1 text-xl font-semibold tracking-tight text-slate-950 sm:text-2xl">Vehicle Performance</h1>
+              <p className="mt-0.5 max-w-3xl text-sm text-slate-500">Fleet KPIs, monthly trends and authorised V4 financial source reports in one workspace.</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="inline-flex rounded-2xl border border-brand-100 bg-white/90 p-1 shadow-sm">
-                {([
-                  ["fleet", "Fleet overview"],
-                  ["monthly", "Monthly performance"]
-                ] as const).map(([value, label]) => (
-                  <button key={value} type="button" onClick={() => setPerformanceView(value)} className={`rounded-xl px-3.5 py-2 text-sm font-semibold transition ${performanceView === value ? "bg-brand-700 text-white shadow-sm" : "text-slate-600 hover:bg-brand-50"}`}>{label}</button>
-                ))}
-                {tripDataAvailable ? (
-                  <button type="button" onClick={() => setPerformanceView("trips")} className={`rounded-xl px-3.5 py-2 text-sm font-semibold transition ${performanceView === "trips" ? "bg-brand-700 text-white shadow-sm" : "text-slate-600 hover:bg-brand-50"}`}>Trip performance</button>
-                ) : null}
-              </div>
-              <a className="btn-secondary" href="#vehicle-performance-v4">V4 source reports (Jan–Sep)</a>
-              <button type="button" className="btn-secondary" onClick={scrollToDataManagement}>Legacy manage data</button>
-              <Link className="btn-secondary" href="/maintenance/analytics">{t.maintenance.analytics}</Link>
-              <button type="button" onClick={() => void downloadVehiclePerformancePdf()} disabled={generatingPdf || loading || !!loadError || !rows.length} className="btn-primary gap-2 disabled:cursor-not-allowed disabled:opacity-50">
+              <Link className="btn-secondary py-2 text-xs sm:text-sm" href="/maintenance/analytics">{t.maintenance.analytics}</Link>
+              <button type="button" onClick={() => void downloadVehiclePerformancePdf()} disabled={generatingPdf || loading || !!loadError || !rows.length} className="btn-primary gap-2 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm">
                 <Download className="h-4 w-4" />
-                {generatingPdf ? "Generating..." : "Download report"}
+                {generatingPdf ? "Generating..." : "Download PDF"}
               </button>
             </div>
           </div>
 
-          <div className="mt-5 rounded-2xl border border-white/80 bg-white/80 p-3 shadow-sm">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Fleet Overview filters · January–July legacy KPIs and rankings</p>
-            <div className="mt-2 grid gap-3 md:grid-cols-[120px_190px_minmax(240px,1fr)] md:items-end">
-            <div>
-              <label className="form-label" htmlFor="vehicle-performance-year">{labels.year}</label>
-              <input id="vehicle-performance-year" className="form-input w-full bg-white" type="number" min="2000" max="2100" value={year} onChange={(event) => setYear(Number(event.target.value) || 2026)} />
-            </div>
-            <div>
-              <label className="form-label" htmlFor="vehicle-performance-month">{labels.month}</label>
-              <select id="vehicle-performance-month" className="form-input w-full bg-white" value={month} onChange={(event) => setMonth(event.target.value ? Number(event.target.value) : "")}>
-                <option value="">{labels.allLoadedMonths}</option>
-                {MONTH_OPTIONS.map((option) => <option key={option.value} value={option.value}>{labels.months[option.labelKey]}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="form-label" htmlFor="vehicle-performance-search">{labels.searchVehicle}</label>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input id="vehicle-performance-search" className="form-input w-full bg-white pl-9" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={labels.searchPlaceholder} />
-              </div>
-            </div>
-            </div>
+          <div role="tablist" aria-label="Vehicle Performance sections" className="mt-3 flex flex-wrap gap-1 rounded-2xl border border-brand-100 bg-white/90 p-1 shadow-sm">
+            {([
+              ["fleet", "Fleet Overview"],
+              ["monthly", "Monthly Performance"],
+              ["financial", "Financial Reports"],
+              ["manage", "Manage Data"]
+            ] as const).map(([value, label]) => {
+              const isSelected = value === "manage"
+                ? dataManagementOpen && performanceView !== "financial"
+                : performanceView === value;
+              return <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={isSelected}
+                onClick={() => {
+                  if (value === "manage") {
+                    openManageData();
+                    return;
+                  }
+                  setDataManagementOpen(false);
+                  setPerformanceView(value);
+                  if (value === "financial") {
+                    requestAnimationFrame(() => document.getElementById("vehicle-performance-v4")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+                  }
+                }}
+                className={`rounded-xl px-3 py-2 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 sm:text-sm ${isSelected ? "bg-brand-700 text-white shadow-sm" : "text-slate-600 hover:bg-brand-50"}`}
+              >{label}</button>;
+            })}
+            {tripDataAvailable ? (
+              <button type="button" role="tab" aria-selected={performanceView === "trips"} onClick={() => { setDataManagementOpen(false); setPerformanceView("trips"); }} className={`rounded-xl px-3 py-2 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 sm:text-sm ${performanceView === "trips" ? "bg-brand-700 text-white shadow-sm" : "text-slate-600 hover:bg-brand-50"}`}>Trip Performance</button>
+            ) : null}
           </div>
 
-          {!loading && !loadError && selectedRecords.length > 0 ? (
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600">
-              <span className="badge-muted">{periodLabel}</span>
-              <button type="button" onClick={() => setVehicleCoverageOpen(true)} className="badge-muted transition hover:border-brand-200 hover:text-brand-700">{dataQuality.representedVehicles} vehicles analysed</button>
-              <span className={`badge-muted ${monthCoverageCounts.partial || dataQuality.missingMonths.length ? "border-amber-200 bg-amber-50 text-amber-800" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{monthCoverageCounts.complete} complete · {monthCoverageCounts.partial} partial</span>
-              {incompletePeriodMessage ? <span className="font-medium text-amber-800">{incompletePeriodMessage}</span> : null}
+          {showLegacyWorkspace ? (
+            <div className="mt-3 rounded-2xl border border-white/80 bg-white/85 p-3 shadow-sm">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Legacy Fleet filters · January–July stored KPIs</p>
+              <div className="mt-2 grid gap-3 md:grid-cols-[120px_190px_minmax(240px,1fr)] md:items-end">
+              <div>
+                <label className="form-label" htmlFor="vehicle-performance-year">{labels.year}</label>
+                <input id="vehicle-performance-year" className="form-input w-full bg-white" type="number" min="2000" max="2100" value={year} onChange={(event) => setYear(Number(event.target.value) || 2026)} />
+              </div>
+              <div>
+                <label className="form-label" htmlFor="vehicle-performance-month">{labels.month}</label>
+                <select id="vehicle-performance-month" className="form-input w-full bg-white" value={month} onChange={(event) => setMonth(event.target.value ? Number(event.target.value) : "")}>
+                  <option value="">{labels.allLoadedMonths}</option>
+                  {MONTH_OPTIONS.map((option) => <option key={option.value} value={option.value}>{labels.months[option.labelKey]}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="form-label" htmlFor="vehicle-performance-search">{labels.searchVehicle}</label>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input id="vehicle-performance-search" className="form-input w-full bg-white pl-9" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={labels.searchPlaceholder} />
+                </div>
+              </div>
+              </div>
+              {!loading && !loadError && selectedRecords.length > 0 ? (
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                  <span className="badge-muted">{periodLabel}</span>
+                  <button type="button" onClick={() => setVehicleCoverageOpen(true)} className="badge-muted transition hover:border-brand-200 hover:text-brand-700">{dataQuality.representedVehicles} vehicles analysed</button>
+                  <span className={`badge-muted ${monthCoverageCounts.partial || dataQuality.missingMonths.length ? "border-amber-200 bg-amber-50 text-amber-800" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{monthCoverageCounts.complete} complete · {monthCoverageCounts.partial} partial</span>
+                  {incompletePeriodMessage ? <span className="font-medium text-amber-800">{incompletePeriodMessage}</span> : null}
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>
       </section>
 
-      <div id="vehicle-performance-v4" className="scroll-mt-6">
-        <VehicleFinancialDrafts
-          language={language}
-          vehicles={vehicles}
-          canImport={canWrite && can("business:import")}
-          canReview={canWrite}
-          canApprove={can("admin:user_management")}
-        />
-      </div>
+      {performanceView === "financial" ? (
+        <div id="vehicle-performance-v4" className="scroll-mt-6">
+          <VehicleFinancialDrafts
+            language={language}
+            vehicles={vehicles}
+            canImport={canWrite && can("business:import")}
+            canReview={canWrite}
+            canApprove={can("admin:user_management")}
+          />
+        </div>
+      ) : null}
 
-      {loading ? <p role="status" className="surface-card p-5">{labels.loadingRecords}</p> : loadError ? (
+      {showLegacyWorkspace ? (loading ? <p role="status" className="surface-card p-5">{labels.loadingRecords}</p> : loadError ? (
         <div role="alert" className="surface-card p-5"><p className="form-error">Unable to load vehicle performance: {loadError}</p><button type="button" className="btn-secondary mt-3" onClick={() => void load()}>{labels.retry}</button></div>
       ) : !selectedRecords.length ? <p role="status" className="surface-card p-5">{labels.noDataTitle}</p> : <>
 
@@ -2580,9 +2612,9 @@ export default function VehiclePerformancePage() {
         </section>
       ) : null}
 
-      </>}
+      </>) : null}
 
-      {dataManagementOpen ? <details id="vehicle-performance-data-management" open className="surface-card scroll-mt-6 p-4 sm:p-5">
+      {showLegacyWorkspace && dataManagementOpen ? <details id="vehicle-performance-data-management" open className="surface-card scroll-mt-6 p-4 sm:p-5">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
           <div>
             <h3 className="section-title">{labels.dataManagement}</h3>

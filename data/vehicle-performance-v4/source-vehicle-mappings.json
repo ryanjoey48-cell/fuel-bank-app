@@ -1,0 +1,19 @@
+{
+  "version": "v4.1-owner-confirmed",
+  "policy": {
+    "noGeneralLastFourMatching": true,
+    "doNotCreateVehicles": true,
+    "doNotModifySupabaseVehicleRecords": true
+  },
+  "mappings": [
+    {
+      "sourceRegistration": "3ฒล-4565",
+      "canonicalRegistration": "3ฒล-4565",
+      "canonicalVehicleId": "39f2dd25-0796-4297-8948-c5f639d6590e",
+      "sourceAliases": ["4565"],
+      "ownerConfirmed": true,
+      "reason": "Technical match authorised for V4 Preview: source registration ending 4565 maps to existing EES operational vehicle G. Preferred vehicle_id is the row linked to 2026 Jan–Jun vehicle_monthly_performance, fuel_logs and weekly_mileage. Owner/boss business confirmation remains pending. Duplicate directory row 4fdab7a0-4b26-4a56-a9c8-003191efd0fd (Aunite G) shares the same registration and must not be used for V4 matching or duplicated.",
+      "ignoredDuplicateVehicleIds": ["4fdab7a0-4b26-4a56-a9c8-003191efd0fd"]
+    }
+  ]
+}
