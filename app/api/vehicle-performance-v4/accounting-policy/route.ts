@@ -5,6 +5,7 @@ import {
   getActiveApprovedVehicleFinancialPolicy,
   VEHICLE_FINANCIAL_POLICY_DEFINITION
 } from "@/lib/vehicle-financial-accounting-policy";
+import { disabledVehicleFinancialV4WriteResponse, isVehicleFinancialV4WriteLocked } from "@/lib/vehicle-financial-v4-release-lock";
 
 function responseError(error: unknown) {
   const status = error instanceof AdminApiError ? error.status : 500;
@@ -29,5 +30,6 @@ export async function GET(request: Request) {
 
 /** Policy activation stays unavailable until the owner approves a separate release. */
 export async function POST() {
+  if (isVehicleFinancialV4WriteLocked()) return disabledVehicleFinancialV4WriteResponse();
   return NextResponse.json({ error: "Accounting-policy activation is disabled for this release." }, { status: 403 });
 }

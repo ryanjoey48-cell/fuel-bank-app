@@ -8,6 +8,7 @@ import { financialDraftEntryPayload, hashFinancialDraftContent } from "@/lib/veh
 import { knownVehicleRegistrationAliases } from "@/lib/vehicle-identity";
 import { BoundedRequestError, boundedRequestBody } from "@/lib/vehicle-financial-upload";
 import { getActiveApprovedVehicleFinancialPolicy, verifiedVehicleFinancialPolicyEvidence } from "@/lib/vehicle-financial-accounting-policy";
+import { disabledVehicleFinancialV4WriteResponse, isVehicleFinancialV4WriteLocked } from "@/lib/vehicle-financial-v4-release-lock";
 
 const json = (value: FormDataEntryValue | null, fallback: unknown) => {
   if (typeof value !== "string" || !value.trim()) return fallback;
@@ -74,6 +75,7 @@ export async function GET(request: Request) {
     const activePolicy = await getActiveApprovedVehicleFinancialPolicy(admin);
     return NextResponse.json({
       migrationReady,
+      writesEnabled: migrationReady && !isVehicleFinancialV4WriteLocked(),
       setupMessage: migrationReady ? null : "Vehicle Financial Draft storage is not installed. Local preview remains available; persistence requires the approved Phase 2 migration.",
       accountingPolicy: { status: activePolicy ? "approved" : "draft", evidenceManifestReady: Boolean(verifiedVehicleFinancialPolicyEvidence()), approvalConflict: Boolean(policyApproval && !activePolicy) },
       vehicles: vehicles ?? [],
@@ -85,6 +87,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  if (isVehicleFinancialV4WriteLocked()) return disabledVehicleFinancialV4WriteResponse();
   try {
     const { user, admin, access } = await authorized(request, "import");
     const maxRequestBytes = MAX_FINANCIAL_FILE_BYTES + 1024 * 1024;

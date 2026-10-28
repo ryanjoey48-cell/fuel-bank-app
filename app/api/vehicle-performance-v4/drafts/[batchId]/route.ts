@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { AdminApiError, createServerSupabaseAdmin, requireVerifiedUser, resolveAccountAccess } from "@/lib/admin-user-management-server";
 import { canUseVehicleFinancialDrafts } from "@/lib/vehicle-financial-draft-access";
 import { BoundedRequestError, boundedRequestBody } from "@/lib/vehicle-financial-upload";
+import { disabledVehicleFinancialV4WriteResponse, isVehicleFinancialV4WriteLocked } from "@/lib/vehicle-financial-v4-release-lock";
 
 export async function GET(request: Request, context: { params: Promise<{ batchId: string }> }) {
   try {
@@ -70,6 +71,7 @@ function errorResponse(error: unknown) {
 }
 
 export async function PATCH(request: Request, context: { params: Promise<{ batchId: string }> }) {
+  if (isVehicleFinancialV4WriteLocked()) return disabledVehicleFinancialV4WriteResponse();
   try {
     const user = await requireVerifiedUser(request);
     const admin = createServerSupabaseAdmin();

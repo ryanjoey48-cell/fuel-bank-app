@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { AdminApiError, createServerSupabaseAdmin, requireVerifiedUser, resolveAccountAccess } from "@/lib/admin-user-management-server";
 import { hasPermission } from "@/lib/authorization";
 import { BoundedRequestError, boundedRequestBody } from "@/lib/vehicle-financial-upload";
+import { disabledVehicleFinancialV4WriteResponse, isVehicleFinancialV4WriteLocked } from "@/lib/vehicle-financial-v4-release-lock";
 
 export async function POST(request: Request) {
+  if (isVehicleFinancialV4WriteLocked()) return disabledVehicleFinancialV4WriteResponse();
   try {
     const user = await requireVerifiedUser(request);
     const admin = createServerSupabaseAdmin();
