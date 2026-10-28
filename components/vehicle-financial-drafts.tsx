@@ -5,7 +5,7 @@ import { AlertTriangle, CheckCircle2, FileUp, ShieldAlert } from "lucide-react";
 import { getAccessToken } from "@/lib/account-management";
 import { FINANCIAL_COLUMNS, calculateDraftFinancials, canonicalLpgVehicleIds, parseFinancialValue, previewFinancialDraft, type FinancialField, type LpgTreatment } from "@/lib/vehicle-financial-draft";
 import { FinancialWorkbookError, listFinancialWorkbookSheets, MAX_FINANCIAL_FILE_BYTES, parseFinancialWorkbook } from "@/lib/vehicle-financial-draft-import";
-import { knownVehicleRegistrationAliases } from "@/lib/vehicle-identity";
+import { formatVehicleRegistrationDisplay, knownVehicleRegistrationAliases } from "@/lib/vehicle-identity";
 import type { Vehicle } from "@/types/database";
 
 type Language = "en" | "th";
@@ -90,11 +90,12 @@ type Props = {
 
 const copy = {
   en: {
-    title: "2026 monthly financial report",
-    subtitle: "One standardised January–September source view. Live KPIs, rankings and approved balances stay unchanged.",
+    title: "V4 source reports · January–September 2026",
+    subtitle: "Separate from the Fleet Overview month filters above. These are authorised source figures only — not live KPIs, rankings or approved profit.",
     period: "Reporting month", upload: "Choose Excel or CSV", sheets: "Source sheets", roster: "Vehicles expected for this month",
-    manageData: "Manage Data",
-    monthSelector: "January–September 2026",
+    manageData: "Manage Data · V4 writes disabled",
+    manageDataHelp: "Saving, review, approval and publication stay locked for this Preview release.",
+    monthSelector: "V4 source month",
     sourceFigures: "Source figures",
     sourceFiguresNote: "Printed source totals · not approved profit",
     sourceReportRequired: "Source report required",
@@ -105,6 +106,8 @@ const copy = {
     unresolvedFigures: "Unresolved figures",
     registrationReview: "Registration review pending",
     registrationReviewHelp: "Owner will confirm 3ฒล-4565 with the boss later. Do not rename or duplicate it.",
+    tableCaption: "Ten-column V4 source report",
+    amountUnit: "THB",
     confirmRoster: "I confirm this is the complete fleet roster for the selected month", rosterConfirmed: "Complete monthly fleet roster confirmed",
     employee: "Month-specific employee", employeeUnassigned: "Unknown / not assigned", lpg: "LPG treatment",
     lpgIncluded: "Included in Fuel", lpgSeparate: "Separate expense", lpgUnknown: "Unknown",
@@ -148,11 +151,12 @@ const copy = {
     policyStatus: "V4 accounting policy", policyDraft: "Draft — balances remain disabled", policyApproved: "Previously approved policy record detected", policyEvidencePending: "Accounting-policy activation remains disabled for this release.", policyApprovalConflict: "An immutable approval exists with different evidence. A new policy version requires review.", approvePolicy: "Approve v4-accounting-draft-3", policyApprovalFailed: "The policy was not approved. Check admin access, the verified evidence manifest and the saved policy version.",
   },
   th: {
-    title: "รายงานการเงินรายเดือน 2026",
-    subtitle: "มุมมองต้นฉบับมาตรฐาน ม.ค.–ก.ย. เดียวกัน KPI อันดับ และยอดคงเหลือที่อนุมัติแล้วยังไม่เปลี่ยน",
+    title: "รายงานต้นฉบับ V4 · มกราคม–กันยายน 2026",
+    subtitle: "แยกจากตัวกรองเดือนของ Fleet Overview ด้านบน เป็นตัวเลขต้นฉบับที่ได้รับอนุญาตเท่านั้น ไม่ใช่ KPI อันดับ หรือกำไรที่อนุมัติ",
     period: "เดือนรายงาน", upload: "เลือก Excel หรือ CSV", sheets: "ชีตต้นทาง", roster: "รถที่คาดว่าจะอยู่ในเดือนนี้",
-    manageData: "จัดการข้อมูล",
-    monthSelector: "มกราคม–กันยายน 2026",
+    manageData: "จัดการข้อมูล · ปิดการเขียน V4",
+    manageDataHelp: "การบันทึก การตรวจทาน การอนุมัติ และการเผยแพร่ยังถูกล็อกไว้สำหรับ Preview นี้",
+    monthSelector: "เดือนต้นฉบับ V4",
     sourceFigures: "ตัวเลขจากต้นฉบับ",
     sourceFiguresNote: "ยอดรวมจากรายงานต้นฉบับ · ไม่ใช่กำไรที่อนุมัติ",
     sourceReportRequired: "ต้องมีรายงานต้นฉบับ",
@@ -163,6 +167,8 @@ const copy = {
     unresolvedFigures: "ตัวเลขที่ยังไม่สรุป",
     registrationReview: "รอตรวจสอบทะเบียน",
     registrationReviewHelp: "เจ้าของจะยืนยันทะเบียน 3ฒล-4565 กับหัวหน้าภายหลัง ห้ามเปลี่ยนชื่อหรือสร้างรายการซ้ำ",
+    tableCaption: "รายงานต้นฉบับ V4 สิบคอลัมน์",
+    amountUnit: "บาท",
     confirmRoster: "ขอยืนยันว่ารายชื่อรถนี้ครบถ้วนสำหรับเดือนที่เลือก", rosterConfirmed: "ยืนยันรายชื่อรถประจำเดือนครบถ้วนแล้ว",
     employee: "พนักงานประจำเดือน", employeeUnassigned: "ไม่ทราบ / ยังไม่กำหนด", lpg: "วิธีบันทึก LPG",
     lpgIncluded: "รวมอยู่ใน Fuel", lpgSeparate: "ค่าใช้จ่ายแยก", lpgUnknown: "ไม่ทราบ",
@@ -320,11 +326,18 @@ const readOnlyPreviewColumns = [
   ["Trip Payments", "tripPayments"], ["Expenses", "expenses"], ["Parking Fees", "parkingFees"],
   ["Total Received", "totalReceived"], ["Fuel", "fuel"], ["LPG", "lpg"], ["Maintenance", "maintenance"]
 ] as const;
-function formatSourceAmount(value: string | null) {
+/** Format pure monetary/count source strings only. Never reformat registration identifiers. */
+function formatSourceAmount(value: string | null, language: Language = "en") {
   if (value === null) return null;
-  const [whole, fraction] = value.split(".");
-  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  return fraction === undefined ? grouped : `${grouped}.${fraction}`;
+  if (!/^-?\d+(\.\d+)?$/.test(value)) return value;
+  const fraction = value.includes(".") ? value.split(".")[1] ?? "" : "";
+  const digits = fraction.length > 0 ? Math.min(fraction.length, 2) : 0;
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return value;
+  return new Intl.NumberFormat(language === "th" ? "th-TH" : "en-GB", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: 2
+  }).format(amount);
 }
 
 const previewMonthLabels: Record<string, { en: string; th: string }> = {
@@ -361,7 +374,7 @@ function ReadOnlySourcePreview({ report, language, c, vehicleIdsByAlias, reviewR
   }).length;
   const unresolvedDashes = report.rows.reduce((sum, row) => sum + Object.values(row.sourceDashStatus).filter(value => value === "unresolved_source_dash").length, 0);
   const salaryText = isAugust ? c.augustSalaryVerified : isSeptember ? c.septemberSalaryProvisional : null;
-  const totalValue = (field: string) => formatSourceAmount(report.sourceFooterTotals[field as keyof typeof report.sourceFooterTotals] ?? null) ?? "—";
+  const totalValue = (field: string) => formatSourceAmount(report.sourceFooterTotals[field as keyof typeof report.sourceFooterTotals] ?? null, language) ?? "—";
   const summaryCards: Array<[string, string]> = [
     [c.revenue, totalValue("totalReceived")],
     [c.jobs, totalValue("jobs")],
@@ -369,22 +382,26 @@ function ReadOnlySourcePreview({ report, language, c, vehicleIdsByAlias, reviewR
     [c.fuel, totalValue("fuel")],
     [c.maintenance, totalValue("maintenance")]
   ];
+  const stickyReg = "sticky left-0 z-[1] border-r border-slate-200 bg-inherit px-2 py-1.5 shadow-[4px_0_8px_rgba(15,23,42,0.04)]";
 
   return <article className="overflow-hidden rounded-xl border border-slate-200 bg-white">
     <div className="border-b border-slate-200 bg-slate-50/80 px-3.5 py-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h4 className="text-sm font-bold text-slate-950">{c.monthlyReport}: {label}</h4>
-          <p className="mt-1 text-xs text-slate-600">{report.rowCount} named vehicle rows · {allSourceVehicles ? `${matchedRows}/${report.rowCount} ${c.matchCount}` : c.matchPending}</p>
+          <p className="mt-1 text-xs text-slate-600">{report.rowCount} named vehicle rows · {c.amountUnit} · {allSourceVehicles ? `${matchedRows}/${report.rowCount} ${c.matchCount}` : c.matchPending}</p>
         </div>
         <span className="inline-flex w-fit rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-900">{c.readOnlySource}</span>
       </div>
-      {salaryText ? <p className={`mt-2 rounded-lg px-3 py-2 text-xs ${isAugust ? "bg-violet-50 text-violet-950" : "bg-amber-50 text-amber-950"}`}>{salaryText}</p> : null}
-      <p className="mt-2 text-xs text-slate-600">{c.sourceLpgRule}</p>
+      <div className={`mt-2 space-y-1 rounded-lg px-3 py-2 text-xs ${isSeptember ? "bg-amber-50 text-amber-950" : "bg-slate-100 text-slate-800"}`}>
+        {salaryText ? <p>{salaryText}</p> : null}
+        <p>{c.sourceLpgRule}</p>
+        {unresolvedDashes > 0 ? <p>{c.unresolvedDashes}: {unresolvedDashes} · {c.sourceReconcile}</p> : null}
+      </div>
       {allSourceVehicles && matchedRows !== report.rowCount ? <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-xs font-medium text-rose-900">{c.matchMissing}: {report.rowCount - matchedRows} of {report.rowCount}</p> : null}
       <div className="mt-3">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{c.sourceFigures} · {c.sourceFiguresNote}</p>
-        <dl className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
+        <dl className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
           {summaryCards.map(([title, value]) => <div key={title} className="rounded-lg border border-slate-200 bg-white px-2.5 py-2">
             <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{title}</dt>
             <dd className="mt-1 text-sm font-semibold tabular-nums text-slate-950">{value}</dd>
@@ -392,50 +409,55 @@ function ReadOnlySourcePreview({ report, language, c, vehicleIdsByAlias, reviewR
         </dl>
       </div>
     </div>
-    <div className="max-h-[34rem] overflow-auto">
+    <div className="max-h-[min(34rem,70vh)] overflow-auto overscroll-contain">
       <table className="min-w-[1080px] w-full border-separate border-spacing-0 text-[11px]">
-        <thead className="sticky top-0 z-10 bg-slate-100 text-left text-slate-700 shadow-[0_1px_0_rgba(15,23,42,0.08)]">
-          <tr>{readOnlyPreviewColumns.map(([columnLabel]) => <th key={columnLabel} className="whitespace-nowrap px-2 py-2 font-semibold">{columnLabel}</th>)}</tr>
+        <caption className="sr-only">{c.tableCaption}: {label}</caption>
+        <thead className="sticky top-0 z-20 bg-slate-100 text-left text-slate-700 shadow-[0_1px_0_rgba(15,23,42,0.08)]">
+          <tr>{readOnlyPreviewColumns.map(([columnLabel, field]) => <th key={columnLabel} scope="col" className={`whitespace-nowrap px-2 py-2 font-semibold ${field === "registration" ? `${stickyReg} z-30 bg-slate-100` : ""}`}>{columnLabel}</th>)}</tr>
         </thead>
         <tbody>
           {report.rows.map(row => {
+            const registration = formatVehicleRegistrationDisplay(row.registration);
             const aliases = knownVehicleRegistrationAliases(row.registration);
             const matches = new Set(aliases.flatMap(alias => [...(vehicleIdsByAlias.get(alias) ?? [])]));
             const vehicleMatch = matches.size === 1 ? "matched" : matches.size > 1 ? "ambiguous" : "missing";
             const needsRegistrationReview = reviewRegistrations.has(row.registration);
-            const valueFor = (field: keyof typeof row) => {
+            const amountFor = (field: keyof typeof row) => {
+              if (field === "registration") return null;
               const value = row[field];
               if (typeof value !== "string") return null;
-              return formatSourceAmount(value);
+              return formatSourceAmount(value, language);
             };
-            return <tr key={row.registration} className="border-t border-slate-100 align-top odd:bg-white even:bg-slate-50/60">
+            return <tr key={row.registration} className="border-t border-slate-100 align-top odd:bg-white even:bg-slate-50/70">
               {readOnlyPreviewColumns.map(([header, field]) => {
-                const raw = valueFor(field as keyof typeof row);
                 const dashStatus = row.sourceDashStatus[field as keyof typeof row.sourceDashStatus];
-                const cellLabel = raw === null ? c.sourceDash : dashStatus === "confirmed_zero_by_owner_rule" ? c.confirmedZero : dashStatus === "zero_confirmed_by_source_note" ? c.resolvedSourceNote : undefined;
-                return <td key={`${row.registration}-${header}`} className={`whitespace-nowrap px-2 py-1.5 tabular-nums ${field === "registration" ? "font-semibold text-slate-950" : "text-slate-700"}`} title={cellLabel}>
+                const cellLabel = field === "registration"
+                  ? (needsRegistrationReview ? c.registrationReviewHelp : undefined)
+                  : amountFor(field as keyof typeof row) === null ? c.sourceDash : dashStatus === "confirmed_zero_by_owner_rule" ? c.confirmedZero : dashStatus === "zero_confirmed_by_source_note" ? c.resolvedSourceNote : undefined;
+                return <td key={`${row.registration}-${header}`} className={`whitespace-nowrap ${field === "registration" ? `${stickyReg} font-semibold text-slate-950 odd:bg-white even:bg-slate-50` : "px-2 py-1.5 tabular-nums text-slate-700"}`} title={cellLabel}>
                   {field === "registration" ? <span className="flex flex-col gap-1">
-                    <span>{raw}</span>
+                    <span className="font-mono text-[12px] tracking-tight">{registration}</span>
                     <span className="flex flex-wrap gap-1">
                       <span className={`w-fit rounded px-1.5 py-0.5 text-[9px] font-semibold ${vehicleMatch === "matched" ? "bg-emerald-50 text-emerald-800" : vehicleMatch === "missing" ? "bg-rose-50 text-rose-800" : "bg-amber-50 text-amber-800"}`}>{!allSourceVehicles ? c.matchPending : vehicleMatch === "matched" ? "matched" : c.matchMissing}</span>
-                      {needsRegistrationReview ? <span className="w-fit rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-950" title={c.registrationReviewHelp}>{c.registrationReview}</span> : null}
+                      {needsRegistrationReview ? <span className="w-fit rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-950">{c.registrationReview}</span> : null}
                     </span>
-                  </span> : raw === null ? <span aria-label={c.sourceDash} className="text-amber-800">—</span> : <span>{raw}{dashStatus === "confirmed_zero_by_owner_rule" ? <sup title={c.confirmedZero}>†</sup> : null}</span>}
+                  </span> : amountFor(field as keyof typeof row) === null ? <span aria-label={c.sourceDash} className="text-amber-800">—</span> : <span>{amountFor(field as keyof typeof row)}{dashStatus === "confirmed_zero_by_owner_rule" ? <sup title={c.confirmedZero}>†</sup> : null}</span>}
                 </td>;
               })}
             </tr>;
           })}
         </tbody>
-        <tfoot className="border-t-2 border-slate-300 bg-slate-50 font-semibold text-slate-900"><tr>
-          {readOnlyPreviewColumns.map(([header, field]) => <td key={header} className="whitespace-nowrap px-2 py-2 tabular-nums">{field === "registration" ? c.sourceFooter : totalValue(field)}</td>)}
-        </tr></tfoot>
+        <tfoot className="sticky bottom-0 z-10 border-t-2 border-slate-400 bg-slate-200/95 font-semibold text-slate-950 backdrop-blur-sm">
+          <tr>
+            {readOnlyPreviewColumns.map(([header, field]) => <td key={header} className={`whitespace-nowrap px-2 py-2.5 tabular-nums ${field === "registration" ? `${stickyReg} z-20 bg-slate-200/95` : ""}`}>{field === "registration" ? c.sourceFooter : totalValue(field)}</td>)}
+          </tr>
+        </tfoot>
       </table>
     </div>
-    <div className="space-y-1 px-3.5 py-3 text-[11px] text-slate-600">
+    <div className="space-y-1 border-t border-slate-200 bg-slate-50 px-3.5 py-3 text-[11px] text-slate-600">
       <p>{report.rowSumReconciliation.caveat}</p>
-      <p>{c.sourceReconcile} · {c.unresolvedDashes}: {unresolvedDashes}</p>
       {report.sourceNotes.map(note => <p key={note}>{note}</p>)}
-      <details className="pt-1"><summary className="cursor-pointer font-semibold text-slate-700">{report.sourceFile} · source SHA-256</summary><p className="mt-1 break-all font-mono text-[10px]">{report.sourceSha256}</p></details>
+      <details className="pt-1"><summary className="cursor-pointer font-semibold text-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600">{report.sourceFile} · source SHA-256</summary><p className="mt-1 break-all font-mono text-[10px]">{report.sourceSha256}</p></details>
     </div>
   </article>;
 }
@@ -774,19 +796,22 @@ export function VehicleFinancialDrafts({ language, vehicles: fallbackVehicles, c
   }
   const multiVehicleEmployees = [...employeeVehicles.entries()].filter(([, assignedVehicles]) => assignedVehicles.size > 1).map(([employeeId]) => employeeId);
 
-  return <section className="rounded-[1rem] border border-brand-200 bg-[linear-gradient(180deg,#ffffff_0%,#fbf9ff_100%)] p-4 shadow-[0_12px_32px_rgba(76,29,149,0.06)] sm:p-5">
+  return <section aria-labelledby="vehicle-performance-v4-heading" className="rounded-[1rem] border border-brand-200 bg-[linear-gradient(180deg,#ffffff_0%,#fbf9ff_100%)] p-4 shadow-[0_12px_32px_rgba(76,29,149,0.06)] sm:p-5">
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-      <div><p className="text-xs font-semibold uppercase tracking-[0.13em] text-brand-700">Vehicle Performance V4</p><h3 className="mt-1 text-lg font-semibold text-slate-950">{c.title}</h3><p className="mt-1 max-w-3xl text-sm text-slate-600">{c.subtitle}</p></div>
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.13em] text-brand-700">Vehicle Performance V4</p>
+        <h3 id="vehicle-performance-v4-heading" className="mt-1 text-lg font-semibold text-slate-950">{c.title}</h3>
+        <p className="mt-1 max-w-3xl text-sm text-slate-600">{c.subtitle}</p>
+      </div>
       <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800"><ShieldAlert className="h-3.5 w-3.5" />{c.disabledPublication}</span>
     </div>
 
     {canReview ? <>
     <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3.5">
-      <label className="block text-xs font-semibold text-slate-700">{c.monthSelector}
-        <select aria-label={c.monthSelector} value={selectedPreviewMonth} onChange={event => setSelectedPreviewMonth(event.target.value)} className="form-input mt-1 max-w-xs">
-          {(sourceMonths.length ? sourceMonths.map(month => month.reportingMonth) : ["2026-08", "2026-09"]).map(monthKey => <option key={monthKey} value={monthKey}>{monthLabel(monthKey, language)}{sourceMonths.find(entry => entry.reportingMonth === monthKey)?.previewAvailable ? "" : ` · ${c.sourceReportRequired}`}</option>)}
-        </select>
-      </label>
+      <label className="block text-xs font-semibold text-slate-700" htmlFor="v4-source-month">{c.monthSelector}</label>
+      <select id="v4-source-month" aria-label={c.monthSelector} value={selectedPreviewMonth} onChange={event => setSelectedPreviewMonth(event.target.value)} className="form-input mt-1 max-w-xs">
+        {(sourceMonths.length ? sourceMonths.map(month => month.reportingMonth) : ["2026-08", "2026-09"]).map(monthKey => <option key={monthKey} value={monthKey}>{monthLabel(monthKey, language)}{sourceMonths.find(entry => entry.reportingMonth === monthKey)?.previewAvailable ? "" : ` · ${c.sourceReportRequired}`}</option>)}
+      </select>
       <p className="mt-2 text-xs text-slate-500">{c.registrationReviewHelp}</p>
     </div>
 
@@ -804,8 +829,9 @@ export function VehicleFinancialDrafts({ language, vehicles: fallbackVehicles, c
     </div>
 
     <details className="mt-4 rounded-xl border border-slate-200 bg-white">
-      <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-slate-900">{c.manageData}</summary>
+      <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-slate-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600">{c.manageData}</summary>
       <div className="space-y-4 border-t border-slate-100 p-4">
+    <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">{c.manageDataHelp}</p>
     {metadataError ? <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">{metadataError}</p> : null}
     {metadata && !metadata.migrationReady ? <p className="rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-700">{c.requiresMigration}</p> : null}
     {!canImport ? <p className="text-xs text-slate-500">{c.permission}</p> : null}

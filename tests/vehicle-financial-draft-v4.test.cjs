@@ -57,7 +57,9 @@ test('source preview salaries are served only through an authorized server route
   assert.match(component, /\{canReview \? <>/);
   assert.match(component, /selectedPreviewMonth/);
   assert.match(component, /c\.manageData/);
+  assert.match(component, /manageDataHelp/);
   assert.match(component, /SourceReportRequiredPanel/);
+  assert.match(component, /formatVehicleRegistrationDisplay/);
   assert.doesNotMatch(component, /sourcePreviews\?\.map\(report =>/);
   assert.match(route, /requireVerifiedUser/);
   assert.match(route, /canUseVehicleFinancialDrafts\(access, "read"\)/);

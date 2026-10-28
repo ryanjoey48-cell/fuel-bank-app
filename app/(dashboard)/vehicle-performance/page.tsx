@@ -2246,8 +2246,8 @@ export default function VehiclePerformancePage() {
                   <button type="button" onClick={() => setPerformanceView("trips")} className={`rounded-xl px-3.5 py-2 text-sm font-semibold transition ${performanceView === "trips" ? "bg-brand-700 text-white shadow-sm" : "text-slate-600 hover:bg-brand-50"}`}>Trip performance</button>
                 ) : null}
               </div>
-              <a className="btn-secondary" href="#vehicle-performance-v4">2026 monthly financial report</a>
-              <button type="button" className="btn-secondary" onClick={scrollToDataManagement}>Manage data</button>
+              <a className="btn-secondary" href="#vehicle-performance-v4">V4 source reports (Jan–Sep)</a>
+              <button type="button" className="btn-secondary" onClick={scrollToDataManagement}>Legacy manage data</button>
               <Link className="btn-secondary" href="/maintenance/analytics">{t.maintenance.analytics}</Link>
               <button type="button" onClick={() => void downloadVehiclePerformancePdf()} disabled={generatingPdf || loading || !!loadError || !rows.length} className="btn-primary gap-2 disabled:cursor-not-allowed disabled:opacity-50">
                 <Download className="h-4 w-4" />
@@ -2256,24 +2256,27 @@ export default function VehiclePerformancePage() {
             </div>
           </div>
 
-          <div className="mt-5 grid gap-3 rounded-2xl border border-white/80 bg-white/80 p-3 shadow-sm md:grid-cols-[120px_190px_minmax(240px,1fr)] md:items-end">
+          <div className="mt-5 rounded-2xl border border-white/80 bg-white/80 p-3 shadow-sm">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Fleet Overview filters · January–July legacy KPIs and rankings</p>
+            <div className="mt-2 grid gap-3 md:grid-cols-[120px_190px_minmax(240px,1fr)] md:items-end">
             <div>
-              <label className="form-label">{labels.year}</label>
-              <input className="form-input w-full bg-white" type="number" min="2000" max="2100" value={year} onChange={(event) => setYear(Number(event.target.value) || 2026)} />
+              <label className="form-label" htmlFor="vehicle-performance-year">{labels.year}</label>
+              <input id="vehicle-performance-year" className="form-input w-full bg-white" type="number" min="2000" max="2100" value={year} onChange={(event) => setYear(Number(event.target.value) || 2026)} />
             </div>
             <div>
-              <label className="form-label">{labels.month}</label>
-              <select className="form-input w-full bg-white" value={month} onChange={(event) => setMonth(event.target.value ? Number(event.target.value) : "")}>
+              <label className="form-label" htmlFor="vehicle-performance-month">{labels.month}</label>
+              <select id="vehicle-performance-month" className="form-input w-full bg-white" value={month} onChange={(event) => setMonth(event.target.value ? Number(event.target.value) : "")}>
                 <option value="">{labels.allLoadedMonths}</option>
                 {MONTH_OPTIONS.map((option) => <option key={option.value} value={option.value}>{labels.months[option.labelKey]}</option>)}
               </select>
             </div>
             <div>
-              <label className="form-label">{labels.searchVehicle}</label>
+              <label className="form-label" htmlFor="vehicle-performance-search">{labels.searchVehicle}</label>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <input className="form-input w-full bg-white pl-9" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={labels.searchPlaceholder} />
+                <input id="vehicle-performance-search" className="form-input w-full bg-white pl-9" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={labels.searchPlaceholder} />
               </div>
+            </div>
             </div>
           </div>
 

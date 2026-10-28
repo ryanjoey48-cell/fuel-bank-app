@@ -72,3 +72,26 @@ export function knownVehicleRegistrationAliases(value: string | null | undefined
 
   return Array.from(aliases);
 }
+
+/**
+ * Vehicle registrations are identifiers, not monetary quantities.
+ * Never Number()/parseInt()/toLocaleString() or thousands-group these values.
+ */
+export function formatVehicleRegistrationDisplay(value: string | null | undefined) {
+  if (value == null) return "";
+  return String(value).normalize("NFKC").trim();
+}
+
+/** Stable string sort for registration identifiers; preserves Thai text and leading zeros. */
+export function compareVehicleRegistrations(left: string, right: string) {
+  return formatVehicleRegistrationDisplay(left).localeCompare(
+    formatVehicleRegistrationDisplay(right),
+    "th-TH",
+    { numeric: false, sensitivity: "variant", caseFirst: "false" }
+  );
+}
+
+/** Case-folded haystack for registration search without altering displayed text. */
+export function vehicleRegistrationSearchText(value: string | null | undefined) {
+  return formatVehicleRegistrationDisplay(value).toLocaleLowerCase("th-TH");
+}
