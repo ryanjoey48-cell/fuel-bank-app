@@ -93,5 +93,7 @@ test('V4 read-only UI displays registrations as identifiers and never formats th
   assert.match(component, /manageDataHelp/);
   assert.match(component, /resolveV4SourceVehicleMatch/);
   assert.match(component, /buildVehicleFinancialV4ManagementAnalysis/);
+  assert.match(previewFn, /sourceFooterShort/);
+  assert.match(previewFn, /text-right tabular-nums/);
   assert.doesNotMatch(previewFn, /max-h-\[min\(36rem/);
 });

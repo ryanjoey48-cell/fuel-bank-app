@@ -48,7 +48,18 @@ export type VehicleManagementMetrics = {
   fuelSharePercent: number | null;
   revenuePerJob: number | null;
   recordedCostPerJob: number | null;
+  balanceEligible: boolean;
   reviewReasons: string[];
+};
+
+export type ReviewIssueSeverity = "high" | "medium" | "low";
+
+export type ManagementReviewIssue = {
+  registration: string;
+  issue: string;
+  severity: ReviewIssueSeverity;
+  evidence: string;
+  code: string;
 };
 
 export type MonthManagementSummary = {
@@ -60,13 +71,18 @@ export type MonthManagementSummary = {
   driverCost: number | null;
   salary: number | null;
   tripPayments: number | null;
+  expenses: number | null;
+  parkingFees: number | null;
   fuelAndLpg: number | null;
+  fuel: number | null;
+  lpg: number | null;
   maintenance: number | null;
   operatingCosts: number | null;
   totalRecordedCosts: number | null;
   indicativeRecordedBalance: number | null;
   indicativeRecordedMarginPercent: number | null;
   fuelSharePercent: number | null;
+  revenuePerJob: number | null;
 };
 
 export type MonthComparisonMetric = {
@@ -77,23 +93,49 @@ export type MonthComparisonMetric = {
   absoluteChange: number | null;
   percentChange: number | null;
   confidence: ManagementAmountConfidence;
+  category: "revenue" | "volume" | "driver" | "operating" | "indicative";
+};
+
+export type CostIncreaseInsight = {
+  key: string;
+  label: string;
+  absoluteChange: number;
+  percentChange: number | null;
+  shareOfRecordedCostIncrease: number | null;
+};
+
+export type RankingMeta = {
+  eligibleCompleteVehicles: number;
+  incompleteVehicles: number;
+  requestedLimit: number;
+  strongestCount: number;
+  weakestCount: number;
+  note: string;
 };
 
 export type ManagementAnalysisResult = {
   policyNote: string;
   lpgNote: string;
+  rankingNote: string;
+  observedVsCauseNote: string;
+  thresholdNote: string;
   previous: MonthManagementSummary | null;
   current: MonthManagementSummary;
   comparisons: MonthComparisonMetric[];
+  costIncreaseInsights: CostIncreaseInsight[];
   vehicles: VehicleManagementMetrics[];
+  reviewIssues: ManagementReviewIssue[];
   reviewVehicles: VehicleManagementMetrics[];
   topRevenue: VehicleManagementMetrics[];
   highestCosts: VehicleManagementMetrics[];
   strongestBalance: VehicleManagementMetrics[];
   weakestBalance: VehicleManagementMetrics[];
+  rankingMeta: RankingMeta;
 };
 
 const LPG_VEHICLE_KEY = "ฒอ8453";
+const DEFAULT_RANK_LIMIT = 5;
+const HIGH_FUEL_SHARE_THRESHOLD = 45;
 
 export function parseManagementSourceAmount(value: string | null | undefined): number | null {
   if (value == null) return null;
@@ -140,18 +182,182 @@ function lpgAmountForRow(row: ManagementSourceRow, reportingMonth: string): { am
   const month = Number(reportingMonth.slice(5, 7));
   const separateFromFuel = month >= 8;
   if (!isLpgVehicle(row.registration)) {
-    // Confirmed non-LPG vehicles use owner rule zero; unresolved would be incomplete.
     if (row.sourceDashStatus?.lpg === "unresolved_source_dash" && row.lpg == null) {
       return { amount: null, incomplete: true };
     }
     return { amount: 0, incomplete: false };
   }
   if (!separateFromFuel) {
-    // Jan–Jul: LPG included in Fuel — do not add again.
     return { amount: 0, incomplete: false };
   }
   const amount = parseManagementSourceAmount(row.lpg);
   return { amount, incomplete: amount == null };
+}
+
+function compareNullableNumber(left: number, right: number, direction: "asc" | "desc") {
+  if (left === right) return 0;
+  if (direction === "desc") return right - left;
+  return left - right;
+}
+
+function sortByNullable(
+  rows: VehicleManagementMetrics[],
+  getter: (row: VehicleManagementMetrics) => number | null,
+  direction: "asc" | "desc"
+) {
+  return [...rows]
+    .filter((row) => getter(row) != null)
+    .sort((left, right) => {
+      const primary = compareNullableNumber(getter(left) as number, getter(right) as number, direction);
+      if (primary !== 0) return primary;
+      return left.registration.localeCompare(right.registration, "en");
+    });
+}
+
+/**
+ * Balance/margin rankings use only complete vehicle rows.
+ * Top and bottom lists never share a vehicle; if fewer than 2*limit eligible
+ * vehicles exist, each list is shortened (or one list emptied) instead of overlapping.
+ */
+export function selectDisjointBalanceRanks(
+  vehicles: VehicleManagementMetrics[],
+  limit = DEFAULT_RANK_LIMIT
+): {
+  strongest: VehicleManagementMetrics[];
+  weakest: VehicleManagementMetrics[];
+  eligible: VehicleManagementMetrics[];
+  meta: RankingMeta;
+} {
+  const eligible = sortByNullable(
+    vehicles.filter((row) => row.balanceEligible && row.indicativeRecordedBalance != null),
+    (row) => row.indicativeRecordedBalance,
+    "desc"
+  );
+  const incompleteVehicles = vehicles.length - eligible.length;
+  const requestedLimit = Math.max(0, limit);
+  let perSide = Math.min(requestedLimit, Math.floor(eligible.length / 2));
+  if (eligible.length === 1) {
+    return {
+      strongest: eligible.slice(0, 1),
+      weakest: [],
+      eligible,
+      meta: {
+        eligibleCompleteVehicles: 1,
+        incompleteVehicles,
+        requestedLimit,
+        strongestCount: 1,
+        weakestCount: 0,
+        note: "Only one complete vehicle-level balance is available; weakest list is omitted to avoid overlap."
+      }
+    };
+  }
+  if (eligible.length === 0) {
+    return {
+      strongest: [],
+      weakest: [],
+      eligible,
+      meta: {
+        eligibleCompleteVehicles: 0,
+        incompleteVehicles,
+        requestedLimit,
+        strongestCount: 0,
+        weakestCount: 0,
+        note: "No complete vehicle-level balances are available. Incomplete cost rows are excluded from rankings."
+      }
+    };
+  }
+  const strongest = eligible.slice(0, perSide);
+  const weakest = eligible.slice(eligible.length - perSide).reverse();
+  return {
+    strongest,
+    weakest,
+    eligible,
+    meta: {
+      eligibleCompleteVehicles: eligible.length,
+      incompleteVehicles,
+      requestedLimit,
+      strongestCount: strongest.length,
+      weakestCount: weakest.length,
+      note:
+        eligible.length < requestedLimit * 2
+          ? `Only ${eligible.length} complete vehicle balances are available; showing ${strongest.length} strongest and ${weakest.length} weakest with no overlap. Incomplete cost rows are excluded.`
+          : `Rankings use ${eligible.length} complete vehicle balances only. Incomplete cost rows are excluded.`
+    }
+  };
+}
+
+function buildReviewIssues(metrics: VehicleManagementMetrics): ManagementReviewIssue[] {
+  const issues: ManagementReviewIssue[] = [];
+  const fuel = metrics.fuelAndLpg;
+  const knownFuel = fuel != null ? fuel : null;
+  const revenue = metrics.clientRevenue;
+  const jobs = metrics.jobs;
+
+  if (revenue === 0 && knownFuel != null && knownFuel > 0) {
+    issues.push({
+      registration: metrics.registration,
+      issue: "Zero client revenue with recorded fuel spend",
+      severity: "high",
+      evidence: `Source shows Total Received 0 with fuel/LPG ${knownFuel.toFixed(2)} THB. Incomplete fields: ${metrics.incompleteFields.join(", ") || "none"}. Review assignment and source notes; do not assume misconduct.`,
+      code: "zero_revenue_with_fuel"
+    });
+  } else if ((jobs === 0 || jobs == null) && knownFuel != null && knownFuel > 0 && revenue !== 0) {
+    issues.push({
+      registration: metrics.registration,
+      issue: "Fuel recorded with zero or unknown jobs",
+      severity: "high",
+      evidence: `Fuel/LPG ${knownFuel.toFixed(2)} THB against jobs ${jobs == null ? "unknown" : "0"}.`,
+      code: "fuel_without_jobs"
+    });
+  }
+
+  if (metrics.indicativeRecordedBalance != null && metrics.indicativeRecordedBalance < 0) {
+    issues.push({
+      registration: metrics.registration,
+      issue: "Negative indicative recorded balance",
+      severity: "medium",
+      evidence: `Complete-row indicative balance ${metrics.indicativeRecordedBalance.toFixed(2)} THB.`,
+      code: "negative_indicative_balance"
+    });
+  }
+
+  if (metrics.fuelSharePercent != null && metrics.fuelSharePercent >= HIGH_FUEL_SHARE_THRESHOLD && metrics.balanceEligible) {
+    issues.push({
+      registration: metrics.registration,
+      issue: "High fuel + LPG share of revenue",
+      severity: "medium",
+      evidence: `Fuel + LPG share ${metrics.fuelSharePercent.toFixed(1)}% (provisional review threshold ${HIGH_FUEL_SHARE_THRESHOLD}%, not an approved rule).`,
+      code: "high_fuel_share"
+    });
+  }
+
+  const criticalMissing = metrics.incompleteFields.filter((field) =>
+    ["expenses", "parkingFees", "tripPayments", "maintenance", "fuel", "salary", "totalReceived"].includes(field)
+  );
+  if (criticalMissing.length && !(revenue === 0 && knownFuel != null && knownFuel > 0)) {
+    const onlyMaintenance = criticalMissing.length === 1 && criticalMissing[0] === "maintenance";
+    issues.push({
+      registration: metrics.registration,
+      issue: onlyMaintenance ? "Maintenance not stated in source" : "Incomplete required expense fields",
+      severity: onlyMaintenance ? "low" : "medium",
+      evidence: onlyMaintenance
+        ? "Maintenance cell is a source dash (unknown). It is not treated as a confirmed expense of zero or any amount."
+        : `Unknown required fields: ${criticalMissing.join(", ")}. Vehicle-level balance withheld.`,
+      code: onlyMaintenance ? "maintenance_unknown" : "incomplete_required_expenses"
+    });
+  }
+
+  if (metrics.provisionalFields.includes("salary")) {
+    issues.push({
+      registration: metrics.registration,
+      issue: "Provisional September salary",
+      severity: "low",
+      evidence: "Salary remains provisional pending independent payroll verification.",
+      code: "provisional_salary"
+    });
+  }
+
+  return issues;
 }
 
 export function analyseVehicleManagementRow(
@@ -187,8 +393,8 @@ export function analyseVehicleManagementRow(
   const operatingCosts = addNullable([fuel, lpg.amount, expenses, parkingFees, maintenance]);
   const totalRecordedCosts = addNullable([driverCost, operatingCosts]);
   const indicativeRecordedBalance = addNullable([clientRevenue, totalRecordedCosts == null ? null : -totalRecordedCosts]);
-  const completeForProfit = incompleteFields.length === 0;
-  const confidence: ManagementAmountConfidence = !completeForProfit
+  const balanceEligible = incompleteFields.length === 0;
+  const confidence: ManagementAmountConfidence = !balanceEligible
     ? "unavailable"
     : provisionalFields.length
       ? "provisional"
@@ -204,14 +410,14 @@ export function analyseVehicleManagementRow(
     driverCost,
     salary,
     tripPayments,
-    operatingCosts: completeForProfit ? operatingCosts : null,
+    operatingCosts: balanceEligible ? operatingCosts : null,
     fuelAndLpg: fuel == null || lpg.incomplete ? null : fuelAndLpg,
     expenses,
     parkingFees,
     maintenance,
-    totalRecordedCosts: completeForProfit ? totalRecordedCosts : null,
-    indicativeRecordedBalance: completeForProfit ? indicativeRecordedBalance : null,
-    indicativeRecordedMarginPercent: completeForProfit
+    totalRecordedCosts: balanceEligible ? totalRecordedCosts : null,
+    indicativeRecordedBalance: balanceEligible ? indicativeRecordedBalance : null,
+    indicativeRecordedMarginPercent: balanceEligible
       ? (() => {
           const ratio = divideNullable(indicativeRecordedBalance, clientRevenue);
           return ratio == null ? null : ratio * 100;
@@ -222,29 +428,13 @@ export function analyseVehicleManagementRow(
       return ratio == null ? null : ratio * 100;
     })(),
     revenuePerJob: divideNullable(clientRevenue, jobs),
-    recordedCostPerJob: completeForProfit ? divideNullable(totalRecordedCosts, jobs) : null,
+    recordedCostPerJob: balanceEligible ? divideNullable(totalRecordedCosts, jobs) : null,
+    balanceEligible,
     reviewReasons: []
   };
 
-  if (incompleteFields.length) {
-    metrics.reviewReasons.push(`Incomplete source fields: ${incompleteFields.join(", ")}`);
-  }
-  if (provisionalFields.includes("salary")) {
-    metrics.reviewReasons.push("September salary remains provisional pending independent payroll verification");
-  }
-  if (metrics.indicativeRecordedBalance != null && metrics.indicativeRecordedBalance < 0) {
-    metrics.reviewReasons.push("Indicative recorded balance is negative");
-  }
-  if (metrics.fuelSharePercent != null && metrics.fuelSharePercent >= 45) {
-    metrics.reviewReasons.push(`Fuel + LPG share is ${metrics.fuelSharePercent.toFixed(1)}% of client revenue`);
-  }
-  if ((jobs === 0 || jobs == null) && fuel != null && fuel > 0) {
-    metrics.reviewReasons.push("Fuel recorded with zero or unknown jobs");
-  }
-  if (clientRevenue === 0 && (fuel ?? 0) > 0) {
-    metrics.reviewReasons.push("Fuel recorded with zero client revenue");
-  }
-
+  const issues = buildReviewIssues(metrics);
+  metrics.reviewReasons = issues.map((issue) => `${issue.issue}: ${issue.evidence}`);
   return metrics;
 }
 
@@ -277,13 +467,17 @@ export function summariseMonthFromFooter(
   return {
     reportingMonth: report.reportingMonth,
     confidence,
-    note: "Printed source-footer illustration using dash-as-zero reconciliation for aggregate totals. Not approved accounting profit.",
+    note: "Printed source-footer illustration using dash-as-zero reconciliation for aggregate totals. Aggregate figures stay separate from complete vehicle-level calculations. Not approved accounting profit.",
     clientRevenue,
     jobs,
     driverCost,
     salary,
     tripPayments,
+    expenses,
+    parkingFees,
     fuelAndLpg: fuel == null ? null : fuelAndLpg,
+    fuel,
+    lpg: lpg ?? 0,
     maintenance,
     operatingCosts: complete ? operatingCosts : null,
     totalRecordedCosts: complete ? totalRecordedCosts : null,
@@ -293,22 +487,15 @@ export function summariseMonthFromFooter(
       : null,
     fuelSharePercent: clientRevenue != null && clientRevenue > 0 && fuel != null
       ? (((fuel + (lpg ?? 0)) / clientRevenue) * 100)
-      : null
+      : null,
+    revenuePerJob: divideNullable(clientRevenue, jobs)
   };
 }
 
-function sortByNullable(
-  rows: VehicleManagementMetrics[],
-  getter: (row: VehicleManagementMetrics) => number | null,
-  direction: "asc" | "desc"
-) {
-  return [...rows]
-    .filter((row) => getter(row) != null)
-    .sort((left, right) => {
-      const a = getter(left) as number;
-      const b = getter(right) as number;
-      return direction === "desc" ? b - a : a - b;
-    });
+function severityRank(severity: ReviewIssueSeverity) {
+  if (severity === "high") return 0;
+  if (severity === "medium") return 1;
+  return 2;
 }
 
 export function buildVehicleFinancialV4ManagementAnalysis(
@@ -321,38 +508,78 @@ export function buildVehicleFinancialV4ManagementAnalysis(
   const previousSummary = previous ? summariseMonthFromFooter(previous, { salaryProvisional: previousProvisional }) : null;
   const vehicles = current.rows.map((row) => analyseVehicleManagementRow(row, current.reportingMonth, { salaryProvisional }));
 
-  const comparisons: MonthComparisonMetric[] = previousSummary
-    ? [
-        ["clientRevenue", "Client revenue (Total Received)", previousSummary.clientRevenue, currentSummary.clientRevenue],
-        ["jobs", "Jobs", previousSummary.jobs, currentSummary.jobs],
-        ["fuelAndLpg", "Fuel + separately recorded LPG", previousSummary.fuelAndLpg, currentSummary.fuelAndLpg],
-        ["maintenance", "Maintenance", previousSummary.maintenance, currentSummary.maintenance],
-        ["driverCost", "Driver cost (Salary + Trip Payments)", previousSummary.driverCost, currentSummary.driverCost],
-        ["indicativeRecordedBalance", "Indicative recorded balance", previousSummary.indicativeRecordedBalance, currentSummary.indicativeRecordedBalance]
-      ].map(([key, label, previousValue, currentValue]) => ({
-        key: String(key),
-        label: String(label),
-        previous: previousValue as number | null,
-        current: currentValue as number | null,
-        absoluteChange: absoluteChange(previousValue as number | null, currentValue as number | null),
-        percentChange: percentChange(previousValue as number | null, currentValue as number | null),
-        confidence: key === "indicativeRecordedBalance" || key === "driverCost"
-          ? (salaryProvisional || previousProvisional ? "provisional" : "indicative")
-          : "indicative"
-      }))
-    : [];
+  const comparisonDefs: Array<[string, string, number | null, number | null, MonthComparisonMetric["category"], ManagementAmountConfidence]> =
+    previousSummary
+      ? [
+          ["clientRevenue", "Client revenue (Total Received)", previousSummary.clientRevenue, currentSummary.clientRevenue, "revenue", "indicative"],
+          ["jobs", "Jobs", previousSummary.jobs, currentSummary.jobs, "volume", "confirmed"],
+          ["revenuePerJob", "Revenue per job", previousSummary.revenuePerJob, currentSummary.revenuePerJob, "revenue", "indicative"],
+          ["salary", "Salary", previousSummary.salary, currentSummary.salary, "driver", salaryProvisional || previousProvisional ? "provisional" : "indicative"],
+          ["tripPayments", "Trip payments", previousSummary.tripPayments, currentSummary.tripPayments, "driver", "indicative"],
+          ["fuelAndLpg", "Fuel + separately recorded LPG", previousSummary.fuelAndLpg, currentSummary.fuelAndLpg, "operating", "indicative"],
+          ["expenses", "Expenses", previousSummary.expenses, currentSummary.expenses, "operating", "indicative"],
+          ["parkingFees", "Parking fees", previousSummary.parkingFees, currentSummary.parkingFees, "operating", "indicative"],
+          ["maintenance", "Maintenance", previousSummary.maintenance, currentSummary.maintenance, "operating", "indicative"],
+          ["indicativeRecordedBalance", "Indicative recorded balance (aggregate footer)", previousSummary.indicativeRecordedBalance, currentSummary.indicativeRecordedBalance, "indicative", salaryProvisional || previousProvisional ? "provisional" : "indicative"]
+        ]
+      : [];
+
+  const comparisons: MonthComparisonMetric[] = comparisonDefs.map(([key, label, previousValue, currentValue, category, confidence]) => ({
+    key,
+    label,
+    previous: previousValue,
+    current: currentValue,
+    absoluteChange: absoluteChange(previousValue, currentValue),
+    percentChange: percentChange(previousValue, currentValue),
+    confidence,
+    category
+  }));
+
+  const costKeys = ["fuelAndLpg", "maintenance", "expenses", "parkingFees", "salary", "tripPayments"] as const;
+  const costIncreases = comparisons
+    .filter((item) => costKeys.includes(item.key as (typeof costKeys)[number]) && item.absoluteChange != null && item.absoluteChange > 0)
+    .map((item) => ({
+      key: item.key,
+      label: item.label,
+      absoluteChange: item.absoluteChange as number,
+      percentChange: item.percentChange
+    }));
+  const totalRecordedCostIncrease = costIncreases.reduce((sum, item) => sum + item.absoluteChange, 0);
+  const costIncreaseInsights: CostIncreaseInsight[] = costIncreases
+    .map((item) => ({
+      ...item,
+      shareOfRecordedCostIncrease: totalRecordedCostIncrease > 0 ? (item.absoluteChange / totalRecordedCostIncrease) * 100 : null
+    }))
+    .sort((left, right) => right.absoluteChange - left.absoluteChange);
+
+  const reviewIssues = vehicles
+    .flatMap((row) => buildReviewIssues(row))
+    .sort((left, right) => {
+      const bySeverity = severityRank(left.severity) - severityRank(right.severity);
+      if (bySeverity !== 0) return bySeverity;
+      return left.registration.localeCompare(right.registration, "en");
+    });
+
+  const ranks = selectDisjointBalanceRanks(vehicles, DEFAULT_RANK_LIMIT);
+  const completeCostVehicles = vehicles.filter((row) => row.balanceEligible);
 
   return {
     policyNote: "Candidate management analysis only. These figures are not an approved V4 accounting policy and must not be treated as official profit.",
     lpgNote: "Only ฒอ-8453 uses LPG. January–July LPG stays inside Fuel; August–September LPG is separate and counted once.",
+    rankingNote: ranks.meta.note,
+    observedVsCauseNote: "Month-to-month differences below are observed printed-source changes. Possible operational causes are hypotheses only until independently verified.",
+    thresholdNote: `Review thresholds such as fuel share ≥ ${HIGH_FUEL_SHARE_THRESHOLD}% are configurable owner proposals for investigation, not approved business rules.`,
     previous: previousSummary,
     current: currentSummary,
     comparisons,
+    costIncreaseInsights,
     vehicles,
-    reviewVehicles: vehicles.filter((row) => row.reviewReasons.length > 0).slice(0, 8),
-    topRevenue: sortByNullable(vehicles, (row) => row.clientRevenue, "desc").slice(0, 5),
-    highestCosts: sortByNullable(vehicles, (row) => row.totalRecordedCosts, "desc").slice(0, 5),
-    strongestBalance: sortByNullable(vehicles, (row) => row.indicativeRecordedBalance, "desc").slice(0, 5),
-    weakestBalance: sortByNullable(vehicles, (row) => row.indicativeRecordedBalance, "asc").slice(0, 5)
+    reviewIssues,
+    reviewVehicles: vehicles.filter((row) => row.reviewReasons.length > 0).slice(0, 12),
+    topRevenue: sortByNullable(vehicles, (row) => row.clientRevenue, "desc").slice(0, Math.min(DEFAULT_RANK_LIMIT, vehicles.filter((row) => row.clientRevenue != null).length)),
+    highestCosts: sortByNullable(completeCostVehicles, (row) => row.totalRecordedCosts, "desc").slice(0, Math.min(DEFAULT_RANK_LIMIT, completeCostVehicles.length)),
+    strongestBalance: ranks.strongest,
+    weakestBalance: ranks.weakest,
+    rankingMeta: ranks.meta
   };
 }

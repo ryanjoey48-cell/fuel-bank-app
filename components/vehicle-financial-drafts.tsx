@@ -10,6 +10,7 @@ import { resolveV4SourceVehicleMatch } from "@/lib/vehicle-financial-v4-source-m
 import {
   buildVehicleFinancialV4ManagementAnalysis,
   type ManagementAnalysisResult,
+  type ManagementReviewIssue,
   type VehicleManagementMetrics
 } from "@/lib/vehicle-financial-v4-management-analysis";
 import type { Vehicle } from "@/types/database";
@@ -100,13 +101,22 @@ const copy = {
     subtitle: "Authorised source figures for management review. Not live KPIs, rankings or approved accounting profit.",
     managementAnalysis: "Management analysis",
     managementAnalysisHelp: "Candidate illustrations from printed source totals and complete vehicle rows. Not an approved accounting policy.",
-    monthCompare: "Month comparison",
-    reviewVehicles: "Vehicles requiring review",
+    managementAnalysisDetail: "Technical notes",
+    monthCompare: "August vs September · observed source changes",
+    costDrivers: "Categories explaining recorded cost increases",
+    costDriversHelp: "Observed printed-source increases only. Possible causes need separate verification.",
+    reviewVehicles: "Exceptions requiring review",
+    reviewIssue: "Issue",
+    reviewSeverity: "Severity",
+    reviewEvidence: "Evidence",
+    severityHigh: "High",
+    severityMedium: "Medium",
+    severityLow: "Low",
     topRevenue: "Highest client revenue",
-    highestCosts: "Highest recorded costs",
-    strongestBalance: "Strongest indicative balance",
-    weakestBalance: "Weakest indicative balance",
-    vehicleDrillDown: "Vehicle drill-down",
+    highestCosts: "Highest complete recorded costs",
+    strongestBalance: "Strongest complete indicative balance",
+    weakestBalance: "Weakest complete indicative balance",
+    vehicleDrillDown: "Selected vehicle detail",
     indicative: "Indicative",
     provisional: "Provisional",
     unavailable: "Unavailable",
@@ -121,9 +131,14 @@ const copy = {
     fuelShare: "Fuel + LPG share",
     revenuePerJob: "Revenue / job",
     costPerJob: "Recorded cost / job",
-    incompleteFields: "Incomplete fields",
-    noReviewVehicles: "No vehicle-level review flags for complete rows in this month.",
-    selectVehicleHint: "Select a table row to inspect original figures and missing-data warnings.",
+    incompleteFields: "Unavailable / unknown",
+    knownCosts: "Known source costs",
+    unavailableCalcs: "Unavailable calculations",
+    noReviewVehicles: "No prioritised data-quality or operational exceptions for this month.",
+    selectVehicleHint: "Select a table row above to open a compact detail view.",
+    rankingEligible: "complete balances eligible",
+    sourceFooterShort: "Totals",
+    aggregateFooterNote: "Aggregate footer figures stay separate from complete vehicle-level rankings.",
     period: "Reporting month", upload: "Choose Excel or CSV", sheets: "Source sheets", roster: "Vehicles expected for this month",
     manageData: "Manage Data · V4 writes disabled",
     manageDataHelp: "Saving, review, approval and publication stay locked for this Preview release.",
@@ -194,13 +209,22 @@ const copy = {
     subtitle: "ตัวเลขต้นฉบับที่ได้รับอนุญาตสำหรับผู้บริหาร ไม่ใช่ KPI อันดับ หรือกำไรทางบัญชีที่อนุมัติ",
     managementAnalysis: "การวิเคราะห์สำหรับผู้บริหาร",
     managementAnalysisHelp: "ตัวเลขเชิงพรรณนาจากยอดท้ายรายงานและแถวที่ครบถ้วน ไม่ใช่นโยบายบัญชีที่อนุมัติ",
-    monthCompare: "เปรียบเทียบรายเดือน",
-    reviewVehicles: "รถที่ควรตรวจสอบ",
+    managementAnalysisDetail: "รายละเอียดทางเทคนิค",
+    monthCompare: "สิงหาคม vs กันยายน · การเปลี่ยนแปลงจากต้นฉบับ",
+    costDrivers: "หมวดที่อธิบายต้นทุนที่บันทึกเพิ่มขึ้น",
+    costDriversHelp: "เป็นยอดเพิ่มขึ้นจากต้นฉบับที่พิมพ์เท่านั้น สาเหตุที่เป็นไปได้ต้องตรวจแยก",
+    reviewVehicles: "รายการที่ควรตรวจสอบ",
+    reviewIssue: "ประเด็น",
+    reviewSeverity: "ความรุนแรง",
+    reviewEvidence: "หลักฐาน",
+    severityHigh: "สูง",
+    severityMedium: "ปานกลาง",
+    severityLow: "ต่ำ",
     topRevenue: "รายรับลูกค้าสูงสุด",
-    highestCosts: "ต้นทุนที่บันทึกสูงสุด",
-    strongestBalance: "ยอดคงเหลือเชิงบ่งชี้แข็งสุด",
-    weakestBalance: "ยอดคงเหลือเชิงบ่งชี้อ่อนสุด",
-    vehicleDrillDown: "รายละเอียดรายคัน",
+    highestCosts: "ต้นทุนที่บันทึกสูงสุด (แถวครบ)",
+    strongestBalance: "ยอดคงเหลือเชิงบ่งชี้แข็งสุด (แถวครบ)",
+    weakestBalance: "ยอดคงเหลือเชิงบ่งชี้อ่อนสุด (แถวครบ)",
+    vehicleDrillDown: "รายละเอียดรถที่เลือก",
     indicative: "เชิงบ่งชี้",
     provisional: "ชั่วคราว",
     unavailable: "ยังคำนวณไม่ได้",
@@ -215,9 +239,14 @@ const copy = {
     fuelShare: "สัดส่วนน้ำมัน+LPG",
     revenuePerJob: "รายรับต่องาน",
     costPerJob: "ต้นทุนต่องาน",
-    incompleteFields: "ช่องที่ยังไม่ครบ",
-    noReviewVehicles: "ไม่มีธงตรวจสอบระดับคันสำหรับแถวที่ครบในเดือนนี้",
-    selectVehicleHint: "เลือกแถวในตารางเพื่อดูตัวเลขต้นฉบับและคำเตือนข้อมูลที่ขาด",
+    incompleteFields: "ยังไม่ทราบ / คำนวณไม่ได้",
+    knownCosts: "ต้นทุนจากต้นฉบับที่ทราบ",
+    unavailableCalcs: "การคำนวณที่ยังทำไม่ได้",
+    noReviewVehicles: "ไม่มีประเด็นคุณภาพข้อมูลหรือการดำเนินงานที่ต้องจัดลำดับในเดือนนี้",
+    selectVehicleHint: "เลือกแถวในตารางด้านบนเพื่อเปิดรายละเอียดแบบย่อ",
+    rankingEligible: "ยอดคงเหลือครบที่ใช้จัดอันดับได้",
+    sourceFooterShort: "ยอดรวม",
+    aggregateFooterNote: "ยอดท้ายรายงานรวมแยกจากอันดับระดับคันที่ข้อมูลครบ",
     period: "เดือนรายงาน", upload: "เลือก Excel หรือ CSV", sheets: "ชีตต้นทาง", roster: "รถที่คาดว่าจะอยู่ในเดือนนี้",
     manageData: "จัดการข้อมูล · ปิดการเขียน V4",
     manageDataHelp: "การบันทึก การตรวจทาน การอนุมัติ และการเผยแพร่ยังถูกล็อกไว้สำหรับ Preview นี้",
@@ -428,11 +457,13 @@ function monthLabel(monthKey: string, language: Language) {
   return previewMonthLabels[monthKey]?.[language] ?? monthKey;
 }
 
-function formatAnalysisAmount(value: number | null, language: Language, digits = 0) {
+function formatAnalysisAmount(value: number | null, language: Language, digits?: number) {
   if (value == null || !Number.isFinite(value)) return "—";
+  const autoDigits = Number.isInteger(value) ? 0 : Math.min(2, ((String(value).split(".")[1] ?? "").length || 2));
+  const resolvedDigits = digits ?? autoDigits;
   return new Intl.NumberFormat(language === "th" ? "th-TH" : "en-GB", {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits
+    minimumFractionDigits: resolvedDigits,
+    maximumFractionDigits: digits ?? (Number.isInteger(value) ? 0 : 2)
   }).format(value);
 }
 
@@ -446,6 +477,18 @@ function confidenceLabel(confidence: VehicleManagementMetrics["confidence"], c: 
   if (confidence === "indicative") return c.indicative;
   if (confidence === "confirmed") return c.confirmed;
   return c.unavailable;
+}
+
+function severityLabel(severity: ManagementReviewIssue["severity"], c: typeof copy.en | typeof copy.th) {
+  if (severity === "high") return c.severityHigh;
+  if (severity === "medium") return c.severityMedium;
+  return c.severityLow;
+}
+
+function severityClass(severity: ManagementReviewIssue["severity"]) {
+  if (severity === "high") return "bg-rose-50 text-rose-900 border-rose-200";
+  if (severity === "medium") return "bg-amber-50 text-amber-950 border-amber-200";
+  return "bg-slate-50 text-slate-700 border-slate-200";
 }
 
 function ManagementAnalysisPanel({
@@ -462,15 +505,8 @@ function ManagementAnalysisPanel({
   onSelect: (registration: string) => void;
 }) {
   const selected = analysis.vehicles.find(row => row.registration === selectedRegistration) ?? null;
-  const summaryCards: Array<[string, string, string]> = [
-    [c.revenue, formatAnalysisAmount(analysis.current.clientRevenue, language), confidenceLabel(analysis.current.confidence, c)],
-    [c.jobs, formatAnalysisAmount(analysis.current.jobs, language), c.confirmed],
-    [c.driverCost, formatAnalysisAmount(analysis.current.driverCost, language), confidenceLabel(analysis.current.confidence, c)],
-    [c.fuel, formatAnalysisAmount(analysis.current.fuelAndLpg, language, 1), c.indicative],
-    [c.indicativeBalance, formatAnalysisAmount(analysis.current.indicativeRecordedBalance, language, 0), confidenceLabel(analysis.current.confidence, c)]
-  ];
   const listBlock = (title: string, rows: VehicleManagementMetrics[], getter: (row: VehicleManagementMetrics) => string) => (
-    <div className="rounded-xl border border-slate-200 bg-white p-3">
+    <div className="rounded-xl border border-brand-100/80 bg-white p-3">
       <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-700">{title}</p>
       <ul className="mt-2 space-y-1.5">
         {rows.length ? rows.map(row => (
@@ -493,28 +529,42 @@ function ManagementAnalysisPanel({
       </div>
       <span className="inline-flex w-fit rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-900">{c.indicative}</span>
     </div>
-    <p className="mt-2 text-[11px] leading-relaxed text-slate-600">{analysis.policyNote} {analysis.lpgNote}</p>
-    <dl className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-5">
-      {summaryCards.map(([title, value, confidence]) => <div key={title} className="rounded-xl border border-brand-100/70 bg-white px-2.5 py-2">
-        <dt className="text-[10px] font-semibold uppercase tracking-wide text-brand-700">{title}</dt>
-        <dd className="mt-1 text-sm font-bold tabular-nums text-slate-950">{value}</dd>
-        <p className="mt-0.5 text-[10px] text-slate-500">{confidence}</p>
-      </div>)}
-    </dl>
+    <details className="mt-2 rounded-lg border border-brand-100/70 bg-white/80 px-3 py-2 text-[11px] text-slate-600">
+      <summary className="cursor-pointer font-semibold text-brand-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600">{c.managementAnalysisDetail}</summary>
+      <div className="mt-2 space-y-1.5 leading-relaxed">
+        <p>{analysis.policyNote}</p>
+        <p>{analysis.lpgNote}</p>
+        <p>{analysis.rankingNote}</p>
+        <p>{analysis.observedVsCauseNote}</p>
+        <p>{analysis.thresholdNote}</p>
+        <p>{c.aggregateFooterNote}</p>
+      </div>
+    </details>
     {analysis.comparisons.length ? <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200 bg-white">
-      <table className="min-w-[640px] w-full text-left text-xs">
+      <table className="min-w-[720px] w-full text-left text-xs">
         <caption className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500">{c.monthCompare}</caption>
-        <thead className="bg-slate-50 text-slate-600"><tr><th className="px-3 py-2 font-semibold">{c.reconciliation}</th><th className="px-3 py-2 text-right font-semibold">{analysis.previous?.reportingMonth ?? "—"}</th><th className="px-3 py-2 text-right font-semibold">{analysis.current.reportingMonth}</th><th className="px-3 py-2 text-right font-semibold">{c.absoluteChange}</th><th className="px-3 py-2 text-right font-semibold">{c.percentChange}</th></tr></thead>
+        <thead className="bg-brand-50 text-brand-900"><tr><th className="px-3 py-2 font-semibold">{c.reconciliation}</th><th className="px-3 py-2 text-right font-semibold">{analysis.previous?.reportingMonth ?? "—"}</th><th className="px-3 py-2 text-right font-semibold">{analysis.current.reportingMonth}</th><th className="px-3 py-2 text-right font-semibold">{c.absoluteChange}</th><th className="px-3 py-2 text-right font-semibold">{c.percentChange}</th></tr></thead>
         <tbody>
           {analysis.comparisons.map(item => <tr key={item.key} className="border-t border-slate-100">
             <td className="px-3 py-2 font-medium text-slate-800">{item.label}<span className="ml-1 text-[10px] font-normal text-slate-500">· {confidenceLabel(item.confidence, c)}</span></td>
-            <td className="px-3 py-2 text-right tabular-nums">{formatAnalysisAmount(item.previous, language, item.key === "fuelAndLpg" ? 1 : 0)}</td>
-            <td className="px-3 py-2 text-right tabular-nums">{formatAnalysisAmount(item.current, language, item.key === "fuelAndLpg" ? 1 : 0)}</td>
-            <td className="px-3 py-2 text-right tabular-nums">{formatAnalysisAmount(item.absoluteChange, language, item.key === "fuelAndLpg" ? 1 : 0)}</td>
+            <td className="px-3 py-2 text-right tabular-nums">{formatAnalysisAmount(item.previous, language)}</td>
+            <td className="px-3 py-2 text-right tabular-nums">{formatAnalysisAmount(item.current, language)}</td>
+            <td className="px-3 py-2 text-right tabular-nums">{formatAnalysisAmount(item.absoluteChange, language)}</td>
             <td className="px-3 py-2 text-right tabular-nums">{formatAnalysisPercent(item.percentChange, language)}</td>
           </tr>)}
         </tbody>
       </table>
+    </div> : null}
+    {analysis.costIncreaseInsights.length ? <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-700">{c.costDrivers}</p>
+      <p className="mt-1 text-[11px] text-slate-500">{c.costDriversHelp}</p>
+      <ul className="mt-2 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
+        {analysis.costIncreaseInsights.map(item => <li key={item.key} className="rounded-lg border border-brand-100/70 bg-brand-50/40 px-2.5 py-2 text-xs">
+          <p className="font-semibold text-slate-900">{item.label}</p>
+          <p className="mt-0.5 tabular-nums text-slate-700">+{formatAnalysisAmount(item.absoluteChange, language)} THB{item.percentChange != null ? ` · ${formatAnalysisPercent(item.percentChange, language)}` : ""}</p>
+          {item.shareOfRecordedCostIncrease != null ? <p className="text-[10px] text-slate-500">{formatAnalysisPercent(item.shareOfRecordedCostIncrease, language)} {language === "th" ? "ของต้นทุนที่เพิ่มขึ้น" : "of recorded cost increase"}</p> : null}
+        </li>)}
+      </ul>
     </div> : null}
     <div className="mt-3 grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
       {listBlock(c.topRevenue, analysis.topRevenue, row => formatAnalysisAmount(row.clientRevenue, language))}
@@ -522,33 +572,64 @@ function ManagementAnalysisPanel({
       {listBlock(c.strongestBalance, analysis.strongestBalance, row => formatAnalysisAmount(row.indicativeRecordedBalance, language))}
       {listBlock(c.weakestBalance, analysis.weakestBalance, row => formatAnalysisAmount(row.indicativeRecordedBalance, language))}
     </div>
-    <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-      <div className="rounded-xl border border-slate-200 bg-white p-3">
-        <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-700">{c.reviewVehicles}</p>
-        {analysis.reviewVehicles.length ? <ul className="mt-2 space-y-2">{analysis.reviewVehicles.map(row => <li key={row.registration} className="rounded-lg border border-amber-100 bg-amber-50/60 px-2.5 py-2">
-          <button type="button" onClick={() => onSelect(row.registration)} className="font-mono text-xs font-bold text-brand-800 underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600">{row.registration}</button>
-          <ul className="mt-1 list-disc pl-4 text-[11px] text-amber-950">{row.reviewReasons.map(reason => <li key={reason}>{reason}</li>)}</ul>
-        </li>)}</ul> : <p className="mt-2 text-xs text-slate-500">{c.noReviewVehicles}</p>}
-      </div>
-      <div className="rounded-xl border border-slate-200 bg-white p-3">
+    <p className="mt-2 text-[11px] text-slate-500">{analysis.rankingMeta.eligibleCompleteVehicles} {c.rankingEligible} · {analysis.rankingNote}</p>
+    <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <table className="min-w-[640px] w-full text-left text-xs">
+        <caption className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500">{c.reviewVehicles}</caption>
+        <thead className="bg-slate-50 text-slate-600">
+          <tr>
+            <th className="px-3 py-2 font-semibold">{c.registration}</th>
+            <th className="px-3 py-2 font-semibold">{c.reviewIssue}</th>
+            <th className="px-3 py-2 font-semibold">{c.reviewSeverity}</th>
+            <th className="px-3 py-2 font-semibold">{c.reviewEvidence}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {analysis.reviewIssues.length ? analysis.reviewIssues.map(issue => <tr key={`${issue.registration}-${issue.code}`} className="border-t border-slate-100 align-top">
+            <td className="px-3 py-2">
+              <button type="button" onClick={() => onSelect(issue.registration)} className="font-mono text-xs font-bold text-brand-800 underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600">{issue.registration}</button>
+            </td>
+            <td className="px-3 py-2 font-medium text-slate-800">{issue.issue}</td>
+            <td className="px-3 py-2"><span className={`inline-flex rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${severityClass(issue.severity)}`}>{severityLabel(issue.severity, c)}</span></td>
+            <td className="px-3 py-2 text-slate-600">{issue.evidence}</td>
+          </tr>) : <tr><td colSpan={4} className="px-3 py-3 text-slate-500">{c.noReviewVehicles}</td></tr>}
+        </tbody>
+      </table>
+    </div>
+    {selected ? <div className="mt-3 rounded-xl border border-brand-200 bg-white p-3">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-700">{c.vehicleDrillDown}</p>
-        {selected ? <div className="mt-2 space-y-2 text-xs text-slate-700">
-          <p className="font-mono text-sm font-bold text-slate-950">{selected.registration} · {confidenceLabel(selected.confidence, c)}</p>
-          <dl className="grid grid-cols-2 gap-2">
+        <p className="font-mono text-sm font-bold text-slate-950">{selected.registration} · {confidenceLabel(selected.confidence, c)}</p>
+      </div>
+      <div className="mt-2 grid gap-3 lg:grid-cols-2">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{c.sourceFigures}</p>
+          <dl className="mt-1 grid grid-cols-2 gap-2 text-xs">
             <div><dt className="text-[10px] text-slate-500">{c.revenue}</dt><dd className="font-semibold tabular-nums">{formatAnalysisAmount(selected.clientRevenue, language)}</dd></div>
             <div><dt className="text-[10px] text-slate-500">{c.jobs}</dt><dd className="font-semibold tabular-nums">{formatAnalysisAmount(selected.jobs, language)}</dd></div>
+            <div><dt className="text-[10px] text-slate-500">{c.revenuePerJob}</dt><dd className="font-semibold tabular-nums">{formatAnalysisAmount(selected.revenuePerJob, language)}</dd></div>
+            <div><dt className="text-[10px] text-slate-500">{c.salary}</dt><dd className="font-semibold tabular-nums">{formatAnalysisAmount(selected.salary, language)}</dd></div>
+            <div><dt className="text-[10px] text-slate-500">{c.trips}</dt><dd className="font-semibold tabular-nums">{formatAnalysisAmount(selected.tripPayments, language)}</dd></div>
+            <div><dt className="text-[10px] text-slate-500">{c.expenses}</dt><dd className="font-semibold tabular-nums">{formatAnalysisAmount(selected.expenses, language)}</dd></div>
+            <div><dt className="text-[10px] text-slate-500">{c.parking}</dt><dd className="font-semibold tabular-nums">{formatAnalysisAmount(selected.parkingFees, language)}</dd></div>
+            <div><dt className="text-[10px] text-slate-500">{c.fuel}</dt><dd className="font-semibold tabular-nums">{formatAnalysisAmount(selected.fuelAndLpg, language)}</dd></div>
+            <div><dt className="text-[10px] text-slate-500">{c.maintenance}</dt><dd className="font-semibold tabular-nums">{formatAnalysisAmount(selected.maintenance, language)}</dd></div>
+          </dl>
+        </div>
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{c.knownCosts}</p>
+          <dl className="mt-1 grid grid-cols-2 gap-2 text-xs">
             <div><dt className="text-[10px] text-slate-500">{c.driverCost}</dt><dd className="font-semibold tabular-nums">{formatAnalysisAmount(selected.driverCost, language)}</dd></div>
             <div><dt className="text-[10px] text-slate-500">{c.operatingCosts}</dt><dd className="font-semibold tabular-nums">{formatAnalysisAmount(selected.operatingCosts, language)}</dd></div>
+            <div><dt className="text-[10px] text-slate-500">{c.totalRecordedCosts}</dt><dd className="font-semibold tabular-nums">{formatAnalysisAmount(selected.totalRecordedCosts, language)}</dd></div>
             <div><dt className="text-[10px] text-slate-500">{c.indicativeBalance}</dt><dd className="font-semibold tabular-nums">{formatAnalysisAmount(selected.indicativeRecordedBalance, language)}</dd></div>
             <div><dt className="text-[10px] text-slate-500">{c.indicativeMargin}</dt><dd className="font-semibold tabular-nums">{formatAnalysisPercent(selected.indicativeRecordedMarginPercent, language)}</dd></div>
             <div><dt className="text-[10px] text-slate-500">{c.fuelShare}</dt><dd className="font-semibold tabular-nums">{formatAnalysisPercent(selected.fuelSharePercent, language)}</dd></div>
-            <div><dt className="text-[10px] text-slate-500">{c.revenuePerJob}</dt><dd className="font-semibold tabular-nums">{formatAnalysisAmount(selected.revenuePerJob, language, 1)}</dd></div>
           </dl>
-          {selected.incompleteFields.length ? <p className="rounded-lg bg-amber-50 px-2.5 py-2 text-[11px] text-amber-950">{c.incompleteFields}: {selected.incompleteFields.join(", ")}</p> : null}
-          {selected.reviewReasons.length ? <ul className="list-disc pl-4 text-[11px] text-slate-600">{selected.reviewReasons.map(reason => <li key={reason}>{reason}</li>)}</ul> : null}
-        </div> : <p className="mt-2 text-xs text-slate-500">{c.selectVehicleHint}</p>}
+          {!selected.balanceEligible ? <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-[11px] text-amber-950">{c.unavailableCalcs}: {c.indicativeBalance}, {c.indicativeMargin}, {c.operatingCosts}. {c.incompleteFields}: {selected.incompleteFields.join(", ") || "—"}</p> : null}
+        </div>
       </div>
-    </div>
+    </div> : null}
   </section>;
 }
 
@@ -632,7 +713,7 @@ function ReadOnlySourcePreview({ report, previousReport, language, c, vehicles, 
                   const cellLabel = field === "registration"
                     ? undefined
                     : amountFor(field as keyof typeof row) === null ? c.sourceDash : dashStatus === "confirmed_zero_by_owner_rule" ? c.confirmedZero : dashStatus === "zero_confirmed_by_source_note" ? c.resolvedSourceNote : undefined;
-                  return <td key={`${row.registration}-${header}`} className={`whitespace-nowrap ${field === "registration" ? `${stickyReg} font-semibold text-slate-950 ${selected ? "bg-brand-50" : "odd:bg-white even:bg-slate-50/70"}` : "px-2 py-1.5 tabular-nums text-slate-700"}`} title={cellLabel}>
+                  return <td key={`${row.registration}-${header}`} className={`whitespace-nowrap ${field === "registration" ? `${stickyReg} font-semibold text-slate-950 ${selected ? "bg-brand-50" : "odd:bg-white even:bg-slate-50/70"}` : "px-2 py-1.5 text-right tabular-nums text-slate-700"}`} title={cellLabel}>
                     {field === "registration"
                       ? <span className="block truncate font-mono text-[12px] tracking-tight" title={registration}>{registration}</span>
                       : amountFor(field as keyof typeof row) === null
@@ -645,7 +726,15 @@ function ReadOnlySourcePreview({ report, previousReport, language, c, vehicles, 
           </tbody>
           <tfoot className="border-t-2 border-brand-200 bg-brand-50 font-semibold text-slate-950">
             <tr>
-              {readOnlyPreviewColumns.map(([header, field]) => <td key={header} className={`whitespace-nowrap px-2 py-2.5 tabular-nums ${field === "registration" ? `${stickyReg} bg-brand-50` : ""}`}>{field === "registration" ? c.sourceFooter : totalValue(field)}</td>)}
+              {readOnlyPreviewColumns.map(([header, field]) => (
+                <td
+                  key={header}
+                  className={`${field === "registration" ? `${stickyReg} bg-brand-50 text-[11px] font-bold uppercase tracking-wide text-brand-900` : "px-2 py-2.5 text-right tabular-nums text-[11px]"}`}
+                  title={field === "registration" ? c.sourceFooter : undefined}
+                >
+                  {field === "registration" ? <span className="block truncate">{c.sourceFooterShort}</span> : totalValue(field)}
+                </td>
+              ))}
             </tr>
           </tfoot>
         </table>
