@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 
-/** V4 financial persistence needs a separate reviewed SQL and release approval. */
+/**
+ * V4 financial persistence stays locked by default.
+ * An authorised import window may set VEHICLE_FINANCIAL_V4_WRITES_UNLOCKED=true
+ * only after migration apply + separate owner approval. Default remains locked.
+ */
 export function isVehicleFinancialV4WriteLocked(): boolean {
-  return true;
+  return process.env.VEHICLE_FINANCIAL_V4_WRITES_UNLOCKED !== "true";
 }
 
 export function disabledVehicleFinancialV4WriteResponse() {
