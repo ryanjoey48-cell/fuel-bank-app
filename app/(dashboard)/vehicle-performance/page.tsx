@@ -44,6 +44,16 @@ import {
   type VehiclePerformanceRow,
   type VehiclePerformanceSummary
 } from "@/lib/vehicle-performance";
+import {
+  VEHICLE_PERFORMANCE_LEGACY_MONTHS,
+  VEHICLE_PERFORMANCE_REPORTING_MONTHS,
+  completeV4RowsAsLegacyCompatible,
+  isLegacyReportingMonth,
+  isV4ReportingMonth,
+  tenColumnHeaders,
+  v4RowToTenColumnValues,
+  type V4FinancialReportingRow
+} from "@/lib/vehicle-financial-v4-reporting";
 import type { TripJourneyWithFuel, Vehicle, VehicleMonthlyPerformance } from "@/types/database";
 import type { FuelLogWithDriver } from "@/types/database";
 
@@ -92,6 +102,9 @@ type VehiclePerformancePdfData = {
   trendRows: VehiclePerformanceMonthlyPerformanceRow[];
   vehicleCount: number;
   vehicleTable: VehiclePerformancePdfTable;
+  /** Aug/Sep V4 draft ten-column source rows (nulls shown as —). */
+  v4DraftTenColumnTable: VehiclePerformancePdfTable | null;
+  v4DraftNote: string | null;
 };
 type VehiclePerformancePdfLogo = {
   dataUrl: string | null;
@@ -136,7 +149,8 @@ const MONTH_OPTIONS = [
   { value: 12, labelKey: "december" }
 ] as const;
 
-const VEHICLE_PERFORMANCE_BASELINE_MONTHS = [1, 2, 3, 4, 5, 6, 7] as const;
+/** @deprecated Use VEHICLE_PERFORMANCE_LEGACY_MONTHS / REPORTING_MONTHS from v4-reporting. */
+const VEHICLE_PERFORMANCE_BASELINE_MONTHS = VEHICLE_PERFORMANCE_LEGACY_MONTHS;
 
 const initialForm: PerformanceForm = {
   id: "",
@@ -640,6 +654,14 @@ async function buildVehiclePerformancePdf(
   table("Top 5 Vehicles by Recorded Balance", data.topVehicles);
   table("Vehicle Performance Table", data.vehicleTable);
 
+  if (data.v4DraftTenColumnTable) {
+    section("August–September V4 Draft Source (ten columns)");
+    if (data.v4DraftNote) paragraph(data.v4DraftNote, margin, contentWidth, 7.5, colors.amber);
+    paragraph("Incomplete costs show as —. Draft balances are not confirmed accounting profit.", margin, contentWidth, 7.5, colors.muted);
+    y += 4;
+    table("V4 Stored Draft Rows", data.v4DraftTenColumnTable);
+  }
+
   section("Data Quality");
   data.dataQuality.forEach((line) => paragraph(line, margin, contentWidth, 7.8));
   paragraph(`Reconciliation status: ${data.reconciliationStatus}`, margin, contentWidth, 7.8, colors.purple);
@@ -662,6 +684,8 @@ export default function VehiclePerformancePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [records, setRecords] = useState<VehicleMonthlyPerformance[]>([]);
   const [fuelRows, setFuelRows] = useState<Awaited<ReturnType<typeof fetchVehicleMonthlyFuelSpend>>>([]);
+  const [v4ReportingRows, setV4ReportingRows] = useState<V4FinancialReportingRow[]>([]);
+  const [v4ReportingNote, setV4ReportingNote] = useState<string | null>(null);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [tripJourneys, setTripJourneys] = useState<TripJourneyWithFuel[]>([]);
   const [detailVehicle, setDetailVehicle] = useState<string | null>(null);
@@ -720,15 +744,31 @@ export default function VehiclePerformancePage() {
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
       if (sessionError) throw sessionError;
       if (!sessionData.session) throw new Error("Sign in to load vehicle performance records.");
-      const [performanceRows, fuelSpendRows, tripRows] = await Promise.all([
+      const [performanceRows, fuelSpendRows, tripRows, reportingResponse] = await Promise.all([
         fetchVehicleMonthlyPerformance({ year }),
         fetchVehicleMonthlyFuelSpend({ year }),
-        fetchTripJourneys()
+        fetchTripJourneys(),
+        fetch("/api/vehicle-performance-v4/reporting-source?" + new URLSearchParams({ year: String(year) }), {
+          cache: "no-store",
+          credentials: "same-origin"
+        }).catch(() => null)
       ]);
       if (sequence !== loadSequence.current) return;
-      setRecords(performanceRows);
+      // Release C: never treat legacy Aug/Sep KPI rows as the V4 source of truth.
+      setRecords(performanceRows.filter((row) => isLegacyReportingMonth(Number(row.month))));
       setFuelRows(fuelSpendRows);
       setTripJourneys(tripRows);
+      if (reportingResponse?.ok) {
+        const payload = await reportingResponse.json() as {
+          rows?: V4FinancialReportingRow[];
+          note?: string;
+        };
+        setV4ReportingRows(Array.isArray(payload.rows) ? payload.rows : []);
+        setV4ReportingNote(payload.note ?? null);
+      } else {
+        setV4ReportingRows([]);
+        setV4ReportingNote(reportingResponse ? "V4 Aug/Sep reporting source unavailable for this session." : null);
+      }
 
       try {
         const vehicleRows = await fetchVehicles();
@@ -750,6 +790,8 @@ export default function VehiclePerformancePage() {
       setRecords([]);
       setFuelRows([]);
       setTripJourneys([]);
+      setV4ReportingRows([]);
+      setV4ReportingNote(null);
     } finally {
       if (sequence === loadSequence.current) setLoading(false);
     }
@@ -767,13 +809,49 @@ export default function VehiclePerformancePage() {
   }, [load]);
 
   const selectedMonths = useMemo(
-    () => month === "" ? [...VEHICLE_PERFORMANCE_BASELINE_MONTHS] : [month],
+    () => month === "" ? [...VEHICLE_PERFORMANCE_REPORTING_MONTHS] : [month],
     [month]
   );
   const selectedMonthSet = useMemo(() => new Set<number>(selectedMonths), [selectedMonths]);
+  const selectedV4ReportingRows = useMemo(
+    () => v4ReportingRows.filter((row) => selectedMonthSet.has(row.month)
+      && normalizeComparableText(row.registration).includes(normalizeComparableText(searchQuery))),
+    [searchQuery, selectedMonthSet, v4ReportingRows]
+  );
+  const completeV4LegacyProjection = useMemo(
+    () => completeV4RowsAsLegacyCompatible(selectedV4ReportingRows),
+    [selectedV4ReportingRows]
+  );
+  const v4SyntheticFuelRows = useMemo(
+    () => completeV4LegacyProjection.map((row) => {
+      const source = selectedV4ReportingRows.find((candidate) =>
+        candidate.month === row.month
+          && normalizeComparableText(candidate.registration) === normalizeComparableText(row.vehicle_registration)
+      );
+      return {
+        vehicleRegistration: row.vehicle_registration,
+        year: row.year,
+        month: row.month,
+        fuelSpend: Number(source?.fuel ?? 0),
+        fuelLogCount: 1
+      };
+    }),
+    [completeV4LegacyProjection, selectedV4ReportingRows]
+  );
+  const dualReadFuelRows = useMemo(
+    () => [...fuelRows.filter((row) => isLegacyReportingMonth(row.month)), ...v4SyntheticFuelRows],
+    [fuelRows, v4SyntheticFuelRows]
+  );
+  const dualReadRecords = useMemo(
+    () => [
+      ...records.filter((record) => selectedMonthSet.has(record.month) && isLegacyReportingMonth(record.month)),
+      ...completeV4LegacyProjection
+    ].filter((record) => normalizeComparableText(record.vehicle_registration).includes(normalizeComparableText(searchQuery))),
+    [completeV4LegacyProjection, records, searchQuery, selectedMonthSet]
+  );
   const selectedRecords = useMemo(
-    () => records.filter((record) => selectedMonthSet.has(record.month) && normalizeComparableText(record.vehicle_registration).includes(normalizeComparableText(searchQuery))),
-    [records, selectedMonthSet, searchQuery]
+    () => dualReadRecords,
+    [dualReadRecords]
   );
   const selectedTripFinancials = useMemo(() => {
     const normalizedSearch = normalizeComparableText(searchQuery);
@@ -784,16 +862,87 @@ export default function VehiclePerformancePage() {
         normalizeComparableText(trip.vehicle_reg).includes(normalizedSearch);
     }));
   }, [searchQuery, selectedMonthSet, tripJourneys, year]);
-  const management = useMemo(() => buildPerformanceManagement({ records, fuelRows, months: selectedMonths }), [records, fuelRows, selectedMonths]);
+  const management = useMemo(
+    () => buildPerformanceManagement({
+      records: dualReadRecords,
+      fuelRows: dualReadFuelRows,
+      months: selectedMonths
+    }),
+    [dualReadFuelRows, dualReadRecords, selectedMonths]
+  );
   const rows = useMemo(() => management.rows.filter(row => normalizeComparableText(row.vehicleRegistration).includes(normalizeComparableText(searchQuery))), [management, searchQuery]);
+  const incompleteV4SelectedCount = useMemo(
+    () => selectedV4ReportingRows.filter((row) => !row.financiallyComplete).length,
+    [selectedV4ReportingRows]
+  );
   const queueManagement = useMemo(() => {
     const actionRows = management.actionRows.filter(row => normalizeComparableText(row.vehicleRegistration).includes(normalizeComparableText(searchQuery)));
     return { ...management, actionRows, totalOpportunity: actionRows.reduce((sum, row) => sum + (row.opportunity ?? 0), 0), estimatedVehicleCount: actionRows.filter(row => row.opportunity != null && row.opportunity > 0).length };
   }, [management, searchQuery]);
-  const vehicleHistory = useMemo(() => detailVehicle ? [...new Set<number>([...VEHICLE_PERFORMANCE_BASELINE_MONTHS, ...records.map(record => record.month)])].sort((a, b) => a - b).map(monthNumber => {
-    const model = buildPerformanceManagement({ records, fuelRows, months: [monthNumber] });
-    return { month: monthNumber, row: model.rows.find(row => row.vehicleRegistration === detailVehicle), benchmark: model.benchmark };
-  }) : [], [records, fuelRows, detailVehicle]);
+  const vehicleHistory = useMemo(() => {
+    type HistoryItem = {
+      month: number;
+      row: ReturnType<typeof buildPerformanceManagement>["rows"][number] | null;
+      benchmark: ReturnType<typeof buildPerformanceManagement>["benchmark"];
+      v4Incomplete: boolean;
+      v4Provisional: boolean;
+      provenance: "v4_draft_source" | "legacy_kpi";
+    };
+    if (!detailVehicle) return [] as HistoryItem[];
+    const historyMonths = [...new Set<number>([
+      ...VEHICLE_PERFORMANCE_REPORTING_MONTHS,
+      ...records.map((record) => record.month),
+      ...v4ReportingRows.map((row) => row.month)
+    ])].sort((a, b) => a - b);
+    const items: HistoryItem[] = [];
+    for (const monthNumber of historyMonths) {
+      if (isV4ReportingMonth(monthNumber)) {
+        const v4Rows = v4ReportingRows.filter((row) =>
+          row.month === monthNumber
+            && normalizeComparableText(row.registration) === normalizeComparableText(detailVehicle)
+        );
+        if (!v4Rows.length) continue;
+        const projection = completeV4RowsAsLegacyCompatible(v4Rows);
+        const fuel = projection.map((row) => ({
+          vehicleRegistration: row.vehicle_registration,
+          year: row.year,
+          month: row.month,
+          fuelSpend: Number(v4Rows[0]?.fuel ?? 0),
+          fuelLogCount: 1
+        }));
+        const model = buildPerformanceManagement({ records: projection, fuelRows: fuel, months: [monthNumber] });
+        items.push({
+          month: monthNumber,
+          row: model.rows.find((row) => row.vehicleRegistration === detailVehicle) ?? null,
+          benchmark: model.benchmark,
+          v4Incomplete: Boolean(!v4Rows[0].financiallyComplete),
+          v4Provisional: Boolean(v4Rows[0].salaryProvisional),
+          provenance: "v4_draft_source"
+        });
+        continue;
+      }
+      const legacyRecords = records.filter((record) =>
+        record.month === monthNumber
+          && isLegacyReportingMonth(record.month)
+          && normalizeComparableText(record.vehicle_registration) === normalizeComparableText(detailVehicle)
+      );
+      if (!legacyRecords.length) continue;
+      const model = buildPerformanceManagement({
+        records: legacyRecords,
+        fuelRows: fuelRows.filter((row) => row.month === monthNumber && isLegacyReportingMonth(row.month)),
+        months: [monthNumber]
+      });
+      items.push({
+        month: monthNumber,
+        row: model.rows.find((row) => row.vehicleRegistration === detailVehicle) ?? null,
+        benchmark: model.benchmark,
+        v4Incomplete: false,
+        v4Provisional: false,
+        provenance: "legacy_kpi"
+      });
+    }
+    return items;
+  }, [detailVehicle, fuelRows, records, v4ReportingRows]);
   const openVehicle = (registration: string) => {
     setDetailVehicle(registration);
     setDetailMonthFilter("");
@@ -858,15 +1007,21 @@ export default function VehiclePerformancePage() {
     };
   }, [vehicleDetailSummary, detailMonthFilter]);
 
-  const monthlyTrend = useMemo(() => buildVehicleMonthlyTrend(selectedRecords, fuelRows), [fuelRows, selectedRecords]);
+  const monthlyTrend = useMemo(
+    () => buildVehicleMonthlyTrend(selectedRecords, dualReadFuelRows),
+    [dualReadFuelRows, selectedRecords]
+  );
   const monthlyPerformanceRows = useMemo(
     () => buildVehicleMonthlyPerformanceRows({
       records: selectedRecords,
-      fuelRows,
+      fuelRows: dualReadFuelRows,
       months: selectedMonths,
-      expectedVehicleCount: new Set(records.filter(record => normalizeComparableText(record.vehicle_registration).includes(normalizeComparableText(searchQuery))).map(record => vehicleKey(record.vehicle_registration))).size
+      expectedVehicleCount: new Set([
+        ...records.filter((record) => normalizeComparableText(record.vehicle_registration).includes(normalizeComparableText(searchQuery))).map((record) => vehicleKey(record.vehicle_registration)),
+        ...completeV4LegacyProjection.map((record) => vehicleKey(record.vehicle_registration))
+      ]).size
     }),
-    [fuelRows, records, searchQuery, selectedMonths, selectedRecords]
+    [completeV4LegacyProjection, dualReadFuelRows, records, searchQuery, selectedMonths, selectedRecords]
   );
   const monthlySummary = useMemo(() => buildVehiclePerformanceSummary(monthlyTrend), [monthlyTrend]);
   const reconciliation = useMemo(() => {
@@ -944,8 +1099,15 @@ export default function VehiclePerformancePage() {
     return true;
   }), [sortedRows, movementFilter, management.changes, coverageFilter, vehicleMonthCounts, selectedMonths.length]);
   const expectedVehicleRegistrations = useMemo(
-    () => Array.from(new Set(records.filter(record => normalizeComparableText(record.vehicle_registration).includes(normalizeComparableText(searchQuery))).map((record) => normalizeVehicleRegistration(record.vehicle_registration)).filter(Boolean))).sort(),
-    [records, searchQuery]
+    () => Array.from(new Set([
+      ...records
+        .filter((record) => normalizeComparableText(record.vehicle_registration).includes(normalizeComparableText(searchQuery)))
+        .map((record) => normalizeVehicleRegistration(record.vehicle_registration)),
+      ...completeV4LegacyProjection
+        .filter((record) => normalizeComparableText(record.vehicle_registration).includes(normalizeComparableText(searchQuery)))
+        .map((record) => normalizeVehicleRegistration(record.vehicle_registration))
+    ].filter(Boolean))).sort(),
+    [completeV4LegacyProjection, records, searchQuery]
   );
   const missingVehiclesByMonth = useMemo(() => {
     const expectedKeys = new Map(expectedVehicleRegistrations.map((registration) => [vehicleKey(registration), registration]));
@@ -1101,7 +1263,7 @@ export default function VehiclePerformancePage() {
   const shortMonthLabel = useCallback((monthNumber: number) => monthLabel(monthNumber).slice(0, 3), [monthLabel]);
   const periodLabel = useMemo(() => {
     if (month !== "") return `${monthLabel(month)} ${year}`;
-    return `${monthLabel(VEHICLE_PERFORMANCE_BASELINE_MONTHS[0])}-${monthLabel(VEHICLE_PERFORMANCE_BASELINE_MONTHS[VEHICLE_PERFORMANCE_BASELINE_MONTHS.length - 1])} ${year}`;
+    return `${monthLabel(VEHICLE_PERFORMANCE_REPORTING_MONTHS[0])}-${monthLabel(VEHICLE_PERFORMANCE_REPORTING_MONTHS[VEHICLE_PERFORMANCE_REPORTING_MONTHS.length - 1])} ${year}`;
   }, [month, monthLabel, year]);
   const managementSnapshotInsights = useMemo(() => {
     if (!rows.length) return ["Load Vehicle Performance data to generate management insights."];
@@ -1961,10 +2123,12 @@ export default function VehiclePerformancePage() {
         `Missing vehicle-month records: ${dataQuality.missingVehicleMonthRecords}`,
         `Missing months: ${dataQuality.missingMonths.join(", ") || "None"}`,
         `Unresolved import exceptions: ${dataQuality.unresolvedImportExceptions}`,
-        `Negative balances: ${dataQuality.negativeBalances}`
+        `Negative balances: ${dataQuality.negativeBalances}`,
+        `V4 Aug/Sep draft rows in selection: ${selectedV4ReportingRows.length} (${selectedV4ReportingRows.filter((row) => row.financiallyComplete).length} complete / ${incompleteV4SelectedCount} incomplete)`,
+        `V4 draft publication: stored draft · not published · not live KPI`
       ],
       disclaimer:
-        "Recorded Balance represents revenue remaining after the direct costs recorded in the Fuel Bank system. It should not automatically be treated as final accounting profit because other company overheads may not be included.",
+        "Recorded Balance represents revenue remaining after the direct costs recorded in the Fuel Bank system. It should not automatically be treated as final accounting profit because other company overheads may not be included. January–July use stored legacy KPI rows. August–September use stored V4 financial draft rows (not published). Incomplete draft cost fields stay unknown and are excluded from confirmed rankings and KPI totals.",
       executiveSummary,
       fleetHealth: [
         { count: performanceStatusCounts.strong, label: "Strong", value: String(performanceStatusCounts.strong), tone: "success" },
@@ -2077,7 +2241,48 @@ export default function VehiclePerformancePage() {
           percent(row.marginPercent),
           statusText(row)
         ])
-      }
+      },
+      v4DraftTenColumnTable: selectedV4ReportingRows.length
+        ? {
+            columns: [
+              { label: "Reg", width: 58 },
+              { label: "Mo", width: 28, align: "center" },
+              { label: "Salary", width: 48, align: "right" },
+              { label: "Jobs", width: 32, align: "right" },
+              { label: "Trip", width: 44, align: "right" },
+              { label: "Exp", width: 40, align: "right" },
+              { label: "Park", width: 40, align: "right" },
+              { label: "Received", width: 52, align: "right" },
+              { label: "Fuel", width: 44, align: "right" },
+              { label: "LPG", width: 44, align: "right" },
+              { label: "Maint", width: 44, align: "right" },
+              { label: "Status", width: 53 }
+            ],
+            rows: selectedV4ReportingRows.map((row) => {
+              const values = v4RowToTenColumnValues(row);
+              return [
+                values[0],
+                String(row.month),
+                values[1],
+                values[2],
+                values[3],
+                values[4],
+                values[5],
+                values[6],
+                values[7],
+                values[8],
+                values[9],
+                row.financiallyComplete
+                  ? (row.salaryProvisional ? "Draft·prov" : "Draft")
+                  : "Incomplete"
+              ];
+            })
+          }
+        : null,
+      v4DraftNote: v4ReportingNote
+        ?? (selectedV4ReportingRows.length
+          ? "Aug/Sep values are stored V4 drafts for dual-read reporting. They are not published accounting profit."
+          : null)
     };
   };
 
@@ -2287,7 +2492,7 @@ export default function VehiclePerformancePage() {
 
           {showLegacyWorkspace ? (
             <div className="mt-3 rounded-2xl border border-white/80 bg-white/85 p-3 shadow-sm">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Legacy Fleet filters · January–July stored KPIs</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Fleet filters · Jan–Jul legacy KPI + Aug/Sep V4 stored drafts</p>
               <div className="mt-2 grid gap-3 md:grid-cols-[120px_190px_minmax(240px,1fr)] md:items-end">
               <div>
                 <label className="form-label" htmlFor="vehicle-performance-year">{labels.year}</label>
@@ -2313,8 +2518,17 @@ export default function VehiclePerformancePage() {
                   <span className="badge-muted">{periodLabel}</span>
                   <button type="button" onClick={() => setVehicleCoverageOpen(true)} className="badge-muted transition hover:border-brand-200 hover:text-brand-700">{dataQuality.representedVehicles} vehicles analysed</button>
                   <span className={`badge-muted ${monthCoverageCounts.partial || dataQuality.missingMonths.length ? "border-amber-200 bg-amber-50 text-amber-800" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{monthCoverageCounts.complete} complete · {monthCoverageCounts.partial} partial</span>
+                  {selectedV4ReportingRows.length ? (
+                    <span className="badge-muted border-amber-200 bg-amber-50 text-amber-900">
+                      V4 drafts {selectedV4ReportingRows.filter((row) => row.financiallyComplete).length}/{selectedV4ReportingRows.length} complete
+                      {incompleteV4SelectedCount ? ` · ${incompleteV4SelectedCount} incomplete excluded from confirmed KPI` : ""}
+                    </span>
+                  ) : null}
                   {incompletePeriodMessage ? <span className="font-medium text-amber-800">{incompletePeriodMessage}</span> : null}
                 </div>
+              ) : null}
+              {v4ReportingNote ? (
+                <p className="mt-2 text-xs text-amber-900">{v4ReportingNote}</p>
               ) : null}
             </div>
           ) : null}
@@ -2395,6 +2609,48 @@ export default function VehiclePerformancePage() {
             ) : null}
           </div>
         </section>
+
+        {selectedV4ReportingRows.length ? (
+          <section className="surface-card overflow-hidden border border-amber-200/80 p-0 shadow-[0_14px_34px_rgba(180,83,9,0.06)]">
+            <div className="border-b border-amber-100 bg-[linear-gradient(135deg,#fffbeb_0%,#ffffff_70%)] px-5 py-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-800">August–September V4 draft source</p>
+              <h2 className="mt-1 text-xl font-semibold text-slate-950">Ten-column stored drafts</h2>
+              <p className="mt-1 max-w-3xl text-sm text-slate-600">
+                Read from authorised V4 draft storage only. Incomplete costs show as —. These rows are not published accounting profit
+                {incompleteV4SelectedCount ? ` · ${incompleteV4SelectedCount} incomplete excluded from confirmed fleet KPI/ranking` : ""}.
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1100px] text-sm">
+                <thead className="bg-amber-50/80 text-[11px] uppercase tracking-[0.1em] text-slate-500">
+                  <tr>
+                    {tenColumnHeaders().map((header) => (
+                      <th key={header} className={`px-3 py-3 font-semibold ${header === "Registration" ? "text-left" : "text-right"}`}>{header}</th>
+                    ))}
+                    <th className="px-3 py-3 text-left font-semibold">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedV4ReportingRows.map((row) => {
+                    const values = v4RowToTenColumnValues(row);
+                    return (
+                      <tr key={`${row.sourceBatchId}:${row.registration}:${row.month}`} className="border-t border-amber-100/80">
+                        {values.map((value, index) => (
+                          <td key={`${row.registration}-${index}`} className={`px-3 py-3 ${index === 0 ? "text-left font-bold text-slate-950" : "text-right text-slate-700"}`}>{value}</td>
+                        ))}
+                        <td className="px-3 py-3 text-left text-xs font-semibold text-amber-900">
+                          {row.financiallyComplete
+                            ? (row.salaryProvisional ? `M${row.month} draft · provisional salary` : `M${row.month} draft · not published`)
+                            : `M${row.month} incomplete · balance unknown`}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        ) : null}
 
         <section id="vehicle-performance-table" className="surface-card scroll-mt-6 overflow-hidden border border-brand-100/70 p-0 shadow-[0_16px_40px_rgba(76,29,149,0.06)]">
           <div className="flex flex-col gap-3 border-b border-brand-100/70 bg-[linear-gradient(135deg,#ffffff_0%,#fbf9ff_72%,#f6f1ff_100%)] px-5 py-4 sm:flex-row sm:items-end sm:justify-between">
@@ -2546,14 +2802,37 @@ export default function VehiclePerformancePage() {
             </div>
 
             <div className="border-t border-slate-100">
-              <div className="px-5 py-4"><p className="text-xs font-semibold uppercase tracking-[0.13em] text-brand-700">Monthly history</p><h3 className="mt-1 text-lg font-semibold text-slate-950">How this vehicle changed month by month</h3><p className="mt-1 text-sm text-slate-500">No hidden scoring — just recorded figures. Choose a month above to focus the summary while keeping the full history visible here.</p></div>
+              <div className="px-5 py-4"><p className="text-xs font-semibold uppercase tracking-[0.13em] text-brand-700">Monthly history</p><h3 className="mt-1 text-lg font-semibold text-slate-950">How this vehicle changed month by month</h3><p className="mt-1 text-sm text-slate-500">Jan–Jul use legacy KPI rows. Aug/Sep use V4 stored drafts. Incomplete draft months stay unknown and are not treated as confirmed profit.</p></div>
               <div className="overflow-x-auto border-t border-slate-100">
                 <table className="w-full min-w-[980px] text-sm">
-                  <thead className="bg-[linear-gradient(90deg,#f7f3ff_0%,#fbf9ff_55%,#f6f2ff_100%)] text-[11px] uppercase tracking-[0.1em] text-slate-500"><tr><th className="px-5 py-3 text-left font-semibold">Month</th><th className="px-4 py-3 text-right font-semibold">Revenue</th><th className="px-4 py-3 text-right font-semibold">Fuel</th><th className="px-4 py-3 text-right font-semibold">Direct costs</th><th className="px-4 py-3 text-right font-semibold">Recorded balance</th><th className="px-4 py-3 text-right font-semibold">Margin</th><th className="px-5 py-3 text-right font-semibold">Fuel / revenue</th></tr></thead>
+                  <thead className="bg-[linear-gradient(90deg,#f7f3ff_0%,#fbf9ff_55%,#f6f2ff_100%)] text-[11px] uppercase tracking-[0.1em] text-slate-500"><tr><th className="px-5 py-3 text-left font-semibold">Month</th><th className="px-4 py-3 text-left font-semibold">Source</th><th className="px-4 py-3 text-right font-semibold">Revenue</th><th className="px-4 py-3 text-right font-semibold">Fuel</th><th className="px-4 py-3 text-right font-semibold">Direct costs</th><th className="px-4 py-3 text-right font-semibold">Recorded balance</th><th className="px-4 py-3 text-right font-semibold">Margin</th><th className="px-5 py-3 text-right font-semibold">Fuel / revenue</th></tr></thead>
                   <tbody>
-                    {vehicleDetailSummary.months.map((item) => {
+                    {vehicleHistory.map((item) => {
+                      if (!item.row) {
+                        return (
+                          <tr key={item.month} className="border-t border-slate-100 bg-amber-50/40">
+                            <td className="px-5 py-3.5 font-bold text-slate-950">{monthLabel(item.month)}</td>
+                            <td className="px-4 py-3.5 text-xs font-semibold text-amber-800">{item.provenance === "v4_draft_source" ? (item.v4Incomplete ? "V4 draft · incomplete" : "V4 draft") : "Legacy"}</td>
+                            <td className="px-4 py-3.5 text-right text-slate-500" colSpan={6}>Incomplete costs — balance unknown · not confirmed profit</td>
+                          </tr>
+                        );
+                      }
                       const directCosts = item.row.grossRevenue - item.row.recordedBalance;
-                      return <tr key={item.month} className={`border-t border-slate-100 ${detailMonthFilter === item.month ? "bg-brand-50/50" : ""}`}><td className="px-5 py-3.5 font-bold text-slate-950">{monthLabel(item.month)}</td><td className="px-4 py-3.5 text-right font-semibold text-slate-900">{formatBaht(item.row.grossRevenue)}</td><td className="px-4 py-3.5 text-right text-slate-700">{formatBaht(item.row.fuelSpend)}</td><td className="px-4 py-3.5 text-right text-slate-700">{formatBaht(directCosts)}</td><td className={`px-4 py-3.5 text-right font-bold ${item.row.recordedBalance < 0 ? "text-rose-700" : "text-emerald-700"}`}>{formatBaht(item.row.recordedBalance)}</td><td className="px-4 py-3.5 text-right font-semibold text-slate-900">{formatPercent(item.row.marginPercent, language)}</td><td className="px-5 py-3.5 text-right font-semibold text-brand-700">{formatPercent(item.row.fuelPercent, language)}</td></tr>;
+                      const sourceLabel = item.provenance === "v4_draft_source"
+                        ? (item.v4Provisional ? "V4 draft · provisional salary" : "V4 draft · not published")
+                        : "Legacy KPI";
+                      return (
+                        <tr key={item.month} className={`border-t border-slate-100 ${detailMonthFilter === item.month ? "bg-brand-50/50" : ""}`}>
+                          <td className="px-5 py-3.5 font-bold text-slate-950">{monthLabel(item.month)}</td>
+                          <td className="px-4 py-3.5 text-xs font-semibold text-slate-600">{sourceLabel}</td>
+                          <td className="px-4 py-3.5 text-right font-semibold text-slate-900">{formatBaht(item.row.grossRevenue)}</td>
+                          <td className="px-4 py-3.5 text-right text-slate-700">{formatBaht(item.row.fuelSpend)}</td>
+                          <td className="px-4 py-3.5 text-right text-slate-700">{formatBaht(directCosts)}</td>
+                          <td className={`px-4 py-3.5 text-right font-bold ${item.row.recordedBalance < 0 ? "text-rose-700" : "text-emerald-700"}`}>{formatBaht(item.row.recordedBalance)}</td>
+                          <td className="px-4 py-3.5 text-right font-semibold text-slate-900">{formatPercent(item.row.marginPercent, language)}</td>
+                          <td className="px-5 py-3.5 text-right font-semibold text-brand-700">{formatPercent(item.row.fuelPercent, language)}</td>
+                        </tr>
+                      );
                     })}
                   </tbody>
                 </table>
