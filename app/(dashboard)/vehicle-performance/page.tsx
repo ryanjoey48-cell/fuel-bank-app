@@ -52,6 +52,7 @@ import {
   isV4ReportingMonth,
   tenColumnHeaders,
   v4RowToTenColumnValues,
+  v4RowsAsFleetDisplayRows,
   type V4FinancialReportingRow
 } from "@/lib/vehicle-financial-v4-reporting";
 import type { TripJourneyWithFuel, Vehicle, VehicleMonthlyPerformance } from "@/types/database";
@@ -725,7 +726,7 @@ export default function VehiclePerformancePage() {
   const [coverageVehicleDetail, setCoverageVehicleDetail] = useState<CoverageVehicleDetail | null>(null);
   const [monitorDetailOpen, setMonitorDetailOpen] = useState(false);
   const [trendMetric, setTrendMetric] = useState<TrendMetric>("grossRevenue");
-  const [performanceView, setPerformanceView] = useState<VehiclePerformanceView>("financial");
+  const [performanceView, setPerformanceView] = useState<VehiclePerformanceView>("fleet");
   const [vehicleSort, setVehicleSort] = useState<{ key: VehicleSortKey; direction: "asc" | "desc" }>({
     key: "recordedBalance",
     direction: "desc"
@@ -743,14 +744,17 @@ export default function VehiclePerformancePage() {
     try {
       const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
       if (sessionError) throw sessionError;
-      if (!sessionData.session) throw new Error("Sign in to load vehicle performance records.");
+      if (!sessionData.session?.access_token) throw new Error("Sign in to load vehicle performance records.");
+      const accessToken = sessionData.session.access_token;
       const [performanceRows, fuelSpendRows, tripRows, reportingResponse] = await Promise.all([
         fetchVehicleMonthlyPerformance({ year }),
         fetchVehicleMonthlyFuelSpend({ year }),
         fetchTripJourneys(),
+        // Must send Bearer — reporting-source uses requireVerifiedUser (header only), same as Financial Reports drafts API.
         fetch("/api/vehicle-performance-v4/reporting-source?" + new URLSearchParams({ year: String(year) }), {
           cache: "no-store",
-          credentials: "same-origin"
+          credentials: "same-origin",
+          headers: { Authorization: `Bearer ${accessToken}` }
         }).catch(() => null)
       ]);
       if (sequence !== loadSequence.current) return;
@@ -767,7 +771,18 @@ export default function VehiclePerformancePage() {
         setV4ReportingNote(payload.note ?? null);
       } else {
         setV4ReportingRows([]);
-        setV4ReportingNote(reportingResponse ? "V4 Aug/Sep reporting source unavailable for this session." : null);
+        let detail = "V4 Aug/Sep reporting source unavailable for this session.";
+        if (reportingResponse) {
+          try {
+            const failure = await reportingResponse.json() as { error?: string; errorCode?: string };
+            detail = failure.errorCode
+              ? `V4 Aug/Sep reporting source unavailable (${failure.errorCode}).`
+              : (failure.error || detail);
+          } catch {
+            detail = `V4 Aug/Sep reporting source unavailable (HTTP ${reportingResponse.status}).`;
+          }
+        }
+        setV4ReportingNote(detail);
       }
 
       try {
@@ -818,6 +833,14 @@ export default function VehiclePerformancePage() {
       && normalizeComparableText(row.registration).includes(normalizeComparableText(searchQuery))),
     [searchQuery, selectedMonthSet, v4ReportingRows]
   );
+  const selectedV4DisplayRows = useMemo(
+    () => v4RowsAsFleetDisplayRows(selectedV4ReportingRows),
+    [selectedV4ReportingRows]
+  );
+  const selectingOnlyV4Months = useMemo(
+    () => selectedMonths.length > 0 && selectedMonths.every((value) => isV4ReportingMonth(value)),
+    [selectedMonths]
+  );
   const completeV4LegacyProjection = useMemo(
     () => completeV4RowsAsLegacyCompatible(selectedV4ReportingRows),
     [selectedV4ReportingRows]
@@ -852,6 +875,10 @@ export default function VehiclePerformancePage() {
   const selectedRecords = useMemo(
     () => dualReadRecords,
     [dualReadRecords]
+  );
+  const hasDualReadContent = useMemo(
+    () => selectedRecords.length > 0 || selectedV4ReportingRows.length > 0,
+    [selectedRecords.length, selectedV4ReportingRows.length]
   );
   const selectedTripFinancials = useMemo(() => {
     const normalizedSearch = normalizeComparableText(searchQuery);
@@ -1011,18 +1038,30 @@ export default function VehiclePerformancePage() {
     () => buildVehicleMonthlyTrend(selectedRecords, dualReadFuelRows),
     [dualReadFuelRows, selectedRecords]
   );
-  const monthlyPerformanceRows = useMemo(
-    () => buildVehicleMonthlyPerformanceRows({
+  const monthlyPerformanceRows = useMemo(() => {
+    const base = buildVehicleMonthlyPerformanceRows({
       records: selectedRecords,
       fuelRows: dualReadFuelRows,
       months: selectedMonths,
       expectedVehicleCount: new Set([
         ...records.filter((record) => normalizeComparableText(record.vehicle_registration).includes(normalizeComparableText(searchQuery))).map((record) => vehicleKey(record.vehicle_registration)),
-        ...completeV4LegacyProjection.map((record) => vehicleKey(record.vehicle_registration))
+        ...selectedV4ReportingRows.map((row) => vehicleKey(row.registration))
       ]).size
-    }),
-    [completeV4LegacyProjection, dualReadFuelRows, records, searchQuery, selectedMonths, selectedRecords]
-  );
+    });
+    // Overlay V4 draft months so Aug/Sep are not labelled "missing" when drafts exist but KPI-complete rows are sparse.
+    return base.map((row) => {
+      if (!isV4ReportingMonth(row.month)) return row;
+      const draftRows = selectedV4ReportingRows.filter((item) => item.month === row.month);
+      if (!draftRows.length) return row;
+      const completeCount = draftRows.filter((item) => item.financiallyComplete).length;
+      return {
+        ...row,
+        vehicleCount: Math.max(row.vehicleCount, draftRows.length),
+        recordCount: Math.max(row.recordCount, draftRows.length),
+        status: completeCount === draftRows.length ? "complete" as const : "partial" as const
+      };
+    });
+  }, [dualReadFuelRows, records, searchQuery, selectedMonths, selectedRecords, selectedV4ReportingRows]);
   const monthlySummary = useMemo(() => buildVehiclePerformanceSummary(monthlyTrend), [monthlyTrend]);
   const reconciliation = useMemo(() => {
     const tolerance = 0.01;
@@ -2293,7 +2332,7 @@ export default function VehiclePerformancePage() {
     setSuccessMessage(null);
 
     try {
-      if (!rows.length) {
+      if (!rows.length && !selectedV4ReportingRows.length) {
         throw new Error("No Vehicle Performance data is available for the selected filters.");
       }
       const logo = await loadVehiclePerformancePdfLogo();
@@ -2449,7 +2488,7 @@ export default function VehiclePerformancePage() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Link className="btn-secondary py-2 text-xs sm:text-sm" href="/maintenance/analytics">{t.maintenance.analytics}</Link>
-              <button type="button" onClick={() => void downloadVehiclePerformancePdf()} disabled={generatingPdf || loading || !!loadError || !rows.length} className="btn-primary gap-2 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm">
+              <button type="button" onClick={() => void downloadVehiclePerformancePdf()} disabled={generatingPdf || loading || !!loadError || (!rows.length && !selectedV4ReportingRows.length)} className="btn-primary gap-2 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm">
                 <Download className="h-4 w-4" />
                 {generatingPdf ? "Generating..." : "Download PDF"}
               </button>
@@ -2502,7 +2541,20 @@ export default function VehiclePerformancePage() {
                 <label className="form-label" htmlFor="vehicle-performance-month">{labels.month}</label>
                 <select id="vehicle-performance-month" className="form-input w-full bg-white" value={month} onChange={(event) => setMonth(event.target.value ? Number(event.target.value) : "")}>
                   <option value="">{labels.allLoadedMonths}</option>
-                  {MONTH_OPTIONS.map((option) => <option key={option.value} value={option.value}>{labels.months[option.labelKey]}</option>)}
+                  {VEHICLE_PERFORMANCE_REPORTING_MONTHS.map((value) => {
+                    const option = MONTH_OPTIONS[value - 1];
+                    const draftCount = isV4ReportingMonth(value)
+                      ? v4ReportingRows.filter((row) => row.month === value).length
+                      : 0;
+                    const suffix = isV4ReportingMonth(value)
+                      ? (draftCount ? ` · V4 draft (${draftCount})` : " · V4 draft")
+                      : " · legacy KPI";
+                    return (
+                      <option key={value} value={value}>
+                        {labels.months[option.labelKey]}{suffix}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
               <div>
@@ -2513,15 +2565,17 @@ export default function VehiclePerformancePage() {
                 </div>
               </div>
               </div>
-              {!loading && !loadError && selectedRecords.length > 0 ? (
+              {!loading && !loadError && hasDualReadContent ? (
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
                   <span className="badge-muted">{periodLabel}</span>
-                  <button type="button" onClick={() => setVehicleCoverageOpen(true)} className="badge-muted transition hover:border-brand-200 hover:text-brand-700">{dataQuality.representedVehicles} vehicles analysed</button>
+                  <button type="button" onClick={() => setVehicleCoverageOpen(true)} className="badge-muted transition hover:border-brand-200 hover:text-brand-700">
+                    {selectingOnlyV4Months ? selectedV4DisplayRows.length : dataQuality.representedVehicles} vehicles analysed
+                  </button>
                   <span className={`badge-muted ${monthCoverageCounts.partial || dataQuality.missingMonths.length ? "border-amber-200 bg-amber-50 text-amber-800" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{monthCoverageCounts.complete} complete · {monthCoverageCounts.partial} partial</span>
                   {selectedV4ReportingRows.length ? (
                     <span className="badge-muted border-amber-200 bg-amber-50 text-amber-900">
                       V4 drafts {selectedV4ReportingRows.filter((row) => row.financiallyComplete).length}/{selectedV4ReportingRows.length} complete
-                      {incompleteV4SelectedCount ? ` · ${incompleteV4SelectedCount} incomplete excluded from confirmed KPI` : ""}
+                      {incompleteV4SelectedCount ? ` · ${incompleteV4SelectedCount} incomplete shown without confirmed profit` : ""}
                     </span>
                   ) : null}
                   {incompletePeriodMessage ? <span className="font-medium text-amber-800">{incompletePeriodMessage}</span> : null}
@@ -2549,7 +2603,7 @@ export default function VehiclePerformancePage() {
 
       {showLegacyWorkspace ? (loading ? <p role="status" className="surface-card p-5">{labels.loadingRecords}</p> : loadError ? (
         <div role="alert" className="surface-card p-5"><p className="form-error">Unable to load vehicle performance: {loadError}</p><button type="button" className="btn-secondary mt-3" onClick={() => void load()}>{labels.retry}</button></div>
-      ) : !selectedRecords.length ? <p role="status" className="surface-card p-5">{labels.noDataTitle}</p> : <>
+      ) : !hasDualReadContent ? <p role="status" className="surface-card p-5">{labels.noDataTitle}</p> : <>
 
       <section className="surface-card overflow-hidden border border-brand-100/80 bg-[linear-gradient(180deg,#ffffff_0%,#fbf9ff_100%)] p-0 shadow-[0_16px_38px_rgba(76,29,149,0.06)]">
         {performanceView === "monthly" && previousMonthComparison ? (
@@ -2656,87 +2710,123 @@ export default function VehiclePerformancePage() {
           <div className="flex flex-col gap-3 border-b border-brand-100/70 bg-[linear-gradient(135deg,#ffffff_0%,#fbf9ff_72%,#f6f1ff_100%)] px-5 py-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">Vehicle performance</p>
-              <h2 className="mt-1 text-xl font-semibold text-slate-950">Fleet vehicle ranking</h2>
-              <p className="mt-1 text-sm text-slate-500">Every analysed vehicle in one ranked comparison. Change the sort to rank by balance, revenue, margin or fuel share, then open a vehicle for the full monthly breakdown.</p>
+              <h2 className="mt-1 text-xl font-semibold text-slate-950">{selectingOnlyV4Months ? "August–September draft vehicles" : "Fleet vehicle ranking"}</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                {selectingOnlyV4Months
+                  ? "All stored V4 draft vehicles for the selected month. Incomplete costs stay unknown — balance and margin are not fabricated."
+                  : "Every analysed vehicle in one ranked comparison. Confirmed KPI ranking uses complete rows only; Aug/Sep drafts also appear in the ten-column source table."}
+              </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="badge-muted">{visibleTableRows.length} vehicles</span>
+              <span className="badge-muted">{selectingOnlyV4Months ? selectedV4DisplayRows.length : visibleTableRows.length} vehicles</span>
               <span className="badge-muted">{periodLabel}</span>
             </div>
           </div>
-          <div className="border-t border-brand-100/70 bg-brand-50/35 px-5 py-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold text-slate-700">Rank follows the selected sort.</p>
-                <p className="mt-0.5 text-xs text-slate-500">Direct costs = fuel + salary/trip payments + other recorded costs.</p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="inline-flex rounded-xl bg-slate-50 p-1">
-                  {([
-                    ["all", "All"],
-                    ["complete", "Full coverage"],
-                    ["partial", "Incomplete"]
-                  ] as const).map(([key, label]) => (
-                    <button key={key} type="button" onClick={(event) => { event.preventDefault(); setCoverageFilter(key); }} className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${coverageFilter === key ? "bg-white text-brand-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>{label}</button>
-                  ))}
+          {!selectingOnlyV4Months ? (
+            <div className="border-t border-brand-100/70 bg-brand-50/35 px-5 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold text-slate-700">Rank follows the selected sort.</p>
+                  <p className="mt-0.5 text-xs text-slate-500">Direct costs = fuel + salary/trip payments + other recorded costs.</p>
                 </div>
-                <div className="flex flex-wrap items-center gap-1 rounded-xl bg-brand-50/70 p-1">
-                  <span className="px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">Sort</span>
-                  {[
-                    ["recordedBalance", "Balance"],
-                    ["grossRevenue", "Revenue"],
-                    ["marginPercent", "Margin"],
-                    ["fuelPercent", "Fuel %"]
-                  ].map(([key, label]) => (
-                    <button key={key} type="button" onClick={(event) => { event.preventDefault(); toggleVehicleSort(key as VehicleSortKey); }} className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${vehicleSort.key === key ? "bg-white text-brand-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>{label}{vehicleSort.key === key ? (vehicleSort.direction === "desc" ? " ↓" : " ↑") : ""}</button>
-                  ))}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="inline-flex rounded-xl bg-slate-50 p-1">
+                    {([
+                      ["all", "All"],
+                      ["complete", "Full coverage"],
+                      ["partial", "Incomplete"]
+                    ] as const).map(([key, label]) => (
+                      <button key={key} type="button" onClick={(event) => { event.preventDefault(); setCoverageFilter(key); }} className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${coverageFilter === key ? "bg-white text-brand-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>{label}</button>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1 rounded-xl bg-brand-50/70 p-1">
+                    <span className="px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">Sort</span>
+                    {[
+                      ["recordedBalance", "Balance"],
+                      ["grossRevenue", "Revenue"],
+                      ["marginPercent", "Margin"],
+                      ["fuelPercent", "Fuel %"]
+                    ].map(([key, label]) => (
+                      <button key={key} type="button" onClick={(event) => { event.preventDefault(); toggleVehicleSort(key as VehicleSortKey); }} className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${vehicleSort.key === key ? "bg-white text-brand-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>{label}{vehicleSort.key === key ? (vehicleSort.direction === "desc" ? " ↓" : " ↑") : ""}</button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          ) : null}
           <div className="overflow-x-auto border-t border-slate-100">
             <table className="w-full min-w-[980px] text-sm">
               <thead className="bg-[linear-gradient(90deg,#f7f3ff_0%,#fbf9ff_55%,#f6f2ff_100%)] text-[11px] uppercase tracking-[0.1em] text-slate-500"><tr><th className="px-5 py-3 text-left font-semibold">Rank / vehicle</th><th className="px-4 py-3 text-right font-semibold">Revenue</th><th className="px-4 py-3 text-right font-semibold">Direct costs</th><th className="px-4 py-3 text-right font-semibold">Recorded balance</th><th className="px-4 py-3 text-right font-semibold">Margin</th><th className="px-4 py-3 text-right font-semibold">Fuel / revenue</th><th className="px-4 py-3 text-center font-semibold">Coverage</th><th className="px-5 py-3 text-right font-semibold">Details</th></tr></thead>
               <tbody>
-                {visibleTableRows.map((row, index) => {
-                  const monthsLoaded = vehicleMonthCounts.get(vehicleKey(row.vehicleRegistration)) ?? 0;
-                  const directCosts = row.grossRevenue - row.recordedBalance;
-                  return (
-                    <tr key={row.vehicleRegistration} onClick={() => openVehicle(row.vehicleRegistration)} className={`cursor-pointer border-t border-slate-100 transition hover:bg-brand-50/55 ${index % 2 ? "bg-slate-50/35" : "bg-white"}`}>
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-3">
-                          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${index < 3 ? "bg-brand-700 text-white shadow-sm" : "bg-brand-50 text-brand-700"}`}>{index + 1}</span>
-                          <div>
-                            <p className="font-bold text-slate-950">{row.vehicleRegistration}</p>
-                            <p className="mt-0.5 text-xs text-slate-500">{monthsLoaded}/{selectedMonths.length} months loaded</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3.5 text-right font-semibold text-slate-900">{formatBaht(row.grossRevenue)}</td>
-                      <td className="px-4 py-3.5 text-right text-slate-700">{formatBaht(directCosts)}</td>
-                      <td className={`px-4 py-3.5 text-right font-bold ${row.recordedBalance < 0 ? "text-rose-700" : "text-emerald-700"}`}>{formatBaht(row.recordedBalance)}</td>
-                      <td className="px-4 py-3.5 text-right font-semibold text-slate-900">{formatPercent(row.marginPercent, language)}</td>
-                      <td className="px-4 py-3.5 text-right font-semibold text-brand-700">{formatPercent(row.fuelPercent, language)}</td>
-                      <td className="px-4 py-3.5 text-center"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${monthsLoaded === selectedMonths.length ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{monthsLoaded}/{selectedMonths.length}</span></td>
-                      <td className="px-5 py-3.5 text-right"><span className="inline-flex rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-brand-700 shadow-sm">Open →</span></td>
-                    </tr>
-                  );
-                })}
+                {selectingOnlyV4Months
+                  ? selectedV4DisplayRows.map((row, index) => {
+                      const directCosts = row.financiallyComplete && row.grossRevenue != null && row.recordedBalance != null
+                        ? row.grossRevenue - row.recordedBalance
+                        : null;
+                      return (
+                        <tr key={`${row.vehicleRegistration}:${row.month}`} onClick={() => openVehicle(row.vehicleRegistration)} className={`cursor-pointer border-t border-slate-100 transition hover:bg-brand-50/55 ${index % 2 ? "bg-slate-50/35" : "bg-white"}`}>
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-3">
+                              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${index < 3 ? "bg-brand-700 text-white shadow-sm" : "bg-brand-50 text-brand-700"}`}>{index + 1}</span>
+                              <div>
+                                <p className="font-bold text-slate-950">{row.vehicleRegistration}</p>
+                                <p className="mt-0.5 text-xs text-amber-800">
+                                  {row.financiallyComplete
+                                    ? (row.salaryProvisional ? "V4 draft · provisional salary" : "V4 draft · not published")
+                                    : `Incomplete · ${row.incompleteFields.join(", ") || "unknown costs"}`}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5 text-right font-semibold text-slate-900">{row.grossRevenue == null ? "—" : formatBaht(row.grossRevenue)}</td>
+                          <td className="px-4 py-3.5 text-right text-slate-700">{directCosts == null ? "—" : formatBaht(directCosts)}</td>
+                          <td className={`px-4 py-3.5 text-right font-bold ${row.recordedBalance == null ? "text-amber-800" : row.recordedBalance < 0 ? "text-rose-700" : "text-emerald-700"}`}>{row.recordedBalance == null ? "—" : formatBaht(row.recordedBalance)}</td>
+                          <td className="px-4 py-3.5 text-right font-semibold text-slate-900">{row.marginPercent == null ? "—" : formatPercent(row.marginPercent, language)}</td>
+                          <td className="px-4 py-3.5 text-right font-semibold text-brand-700">{row.fuelPercent == null ? "—" : formatPercent(row.fuelPercent, language)}</td>
+                          <td className="px-4 py-3.5 text-center"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${row.financiallyComplete ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{row.financiallyComplete ? "Complete draft" : "Incomplete"}</span></td>
+                          <td className="px-5 py-3.5 text-right"><span className="inline-flex rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-brand-700 shadow-sm">Open →</span></td>
+                        </tr>
+                      );
+                    })
+                  : visibleTableRows.map((row, index) => {
+                      const monthsLoaded = vehicleMonthCounts.get(vehicleKey(row.vehicleRegistration)) ?? 0;
+                      const directCosts = row.grossRevenue - row.recordedBalance;
+                      return (
+                        <tr key={row.vehicleRegistration} onClick={() => openVehicle(row.vehicleRegistration)} className={`cursor-pointer border-t border-slate-100 transition hover:bg-brand-50/55 ${index % 2 ? "bg-slate-50/35" : "bg-white"}`}>
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-3">
+                              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${index < 3 ? "bg-brand-700 text-white shadow-sm" : "bg-brand-50 text-brand-700"}`}>{index + 1}</span>
+                              <div>
+                                <p className="font-bold text-slate-950">{row.vehicleRegistration}</p>
+                                <p className="mt-0.5 text-xs text-slate-500">{monthsLoaded}/{selectedMonths.length} months loaded</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5 text-right font-semibold text-slate-900">{formatBaht(row.grossRevenue)}</td>
+                          <td className="px-4 py-3.5 text-right text-slate-700">{formatBaht(directCosts)}</td>
+                          <td className={`px-4 py-3.5 text-right font-bold ${row.recordedBalance < 0 ? "text-rose-700" : "text-emerald-700"}`}>{formatBaht(row.recordedBalance)}</td>
+                          <td className="px-4 py-3.5 text-right font-semibold text-slate-900">{formatPercent(row.marginPercent, language)}</td>
+                          <td className="px-4 py-3.5 text-right font-semibold text-brand-700">{formatPercent(row.fuelPercent, language)}</td>
+                          <td className="px-4 py-3.5 text-center"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${monthsLoaded === selectedMonths.length ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{monthsLoaded}/{selectedMonths.length}</span></td>
+                          <td className="px-5 py-3.5 text-right"><span className="inline-flex rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-brand-700 shadow-sm">Open →</span></td>
+                        </tr>
+                      );
+                    })}
               </tbody>
             </table>
           </div>
         </section>
 
-        {detailVehicle && vehicleDetailSummary && detailScope ? (
+        {detailVehicle && vehicleHistory.length ? (
           <section id="vehicle-detail" className="surface-card scroll-mt-6 overflow-hidden border border-brand-100/80 p-0 shadow-[0_18px_46px_rgba(76,29,149,0.08)]">
             <div className="flex flex-col gap-4 border-b border-slate-100 bg-[linear-gradient(135deg,#ffffff_0%,#fbf9ff_65%,#f4efff_100%)] px-5 py-5 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">Vehicle detail</p>
                 <div className="mt-1 flex flex-wrap items-center gap-3">
                   <h2 className="text-2xl font-semibold text-slate-950">{detailVehicle}</h2>
-                  <span className="badge-muted">{vehicleDetailSummary.months.length} months of data</span>
+                  <span className="badge-muted">{vehicleDetailSummary?.months.length ?? vehicleHistory.length} months of data</span>
                 </div>
-                <p className="mt-1 text-sm text-slate-500">Selected-period totals, direct-cost breakdown and month-by-month performance.</p>
+                <p className="mt-1 text-sm text-slate-500">Selected-period totals, direct-cost breakdown and month-by-month performance. Incomplete V4 draft months keep source figures without confirmed profit.</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <button type="button" disabled={!previousDetailVehicle} onClick={() => previousDetailVehicle && openVehicle(previousDetailVehicle)} className="btn-secondary disabled:cursor-not-allowed disabled:opacity-40">← Previous vehicle</button>
@@ -2755,12 +2845,13 @@ export default function VehiclePerformancePage() {
                   <button type="button" onClick={() => setDetailMonthFilter("")} className={`rounded-xl border px-3 py-2 text-sm font-semibold transition ${detailMonthFilter === "" ? "border-brand-200 bg-brand-50 text-brand-700" : "border-slate-200 bg-white text-slate-600 hover:border-brand-200"}`}>All months</button>
                   <select value={detailMonthFilter} onChange={(event) => setDetailMonthFilter(event.target.value ? Number(event.target.value) : "")} className="form-input min-w-[180px] bg-white">
                     <option value="">Select month</option>
-                    {vehicleDetailSummary.months.map((item) => <option key={item.month} value={item.month}>{monthLabel(item.month)}</option>)}
+                    {(vehicleDetailSummary?.months ?? vehicleHistory.map((item) => ({ month: item.month }))).map((item) => <option key={item.month} value={item.month}>{monthLabel(item.month)}</option>)}
                   </select>
                 </div>
               </div>
             </div>
 
+            {detailScope ? (
             <div className="grid divide-y divide-brand-100/60 bg-[linear-gradient(180deg,#ffffff_0%,#fcfbff_100%)] sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-6">
               <PerformanceHeroMetric label="Revenue" value={formatCompactBaht(detailScope.totals.revenue)} detail="Selected-period revenue" />
               <PerformanceHeroMetric label="Fuel" value={formatCompactBaht(detailScope.totals.fuel)} detail="Recorded fuel spend" />
@@ -2769,7 +2860,13 @@ export default function VehiclePerformancePage() {
               <PerformanceHeroMetric label="Margin" value={formatPercent(detailScope.margin, language)} detail="Recorded balance ÷ revenue" />
               <PerformanceHeroMetric label="Fuel / revenue" value={formatPercent(detailScope.fuelShare, language)} detail="Fuel as share of revenue" />
             </div>
+            ) : (
+              <div className="border-b border-amber-100 bg-amber-50/60 px-5 py-4 text-sm text-amber-900">
+                Confirmed KPI totals are unavailable for this selection because one or more V4 draft cost fields are incomplete. Source figures remain visible in the monthly history below without fabricated profit.
+              </div>
+            )}
 
+            {detailScope ? (
             <div className="grid border-t border-brand-100/70 bg-[linear-gradient(180deg,#ffffff_0%,#fbf9ff_100%)] lg:grid-cols-[0.8fr_1.2fr]">
               <div className="border-b border-slate-100 p-5 lg:border-b-0 lg:border-r">
                 <p className="text-xs font-semibold uppercase tracking-[0.13em] text-brand-700">Cost composition</p>
@@ -2800,6 +2897,7 @@ export default function VehiclePerformancePage() {
                 </div>
               </div>
             </div>
+            ) : null}
 
             <div className="border-t border-slate-100">
               <div className="px-5 py-4"><p className="text-xs font-semibold uppercase tracking-[0.13em] text-brand-700">Monthly history</p><h3 className="mt-1 text-lg font-semibold text-slate-950">How this vehicle changed month by month</h3><p className="mt-1 text-sm text-slate-500">Jan–Jul use legacy KPI rows. Aug/Sep use V4 stored drafts. Incomplete draft months stay unknown and are not treated as confirmed profit.</p></div>

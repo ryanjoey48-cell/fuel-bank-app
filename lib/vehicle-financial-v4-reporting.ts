@@ -291,6 +291,77 @@ export function completeV4RowsAsLegacyCompatible(rows: V4FinancialReportingRow[]
   });
 }
 
+/**
+ * Fleet/Monthly display projection for every stored draft row.
+ * Known source amounts are preserved; unknown costs stay null.
+ * Balance/margin stay null unless the row is financially complete —
+ * never coerce missing costs to 0 / fabricated profit.
+ */
+export type V4FleetDisplayRow = {
+  vehicleRegistration: string;
+  year: number;
+  month: number;
+  salaryCost: number | null;
+  tripIncome: number | null;
+  otherExpenses: number | null;
+  grossRevenue: number | null;
+  fuelSpend: number | null;
+  lpgCost: number | null;
+  maintenance: number | null;
+  jobs: number | null;
+  parkingFees: number | null;
+  expenses: number | null;
+  recordedBalance: number | null;
+  marginPercent: number | null;
+  fuelPercent: number | null;
+  financiallyComplete: boolean;
+  salaryProvisional: boolean;
+  incompleteFields: string[];
+  dataProvenance: "v4_draft_source";
+  publicationLabel: "stored_draft_not_published";
+};
+
+export function v4RowsAsFleetDisplayRows(rows: V4FinancialReportingRow[]): V4FleetDisplayRow[] {
+  return rows.map((row) => {
+    const lpgCost = row.lpgTreatment === "separate"
+      ? (isKnownAmount(row.lpg) ? Number(row.lpg) : null)
+      : (row.lpgTreatment === "included_in_fuel" ? 0 : (isKnownAmount(row.lpg) ? Number(row.lpg) : null));
+    const expensesKnown = isKnownAmount(row.expenses) && isKnownAmount(row.parkingFees) && isKnownAmount(row.maintenance);
+    const otherExpenses = expensesKnown
+      ? Number(row.expenses) + Number(row.parkingFees) + Number(row.maintenance)
+      : null;
+    const balance = row.financiallyComplete ? row.indicativeRecordedBalance : null;
+    const marginPercent = row.financiallyComplete ? row.indicativeMarginPercent : null;
+    const grossRevenue = isKnownAmount(row.totalReceived) ? Number(row.totalReceived) : null;
+    const fuelSpend = isKnownAmount(row.fuel) ? Number(row.fuel) : null;
+    return {
+      vehicleRegistration: row.registration,
+      year: row.year,
+      month: row.month,
+      salaryCost: isKnownAmount(row.salary) ? Number(row.salary) : null,
+      tripIncome: isKnownAmount(row.tripPayments) ? Number(row.tripPayments) : null,
+      otherExpenses,
+      grossRevenue,
+      fuelSpend,
+      lpgCost,
+      maintenance: isKnownAmount(row.maintenance) ? Number(row.maintenance) : null,
+      jobs: isKnownAmount(row.jobs) ? Number(row.jobs) : null,
+      parkingFees: isKnownAmount(row.parkingFees) ? Number(row.parkingFees) : null,
+      expenses: isKnownAmount(row.expenses) ? Number(row.expenses) : null,
+      recordedBalance: balance,
+      marginPercent,
+      fuelPercent: grossRevenue != null && grossRevenue > 0 && fuelSpend != null
+        ? (fuelSpend / grossRevenue) * 100
+        : null,
+      financiallyComplete: row.financiallyComplete,
+      salaryProvisional: row.salaryProvisional,
+      incompleteFields: row.incompleteFields,
+      dataProvenance: "v4_draft_source" as const,
+      publicationLabel: "stored_draft_not_published" as const
+    };
+  });
+}
+
 export function rankCompleteV4Rows<T extends { financiallyComplete: boolean; indicativeRecordedBalance: number | null }>(
   rows: T[],
   direction: "strongest" | "weakest" = "strongest"

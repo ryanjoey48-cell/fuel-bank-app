@@ -141,3 +141,23 @@ test('page reporting months include Aug/Sep without writing into legacy KPI help
   assert.match(page, /stored_draft_not_published|not published/);
   assert.doesNotMatch(page, /from\("vehicle_monthly_performance"\).*insert/);
 });
+
+test('Fleet Overview sends Bearer token to reporting-source like Financial Reports', () => {
+  const page = fs.readFileSync(path.resolve('app/(dashboard)/vehicle-performance/page.tsx'), 'utf8');
+  assert.match(page, /Authorization:\s*`Bearer \$\{accessToken\}`/);
+  assert.match(page, /reporting-source/);
+  assert.match(page, /VEHICLE_PERFORMANCE_REPORTING_MONTHS\.map/);
+  assert.match(page, /v4RowsAsFleetDisplayRows/);
+  assert.match(page, /selectingOnlyV4Months/);
+});
+
+test('incomplete V4 display rows keep null balance and do not coerce maintenance to zero', () => {
+  const incomplete = reporting.mapV4DraftEntryToReportingRow(entry({ maintenance: null }), batch);
+  const display = reporting.v4RowsAsFleetDisplayRows([incomplete]);
+  assert.equal(display.length, 1);
+  assert.equal(display[0].financiallyComplete, false);
+  assert.equal(display[0].maintenance, null);
+  assert.equal(display[0].recordedBalance, null);
+  assert.equal(display[0].marginPercent, null);
+  assert.equal(display[0].grossRevenue, 20000);
+});
