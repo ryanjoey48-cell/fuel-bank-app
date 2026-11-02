@@ -141,7 +141,7 @@ test('page reporting months include Aug/Sep without writing into legacy KPI help
   const page = fs.readFileSync(path.resolve('app/(dashboard)/vehicle-performance/page.tsx'), 'utf8');
   assert.match(page, /VEHICLE_PERFORMANCE_REPORTING_MONTHS|VEHICLE_PERFORMANCE_V4_REPORTING_MONTHS/);
   assert.match(page, /reporting-source/);
-  assert.match(page, /stored_draft_not_published|not published/);
+  assert.match(page, /publicationLabel|not yet approved as published profit|Stored report/);
   assert.doesNotMatch(page, /from\("vehicle_monthly_performance"\).*insert/);
 });
 
@@ -175,6 +175,17 @@ test('August–September fleet table avoids fake rank badges and repeated month 
   assert.match(page, /incomplete rows are not ranked as profit/);
   assert.doesNotMatch(augSepBlock.slice(0, 4500), /index \+ 1/);
   assert.doesNotMatch(augSepBlock.slice(0, 4500), /Rank \/ vehicle/);
+});
+
+test('vehicle detail history keeps Aug/Sep PDF source columns even when incomplete', () => {
+  const page = fs.readFileSync(path.resolve('app/(dashboard)/vehicle-performance/page.tsx'), 'utf8');
+  assert.match(page, /sourceDisplay/);
+  assert.match(page, /v4RowsAsFleetDisplayRows\(v4Rows\)/);
+  assert.doesNotMatch(page, /Incomplete costs — balance unknown · not confirmed profit/);
+  assert.match(page, /August–September show the same ten financial-report columns/);
+  assert.match(page, /financial-report columns \(Salary through Maintenance/);
+  assert.match(page, />August</);
+  assert.match(page, />September</);
 });
 
 test('August–September table exposes PDF-matching TOTAL row and dash/zero notes', () => {

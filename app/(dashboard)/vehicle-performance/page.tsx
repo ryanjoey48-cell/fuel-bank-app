@@ -964,6 +964,8 @@ export default function VehiclePerformancePage() {
       v4Incomplete: boolean;
       v4Provisional: boolean;
       provenance: "v4_draft_source" | "legacy_kpi";
+      /** Always populated for Aug/Sep so incomplete months still show PDF source figures. */
+      sourceDisplay: ReturnType<typeof v4RowsAsFleetDisplayRows>[number] | null;
     };
     if (!detailVehicle) return [] as HistoryItem[];
     const historyMonths = [...new Set<number>([
@@ -979,6 +981,7 @@ export default function VehiclePerformancePage() {
             && normalizeComparableText(row.registration) === normalizeComparableText(detailVehicle)
         );
         if (!v4Rows.length) continue;
+        const sourceDisplay = v4RowsAsFleetDisplayRows(v4Rows)[0] ?? null;
         const projection = completeV4RowsAsLegacyCompatible(v4Rows);
         const fuel = projection.map((row) => ({
           vehicleRegistration: row.vehicle_registration,
@@ -994,7 +997,8 @@ export default function VehiclePerformancePage() {
           benchmark: model.benchmark,
           v4Incomplete: Boolean(!v4Rows[0].financiallyComplete),
           v4Provisional: Boolean(v4Rows[0].salaryProvisional),
-          provenance: "v4_draft_source"
+          provenance: "v4_draft_source",
+          sourceDisplay
         });
         continue;
       }
@@ -1015,7 +1019,8 @@ export default function VehiclePerformancePage() {
         benchmark: model.benchmark,
         v4Incomplete: false,
         v4Provisional: false,
-        provenance: "legacy_kpi"
+        provenance: "legacy_kpi",
+        sourceDisplay: null
       });
     }
     return items;
@@ -2757,6 +2762,12 @@ export default function VehiclePerformancePage() {
       </section>
 
       {performanceView === "fleet" ? <>
+        {!selectingOnlyV4Months && month === "" && selectedV4ReportingRows.length > 0 ? (
+          <div className="surface-card border border-amber-200 bg-amber-50/70 px-5 py-3 text-sm text-amber-950">
+            August and September financial-report columns (Salary through Maintenance, plus TOTAL) appear when you select <span className="font-semibold">August</span> or <span className="font-semibold">September</span> in the month filter. The all-months view keeps the January–July ranking layout.
+          </div>
+        ) : null}
+        {!selectingOnlyV4Months ? (
         <section className="surface-card overflow-hidden border border-brand-100/70 p-0 shadow-[0_14px_34px_rgba(76,29,149,0.05)]">
           <div className="flex flex-col gap-3 border-b border-brand-100/70 bg-[linear-gradient(135deg,#ffffff_0%,#fbf9ff_68%,#f5f0ff_100%)] px-5 py-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -2794,6 +2805,7 @@ export default function VehiclePerformancePage() {
             ) : null}
           </div>
         </section>
+        ) : null}
 
         <section id="vehicle-performance-table" className="surface-card scroll-mt-6 overflow-hidden border border-brand-100/70 p-0 shadow-[0_16px_40px_rgba(76,29,149,0.06)]">
           <div className="flex flex-col gap-3 border-b border-brand-100/70 bg-[linear-gradient(135deg,#ffffff_0%,#fbf9ff_72%,#f6f1ff_100%)] px-5 py-4 sm:flex-row sm:items-end sm:justify-between">
@@ -3028,35 +3040,72 @@ export default function VehiclePerformancePage() {
             ) : null}
 
             <div className="border-t border-slate-100">
-              <div className="px-5 py-4"><p className="text-xs font-semibold uppercase tracking-[0.13em] text-brand-700">Monthly history</p><h3 className="mt-1 text-lg font-semibold text-slate-950">How this vehicle changed month by month</h3><p className="mt-1 text-sm text-slate-500">January–September in one history. Incomplete months stay unknown and are not treated as confirmed profit.</p></div>
+              <div className="px-5 py-4"><p className="text-xs font-semibold uppercase tracking-[0.13em] text-brand-700">Monthly history</p><h3 className="mt-1 text-lg font-semibold text-slate-950">How this vehicle changed month by month</h3><p className="mt-1 text-sm text-slate-500">January–July show published KPI history. August–September show the same ten financial-report columns as the owner PDFs, including incomplete months (unknown costs remain —).</p></div>
               <div className="overflow-x-auto border-t border-slate-100">
-                <table className="w-full min-w-[980px] text-sm">
-                  <thead className="bg-[linear-gradient(90deg,#f7f3ff_0%,#fbf9ff_55%,#f6f2ff_100%)] text-[11px] uppercase tracking-[0.1em] text-slate-500"><tr><th className="px-5 py-3 text-left font-semibold">Month</th><th className="px-4 py-3 text-left font-semibold">Source</th><th className="px-4 py-3 text-right font-semibold">Revenue</th><th className="px-4 py-3 text-right font-semibold">Fuel</th><th className="px-4 py-3 text-right font-semibold">Direct costs</th><th className="px-4 py-3 text-right font-semibold">Recorded balance</th><th className="px-4 py-3 text-right font-semibold">Margin</th><th className="px-5 py-3 text-right font-semibold">Fuel / revenue</th></tr></thead>
+                <table className="w-full min-w-[1180px] text-sm tabular-nums">
+                  <thead className="bg-[linear-gradient(90deg,#f7f3ff_0%,#fbf9ff_55%,#f6f2ff_100%)] text-[10px] uppercase tracking-[0.08em] text-slate-500">
+                    <tr>
+                      <th className="whitespace-nowrap px-3 py-2.5 text-left font-semibold">Month</th>
+                      <th className="whitespace-nowrap px-2 py-2.5 text-left font-semibold">Status</th>
+                      <th className="whitespace-nowrap px-2 py-2.5 text-right font-semibold">Salary</th>
+                      <th className="whitespace-nowrap px-2 py-2.5 text-right font-semibold">Jobs</th>
+                      <th className="whitespace-nowrap px-2 py-2.5 text-right font-semibold">Trip Payments</th>
+                      <th className="whitespace-nowrap px-2 py-2.5 text-right font-semibold">Expenses</th>
+                      <th className="whitespace-nowrap px-2 py-2.5 text-right font-semibold">Parking Fees</th>
+                      <th className="whitespace-nowrap px-2 py-2.5 text-right font-semibold">Total Received</th>
+                      <th className="whitespace-nowrap px-2 py-2.5 text-right font-semibold">Fuel</th>
+                      <th className="whitespace-nowrap px-2 py-2.5 text-right font-semibold">LPG</th>
+                      <th className="whitespace-nowrap px-2 py-2.5 text-right font-semibold">Maintenance</th>
+                      <th className="whitespace-nowrap px-2 py-2.5 text-right font-semibold">Balance</th>
+                    </tr>
+                  </thead>
                   <tbody>
                     {vehicleHistory.map((item) => {
-                      if (!item.row) {
+                      if (item.sourceDisplay) {
+                        const source = item.sourceDisplay;
+                        const statusLabel = source.financiallyComplete
+                          ? (source.salaryProvisional ? "Provisional salary" : "Complete")
+                          : "Incomplete · balance unknown";
                         return (
-                          <tr key={item.month} className="border-t border-slate-100 bg-amber-50/40">
-                            <td className="px-5 py-3.5 font-bold text-slate-950">{monthLabel(item.month)}</td>
-                            <td className="px-4 py-3.5 text-xs font-semibold text-amber-800">{item.provenance === "v4_draft_source" ? (item.v4Incomplete ? "Incomplete costs" : "Stored report") : "Published KPI"}</td>
-                            <td className="px-4 py-3.5 text-right text-slate-500" colSpan={6}>Incomplete costs — balance unknown · not confirmed profit</td>
+                          <tr key={item.month} className={`border-t border-slate-100 ${detailMonthFilter === item.month ? "bg-brand-50/50" : item.v4Incomplete ? "bg-amber-50/35" : ""}`}>
+                            <td className="whitespace-nowrap px-3 py-2.5 font-bold text-slate-950">{monthLabel(item.month)}</td>
+                            <td className="whitespace-nowrap px-2 py-2.5 text-xs font-semibold text-slate-600">{statusLabel}</td>
+                            <td className="whitespace-nowrap px-2 py-2.5 text-right text-slate-700">{formatNullableBaht(source.salaryCost)}{source.salaryProvisional ? " *" : ""}</td>
+                            <td className="whitespace-nowrap px-2 py-2.5 text-right text-slate-700">{source.jobs == null ? "—" : formatNumber(source.jobs, language)}</td>
+                            <td className="whitespace-nowrap px-2 py-2.5 text-right text-slate-700">{formatNullableBaht(source.tripIncome)}</td>
+                            <td className="whitespace-nowrap px-2 py-2.5 text-right text-slate-700">{formatNullableBaht(source.expenses)}</td>
+                            <td className="whitespace-nowrap px-2 py-2.5 text-right text-slate-700">{formatNullableBaht(source.parkingFees)}</td>
+                            <td className="whitespace-nowrap px-2 py-2.5 text-right font-semibold text-slate-900">{formatNullableBaht(source.grossRevenue)}</td>
+                            <td className="whitespace-nowrap px-2 py-2.5 text-right text-slate-700">{formatNullableBaht(source.fuelSpend)}</td>
+                            <td className="whitespace-nowrap px-2 py-2.5 text-right text-slate-700">{formatNullableBaht(source.lpgCost)}</td>
+                            <td className="whitespace-nowrap px-2 py-2.5 text-right text-slate-700">{formatNullableBaht(source.maintenance)}</td>
+                            <td className={`whitespace-nowrap px-2 py-2.5 text-right font-bold ${source.recordedBalance == null ? "text-amber-800" : source.recordedBalance < 0 ? "text-rose-700" : "text-emerald-700"}`}>{formatNullableBaht(source.recordedBalance)}</td>
                           </tr>
                         );
                       }
-                      const directCosts = item.row.grossRevenue - item.row.recordedBalance;
-                      const sourceLabel = item.provenance === "v4_draft_source"
-                        ? (item.v4Provisional ? "Provisional salary · not published" : "Stored report · not published")
-                        : "Published KPI";
+                      if (!item.row) {
+                        return (
+                          <tr key={item.month} className="border-t border-slate-100 bg-amber-50/40">
+                            <td className="whitespace-nowrap px-3 py-2.5 font-bold text-slate-950">{monthLabel(item.month)}</td>
+                            <td className="whitespace-nowrap px-2 py-2.5 text-xs font-semibold text-amber-800">No record</td>
+                            <td className="px-2 py-2.5 text-right text-slate-500" colSpan={10}>No monthly figures for this vehicle</td>
+                          </tr>
+                        );
+                      }
                       return (
                         <tr key={item.month} className={`border-t border-slate-100 ${detailMonthFilter === item.month ? "bg-brand-50/50" : ""}`}>
-                          <td className="px-5 py-3.5 font-bold text-slate-950">{monthLabel(item.month)}</td>
-                          <td className="px-4 py-3.5 text-xs font-semibold text-slate-600">{sourceLabel}</td>
-                          <td className="px-4 py-3.5 text-right font-semibold text-slate-900">{formatBaht(item.row.grossRevenue)}</td>
-                          <td className="px-4 py-3.5 text-right text-slate-700">{formatBaht(item.row.fuelSpend)}</td>
-                          <td className="px-4 py-3.5 text-right text-slate-700">{formatBaht(directCosts)}</td>
-                          <td className={`px-4 py-3.5 text-right font-bold ${item.row.recordedBalance < 0 ? "text-rose-700" : "text-emerald-700"}`}>{formatBaht(item.row.recordedBalance)}</td>
-                          <td className="px-4 py-3.5 text-right font-semibold text-slate-900">{formatPercent(item.row.marginPercent, language)}</td>
-                          <td className="px-5 py-3.5 text-right font-semibold text-brand-700">{formatPercent(item.row.fuelPercent, language)}</td>
+                          <td className="whitespace-nowrap px-3 py-2.5 font-bold text-slate-950">{monthLabel(item.month)}</td>
+                          <td className="whitespace-nowrap px-2 py-2.5 text-xs font-semibold text-slate-600">Published KPI</td>
+                          <td className="whitespace-nowrap px-2 py-2.5 text-right text-slate-700">{formatBaht(item.row.salaryCost)}</td>
+                          <td className="whitespace-nowrap px-2 py-2.5 text-right text-slate-500">—</td>
+                          <td className="whitespace-nowrap px-2 py-2.5 text-right text-slate-700">{formatBaht(item.row.tripIncome)}</td>
+                          <td className="whitespace-nowrap px-2 py-2.5 text-right text-slate-500">—</td>
+                          <td className="whitespace-nowrap px-2 py-2.5 text-right text-slate-500">—</td>
+                          <td className="whitespace-nowrap px-2 py-2.5 text-right font-semibold text-slate-900">{formatBaht(item.row.grossRevenue)}</td>
+                          <td className="whitespace-nowrap px-2 py-2.5 text-right text-slate-700">{formatBaht(item.row.fuelSpend)}</td>
+                          <td className="whitespace-nowrap px-2 py-2.5 text-right text-slate-700">{formatBaht(item.row.lpgCost)}</td>
+                          <td className="whitespace-nowrap px-2 py-2.5 text-right text-slate-500">—</td>
+                          <td className={`whitespace-nowrap px-2 py-2.5 text-right font-bold ${item.row.recordedBalance < 0 ? "text-rose-700" : "text-emerald-700"}`}>{formatBaht(item.row.recordedBalance)}</td>
                         </tr>
                       );
                     })}
