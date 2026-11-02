@@ -396,7 +396,11 @@ export function tenColumnHeaders(): string[] {
 
 export function formatNullableAmount(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return "—";
-  return String(value);
+  const hasDecimals = Math.abs(Number(value) % 1) > 0.004;
+  return new Intl.NumberFormat("en-GB", {
+    minimumFractionDigits: hasDecimals ? 2 : 0,
+    maximumFractionDigits: 2
+  }).format(Number(value));
 }
 
 export function v4RowToTenColumnValues(row: V4FinancialReportingRow): string[] {

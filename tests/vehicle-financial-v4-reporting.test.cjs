@@ -121,6 +121,9 @@ test('ten-column headers and unknown formatting preserve dashes', () => {
   const incomplete = reporting.mapV4DraftEntryToReportingRow(entry({ expenses: null }), batch);
   const values = reporting.v4RowToTenColumnValues(incomplete);
   assert.equal(values[4], '—');
+  assert.equal(reporting.formatNullableAmount(7292.1), '7,292.10');
+  assert.equal(reporting.formatNullableAmount(3581914), '3,581,914');
+  assert.equal(reporting.formatNullableAmount(null), '—');
 });
 
 test('reporting-source route is GET-only and stays write-locked', () => {
@@ -161,6 +164,17 @@ test('Fleet Overview no longer mounts a separate August–September draft table 
   assert.match(page, /formatNullableBaht/);
   assert.match(page, /partialCoverageActive/);
   assert.match(page, /Confirmed balance/);
+});
+
+test('August–September fleet table avoids fake rank badges and repeated month subtitles', () => {
+  const page = fs.readFileSync(path.resolve('app/(dashboard)/vehicle-performance/page.tsx'), 'utf8');
+  assert.match(page, /Fleet vehicle list/);
+  assert.doesNotMatch(page, /monthLabel\(row\.month\)\} financial report/);
+  const augSepBlock = page.split('selectingOnlyV4Months ? (')[2] || page.split('{selectingOnlyV4Months ? (')[1] || '';
+  assert.match(page, /Registration/);
+  assert.match(page, /incomplete rows are not ranked as profit/);
+  assert.doesNotMatch(augSepBlock.slice(0, 4500), /index \+ 1/);
+  assert.doesNotMatch(augSepBlock.slice(0, 4500), /Rank \/ vehicle/);
 });
 
 test('incomplete V4 display rows keep null balance and do not coerce maintenance to zero', () => {

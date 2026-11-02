@@ -839,7 +839,9 @@ export default function VehiclePerformancePage() {
     [searchQuery, selectedMonthSet, v4ReportingRows]
   );
   const selectedV4DisplayRows = useMemo(
-    () => v4RowsAsFleetDisplayRows(selectedV4ReportingRows),
+    () => v4RowsAsFleetDisplayRows(selectedV4ReportingRows).sort((left, right) =>
+      left.vehicleRegistration.localeCompare(right.vehicleRegistration, "th", { sensitivity: "base", numeric: true })
+    ),
     [selectedV4ReportingRows]
   );
   const selectingOnlyV4Months = useMemo(
@@ -2786,10 +2788,10 @@ export default function VehiclePerformancePage() {
           <div className="flex flex-col gap-3 border-b border-brand-100/70 bg-[linear-gradient(135deg,#ffffff_0%,#fbf9ff_72%,#f6f1ff_100%)] px-5 py-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">Vehicle performance</p>
-              <h2 className="mt-1 text-xl font-semibold text-slate-950">Fleet vehicle ranking</h2>
+              <h2 className="mt-1 text-xl font-semibold text-slate-950">{selectingOnlyV4Months ? "Fleet vehicle list" : "Fleet vehicle ranking"}</h2>
               <p className="mt-1 text-sm text-slate-500">
                 {selectingOnlyV4Months
-                  ? "Every vehicle in the selected month. Unknown costs show as —. Confirmed balance is only shown when all required costs are present."
+                  ? "Vehicles listed by registration. Unknown costs show as —. Confirmed balance appears only when all required costs are present — incomplete rows are not ranked as profit."
                   : "Every analysed vehicle in one ranked comparison. Change the sort to rank by balance, revenue, margin or fuel share, then open a vehicle for the full monthly breakdown."}
               </p>
             </div>
@@ -2798,6 +2800,11 @@ export default function VehiclePerformancePage() {
               <span className="badge-muted">{periodLabel}</span>
             </div>
           </div>
+          {selectingOnlyV4Months && selectedV4SourceTotals.salaryProvisional ? (
+            <div className="border-t border-amber-100 bg-amber-50/55 px-5 py-2.5 text-xs text-amber-950">
+              <span className="font-semibold">*</span> Salary marked with an asterisk is provisional for September and is not final published payroll.
+            </div>
+          ) : null}
           {!selectingOnlyV4Months ? (
             <div className="border-t border-brand-100/70 bg-brand-50/35 px-5 py-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2832,46 +2839,40 @@ export default function VehiclePerformancePage() {
           ) : null}
           <div className="overflow-x-auto border-t border-slate-100">
             {selectingOnlyV4Months ? (
-              <table className="w-full min-w-[1180px] text-sm">
-                <thead className="bg-[linear-gradient(90deg,#f7f3ff_0%,#fbf9ff_55%,#f6f2ff_100%)] text-[11px] uppercase tracking-[0.1em] text-slate-500">
+              <table className="w-full min-w-[1080px] text-[13px] tabular-nums">
+                <thead className="bg-[linear-gradient(90deg,#f7f3ff_0%,#fbf9ff_55%,#f6f2ff_100%)] text-[10px] uppercase tracking-[0.08em] text-slate-500">
                   <tr>
-                    <th className="px-5 py-3 text-left font-semibold">Rank / vehicle</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-left font-semibold">Registration</th>
                     {tenColumnHeaders().slice(1).map((header) => (
-                      <th key={header} className="px-3 py-3 text-right font-semibold">{header}</th>
+                      <th key={header} className="whitespace-nowrap px-2 py-2.5 text-right font-semibold">{header === "Trip Payments" ? "Trip pay." : header === "Parking Fees" ? "Parking" : header === "Total Received" ? "Received" : header}</th>
                     ))}
-                    <th className="px-3 py-3 text-right font-semibold">Recorded balance</th>
-                    <th className="px-3 py-3 text-left font-semibold">Status</th>
-                    <th className="px-5 py-3 text-right font-semibold">Details</th>
+                    <th className="whitespace-nowrap px-2 py-2.5 text-right font-semibold">Balance</th>
+                    <th className="whitespace-nowrap px-2 py-2.5 text-left font-semibold">Status</th>
+                    <th className="whitespace-nowrap px-3 py-2.5 text-right font-semibold">Details</th>
                   </tr>
                 </thead>
                 <tbody>
                   {selectedV4DisplayRows.map((row, index) => (
                     <tr key={`${row.vehicleRegistration}:${row.month}`} onClick={() => openVehicle(row.vehicleRegistration)} className={`cursor-pointer border-t border-slate-100 transition hover:bg-brand-50/55 ${index % 2 ? "bg-slate-50/35" : "bg-white"}`}>
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-3">
-                          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${index < 3 ? "bg-brand-700 text-white shadow-sm" : "bg-brand-50 text-brand-700"}`}>{index + 1}</span>
-                          <div>
-                            <p className="font-bold text-slate-950">{row.vehicleRegistration}</p>
-                            <p className="mt-0.5 text-xs text-slate-500">{monthLabel(row.month)} financial report</p>
-                          </div>
-                        </div>
+                      <td className="whitespace-nowrap px-3 py-2 text-left font-bold text-slate-950">{row.vehicleRegistration}</td>
+                      <td className="whitespace-nowrap px-2 py-2 text-right text-slate-700">{formatNullableBaht(row.salaryCost)}{row.salaryProvisional ? " *" : ""}</td>
+                      <td className="whitespace-nowrap px-2 py-2 text-right text-slate-700">{row.jobs == null ? "—" : formatNumber(row.jobs, language)}</td>
+                      <td className="whitespace-nowrap px-2 py-2 text-right text-slate-700">{formatNullableBaht(row.tripIncome)}</td>
+                      <td className="whitespace-nowrap px-2 py-2 text-right text-slate-700">{formatNullableBaht(row.expenses)}</td>
+                      <td className="whitespace-nowrap px-2 py-2 text-right text-slate-700">{formatNullableBaht(row.parkingFees)}</td>
+                      <td className="whitespace-nowrap px-2 py-2 text-right font-semibold text-slate-900">{formatNullableBaht(row.grossRevenue)}</td>
+                      <td className="whitespace-nowrap px-2 py-2 text-right text-slate-700">{formatNullableBaht(row.fuelSpend)}</td>
+                      <td className="whitespace-nowrap px-2 py-2 text-right text-slate-700">{formatNullableBaht(row.lpgCost)}</td>
+                      <td className="whitespace-nowrap px-2 py-2 text-right text-slate-700">{formatNullableBaht(row.maintenance)}</td>
+                      <td className={`whitespace-nowrap px-2 py-2 text-right font-bold ${row.recordedBalance == null ? "text-amber-800" : row.recordedBalance < 0 ? "text-rose-700" : "text-emerald-700"}`}>{formatNullableBaht(row.recordedBalance)}</td>
+                      <td className="whitespace-nowrap px-2 py-2 text-left">
+                        <span className={`inline-flex rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${row.financiallyComplete ? (row.salaryProvisional ? "bg-amber-50 text-amber-800" : "bg-emerald-50 text-emerald-700") : "bg-amber-50 text-amber-800"}`}>
+                          {row.financiallyComplete
+                            ? (row.salaryProvisional ? "Provisional" : "Complete")
+                            : "Incomplete"}
+                        </span>
                       </td>
-                      <td className="px-3 py-3.5 text-right text-slate-700">{formatNullableBaht(row.salaryCost)}{row.salaryProvisional ? " *" : ""}</td>
-                      <td className="px-3 py-3.5 text-right text-slate-700">{row.jobs == null ? "—" : formatNumber(row.jobs, language)}</td>
-                      <td className="px-3 py-3.5 text-right text-slate-700">{formatNullableBaht(row.tripIncome)}</td>
-                      <td className="px-3 py-3.5 text-right text-slate-700">{formatNullableBaht(row.expenses)}</td>
-                      <td className="px-3 py-3.5 text-right text-slate-700">{formatNullableBaht(row.parkingFees)}</td>
-                      <td className="px-3 py-3.5 text-right font-semibold text-slate-900">{formatNullableBaht(row.grossRevenue)}</td>
-                      <td className="px-3 py-3.5 text-right text-slate-700">{formatNullableBaht(row.fuelSpend)}</td>
-                      <td className="px-3 py-3.5 text-right text-slate-700">{formatNullableBaht(row.lpgCost)}</td>
-                      <td className="px-3 py-3.5 text-right text-slate-700">{formatNullableBaht(row.maintenance)}</td>
-                      <td className={`px-3 py-3.5 text-right font-bold ${row.recordedBalance == null ? "text-amber-800" : row.recordedBalance < 0 ? "text-rose-700" : "text-emerald-700"}`}>{formatNullableBaht(row.recordedBalance)}</td>
-                      <td className="px-3 py-3.5 text-left text-xs font-semibold text-slate-600">
-                        {row.financiallyComplete
-                          ? (row.salaryProvisional ? "Provisional salary" : "Complete")
-                          : "Incomplete · balance unknown"}
-                      </td>
-                      <td className="px-5 py-3.5 text-right"><span className="inline-flex rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-brand-700 shadow-sm">Open →</span></td>
+                      <td className="whitespace-nowrap px-3 py-2 text-right"><span className="inline-flex rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-brand-700 shadow-sm">Open →</span></td>
                     </tr>
                   ))}
                 </tbody>
