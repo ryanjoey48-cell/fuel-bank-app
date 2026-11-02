@@ -179,6 +179,11 @@ function formatBaht(value: number) {
   }).format(value || 0)}`;
 }
 
+function formatNullableBaht(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return formatBaht(value);
+}
+
 function formatCompactBaht(value: number) {
   const absolute = Math.abs(value || 0);
   const sign = value < 0 ? "-" : "";
@@ -188,7 +193,7 @@ function formatCompactBaht(value: number) {
 }
 
 function formatPercent(value: number | null, language: "en" | "th") {
-  if (value == null || !Number.isFinite(value)) return "-";
+  if (value == null || !Number.isFinite(value)) return "—";
   return `${formatNumber(value, language, 1)}%`;
 }
 
@@ -656,11 +661,11 @@ async function buildVehiclePerformancePdf(
   table("Vehicle Performance Table", data.vehicleTable);
 
   if (data.v4DraftTenColumnTable) {
-    section("August–September V4 Draft Source (ten columns)");
+    section("August–September monthly financial report");
     if (data.v4DraftNote) paragraph(data.v4DraftNote, margin, contentWidth, 7.5, colors.amber);
-    paragraph("Incomplete costs show as —. Draft balances are not confirmed accounting profit.", margin, contentWidth, 7.5, colors.muted);
+    paragraph("Unknown costs show as —. Incomplete rows do not contribute confirmed balance or margin.", margin, contentWidth, 7.5, colors.muted);
     y += 4;
-    table("V4 Stored Draft Rows", data.v4DraftTenColumnTable);
+    table("August–September vehicle rows", data.v4DraftTenColumnTable);
   }
 
   section("Data Quality");
@@ -771,15 +776,15 @@ export default function VehiclePerformancePage() {
         setV4ReportingNote(payload.note ?? null);
       } else {
         setV4ReportingRows([]);
-        let detail = "V4 Aug/Sep reporting source unavailable for this session.";
+        let detail = "August–September financial report unavailable for this session.";
         if (reportingResponse) {
           try {
             const failure = await reportingResponse.json() as { error?: string; errorCode?: string };
             detail = failure.errorCode
-              ? `V4 Aug/Sep reporting source unavailable (${failure.errorCode}).`
+              ? `August–September financial report unavailable (${failure.errorCode}).`
               : (failure.error || detail);
           } catch {
-            detail = `V4 Aug/Sep reporting source unavailable (HTTP ${reportingResponse.status}).`;
+            detail = `August–September financial report unavailable (HTTP ${reportingResponse.status}).`;
           }
         }
         setV4ReportingNote(detail);
@@ -902,6 +907,38 @@ export default function VehiclePerformancePage() {
     () => selectedV4ReportingRows.filter((row) => !row.financiallyComplete).length,
     [selectedV4ReportingRows]
   );
+  const completeV4SelectedCount = useMemo(
+    () => selectedV4ReportingRows.filter((row) => row.financiallyComplete).length,
+    [selectedV4ReportingRows]
+  );
+  const selectedV4SourceTotals = useMemo(() => {
+    const sumKnown = (picker: (row: V4FinancialReportingRow) => number | null) =>
+      selectedV4ReportingRows.reduce((sum, row) => {
+        const value = picker(row);
+        return value == null || !Number.isFinite(value) ? sum : sum + value;
+      }, 0);
+    return {
+      vehicleCount: selectedV4ReportingRows.length,
+      completeCount: completeV4SelectedCount,
+      incompleteCount: incompleteV4SelectedCount,
+      totalReceived: sumKnown((row) => row.totalReceived),
+      maintenance: sumKnown((row) => row.maintenance),
+      fuel: sumKnown((row) => row.fuel),
+      lpg: sumKnown((row) => (row.lpgTreatment === "separate" ? row.lpg : null)),
+      confirmedBalance: selectedV4ReportingRows
+        .filter((row) => row.financiallyComplete && row.indicativeRecordedBalance != null)
+        .reduce((sum, row) => sum + Number(row.indicativeRecordedBalance), 0),
+      salaryProvisional: selectedV4ReportingRows.some((row) => row.salaryProvisional)
+    };
+  }, [completeV4SelectedCount, incompleteV4SelectedCount, selectedV4ReportingRows]);
+  const partialCoverageActive = incompleteV4SelectedCount > 0;
+  const confirmedCoverageLabel = selectingOnlyV4Months
+    ? (partialCoverageActive
+      ? `Partial coverage · confirmed balance from ${completeV4SelectedCount}/${selectedV4SourceTotals.vehicleCount} vehicles`
+      : `Full confirmed coverage · ${selectedV4SourceTotals.vehicleCount} vehicles`)
+    : (partialCoverageActive
+      ? `Partial coverage · Aug/Sep incomplete costs excluded from confirmed balance (${completeV4SelectedCount} complete / ${incompleteV4SelectedCount} incomplete)`
+      : null);
   const queueManagement = useMemo(() => {
     const actionRows = management.actionRows.filter(row => normalizeComparableText(row.vehicleRegistration).includes(normalizeComparableText(searchQuery)));
     return { ...management, actionRows, totalOpportunity: actionRows.reduce((sum, row) => sum + (row.opportunity ?? 0), 0), estimatedVehicleCount: actionRows.filter(row => row.opportunity != null && row.opportunity > 0).length };
@@ -1048,16 +1085,41 @@ export default function VehiclePerformancePage() {
         ...selectedV4ReportingRows.map((row) => vehicleKey(row.registration))
       ]).size
     });
-    // Overlay V4 draft months so Aug/Sep are not labelled "missing" when drafts exist but KPI-complete rows are sparse.
+    // Overlay Aug/Sep stored financial report months into the same monthly performance rows.
     return base.map((row) => {
       if (!isV4ReportingMonth(row.month)) return row;
       const draftRows = selectedV4ReportingRows.filter((item) => item.month === row.month);
       if (!draftRows.length) return row;
-      const completeCount = draftRows.filter((item) => item.financiallyComplete).length;
+      const sumKnown = (picker: (item: V4FinancialReportingRow) => number | null) =>
+        draftRows.reduce((sum, item) => {
+          const value = picker(item);
+          return value == null || !Number.isFinite(value) ? sum : sum + value;
+        }, 0);
+      const completeRows = draftRows.filter((item) => item.financiallyComplete && item.indicativeRecordedBalance != null);
+      const confirmedBalance = completeRows.reduce((sum, item) => sum + Number(item.indicativeRecordedBalance), 0);
+      const grossRevenue = sumKnown((item) => item.totalReceived);
+      const fuelSpend = sumKnown((item) => item.fuel);
+      const salaryCost = sumKnown((item) => item.salary);
+      const tripIncome = sumKnown((item) => item.tripPayments);
+      const otherExpenses = sumKnown((item) => {
+        if (item.expenses == null || item.parkingFees == null || item.maintenance == null) return null;
+        return Number(item.expenses) + Number(item.parkingFees) + Number(item.maintenance);
+      });
+      const completeCount = completeRows.length;
       return {
         ...row,
         vehicleCount: Math.max(row.vehicleCount, draftRows.length),
         recordCount: Math.max(row.recordCount, draftRows.length),
+        grossRevenue,
+        fuelSpend,
+        salaryCost,
+        tripIncome,
+        otherExpenses,
+        recordedBalance: confirmedBalance,
+        marginPercent: completeCount === draftRows.length && grossRevenue > 0
+          ? (confirmedBalance / grossRevenue) * 100
+          : null,
+        fuelPercent: grossRevenue > 0 ? (fuelSpend / grossRevenue) * 100 : null,
         status: completeCount === draftRows.length ? "complete" as const : "partial" as const
       };
     });
@@ -2163,11 +2225,13 @@ export default function VehiclePerformancePage() {
         `Missing months: ${dataQuality.missingMonths.join(", ") || "None"}`,
         `Unresolved import exceptions: ${dataQuality.unresolvedImportExceptions}`,
         `Negative balances: ${dataQuality.negativeBalances}`,
-        `V4 Aug/Sep draft rows in selection: ${selectedV4ReportingRows.length} (${selectedV4ReportingRows.filter((row) => row.financiallyComplete).length} complete / ${incompleteV4SelectedCount} incomplete)`,
-        `V4 draft publication: stored draft · not published · not live KPI`
+        `August–September financial rows in selection: ${selectedV4ReportingRows.length} (${completeV4SelectedCount} complete / ${incompleteV4SelectedCount} incomplete)`,
+        partialCoverageActive
+          ? `Partial coverage: confirmed balance/margin use complete records only (${completeV4SelectedCount} of ${selectedV4ReportingRows.length} Aug/Sep vehicles).`
+          : "August–September coverage: all selected financial rows are complete for confirmed balance."
       ],
       disclaimer:
-        "Recorded Balance represents revenue remaining after the direct costs recorded in the Fuel Bank system. It should not automatically be treated as final accounting profit because other company overheads may not be included. January–July use stored legacy KPI rows. August–September use stored V4 financial draft rows (not published). Incomplete draft cost fields stay unknown and are excluded from confirmed rankings and KPI totals.",
+        "Recorded Balance represents revenue remaining after the direct costs recorded in the system. It should not automatically be treated as final accounting profit because other company overheads may not be included. January–July use stored monthly performance records. August–September use stored monthly financial report rows that are not yet approved as published profit. Incomplete cost fields stay unknown and are excluded from confirmed rankings and KPI totals.",
       executiveSummary,
       fleetHealth: [
         { count: performanceStatusCounts.strong, label: "Strong", value: String(performanceStatusCounts.strong), tone: "success" },
@@ -2186,16 +2250,45 @@ export default function VehiclePerformancePage() {
         { label: "Month with highest recorded balance", value: highestBalanceMonth ? monthName(highestBalanceMonth.month) : "-", detail: highestBalanceMonth ? currency(highestBalanceMonth.recordedBalance) : "-" },
         { label: "Month with highest fuel %", value: highestFuelPercentMonth ? monthName(highestFuelPercentMonth.month) : "-", detail: highestFuelPercentMonth ? percent(highestFuelPercentMonth.fuelPercent) : "-", tone: "warning" }
       ],
-      kpis: [
-        { label: labels.revenue, value: currency(summary.grossRevenue) },
-        { label: "Recorded Balance after recorded direct costs", value: currency(summary.recordedBalance), tone: summary.recordedBalance < 0 ? "danger" : "success" },
-        { label: "Margin %", value: percent(summary.marginPercent), tone: summary.recordedBalance < 0 ? "danger" : "success" },
-        { label: labels.fuelSpend, value: currency(summary.fuelSpend) },
-        { label: labels.fuelPercentOfRevenue, value: percent(summary.fuelPercent) },
-        { label: labels.salary, value: currency(summary.salaryCost) },
-        { label: labels.tripPayments, value: currency(summary.tripIncome) },
-        { label: "Other Costs", value: currency(summary.otherExpenses) }
-      ],
+      kpis: selectingOnlyV4Months
+        ? [
+            { label: labels.revenue, value: currency(selectedV4SourceTotals.totalReceived) },
+            {
+              label: partialCoverageActive ? "Confirmed balance (partial coverage)" : "Confirmed balance after recorded direct costs",
+              value: currency(selectedV4SourceTotals.confirmedBalance),
+              tone: partialCoverageActive ? "warning" : (selectedV4SourceTotals.confirmedBalance < 0 ? "danger" : "success")
+            },
+            {
+              label: "Margin %",
+              value: partialCoverageActive
+                ? "—"
+                : percent(
+                  selectedV4SourceTotals.totalReceived > 0
+                    ? (selectedV4SourceTotals.confirmedBalance / selectedV4SourceTotals.totalReceived) * 100
+                    : null
+                ),
+              tone: partialCoverageActive ? "warning" : (selectedV4SourceTotals.confirmedBalance < 0 ? "danger" : "success")
+            },
+            { label: labels.fuelSpend, value: currency(selectedV4SourceTotals.fuel) },
+            { label: "Maintenance", value: currency(selectedV4SourceTotals.maintenance) },
+            { label: "LPG (separate)", value: currency(selectedV4SourceTotals.lpg) },
+            { label: "Vehicles", value: String(selectedV4SourceTotals.vehicleCount) },
+            {
+              label: "Coverage",
+              value: `${completeV4SelectedCount} complete / ${incompleteV4SelectedCount} incomplete`,
+              tone: partialCoverageActive ? "warning" : "success"
+            }
+          ]
+        : [
+            { label: labels.revenue, value: currency(summary.grossRevenue) },
+            { label: "Recorded Balance after recorded direct costs", value: currency(summary.recordedBalance), tone: summary.recordedBalance < 0 ? "danger" : "success" },
+            { label: "Margin %", value: partialCoverageActive ? "—" : percent(summary.marginPercent), tone: partialCoverageActive ? "warning" : (summary.recordedBalance < 0 ? "danger" : "success") },
+            { label: labels.fuelSpend, value: currency(summary.fuelSpend) },
+            { label: labels.fuelPercentOfRevenue, value: percent(summary.fuelPercent) },
+            { label: labels.salary, value: currency(summary.salaryCost) },
+            { label: labels.tripPayments, value: currency(summary.tripIncome) },
+            { label: "Other Costs", value: currency(summary.otherExpenses) }
+          ],
       monthlyTable: {
         columns: [
           { label: "Month", width: 44 },
@@ -2312,7 +2405,7 @@ export default function VehiclePerformancePage() {
                 values[8],
                 values[9],
                 row.financiallyComplete
-                  ? (row.salaryProvisional ? "Draft·prov" : "Draft")
+                  ? (row.salaryProvisional ? "Provisional salary" : "Complete")
                   : "Incomplete"
               ];
             })
@@ -2320,7 +2413,7 @@ export default function VehiclePerformancePage() {
         : null,
       v4DraftNote: v4ReportingNote
         ?? (selectedV4ReportingRows.length
-          ? "Aug/Sep values are stored V4 drafts for dual-read reporting. They are not published accounting profit."
+          ? "August–September figures come from stored monthly financial reports. They are not approved published profit."
           : null)
     };
   };
@@ -2484,7 +2577,7 @@ export default function VehiclePerformancePage() {
                 EES Vehicle Performance
               </div>
               <h1 className="mt-1 text-xl font-semibold tracking-tight text-slate-950 sm:text-2xl">Vehicle Performance</h1>
-              <p className="mt-0.5 max-w-3xl text-sm text-slate-500">Fleet KPIs, monthly trends and authorised V4 financial source reports in one workspace.</p>
+              <p className="mt-0.5 max-w-3xl text-sm text-slate-500">Fleet KPIs, monthly trends and authorised financial reports in one workspace.</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Link className="btn-secondary py-2 text-xs sm:text-sm" href="/maintenance/analytics">{t.maintenance.analytics}</Link>
@@ -2531,7 +2624,7 @@ export default function VehiclePerformancePage() {
 
           {showLegacyWorkspace ? (
             <div className="mt-3 rounded-2xl border border-white/80 bg-white/85 p-3 shadow-sm">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Fleet filters · Jan–Jul legacy KPI + Aug/Sep V4 stored drafts</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Fleet filters · January–September 2026</p>
               <div className="mt-2 grid gap-3 md:grid-cols-[120px_190px_minmax(240px,1fr)] md:items-end">
               <div>
                 <label className="form-label" htmlFor="vehicle-performance-year">{labels.year}</label>
@@ -2543,15 +2636,9 @@ export default function VehiclePerformancePage() {
                   <option value="">{labels.allLoadedMonths}</option>
                   {VEHICLE_PERFORMANCE_REPORTING_MONTHS.map((value) => {
                     const option = MONTH_OPTIONS[value - 1];
-                    const draftCount = isV4ReportingMonth(value)
-                      ? v4ReportingRows.filter((row) => row.month === value).length
-                      : 0;
-                    const suffix = isV4ReportingMonth(value)
-                      ? (draftCount ? ` · V4 draft (${draftCount})` : " · V4 draft")
-                      : " · legacy KPI";
                     return (
                       <option key={value} value={value}>
-                        {labels.months[option.labelKey]}{suffix}
+                        {labels.months[option.labelKey]}
                       </option>
                     );
                   })}
@@ -2572,17 +2659,17 @@ export default function VehiclePerformancePage() {
                     {selectingOnlyV4Months ? selectedV4DisplayRows.length : dataQuality.representedVehicles} vehicles analysed
                   </button>
                   <span className={`badge-muted ${monthCoverageCounts.partial || dataQuality.missingMonths.length ? "border-amber-200 bg-amber-50 text-amber-800" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{monthCoverageCounts.complete} complete · {monthCoverageCounts.partial} partial</span>
-                  {selectedV4ReportingRows.length ? (
-                    <span className="badge-muted border-amber-200 bg-amber-50 text-amber-900">
-                      V4 drafts {selectedV4ReportingRows.filter((row) => row.financiallyComplete).length}/{selectedV4ReportingRows.length} complete
-                      {incompleteV4SelectedCount ? ` · ${incompleteV4SelectedCount} incomplete shown without confirmed profit` : ""}
-                    </span>
+                  {confirmedCoverageLabel ? (
+                    <span className="badge-muted border-amber-200 bg-amber-50 text-amber-900">{confirmedCoverageLabel}</span>
+                  ) : null}
+                  {selectedV4SourceTotals.salaryProvisional ? (
+                    <span className="badge-muted border-amber-200 bg-amber-50 text-amber-900">September salary provisional</span>
                   ) : null}
                   {incompletePeriodMessage ? <span className="font-medium text-amber-800">{incompletePeriodMessage}</span> : null}
                 </div>
               ) : null}
               {v4ReportingNote ? (
-                <p className="mt-2 text-xs text-amber-900">{v4ReportingNote}</p>
+                <p className="mt-2 text-xs text-amber-900">{v4ReportingNote.replace(/V4 /gi, "").replace(/dual-read/gi, "combined")}</p>
               ) : null}
             </div>
           ) : null}
@@ -2614,11 +2701,42 @@ export default function VehiclePerformancePage() {
             <PerformanceHeroMetric label="Fuel / revenue" value={formatPercent(previousMonthComparison.current.fuelPercent, language)} detail={`${formatCompactBaht(previousMonthComparison.current.fuelSpend)} fuel spend`} delta={moneyDelta(previousMonthComparison.fuelChange)} deltaClass={previousMonthComparison.fuelChange == null ? "text-slate-500" : previousMonthComparison.fuelChange > 0 ? "text-rose-700" : "text-emerald-700"} compareLabel={previousPeriodLabel} />
             <PerformanceHeroMetric label="Vehicles analysed" value={formatNumber(previousMonthComparison.current.vehicleCount, language)} detail={`${monthLabel(previousMonthComparison.current.month)} complete-month view`} />
           </div>
+        ) : selectingOnlyV4Months ? (
+          <div className="grid divide-y divide-slate-100 sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-5">
+            <PerformanceHeroMetric label="Revenue" value={formatCompactBaht(selectedV4SourceTotals.totalReceived)} detail={`${periodLabel} · stored financial report`} />
+            <PerformanceHeroMetric
+              label="Confirmed balance"
+              value={formatCompactBaht(selectedV4SourceTotals.confirmedBalance)}
+              detail={confirmedCoverageLabel || "Revenue after recorded direct costs"}
+              tone={partialCoverageActive ? "warning" : (selectedV4SourceTotals.confirmedBalance < 0 ? "danger" : "success")}
+            />
+            <PerformanceHeroMetric
+              label="Margin"
+              value={partialCoverageActive ? "—" : formatPercent(
+                selectedV4SourceTotals.totalReceived > 0
+                  ? (selectedV4SourceTotals.confirmedBalance / selectedV4SourceTotals.totalReceived) * 100
+                  : null,
+                language
+              )}
+              detail={partialCoverageActive ? "Withheld · incomplete costs in this month" : "Confirmed balance ÷ revenue"}
+            />
+            <PerformanceHeroMetric label="Maintenance" value={formatCompactBaht(selectedV4SourceTotals.maintenance)} detail="Sum of known maintenance amounts" />
+            <PerformanceHeroMetric label="Vehicles analysed" value={formatNumber(selectedV4SourceTotals.vehicleCount, language)} detail={`${completeV4SelectedCount} complete · ${incompleteV4SelectedCount} incomplete`} />
+          </div>
         ) : (
           <div className="grid divide-y divide-slate-100 sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-5">
             <PerformanceHeroMetric label="Revenue" value={formatCompactBaht(summary.grossRevenue)} detail={`${periodLabel} total`} />
-            <PerformanceHeroMetric label="Recorded balance" value={formatCompactBaht(summary.recordedBalance)} detail="Revenue after recorded direct costs" tone={summary.recordedBalance < 0 ? "danger" : "success"} />
-            <PerformanceHeroMetric label="Margin" value={formatPercent(summary.marginPercent, language)} detail="Recorded balance ÷ revenue" />
+            <PerformanceHeroMetric
+              label="Recorded balance"
+              value={formatCompactBaht(summary.recordedBalance)}
+              detail={confirmedCoverageLabel || "Revenue after recorded direct costs"}
+              tone={partialCoverageActive ? "warning" : (summary.recordedBalance < 0 ? "danger" : "success")}
+            />
+            <PerformanceHeroMetric
+              label="Margin"
+              value={partialCoverageActive ? "—" : formatPercent(summary.marginPercent, language)}
+              detail={partialCoverageActive ? "Withheld · Aug/Sep incomplete costs excluded from confirmed totals" : "Recorded balance ÷ revenue"}
+            />
             <PerformanceHeroMetric label="Fuel / revenue" value={formatPercent(summary.fuelPercent, language)} detail={`${formatCompactBaht(summary.fuelSpend)} fuel spend`} />
             <PerformanceHeroMetric label="Vehicles analysed" value={formatNumber(rows.length, language)} detail={`${loadedMonthCount} loaded ${loadedMonthCount === 1 ? "month" : "months"}`} />
           </div>
@@ -2664,57 +2782,15 @@ export default function VehiclePerformancePage() {
           </div>
         </section>
 
-        {selectedV4ReportingRows.length ? (
-          <section className="surface-card overflow-hidden border border-amber-200/80 p-0 shadow-[0_14px_34px_rgba(180,83,9,0.06)]">
-            <div className="border-b border-amber-100 bg-[linear-gradient(135deg,#fffbeb_0%,#ffffff_70%)] px-5 py-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-800">August–September V4 draft source</p>
-              <h2 className="mt-1 text-xl font-semibold text-slate-950">Ten-column stored drafts</h2>
-              <p className="mt-1 max-w-3xl text-sm text-slate-600">
-                Read from authorised V4 draft storage only. Incomplete costs show as —. These rows are not published accounting profit
-                {incompleteV4SelectedCount ? ` · ${incompleteV4SelectedCount} incomplete excluded from confirmed fleet KPI/ranking` : ""}.
-              </p>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1100px] text-sm">
-                <thead className="bg-amber-50/80 text-[11px] uppercase tracking-[0.1em] text-slate-500">
-                  <tr>
-                    {tenColumnHeaders().map((header) => (
-                      <th key={header} className={`px-3 py-3 font-semibold ${header === "Registration" ? "text-left" : "text-right"}`}>{header}</th>
-                    ))}
-                    <th className="px-3 py-3 text-left font-semibold">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedV4ReportingRows.map((row) => {
-                    const values = v4RowToTenColumnValues(row);
-                    return (
-                      <tr key={`${row.sourceBatchId}:${row.registration}:${row.month}`} className="border-t border-amber-100/80">
-                        {values.map((value, index) => (
-                          <td key={`${row.registration}-${index}`} className={`px-3 py-3 ${index === 0 ? "text-left font-bold text-slate-950" : "text-right text-slate-700"}`}>{value}</td>
-                        ))}
-                        <td className="px-3 py-3 text-left text-xs font-semibold text-amber-900">
-                          {row.financiallyComplete
-                            ? (row.salaryProvisional ? `M${row.month} draft · provisional salary` : `M${row.month} draft · not published`)
-                            : `M${row.month} incomplete · balance unknown`}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        ) : null}
-
         <section id="vehicle-performance-table" className="surface-card scroll-mt-6 overflow-hidden border border-brand-100/70 p-0 shadow-[0_16px_40px_rgba(76,29,149,0.06)]">
           <div className="flex flex-col gap-3 border-b border-brand-100/70 bg-[linear-gradient(135deg,#ffffff_0%,#fbf9ff_72%,#f6f1ff_100%)] px-5 py-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">Vehicle performance</p>
-              <h2 className="mt-1 text-xl font-semibold text-slate-950">{selectingOnlyV4Months ? "August–September draft vehicles" : "Fleet vehicle ranking"}</h2>
+              <h2 className="mt-1 text-xl font-semibold text-slate-950">Fleet vehicle ranking</h2>
               <p className="mt-1 text-sm text-slate-500">
                 {selectingOnlyV4Months
-                  ? "All stored V4 draft vehicles for the selected month. Incomplete costs stay unknown — balance and margin are not fabricated."
-                  : "Every analysed vehicle in one ranked comparison. Confirmed KPI ranking uses complete rows only; Aug/Sep drafts also appear in the ten-column source table."}
+                  ? "Every vehicle in the selected month. Unknown costs show as —. Confirmed balance is only shown when all required costs are present."
+                  : "Every analysed vehicle in one ranked comparison. Change the sort to rank by balance, revenue, margin or fuel share, then open a vehicle for the full monthly breakdown."}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -2755,65 +2831,82 @@ export default function VehiclePerformancePage() {
             </div>
           ) : null}
           <div className="overflow-x-auto border-t border-slate-100">
-            <table className="w-full min-w-[980px] text-sm">
-              <thead className="bg-[linear-gradient(90deg,#f7f3ff_0%,#fbf9ff_55%,#f6f2ff_100%)] text-[11px] uppercase tracking-[0.1em] text-slate-500"><tr><th className="px-5 py-3 text-left font-semibold">Rank / vehicle</th><th className="px-4 py-3 text-right font-semibold">Revenue</th><th className="px-4 py-3 text-right font-semibold">Direct costs</th><th className="px-4 py-3 text-right font-semibold">Recorded balance</th><th className="px-4 py-3 text-right font-semibold">Margin</th><th className="px-4 py-3 text-right font-semibold">Fuel / revenue</th><th className="px-4 py-3 text-center font-semibold">Coverage</th><th className="px-5 py-3 text-right font-semibold">Details</th></tr></thead>
-              <tbody>
-                {selectingOnlyV4Months
-                  ? selectedV4DisplayRows.map((row, index) => {
-                      const directCosts = row.financiallyComplete && row.grossRevenue != null && row.recordedBalance != null
-                        ? row.grossRevenue - row.recordedBalance
-                        : null;
-                      return (
-                        <tr key={`${row.vehicleRegistration}:${row.month}`} onClick={() => openVehicle(row.vehicleRegistration)} className={`cursor-pointer border-t border-slate-100 transition hover:bg-brand-50/55 ${index % 2 ? "bg-slate-50/35" : "bg-white"}`}>
-                          <td className="px-5 py-3.5">
-                            <div className="flex items-center gap-3">
-                              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${index < 3 ? "bg-brand-700 text-white shadow-sm" : "bg-brand-50 text-brand-700"}`}>{index + 1}</span>
-                              <div>
-                                <p className="font-bold text-slate-950">{row.vehicleRegistration}</p>
-                                <p className="mt-0.5 text-xs text-amber-800">
-                                  {row.financiallyComplete
-                                    ? (row.salaryProvisional ? "V4 draft · provisional salary" : "V4 draft · not published")
-                                    : `Incomplete · ${row.incompleteFields.join(", ") || "unknown costs"}`}
-                                </p>
-                              </div>
+            {selectingOnlyV4Months ? (
+              <table className="w-full min-w-[1180px] text-sm">
+                <thead className="bg-[linear-gradient(90deg,#f7f3ff_0%,#fbf9ff_55%,#f6f2ff_100%)] text-[11px] uppercase tracking-[0.1em] text-slate-500">
+                  <tr>
+                    <th className="px-5 py-3 text-left font-semibold">Rank / vehicle</th>
+                    {tenColumnHeaders().slice(1).map((header) => (
+                      <th key={header} className="px-3 py-3 text-right font-semibold">{header}</th>
+                    ))}
+                    <th className="px-3 py-3 text-right font-semibold">Recorded balance</th>
+                    <th className="px-3 py-3 text-left font-semibold">Status</th>
+                    <th className="px-5 py-3 text-right font-semibold">Details</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedV4DisplayRows.map((row, index) => (
+                    <tr key={`${row.vehicleRegistration}:${row.month}`} onClick={() => openVehicle(row.vehicleRegistration)} className={`cursor-pointer border-t border-slate-100 transition hover:bg-brand-50/55 ${index % 2 ? "bg-slate-50/35" : "bg-white"}`}>
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${index < 3 ? "bg-brand-700 text-white shadow-sm" : "bg-brand-50 text-brand-700"}`}>{index + 1}</span>
+                          <div>
+                            <p className="font-bold text-slate-950">{row.vehicleRegistration}</p>
+                            <p className="mt-0.5 text-xs text-slate-500">{monthLabel(row.month)} financial report</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-3 py-3.5 text-right text-slate-700">{formatNullableBaht(row.salaryCost)}{row.salaryProvisional ? " *" : ""}</td>
+                      <td className="px-3 py-3.5 text-right text-slate-700">{row.jobs == null ? "—" : formatNumber(row.jobs, language)}</td>
+                      <td className="px-3 py-3.5 text-right text-slate-700">{formatNullableBaht(row.tripIncome)}</td>
+                      <td className="px-3 py-3.5 text-right text-slate-700">{formatNullableBaht(row.expenses)}</td>
+                      <td className="px-3 py-3.5 text-right text-slate-700">{formatNullableBaht(row.parkingFees)}</td>
+                      <td className="px-3 py-3.5 text-right font-semibold text-slate-900">{formatNullableBaht(row.grossRevenue)}</td>
+                      <td className="px-3 py-3.5 text-right text-slate-700">{formatNullableBaht(row.fuelSpend)}</td>
+                      <td className="px-3 py-3.5 text-right text-slate-700">{formatNullableBaht(row.lpgCost)}</td>
+                      <td className="px-3 py-3.5 text-right text-slate-700">{formatNullableBaht(row.maintenance)}</td>
+                      <td className={`px-3 py-3.5 text-right font-bold ${row.recordedBalance == null ? "text-amber-800" : row.recordedBalance < 0 ? "text-rose-700" : "text-emerald-700"}`}>{formatNullableBaht(row.recordedBalance)}</td>
+                      <td className="px-3 py-3.5 text-left text-xs font-semibold text-slate-600">
+                        {row.financiallyComplete
+                          ? (row.salaryProvisional ? "Provisional salary" : "Complete")
+                          : "Incomplete · balance unknown"}
+                      </td>
+                      <td className="px-5 py-3.5 text-right"><span className="inline-flex rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-brand-700 shadow-sm">Open →</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <table className="w-full min-w-[980px] text-sm">
+                <thead className="bg-[linear-gradient(90deg,#f7f3ff_0%,#fbf9ff_55%,#f6f2ff_100%)] text-[11px] uppercase tracking-[0.1em] text-slate-500"><tr><th className="px-5 py-3 text-left font-semibold">Rank / vehicle</th><th className="px-4 py-3 text-right font-semibold">Revenue</th><th className="px-4 py-3 text-right font-semibold">Direct costs</th><th className="px-4 py-3 text-right font-semibold">Recorded balance</th><th className="px-4 py-3 text-right font-semibold">Margin</th><th className="px-4 py-3 text-right font-semibold">Fuel / revenue</th><th className="px-4 py-3 text-center font-semibold">Coverage</th><th className="px-5 py-3 text-right font-semibold">Details</th></tr></thead>
+                <tbody>
+                  {visibleTableRows.map((row, index) => {
+                    const monthsLoaded = vehicleMonthCounts.get(vehicleKey(row.vehicleRegistration)) ?? 0;
+                    const directCosts = row.grossRevenue - row.recordedBalance;
+                    return (
+                      <tr key={row.vehicleRegistration} onClick={() => openVehicle(row.vehicleRegistration)} className={`cursor-pointer border-t border-slate-100 transition hover:bg-brand-50/55 ${index % 2 ? "bg-slate-50/35" : "bg-white"}`}>
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${index < 3 ? "bg-brand-700 text-white shadow-sm" : "bg-brand-50 text-brand-700"}`}>{index + 1}</span>
+                            <div>
+                              <p className="font-bold text-slate-950">{row.vehicleRegistration}</p>
+                              <p className="mt-0.5 text-xs text-slate-500">{monthsLoaded}/{selectedMonths.length} months loaded</p>
                             </div>
-                          </td>
-                          <td className="px-4 py-3.5 text-right font-semibold text-slate-900">{row.grossRevenue == null ? "—" : formatBaht(row.grossRevenue)}</td>
-                          <td className="px-4 py-3.5 text-right text-slate-700">{directCosts == null ? "—" : formatBaht(directCosts)}</td>
-                          <td className={`px-4 py-3.5 text-right font-bold ${row.recordedBalance == null ? "text-amber-800" : row.recordedBalance < 0 ? "text-rose-700" : "text-emerald-700"}`}>{row.recordedBalance == null ? "—" : formatBaht(row.recordedBalance)}</td>
-                          <td className="px-4 py-3.5 text-right font-semibold text-slate-900">{row.marginPercent == null ? "—" : formatPercent(row.marginPercent, language)}</td>
-                          <td className="px-4 py-3.5 text-right font-semibold text-brand-700">{row.fuelPercent == null ? "—" : formatPercent(row.fuelPercent, language)}</td>
-                          <td className="px-4 py-3.5 text-center"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${row.financiallyComplete ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{row.financiallyComplete ? "Complete draft" : "Incomplete"}</span></td>
-                          <td className="px-5 py-3.5 text-right"><span className="inline-flex rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-brand-700 shadow-sm">Open →</span></td>
-                        </tr>
-                      );
-                    })
-                  : visibleTableRows.map((row, index) => {
-                      const monthsLoaded = vehicleMonthCounts.get(vehicleKey(row.vehicleRegistration)) ?? 0;
-                      const directCosts = row.grossRevenue - row.recordedBalance;
-                      return (
-                        <tr key={row.vehicleRegistration} onClick={() => openVehicle(row.vehicleRegistration)} className={`cursor-pointer border-t border-slate-100 transition hover:bg-brand-50/55 ${index % 2 ? "bg-slate-50/35" : "bg-white"}`}>
-                          <td className="px-5 py-3.5">
-                            <div className="flex items-center gap-3">
-                              <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${index < 3 ? "bg-brand-700 text-white shadow-sm" : "bg-brand-50 text-brand-700"}`}>{index + 1}</span>
-                              <div>
-                                <p className="font-bold text-slate-950">{row.vehicleRegistration}</p>
-                                <p className="mt-0.5 text-xs text-slate-500">{monthsLoaded}/{selectedMonths.length} months loaded</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3.5 text-right font-semibold text-slate-900">{formatBaht(row.grossRevenue)}</td>
-                          <td className="px-4 py-3.5 text-right text-slate-700">{formatBaht(directCosts)}</td>
-                          <td className={`px-4 py-3.5 text-right font-bold ${row.recordedBalance < 0 ? "text-rose-700" : "text-emerald-700"}`}>{formatBaht(row.recordedBalance)}</td>
-                          <td className="px-4 py-3.5 text-right font-semibold text-slate-900">{formatPercent(row.marginPercent, language)}</td>
-                          <td className="px-4 py-3.5 text-right font-semibold text-brand-700">{formatPercent(row.fuelPercent, language)}</td>
-                          <td className="px-4 py-3.5 text-center"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${monthsLoaded === selectedMonths.length ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{monthsLoaded}/{selectedMonths.length}</span></td>
-                          <td className="px-5 py-3.5 text-right"><span className="inline-flex rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-brand-700 shadow-sm">Open →</span></td>
-                        </tr>
-                      );
-                    })}
-              </tbody>
-            </table>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5 text-right font-semibold text-slate-900">{formatBaht(row.grossRevenue)}</td>
+                        <td className="px-4 py-3.5 text-right text-slate-700">{formatBaht(directCosts)}</td>
+                        <td className={`px-4 py-3.5 text-right font-bold ${row.recordedBalance < 0 ? "text-rose-700" : "text-emerald-700"}`}>{formatBaht(row.recordedBalance)}</td>
+                        <td className="px-4 py-3.5 text-right font-semibold text-slate-900">{formatPercent(row.marginPercent, language)}</td>
+                        <td className="px-4 py-3.5 text-right font-semibold text-brand-700">{formatPercent(row.fuelPercent, language)}</td>
+                        <td className="px-4 py-3.5 text-center"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${monthsLoaded === selectedMonths.length ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{monthsLoaded}/{selectedMonths.length}</span></td>
+                        <td className="px-5 py-3.5 text-right"><span className="inline-flex rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-brand-700 shadow-sm">Open →</span></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
           </div>
         </section>
 
@@ -2826,7 +2919,7 @@ export default function VehiclePerformancePage() {
                   <h2 className="text-2xl font-semibold text-slate-950">{detailVehicle}</h2>
                   <span className="badge-muted">{vehicleDetailSummary?.months.length ?? vehicleHistory.length} months of data</span>
                 </div>
-                <p className="mt-1 text-sm text-slate-500">Selected-period totals, direct-cost breakdown and month-by-month performance. Incomplete V4 draft months keep source figures without confirmed profit.</p>
+                <p className="mt-1 text-sm text-slate-500">Selected-period totals, direct-cost breakdown and month-by-month performance. Incomplete months keep source figures without confirmed profit.</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <button type="button" disabled={!previousDetailVehicle} onClick={() => previousDetailVehicle && openVehicle(previousDetailVehicle)} className="btn-secondary disabled:cursor-not-allowed disabled:opacity-40">← Previous vehicle</button>
@@ -2862,7 +2955,7 @@ export default function VehiclePerformancePage() {
             </div>
             ) : (
               <div className="border-b border-amber-100 bg-amber-50/60 px-5 py-4 text-sm text-amber-900">
-                Confirmed KPI totals are unavailable for this selection because one or more V4 draft cost fields are incomplete. Source figures remain visible in the monthly history below without fabricated profit.
+                Confirmed totals are unavailable for this selection because one or more cost fields are incomplete. Source figures remain visible in the monthly history below without fabricated profit.
               </div>
             )}
 
@@ -2900,7 +2993,7 @@ export default function VehiclePerformancePage() {
             ) : null}
 
             <div className="border-t border-slate-100">
-              <div className="px-5 py-4"><p className="text-xs font-semibold uppercase tracking-[0.13em] text-brand-700">Monthly history</p><h3 className="mt-1 text-lg font-semibold text-slate-950">How this vehicle changed month by month</h3><p className="mt-1 text-sm text-slate-500">Jan–Jul use legacy KPI rows. Aug/Sep use V4 stored drafts. Incomplete draft months stay unknown and are not treated as confirmed profit.</p></div>
+              <div className="px-5 py-4"><p className="text-xs font-semibold uppercase tracking-[0.13em] text-brand-700">Monthly history</p><h3 className="mt-1 text-lg font-semibold text-slate-950">How this vehicle changed month by month</h3><p className="mt-1 text-sm text-slate-500">January–September in one history. Incomplete months stay unknown and are not treated as confirmed profit.</p></div>
               <div className="overflow-x-auto border-t border-slate-100">
                 <table className="w-full min-w-[980px] text-sm">
                   <thead className="bg-[linear-gradient(90deg,#f7f3ff_0%,#fbf9ff_55%,#f6f2ff_100%)] text-[11px] uppercase tracking-[0.1em] text-slate-500"><tr><th className="px-5 py-3 text-left font-semibold">Month</th><th className="px-4 py-3 text-left font-semibold">Source</th><th className="px-4 py-3 text-right font-semibold">Revenue</th><th className="px-4 py-3 text-right font-semibold">Fuel</th><th className="px-4 py-3 text-right font-semibold">Direct costs</th><th className="px-4 py-3 text-right font-semibold">Recorded balance</th><th className="px-4 py-3 text-right font-semibold">Margin</th><th className="px-5 py-3 text-right font-semibold">Fuel / revenue</th></tr></thead>
@@ -2910,15 +3003,15 @@ export default function VehiclePerformancePage() {
                         return (
                           <tr key={item.month} className="border-t border-slate-100 bg-amber-50/40">
                             <td className="px-5 py-3.5 font-bold text-slate-950">{monthLabel(item.month)}</td>
-                            <td className="px-4 py-3.5 text-xs font-semibold text-amber-800">{item.provenance === "v4_draft_source" ? (item.v4Incomplete ? "V4 draft · incomplete" : "V4 draft") : "Legacy"}</td>
+                            <td className="px-4 py-3.5 text-xs font-semibold text-amber-800">{item.provenance === "v4_draft_source" ? (item.v4Incomplete ? "Incomplete costs" : "Stored report") : "Published KPI"}</td>
                             <td className="px-4 py-3.5 text-right text-slate-500" colSpan={6}>Incomplete costs — balance unknown · not confirmed profit</td>
                           </tr>
                         );
                       }
                       const directCosts = item.row.grossRevenue - item.row.recordedBalance;
                       const sourceLabel = item.provenance === "v4_draft_source"
-                        ? (item.v4Provisional ? "V4 draft · provisional salary" : "V4 draft · not published")
-                        : "Legacy KPI";
+                        ? (item.v4Provisional ? "Provisional salary · not published" : "Stored report · not published")
+                        : "Published KPI";
                       return (
                         <tr key={item.month} className={`border-t border-slate-100 ${detailMonthFilter === item.month ? "bg-brand-50/50" : ""}`}>
                           <td className="px-5 py-3.5 font-bold text-slate-950">{monthLabel(item.month)}</td>
@@ -3354,9 +3447,15 @@ function PerformanceHeroMetric({
   delta?: string | null;
   deltaClass?: string;
   compareLabel?: string | null;
-  tone?: "default" | "success" | "danger";
+  tone?: "default" | "success" | "danger" | "warning";
 }) {
-  const valueClass = tone === "success" ? "text-emerald-700" : tone === "danger" ? "text-rose-700" : "text-slate-950";
+  const valueClass = tone === "success"
+    ? "text-emerald-700"
+    : tone === "danger"
+      ? "text-rose-700"
+      : tone === "warning"
+        ? "text-amber-800"
+        : "text-slate-950";
   return (
     <article className="group min-w-0 bg-white/55 px-5 py-4 transition hover:bg-brand-50/35">
       <p className="text-[10px] font-semibold uppercase tracking-[0.13em] text-slate-500">{label}</p>

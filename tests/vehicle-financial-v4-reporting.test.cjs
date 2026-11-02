@@ -151,6 +151,18 @@ test('Fleet Overview sends Bearer token to reporting-source like Financial Repor
   assert.match(page, /selectingOnlyV4Months/);
 });
 
+test('Fleet Overview no longer mounts a separate August–September draft table section', () => {
+  const page = fs.readFileSync(path.resolve('app/(dashboard)/vehicle-performance/page.tsx'), 'utf8');
+  assert.doesNotMatch(page, /Ten-column stored drafts/);
+  assert.doesNotMatch(page, /August–September V4 draft source/);
+  assert.doesNotMatch(page, /August–September draft vehicles/);
+  assert.match(page, /id="vehicle-performance-table"/);
+  assert.match(page, /selectingOnlyV4Months \?/);
+  assert.match(page, /formatNullableBaht/);
+  assert.match(page, /partialCoverageActive/);
+  assert.match(page, /Confirmed balance/);
+});
+
 test('incomplete V4 display rows keep null balance and do not coerce maintenance to zero', () => {
   const incomplete = reporting.mapV4DraftEntryToReportingRow(entry({ maintenance: null }), batch);
   const display = reporting.v4RowsAsFleetDisplayRows([incomplete]);

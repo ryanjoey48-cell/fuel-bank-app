@@ -125,7 +125,7 @@ export async function GET(request: Request) {
       writesEnabled: false,
       publicationEnabled: false,
       liveKpiEligible: false,
-      note: "Aug/Sep rows are stored V4 drafts for reporting dual-read. They are not published accounting profit.",
+      note: "August–September figures come from stored monthly financial reports. They are not yet approved as published profit.",
       batches: reportingBatches.map(({ rows, ...batch }) => batch),
       rows: reportingBatches.flatMap((batch) => batch.rows)
     }, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
