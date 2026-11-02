@@ -177,6 +177,31 @@ test('August–September fleet table avoids fake rank badges and repeated month 
   assert.doesNotMatch(augSepBlock.slice(0, 4500), /Rank \/ vehicle/);
 });
 
+test('August–September table exposes PDF-matching TOTAL row and dash/zero notes', () => {
+  const page = fs.readFileSync(path.resolve('app/(dashboard)/vehicle-performance/page.tsx'), 'utf8');
+  assert.match(page, /Nine PDF control totals/);
+  assert.match(page, /selectedV4SourceTotals\.totalReceived/);
+  assert.match(page, /selectedV4SourceTotals\.maintenance/);
+  assert.match(page, /selectedV4SourceTotals\.lpg/);
+  assert.match(page, /only ฒอ-8453 has separately recorded LPG/);
+  assert.match(page, /3ฒล-4565 August Total Received/);
+  assert.match(page, /hasAugust4565ReceivedZero/);
+  const aug = JSON.parse(fs.readFileSync(path.resolve('data/vehicle-performance-v4/previews/2026-08.json'), 'utf8'));
+  const sep = JSON.parse(fs.readFileSync(path.resolve('data/vehicle-performance-v4/previews/2026-09.json'), 'utf8'));
+  assert.equal(aug.rows.length, 21);
+  assert.equal(sep.rows.length, 21);
+  assert.equal(aug.sourceFooterTotals.totalReceived, '3581914');
+  assert.equal(aug.sourceFooterTotals.maintenance, '27660');
+  assert.equal(aug.sourceFooterTotals.lpg, '7292.1');
+  assert.equal(sep.sourceFooterTotals.totalReceived, '3819401');
+  assert.equal(sep.sourceFooterTotals.maintenance, '104690');
+  assert.equal(sep.sourceFooterTotals.lpg, '7962.31');
+  const aug4565 = aug.rows.find((row) => row.registration === '3ฒล-4565');
+  assert.equal(aug4565.totalReceived, '0');
+  assert.equal(aug4565.sourceDashStatus.totalReceived, 'zero_confirmed_by_source_note');
+  assert.ok(aug4565.sourceDashes.includes('totalReceived'));
+});
+
 test('incomplete V4 display rows keep null balance and do not coerce maintenance to zero', () => {
   const incomplete = reporting.mapV4DraftEntryToReportingRow(entry({ maintenance: null }), batch);
   const display = reporting.v4RowsAsFleetDisplayRows([incomplete]);

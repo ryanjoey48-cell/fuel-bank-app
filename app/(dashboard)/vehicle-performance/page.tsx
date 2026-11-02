@@ -919,18 +919,29 @@ export default function VehiclePerformancePage() {
         const value = picker(row);
         return value == null || !Number.isFinite(value) ? sum : sum + value;
       }, 0);
+    const lpg = sumKnown((row) => (row.lpgTreatment === "separate" ? row.lpg : null));
     return {
       vehicleCount: selectedV4ReportingRows.length,
       completeCount: completeV4SelectedCount,
       incompleteCount: incompleteV4SelectedCount,
+      salary: sumKnown((row) => row.salary),
+      jobs: sumKnown((row) => row.jobs),
+      tripPayments: sumKnown((row) => row.tripPayments),
+      expenses: sumKnown((row) => row.expenses),
+      parkingFees: sumKnown((row) => row.parkingFees),
       totalReceived: sumKnown((row) => row.totalReceived),
-      maintenance: sumKnown((row) => row.maintenance),
       fuel: sumKnown((row) => row.fuel),
-      lpg: sumKnown((row) => (row.lpgTreatment === "separate" ? row.lpg : null)),
+      lpg,
+      maintenance: sumKnown((row) => row.maintenance),
       confirmedBalance: selectedV4ReportingRows
         .filter((row) => row.financiallyComplete && row.indicativeRecordedBalance != null)
         .reduce((sum, row) => sum + Number(row.indicativeRecordedBalance), 0),
-      salaryProvisional: selectedV4ReportingRows.some((row) => row.salaryProvisional)
+      salaryProvisional: selectedV4ReportingRows.some((row) => row.salaryProvisional),
+      hasAugust4565ReceivedZero: selectedV4ReportingRows.some((row) =>
+        row.month === 8 &&
+        /4565/.test(row.registration) &&
+        row.totalReceived === 0
+      )
     };
   }, [completeV4SelectedCount, incompleteV4SelectedCount, selectedV4ReportingRows]);
   const partialCoverageActive = incompleteV4SelectedCount > 0;
@@ -2800,9 +2811,16 @@ export default function VehiclePerformancePage() {
               <span className="badge-muted">{periodLabel}</span>
             </div>
           </div>
-          {selectingOnlyV4Months && selectedV4SourceTotals.salaryProvisional ? (
-            <div className="border-t border-amber-100 bg-amber-50/55 px-5 py-2.5 text-xs text-amber-950">
-              <span className="font-semibold">*</span> Salary marked with an asterisk is provisional for September and is not final published payroll.
+          {selectingOnlyV4Months ? (
+            <div className="space-y-1.5 border-t border-amber-100 bg-amber-50/55 px-5 py-2.5 text-xs text-amber-950">
+              {selectedV4SourceTotals.salaryProvisional ? (
+                <p><span className="font-semibold">*</span> Salary marked with an asterisk is provisional for September and is not final published payroll.</p>
+              ) : null}
+              <p>LPG: only ฒอ-8453 has separately recorded LPG. Other vehicles show confirmed ฿0 where the source PDF printed a dash.</p>
+              {selectedV4SourceTotals.hasAugust4565ReceivedZero ? (
+                <p>3ฒล-4565 August Total Received: source PDF shows —, stored as ฿0 from the source note (no received revenue). Owner confirmation still pending whether this should remain unknown.</p>
+              ) : null}
+              <p>Missing expenses/maintenance stay as —. Incomplete rows do not create confirmed profit.</p>
             </div>
           ) : null}
           {!selectingOnlyV4Months ? (
@@ -2844,7 +2862,7 @@ export default function VehiclePerformancePage() {
                   <tr>
                     <th className="whitespace-nowrap px-3 py-2.5 text-left font-semibold">Registration</th>
                     {tenColumnHeaders().slice(1).map((header) => (
-                      <th key={header} className="whitespace-nowrap px-2 py-2.5 text-right font-semibold">{header === "Trip Payments" ? "Trip pay." : header === "Parking Fees" ? "Parking" : header === "Total Received" ? "Received" : header}</th>
+                      <th key={header} className="whitespace-nowrap px-2 py-2.5 text-right font-semibold">{header}</th>
                     ))}
                     <th className="whitespace-nowrap px-2 py-2.5 text-right font-semibold">Balance</th>
                     <th className="whitespace-nowrap px-2 py-2.5 text-left font-semibold">Status</th>
@@ -2876,6 +2894,22 @@ export default function VehiclePerformancePage() {
                     </tr>
                   ))}
                 </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-brand-200 bg-brand-50/70 text-[13px] font-semibold text-slate-900">
+                    <td className="whitespace-nowrap px-3 py-2.5 text-left">TOTAL</td>
+                    <td className="whitespace-nowrap px-2 py-2.5 text-right">{formatBaht(selectedV4SourceTotals.salary)}</td>
+                    <td className="whitespace-nowrap px-2 py-2.5 text-right">{formatNumber(selectedV4SourceTotals.jobs, language)}</td>
+                    <td className="whitespace-nowrap px-2 py-2.5 text-right">{formatBaht(selectedV4SourceTotals.tripPayments)}</td>
+                    <td className="whitespace-nowrap px-2 py-2.5 text-right">{formatBaht(selectedV4SourceTotals.expenses)}</td>
+                    <td className="whitespace-nowrap px-2 py-2.5 text-right">{formatBaht(selectedV4SourceTotals.parkingFees)}</td>
+                    <td className="whitespace-nowrap px-2 py-2.5 text-right">{formatBaht(selectedV4SourceTotals.totalReceived)}</td>
+                    <td className="whitespace-nowrap px-2 py-2.5 text-right">{formatBaht(selectedV4SourceTotals.fuel)}</td>
+                    <td className="whitespace-nowrap px-2 py-2.5 text-right">{formatBaht(selectedV4SourceTotals.lpg)}</td>
+                    <td className="whitespace-nowrap px-2 py-2.5 text-right">{formatBaht(selectedV4SourceTotals.maintenance)}</td>
+                    <td className="whitespace-nowrap px-2 py-2.5 text-right text-amber-900">{partialCoverageActive ? "Partial" : formatBaht(selectedV4SourceTotals.confirmedBalance)}</td>
+                    <td className="whitespace-nowrap px-2 py-2.5 text-left text-[11px] font-medium text-slate-600" colSpan={2}>Nine PDF control totals</td>
+                  </tr>
+                </tfoot>
               </table>
             ) : (
               <table className="w-full min-w-[980px] text-sm">
