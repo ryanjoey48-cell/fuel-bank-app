@@ -1,5 +1,6 @@
 "use client";
 
+import { EES_COMPANY } from "@/lib/ees-company";
 import { VERIFIED_DEPOT_LOCATION } from "@/lib/ees-depot";
 
 import {
@@ -3248,7 +3249,7 @@ export default function ShipmentsPage() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-violet-700">
-              EXPERT EXPRESS SENDER CO., LTD.
+              {EES_COMPANY.nameEn}
             </p>
             <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-950">
               {labels.title}

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { AdminApiError, createServerSupabaseAdmin, requireVerifiedUser, resolveAccountAccess } from "@/lib/admin-user-management-server";
+import { isAdminRole } from "@/lib/authorization";
 import { canUseVehicleFinancialDrafts } from "@/lib/vehicle-financial-draft-access";
 import { BoundedRequestError, boundedRequestBody } from "@/lib/vehicle-financial-upload";
 import { disabledVehicleFinancialV4WriteResponse, isVehicleFinancialV4WriteLocked } from "@/lib/vehicle-financial-v4-release-lock";
@@ -33,7 +34,7 @@ export async function GET(request: Request, context: { params: Promise<{ batchId
     const { data: identities, error: identityError } = await admin.from("account_access").select("user_id,display_name").in("user_id", ids);
     if (identityError) throw identityError;
     const names = new Map((identities ?? []).map((identity: { user_id: string; display_name: string | null }) => [identity.user_id, identity.display_name || "—"]));
-    const maySeeEmployeeAllocationEvidence = access.role === "admin" || batch.uploaded_by === user.id;
+    const maySeeEmployeeAllocationEvidence = isAdminRole(access.role) || batch.uploaded_by === user.id;
     return NextResponse.json({
       batch: { ...batch, salary_verification: maySeeEmployeeAllocationEvidence ? batch.salary_verification : null,
         uploader_name: names.get(batch.uploaded_by) ?? "—" },

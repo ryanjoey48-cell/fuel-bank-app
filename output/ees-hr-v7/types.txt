@@ -1,1 +1,0 @@
-components/sidebar.tsx(213,18): error TS2304: Cannot find name 'language'.

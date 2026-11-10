@@ -1,5 +1,6 @@
 "use client";
 
+import { EES_COMPANY } from "@/lib/ees-company";
 import clsx from "clsx";
 import {
   AlertTriangle,
@@ -280,15 +281,29 @@ export default function DispatchPage() {
   }, [loadData]);
 
   useEffect(() => {
-    const handleDataChanged = () => void loadData(false);
-    window.addEventListener("fuel-bank:data-changed", handleDataChanged);
+    let debounceTimer: number | null = null;
+    const scheduleReload = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      if (debounceTimer != null) window.clearTimeout(debounceTimer);
+      debounceTimer = window.setTimeout(() => {
+        debounceTimer = null;
+        if (document.visibilityState === "visible") void loadData(false);
+      }, 750);
+    };
+    window.addEventListener("fuel-bank:data-changed", scheduleReload);
     const bookingChannel = supabase
       .channel("dispatch-booking-diary")
-      .on("postgres_changes", { event: "*", schema: "public", table: "booking_diary" }, handleDataChanged)
-      .on("postgres_changes", { event: "*", schema: "public", table: "trip_journeys" }, handleDataChanged)
+      .on("postgres_changes", { event: "*", schema: "public", table: "booking_diary" }, scheduleReload)
+      .on("postgres_changes", { event: "*", schema: "public", table: "trip_journeys" }, scheduleReload)
       .subscribe();
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") scheduleReload();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
     return () => {
-      window.removeEventListener("fuel-bank:data-changed", handleDataChanged);
+      if (debounceTimer != null) window.clearTimeout(debounceTimer);
+      window.removeEventListener("fuel-bank:data-changed", scheduleReload);
+      document.removeEventListener("visibilitychange", handleVisibility);
       void supabase.removeChannel(bookingChannel);
     };
   }, [loadData]);
@@ -328,7 +343,7 @@ export default function DispatchPage() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-violet-700">
-              EXPERT EXPRESS SENDER CO., LTD.
+              {EES_COMPANY.nameEn}
             </p>
             <h1 className="mt-1 text-2xl font-black tracking-tight text-slate-950">{copy.title}</h1>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">{copy.description}</p>

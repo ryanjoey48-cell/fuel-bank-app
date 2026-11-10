@@ -1,5 +1,6 @@
 "use client";
 
+import { EES_COMPANY } from "@/lib/ees-company";
 import {
   ClipboardCheck,
   Download,
@@ -423,7 +424,7 @@ export default function SafetyPage() {
     <div className="maintenance-shell -m-3 min-h-full space-y-3 p-3 sm:-m-4 sm:p-4 lg:-m-5 lg:p-5">
       <section className="surface-card flex flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-[.16em] text-violet-500">EXPERT EXPRESS SENDER CO., LTD.</p>
+          <p className="text-[10px] font-bold uppercase tracking-[.16em] text-violet-500">{EES_COMPANY.nameEn}</p>
           <h1 className="mt-1 text-2xl font-semibold text-slate-950">{english ? "Vehicle Safety" : "ความปลอดภัยของรถ"}</h1>
           <p className="mt-1 text-xs text-slate-500">{english ? "See who needs equipment and which vehicles are ready." : "ดูอุปกรณ์ที่ขาดและสถานะความพร้อมของรถ"}</p>
         </div>

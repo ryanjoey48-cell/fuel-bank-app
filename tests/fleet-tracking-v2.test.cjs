@@ -170,7 +170,7 @@ test("English and Thai copy exist and the prototype stays off live Forth, Supaba
   const ui = readUi();
   const css = fs.readFileSync(path.join(root, "components/fleet-tracking-v2/workspace.module.css"), "utf8");
   const { FLEET_V2_FOCUS_ZOOM } = loadTypeScriptModule("lib/fleet-tracking-v2/view.ts");
-  assert.equal(FLEET_TRACKING_V2_MAP_ENGINE, "leaflet");
+  assert.equal(FLEET_TRACKING_V2_MAP_ENGINE, "leaflet+openfreemap");
   assert.equal(FLEET_V2_FOCUS_ZOOM, 12);
   assert.equal(loadTypeScriptModule("lib/fleet-tracking-v2/view.ts").FLEET_V2_LABEL_ZOOM, 8);
   assert.ok(FLEET_TRACKING_V2_COPY.en.testDataBanner.includes("SIMULATED FIXTURE"));

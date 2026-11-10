@@ -1,4 +1,5 @@
 "use client";
+import { EES_COMPANY } from "@/lib/ees-company";
 import Link from "next/link";
 
 import { AlertTriangle, Calculator, CheckCircle2, ChevronDown, Download, FileUp, Info, Pencil, Search, Trash2, TrendingUp, X } from "lucide-react";
@@ -10,7 +11,6 @@ import {
   deleteVehicleMonthlyPerformance,
   deleteVehiclePerformanceImportReview,
   fetchFuelLogsForExport,
-  fetchTripJourneys,
   fetchVehicleMonthlyFuelSpend,
   fetchVehicleMonthlyPerformance,
   fetchVehiclePerformanceImportReviews,
@@ -25,8 +25,8 @@ import { useAccountAccess } from "@/lib/use-account-access";
 import { supabase } from "@/lib/supabase";
 import { formatNumber, normalizeComparableText, normalizeVehicleRegistration } from "@/lib/utils";
 import { knownVehicleRegistrationAliases } from "@/lib/vehicle-identity";
+import { VehiclePerformanceFinancial } from "@/components/vehicle-performance-financial";
 import { VehicleFinancialDrafts } from "@/components/vehicle-financial-drafts";
-import { summarizeTripFinancials } from "@/lib/trip-financials";
 import {
   addAppFuelToImportRows,
   applySavedVehiclePerformanceImportReviews,
@@ -36,6 +36,8 @@ import {
   buildVehiclePerformanceRows,
   calculateVehiclePerformanceMetrics,
   evaluateVehiclePerformanceImportStatus,
+  filterEligibleRegistrationsForMonth,
+  isVehicleEligibleForPerformanceMonth,
   parseVehiclePerformanceWorkbook,
   VEHICLE_PERFORMANCE_STATUS_RULES,
   type VehiclePerformanceMonthlyPerformanceRow,
@@ -55,15 +57,24 @@ import {
   v4RowsAsFleetDisplayRows,
   type V4FinancialReportingRow
 } from "@/lib/vehicle-financial-v4-reporting";
-import type { TripJourneyWithFuel, Vehicle, VehicleMonthlyPerformance } from "@/types/database";
+import {
+  cellBaht,
+  OWNER_REPORTING_NOTE_EN,
+  OWNER_REPORTING_NOTE_TH,
+  v6FleetHeroTotals,
+  v6ReportsAsDashboardProjection,
+  type FinancialReport,
+  type V6DashboardVehicleMeta
+} from "@/lib/vehicle-performance-financial";
+import type { Vehicle, VehicleMonthlyPerformance } from "@/types/database";
 import type { FuelLogWithDriver } from "@/types/database";
 
 type MonthFilter = "" | number;
 type RankingKey = "recordedBalance" | "grossRevenue" | "marginPercent" | "fuelPercent" | "fuelSpend" | "lowestRecordedBalance";
 type ImportStatusFilter = "" | VehiclePerformanceImportRow["status"];
 type VehicleSortKey = "vehicleRegistration" | "grossRevenue" | "fuelSpend" | "fuelPercent" | "lpgCost" | "salaryCost" | "tripIncome" | "otherExpenses" | "recordedBalance" | "marginPercent" | "status";
-type TrendMetric = "grossRevenue" | "recordedBalance" | "fuelSpend" | "marginPercent";
-type VehiclePerformanceView = "fleet" | "monthly" | "financial" | "trips";
+type TrendMetric = "grossRevenue" | "recordedBalance" | "fuelSpend" | "marginPercent" | "fuelPercent";
+type VehiclePerformanceView = "fleet" | "monthly" | "financial";
 type CoverageVehicleDetail = {
   registration: string;
   presentMonths: number[];
@@ -504,7 +515,7 @@ async function buildVehiclePerformancePdf(
       const logoHeight = logo.height && logo.width ? logoWidth * (logo.height / logo.width) : 30;
       context.drawImage(logoImage, margin * scale, y * scale, logoWidth * scale, logoHeight * scale);
     }
-    text("Expert Express Sender Co., Ltd.", page.width - margin, y + 10, { align: "right", color: colors.slate, size: 11, weight: 800 });
+    text(EES_COMPANY.nameEnTitle, page.width - margin, y + 10, { align: "right", color: colors.slate, size: 11, weight: 800 });
     text(data.title, page.width - margin, y + 28, { align: "right", color: colors.purple, size: 13, weight: 800 });
     text(`${data.periodLabel} | ${data.vehicleCount} vehicles analysed`, page.width - margin, y + 45, { align: "right", color: colors.muted, size: 8, weight: 600 });
     y += 70;
@@ -663,7 +674,9 @@ async function buildVehiclePerformancePdf(
   if (data.v4DraftTenColumnTable) {
     section("August–September monthly financial report");
     if (data.v4DraftNote) paragraph(data.v4DraftNote, margin, contentWidth, 7.5, colors.amber);
-    paragraph("Unknown costs show as —. Incomplete rows do not contribute confirmed balance or margin.", margin, contentWidth, 7.5, colors.muted);
+    paragraph(selectingOnlyV6Months
+      ? OWNER_REPORTING_NOTE_EN
+      : "Unknown costs show as —. Incomplete rows do not contribute confirmed balance or margin.", margin, contentWidth, 7.5, colors.muted);
     y += 4;
     table("August–September vehicle rows", data.v4DraftTenColumnTable);
   }
@@ -686,14 +699,26 @@ export default function VehiclePerformancePage() {
   const canWrite = can("business:write");
   const canDelete = can("business:delete");
   const [year, setYear] = useState(2026);
-  const [month, setMonth] = useState<MonthFilter>("");
+  const [month, setMonth] = useState<MonthFilter>(9);
+  const [periodReady, setPeriodReady] = useState(false);
+  useEffect(() => {
+    try {
+      const period = JSON.parse(sessionStorage.getItem('ees:vehicle-performance-period:v1') || 'null');
+      if (period && Number.isInteger(period.year) && period.year >= 2000 && period.year <= 2100 && (period.month === '' || (Number.isInteger(period.month) && period.month >= 1 && period.month <= 9))) { setYear(period.year); setMonth(period.month); }
+    } catch { /* Period preferences never affect financial storage. */ }
+    setPeriodReady(true);
+  }, []);
+  useEffect(() => { if (periodReady) { try { sessionStorage.setItem('ees:vehicle-performance-period:v1', JSON.stringify({ year, month })); } catch { /* Editing remains available without preference storage. */ } } }, [year, month, periodReady]);
+  const financialLeaveGuard = useRef<(() => boolean) | null>(null);
+  const registerFinancialLeaveGuard = useCallback((guard: (() => boolean) | null) => { financialLeaveGuard.current = guard; }, []);
   const [searchQuery, setSearchQuery] = useState("");
   const [records, setRecords] = useState<VehicleMonthlyPerformance[]>([]);
   const [fuelRows, setFuelRows] = useState<Awaited<ReturnType<typeof fetchVehicleMonthlyFuelSpend>>>([]);
   const [v4ReportingRows, setV4ReportingRows] = useState<V4FinancialReportingRow[]>([]);
   const [v4ReportingNote, setV4ReportingNote] = useState<string | null>(null);
+  const [v6Reports, setV6Reports] = useState<FinancialReport[]>([]);
+  const [worksheetFocusRegistration, setWorksheetFocusRegistration] = useState<string | null>(null);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [tripJourneys, setTripJourneys] = useState<TripJourneyWithFuel[]>([]);
   const [detailVehicle, setDetailVehicle] = useState<string | null>(null);
   const [movementFilter, setMovementFilter] = useState<Direction | null>(null);
   const [rankingKey, setRankingKey] = useState<RankingKey>("recordedBalance");
@@ -751,12 +776,16 @@ export default function VehiclePerformancePage() {
       if (sessionError) throw sessionError;
       if (!sessionData.session?.access_token) throw new Error("Sign in to load vehicle performance records.");
       const accessToken = sessionData.session.access_token;
-      const [performanceRows, fuelSpendRows, tripRows, reportingResponse] = await Promise.all([
+      const [performanceRows, fuelSpendRows, reportingResponse, v5Response] = await Promise.all([
         fetchVehicleMonthlyPerformance({ year }),
         fetchVehicleMonthlyFuelSpend({ year }),
-        fetchTripJourneys(),
         // Must send Bearer — reporting-source uses requireVerifiedUser (header only), same as Financial Reports drafts API.
         fetch("/api/vehicle-performance-v4/reporting-source?" + new URLSearchParams({ year: String(year) }), {
+          cache: "no-store",
+          credentials: "same-origin",
+          headers: { Authorization: `Bearer ${accessToken}` }
+        }).catch(() => null),
+        fetch("/api/vehicle-performance-v5", {
           cache: "no-store",
           credentials: "same-origin",
           headers: { Authorization: `Bearer ${accessToken}` }
@@ -766,7 +795,12 @@ export default function VehiclePerformancePage() {
       // Release C: never treat legacy Aug/Sep KPI rows as the V4 source of truth.
       setRecords(performanceRows.filter((row) => isLegacyReportingMonth(Number(row.month))));
       setFuelRows(fuelSpendRows);
-      setTripJourneys(tripRows);
+      if (v5Response?.ok) {
+        const payload = await v5Response.json() as { reports?: FinancialReport[] };
+        setV6Reports(Array.isArray(payload.reports) ? payload.reports : []);
+      } else {
+        setV6Reports([]);
+      }
       if (reportingResponse?.ok) {
         const payload = await reportingResponse.json() as {
           rows?: V4FinancialReportingRow[];
@@ -812,6 +846,7 @@ export default function VehiclePerformancePage() {
       setTripJourneys([]);
       setV4ReportingRows([]);
       setV4ReportingNote(null);
+      setV6Reports([]);
     } finally {
       if (sequence === loadSequence.current) setLoading(false);
     }
@@ -823,7 +858,10 @@ export default function VehiclePerformancePage() {
   }, [load]);
 
   useEffect(() => {
-    const handleDataChanged = () => void load();
+    const handleDataChanged = () => {
+      if (document.visibilityState !== "visible") return;
+      void load();
+    };
     window.addEventListener("fuel-bank:data-changed", handleDataChanged);
     return () => window.removeEventListener("fuel-bank:data-changed", handleDataChanged);
   }, [load]);
@@ -844,13 +882,42 @@ export default function VehiclePerformancePage() {
     ),
     [selectedV4ReportingRows]
   );
-  const selectingOnlyV4Months = useMemo(
-    () => selectedMonths.length > 0 && selectedMonths.every((value) => isV4ReportingMonth(value)),
+  const v6MonthSelected = useMemo(
+    () => selectedMonths.some((value) => isV4ReportingMonth(value)),
     [selectedMonths]
   );
+  const useV6Dashboard = useMemo(
+    () => year === 2026 && v6MonthSelected && v6Reports.some((report) => selectedMonthSet.has(report.month)),
+    [selectedMonthSet, v6MonthSelected, v6Reports, year]
+  );
+  const selectingOnlyV4Months = useMemo(
+    () => !useV6Dashboard && selectedMonths.length > 0 && selectedMonths.every((value) => isV4ReportingMonth(value)),
+    [selectedMonths, useV6Dashboard]
+  );
+  const selectingOnlyV6Months = useMemo(
+    () => useV6Dashboard && selectedMonths.length > 0 && selectedMonths.every((value) => isV4ReportingMonth(value)),
+    [selectedMonths, useV6Dashboard]
+  );
+  const v6Projection = useMemo(
+    () => v6ReportsAsDashboardProjection(v6Reports, selectedMonths.filter((value) => isV4ReportingMonth(value))),
+    [selectedMonths, v6Reports]
+  );
+  const v6MetaByRegistration = useMemo(() => {
+    const map = new Map<string, V6DashboardVehicleMeta>();
+    for (const item of v6Projection.meta) map.set(normalizeComparableText(item.registration), item);
+    return map;
+  }, [v6Projection.meta]);
+  const selectedV6Report = useMemo(
+    () => (typeof month === "number" && isV4ReportingMonth(month) ? v6Reports.find((report) => report.month === month) : undefined),
+    [month, v6Reports]
+  );
+  const v6Hero = useMemo(
+    () => (selectingOnlyV6Months && selectedV6Report ? v6FleetHeroTotals(selectedV6Report) : null),
+    [selectedV6Report, selectingOnlyV6Months]
+  );
   const completeV4LegacyProjection = useMemo(
-    () => completeV4RowsAsLegacyCompatible(selectedV4ReportingRows),
-    [selectedV4ReportingRows]
+    () => (useV6Dashboard ? [] : completeV4RowsAsLegacyCompatible(selectedV4ReportingRows)),
+    [selectedV4ReportingRows, useV6Dashboard]
   );
   const v4SyntheticFuelRows = useMemo(
     () => completeV4LegacyProjection.map((row) => {
@@ -869,33 +936,27 @@ export default function VehiclePerformancePage() {
     [completeV4LegacyProjection, selectedV4ReportingRows]
   );
   const dualReadFuelRows = useMemo(
-    () => [...fuelRows.filter((row) => isLegacyReportingMonth(row.month)), ...v4SyntheticFuelRows],
-    [fuelRows, v4SyntheticFuelRows]
+    () => [
+      ...fuelRows.filter((row) => isLegacyReportingMonth(row.month)),
+      ...(useV6Dashboard ? v6Projection.fuelRows : v4SyntheticFuelRows)
+    ],
+    [fuelRows, useV6Dashboard, v4SyntheticFuelRows, v6Projection.fuelRows]
   );
   const dualReadRecords = useMemo(
     () => [
       ...records.filter((record) => selectedMonthSet.has(record.month) && isLegacyReportingMonth(record.month)),
-      ...completeV4LegacyProjection
+      ...(useV6Dashboard ? v6Projection.records : completeV4LegacyProjection)
     ].filter((record) => normalizeComparableText(record.vehicle_registration).includes(normalizeComparableText(searchQuery))),
-    [completeV4LegacyProjection, records, searchQuery, selectedMonthSet]
+    [completeV4LegacyProjection, records, searchQuery, selectedMonthSet, useV6Dashboard, v6Projection.records]
   );
   const selectedRecords = useMemo(
     () => dualReadRecords,
     [dualReadRecords]
   );
   const hasDualReadContent = useMemo(
-    () => selectedRecords.length > 0 || selectedV4ReportingRows.length > 0,
-    [selectedRecords.length, selectedV4ReportingRows.length]
+    () => selectedRecords.length > 0 || selectedV4ReportingRows.length > 0 || (useV6Dashboard && v6Projection.records.length > 0),
+    [selectedRecords.length, selectedV4ReportingRows.length, useV6Dashboard, v6Projection.records.length]
   );
-  const selectedTripFinancials = useMemo(() => {
-    const normalizedSearch = normalizeComparableText(searchQuery);
-    return summarizeTripFinancials(tripJourneys.filter((trip) => {
-      const tripDate = new Date(`${trip.trip_date || trip.date}T00:00:00`);
-      return tripDate.getFullYear() === year &&
-        selectedMonthSet.has(tripDate.getMonth() + 1) &&
-        normalizeComparableText(trip.vehicle_reg).includes(normalizedSearch);
-    }));
-  }, [searchQuery, selectedMonthSet, tripJourneys, year]);
   const management = useMemo(
     () => buildPerformanceManagement({
       records: dualReadRecords,
@@ -944,14 +1005,41 @@ export default function VehiclePerformancePage() {
       )
     };
   }, [completeV4SelectedCount, incompleteV4SelectedCount, selectedV4ReportingRows]);
-  const partialCoverageActive = incompleteV4SelectedCount > 0;
+  /** Legacy V4 incomplete-cost withholding only when the V6 owner-approved path is unavailable. */
+  const partialCoverageActive = !useV6Dashboard && selectingOnlyV4Months && incompleteV4SelectedCount > 0;
   const confirmedCoverageLabel = selectingOnlyV4Months
     ? (partialCoverageActive
       ? `Partial coverage · confirmed balance from ${completeV4SelectedCount}/${selectedV4SourceTotals.vehicleCount} vehicles`
       : `Full confirmed coverage · ${selectedV4SourceTotals.vehicleCount} vehicles`)
-    : (partialCoverageActive
-      ? `Partial coverage · Aug/Sep incomplete costs excluded from confirmed balance (${completeV4SelectedCount} complete / ${incompleteV4SelectedCount} incomplete)`
-      : null);
+    : null;
+  const v6ReportingSummary = useMemo(() => {
+    if (!useV6Dashboard || !v6Projection.meta.length) return null;
+    const byRegistration = new Map<string, V6DashboardVehicleMeta>();
+    for (const item of v6Projection.meta) {
+      const key = normalizeComparableText(item.registration);
+      const existing = byRegistration.get(key);
+      if (!existing || item.status === "review" || (item.status === "adjusted" && existing.status === "reported")) {
+        byRegistration.set(key, item);
+      }
+    }
+    const vehicles = Array.from(byRegistration.values());
+    return {
+      vehicleCount: vehicles.length,
+      reportedCount: vehicles.length,
+      reviewCount: vehicles.filter((item) => item.status === "review").length,
+      adjustedCount: vehicles.filter((item) => item.status === "adjusted").length
+    };
+  }, [useV6Dashboard, v6Projection.meta]);
+  const v6StatusLabel = useMemo(() => {
+    const summary = selectingOnlyV6Months && v6Hero
+      ? { vehicleCount: v6Hero.vehicleCount, reviewCount: v6Hero.reviewCount, adjustedCount: v6Hero.adjustedCount }
+      : v6ReportingSummary;
+    if (!summary) return null;
+    const parts = [`${summary.vehicleCount} vehicles reported`];
+    if (summary.reviewCount) parts.push(`${summary.reviewCount} require${summary.reviewCount === 1 ? "s" : ""} review`);
+    if (summary.adjustedCount) parts.push(`${summary.adjustedCount} adjusted`);
+    return parts.join(" · ");
+  }, [selectingOnlyV6Months, v6Hero, v6ReportingSummary]);
   const queueManagement = useMemo(() => {
     const actionRows = management.actionRows.filter(row => normalizeComparableText(row.vehicleRegistration).includes(normalizeComparableText(searchQuery)));
     return { ...management, actionRows, totalOpportunity: actionRows.reduce((sum, row) => sum + (row.opportunity ?? 0), 0), estimatedVehicleCount: actionRows.filter(row => row.opportunity != null && row.opportunity > 0).length };
@@ -963,19 +1051,78 @@ export default function VehiclePerformancePage() {
       benchmark: ReturnType<typeof buildPerformanceManagement>["benchmark"];
       v4Incomplete: boolean;
       v4Provisional: boolean;
-      provenance: "v4_draft_source" | "legacy_kpi";
-      /** Always populated for Aug/Sep so incomplete months still show PDF source figures. */
+      provenance: "v4_draft_source" | "legacy_kpi" | "v6_reported" | "not_in_fleet";
+      /** Source display for Aug/Sep worksheets; balances come from owner-approved V6 projection when available. */
       sourceDisplay: ReturnType<typeof v4RowsAsFleetDisplayRows>[number] | null;
+      reportingStatus?: "reported" | "adjusted" | "review";
     };
     if (!detailVehicle) return [] as HistoryItem[];
     const historyMonths = [...new Set<number>([
       ...VEHICLE_PERFORMANCE_REPORTING_MONTHS,
       ...records.map((record) => record.month),
-      ...v4ReportingRows.map((row) => row.month)
+      ...v4ReportingRows.map((row) => row.month),
+      ...v6Reports.map((report) => report.month)
     ])].sort((a, b) => a - b);
     const items: HistoryItem[] = [];
     for (const monthNumber of historyMonths) {
+      if (!isVehicleEligibleForPerformanceMonth(detailVehicle, year, monthNumber)) {
+        items.push({
+          month: monthNumber,
+          row: null,
+          benchmark: { fuel: null, margin: null, eligibleCount: 0, excludedCount: 0 },
+          v4Incomplete: false,
+          v4Provisional: false,
+          provenance: "not_in_fleet",
+          sourceDisplay: null
+        });
+        continue;
+      }
       if (isV4ReportingMonth(monthNumber)) {
+        const v6Month = v6ReportsAsDashboardProjection(v6Reports, [monthNumber]);
+        const v6Record = v6Month.records.find((row) => normalizeComparableText(row.vehicle_registration) === normalizeComparableText(detailVehicle));
+        const v6Meta = v6Month.meta.find((row) => normalizeComparableText(row.registration) === normalizeComparableText(detailVehicle));
+        if (v6Record && v6Meta) {
+          const model = buildPerformanceManagement({
+            records: [v6Record],
+            fuelRows: v6Month.fuelRows.filter((row) => normalizeComparableText(row.vehicleRegistration) === normalizeComparableText(detailVehicle)),
+            months: [monthNumber]
+          });
+          const report = v6Reports.find((item) => item.month === monthNumber);
+          const sourceRow = report?.rows.find((row) => normalizeComparableText(row.registration) === normalizeComparableText(detailVehicle));
+          items.push({
+            month: monthNumber,
+            row: model.rows.find((row) => row.vehicleRegistration === detailVehicle) ?? null,
+            benchmark: model.benchmark,
+            v4Incomplete: false,
+            v4Provisional: Boolean(v6Meta.salaryProvisional),
+            provenance: "v6_reported",
+            reportingStatus: v6Meta.status,
+            sourceDisplay: sourceRow ? {
+              vehicleRegistration: sourceRow.registration,
+              year: report!.year,
+              month: monthNumber,
+              salaryCost: cellBaht(sourceRow.cells.salary),
+              tripIncome: cellBaht(sourceRow.cells.tripPayments),
+              otherExpenses: null,
+              grossRevenue: cellBaht(sourceRow.cells.totalReceived),
+              fuelSpend: cellBaht(sourceRow.cells.fuel),
+              lpgCost: cellBaht(sourceRow.cells.lpg),
+              maintenance: cellBaht(sourceRow.cells.maintenance),
+              jobs: sourceRow.cells.jobs.value == null ? null : Number(sourceRow.cells.jobs.value),
+              parkingFees: cellBaht(sourceRow.cells.parkingFees),
+              expenses: cellBaht(sourceRow.cells.expenses),
+              recordedBalance: v6Meta.recordedBalanceBaht,
+              marginPercent: v6Meta.marginPercent,
+              fuelPercent: v6Meta.fuelPercent,
+              financiallyComplete: true,
+              salaryProvisional: sourceRow.salaryProvisional,
+              incompleteFields: v6Meta.missingCosts,
+              dataProvenance: "v4_draft_source",
+              publicationLabel: "stored_draft_not_published"
+            } : null
+          });
+          continue;
+        }
         const v4Rows = v4ReportingRows.filter((row) =>
           row.month === monthNumber
             && normalizeComparableText(row.registration) === normalizeComparableText(detailVehicle)
@@ -1024,7 +1171,7 @@ export default function VehiclePerformancePage() {
       });
     }
     return items;
-  }, [detailVehicle, fuelRows, records, v4ReportingRows]);
+  }, [detailVehicle, fuelRows, records, v4ReportingRows, v6Reports, year]);
   const openVehicle = (registration: string) => {
     setDetailVehicle(registration);
     setDetailMonthFilter("");
@@ -1093,19 +1240,62 @@ export default function VehiclePerformancePage() {
     () => buildVehicleMonthlyTrend(selectedRecords, dualReadFuelRows),
     [dualReadFuelRows, selectedRecords]
   );
+  const fleetUniverseRegistrations = useMemo(
+    () => Array.from(new Set([
+      ...records
+        .filter((record) => normalizeComparableText(record.vehicle_registration).includes(normalizeComparableText(searchQuery)))
+        .map((record) => normalizeVehicleRegistration(record.vehicle_registration)),
+      ...completeV4LegacyProjection
+        .filter((record) => normalizeComparableText(record.vehicle_registration).includes(normalizeComparableText(searchQuery)))
+        .map((record) => normalizeVehicleRegistration(record.vehicle_registration)),
+      ...v6Projection.records
+        .filter((record) => normalizeComparableText(record.vehicle_registration).includes(normalizeComparableText(searchQuery)))
+        .map((record) => normalizeVehicleRegistration(record.vehicle_registration)),
+      ...selectedV4ReportingRows
+        .filter((row) => normalizeComparableText(row.registration).includes(normalizeComparableText(searchQuery)))
+        .map((row) => normalizeVehicleRegistration(row.registration))
+    ].filter(Boolean))).sort(),
+    [completeV4LegacyProjection, records, searchQuery, selectedV4ReportingRows, v6Projection.records]
+  );
+  const eligibleCountByMonth = useMemo(() => {
+    const counts: Partial<Record<number, number>> = {};
+    for (const monthNumber of selectedMonths) {
+      counts[monthNumber] = filterEligibleRegistrationsForMonth(fleetUniverseRegistrations, year, monthNumber).length;
+    }
+    return counts;
+  }, [fleetUniverseRegistrations, selectedMonths, year]);
   const monthlyPerformanceRows = useMemo(() => {
     const base = buildVehicleMonthlyPerformanceRows({
       records: selectedRecords,
       fuelRows: dualReadFuelRows,
       months: selectedMonths,
-      expectedVehicleCount: new Set([
-        ...records.filter((record) => normalizeComparableText(record.vehicle_registration).includes(normalizeComparableText(searchQuery))).map((record) => vehicleKey(record.vehicle_registration)),
-        ...selectedV4ReportingRows.map((row) => vehicleKey(row.registration))
-      ]).size
+      expectedVehicleCount: fleetUniverseRegistrations.length,
+      expectedVehicleCountByMonth: eligibleCountByMonth
     });
-    // Overlay Aug/Sep stored financial report months into the same monthly performance rows.
+    // Overlay Aug/Sep from saved V6 effective figures when available; otherwise V4 draft source.
     return base.map((row) => {
       if (!isV4ReportingMonth(row.month)) return row;
+      const v6Report = v6Reports.find((report) => report.month === row.month);
+      if (v6Report) {
+        const hero = v6FleetHeroTotals(v6Report);
+        return {
+          ...row,
+          vehicleCount: Math.max(row.vehicleCount, hero.vehicleCount),
+          recordCount: Math.max(row.recordCount, hero.vehicleCount),
+          grossRevenue: hero.revenueBaht,
+          fuelSpend: hero.fuelBaht,
+          salaryCost: v6Report.rows.reduce((sum, item) => sum + (cellBaht(item.cells.salary) ?? 0), 0),
+          tripIncome: v6Report.rows.reduce((sum, item) => sum + (cellBaht(item.cells.tripPayments) ?? 0), 0),
+          otherExpenses: v6Report.rows.reduce((sum, item) => sum
+            + (cellBaht(item.cells.expenses) ?? 0)
+            + (cellBaht(item.cells.parkingFees) ?? 0)
+            + (cellBaht(item.cells.maintenance) ?? 0), 0),
+          recordedBalance: hero.balanceBaht ?? 0,
+          marginPercent: hero.marginPercent,
+          fuelPercent: hero.fuelPercent,
+          status: hero.provisional ? "partial" as const : "complete" as const
+        };
+      }
       const draftRows = selectedV4ReportingRows.filter((item) => item.month === row.month);
       if (!draftRows.length) return row;
       const sumKnown = (picker: (item: V4FinancialReportingRow) => number | null) =>
@@ -1141,7 +1331,7 @@ export default function VehiclePerformancePage() {
         status: completeCount === draftRows.length ? "complete" as const : "partial" as const
       };
     });
-  }, [dualReadFuelRows, records, searchQuery, selectedMonths, selectedRecords, selectedV4ReportingRows]);
+  }, [dualReadFuelRows, eligibleCountByMonth, fleetUniverseRegistrations.length, selectedMonths, selectedRecords, v6Reports]);
   const monthlySummary = useMemo(() => buildVehiclePerformanceSummary(monthlyTrend), [monthlyTrend]);
   const reconciliation = useMemo(() => {
     const tolerance = 0.01;
@@ -1212,37 +1402,42 @@ export default function VehiclePerformancePage() {
 
   const visibleTableRows = useMemo(() => sortedRows.filter((row) => {
     if (movementFilter && !management.changes.some(change => change.registration === row.vehicleRegistration && change.direction === movementFilter)) return false;
-    const monthsLoaded = vehicleMonthCounts.get(vehicleKey(row.vehicleRegistration)) ?? 0;
-    if (coverageFilter === "complete" && monthsLoaded !== selectedMonths.length) return false;
-    if (coverageFilter === "partial" && monthsLoaded === selectedMonths.length) return false;
+    if (selectingOnlyV6Months) {
+      const meta = v6MetaByRegistration.get(vehicleKey(row.vehicleRegistration));
+      if (coverageFilter === "complete" && meta?.status === "review") return false;
+      if (coverageFilter === "partial" && meta?.status !== "review") return false;
+      return true;
+    }
+    const eligibleMonths = selectedMonths.filter((monthNumber) =>
+      isVehicleEligibleForPerformanceMonth(row.vehicleRegistration, year, monthNumber)
+    );
+    const monthsLoaded = eligibleMonths.filter((monthNumber) =>
+      selectedRecords.some((record) =>
+        record.month === monthNumber
+          && vehicleKey(record.vehicle_registration) === vehicleKey(row.vehicleRegistration)
+      )
+    ).length;
+    if (coverageFilter === "complete" && monthsLoaded !== eligibleMonths.length) return false;
+    if (coverageFilter === "partial" && monthsLoaded === eligibleMonths.length) return false;
     return true;
-  }), [sortedRows, movementFilter, management.changes, coverageFilter, vehicleMonthCounts, selectedMonths.length]);
-  const expectedVehicleRegistrations = useMemo(
-    () => Array.from(new Set([
-      ...records
-        .filter((record) => normalizeComparableText(record.vehicle_registration).includes(normalizeComparableText(searchQuery)))
-        .map((record) => normalizeVehicleRegistration(record.vehicle_registration)),
-      ...completeV4LegacyProjection
-        .filter((record) => normalizeComparableText(record.vehicle_registration).includes(normalizeComparableText(searchQuery)))
-        .map((record) => normalizeVehicleRegistration(record.vehicle_registration))
-    ].filter(Boolean))).sort(),
-    [completeV4LegacyProjection, records, searchQuery]
-  );
+  }), [sortedRows, movementFilter, management.changes, coverageFilter, selectedMonths, selectingOnlyV6Months, v6MetaByRegistration, selectedRecords, year]);
+  const expectedVehicleRegistrations = fleetUniverseRegistrations;
   const missingVehiclesByMonth = useMemo(() => {
-    const expectedKeys = new Map(expectedVehicleRegistrations.map((registration) => [vehicleKey(registration), registration]));
     const result = new Map<number, string[]>();
     for (const monthNumber of selectedMonths) {
+      const eligible = filterEligibleRegistrationsForMonth(expectedVehicleRegistrations, year, monthNumber);
       const present = new Set(
         selectedRecords
           .filter((record) => record.month === monthNumber)
           .map((record) => vehicleKey(record.vehicle_registration))
       );
-      result.set(monthNumber, Array.from(expectedKeys.entries())
-        .filter(([key]) => !present.has(key))
-        .map(([, registration]) => registration));
+      result.set(
+        monthNumber,
+        eligible.filter((registration) => !present.has(vehicleKey(registration)))
+      );
     }
     return result;
-  }, [expectedVehicleRegistrations, selectedMonths, selectedRecords]);
+  }, [expectedVehicleRegistrations, selectedMonths, selectedRecords, year]);
   const missingMonthsByVehicle = useMemo(() => {
     const result = new Map<string, number[]>();
     for (const registration of expectedVehicleRegistrations) {
@@ -1252,10 +1447,15 @@ export default function VehiclePerformancePage() {
           .filter((record) => vehicleKey(record.vehicle_registration) === key)
           .map((record) => record.month)
       );
-      result.set(key, selectedMonths.filter((monthNumber) => !presentMonths.has(monthNumber)));
+      result.set(
+        key,
+        selectedMonths.filter((monthNumber) =>
+          isVehicleEligibleForPerformanceMonth(registration, year, monthNumber) && !presentMonths.has(monthNumber)
+        )
+      );
     }
     return result;
-  }, [expectedVehicleRegistrations, selectedMonths, selectedRecords]);
+  }, [expectedVehicleRegistrations, selectedMonths, selectedRecords, year]);
   const monthCoverageCounts = useMemo(() => ({
     complete: monthlyPerformanceRows.filter((row) => row.status === "complete").length,
     partial: monthlyPerformanceRows.filter((row) => row.status === "partial").length
@@ -2243,13 +2443,18 @@ export default function VehiclePerformancePage() {
         `Missing months: ${dataQuality.missingMonths.join(", ") || "None"}`,
         `Unresolved import exceptions: ${dataQuality.unresolvedImportExceptions}`,
         `Negative balances: ${dataQuality.negativeBalances}`,
-        `August–September financial rows in selection: ${selectedV4ReportingRows.length} (${completeV4SelectedCount} complete / ${incompleteV4SelectedCount} incomplete)`,
-        partialCoverageActive
-          ? `Partial coverage: confirmed balance/margin use complete records only (${completeV4SelectedCount} of ${selectedV4ReportingRows.length} Aug/Sep vehicles).`
-          : "August–September coverage: all selected financial rows are complete for confirmed balance."
+        useV6Dashboard
+          ? (v6StatusLabel
+            ? `August–September reporting: ${v6StatusLabel}. Unreported source costs contribute ฿0 to recorded operating balances; source blanks are preserved.`
+            : "August–September reporting: owner-approved recorded operating balances.")
+          : (partialCoverageActive
+            ? `Partial coverage: confirmed balance/margin use complete records only (${completeV4SelectedCount} of ${selectedV4ReportingRows.length} Aug/Sep vehicles).`
+            : selectedV4ReportingRows.length
+              ? `August–September draft rows in selection: ${selectedV4ReportingRows.length}.`
+              : "August–September financial reports not loaded in this selection.")
       ],
       disclaimer:
-        "Recorded Balance represents revenue remaining after the direct costs recorded in the system. It should not automatically be treated as final accounting profit because other company overheads may not be included. January–July use stored monthly performance records. August–September use stored monthly financial report rows that are not yet approved as published profit. Incomplete cost fields stay unknown and are excluded from confirmed rankings and KPI totals.",
+        "Recorded Operating Balance is revenue remaining after the direct costs used for internal vehicle reporting. It is not audited net profit. January–July use stored monthly performance records. August–September use the owner-approved reporting convention: unreported source costs contribute ฿0 to the operating balance without rewriting the original source blanks. Saved Manage Data adjustments take precedence over source values.",
       executiveSummary,
       fleetHealth: [
         { count: performanceStatusCounts.strong, label: "Strong", value: String(performanceStatusCounts.strong), tone: "success" },
@@ -2300,7 +2505,7 @@ export default function VehiclePerformancePage() {
         : [
             { label: labels.revenue, value: currency(summary.grossRevenue) },
             { label: "Recorded Balance after recorded direct costs", value: currency(summary.recordedBalance), tone: summary.recordedBalance < 0 ? "danger" : "success" },
-            { label: "Margin %", value: partialCoverageActive ? "—" : percent(summary.marginPercent), tone: partialCoverageActive ? "warning" : (summary.recordedBalance < 0 ? "danger" : "success") },
+            { label: "Margin %", value: percent(summary.marginPercent), tone: summary.recordedBalance < 0 ? "danger" : "success" },
             { label: labels.fuelSpend, value: currency(summary.fuelSpend) },
             { label: labels.fuelPercentOfRevenue, value: percent(summary.fuelPercent) },
             { label: labels.salary, value: currency(summary.salaryCost) },
@@ -2472,11 +2677,11 @@ export default function VehiclePerformancePage() {
   const moneyDelta = (value: number | null) => value == null ? null : formatSignedPercent(value, language);
   const pointDelta = (value: number | null) => value == null ? null : formatSignedPointChange(value, language);
 
-  const tripDataAvailable = selectedTripFinancials.operationalTrips > 0 || selectedTripFinancials.revenueGeneratingTrips > 0;
-
   const fleetDecisionData = useMemo(() => {
-    const validMargins = rows.filter((row) => row.marginPercent != null);
-    const validFuel = rows.filter((row) => row.fuelPercent != null);
+    const balanceHighlightRows = rows;
+    const balanceHighlightsProvisional = false;
+    const validMargins = rows.filter((row) => row.grossRevenue > 0 && row.marginPercent != null);
+    const validFuel = rows.filter((row) => row.fuelPercent != null && row.grossRevenue > 0);
 
     const median = (values: number[]) => {
       if (!values.length) return null;
@@ -2494,13 +2699,14 @@ export default function VehiclePerformancePage() {
     const lowestMargins = [...validMargins]
       .sort((left, right) => (left.marginPercent ?? Number.POSITIVE_INFINITY) - (right.marginPercent ?? Number.POSITIVE_INFINITY))
       .slice(0, 5);
-    const topBalance = [...rows]
+    const topBalance = [...balanceHighlightRows]
       .sort((left, right) => right.recordedBalance - left.recordedBalance)
       .slice(0, 5);
     const topRevenue = [...rows]
+      .filter((row) => row.grossRevenue > 0)
       .sort((left, right) => right.grossRevenue - left.grossRevenue)
       .slice(0, 5);
-    const topVehicles = [...rows]
+    const topVehicles = [...balanceHighlightRows]
       .sort((left, right) => right.recordedBalance - left.recordedBalance)
       .slice(0, 8);
     const bestMargins = [...validMargins]
@@ -2563,26 +2769,69 @@ export default function VehiclePerformancePage() {
       topVehicles,
       highestFuelShare,
       bestMargins,
+      balanceHighlightsProvisional,
       fleetMedianMargin,
       fleetMedianFuel,
       topFiveBalanceShare: positiveBalance > 0 ? (topFiveBalance / positiveBalance) * 100 : null,
       averageBalancePerVehicle: rows.length ? summary.recordedBalance / rows.length : 0,
       averageRevenuePerVehicle: rows.length ? summary.grossRevenue / rows.length : 0
     };
-  }, [language, rows, selectedMonths.length, summary.grossRevenue, summary.recordedBalance, vehicleMonthCounts]);
+  }, [language, rows, selectedMonths.length, selectingOnlyV6Months, summary.grossRevenue, summary.recordedBalance, v6MetaByRegistration, vehicleMonthCounts]);
 
-  const openManageData = () => {
+  const openManageData = (focusRegistration?: string | null) => {
+    if (financialLeaveGuard.current?.() === false) return;
+    setWorksheetFocusRegistration(focusRegistration ?? null);
     setPerformanceView("fleet");
     setDataManagementOpen(true);
     requestAnimationFrame(() => document.getElementById("vehicle-performance-data-management")?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
+  const applyV6Workspace = useCallback((workspace: { reports?: FinancialReport[] }) => {
+    if (Array.isArray(workspace.reports)) setV6Reports(workspace.reports);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (window.location.hash === "#vehicle-performance-v4") setPerformanceView("financial");
+    if (window.location.hash === "#vehicle-performance-trips") {
+      window.location.hash = "";
+      setPerformanceView("fleet");
+    }
   }, []);
 
-  const showLegacyWorkspace = performanceView === "fleet" || performanceView === "monthly" || performanceView === "trips";
+  useEffect(() => {
+    if ((performanceView as string) === "trips") setPerformanceView("fleet");
+  }, [performanceView]);
+
+  const showLegacyWorkspace = performanceView === "fleet" || performanceView === "monthly";
+  const showDashboardChrome = showLegacyWorkspace || performanceView === "financial" || dataManagementOpen;
+  const selectedMonthEligibleCount = typeof month === "number"
+    ? (eligibleCountByMonth[month] ?? filterEligibleRegistrationsForMonth(expectedVehicleRegistrations, year, month).length)
+    : null;
+  const selectedMonthCoverageStatus = typeof month === "number"
+    ? (monthlyPerformanceRows.find((row) => row.month === month)?.status ?? "missing")
+    : null;
+  const periodStatusLabel = useMemo(() => {
+    if (typeof month === "number") {
+      const eligible = selectedMonthEligibleCount ?? 0;
+      if (selectingOnlyV6Months && v6StatusLabel) {
+        return `${periodLabel} · ${v6StatusLabel}`;
+      }
+      const coverage = selectedMonthCoverageStatus === "complete"
+        ? "Complete"
+        : selectedMonthCoverageStatus === "partial"
+          ? "Partial"
+          : selectedMonthCoverageStatus === "missing"
+            ? "Missing"
+            : null;
+      return coverage
+        ? `${periodLabel} · ${eligible} eligible vehicles · ${coverage}`
+        : `${periodLabel} · ${eligible} eligible vehicles`;
+    }
+    if (useV6Dashboard && v6StatusLabel) {
+      return `${periodLabel} · ${v6StatusLabel}`;
+    }
+    return `${periodLabel} · ${monthCoverageCounts.complete} complete · ${monthCoverageCounts.partial} partial`;
+  }, [month, monthCoverageCounts.complete, monthCoverageCounts.partial, periodLabel, selectedMonthCoverageStatus, selectedMonthEligibleCount, selectingOnlyV6Months, useV6Dashboard, v6StatusLabel]);
 
   return (
     <>
@@ -2599,7 +2848,13 @@ export default function VehiclePerformancePage() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Link className="btn-secondary py-2 text-xs sm:text-sm" href="/maintenance/analytics">{t.maintenance.analytics}</Link>
-              <button type="button" onClick={() => void downloadVehiclePerformancePdf()} disabled={generatingPdf || loading || !!loadError || (!rows.length && !selectedV4ReportingRows.length)} className="btn-primary gap-2 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm">
+              {selectingOnlyV6Months ? (
+                <button type="button" onClick={() => openManageData()} className="btn-secondary gap-2 py-2 text-xs sm:text-sm">
+                  <Pencil className="h-4 w-4" />
+                  {language === "th" ? "แก้ไขตัวเลขการเงิน" : "Edit Financial Figures"}
+                </button>
+              ) : null}
+              <button type="button" onClick={() => void downloadVehiclePerformancePdf()} disabled={generatingPdf || loading || !!loadError || (!rows.length && !selectedV4ReportingRows.length && !v6Projection.records.length)} className="btn-primary gap-2 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm">
                 <Download className="h-4 w-4" />
                 {generatingPdf ? "Generating..." : "Download PDF"}
               </button>
@@ -2626,6 +2881,7 @@ export default function VehiclePerformancePage() {
                     openManageData();
                     return;
                   }
+                  if (financialLeaveGuard.current?.() === false) return;
                   setDataManagementOpen(false);
                   setPerformanceView(value);
                   if (value === "financial") {
@@ -2635,22 +2891,19 @@ export default function VehiclePerformancePage() {
                 className={`rounded-xl px-3 py-2 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 sm:text-sm ${isSelected ? "bg-brand-700 text-white shadow-sm" : "text-slate-600 hover:bg-brand-50"}`}
               >{label}</button>;
             })}
-            {tripDataAvailable ? (
-              <button type="button" role="tab" aria-selected={performanceView === "trips"} onClick={() => { setDataManagementOpen(false); setPerformanceView("trips"); }} className={`rounded-xl px-3 py-2 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 sm:text-sm ${performanceView === "trips" ? "bg-brand-700 text-white shadow-sm" : "text-slate-600 hover:bg-brand-50"}`}>Trip Performance</button>
-            ) : null}
           </div>
 
-          {showLegacyWorkspace ? (
+          {showDashboardChrome ? (
             <div className="mt-3 rounded-2xl border border-white/80 bg-white/85 p-3 shadow-sm">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Fleet filters · January–September 2026</p>
               <div className="mt-2 grid gap-3 md:grid-cols-[120px_190px_minmax(240px,1fr)] md:items-end">
               <div>
                 <label className="form-label" htmlFor="vehicle-performance-year">{labels.year}</label>
-                <input id="vehicle-performance-year" className="form-input w-full bg-white" type="number" min="2000" max="2100" value={year} onChange={(event) => setYear(Number(event.target.value) || 2026)} />
+                <input id="vehicle-performance-year" className="form-input w-full bg-white" type="number" min="2000" max="2100" value={year} onChange={(event) => { if (financialLeaveGuard.current?.() === false) return; setYear(Number(event.target.value) || 2026); }} />
               </div>
               <div>
                 <label className="form-label" htmlFor="vehicle-performance-month">{labels.month}</label>
-                <select id="vehicle-performance-month" className="form-input w-full bg-white" value={month} onChange={(event) => setMonth(event.target.value ? Number(event.target.value) : "")}>
+                <select id="vehicle-performance-month" className="form-input w-full bg-white" value={month} onChange={(event) => { if (financialLeaveGuard.current?.() === false) return; setMonth(event.target.value ? Number(event.target.value) : ""); }}>
                   <option value="">{labels.allLoadedMonths}</option>
                   {VEHICLE_PERFORMANCE_REPORTING_MONTHS.map((value) => {
                     const option = MONTH_OPTIONS[value - 1];
@@ -2672,21 +2925,19 @@ export default function VehiclePerformancePage() {
               </div>
               {!loading && !loadError && hasDualReadContent ? (
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
-                  <span className="badge-muted">{periodLabel}</span>
-                  <button type="button" onClick={() => setVehicleCoverageOpen(true)} className="badge-muted transition hover:border-brand-200 hover:text-brand-700">
-                    {selectingOnlyV4Months ? selectedV4DisplayRows.length : dataQuality.representedVehicles} vehicles analysed
+                  <button type="button" onClick={() => setVehicleCoverageOpen(true)} className={`badge-muted transition hover:border-brand-200 hover:text-brand-700 ${monthCoverageCounts.partial || dataQuality.missingMonths.length ? "border-amber-200 bg-amber-50 text-amber-800" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`} title={language === "th" ? OWNER_REPORTING_NOTE_TH : OWNER_REPORTING_NOTE_EN}>
+                    {periodStatusLabel}
                   </button>
-                  <span className={`badge-muted ${monthCoverageCounts.partial || dataQuality.missingMonths.length ? "border-amber-200 bg-amber-50 text-amber-800" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{monthCoverageCounts.complete} complete · {monthCoverageCounts.partial} partial</span>
                   {confirmedCoverageLabel ? (
                     <span className="badge-muted border-amber-200 bg-amber-50 text-amber-900">{confirmedCoverageLabel}</span>
                   ) : null}
-                  {selectedV4SourceTotals.salaryProvisional ? (
-                    <span className="badge-muted border-amber-200 bg-amber-50 text-amber-900">September salary provisional</span>
+                  {useV6Dashboard && selectedMonthSet.has(9) ? (
+                    <span className="badge-muted border-slate-200 bg-slate-50 text-slate-700" title="Source payroll awaits independent confirmation; balances still use the owner-approved reporting convention.">September payroll note</span>
                   ) : null}
-                  {incompletePeriodMessage ? <span className="font-medium text-amber-800">{incompletePeriodMessage}</span> : null}
+                  {!selectingOnlyV6Months && incompletePeriodMessage ? <span className="font-medium text-amber-800">{incompletePeriodMessage}</span> : null}
                 </div>
               ) : null}
-              {v4ReportingNote ? (
+              {!useV6Dashboard && v4ReportingNote ? (
                 <p className="mt-2 text-xs text-amber-900">{v4ReportingNote.replace(/V4 /gi, "").replace(/dual-read/gi, "combined")}</p>
               ) : null}
             </div>
@@ -2695,7 +2946,8 @@ export default function VehiclePerformancePage() {
       </section>
 
       {performanceView === "financial" ? (
-        <div id="vehicle-performance-v4" className="scroll-mt-6">
+        <details id="vehicle-performance-v4" className="surface-card scroll-mt-6 p-4" open={!selectingOnlyV6Months}>
+          <summary className="cursor-pointer font-semibold text-brand-700">{language === "th" ? "นำเข้าและตรวจสอบเอกสารต้นทาง" : "Source report import and verification"}</summary>
           <VehicleFinancialDrafts
             language={language}
             vehicles={vehicles}
@@ -2703,7 +2955,7 @@ export default function VehiclePerformancePage() {
             canReview={canWrite}
             canApprove={can("admin:user_management")}
           />
-        </div>
+        </details>
       ) : null}
 
       {showLegacyWorkspace ? (loading ? <p role="status" className="surface-card p-5">{labels.loadingRecords}</p> : loadError ? (
@@ -2742,38 +2994,64 @@ export default function VehiclePerformancePage() {
             <PerformanceHeroMetric label="Vehicles analysed" value={formatNumber(selectedV4SourceTotals.vehicleCount, language)} detail={`${completeV4SelectedCount} complete · ${incompleteV4SelectedCount} incomplete`} />
           </div>
         ) : (
-          <div className="grid divide-y divide-slate-100 sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-5">
-            <PerformanceHeroMetric label="Revenue" value={formatCompactBaht(summary.grossRevenue)} detail={`${periodLabel} total`} />
+          <div className="grid divide-y divide-slate-100 sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-5" data-testid="vehicle-performance-kpi-strip">
+            <PerformanceHeroMetric label="Revenue" value={formatCompactBaht(v6Hero ? v6Hero.revenueBaht : summary.grossRevenue)} detail={`${periodLabel} total`} />
             <PerformanceHeroMetric
               label="Recorded balance"
-              value={formatCompactBaht(summary.recordedBalance)}
-              detail={confirmedCoverageLabel || "Revenue after recorded direct costs"}
-              tone={partialCoverageActive ? "warning" : (summary.recordedBalance < 0 ? "danger" : "success")}
+              value={formatCompactBaht(v6Hero ? (v6Hero.balanceBaht ?? 0) : summary.recordedBalance)}
+              detail={useV6Dashboard
+                ? (v6Hero ? "Recorded operating balance · owner-approved reporting" : "Jan–Jul published + Aug–Sep owner-approved reporting")
+                : (confirmedCoverageLabel || "Revenue after recorded direct costs")}
+              tone={(v6Hero ? (v6Hero.balanceBaht ?? 0) : summary.recordedBalance) < 0 ? "danger" : "success"}
             />
             <PerformanceHeroMetric
               label="Margin"
-              value={partialCoverageActive ? "—" : formatPercent(summary.marginPercent, language)}
-              detail={partialCoverageActive ? "Withheld · Aug/Sep incomplete costs excluded from confirmed totals" : "Recorded balance ÷ revenue"}
+              value={formatPercent(v6Hero ? v6Hero.marginPercent : summary.marginPercent, language)}
+              detail="Recorded balance ÷ revenue"
             />
-            <PerformanceHeroMetric label="Fuel / revenue" value={formatPercent(summary.fuelPercent, language)} detail={`${formatCompactBaht(summary.fuelSpend)} fuel spend`} />
-            <PerformanceHeroMetric label="Vehicles analysed" value={formatNumber(rows.length, language)} detail={`${loadedMonthCount} loaded ${loadedMonthCount === 1 ? "month" : "months"}`} />
+            <PerformanceHeroMetric label="Fuel / revenue" value={formatPercent(v6Hero ? v6Hero.fuelPercent : summary.fuelPercent, language)} detail={`${formatCompactBaht(v6Hero ? v6Hero.fuelBaht : summary.fuelSpend)} fuel spend`} />
+            <PerformanceHeroMetric
+              label="Vehicles analysed"
+              value={formatNumber(
+                v6Hero
+                  ? v6Hero.vehicleCount
+                  : selectedMonthEligibleCount != null
+                    ? selectedMonthEligibleCount
+                    : rows.length,
+                language
+              )}
+              detail={v6Hero
+                ? `${v6Hero.vehicleCount} reported vehicles`
+                : selectedMonthEligibleCount != null
+                  ? `${selectedMonthEligibleCount} eligible for ${periodLabel}`
+                  : useV6Dashboard && v6ReportingSummary
+                    ? `${rows.length} vehicles · ${v6ReportingSummary.vehicleCount} Aug/Sep reported`
+                    : `${loadedMonthCount} loaded ${loadedMonthCount === 1 ? "month" : "months"}`}
+            />
           </div>
         )}
+        {selectingOnlyV6Months ? (
+          <p className="border-t border-brand-100/70 px-5 py-2.5 text-xs text-slate-500" title={language === "th" ? OWNER_REPORTING_NOTE_TH : OWNER_REPORTING_NOTE_EN}>
+            {language === "th" ? OWNER_REPORTING_NOTE_TH : OWNER_REPORTING_NOTE_EN}
+          </p>
+        ) : null}
       </section>
 
       {performanceView === "fleet" ? <>
-        {!selectingOnlyV4Months && month === "" && selectedV4ReportingRows.length > 0 ? (
+        {!selectingOnlyV4Months && month === "" && selectedV4ReportingRows.length > 0 && !useV6Dashboard ? (
           <div className="surface-card border border-amber-200 bg-amber-50/70 px-5 py-3 text-sm text-amber-950">
             August and September financial-report columns (Salary through Maintenance, plus TOTAL) appear when you select <span className="font-semibold">August</span> or <span className="font-semibold">September</span> in the month filter. The all-months view keeps the January–July ranking layout.
           </div>
         ) : null}
         {!selectingOnlyV4Months ? (
-        <section className="surface-card overflow-hidden border border-brand-100/70 p-0 shadow-[0_14px_34px_rgba(76,29,149,0.05)]">
+        <section className="surface-card overflow-hidden border border-brand-100/70 p-0 shadow-[0_14px_34px_rgba(76,29,149,0.05)]" data-testid="fleet-highlights">
           <div className="flex flex-col gap-3 border-b border-brand-100/70 bg-[linear-gradient(135deg,#ffffff_0%,#fbf9ff_68%,#f5f0ff_100%)] px-5 py-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">Fleet highlights</p>
               <h2 className="mt-1 text-xl font-semibold text-slate-950">The clearest picture of the fleet</h2>
-              <p className="mt-1 max-w-3xl text-sm text-slate-500">Four factual signals from the selected period. Open any vehicle to see the figures behind it.</p>
+              <p className="mt-1 max-w-3xl text-sm text-slate-500">
+                Four factual signals from the selected period. Open any vehicle to see the figures behind it.
+              </p>
             </div>
             <span className="badge-muted">{periodLabel}</span>
           </div>
@@ -2815,12 +3093,22 @@ export default function VehiclePerformancePage() {
               <p className="mt-1 text-sm text-slate-500">
                 {selectingOnlyV4Months
                   ? "Vehicles listed by registration. Unknown costs show as —. Confirmed balance appears only when all required costs are present — incomplete rows are not ranked as profit."
-                  : "Every analysed vehicle in one ranked comparison. Change the sort to rank by balance, revenue, margin or fuel share, then open a vehicle for the full monthly breakdown."}
+                  : selectingOnlyV6Months
+                    ? "Every analysed vehicle ranked with owner-approved recorded operating balances. Blank source costs contribute ฿0 to the balance; source dashes stay visible in Manage Data and vehicle details."
+                    : useV6Dashboard
+                      ? "January–July published KPIs plus August–September owner-approved recorded balances. Sort by Balance ↑ to review the weakest performers first."
+                      : "Every analysed vehicle in one ranked comparison. Change the sort to rank by balance, revenue, margin or fuel share, then open a vehicle for the full monthly breakdown."}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <span className="badge-muted">{selectingOnlyV4Months ? selectedV4DisplayRows.length : visibleTableRows.length} vehicles</span>
               <span className="badge-muted">{periodLabel}</span>
+              {selectingOnlyV6Months ? (
+                <button type="button" onClick={() => openManageData()} className="btn-secondary py-1.5 text-xs">
+                  <Pencil className="mr-1 inline h-3.5 w-3.5" />
+                  {language === "th" ? "แก้ไขตัวเลข" : "Edit figures"}
+                </button>
+              ) : null}
             </div>
           </div>
           {selectingOnlyV4Months ? (
@@ -2846,8 +3134,8 @@ export default function VehiclePerformancePage() {
                   <div className="inline-flex rounded-xl bg-slate-50 p-1">
                     {([
                       ["all", "All"],
-                      ["complete", "Full coverage"],
-                      ["partial", "Incomplete"]
+                      ["complete", selectingOnlyV6Months ? "Reported" : "Full coverage"],
+                      ["partial", selectingOnlyV6Months ? "Review" : "Incomplete"]
                     ] as const).map(([key, label]) => (
                       <button key={key} type="button" onClick={(event) => { event.preventDefault(); setCoverageFilter(key); }} className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition ${coverageFilter === key ? "bg-white text-brand-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>{label}</button>
                     ))}
@@ -2928,8 +3216,24 @@ export default function VehiclePerformancePage() {
                 <thead className="bg-[linear-gradient(90deg,#f7f3ff_0%,#fbf9ff_55%,#f6f2ff_100%)] text-[11px] uppercase tracking-[0.1em] text-slate-500"><tr><th className="px-5 py-3 text-left font-semibold">Rank / vehicle</th><th className="px-4 py-3 text-right font-semibold">Revenue</th><th className="px-4 py-3 text-right font-semibold">Direct costs</th><th className="px-4 py-3 text-right font-semibold">Recorded balance</th><th className="px-4 py-3 text-right font-semibold">Margin</th><th className="px-4 py-3 text-right font-semibold">Fuel / revenue</th><th className="px-4 py-3 text-center font-semibold">Coverage</th><th className="px-5 py-3 text-right font-semibold">Details</th></tr></thead>
                 <tbody>
                   {visibleTableRows.map((row, index) => {
-                    const monthsLoaded = vehicleMonthCounts.get(vehicleKey(row.vehicleRegistration)) ?? 0;
-                    const directCosts = row.grossRevenue - row.recordedBalance;
+                    const eligibleMonths = selectedMonths.filter((monthNumber) =>
+                      isVehicleEligibleForPerformanceMonth(row.vehicleRegistration, year, monthNumber)
+                    );
+                    const monthsLoaded = eligibleMonths.filter((monthNumber) =>
+                      selectedRecords.some((record) =>
+                        record.month === monthNumber
+                          && vehicleKey(record.vehicle_registration) === vehicleKey(row.vehicleRegistration)
+                      )
+                    ).length;
+                    const meta = selectingOnlyV6Months ? v6MetaByRegistration.get(vehicleKey(row.vehicleRegistration)) : undefined;
+                    const directCosts = meta ? meta.knownCostsBaht : row.grossRevenue - row.recordedBalance;
+                    const balanceValue = meta?.recordedBalanceBaht ?? row.recordedBalance;
+                    const marginValue = meta ? meta.marginPercent : row.marginPercent;
+                    const fuelValue = meta ? meta.fuelPercent : row.fuelPercent;
+                    const coverageLabel = meta
+                      ? (meta.status === "adjusted" ? "Adjusted" : meta.status === "review" ? "Review" : "Reported")
+                      : `${monthsLoaded}/${eligibleMonths.length}`;
+                    const coverageComplete = meta ? meta.status !== "review" : monthsLoaded === eligibleMonths.length;
                     return (
                       <tr key={row.vehicleRegistration} onClick={() => openVehicle(row.vehicleRegistration)} className={`cursor-pointer border-t border-slate-100 transition hover:bg-brand-50/55 ${index % 2 ? "bg-slate-50/35" : "bg-white"}`}>
                         <td className="px-5 py-3.5">
@@ -2937,16 +3241,16 @@ export default function VehiclePerformancePage() {
                             <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${index < 3 ? "bg-brand-700 text-white shadow-sm" : "bg-brand-50 text-brand-700"}`}>{index + 1}</span>
                             <div>
                               <p className="font-bold text-slate-950">{row.vehicleRegistration}</p>
-                              <p className="mt-0.5 text-xs text-slate-500">{monthsLoaded}/{selectedMonths.length} months loaded</p>
+                              <p className="mt-0.5 text-xs text-slate-500">{meta ? (meta.identityReview ? "Registration identity review" : `${monthsLoaded}/${eligibleMonths.length} eligible months`) : `${monthsLoaded}/${eligibleMonths.length} eligible months`}</p>
                             </div>
                           </div>
                         </td>
                         <td className="px-4 py-3.5 text-right font-semibold text-slate-900">{formatBaht(row.grossRevenue)}</td>
                         <td className="px-4 py-3.5 text-right text-slate-700">{formatBaht(directCosts)}</td>
-                        <td className={`px-4 py-3.5 text-right font-bold ${row.recordedBalance < 0 ? "text-rose-700" : "text-emerald-700"}`}>{formatBaht(row.recordedBalance)}</td>
-                        <td className="px-4 py-3.5 text-right font-semibold text-slate-900">{formatPercent(row.marginPercent, language)}</td>
-                        <td className="px-4 py-3.5 text-right font-semibold text-brand-700">{formatPercent(row.fuelPercent, language)}</td>
-                        <td className="px-4 py-3.5 text-center"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${monthsLoaded === selectedMonths.length ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{monthsLoaded}/{selectedMonths.length}</span></td>
+                        <td className={`px-4 py-3.5 text-right font-bold ${balanceValue < 0 ? "text-rose-700" : "text-emerald-700"}`}>{formatBaht(balanceValue)}</td>
+                        <td className="px-4 py-3.5 text-right font-semibold text-slate-900">{marginValue == null ? "N/A" : formatPercent(marginValue, language)}</td>
+                        <td className="px-4 py-3.5 text-right font-semibold text-brand-700">{fuelValue == null ? "N/A" : formatPercent(fuelValue, language)}</td>
+                        <td className="px-4 py-3.5 text-center"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${coverageComplete ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{coverageLabel}</span></td>
                         <td className="px-5 py-3.5 text-right"><span className="inline-flex rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-brand-700 shadow-sm">Open →</span></td>
                       </tr>
                     );
@@ -2966,9 +3270,15 @@ export default function VehiclePerformancePage() {
                   <h2 className="text-2xl font-semibold text-slate-950">{detailVehicle}</h2>
                   <span className="badge-muted">{vehicleDetailSummary?.months.length ?? vehicleHistory.length} months of data</span>
                 </div>
-                <p className="mt-1 text-sm text-slate-500">Selected-period totals, direct-cost breakdown and month-by-month performance. Incomplete months keep source figures without confirmed profit.</p>
+                <p className="mt-1 text-sm text-slate-500">Selected-period totals, direct-cost breakdown and month-by-month performance. August–September use the owner-approved recorded operating balance.</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                {selectingOnlyV6Months && detailVehicle ? (
+                  <button type="button" className="btn-primary gap-2" onClick={() => openManageData(detailVehicle)}>
+                    <Pencil className="h-4 w-4" />
+                    {language === "th" ? "แก้ไขตัวเลข" : "Edit Figures"}
+                  </button>
+                ) : null}
                 <button type="button" disabled={!previousDetailVehicle} onClick={() => previousDetailVehicle && openVehicle(previousDetailVehicle)} className="btn-secondary disabled:cursor-not-allowed disabled:opacity-40">← Previous vehicle</button>
                 <button type="button" disabled={!nextDetailVehicle} onClick={() => nextDetailVehicle && openVehicle(nextDetailVehicle)} className="btn-secondary disabled:cursor-not-allowed disabled:opacity-40">Next vehicle →</button>
                 <button type="button" className="btn-secondary" onClick={() => setDetailVehicle(null)}>Close detail</button>
@@ -3001,8 +3311,8 @@ export default function VehiclePerformancePage() {
               <PerformanceHeroMetric label="Fuel / revenue" value={formatPercent(detailScope.fuelShare, language)} detail="Fuel as share of revenue" />
             </div>
             ) : (
-              <div className="border-b border-amber-100 bg-amber-50/60 px-5 py-4 text-sm text-amber-900">
-                Confirmed totals are unavailable for this selection because one or more cost fields are incomplete. Source figures remain visible in the monthly history below without fabricated profit.
+              <div className="border-b border-slate-100 bg-slate-50/80 px-5 py-4 text-sm text-slate-700">
+                No selected-period totals are available for this vehicle yet.
               </div>
             )}
 
@@ -3040,7 +3350,7 @@ export default function VehiclePerformancePage() {
             ) : null}
 
             <div className="border-t border-slate-100">
-              <div className="px-5 py-4"><p className="text-xs font-semibold uppercase tracking-[0.13em] text-brand-700">Monthly history</p><h3 className="mt-1 text-lg font-semibold text-slate-950">How this vehicle changed month by month</h3><p className="mt-1 text-sm text-slate-500">January–July show published KPI history. August–September show the same ten financial-report columns as the owner PDFs, including incomplete months (unknown costs remain —).</p></div>
+              <div className="px-5 py-4"><p className="text-xs font-semibold uppercase tracking-[0.13em] text-brand-700">Monthly history</p><h3 className="mt-1 text-lg font-semibold text-slate-950">How this vehicle changed month by month</h3><p className="mt-1 text-sm text-slate-500">Only eligible fleet months are counted as coverage. January–July show published KPI history. August–September use owner-approved recorded operating balances. Periods before this vehicle joined the fleet are labelled Not in fleet.</p></div>
               <div className="overflow-x-auto border-t border-slate-100">
                 <table className="w-full min-w-[1180px] text-sm tabular-nums">
                   <thead className="bg-[linear-gradient(90deg,#f7f3ff_0%,#fbf9ff_55%,#f6f2ff_100%)] text-[10px] uppercase tracking-[0.08em] text-slate-500">
@@ -3063,11 +3373,17 @@ export default function VehiclePerformancePage() {
                     {vehicleHistory.map((item) => {
                       if (item.sourceDisplay) {
                         const source = item.sourceDisplay;
-                        const statusLabel = source.financiallyComplete
-                          ? (source.salaryProvisional ? "Provisional salary" : "Complete")
-                          : "Incomplete · balance unknown";
+                        const statusLabel = item.reportingStatus === "adjusted"
+                          ? "Adjusted"
+                          : item.reportingStatus === "review"
+                            ? "Review"
+                            : item.provenance === "v6_reported"
+                              ? "Reported"
+                              : (source.financiallyComplete
+                                ? (source.salaryProvisional ? "Payroll note" : "Reported")
+                                : "Reported");
                         return (
-                          <tr key={item.month} className={`border-t border-slate-100 ${detailMonthFilter === item.month ? "bg-brand-50/50" : item.v4Incomplete ? "bg-amber-50/35" : ""}`}>
+                          <tr key={item.month} className={`border-t border-slate-100 ${detailMonthFilter === item.month ? "bg-brand-50/50" : ""}`}>
                             <td className="whitespace-nowrap px-3 py-2.5 font-bold text-slate-950">{monthLabel(item.month)}</td>
                             <td className="whitespace-nowrap px-2 py-2.5 text-xs font-semibold text-slate-600">{statusLabel}</td>
                             <td className="whitespace-nowrap px-2 py-2.5 text-right text-slate-700">{formatNullableBaht(source.salaryCost)}{source.salaryProvisional ? " *" : ""}</td>
@@ -3079,11 +3395,20 @@ export default function VehiclePerformancePage() {
                             <td className="whitespace-nowrap px-2 py-2.5 text-right text-slate-700">{formatNullableBaht(source.fuelSpend)}</td>
                             <td className="whitespace-nowrap px-2 py-2.5 text-right text-slate-700">{formatNullableBaht(source.lpgCost)}</td>
                             <td className="whitespace-nowrap px-2 py-2.5 text-right text-slate-700">{formatNullableBaht(source.maintenance)}</td>
-                            <td className={`whitespace-nowrap px-2 py-2.5 text-right font-bold ${source.recordedBalance == null ? "text-amber-800" : source.recordedBalance < 0 ? "text-rose-700" : "text-emerald-700"}`}>{formatNullableBaht(source.recordedBalance)}</td>
+                            <td className={`whitespace-nowrap px-2 py-2.5 text-right font-bold ${source.recordedBalance == null ? "text-slate-500" : source.recordedBalance < 0 ? "text-rose-700" : "text-emerald-700"}`}>{formatNullableBaht(source.recordedBalance)}</td>
                           </tr>
                         );
                       }
                       if (!item.row) {
+                        if (item.provenance === "not_in_fleet") {
+                          return (
+                            <tr key={item.month} className="border-t border-slate-100 bg-slate-50/70">
+                              <td className="whitespace-nowrap px-3 py-2.5 font-bold text-slate-950">{monthLabel(item.month)}</td>
+                              <td className="whitespace-nowrap px-2 py-2.5 text-xs font-semibold text-slate-600">Not in fleet</td>
+                              <td className="px-2 py-2.5 text-right text-slate-500" colSpan={10}>Not part of the EES reporting fleet in this month</td>
+                            </tr>
+                          );
+                        }
                         return (
                           <tr key={item.month} className="border-t border-slate-100 bg-amber-50/40">
                             <td className="whitespace-nowrap px-3 py-2.5 font-bold text-slate-950">{monthLabel(item.month)}</td>
@@ -3127,7 +3452,7 @@ export default function VehiclePerformancePage() {
             </div>
             <span className="badge-muted">{periodLabel}</span>
           </div>
-          <MonthlyPerformanceTable rows={monthlyPerformanceRows} labels={labels} language={language} monthLabel={monthLabel} expectedVehicleCount={expectedVehicleRegistrations.length} missingVehiclesByMonth={missingVehiclesByMonth} onPartialClick={setPartialMonthDetail} />
+          <MonthlyPerformanceTable rows={monthlyPerformanceRows} labels={labels} language={language} monthLabel={monthLabel} expectedVehicleCountByMonth={eligibleCountByMonth} missingVehiclesByMonth={missingVehiclesByMonth} onPartialClick={setPartialMonthDetail} />
         </section>
 
         <details className="surface-card overflow-hidden border border-brand-100/70 bg-[linear-gradient(180deg,#ffffff_0%,#fbf9ff_100%)] p-0 shadow-[0_14px_34px_rgba(76,29,149,0.05)]">
@@ -3146,6 +3471,7 @@ export default function VehiclePerformancePage() {
                 <option value="recordedBalance">{labels.recordedBalance}</option>
                 <option value="fuelSpend">{labels.fuelSpend}</option>
                 <option value="marginPercent">{labels.marginPercent}</option>
+                <option value="fuelPercent">{labels.fuelPercent}</option>
               </select>
             </div>
             <MonthlyTrend rows={monthlyPerformanceRows} labels={labels} language={language} metric={trendMetric} monthLabel={shortMonthLabel} />
@@ -3153,22 +3479,9 @@ export default function VehiclePerformancePage() {
         </details>
       </> : null}
 
-      {performanceView === "trips" ? (
-        <section className="surface-card p-4 sm:p-5">
-          <div className="mb-4"><p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">Trip performance</p><h2 className="mt-1 text-xl font-semibold text-slate-950">Operational vs financial trips</h2><p className="mt-1 text-sm text-slate-500">Trip Journey data is kept separate from monthly vehicle finance so zero or incomplete trip data never makes the financial page look broken.</p></div>
-          {tripDataAvailable ? <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <KpiCard label="Total distance" value={`${formatNumber(selectedTripFinancials.operationalDistanceKm, language, 1)} km`} detail={`${selectedTripFinancials.operationalTrips} operational trips`} />
-            <KpiCard label="Revenue distance" value={`${formatNumber(selectedTripFinancials.revenueDistanceKm, language, 1)} km`} detail={`${selectedTripFinancials.revenueGeneratingTrips} revenue-generating trips`} />
-            <KpiCard label="Non-chargeable distance" value={`${formatNumber(selectedTripFinancials.nonChargeableDistanceKm, language, 1)} km`} detail={`${selectedTripFinancials.excludedTrips} financially excluded trips`} />
-            <KpiCard label="Trip revenue" value={formatBaht(selectedTripFinancials.includedRevenue)} detail="Financially included trip prices" />
-            <KpiCard label="Revenue / km" value={selectedTripFinancials.revenuePerKm == null ? "-" : formatBaht(selectedTripFinancials.revenuePerKm)} detail="Included revenue ÷ revenue distance" />
-          </div> : <div className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-8 text-center"><p className="font-semibold text-slate-900">Trip performance is not available for this period yet.</p><p className="mt-1 text-sm text-slate-500">No eligible Trip Journey records are linked to the selected financial period. Financial performance above remains unaffected.</p></div>}
-        </section>
-      ) : null}
-
       </>) : null}
 
-      {showLegacyWorkspace && dataManagementOpen ? <details id="vehicle-performance-data-management" open className="surface-card scroll-mt-6 p-4 sm:p-5">
+      {dataManagementOpen ? <details id="vehicle-performance-data-management" open className="surface-card scroll-mt-6 p-4 sm:p-5">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
           <div>
             <h3 className="section-title">{labels.dataManagement}</h3>
@@ -3178,6 +3491,28 @@ export default function VehiclePerformancePage() {
         </summary>
 
         <div className="mt-5 space-y-5">
+          {year === 2026 && (month === 8 || month === 9) ? (
+            <section className="rounded-[0.85rem] border border-brand-100 bg-white p-3 sm:p-4" data-testid="vehicle-performance-v6-manage">
+              <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-700">{language === "th" ? "แก้ไขการเงินรายเดือน" : "Editable monthly finances"}</p>
+                  <h3 className="mt-1 text-lg font-semibold text-slate-950">{language === "th" ? "ตารางการเงินที่บันทึกได้" : "Saved financial worksheet"}</h3>
+                  <p className="mt-1 text-sm text-slate-500">{language === "th" ? "แก้ไขและบันทึกตัวเลขเดือนที่เลือก ยอดใน Fleet Overview จะอัปเดตหลังบันทึกสำเร็จ" : "Edit and save the selected month. Fleet Overview updates after a confirmed save."}</p>
+                </div>
+                <button type="button" className="btn-secondary" onClick={() => { if (financialLeaveGuard.current?.() === false) return; setDataManagementOpen(false); setWorksheetFocusRegistration(null); }}>{language === "th" ? "กลับไปภาพรวมกองรถ" : "Back to Fleet Overview"}</button>
+              </div>
+              <VehiclePerformanceFinancial
+                registerLeaveGuard={registerFinancialLeaveGuard}
+                month={Number(month)}
+                language={language}
+                search={searchQuery}
+                mode="manage"
+                focusRegistration={worksheetFocusRegistration}
+                onWorkspaceChange={applyV6Workspace}
+                onSaved={applyV6Workspace}
+              />
+            </section>
+          ) : null}
           <section className="rounded-[0.85rem] border border-slate-200 bg-white p-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
@@ -3475,7 +3810,7 @@ export default function VehiclePerformancePage() {
           labels={labels}
           year={year}
           monthName={monthLabel(selectedPartialMonthRow.month)}
-          expectedVehicleCount={expectedVehicleRegistrations.length}
+          expectedVehicleCount={eligibleCountByMonth[selectedPartialMonthRow.month] ?? selectedPartialMonthRow.vehicleCount}
           vehicleCount={selectedPartialMonthRow.vehicleCount}
           missingVehicles={missingVehiclesByMonth.get(selectedPartialMonthRow.month) ?? []}
           onClose={() => setPartialMonthDetail(null)}
@@ -3677,7 +4012,7 @@ function MonthlyPerformanceTable({
   labels,
   language,
   monthLabel,
-  expectedVehicleCount,
+  expectedVehicleCountByMonth,
   missingVehiclesByMonth,
   onPartialClick
 }: {
@@ -3685,7 +4020,7 @@ function MonthlyPerformanceTable({
   labels: ReturnType<typeof useLanguage>["t"]["vehiclePerformance"];
   language: "en" | "th";
   monthLabel: (month: number) => string;
-  expectedVehicleCount: number;
+  expectedVehicleCountByMonth: Partial<Record<number, number>>;
   missingVehiclesByMonth: Map<number, string[]>;
   onPartialClick: (month: number) => void;
 }) {
@@ -3738,9 +4073,9 @@ function MonthlyPerformanceTable({
                       onClick={() => onPartialClick(row.month)}
                       className="inline-flex rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-800 hover:border-amber-300 hover:bg-amber-100"
                     >
-                      {row.vehicleCount} / {expectedVehicleCount}
+                      {row.vehicleCount} / {expectedVehicleCountByMonth[row.month] ?? row.vehicleCount}
                     </button>
-                  ) : `${row.vehicleCount} / ${expectedVehicleCount}`}
+                  ) : `${row.vehicleCount} / ${expectedVehicleCountByMonth[row.month] ?? row.vehicleCount}`}
                 </td>
                 <td className="table-body-cell">
                   <MonthStatusBadge
@@ -4381,11 +4716,12 @@ function MonthlyTrend({
     metric === "grossRevenue" ? labels.revenue :
     metric === "recordedBalance" ? labels.recordedBalance :
     metric === "fuelSpend" ? labels.fuelSpend :
+    metric === "fuelPercent" ? labels.fuelPercent :
     labels.marginPercent;
   const formatValue = (value: number | null) =>
     value == null
       ? "-"
-      : metric === "marginPercent"
+      : metric === "marginPercent" || metric === "fuelPercent"
         ? formatPercent(value, language)
         : formatBaht(value);
   const points = rows.map((row, index) => ({
@@ -4394,10 +4730,10 @@ function MonthlyTrend({
     value: row.status === "missing" ? null : Number(row[metric] ?? 0)
   }));
   const values = points.map((point) => point.value).filter((value): value is number => value != null && Number.isFinite(value));
-  const isMoneyMetric = metric !== "marginPercent";
+  const isMoneyMetric = metric !== "marginPercent" && metric !== "fuelPercent";
   const rawMin = values.length ? (isMoneyMetric ? Math.min(...values, 0) : Math.min(...values)) : 0;
   const rawMax = values.length ? Math.max(...values, 1) : 1;
-  const padding = Math.max((rawMax - rawMin) * 0.12, metric === "marginPercent" ? 2 : rawMax * 0.04, 1);
+  const padding = Math.max((rawMax - rawMin) * 0.12, isMoneyMetric ? rawMax * 0.04 : 2, 1);
   const minValue = isMoneyMetric ? 0 : rawMin - padding;
   const maxValue = rawMax + padding;
   const chart = { width: 720, height: 250, left: 68, right: 28, top: 24, bottom: 46 };
@@ -4436,7 +4772,7 @@ function MonthlyTrend({
           );
         })}
         {segments.map((segment, index) => (
-          <path key={index} d={segment.join(" ")} fill="none" stroke={metric === "fuelSpend" ? "#d97706" : "#2563eb"} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+          <path key={index} d={segment.join(" ")} fill="none" stroke={metric === "fuelSpend" || metric === "fuelPercent" ? "#d97706" : "#2563eb"} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
         ))}
         {points.map((point) => {
           const x = xFor(point.index);
@@ -4445,7 +4781,7 @@ function MonthlyTrend({
             <g key={point.row.month}>
               <text x={x} y={chart.height - 18} textAnchor="middle" className="fill-slate-500 text-[12px]">{monthLabel(point.row.month)}</text>
               {hasValue ? (
-                <circle cx={x} cy={yFor(point.value as number)} r="4.5" className={metric === "fuelSpend" ? "fill-amber-600" : "fill-blue-600"}>
+                <circle cx={x} cy={yFor(point.value as number)} r="4.5" className={metric === "fuelSpend" || metric === "fuelPercent" ? "fill-amber-600" : "fill-blue-600"}>
                   <title>{`${monthLabel(point.row.month)}: ${formatValue(point.value)}`}</title>
                 </circle>
               ) : (

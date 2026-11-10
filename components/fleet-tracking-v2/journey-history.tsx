@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { Clock3, LoaderCircle, Search } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { originHeaders } from "@/lib/fleet-request-origin";
 import { FORTH_HISTORY_LIVE_REQUESTS_ENABLED } from "@/lib/forth-history-live-gate";
 import { parseForthTripsResponse, type ForthTripRecord } from "@/lib/forth-history-contract";
 import type { FleetTrackingV2LiveVehicle } from "@/lib/fleet-tracking-v2/live-adapter";
@@ -52,7 +53,7 @@ export function JourneyHistoryPanel({ vehicle, language, copy }: {
       const response = await fetch("/api/admin/forth-tracking/history/journeys", {
         method: "POST",
         cache: "no-store",
-        headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+        headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", ...originHeaders("live_journey_history_form") },
         body: JSON.stringify({ deviceId: vehicle.deviceId, date, language })
       });
       const payload: unknown = await response.json().catch(() => null);

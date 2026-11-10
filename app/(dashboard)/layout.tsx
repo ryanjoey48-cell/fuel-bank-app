@@ -1,15 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { FinanceFixtureProvider } from "@/components/finance-fixture-provider";
+import { FinancePreviewBanner } from "@/components/finance-preview-banner";
 import { SetupNotice } from "@/components/setup-notice";
+import { FloatingNavV3 } from "@/components/floating-nav-v3";
 import { TopNavigation } from "@/components/top-navigation";
 import { AdminFetchError, resolveLoginRouting } from "@/lib/account-management";
+import { isFinanceCentreLocalWorkspace, isFinanceFixtureMode, usesFinanceLocalDemoScreens } from "@/lib/finance-fixture-mode";
+import { isFinanceWorkspaceRoute } from "@/lib/finance-workspace-routes";
+import { isFinanceLocalPreview } from "@/lib/finance-local-preview";
 import { useLanguage } from "@/lib/language-provider";
-import { supabase } from "@/lib/supabase";
+import { supabase, supabaseConfigError } from "@/lib/supabase";
 import { AccountAccessProvider, useAccountAccess } from "@/lib/use-account-access";
 
-const AUTH_CHECK_TIMEOUT_MS = 8_000;
+const AUTH_CHECK_TIMEOUT_MS = 20_000;
 
 type ServiceUnavailableState = {
   message: string;
@@ -84,13 +90,28 @@ function DashboardShell({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [checkingAuth, setCheckingAuth] = useState(true);
+  const financeFixture = isFinanceFixtureMode();
+  const financeLocalWorkspace = isFinanceCentreLocalWorkspace();
+  const financePreview = financeFixture || (isFinanceLocalPreview() && !!supabaseConfigError);
+  const [checkingAuth, setCheckingAuth] = useState(!financePreview);
   const [serviceUnavailable, setServiceUnavailable] = useState<ServiceUnavailableState | null>(null);
   const [retryCount, setRetryCount] = useState(0);
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { refresh } = useAccountAccess();
+  // V7.8.4: the session check must not depend on the display language. It used to list the (translated) message string as an effect
+  // dependency, so every EN/TH switch re-ran the check, showed "Checking your session…" and unmounted every workspace (losing the
+  // selected dates and loaded evidence). The latest message is read through a ref instead.
+  const connectionFailedMessage = useRef(t.serviceUnavailable.connectionFailed);
+  connectionFailedMessage.current = t.serviceUnavailable.connectionFailed;
 
   useEffect(() => {
+    if (!financePreview) return;
+    setCheckingAuth(false);
+    setServiceUnavailable(null);
+  }, [financePreview]);
+
+  useEffect(() => {
+    if (financePreview) return;
     let active = true;
     const loginPath = () => {
       const currentPath = typeof window === "undefined"
@@ -112,7 +133,7 @@ function DashboardShell({
         );
       } catch (error) {
         if (active && isServiceAvailabilityError(error)) {
-          setServiceUnavailable({ message: error instanceof Error ? error.message : t.serviceUnavailable.connectionFailed });
+          setServiceUnavailable({ message: error instanceof Error ? error.message : connectionFailedMessage.current });
           setCheckingAuth(false);
           return;
         }
@@ -168,7 +189,7 @@ function DashboardShell({
         }
 
         if (active && isServiceAvailabilityError(error)) {
-          setServiceUnavailable({ message: error instanceof Error ? error.message : t.serviceUnavailable.connectionFailed });
+          setServiceUnavailable({ message: error instanceof Error ? error.message : connectionFailedMessage.current });
           setCheckingAuth(false);
           return;
         }
@@ -196,7 +217,7 @@ function DashboardShell({
       active = false;
       data.subscription.unsubscribe();
     };
-  }, [pathname, refresh, retryCount, router, t.serviceUnavailable.connectionFailed]);
+  }, [financePreview, pathname, refresh, retryCount, router]);
 
   useEffect(() => {
     if (pathname !== "/fleet-tracking") {
@@ -241,23 +262,96 @@ function DashboardShell({
     );
   }
 
+  const isFleetTrackingRoute = pathname === "/fleet-tracking";
+  const isHomeRoute = pathname === "/dashboard";
+  const onFinanceRoute = isFinanceWorkspaceRoute(pathname);
+  const isNarrowOfficeRoute = pathname === "/profile" || pathname === "/change-password";
+  // Data-heavy operational pages use the wide shell (fluid width + readable table/filter type).
+  const isWideOfficeRoute =
+    !isNarrowOfficeRoute &&
+    !isHomeRoute &&
+    !isFleetTrackingRoute &&
+    (pathname === "/booking-diary" ||
+      pathname === "/weekly-mileage" ||
+      pathname === "/fuel-logs" ||
+      pathname === "/fuel-spend-report" ||
+      pathname === "/vehicle-performance" ||
+      pathname === "/expenses-centre" ||
+      pathname === "/reports" ||
+      pathname === "/dispatch" ||
+      pathname === "/shipments" ||
+      pathname === "/trip-journey" ||
+      pathname === "/maintenance" ||
+      pathname.startsWith("/maintenance/") ||
+      pathname === "/inventory" ||
+      pathname === "/locations" ||
+      pathname === "/insurance" ||
+      pathname === "/fleet-events" ||
+      pathname === "/safety" ||
+      pathname.startsWith("/hr") ||
+      pathname.startsWith("/drivers") ||
+      pathname.startsWith("/employees") ||
+      pathname.startsWith("/admin/") ||
+      onFinanceRoute);
+
+  // Universal office chrome: every authenticated office route uses the same
+  // floating-glass TopNavigation. Fleet keeps a full-height map viewport shell
+  // under the nav — it must never restyle or re-parent the navbar.
+  const contentFrameClass = [
+    "dashboard-content-frame !pl-0",
+    isHomeRoute ? "has-floating-nav" : "has-v3-nav",
+    isHomeRoute ? "has-hero-overlay" : "",
+    isFleetTrackingRoute ? "ees-fleet-under-nav" : ""
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const mainClass = [
+    "dashboard-mobile-shell ees-shell-main mx-auto flex w-full max-w-full flex-col",
+    isFleetTrackingRoute
+      ? "min-h-0 flex-1 gap-0 px-0 pb-0"
+      : "min-h-[calc(100dvh-56px)] gap-3.5 px-4 pb-5 sm:gap-4 sm:px-5 sm:pb-6 md:px-6 md:pb-7 lg:px-8",
+    isHomeRoute ? "ees-shell-main--hero" : "ees-shell-main--standard",
+    isWideOfficeRoute ? "ees-shell-main--wide" : "",
+    isNarrowOfficeRoute ? "ees-shell-main--narrow" : ""
+  ].join(" ");
+
   return (
-    <div className={pathname === "/fleet-tracking" ? "dashboard-dispatch-shell" : "min-h-[100dvh]"}>
-      <TopNavigation />
-      <div className="dashboard-content-frame !pl-0">
-        <main className="dashboard-mobile-shell mx-auto flex min-h-[calc(100dvh-68px)] w-full max-w-full flex-col gap-3.5 px-4 pb-5 !pt-4 sm:gap-4 sm:px-5 sm:pb-6 md:px-6 md:pb-7 lg:px-8">
-          <SetupNotice />
-          {children}
-        </main>
-      </div>
+    <div className="ees-office-shell min-h-[100dvh]">
+      {onFinanceRoute && financePreview && !financeLocalWorkspace && !financeFixture ? (
+        <FinancePreviewBanner />
+      ) : null}
+      {isHomeRoute ? <TopNavigation /> : <FloatingNavV3 />}
+      {isFleetTrackingRoute ? (
+        <div className="dashboard-dispatch-shell is-fleet-route ees-fleet-viewport">
+          <div className={contentFrameClass}>
+            <main className={mainClass}>{children}</main>
+          </div>
+        </div>
+      ) : (
+        <div className={contentFrameClass}>
+          <main className={mainClass}>
+            {onFinanceRoute && financePreview && !financeLocalWorkspace ? (
+              <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+                {language === "th" ? "การทดสอบจำลอง · ไม่เชื่อมต่อระบบเข้าสู่ระบบและสมุดจองจริง" : "Simulated fixture testing · authentication and live Booking Diary are intentionally offline"}
+              </p>
+            ) : onFinanceRoute || isHomeRoute ? null : (
+              <SetupNotice />
+            )}
+            {children}
+          </main>
+        </div>
+      )}
     </div>
   );
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const financeLocalScreens = usesFinanceLocalDemoScreens();
+  const shell = <DashboardShell>{children}</DashboardShell>;
   return (
     <AccountAccessProvider>
-      <DashboardShell>{children}</DashboardShell>
+      {financeLocalScreens ? <FinanceFixtureProvider>{shell}</FinanceFixtureProvider> : shell}
     </AccountAccessProvider>
   );
 }

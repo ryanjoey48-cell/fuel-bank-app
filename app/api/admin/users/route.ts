@@ -25,7 +25,7 @@ function matchesFilters(user: ServerManagedAccount, filters: { search: string; r
 }
 
 function emptySummary() {
-  return { total: 0, admin: 0, officeStaff: 0, readOnly: 0, suspended: 0 };
+  return { total: 0, admin: 0, superAdmin: 0, officeStaff: 0, readOnly: 0, suspended: 0 };
 }
 
 function metaString(metadata: Record<string, unknown> | undefined, key: string) {
@@ -98,7 +98,8 @@ export async function GET(request: Request) {
     const visibleUsers = users.filter((account) => matchesFilters(account, filters));
     const summary = visibleUsers.reduce((acc, account) => {
       acc.total += 1;
-      if (account.role === "admin") acc.admin += 1;
+      if (account.role === "admin" || account.role === "super_admin") acc.admin += 1;
+      if (account.role === "super_admin") acc.superAdmin += 1;
       if (account.role === "office_staff") acc.officeStaff += 1;
       if (account.role === "read_only") acc.readOnly += 1;
       if (account.status === "suspended") acc.suspended += 1;

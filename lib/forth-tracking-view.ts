@@ -1,5 +1,6 @@
 import type { ForthFleetTrackingRecord } from "@/lib/forth-tracking-server";
 import type { ForthSourceFieldSnapshot } from "@/lib/forth-tracking";
+import { lookupForthSpeedConfig } from "@/lib/forth-speed-config";
 
 export type ForthFleetStatus = "moving" | "stationary" | "unknown";
 export type ForthReportedActivity =
@@ -20,8 +21,18 @@ export type ForthFleetFilter =
   | "offline"
   | "stale"
   | "unverified"
-  | "engine_on_stopped";
-export type ForthFleetSort = "registration" | "speed_desc" | "updated_desc";
+  | "engine_on_stopped"
+  | "high_speed"
+  | "missing_coordinates"
+  | "verified";
+export type ForthAttentionKind =
+  | "offline"
+  | "stale"
+  | "missing_coordinates"
+  | "engine_on_stopped"
+  | "unverified_position"
+  | "speed_engine_conflict";
+export type ForthFleetSort = "operations" | "registration" | "speed_desc" | "updated_desc" | "status";
 export type ForthMotionReason =
   | "moving"
   | "stationary"
@@ -83,18 +94,22 @@ export type ForthMarkerLabelPlacement = {
   width: number;
   height: number;
   selected: boolean;
+  /** Show this label at wide zoom when it belongs to a selection, hover, or search result. */
+  reveal?: boolean;
   priority?: number;
 };
 
-/** Select visible marker labels at close zoom while prioritizing the selected vehicle. */
+/** Select visible marker labels, keeping selected, hovered and search labels readable. */
 export function getVisibleForthMarkerLabelKeys(
   placements: ForthMarkerLabelPlacement[],
   zoom: number,
-  minimumZoom = 8
+  minimumZoom = 7
 ): Set<string> {
-  if (!Number.isFinite(zoom) || zoom < minimumZoom) return new Set();
+  if (!Number.isFinite(zoom)) return new Set();
+  const wideZoom = zoom < minimumZoom;
+  const eligible = wideZoom ? placements.filter((placement) => placement.selected || placement.reveal) : placements;
 
-  const ordered = [...placements].sort((left, right) => {
+  const ordered = [...eligible].sort((left, right) => {
     if (left.selected !== right.selected) return left.selected ? -1 : 1;
     if ((left.priority ?? 0) !== (right.priority ?? 0)) return (right.priority ?? 0) - (left.priority ?? 0);
     return left.key.localeCompare(right.key);
@@ -243,6 +258,18 @@ export function getForthLocationDescription(record: ForthFleetTrackingRecord, la
   return candidates.find((value) => typeof value === "string" && value.trim()) ?? null;
 }
 
+/** A compact area label for list rows. The full source address remains available in the inspector. */
+export function getForthLocationArea(record: ForthFleetTrackingRecord, language: "en" | "th") {
+  const full = getForthLocationDescription(record, language);
+  if (!full) return null;
+  const parts = full.split(/[,，]/).map((part) => part.trim()).filter(Boolean);
+  if (parts.length < 2) return full;
+  return parts.slice(-2).map((part) => part
+    .replace(/^(?:Tambon|Amphoe|Changwat|Subdistrict|District|Province)\s+/i, "")
+    .replace(/^(?:ตำบล|อำเภอ|จังหวัด)\s*/, "")
+    .trim()).filter(Boolean).join(", ") || full;
+}
+
 export function isForthGpsPositionVerified(record: ForthFleetTrackingRecord) {
   return record.timestampStatus === "current" &&
     record.coordinateStatus === "valid" &&
@@ -256,6 +283,11 @@ export function isForthGpsPositionVerified(record: ForthFleetTrackingRecord) {
     record.longitude <= 180 &&
     record.gpsConnectivity === "connected" &&
     record.positionQuality === "gps";
+}
+
+/** Map modes select source confidence; getForthFleetMapRecords validates coordinates. */
+export function getForthFleetMapModeRecords(records: ForthFleetTrackingRecord[], mode: "reported" | "gps") {
+  return mode === "gps" ? records.filter(isForthGpsPositionVerified) : records;
 }
 
 export function isForthGpsVerifiedDriving(record: ForthFleetTrackingRecord) {
@@ -371,7 +403,7 @@ export function summarizeForthFleet(records: ForthFleetTrackingRecord[]) {
     summary.positionQuality[record.positionQuality ?? "unknown"] += 1;
     summary.speedAvailability[isUsableSpeed(record.speed) ? "available" : "unavailable"] += 1;
     summary.engineState[record.engineOn === true ? "on" : record.engineOn === false ? "off" : "unknown"] += 1;
-    if (record.gprsConnectivity === "disconnected" || record.timestampStatus === "stale") summary.needsAttention += 1;
+    if (recordNeedsForthAttentionReview(record)) summary.needsAttention += 1;
 
     if (isForthGpsPositionVerified(record)) {
       summary.currentGpsVerifiedPositions += 1;
@@ -394,39 +426,191 @@ export function summarizeForthFleet(records: ForthFleetTrackingRecord[]) {
   return summary;
 }
 
+/** Distinct source-supported conditions. A vehicle may match more than one; none implies a fault by itself. */
+export function getForthAttentionKinds(record: ForthFleetTrackingRecord): ForthAttentionKind[] {
+  const kinds: ForthAttentionKind[] = [];
+  if (record.gprsConnectivity === "disconnected") kinds.push("offline");
+  if (record.timestampStatus === "stale") kinds.push("stale");
+  if (record.coordinateStatus === "missing" || record.coordinateStatus === "invalid") kinds.push("missing_coordinates");
+  if (getForthReportedActivity(record) === "stopped_engine_on") kinds.push("engine_on_stopped");
+  if (getForthReportedActivity(record) === "uncertain") kinds.push("speed_engine_conflict");
+  if (record.coordinateStatus === "valid" && !isForthGpsPositionVerified(record)) kinds.push("unverified_position");
+  return kinds;
+}
+
+/**
+ * Metres used only for genuine shared-location anchors.
+ * Grouping is geographic, never screen-pixel based: distant vehicles stay separate even when zoomed out.
+ */
+export function getForthSharedLocationThresholdMeters(zoom: number) {
+  if (!Number.isFinite(zoom)) return 8;
+  if (zoom >= 16) return 1.5;
+  if (zoom >= 14) return 4;
+  if (zoom >= 12) return 8;
+  return 10;
+}
+
+/** Convert haversine kilometres to metres for all shared-location comparisons. */
+export function forthDistanceMeters(left: [number, number], right: [number, number]) {
+  return distanceKm(left, right) * 1000;
+}
+
+/**
+ * Legacy lowest owner-reported device alert among the configured fleet (Group A).
+ * Prefer lookupForthSpeedConfig / evaluateForthSpeedReview. Not a road legal limit.
+ */
+export const FORTH_HIGH_SPEED_REVIEW_KMH = 70;
+
+/** Vehicle-class fallback advisories when no owner Forth device setting is matched. */
+const FORTH_CLASS_SPEED_ADVISORY_KMH: Record<ForthTrackingMapVehicleClass, number> = {
+  four_wheeler: 110,
+  six_wheeler: 90,
+  six_plus_six_wheeler: 90,
+  eighteen_wheeler: 80,
+  unclassified: 90
+};
+
+export function getForthOperationalSpeedAdvisoryKmh(vehicleClass: ForthTrackingMapVehicleClass) {
+  return FORTH_CLASS_SPEED_ADVISORY_KMH[vehicleClass] ?? FORTH_CLASS_SPEED_ADVISORY_KMH.unclassified;
+}
+
+/**
+ * GPS-verified driving at or above the owner-reported Forth device alert threshold
+ * (or class advisory fallback). Never implies a legal road-limit offence or a
+ * confirmed Forth overspeed event when a delay is configured.
+ */
+export function isForthHighReportedSpeed(record: ForthFleetTrackingRecord) {
+  if (!isForthGpsPositionVerified(record) || getForthReportedActivity(record) !== "driving" || !isUsableSpeed(record.speed)) {
+    return false;
+  }
+  const config = lookupForthSpeedConfig(record.vehicleRegistration);
+  if (config) return record.speed >= config.speedAlertKmh;
+  const vehicleClass = getForthTrackingVehicleIdentity(record.vehicleRegistration).vehicleClass;
+  return record.speed >= getForthOperationalSpeedAdvisoryKmh(vehicleClass);
+}
+
+/** Review-severity attention (excludes engine-on-stopped advisories). */
+export function recordNeedsForthAttentionReview(record: ForthFleetTrackingRecord) {
+  return (
+    record.gprsConnectivity === "disconnected" ||
+    record.timestampStatus === "stale" ||
+    record.coordinateStatus === "missing" ||
+    record.coordinateStatus === "invalid" ||
+    getForthReportedActivity(record) === "uncertain" ||
+    isForthHighReportedSpeed(record)
+  );
+}
+
 export function filterForthFleetRecords(
   records: ForthFleetTrackingRecord[],
   search: string,
-  filter: ForthFleetFilter
+  filter: ForthFleetFilter,
+  extraSearch?: (record: ForthFleetTrackingRecord) => Array<string | null | undefined>
 ) {
   const query = search.trim().toLocaleLowerCase();
   return records.filter((record) => {
     const matchesFilter = filter === "all" ||
       (filter === "online" && record.gprsConnectivity === "connected") ||
-      (filter === "attention" && (record.gprsConnectivity === "disconnected" || record.timestampStatus === "stale")) ||
+      (filter === "attention" && recordNeedsForthAttentionReview(record)) ||
       (filter === "offline" && record.gprsConnectivity === "disconnected") ||
       (filter === "stale" && record.timestampStatus === "stale") ||
+      (filter === "verified" && isForthGpsPositionVerified(record)) ||
       (filter === "unverified" && !isForthGpsPositionVerified(record)) ||
+      (filter === "missing_coordinates" && (record.coordinateStatus === "missing" || record.coordinateStatus === "invalid")) ||
       (filter === "engine_on_stopped" && getForthReportedActivity(record) === "stopped_engine_on") ||
+      (filter === "high_speed" && isForthHighReportedSpeed(record)) ||
       (["driving", "uncertain", "stopped", "unavailable"].includes(filter) && getForthFleetFilterCategory(record) === filter);
     if (!matchesFilter) return false;
     if (!query) return true;
+    const identity = getForthTrackingVehicleIdentity(record.vehicleRegistration);
+    const vehicleType = identity.vehicleClass === "four_wheeler"
+      ? "4-wheeler 4w รถ 4 ล้อ"
+      : identity.vehicleClass === "six_wheeler"
+        ? "6-wheeler 6w รถ 6 ล้อ"
+        : identity.vehicleClass === "six_plus_six_wheeler"
+          ? "6+6-wheeler 6+6 รถ 6+6 ล้อ"
+          : identity.vehicleClass === "eighteen_wheeler"
+            ? "18-wheeler 18w รถพ่วง 18 ล้อ"
+            : "";
     return [
       record.vehicleRegistration,
       record.reportedDriver,
       record.gpsDeviceId,
       record.locationAddressEnglish,
       record.locationAddressThai,
-      record.locationPointOfInterest
+      record.locationPointOfInterest,
+      identity.make,
+      identity.model,
+      identity.classLabel,
+      vehicleType,
+      ...(extraSearch?.(record) ?? [])
     ]
       .some((value) => value?.toLocaleLowerCase().includes(query));
   });
 }
 
+const FORTH_STATUS_SORT_RANK: Record<ForthReportedActivity, number> = {
+  driving: 0,
+  uncertain: 1,
+  stopped_engine_on: 2,
+  stopped_engine_off: 3,
+  stopped_engine_unknown: 4,
+  unavailable: 5
+};
+
+function forthReportTime(record: ForthFleetTrackingRecord) {
+  if (record.timestampStatus !== "current" && record.timestampStatus !== "stale") return null;
+  const parsed = Date.parse(record.lastGpsTimestamp ?? "");
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function forthOperationsGroup(record: ForthFleetTrackingRecord) {
+  const activity = getForthReportedActivity(record);
+  const sourceIssue = record.gprsConnectivity === "disconnected" ||
+    record.timestampStatus === "stale" ||
+    record.coordinateStatus === "missing" || record.coordinateStatus === "invalid";
+  if (sourceIssue || activity === "uncertain" || activity === "unavailable") return 3;
+  if (activity === "driving") return 0;
+  if (activity === "stopped_engine_on") return 1;
+  if (activity === "stopped_engine_off") return 2;
+  return 3;
+}
+
+function forthOperationsIssueRank(record: ForthFleetTrackingRecord) {
+  const offline = record.gprsConnectivity === "disconnected";
+  const stale = record.timestampStatus === "stale";
+  if (offline && stale) return 0;
+  if (offline) return 1;
+  if (stale) return 2;
+  if (record.coordinateStatus === "missing" || record.coordinateStatus === "invalid") return 3;
+  if (getForthReportedActivity(record) === "uncertain") return 4;
+  if (getForthReportedActivity(record) === "unavailable") return 5;
+  return 6;
+}
+
 export function sortForthFleetRecords(records: ForthFleetTrackingRecord[], sort: ForthFleetSort) {
   const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
   return [...records].sort((left, right) => {
-    if (sort === "speed_desc") {
+    if (sort === "operations") {
+      const leftGroup = forthOperationsGroup(left);
+      const rightGroup = forthOperationsGroup(right);
+      if (leftGroup !== rightGroup) return leftGroup - rightGroup;
+      if (leftGroup === 0 && isUsableSpeed(left.speed) && isUsableSpeed(right.speed) && left.speed !== right.speed) {
+        return right.speed - left.speed;
+      }
+      if (leftGroup === 3) {
+        const leftIssue = forthOperationsIssueRank(left);
+        const rightIssue = forthOperationsIssueRank(right);
+        if (leftIssue !== rightIssue) return leftIssue - rightIssue;
+      }
+      const leftTime = forthReportTime(left);
+      const rightTime = forthReportTime(right);
+      if (leftTime === null && rightTime !== null) return 1;
+      if (rightTime === null && leftTime !== null) return -1;
+      if (leftTime !== null && rightTime !== null && leftTime !== rightTime) {
+        return leftGroup === 3 && forthOperationsIssueRank(left) <= 2 ? leftTime - rightTime : rightTime - leftTime;
+      }
+    } else if (sort === "speed_desc") {
       const leftSpeed = isUsableSpeed(left.speed) ? left.speed : null;
       const rightSpeed = isUsableSpeed(right.speed) ? right.speed : null;
       if (leftSpeed === null && rightSpeed !== null) return 1;
@@ -440,6 +624,10 @@ export function sortForthFleetRecords(records: ForthFleetTrackingRecord[], sort:
       if (!Number.isFinite(leftTime) && Number.isFinite(rightTime)) return 1;
       if (!Number.isFinite(rightTime) && Number.isFinite(leftTime)) return -1;
       if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) return rightTime - leftTime;
+    } else if (sort === "status") {
+      const leftRank = FORTH_STATUS_SORT_RANK[getForthReportedActivity(left)];
+      const rightRank = FORTH_STATUS_SORT_RANK[getForthReportedActivity(right)];
+      if (leftRank !== rightRank) return leftRank - rightRank;
     }
     return collator.compare(left.vehicleRegistration ?? "", right.vehicleRegistration ?? "");
   });
@@ -467,7 +655,12 @@ export type ForthFleetMapRecord = {
   position: [number, number];
 };
 
-export type ForthTrackingMapVehicleClass = "four_wheeler" | "six_wheeler" | "eighteen_wheeler" | "unclassified";
+export type ForthTrackingMapVehicleClass =
+  | "four_wheeler"
+  | "six_wheeler"
+  | "six_plus_six_wheeler"
+  | "eighteen_wheeler"
+  | "unclassified";
 
 export type ForthTrackingVehicleIdentity = {
   vehicleClass: ForthTrackingMapVehicleClass;
@@ -518,11 +711,21 @@ export function getForthTrackingMapVehicleClass(registration: string | null): Fo
   return getForthTrackingVehicleIdentity(registration).vehicleClass;
 }
 
-export type ForthMarkerScreenPoint = { key: string; x: number; y: number };
+export type ForthReportedLocationPoint = { key: string; latitude: number; longitude: number };
 
-/** Connected components of markers whose screen-space points would collide. */
-export function getForthMarkerCollisionGroups(points: ForthMarkerScreenPoint[], radius = 54): string[][] {
-  const valid = points.filter((point) => point.key && Number.isFinite(point.x) && Number.isFinite(point.y));
+/**
+ * Group vehicles that share a genuine reported location.
+ * The returned keys are identifiers only; coordinates are never rewritten.
+ */
+export function getForthSharedLocationGroups(
+  points: ForthReportedLocationPoint[],
+  thresholdMeters = 30
+): string[][] {
+  const valid = points.filter((point) =>
+    point.key &&
+    Number.isFinite(point.latitude) && point.latitude >= -90 && point.latitude <= 90 &&
+    Number.isFinite(point.longitude) && point.longitude >= -180 && point.longitude <= 180
+  );
   const parent = valid.map((_, index) => index);
   const find = (index: number): number => {
     if (parent[index] !== index) parent[index] = find(parent[index]);
@@ -533,12 +736,14 @@ export function getForthMarkerCollisionGroups(points: ForthMarkerScreenPoint[], 
     const rightRoot = find(right);
     if (leftRoot !== rightRoot) parent[rightRoot] = leftRoot;
   };
-  const radiusSquared = Math.max(0, radius) ** 2;
+  const threshold = Number.isFinite(thresholdMeters) && thresholdMeters > 0 ? thresholdMeters : 0;
   for (let left = 0; left < valid.length; left += 1) {
     for (let right = left + 1; right < valid.length; right += 1) {
-      const dx = valid[left].x - valid[right].x;
-      const dy = valid[left].y - valid[right].y;
-      if (dx * dx + dy * dy <= radiusSquared) union(left, right);
+      const distanceMeters = forthDistanceMeters(
+        [valid[left].latitude, valid[left].longitude],
+        [valid[right].latitude, valid[right].longitude]
+      );
+      if (distanceMeters <= threshold) union(left, right);
     }
   }
   const components = new Map<number, string[]>();
@@ -552,22 +757,6 @@ export function getForthMarkerCollisionGroups(points: ForthMarkerScreenPoint[], 
     .filter((keys) => keys.length > 1)
     .map((keys) => keys.sort((left, right) => left.localeCompare(right)))
     .sort((left, right) => left[0].localeCompare(right[0]));
-}
-
-/** Pixel offsets used to fan a collision group into individually labelled markers. */
-export function getForthMarkerFanOutOffsets(count: number, columnSpacing = 160, rowSpacing = 44) {
-  if (!Number.isInteger(count) || count < 1) return [];
-  const columns = Math.min(5, Math.ceil(Math.sqrt(count)));
-  const rows = Math.ceil(count / columns);
-  return Array.from({ length: count }, (_, index) => {
-    const column = index % columns;
-    const row = Math.floor(index / columns);
-    const rowCount = Math.min(columns, count - row * columns);
-    return {
-      x: (column - (rowCount - 1) / 2) * columnSpacing,
-      y: (row - (rows - 1) / 2) * rowSpacing
-    };
-  });
 }
 
 export function getForthFleetMapRecords(records: ForthFleetTrackingRecord[]): ForthFleetMapRecord[] {
@@ -625,6 +814,18 @@ export function getForthFleetMapInitialFrame(positions: [number, number][]): For
     Number.isFinite(longitude) && longitude >= -180 && longitude <= 180
   );
   if (allPositions.length < 4) return { allPositions, focusPositions: allPositions, outlierCount: 0 };
+
+  // Keep the day-to-day view on the densest working area. A distant, valid
+  // report remains in allPositions and can be opened directly from the map tray.
+  if (allPositions.length >= 5) {
+    const nearby = allPositions.map((anchor) =>
+      allPositions.filter((position) => distanceKm(anchor, position) <= 90)
+    );
+    const primaryArea = nearby.reduce((best, candidate) => candidate.length > best.length ? candidate : best, nearby[0]);
+    if (primaryArea.length >= Math.ceil(allPositions.length / 2) && primaryArea.length < allPositions.length) {
+      return { allPositions, focusPositions: primaryArea, outlierCount: allPositions.length - primaryArea.length };
+    }
+  }
 
   const center: [number, number] = [
     median(allPositions.map(([latitude]) => latitude)),

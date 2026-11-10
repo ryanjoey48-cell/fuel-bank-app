@@ -1,5 +1,6 @@
 "use client";
 
+import { EES_COMPANY } from "@/lib/ees-company";
 import { Pencil } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Header } from "@/components/header";
@@ -48,7 +49,7 @@ export default function ProfilePage() {
   const email = user?.email ?? "";
   const name = metaString(user, "name") || metaString(user, "full_name") || access?.displayName || email || "-";
   const role = access?.role ? t.adminUsers.roles[roleDisplayKey(access.role)] : accessError ? "User Management setup required" : "Access pending";
-  const company = metaString(user, "company") || metaString(user, "company_name") || "Expert Express Sender Co., Ltd.";
+  const company = metaString(user, "company") || metaString(user, "company_name") || EES_COMPANY.nameEnTitle;
 
   const startEditingName = () => {
     setNameInput(name === "-" ? "" : name);

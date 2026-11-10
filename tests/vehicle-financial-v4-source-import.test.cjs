@@ -226,9 +226,11 @@ test('synthetic PGlite import stores Aug/Sep drafts without touching Jan–Jul l
 
 test('Fleet Overview baseline and legacy KPI helpers still exclude Aug/Sep and coerce null to zero', () => {
   const page = fs.readFileSync(path.resolve('app/(dashboard)/vehicle-performance/page.tsx'), 'utf8');
-  assert.match(page, /VEHICLE_PERFORMANCE_BASELINE_MONTHS = \[1, 2, 3, 4, 5, 6, 7\]/);
-  assert.match(page, /Legacy Fleet filters · January–July stored KPIs/);
-  assert.doesNotMatch(page, /VEHICLE_PERFORMANCE_BASELINE_MONTHS = \[1, 2, 3, 4, 5, 6, 7, 8, 9\]/);
+  assert.match(page, /VEHICLE_PERFORMANCE_BASELINE_MONTHS = VEHICLE_PERFORMANCE_LEGACY_MONTHS/);
+  assert.match(page, /January–July use stored monthly performance records/);
+  assert.doesNotMatch(page, /VEHICLE_PERFORMANCE_LEGACY_MONTHS = \[1, 2, 3, 4, 5, 6, 7, 8, 9\]/);
+  const reporting = fs.readFileSync(path.resolve('lib/vehicle-financial-v4-reporting.ts'), 'utf8');
+  assert.match(reporting, /VEHICLE_PERFORMANCE_LEGACY_MONTHS = \[1, 2, 3, 4, 5, 6, 7\]/);
 
   const data = fs.readFileSync(path.resolve('lib/data.ts'), 'utf8');
   assert.match(data, /salary_cost: Number\(row\.salary_cost \|\| 0\)/);

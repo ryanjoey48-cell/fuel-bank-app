@@ -2,18 +2,14 @@
 
 import {
   ArrowRight,
-  BarChart3,
   Boxes,
   CalendarDays,
   ClipboardCheck,
-  FileBarChart,
   Fuel,
   Gauge,
   MapPinned,
-  PackageSearch,
   Plus,
   Route,
-  ShieldCheck,
   Truck,
   Users,
   Wrench,
@@ -23,6 +19,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { EESLogo } from "@/components/ees-logo";
+import { SetupNotice } from "@/components/setup-notice";
 import {
   fetchBookingDiaryEntries,
   fetchFuelLogs,
@@ -31,7 +28,6 @@ import {
 import { useLanguage } from "@/lib/language-provider";
 import { fetchMaintenanceData } from "@/lib/maintenance-data";
 import type { MaintenanceData } from "@/lib/maintenance-types";
-import { useAccountAccess } from "@/lib/use-account-access";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/utils";
 import type {
   BookingDiaryEntry,
@@ -177,8 +173,6 @@ function TodayMetric({ href, label, value, icon: Icon }: { href: string; label: 
 export default function DashboardPage() {
   const { language, t } = useLanguage();
   const home = t.home;
-  const { can } = useAccountAccess();
-  const isAdmin = can("admin:user_management");
   const [bookings, setBookings] = useState<BookingDiaryEntry[]>([]);
   const [fuelLogs, setFuelLogs] = useState<FuelLogWithDriver[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -209,7 +203,10 @@ export default function DashboardPage() {
 
   useEffect(() => {
     void load();
-    const reload = () => void load();
+    const reload = () => {
+      if (document.visibilityState !== "visible") return;
+      void load();
+    };
     window.addEventListener("fuel-bank:data-changed", reload);
     return () => window.removeEventListener("fuel-bank:data-changed", reload);
   }, [load]);
@@ -285,36 +282,31 @@ export default function DashboardPage() {
     { href: "/trip-journey", label: home.shortcuts.trip, description: home.shortcuts.tripDescription, icon: MapPinned, tone: "purple" },
     { href: "/fuel-logs", label: home.shortcuts.fuel, description: home.shortcuts.fuelDescription, icon: Fuel, tone: "purple" },
     { href: "/weekly-mileage", label: home.shortcuts.mileage, description: home.shortcuts.mileageDescription, icon: Gauge, tone: "neutral" },
-    { href: "/drivers", label: home.shortcuts.fleet, description: home.shortcuts.fleetDescription, icon: Truck, tone: "neutral" },
-    { href: "/maintenance", label: home.shortcuts.maintenance, description: home.shortcuts.maintenanceDescription, icon: Wrench, tone: "neutral" },
-    { href: "/insurance", label: home.shortcuts.insurance, description: home.shortcuts.insuranceDescription, icon: ShieldCheck, tone: "neutral" },
-    { href: "/inventory", label: home.shortcuts.inventory, description: home.shortcuts.inventoryDescription, icon: PackageSearch, tone: "neutral" },
-    { href: "/reports", label: home.shortcuts.reports, description: home.shortcuts.reportsDescription, icon: FileBarChart, tone: "neutral" },
-    { href: "/booking-diary", label: home.shortcuts.insights, description: home.shortcuts.insightsDescription, icon: BarChart3, tone: "neutral" },
-    ...(isAdmin ? [{ href: "/admin/users", label: home.shortcuts.admin, description: home.shortcuts.adminDescription, icon: Users, tone: "neutral" as const }] : [])
+    { href: "/maintenance", label: home.shortcuts.maintenance, description: home.shortcuts.maintenanceDescription, icon: Wrench, tone: "neutral" }
   ];
 
   return (
     <div className="office-home w-full space-y-3.5 pb-4 sm:space-y-4 lg:-mx-3 lg:w-[calc(100%+1.5rem)] xl:-mx-4 xl:w-[calc(100%+2rem)]">
-      <section className="overflow-hidden rounded-[1.35rem] border border-violet-100/80 shadow-[0_16px_42px_rgba(42,32,72,0.11)]">
-        <div className="relative hidden aspect-[31/8.8] md:block">
+      <section className="office-home-hero overflow-hidden border border-violet-100/80 shadow-[0_16px_42px_rgba(42,32,72,0.11)]">
+        <div className="office-home-hero__desktop relative hidden md:block">
           <h1 className="sr-only">{home.title}</h1>
           <p className="sr-only">{home.subtitle}</p>
           <Image
-            src="/ees-truck.png"
+            src="/images/ees-dashboard-banner.png"
             alt={home.truckAlt}
             fill
             sizes="100vw"
             className="h-full w-full object-cover object-center"
             priority
           />
+          <div className="office-home-hero__veil" aria-hidden="true" />
         </div>
         <div className="md:hidden">
-          <div className="relative overflow-hidden bg-[linear-gradient(138deg,#faf8ff_0%,#ffffff_58%,#f5f1ff_100%)] px-4 py-4 sm:px-8 sm:py-7">
+          <div className="relative overflow-hidden bg-[linear-gradient(138deg,#faf8ff_0%,#ffffff_58%,#f5f1ff_100%)] px-4 pb-4 pt-[calc(var(--ees-nav-clearance)+0.35rem)] sm:px-8 sm:pb-7">
             <span className="absolute -left-16 -top-20 h-48 w-48 rounded-full bg-violet-100/70 blur-3xl" aria-hidden="true" />
             <div className="relative">
               <EESLogo alt="EES" size={48} className="hidden h-12 w-12 sm:block" priority />
-              <h1 className="text-2xl font-black sm:mt-5 sm:text-3xl tracking-[-0.035em]">
+              <h1 className="text-2xl font-black tracking-[-0.035em] sm:mt-5 sm:text-3xl">
                 <span className="text-slate-950">{home.titlePrimary}</span>{" "}
                 <span className="text-violet-700">{home.titleAccent}</span>
               </h1>
@@ -322,10 +314,12 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="relative min-h-[144px] overflow-hidden bg-violet-50 sm:min-h-[260px]">
-            <Image src="/ees-truck.png" alt={home.truckAlt} fill sizes="100vw" className="object-cover object-right" priority />
+            <Image src="/images/ees-dashboard-banner.png" alt={home.truckAlt} fill sizes="100vw" className="object-cover object-right" priority />
           </div>
         </div>
       </section>
+
+      <SetupNotice />
 
       <section aria-labelledby="quick-actions-title">
         <div className="mb-2.5 flex items-center justify-between">
@@ -360,15 +354,53 @@ export default function DashboardPage() {
         </div>
       </section>
 
+      {/* Read-only Fleet Tracking entry point. Live GPS status metrics must be sourced
+          from the verified Forth tracking service, not inferred from the vehicle list. */}
+      <section aria-labelledby="fleet-overview-title" className="rounded-[1.35rem] border border-violet-100 bg-white p-4 shadow-[0_10px_28px_rgba(42,32,72,0.055)] sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-violet-700">{language === "th" ? "การติดตามยานพาหนะ" : "FLEET OPERATIONS"}</p>
+            <h2 id="fleet-overview-title" className="mt-1 text-xl font-extrabold tracking-tight text-slate-950">{language === "th" ? "ภาพรวมการติดตามรถ" : "Fleet Tracking Overview"}</h2>
+            <p className="mt-1 max-w-2xl text-sm text-slate-600">{language === "th" ? "ข้อมูลทะเบียนรถจากระบบ EES ส่วนสถานะ GPS สดต้องตรวจสอบที่หน้าติดตามรถ" : "Fleet register information is shown below. Live GPS movement and verification statuses must be checked in Fleet Tracking."}</p>
+          </div>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800">
+            {language === "th" ? "ยังไม่ได้เชื่อมต่อข้อมูล GPS สด" : "Live GPS summary not connected"}
+          </span>
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-2.5 lg:grid-cols-5">
+          <div className="rounded-xl border border-violet-200 bg-violet-50/70 p-3">
+            <p className="text-xs font-semibold text-violet-800">{language === "th" ? "รถในทะเบียนที่ใช้งาน" : "Active fleet register"}</p>
+            <p className="mt-1 text-2xl font-black tabular-nums text-violet-950">{loading ? "—" : formatNumber(activeVehicles, language)}</p>
+            <p className="mt-1 text-[11px] text-violet-700">{language === "th" ? "ไม่ใช่จำนวนรถที่ GPS ยืนยัน" : "Not GPS-verified count"}</p>
+          </div>
+          {([
+            ["Driving", "กำลังวิ่ง"],
+            ["Idle / Parked", "จอด / เดินเบา"],
+            ["GPS verified", "GPS ยืนยันแล้ว"],
+            ["Unverified", "ยังไม่ยืนยัน GPS"]
+          ] as const).map(([en, th]) => (
+            <div key={en} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+              <p className="text-xs font-semibold text-slate-700">{language === "th" ? th : en}</p>
+              <p className="mt-1 text-2xl font-black text-slate-400" aria-label={language === "th" ? "ไม่มีข้อมูล" : "Unavailable"}>—</p>
+              <p className="mt-1 text-[11px] text-slate-500">{language === "th" ? "ดูสถานะในศูนย์ติดตามรถ" : "See live tracking centre"}</p>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+          <p className="text-xs text-slate-500">{language === "th" ? "ไม่เปลี่ยนข้อมูลระยะทาง การบำรุงรักษา หรือ GPS" : "Read-only overview. No mileage, maintenance or GPS records are changed."}</p>
+          <p className="text-xs font-semibold text-violet-700">{language === "th" ? "เปิดศูนย์ติดตามรถจากเมนู Fleet" : "Open Fleet Tracking from the Fleet menu"}</p>
+        </div>
+      </section>
+
       <section aria-labelledby="operations-shortcuts-title" className="rounded-[1.35rem] border border-slate-200/90 bg-[#fbfafc] p-4 shadow-sm">
         <div className="mb-3.5">
           <p className="text-xs font-extrabold uppercase tracking-[0.14em] text-violet-700">{home.toolsEyebrow}</p>
           <h2 id="operations-shortcuts-title" className="mt-1 text-2xl font-extrabold tracking-tight text-slate-950">{home.operationsShortcuts}</h2>
           <p className="mt-1 text-sm text-slate-500">{home.operationsShortcutsDescription}</p>
         </div>
-        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {shortcuts.map((shortcut, index) => (
-            <ShortcutCard key={`${shortcut.href}-${shortcut.label}`} shortcut={shortcut} compact={index >= 4} />
+        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+          {shortcuts.map((shortcut) => (
+            <ShortcutCard key={`${shortcut.href}-${shortcut.label}`} shortcut={shortcut} compact />
           ))}
         </div>
       </section>

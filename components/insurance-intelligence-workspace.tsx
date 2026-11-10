@@ -1,5 +1,6 @@
 "use client";
 
+import { EES_COMPANY } from "@/lib/ees-company";
 import { useMemo, useState } from "react";
 import {
   ArrowUpDown,
@@ -478,7 +479,7 @@ export function InsuranceIntelligenceWorkspace({
       XLSX.utils.book_append_sheet(
         workbook,
         XLSX.utils.aoa_to_sheet([
-          ["Company", "Expert Express Sender Co., Ltd."],
+          ["Company", EES_COMPANY.nameEnTitle],
           ["Report", reportTypeLabel(type, language)],
           ["Scope", reportScope],
           ["Filtered", source.length === records.length ? "No" : "Yes"],

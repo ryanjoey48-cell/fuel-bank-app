@@ -1,6 +1,8 @@
 "use client";
 
+import { EES_COMPANY } from "@/lib/ees-company";
 import clsx from "clsx";
+import Link from "next/link";
 import {
   CalendarDays,
   CheckCircle2,
@@ -25,6 +27,7 @@ import {
 } from "lucide-react";
 import { Fragment, type RefObject, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { ClientDirectoryDialog } from "@/components/client-directory-dialog";
+import { BookingIntegritySummary } from "@/components/booking-integrity-summary";
 import { ClientSelector } from "@/components/client-selector";
 import { EmptyState } from "@/components/empty-state";
 import { GoogleMapsLoader } from "@/components/google-maps-loader";
@@ -46,6 +49,7 @@ import {
   updateClient
 } from "@/lib/data";
 import { fetchCurrentAccess } from "@/lib/account-management";
+import { analyseBookingIntegrity, ATTENTION_FLAGS, integrityLabel } from "@/lib/booking-diary-integrity";
 import { hasPermission } from "@/lib/authorization";
 import { exportToXlsx } from "@/lib/export";
 import { fetchJson } from "@/lib/http";
@@ -56,7 +60,7 @@ import {
   normalizeSavedLocationName,
   rankSavedLocations
 } from "@/lib/saved-locations";
-import { supabase } from "@/lib/supabase";
+import { supabase, supabaseConfigError } from "@/lib/supabase";
 import { formatDate } from "@/lib/utils";
 import { LOCATION_SUGGESTIONS } from "@/src/data/locations";
 import type { BookingDiaryEntry, Client, Driver, SavedLocation, SavedLocationType, TripJourney, TripJourneyStatus, Vehicle } from "@/types/database";
@@ -174,6 +178,8 @@ const labels = {
   en: {
     title: "Booking Diary",
     description: "Fast daily booking capture for phone calls, dispatch handover, and live office updates.",
+    descriptionOffline: "Daily booking capture for phone calls and dispatch handover.",
+    offline: "Offline — not connected",
     dailyDiaryTab: "Daily diary",
     businessInsightsTab: "Business insights",
     addBooking: "Add booking",
@@ -286,7 +292,7 @@ const labels = {
     details: "Booking details",
     tapToEdit: "Tap to edit",
     updatedLabel: "Updated",
-    company: "EXPERT EXPRESS SENDER CO., LTD.",
+    company: EES_COMPANY.nameEn,
     filters: "Filters",
     job: "Job",
     load: "Load",
@@ -298,8 +304,9 @@ const labels = {
     jobCompletionInvoicing: "Job completion / invoicing",
     jobOrderNumber: "Job Order Number",
     jobOrderNumberPlaceholder: "Enter job order number",
-    jobOrderNumberHelper: "Optional — this can be added after the job is completed to help with invoicing.",
+    jobOrderNumberHelper: "Leave blank at booking. Enter only after the green sheet returns — use Reconcile Job.",
     jobOrderLabel: "Job Order",
+    reconcileJob: "Reconcile Job",
     addedBy: "Added by",
     allUsers: "All users",
     creatorUnavailable: "Creator unavailable",
@@ -329,6 +336,8 @@ const labels = {
   th: {
     title: "สมุดจองงาน",
     description: "บันทึกงานจองประจำวันให้เร็ว ใช้ง่าย และอัปเดตพร้อมกันทุกเครื่อง",
+    descriptionOffline: "บันทึกงานจองประจำวันสำหรับรับสายและส่งต่อฝ่ายจัดรถ",
+    offline: "ออฟไลน์ — ไม่ได้เชื่อมต่อ",
     addBooking: "เพิ่มงานจอง",
     editBooking: "แก้ไขงานจอง",
     edit: "แก้ไข",
@@ -387,7 +396,7 @@ const labels = {
     details: "รายละเอียดงานจอง",
     tapToEdit: "แตะเพื่อแก้ไข",
     updatedLabel: "อัปเดต",
-    company: "EXPERT EXPRESS SENDER CO., LTD.",
+    company: EES_COMPANY.nameEn,
     filters: "ตัวกรอง",
     job: "งาน",
     load: "สินค้า",
@@ -465,8 +474,9 @@ const jobOrderLabelExtras = {
     jobCompletionInvoicing: "จบงาน / ออกใบแจ้งหนี้",
     jobOrderNumber: "เลขใบงาน",
     jobOrderNumberPlaceholder: "กรอกเลขใบงาน",
-    jobOrderNumberHelper: "ไม่บังคับ - สามารถเพิ่มหลังจบงานเพื่อช่วยในการออกใบแจ้งหนี้",
+    jobOrderNumberHelper: "เว้นว่างตอนจอง กรอกหลังได้รับใบสั่งงานสีเขียวเท่านั้น — ใช้ปุ่มกระทบยอดงาน",
     jobOrderLabel: "เลขใบงาน",
+    reconcileJob: "กระทบยอดงาน",
     addedBy: "เพิ่มโดย",
     allUsers: "ผู้ใช้ทั้งหมด",
     creatorUnavailable: "ไม่พบข้อมูลผู้เพิ่ม"
@@ -712,14 +722,16 @@ function getBookingDataQuality(
     | "distanceMissing"
     | "dataQualityComplete"
     | "dataQualityNeedsAttention"
-  >
+  >,
+  extraIssues: readonly string[] = []
 ) {
   const issues = [
     !hasPickupMapsLocation(booking) ? copy.pickupMapsUnresolved : "",
     !hasDropoffMapsLocation(booking) ? copy.dropoffMapsUnresolved : "",
     !booking.driver?.trim() ? copy.driverMissing : "",
     !(booking.vehicle_registration?.trim() || booking.vehicle?.trim()) ? copy.vehicleRegMissing : "",
-    !formatDistanceKm(booking.estimated_distance_km) ? copy.distanceMissing : ""
+    !formatDistanceKm(booking.estimated_distance_km) ? copy.distanceMissing : "",
+    ...extraIssues
   ].filter(Boolean);
 
   return {
@@ -1062,7 +1074,7 @@ function LocationCombobox({
   );
 }
 
-export default function BookingDiaryPage() {
+function LiveBookingDiaryPage() {
   const { language } = useLanguage();
   const languageKey = language === "th" ? "th" : "en";
   const copy = useMemo(
@@ -1077,6 +1089,19 @@ export default function BookingDiaryPage() {
       ...registrationLabelExtras[languageKey]
     }),
     [languageKey]
+  );
+  const syncOffline = Boolean(supabaseConfigError);
+  const headerCopy = useMemo(
+    () => ({
+      ...copy,
+      description: syncOffline
+        ? (languageKey === "th" ? labels.th.descriptionOffline : labels.en.descriptionOffline)
+        : copy.description,
+      live: syncOffline
+        ? (languageKey === "th" ? labels.th.offline : labels.en.offline)
+        : copy.live
+    }),
+    [copy, languageKey, syncOffline]
   );
   const firstInputRef = useRef<HTMLInputElement | null>(null);
   const [bookings, setBookings] = useState<BookingDiaryEntry[]>([]);
@@ -1183,20 +1208,31 @@ export default function BookingDiaryPage() {
   }, []);
 
   useEffect(() => {
+    let debounceTimer: number | null = null;
+    const scheduleReload = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      if (debounceTimer != null) window.clearTimeout(debounceTimer);
+      debounceTimer = window.setTimeout(() => {
+        debounceTimer = null;
+        if (document.visibilityState === "visible") void load(false);
+      }, 750);
+    };
+
     const channel = supabase
       .channel("booking-diary-live")
-      .on("postgres_changes", { event: "*", schema: "public", table: "booking_diary" }, () => {
-        void load(false);
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "clients" }, () => {
-        void load(false);
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "saved_locations" }, () => {
-        void load(false);
-      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "booking_diary" }, scheduleReload)
+      .on("postgres_changes", { event: "*", schema: "public", table: "clients" }, scheduleReload)
+      .on("postgres_changes", { event: "*", schema: "public", table: "saved_locations" }, scheduleReload)
       .subscribe();
 
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") scheduleReload();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
     return () => {
+      if (debounceTimer != null) window.clearTimeout(debounceTimer);
+      document.removeEventListener("visibilitychange", handleVisibility);
       void supabase.removeChannel(channel);
     };
   }, [load]);
@@ -1261,6 +1297,9 @@ export default function BookingDiaryPage() {
     [bookings, currentUser]
   );
   const clientById = useMemo(() => new Map(clients.map((client) => [client.id, client])), [clients]);
+  // V6 read-only data checks over every loaded booking; they explain problems and change nothing.
+  const integrity = useMemo(() => analyseBookingIntegrity(bookings, vehicles.map((vehicle) => ({ id: String(vehicle.id), vehicle_reg: vehicle.vehicle_reg ?? "" }))), [bookings, vehicles]);
+  const integrityIssues = useCallback((id: string) => (integrity.byId.get(id)?.flags ?? []).filter((flag) => ATTENTION_FLAGS.includes(flag)).map((flag) => integrityLabel(flag, language)), [integrity, language]);
   const bookingClientName = useCallback(
     (booking: BookingDiaryEntry) => clientById.get(booking.client_id ?? "")?.name ?? booking.client?.name ?? "",
     [clientById]
@@ -1932,7 +1971,7 @@ export default function BookingDiaryPage() {
   const handleGoogleMapsStatusChange = useCallback((status: GoogleMapsHealthStatus) => {
     setGoogleMapsStatus(status);
     if (process.env.NODE_ENV !== "production") {
-      console.info("[Fuel Bank] Booking Diary Google Maps status:", {
+      console.info("[EES] Booking Diary Google Maps status:", {
         publicKey: status.hasPublicKey,
         serverKey: status.hasServerKey,
         scriptLoaded: status.scriptLoaded,
@@ -2166,7 +2205,7 @@ export default function BookingDiaryPage() {
         /origin|destination|verified|place|location/i.test(rawMessage)
           ? copy.googleMapsDistanceFailure
           : rawMessage || copy.googleMapsUnavailable;
-      console.warn("[Fuel Bank] Booking Diary route estimate failed:", message);
+      console.warn("[EES] Booking Diary route estimate failed:", message);
       setRouteMessage(
         message === copy.googleMapsDistanceFailure ? message : `${message}. You can enter the estimated distance manually.`
       );
@@ -2383,20 +2422,20 @@ export default function BookingDiaryPage() {
   return (
     <div className="booking-diary-page w-full max-w-full overflow-x-hidden">
       <GoogleMapsLoader onStatusChange={handleGoogleMapsStatusChange} />
-      <section className="mb-4 rounded-[1.35rem] border border-violet-100/90 bg-white px-4 py-4 shadow-[0_12px_34px_rgba(76,29,149,0.07)] sm:px-5 lg:px-6">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="flex min-w-0 items-center gap-3.5">
+      <section className="office-page-header mb-4">
+        <div className="office-page-header__row">
+          <div className="office-page-header__identity">
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-50 text-violet-700 ring-1 ring-violet-100">
               <CalendarDays className="h-6 w-6" />
             </span>
             <div className="min-w-0">
-              <p className="truncate text-[10px] font-bold uppercase tracking-[0.16em] text-violet-700">{copy.company}</p>
-              <h1 className="mt-0.5 truncate text-[1.45rem] font-bold tracking-[-0.025em] text-slate-950 sm:text-[1.7rem]">{bookingTitle}</h1>
-              <p className="mt-0.5 max-w-2xl text-xs leading-5 text-slate-500 sm:text-sm">{copy.description}</p>
+              <p className="office-page-header__eyebrow">{copy.company}</p>
+              <h1 className="office-page-header__title">{bookingTitle}</h1>
+              <p className="office-page-header__description">{headerCopy.description}</p>
             </div>
           </div>
 
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <div className="office-page-header__actions">
             <button
               type="button"
               onClick={() => setMobileFiltersOpen(true)}
@@ -2412,7 +2451,7 @@ export default function BookingDiaryPage() {
               className="btn-secondary min-h-[42px] gap-2 rounded-xl px-3.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Download className="h-4 w-4" />
-              <span className="hidden sm:inline">{copy.exportExcel}</span>
+              <span>{copy.exportExcel}</span>
             </button>
             <button
               type="button"
@@ -2434,9 +2473,9 @@ export default function BookingDiaryPage() {
               <Filter className="h-4 w-4 text-brand-700" />
               <p className="text-sm font-semibold text-slate-800">{copy.filters}</p>
             </div>
-            <div className="flex items-center gap-2 text-xs font-semibold text-emerald-700">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              {copy.live}
+            <div className={`flex items-center gap-2 text-xs font-semibold ${syncOffline ? "text-slate-600" : "text-emerald-700"}`}>
+              <span className={`h-2 w-2 rounded-full ${syncOffline ? "bg-slate-400" : "bg-emerald-500"}`} />
+              {headerCopy.live}
             </div>
           </div>
           <div className="booking-filter-grid grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-[minmax(300px,1.8fr)_150px_170px_repeat(6,minmax(118px,1fr))]">
@@ -2501,6 +2540,7 @@ export default function BookingDiaryPage() {
         <p className="booking-visible-count">
           {visibleRangeText}
         </p>
+        {!loading && bookings.length > 0 ? <BookingIntegritySummary report={integrity} language={language === "th" ? "th" : "en"} /> : null}
 
         {loading ? (
           <p className="loading-inline">{copy.loading}</p>
@@ -2564,7 +2604,7 @@ export default function BookingDiaryPage() {
                                 </span>
                               ) : null}
                               {(() => {
-                                const quality = getBookingDataQuality(booking, copy);
+                                const quality = getBookingDataQuality(booking, copy, integrityIssues(booking.id));
                                 return (
                                   <span
                                     className={clsx(
@@ -2656,6 +2696,10 @@ export default function BookingDiaryPage() {
                             <Edit3 className="h-3.5 w-3.5" />
                             {copy.edit}
                           </button>
+                          <Link href={`/finance-centre?booking=${encodeURIComponent(booking.id)}&section=reconciliation`} className="booking-entry-edit" aria-label={copy.reconcileJob}>
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            {copy.reconcileJob}
+                          </Link>
                           <button type="button" onClick={() => openDuplicate(booking)} className="booking-entry-edit" aria-label={copy.duplicate}>
                             <Copy className="h-3.5 w-3.5" />
                             {copy.duplicate}
@@ -2936,7 +2980,7 @@ export default function BookingDiaryPage() {
 
                             <div className="divide-y divide-slate-100">
                               {entries.map((booking) => {
-                              const quality = getBookingDataQuality(booking, copy);
+                              const quality = getBookingDataQuality(booking, copy, integrityIssues(booking.id));
                               const tripLabel = getBookingTripLabel(booking);
                               const tripClass = getBookingTripClass(booking);
 
@@ -3092,6 +3136,15 @@ export default function BookingDiaryPage() {
                                       className="flex items-center gap-1"
                                       onClick={(event) => event.stopPropagation()}
                                     >
+                                      <Link
+                                        href={`/finance-centre?booking=${encodeURIComponent(booking.id)}&section=reconciliation`}
+                                        className="inline-flex min-h-[32px] items-center gap-1 rounded-lg border border-emerald-100 bg-emerald-50/70 px-2 text-[10px] font-bold text-emerald-800 transition hover:border-emerald-200 hover:bg-emerald-100"
+                                        aria-label={copy.reconcileJob}
+                                        title={copy.reconcileJob}
+                                      >
+                                        <CheckCircle2 className="h-3.5 w-3.5" />
+                                        {copy.reconcileJob}
+                                      </Link>
                                       <button
                                         type="button"
                                         onClick={(event) => {
@@ -3520,4 +3573,8 @@ export default function BookingDiaryPage() {
       ) : null}
     </div>
   );
+}
+
+export default function BookingDiaryPage() {
+  return <LiveBookingDiaryPage />;
 }

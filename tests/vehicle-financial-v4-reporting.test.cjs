@@ -208,8 +208,8 @@ test('August–September table exposes PDF-matching TOTAL row and dash/zero note
   assert.equal(sep.sourceFooterTotals.maintenance, '104690');
   assert.equal(sep.sourceFooterTotals.lpg, '7962.31');
   const aug4565 = aug.rows.find((row) => row.registration === '3ฒล-4565');
-  assert.equal(aug4565.totalReceived, '0');
-  assert.equal(aug4565.sourceDashStatus.totalReceived, 'zero_confirmed_by_source_note');
+  assert.equal(aug4565.totalReceived, null);
+  assert.equal(aug4565.sourceDashStatus.totalReceived, 'unresolved_source_dash');
   assert.ok(aug4565.sourceDashes.includes('totalReceived'));
 });
 

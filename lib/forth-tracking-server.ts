@@ -4,12 +4,16 @@ import {
   type ForthTrackingRecord
 } from "@/lib/forth-tracking";
 import { validateJourneyHistoryRequest } from "@/lib/forth-history-contract";
+import { buildHistoricalLogPath } from "@/lib/forth-history-log";
 import { summarizeForthFleet } from "@/lib/forth-tracking-view";
 
 const TOKEN_ENDPOINT = "https://webapi.forthtrack.com/authorizationserver/token";
 const TRACKING_ENDPOINT = "https://webapi.forthtrack.com/trackingresource/api/tracking";
 const HISTORY_REPORT_ENDPOINTS = {
-  trips: "https://webapi.forthtrack.com/trackingresource/api/vehicle/trips"
+  trips: "https://webapi.forthtrack.com/trackingresource/api/vehicle/trips",
+  parking: "https://webapi.forthtrack.com/trackingresource/api/vehicle/parkingTrip",
+  /** GPS point log — path built per request; never called while history live gate is off. */
+  logBase: "https://webapi.forthtrack.com/trackingresource/api/log"
 } as const;
 const REQUEST_TIMEOUT_MS = 10_000;
 const AUTH_FAILURE_COOLDOWN_MS = 60_000;
@@ -19,6 +23,8 @@ const MAX_HISTORY_RESPONSE_BYTES = 1_000_000;
 export type ForthTripsReportResult =
   | { ok: true; payload: unknown }
   | { ok: false; status: 400 | 502 | 503; error: { code: string; message: string } };
+
+export type ForthLogReportResult = ForthTripsReportResult;
 
 export type ForthTokenRequestProfile = "oauth-password-basic-v1";
 
@@ -332,6 +338,7 @@ export function createForthTrackingService(options: {
   const now = options.now ?? Date.now;
   let cachedToken: { value: string; expiresAt: number } | null = null;
   let tokenInFlight: Promise<TokenResult> | null = null;
+  let fleetInFlight: Promise<ForthFleetTrackingData> | null = null;
   let authFailure: TokenResult | null = null;
   let authRetryAfter = 0;
 
@@ -415,6 +422,9 @@ export function createForthTrackingService(options: {
 
     if (!response.ok) {
       const code = [401, 403].includes(response.status) ? "tracking_auth_rejected" : "tracking_http_error";
+      // A revoked token can still be inside its advertised lifetime. Discard
+      // only that token so the next poll can authenticate again; no retry storm.
+      if (code === "tracking_auth_rejected" && cachedToken?.value === tokenResult.token) cachedToken = null;
       return { connectionStatus: "failed", authenticationStatus: "authenticated", credentialsConfigured: true, requestProfileConfigured: true, fetchedAt: null, records: [], error: safeError(code) };
     }
 
@@ -477,7 +487,12 @@ export function createForthTrackingService(options: {
     };
   }
 
-  async function getFleetData(): Promise<ForthFleetTrackingData> {
+  function getFleetData(): Promise<ForthFleetTrackingData> {
+    if (!fleetInFlight) fleetInFlight = requestFleetData().finally(() => { fleetInFlight = null; });
+    return fleetInFlight;
+  }
+
+  async function requestFleetData(): Promise<ForthFleetTrackingData> {
     const result = await requestTracking();
     const records = result.records.map((record): ForthFleetTrackingRecord => ({
       sourceAudit: record.sourceAudit,
@@ -510,7 +525,7 @@ export function createForthTrackingService(options: {
     };
   }
 
-  async function getTripsReport(input: { deviceId: string; forthDate: string; language: "en" | "th" }): Promise<ForthTripsReportResult> {
+  async function getVehicleReport(input: { deviceId: string; forthDate: string; language: "en" | "th" }, kind: "trips" | "parking"): Promise<ForthTripsReportResult> {
     const date = typeof input?.forthDate === "string" && /^\d{8}$/.test(input.forthDate)
       ? `${input.forthDate.slice(0, 4)}-${input.forthDate.slice(4, 6)}-${input.forthDate.slice(6, 8)}`
       : "";
@@ -539,7 +554,7 @@ export function createForthTrackingService(options: {
 
     let response: Response;
     try {
-      response = await fetcher(HISTORY_REPORT_ENDPOINTS.trips, {
+      response = await fetcher(HISTORY_REPORT_ENDPOINTS[kind], {
         method: "POST",
         headers: {
           Authorization: `Bearer ${tokenResult.token}`,
@@ -584,6 +599,90 @@ export function createForthTrackingService(options: {
           message: result.failure === "response_too_large"
             ? "Forth journey history exceeded the safe response size."
             : "Forth journey history returned an invalid response."
+        }
+      };
+    }
+    return result;
+  }
+
+  async function getLogReport(input: {
+    deviceId: string;
+    startTime: string;
+    endTime: string;
+  }): Promise<ForthLogReportResult> {
+    const relative = buildHistoricalLogPath(input?.deviceId ?? "", input?.startTime ?? "", input?.endTime ?? "");
+    if (!relative) {
+      return {
+        ok: false,
+        status: 400,
+        error: {
+          code: "invalid_log_request",
+          message: "Choose one Forth device and a valid same-day Bangkok time window."
+        }
+      };
+    }
+    const credentials = readCredentials(environment);
+    const profile = configuredTokenRequestProfile(environment);
+    if (!credentials) {
+      return { ok: false, status: 503, error: { code: "credentials_not_configured", message: "Forth credentials are not configured on the server." } };
+    }
+    if (!profile) {
+      return { ok: false, status: 503, error: { code: "oauth_protocol_unverified", message: "The verified Forth token request profile is not enabled on the server." } };
+    }
+
+    const tokenResult = await getAccessToken(credentials, profile);
+    if ("failure" in tokenResult) {
+      const messages = {
+        authentication_rejected: "Forth rejected the server authentication request.",
+        authentication_unavailable: "Forth authentication service could not be reached.",
+        authentication_failed: "Forth authentication response was not usable."
+      } as const;
+      return { ok: false, status: tokenResult.failure === "authentication_rejected" ? 502 : 503, error: { code: tokenResult.failure, message: messages[tokenResult.failure] } };
+    }
+
+    const url = `${HISTORY_REPORT_ENDPOINTS.logBase}/${encodeURIComponent(input.deviceId)}/${input.startTime}/${input.endTime}`;
+    let response: Response;
+    try {
+      response = await fetcher(url, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${tokenResult.token}`,
+          Accept: "application/json"
+        },
+        cache: "no-store",
+        redirect: "error",
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+      });
+    } catch (error) {
+      const unavailable = isNetworkOrTimeoutError(error);
+      return { ok: false, status: 503, error: { code: unavailable ? "report_network_error" : "report_request_failed", message: "Forth historical GPS log could not be reached." } };
+    }
+
+    if (!response.ok) {
+      const rejected = response.status === 401 || response.status === 403;
+      const unavailable = response.status === 429 || response.status >= 500;
+      return {
+        ok: false,
+        status: unavailable ? 503 : 502,
+        error: {
+          code: rejected ? "report_auth_rejected" : "report_http_error",
+          message: rejected
+            ? "Forth did not accept the existing authentication profile for historical GPS logs."
+            : "Forth historical GPS log returned an unsuccessful response."
+        }
+      };
+    }
+
+    const result = await readBoundedJsonResponse(response);
+    if (!result.ok) {
+      return {
+        ok: false,
+        status: 502,
+        error: {
+          code: result.failure,
+          message: result.failure === "response_too_large"
+            ? "Forth historical GPS log exceeded the safe response size."
+            : "Forth historical GPS log returned an invalid response."
         }
       };
     }
@@ -646,7 +745,9 @@ export function createForthTrackingService(options: {
     };
   }
 
-  return { diagnose, getFleetData, getTripsReport, diagnoseStatus };
+  const getTripsReport = (input: { deviceId: string; forthDate: string; language: "en" | "th" }) => getVehicleReport(input, "trips");
+  const getParkingReport = (input: { deviceId: string; forthDate: string; language: "en" | "th" }) => getVehicleReport(input, "parking");
+  return { diagnose, getFleetData, getTripsReport, getParkingReport, getLogReport, diagnoseStatus };
 }
 
 export function createForthTrackingDiagnosticService(options: {
@@ -657,7 +758,11 @@ export function createForthTrackingDiagnosticService(options: {
   return createForthTrackingService(options).diagnose;
 }
 
-const forthTrackingService = createForthTrackingService();
+// One shared service per server process. Next.js compiles each route (and every hot reload)
+// as a separate module instance; without sharing, each instance requests its own OAuth token
+// and can trip the provider's token rate limiting, which surfaces as "authentication rejected".
+const forthServiceHost = globalThis as typeof globalThis & { eesForthTrackingService?: ReturnType<typeof createForthTrackingService> };
+const forthTrackingService = forthServiceHost.eesForthTrackingService ??= createForthTrackingService();
 
 export async function getForthTrackingDiagnostic() {
   return forthTrackingService.diagnose();
@@ -669,6 +774,16 @@ export async function getForthTrackingFleetData() {
 
 export async function getForthTripsReport(input: { deviceId: string; forthDate: string; language: "en" | "th" }) {
   return forthTrackingService.getTripsReport(input);
+}
+
+/** Read-only report retrieval; office caller must authorize and bound the device/day. */
+export async function getForthParkingReport(input: { deviceId: string; forthDate: string; language: "en" | "th" }) {
+  return forthTrackingService.getParkingReport(input);
+}
+
+/** Server-only GPS log fetch. Callers must enforce FORTH_HISTORY_LIVE_REQUESTS_ENABLED. */
+export async function getForthLogReport(input: { deviceId: string; startTime: string; endTime: string }) {
+  return forthTrackingService.getLogReport(input);
 }
 
 export async function getForthTrackingStatusDiagnostic() {

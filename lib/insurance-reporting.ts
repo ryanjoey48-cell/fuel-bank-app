@@ -1,3 +1,4 @@
+import { EES_COMPANY } from "./ees-company";
 import {
   annualInsuranceCost,
   buildDataQualityFindings,
@@ -272,7 +273,7 @@ export async function buildInsurancePdf(options: {
     const headingX = logo && !continuation ? 122 : MARGIN;
     context.fillStyle = COLORS.violet;
     context.font = `700 9px ${fontFamily}`;
-    context.fillText("EXPERT EXPRESS SENDER CO., LTD.", headingX, 38);
+    context.fillText(EES_COMPANY.nameEn, headingX, 38);
     context.fillStyle = COLORS.ink;
     context.font = `700 19px ${fontFamily}`;
     context.fillText(continuation ? `${title} - continued` : title, headingX, 59);
@@ -615,7 +616,7 @@ export async function buildInsurancePdf(options: {
     const pageContext = page.getContext("2d") as CanvasRenderingContext2D;
     pageContext.fillStyle = COLORS.muted;
     pageContext.font = `400 7px ${fontFamily}`;
-    pageContext.fillText("Expert Express Sender Co., Ltd.", MARGIN, PAGE_HEIGHT - 22);
+    pageContext.fillText(EES_COMPANY.nameEnTitle, MARGIN, PAGE_HEIGHT - 22);
     const pageLabel = `${language === "th" ? "หน้า" : "Page"} ${index + 1} / ${pages.length}`;
     pageContext.fillText(pageLabel, PAGE_WIDTH - MARGIN - pageContext.measureText(pageLabel).width, PAGE_HEIGHT - 22);
   });

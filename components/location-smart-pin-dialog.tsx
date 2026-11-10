@@ -3,10 +3,17 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { ArrowUpRight, Check, LoaderCircle, MapPin, RefreshCw, RotateCcw, X } from "lucide-react";
 import type { CircleMarker, Map as LeafletMap } from "leaflet";
+import "leaflet/dist/leaflet.css";
+import "maplibre-gl/dist/maplibre-gl.css";
 import styles from "./location-smart-pin-dialog.module.css";
 import { getLocationDisplayName, getLocationMapUrl, type LocationPin } from "@/lib/locations-directory";
 import { initialSmartPinState, smartPinReducer, type GeoapifyCandidate } from "@/lib/location-geocoding";
 import type { Translation } from "@/lib/translations";
+import {
+  attachEesLeafletBasemap,
+  eesLeafletAttributionHtml,
+  eesLeafletMapInitOptions
+} from "@/lib/ees-map-tiles-leaflet";
 
 type SmartPinLocation = {
   id: string;
@@ -48,14 +55,17 @@ function CandidatePreviewMap({ candidate, label }: { candidate: CandidateWithTok
         const leafletModule = await import("leaflet");
         const Leaflet = (leafletModule as unknown as { default?: typeof import("leaflet") }).default ?? leafletModule;
         if (disposed || !nodeRef.current) return;
-        const map = Leaflet.map(nodeRef.current, { zoomControl: true, scrollWheelZoom: false, attributionControl: true });
+        const map = Leaflet.map(nodeRef.current, {
+          ...eesLeafletMapInitOptions(),
+          zoomControl: true,
+          scrollWheelZoom: false
+        });
         activeMap = map;
         mapRef.current = map;
         leafletRef.current = Leaflet;
-        Leaflet.tileLayer(process.env.NEXT_PUBLIC_EES_MAP_TILE_URL || "https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          maxZoom: 19,
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>'
-        }).addTo(map);
+        map.attributionControl?.setPrefix(false);
+        map.attributionControl?.addAttribution(eesLeafletAttributionHtml());
+        await attachEesLeafletBasemap(Leaflet, map);
         map.fitBounds([[5.6, 97.3], [20.5, 105.7]], { padding: [10, 10], maxZoom: 7 });
         setReady(true);
         window.setTimeout(() => map.invalidateSize(), 0);

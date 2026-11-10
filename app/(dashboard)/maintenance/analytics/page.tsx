@@ -1,5 +1,6 @@
 "use client";
 
+import { EES_COMPANY } from "@/lib/ees-company";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { BarChart3, CalendarDays, ChevronRight, CircleDollarSign, Repeat2, Truck, Wrench, X } from "lucide-react";
@@ -324,7 +325,7 @@ export default function MaintenanceAnalyticsPage() {
       <section className="surface-card flex flex-col gap-5 px-5 py-6 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-violet-500">
-            EXPERT EXPRESS SENDER CO., LTD.
+            {EES_COMPANY.nameEn}
           </p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950 sm:text-[28px]">
             {c.analytics}

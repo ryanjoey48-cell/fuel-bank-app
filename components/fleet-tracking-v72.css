@@ -1,0 +1,174 @@
+/*
+ * EES Fleet Tracking V7.2 · workspace content design system.
+ * Shared patterns for Daily Activity, Journeys & Jobs, Fuel Intelligence and Reports: summary strips, tables, timeline,
+ * notices, one-at-a-time detail panels and expandable technical sections. Presentation only; no figure is altered here.
+ * (Scope prefix repeated to out-rank the V21/V3/V7/V7.1 rules.)
+ */
+
+/* ---------- Shared atoms ---------- */
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-hint { margin: 0; color: var(--v7-muted); font-size: .78rem; line-height: 1.45; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-muted { color: var(--v7-muted); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-empty-line { margin: 0; padding: .7rem .9rem; border: 1px dashed #d9cce8; border-radius: 10px; background: #fcfbfe; color: var(--v7-muted); font-size: .84rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-tag { display: inline-block; padding: .05rem .5rem; border-radius: 6px; background: #f3eff7; color: var(--v7-purple); font-size: .66rem; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-chip { display: inline-flex; align-items: center; min-height: 24px; padding: 0 .6rem; border-radius: 999px; background: #f3eff7; color: #4b3a58; font-size: .72rem; font-weight: 680; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-chip[data-coverage^="verified"] { background: #e5f5ed; color: #14633d; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-chip[data-coverage="unverified"], .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-chip[data-coverage="partly_verified"] { background: #fbf0d9; color: #85560a; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-section-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .4rem .8rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-section-head h3 { margin: 0; font-size: 1.02rem; color: var(--v7-purple-deep); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-plain-list { margin: 0; padding-left: 1.1rem; display: grid; gap: .2rem; font-size: .82rem; color: #4b3a58; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-inline-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .6rem 1rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-inline-controls label { display: grid; gap: .2rem; font-size: .72rem; font-weight: 650; color: var(--v7-muted); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-inline-controls input, .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-inline-controls select { min-height: 40px; border: 1px solid #ddd2ea; border-radius: 8px; padding: 0 .5rem; background: #fff; color: var(--v7-ink); }
+
+/* Summary strip: one bordered band with dividers, not a row of separate tiles */
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin: 0; background: #fff; border: 1px solid var(--v7-line); border-radius: 10px; overflow: hidden; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-strip > div { padding: .65rem .9rem; border-left: 1px solid var(--v7-line); min-width: 0; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-strip > div:first-child { border-left: 0; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-strip dt { margin: 0; color: var(--v7-muted); font-size: .7rem; font-weight: 700; letter-spacing: .02em; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-strip dd { margin: .15rem 0 0; display: grid; gap: .05rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-strip dd b { color: var(--v7-purple-deep); font-size: 1.3rem; font-weight: 780; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-strip dd small { color: var(--v7-muted); font-size: .7rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-strip .v72-strip-wide { grid-column: span 2; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-strip .v72-strip-wide dd { display: flex; flex-wrap: wrap; gap: .3rem 1.4rem; align-items: baseline; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-strip .v72-strip-wide dd span { display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: .3rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-strip .is-secondary b { font-size: 1rem; color: var(--v7-muted); font-weight: 700; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-strip .is-warn { background: #fffaf0; box-shadow: inset 3px 0 #d9971f; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-strip .is-warn dd b { color: #7a4d06; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-strip .is-attention dd b { color: var(--v7-bad); }
+
+/* Review notice: restrained amber, never red, never auto-corrects */
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-notice { margin: 0; padding: .7rem .9rem; border: 1px solid #efd9a6; border-left: 4px solid #d9971f; border-radius: 10px; background: #fffaf0; color: #5c4210; font-size: .84rem; line-height: 1.5; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-notice strong { display: block; color: #6b4707; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-notice p { margin: .25rem 0 0; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-attention { margin: 0; padding: 0; list-style: none; display: grid; gap: .3rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-attention li { display: grid; gap: .05rem; padding: .45rem .8rem; border: 1px solid var(--v7-line); border-left: 3px solid var(--v7-bad); border-radius: 8px; background: #fff; font-size: .82rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-attention li span { color: var(--v7-muted); font-size: .76rem; }
+
+/* ---------- Tables ---------- */
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-table-wrap { overflow-x: auto; border: 1px solid var(--v7-line); border-radius: 10px; background: #fff; max-width: 100%; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-table { width: 100%; border-collapse: collapse; font-size: .82rem; font-variant-numeric: tabular-nums; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-table caption { padding: .5rem .8rem; text-align: left; font-weight: 720; color: var(--v7-purple-deep); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-table th, .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-table td { padding: .5rem .75rem; border-top: 1px solid #eee8f3; text-align: left; vertical-align: top; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-table thead th { border-top: 0; background: #faf7fd; color: var(--v7-muted); font-size: .68rem; font-weight: 750; letter-spacing: .03em; text-transform: uppercase; white-space: nowrap; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-table th[scope="row"] { font-weight: 700; color: var(--v7-ink); white-space: nowrap; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-table .num { text-align: right; white-space: nowrap; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-table tbody tr:hover { background: #fcfaff; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-table tr.is-active { background: var(--v7-purple-soft); box-shadow: inset 3px 0 var(--v7-orange); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-table tr.needs-review { background: #fffaf0; box-shadow: inset 3px 0 #d9971f; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-table th[scope="row"] button { display: grid; gap: 0; min-height: 44px; padding: 0; text-align: left; color: var(--v7-purple); font-weight: 760; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-table th[scope="row"] button small { color: var(--v7-muted); font-weight: 500; font-size: .7rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-table td small { display: block; color: var(--v7-muted); font-size: .7rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-notes { display: grid; gap: .2rem; min-width: 14rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-notes > span { display: block; font-size: .78rem; color: #4b3a58; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-flag { padding: .3rem .5rem; border-radius: 6px; background: #fff3d6; color: #6b4707 !important; line-height: 1.4; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-fuel-table { min-width: 640px; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-areas-table { min-width: 640px; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-days-table th[scope="row"] button { min-height: 40px; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-quality { display: inline-block; padding: .05rem .5rem; border-radius: 999px; font-size: .7rem; font-weight: 700; background: #f3eff7; color: #4b3a58; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-quality.is-ok { background: #e5f5ed; color: #14633d; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-quality.is-mixed { background: #fbf0d9; color: #85560a; }
+
+/* ---------- Daily Activity ---------- */
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-snapshot { display: grid; gap: .7rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-day-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem .8rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-day-head strong { font-size: 1.25rem; color: var(--v7-purple-deep); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-day-head > span:not(.v72-chip) { color: var(--v7-muted); font-size: .82rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-timeline-wrap { display: grid; gap: .4rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-timeline-wrap h3 { margin: 0; font-size: .98rem; color: var(--v7-purple-deep); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-timeline { list-style: none; margin: 0; padding: 0; border: 1px solid var(--v7-line); border-radius: 10px; background: #fff; overflow: hidden; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-timeline li { display: grid; grid-template-columns: 10rem 11rem 6.5rem 7rem minmax(0, 1fr); gap: .5rem; align-items: center; padding: .5rem .8rem; border-top: 1px solid #eee8f3; border-left: 4px solid transparent; font-size: .82rem; font-variant-numeric: tabular-nums; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-timeline li:first-child { border-top: 0; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-timeline li[data-kind="moving"] { border-left-color: var(--v7-purple); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-timeline li[data-kind="stopped"] { border-left-color: #b9b2c8; background: #fcfbfd; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-timeline li[data-kind="open"] { border-left-color: #8b84a0; border-left-style: dashed; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-timeline li[data-kind="uncertain"] { border-left-color: #d9971f; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-timeline li[data-kind="gap"] { border-left-color: #d9971f; background: repeating-linear-gradient(135deg, #fffaf0, #fffaf0 8px, #fff4dc 8px, #fff4dc 16px); color: #6b4707; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-t-time { font-weight: 700; color: var(--v7-ink); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-t-km { text-align: right; font-weight: 700; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-t-src { color: var(--v7-muted); font-size: .72rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-read-row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .8rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-read-row .btn-secondary { min-height: 40px; padding: 0 .9rem; font-size: .8rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-read-status { color: var(--v7-muted); font-size: .8rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .fleet-provider-day.v72-provider-bar { padding: .6rem .9rem; border: 1px solid var(--v7-line); border-radius: 12px; background: #fff; gap: .2rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .fleet-provider-day.v72-provider-details { padding: 0; border: 0; background: transparent; }
+
+/* ---------- Expandable technical / optional sections ---------- */
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-evidence, .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-optional, .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-hint-details { border: 1px solid var(--v7-line); border-radius: 10px; background: #fff; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-hint-details { border: 0; background: transparent; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-evidence > summary, .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-optional > summary { display: flex; align-items: center; min-height: 46px; padding: 0 .9rem; font-weight: 740; color: var(--v7-purple-deep); cursor: pointer; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-hint-details > summary { display: inline-flex; align-items: center; min-height: 36px; font-size: .76rem; font-weight: 650; color: var(--v7-purple); cursor: pointer; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-evidence[open] > summary, .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-optional[open] > summary { border-bottom: 1px solid var(--v7-line); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-evidence > *:not(summary), .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-optional > *:not(summary) { margin: .8rem .9rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-optional { background: #fcfbfe; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-optional .fleet-vehicle-view { border: 0; padding: 0; background: transparent; }
+
+/* ---------- Journeys ---------- */
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-journey-head { display: grid; grid-template-columns: 4rem minmax(10rem, 1.4fr) 8rem 8rem 1fr; gap: .25rem .6rem; padding: .3rem .6rem; color: var(--v7-muted); font-size: .68rem; font-weight: 750; letter-spacing: .03em; text-transform: uppercase; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-stops { display: grid; gap: .4rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-stops h4 { margin: 0; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-recurring { display: grid; gap: .7rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-recurring-grid { display: grid; gap: 1rem; align-items: start; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-area-detail { display: grid; gap: .5rem; padding: 1rem; background: #fff; border: 1px solid var(--v7-line); border-left: 4px solid var(--v7-purple); border-radius: 10px; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-area-detail h4 { margin: 0; font-size: 1.05rem; color: var(--v7-purple-deep); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-area-detail h5 { margin: .4rem 0 0; font-size: .74rem; letter-spacing: .04em; text-transform: uppercase; color: var(--v7-muted); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-detail-head { display: flex; justify-content: space-between; align-items: flex-start; gap: .6rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-detail-head > div { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-detail-line { margin: 0; font-size: .82rem; color: #4b3a58; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-detail-actions { margin: .2rem 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-patterns { display: grid; gap: .4rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-patterns h4 { margin: 0; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-sample { margin: 0; padding: .5rem .8rem; border-radius: 8px; background: #faf7fd; color: #4b3a58; font-size: .8rem; }
+
+/* ---------- Reports ---------- */
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-exceptions { display: grid; gap: .4rem; padding: .7rem .9rem; border: 1px solid #f1c9c1; border-left: 4px solid var(--v7-bad); border-radius: 10px; background: #fff; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-exceptions h4 { margin: 0; font-size: .9rem; color: #8a2d1f; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-exceptions ul { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: .4rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-exceptions li { padding: .2rem .65rem; border-radius: 999px; background: #fdeeeb; color: #7a2519; font-size: .8rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-exceptions li b { font-weight: 800; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-legend { padding: .1rem .2rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-reports-workspace .fleet-review-list { gap: .35rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-reports-workspace .fleet-review-list > li { padding: .55rem .8rem; border-radius: 10px; }
+
+/* Wide screens: list beside one focused detail panel; reports stay single column so tables keep their width */
+@media (min-width: 1100px) {
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-recurring-grid.has-detail { grid-template-columns: minmax(0, 1.5fr) minmax(340px, 1fr); }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-reports-workspace { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 900px) {
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-timeline li { grid-template-columns: 1fr auto; row-gap: .1rem; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-timeline .v72-t-time { grid-column: 1 / -1; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-journey-head { display: none; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-strip .v72-strip-wide { grid-column: 1 / -1; }
+}
+@media (max-width: 767px) {
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-strip > div { border-top: 1px solid var(--v7-line); }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-strip > div:nth-child(-n+2) { border-top: 0; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-strip > div:nth-child(2n+1) { border-left: 0; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-strip dd b { font-size: 1.12rem; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-table-wrap { -webkit-overflow-scrolling: touch; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-area-detail { padding: .8rem; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-inline-controls input, .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-inline-controls select, .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-read-row .btn-secondary { min-height: 44px; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-evidence > summary, .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-optional > summary { min-height: 48px; }
+}
+
+/* ---------- Live Fleet: shorter, calmer map toolbar ---------- */
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-map-status { gap: .25rem; padding: .2rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-map-primary-actions > button, .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-map-layers > summary { min-height: 32px; padding: 0 .6rem; font-size: .76rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-outside-button { min-height: 32px; font-size: .72rem; }
+
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-table th[scope="row"] button { background: none; border: 0; box-shadow: none; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-table th[scope="row"] { background: transparent; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-days-table th[scope="row"] button { color: var(--v7-purple); font-weight: 760; text-decoration: underline; text-underline-offset: 3px; }
+
+/* Review/search controls sit in one row; detail tables keep action buttons on one line */
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .fleet-review-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .6rem 1rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .fleet-review-controls label { display: grid; gap: .2rem; font-size: .72rem; font-weight: 650; color: var(--v7-muted); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .fleet-review-controls input:not([type="checkbox"]), .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .fleet-review-controls select { width: auto; min-width: 11rem; min-height: 40px; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .fleet-review-controls .btn-secondary { min-height: 40px; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-area-detail .v72-table td:last-child, .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-area-detail .v72-table td:nth-child(2) { white-space: nowrap; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v72-area-detail .v72-table td .fleet-link-button { min-height: 36px; padding: 0 .5rem; white-space: nowrap; }
+@media (max-width: 767px) {
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .fleet-review-controls input:not([type="checkbox"]), .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .fleet-review-controls select { width: 100%; min-height: 44px; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .fleet-review-controls label { flex: 1 1 100%; }
+}

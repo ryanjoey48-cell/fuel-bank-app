@@ -27,6 +27,7 @@ export type ManagedAccount = AccountAccess & {
 export type ManagedAccountSummary = {
   total: number;
   admin: number;
+  superAdmin: number;
   officeStaff: number;
   readOnly: number;
   suspended: number;

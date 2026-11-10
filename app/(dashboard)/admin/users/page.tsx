@@ -22,7 +22,7 @@ import {
   updateManagedAccount,
   type ManagedAccount
 } from "@/lib/account-management";
-import { ACCOUNT_ROLES, ACCOUNT_STATUSES, roleDisplayKey, type AccountRole, type AccountStatus } from "@/lib/authorization";
+import { ACCOUNT_ASSIGNABLE_ROLES, ACCOUNT_ROLES, ACCOUNT_STATUSES, roleDisplayKey, type AccountRole, type AccountStatus } from "@/lib/authorization";
 import { useLanguage } from "@/lib/language-provider";
 
 const PAGE_SIZE = 20;
@@ -50,6 +50,7 @@ function statusClass(status: AccountStatus) {
 }
 
 function roleClass(role: AccountRole) {
+  if (role === "super_admin") return "border-amber-300 bg-amber-50 text-amber-800";
   if (role === "admin") return "border-violet-200 bg-violet-50 text-violet-700";
   if (role === "office_staff") return "border-sky-200 bg-sky-50 text-sky-700";
   return "border-slate-200 bg-slate-50 text-slate-700";
@@ -87,7 +88,7 @@ function SummaryCard({
 export default function AdminUsersPage() {
   const { language, t } = useLanguage();
   const [users, setUsers] = useState<ManagedAccount[]>([]);
-  const [summary, setSummary] = useState({ total: 0, admin: 0, officeStaff: 0, readOnly: 0, suspended: 0 });
+  const [summary, setSummary] = useState({ total: 0, admin: 0, superAdmin: 0, officeStaff: 0, readOnly: 0, suspended: 0 });
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -453,11 +454,12 @@ export default function AdminUsersPage() {
                   <span className="form-label">Role</span>
                   <select
                     value={managedUser.role}
-                    disabled={managedUser.isCurrentUser}
+                    disabled={managedUser.isCurrentUser || managedUser.role === "super_admin"}
                     onChange={(event) => setPendingAction({ type: "role", user: managedUser, role: event.target.value as AccountRole })}
                     className="form-input bg-white disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
                   >
-                    {ACCOUNT_ROLES.map((role) => (
+                    {managedUser.role === "super_admin" ? <option value="super_admin">{t.adminUsers.roles.superAdmin}</option> : null}
+                    {ACCOUNT_ASSIGNABLE_ROLES.map((role) => (
                       <option key={role} value={role}>{t.adminUsers.roles[roleDisplayKey(role)]}</option>
                     ))}
                   </select>

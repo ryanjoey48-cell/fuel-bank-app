@@ -1,5 +1,6 @@
 "use client";
 
+import { EES_COMPANY } from "@/lib/ees-company";
 import {
   Download,
   Search,
@@ -391,7 +392,7 @@ export default function SafetyPage() {
 
   return <div className="maintenance-shell -m-3 min-h-full space-y-4 p-3 sm:-m-4 sm:p-4 lg:-m-5 lg:p-5">
     <section className="surface-card flex flex-col gap-4 p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
-      <div><p className="text-[11px] font-bold uppercase tracking-[.15em] text-violet-500">EXPERT EXPRESS SENDER CO., LTD.</p>
+      <div><p className="text-[11px] font-bold uppercase tracking-[.15em] text-violet-500">{EES_COMPANY.nameEn}</p>
         <h1 className="mt-1 text-2xl font-semibold text-slate-950">{english ? "Vehicle Safety" : "ความปลอดภัยของรถ"}</h1>
         <p className="mt-1 text-sm text-slate-500">{english ? "Know who's ready, what's missing and what needs replacing." : "ดูรถที่พร้อมใช้งาน อุปกรณ์ที่ขาด และรายการที่ต้องเปลี่ยน"}</p></div>
       <div className="flex flex-wrap items-center gap-2"><div className="flex flex-wrap rounded-2xl border border-violet-100 bg-violet-50/70 p-1">

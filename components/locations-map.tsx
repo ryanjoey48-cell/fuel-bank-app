@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
+import "maplibre-gl/dist/maplibre-gl.css";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import { ArrowUpRight, Crosshair, LoaderCircle, MapPin, MousePointer2 } from "lucide-react";
@@ -21,6 +22,11 @@ import {
   type LocationPinType
 } from "@/lib/locations-directory";
 import type { Translation } from "@/lib/translations";
+import {
+  attachEesLeafletBasemap,
+  eesLeafletAttributionHtml,
+  eesLeafletMapInitOptions
+} from "@/lib/ees-map-tiles-leaflet";
 
 type MapLocation = {
   id: string;
@@ -57,9 +63,13 @@ type Props = {
   onPinTypeChange: (pinType: LocationPinType) => void;
   onMarkUsed: (location: MapLocation) => void;
   onSavePin: (pin: SaveLocationPinInput) => Promise<LocationPin>;
+  /** Stage B: grey, unsaved stop evidence from a vehicle-day. Never persisted and never used as a pin. */
+  evidenceMarkers?: { id: string; latitude: number; longitude: number; label: string; kind?: "fleet_suggestion" }[];
+  onEvidenceMarkerClick?: (id: string) => void;
+  /** Stage B: puts a position into the editor as an unsaved candidate; the existing source text and Save step still decide. */
+  suggestedCandidate?: { latitude: number; longitude: number; nonce: number } | null;
 };
 
-const tileUrl = process.env.NEXT_PUBLIC_EES_MAP_TILE_URL || "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const THAILAND_BOUNDS: [[number, number], [number, number]] = [[5.6, 97.3], [20.5, 105.7]];
 
 function buildPopup(location: MapLocation, pinType: LocationPinType, language: "en" | "th", openLabel: string, truckEntranceLabel: string, onOpen: () => void) {
@@ -114,13 +124,17 @@ export function LocationsMap({
   pinType,
   onPinTypeChange,
   onMarkUsed,
-  onSavePin
+  onSavePin,
+  evidenceMarkers,
+  onEvidenceMarkerClick,
+  suggestedCandidate
 }: Props) {
   const mapNodeRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const clusterRef = useRef<MarkerClusterGroup | null>(null);
   const leafletRef = useRef<typeof import("leaflet") | null>(null);
   const candidateMarkerRef = useRef<import("leaflet").Marker | null>(null);
+  const evidenceLayerRef = useRef<import("leaflet").LayerGroup | null>(null);
   const pickingRef = useRef(false);
   const mapClickRef = useRef<(coordinate: Coordinates) => void>(() => undefined);
   const onMarkUsedRef = useRef(onMarkUsed);
@@ -182,21 +196,16 @@ export function LocationsMap({
         if (disposed || !mapNodeRef.current) return;
 
         const map = Leaflet.map(mapNodeRef.current, {
-          minZoom: 4,
+          ...eesLeafletMapInitOptions(),
           zoomControl: true,
           scrollWheelZoom: true
         });
         activeMap = map;
         mapRef.current = map;
         leafletRef.current = Leaflet;
-        Leaflet.tileLayer(tileUrl, {
-          maxZoom: 19,
-          minZoom: 4,
-          keepBuffer: 2,
-          updateWhenIdle: true,
-          updateWhenZooming: false,
-          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap contributors</a>'
-        }).addTo(map);
+        map.attributionControl?.setPrefix(false);
+        map.attributionControl?.addAttribution(eesLeafletAttributionHtml());
+        await attachEesLeafletBasemap(Leaflet, map);
         map.fitBounds(THAILAND_BOUNDS, { padding: [18, 18], maxZoom: 8 });
 
         const cluster = Leaflet.markerClusterGroup({
@@ -270,6 +279,23 @@ export function LocationsMap({
   }, [candidate, copy.map, copy.truckEntrance, language, locationById, mapReady, pins, visibleIds]);
 
   useEffect(() => {
+    if (!mapReady || !mapRef.current || !leafletRef.current) return;
+    const Leaflet = leafletRef.current;
+    evidenceLayerRef.current?.remove();
+    evidenceLayerRef.current = null;
+    const markers = (evidenceMarkers ?? []).filter((m) => isValidCoordinates(m.latitude, m.longitude));
+    if (!markers.length) return;
+    const layer = Leaflet.layerGroup();
+    // V6.5: a fleet suggestion is drawn larger, in EES purple with an orange ring, so it cannot be mistaken for a saved pin or a Stage B stop.
+    markers.forEach((m) => Leaflet.circleMarker([m.latitude, m.longitude], m.kind === "fleet_suggestion"
+      ? { radius: 13, color: "#f97316", weight: 3, fillColor: "#6d28d9", fillOpacity: 0.6, dashArray: "6 4" }
+      : { radius: 9, color: "#475467", weight: 2, fillColor: "#98a2b3", fillOpacity: 0.55, dashArray: "3 3" }).bindTooltip(m.label, { direction: "top" }).on("click", () => onEvidenceMarkerClick?.(m.id)).addTo(layer));
+    layer.addTo(mapRef.current);
+    evidenceLayerRef.current = layer;
+    return () => { layer.remove(); if (evidenceLayerRef.current === layer) evidenceLayerRef.current = null; };
+  }, [evidenceMarkers, mapReady, onEvidenceMarkerClick]);
+
+  useEffect(() => {
     const pin = selectedPin;
     setCoordinates(pin ? formatCoordinates(pin) : "");
     setCoordinateSource(pin?.coordinate_source ?? "");
@@ -282,6 +308,28 @@ export function LocationsMap({
     setSaveError(false);
     setSaveSucceeded(false);
   }, [selectedLocationId, pinType]);
+
+  // Declared after the effects above on purpose: on a fresh mount those reset the editor, and a suggestion handed over before the
+  // map existed (V6.5, from Fleet Tracking) must win. It re-applies once when the map becomes ready so it can also centre the view.
+  const lastSuggestionRef = useRef<{ latitude: number; longitude: number } | null>(null);
+  useEffect(() => {
+    if (!suggestedCandidate) {
+      // The suggestion was dismissed: remove it from the editor, but only if the person has not moved or replaced it since.
+      const last = lastSuggestionRef.current; lastSuggestionRef.current = null;
+      if (last) setCandidate((current) => (current && Math.abs(current.latitude - last.latitude) < 1e-7 && Math.abs(current.longitude - last.longitude) < 1e-7 ? null : current));
+      if (last) setCoordinates((current) => (current === formatCoordinates(last) ? "" : current));
+      return;
+    }
+    if (!isValidCoordinates(suggestedCandidate.latitude, suggestedCandidate.longitude)) return;
+    const point = { latitude: suggestedCandidate.latitude, longitude: suggestedCandidate.longitude };
+    lastSuggestionRef.current = point;
+    setCandidate(point);
+    setCoordinates(formatCoordinates(point));
+    setSaveError(false);
+    setSaveSucceeded(false);
+    mapRef.current?.setView([point.latitude, point.longitude], Math.max(mapRef.current.getZoom(), 16));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggestedCandidate?.nonce, mapReady]);
 
   useEffect(() => {
     if (!mapRef.current || !selectedPin) return;

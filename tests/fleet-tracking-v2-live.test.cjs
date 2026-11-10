@@ -34,7 +34,8 @@ function loadWithMocks(relativePath, mocks) {
 }
 
 const forth = loadTypeScriptModule("lib/forth-tracking.ts");
-const forthView = loadTypeScriptModule("lib/forth-tracking-view.ts");
+const speedConfig = loadWithMocks("lib/forth-speed-config.ts", { "@/lib/forth-tracking": forth });
+const forthView = loadWithMocks("lib/forth-tracking-view.ts", { "@/lib/forth-speed-config": speedConfig });
 const v2View = loadTypeScriptModule("lib/fleet-tracking-v2/view.ts");
 const v2Summary = loadTypeScriptModule("lib/fleet-tracking-v2/summary.ts");
 const { canShowUnverifiedReportedPosition, getFleetFitPositions, getVerifiedPositionsOutsideOperatingArea, getVisibleMapVehicles } = v2View;

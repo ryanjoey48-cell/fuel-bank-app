@@ -1,4 +1,5 @@
-export const ACCOUNT_ROLES = ["admin", "office_staff", "read_only"] as const;
+export const ACCOUNT_ROLES = ["super_admin", "admin", "office_staff", "read_only"] as const;
+export const ACCOUNT_ASSIGNABLE_ROLES = ["admin", "office_staff", "read_only"] as const;
 export const ACCOUNT_STATUSES = ["active", "suspended"] as const;
 
 export type AccountRole = (typeof ACCOUNT_ROLES)[number];
@@ -16,7 +17,11 @@ export type Permission =
   | "inventory.manage"
   | "inventory.receive"
   | "inventory.issue"
-  | "inventory.adjust";
+  | "inventory.adjust"
+  | "finance:review"
+  | "finance:approve"
+  /** Retrieve historical vehicle location (journey playback points and journey reports). Not implied by business:read. */
+  | "fleet:history_playback";
 
 export type AccountAccess = {
   userId: string;
@@ -28,6 +33,23 @@ export type AccountAccess = {
 };
 
 export const ROLE_PERMISSIONS: Record<AccountRole, Permission[]> = {
+  super_admin: [
+    "admin:support_tickets",
+    "admin:user_management",
+    "admin:security_settings",
+    "business:read",
+    "business:write",
+    "business:delete",
+    "business:import",
+    "inventory.view",
+    "inventory.manage",
+    "inventory.receive",
+    "inventory.issue",
+    "inventory.adjust",
+    "finance:review",
+    "finance:approve",
+    "fleet:history_playback"
+  ],
   admin: [
     "admin:support_tickets",
     "admin:user_management",
@@ -40,11 +62,16 @@ export const ROLE_PERMISSIONS: Record<AccountRole, Permission[]> = {
     "inventory.manage",
     "inventory.receive",
     "inventory.issue",
-    "inventory.adjust"
+    "inventory.adjust",
+    "fleet:history_playback"
   ],
   office_staff: ["business:read", "business:write", "business:delete", "business:import", "inventory.view", "inventory.receive", "inventory.issue", "inventory.adjust"],
   read_only: ["business:read", "inventory.view"]
 };
+
+export function isAdminRole(role: AccountRole | null | undefined) {
+  return role === "admin" || role === "super_admin";
+}
 
 export function normalizeAccountRole(value: unknown): AccountRole {
   const normalized = String(value ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
@@ -69,6 +96,7 @@ export function isActiveAdmin(access: Pick<AccountAccess, "role" | "status"> | n
 }
 
 export function roleDisplayKey(role: AccountRole) {
+  if (role === "super_admin") return "superAdmin";
   if (role === "admin") return "administrator";
   if (role === "read_only") return "readOnly";
   return "officeStaff";

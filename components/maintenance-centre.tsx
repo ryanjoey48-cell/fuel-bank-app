@@ -1,4 +1,5 @@
 'use client';
+import { EES_COMPANY } from "@/lib/ees-company";
 import {oilStatusLabel} from '@/lib/oil-service-labels';
 
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
@@ -117,7 +118,7 @@ export function MaintenanceCentre(){
      .catch(e=>{console.warn('Supplementary oil history unavailable',e);if(version===revision.current){setOilLoading(false);setOilError(true);}});
    }catch(e){if(version===revision.current){setError(e instanceof Error?e.message:String(e));setBusy(false);setOilLoading(false);setOilError(true);}}
   },[]);
- useEffect(()=>{void load();const p=new URLSearchParams(window.location.search);setVehicleId(p.get('vehicle')??'');if(p.get('package')==='engine_oil'&&p.get('vehicle'))setForm({record:null,key:crypto.randomUUID(),oilPackage:true});if(['overview','schedule','history','settings','vehicles','reports','intervals','oil','components','problems'].includes(p.get('tab')??''))setTab(p.get('tab') as 'overview'|'schedule'|'history'|'settings'|'vehicles'|'reports'|'intervals'|'oil'|'components'|'problems');const timer=setInterval(()=>setToday(maintenanceToday()),60000);const changed=()=>void load();window.addEventListener('fuel-bank:data-changed',changed);window.addEventListener('focus',changed);const invalidate=()=>{revision.current++;};return()=>{invalidate();clearInterval(timer);window.removeEventListener('fuel-bank:data-changed',changed);window.removeEventListener('focus',changed);};},[load]);
+ useEffect(()=>{void load();const p=new URLSearchParams(window.location.search);setVehicleId(p.get('vehicle')??'');if(p.get('package')==='engine_oil'&&p.get('vehicle'))setForm({record:null,key:crypto.randomUUID(),oilPackage:true});if(['overview','schedule','history','settings','vehicles','reports','intervals','oil','components','problems'].includes(p.get('tab')??''))setTab(p.get('tab') as 'overview'|'schedule'|'history'|'settings'|'vehicles'|'reports'|'intervals'|'oil'|'components'|'problems');const timer=setInterval(()=>setToday(maintenanceToday()),60000);const changed=()=>{if(document.visibilityState==='visible')void load();};window.addEventListener('fuel-bank:data-changed',changed);window.addEventListener('focus',changed);const invalidate=()=>{revision.current++;};return()=>{invalidate();clearInterval(timer);window.removeEventListener('fuel-bank:data-changed',changed);window.removeEventListener('focus',changed);};},[load]);
  const oilUnavailable=oilLoading||oilError;
  const oilRetryAction=()=>void load();
  const oilRows=useMemo(()=>data&&!oilLoading&&!oilError?buildOilServiceSnapshot({vehicles:data.vehicles.map(v=>({...v,maintenance_oil_schedule:data.requirements.find(s=>s.service_key==='engine_oil'&&s.schedule_kind==='replacement'&&s.active&&data.applicability.some(a=>a.vehicle_id===v.id&&a.requirement_id===s.id)) as ServiceSchedule|undefined})),drivers:data.drivers,mileage:data.mileage,logs:oil.logs,baselines:oil.baselines}):[],[data,oil,oilLoading,oilError]);
@@ -177,7 +178,7 @@ export function MaintenanceCentre(){
  const selected=vehicleId||visible[0]?.vehicle.id||'';
  return <div className={`${styles.root} maintenance-centre space-y-3 rounded-2xl p-3 text-slate-900 sm:p-4`}>
  <header className="maintenance-heading surface-card flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 sm:px-5">
-  <div><p className="text-[11px] font-semibold uppercase tracking-[0.13em] text-violet-600">EXPERT EXPRESS SENDER CO., LTD.</p>
+  <div><p className="text-[11px] font-semibold uppercase tracking-[0.13em] text-violet-600">{EES_COMPANY.nameEn}</p>
    <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">{language==='th'?'การบำรุงรักษา':'Maintenance'}</h1>
 </div>
   <nav className="flex flex-wrap gap-1 rounded-xl border border-violet-100 bg-violet-50/70 p-1" aria-label="Maintenance and analytics">

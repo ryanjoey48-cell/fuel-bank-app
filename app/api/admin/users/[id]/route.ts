@@ -9,7 +9,7 @@ import {
   resolveAccountAccess,
   type ServerManagedAccount
 } from "@/lib/admin-user-management-server";
-import { ACCOUNT_ROLES, ACCOUNT_STATUSES, normalizeAccountRole, normalizeAccountStatus } from "@/lib/authorization";
+import { ACCOUNT_ASSIGNABLE_ROLES, ACCOUNT_STATUSES, isAdminRole, normalizeAccountRole, normalizeAccountStatus } from "@/lib/authorization";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -26,7 +26,7 @@ function cleanDisplayName(value: unknown) {
 function parseRole(value: unknown) {
   if (value === undefined) return undefined;
   const normalized = String(value ?? "").trim().toLowerCase().replace(/[\s-]+/g, "_");
-  if (!(ACCOUNT_ROLES as readonly string[]).includes(normalized)) throw new AdminApiError(400, "Invalid account role.");
+  if (!(ACCOUNT_ASSIGNABLE_ROLES as readonly string[]).includes(normalized)) throw new AdminApiError(400, "Invalid or protected account role.");
   return normalizeAccountRole(normalized);
 }
 
@@ -69,7 +69,11 @@ export async function PATCH(request: Request, context: RouteContext) {
       throw new AdminApiError(400, "Administrators cannot suspend their own signed-in account.");
     }
 
-    if (targetAccess.role === "admin" && targetAccess.status === "active" && (nextRole !== "admin" || nextStatus !== "active")) {
+    if (targetAccess.role === "super_admin" && (role !== undefined || status !== undefined)) {
+      throw new AdminApiError(403, "Super Admin role and status are protected from account-management changes.");
+    }
+
+    if (isAdminRole(targetAccess.role) && targetAccess.status === "active" && (!isAdminRole(nextRole) || nextStatus !== "active")) {
       const otherAdmins = await countOtherActiveAdmins(actor.admin, targetUser.id);
       if (otherAdmins < 1) {
         throw new AdminApiError(400, "The final active administrator cannot be demoted or suspended.");

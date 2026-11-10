@@ -633,7 +633,8 @@ function findTransferFuelLogMatch(
   return candidates[0]?.log ?? null;
 }
 
-const READ_CACHE_TTL_MS = 30_000;
+const READ_CACHE_TTL_MS = 60_000;
+const DIRECTORY_CACHE_TTL_MS = 120_000;
 
 type CacheEntry<T> = {
   expiresAt: number;
@@ -1463,7 +1464,7 @@ export async function fetchDriverDirectory({
     return ((data ?? []) as Driver[])
       .filter((driver) => includeInactive || driver.active !== false)
       .map(normalizeDriverRow);
-  });
+  }, DIRECTORY_CACHE_TTL_MS);
 }
 
 export async function fetchVehicles() {
@@ -1493,7 +1494,7 @@ export async function fetchVehicles() {
     }
 
     return (await import('./maintenance-oil-data')).oilSchedulesForVehicles(merged);
-  });
+  }, DIRECTORY_CACHE_TTL_MS);
 }
 
 export async function fetchVehicleServiceLogs() {
@@ -4021,14 +4022,34 @@ export async function fetchTripFuelLogLinks(): Promise<TripFuelLogLink[]> {
 }
 
 export async function fetchTripJourneysByBookingIds(bookingIds: string[]) {
-  if (!bookingIds.length) return [] as TripJourney[];
-  const bookingIdSet = new Set(bookingIds.map((id) => String(id)));
-  const trips = await fetchTripJourneys();
-  return trips.filter(
-    (trip) =>
-      bookingIdSet.has(String(trip.booking_id ?? "")) ||
-      bookingIdSet.has(String(trip.booking_diary_id ?? ""))
-  );
+  const uniqueIds = [...new Set(bookingIds.map((id) => String(id).trim()).filter(Boolean))];
+  if (!uniqueIds.length) return [] as TripJourney[];
+
+  // Scoped lookup only — avoid loading every trip_journey + fuel_log for diary status badges.
+  const chunkSize = 100;
+  const rows: TripJourney[] = [];
+  for (let offset = 0; offset < uniqueIds.length; offset += chunkSize) {
+    const chunk = uniqueIds.slice(offset, offset + chunkSize);
+    const tripResult = await supabase
+      .from("trip_journeys")
+      .select("*")
+      .in("booking_id", chunk)
+      .order("created_at", { ascending: false });
+
+    if (tripResult.error) {
+      if (isMissingTableError(tripResult.error)) {
+        return [] as TripJourney[];
+      }
+      logDataError("fetchTripJourneysByBookingIds error:", tripResult.error);
+      throw new Error(tripResult.error.message || "Unable to load trip journeys for bookings.");
+    }
+
+    for (const row of (tripResult.data ?? []) as TripJourney[]) {
+      rows.push(normalizeTripJourneyRow(row));
+    }
+  }
+
+  return rows;
 }
 
 export async function fetchRouteDistanceEstimate(

@@ -1,0 +1,53 @@
+const { chromium } = require('C:/Users/joery/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+const fs = require('node:fs'); const path = require('node:path'); const assert = require('node:assert/strict');
+const out = path.resolve('output/finance-v101'); fs.mkdirSync(out,{recursive:true});
+async function intakeFollowup(page){
+ await page.goto('http://127.0.0.1:3003/finance-centre?section=reconciliation',{waitUntil:'domcontentloaded'});await page.getByRole('button',{name:'View earlier bookings',exact:true}).waitFor();await page.getByRole('button',{name:'View earlier bookings',exact:true}).click();await page.locator('[data-intake-row]').first().waitFor();
+ const form=page.getByTestId('intake-workspace');const wo=page.getByRole('textbox',{name:'Green-paper Work Order Number',exact:true});const number='V101-NEXT-'+Date.now();await wo.fill(number);await page.getByRole('button',{name:/Save & Next/}).click();await page.getByText(/Next job ready/).waitFor();await page.waitForFunction(()=>document.querySelector('input[autocomplete="off"][inputmode="text"]')?.value==='');console.log('PASS successful Save & Next');
+ const flagged='V101-FLAG-'+Date.now();await wo.fill(flagged);await page.getByRole('button',{name:/Flag issue/}).click();await page.getByLabel('Issue category',{exact:true}).selectOption('Wrong vehicle');await page.getByRole('textbox',{name:/What is wrong/}).fill('Synthetic wrong-vehicle evidence');await page.getByRole('button',{name:'Save',exact:true}).click();await page.getByText('Saved WO '+flagged+'.',{exact:true}).waitFor();await form.getByText('No unsaved changes',{exact:true}).waitFor();console.log('PASS categorized Flag Issue persists cleanly');
+ await page.getByRole('button',{name:'Cancel flag',exact:true}).click();await page.getByRole('button',{name:/Confirm job/}).click();await page.getByText(/Next job ready/).waitFor();const saved=(await (await page.request.get('http://127.0.0.1:3003/api/finance-local-store')).json()).envelope.workspaces.owner;assert.equal(saved.bookings.find(j=>j.returned.workOrder===flagged).status,'verified');console.log('PASS Confirm Job verifies without billing approval');
+ await page.getByRole('button',{name:/Flag issue/}).click();await page.getByLabel('Issue category',{exact:true}).selectOption('Missing Work Order Number');await page.getByRole('textbox',{name:/What is wrong/}).fill('Synthetic missing green-paper number');const ref=page.getByRole('textbox',{name:'Customer job no. (optional)',exact:true});await ref.fill('TEST-CUSTOMER-REF');await page.getByRole('button',{name:'Save',exact:true}).click();await page.getByText('Issue saved. Work order number is still missing.',{exact:true}).waitFor();await form.getByText('No unsaved changes',{exact:true}).waitFor();await ref.fill('');await page.getByRole('button',{name:'Save',exact:true}).click();await form.getByText('No unsaved changes',{exact:true}).waitFor();await page.reload({waitUntil:'domcontentloaded'});await page.getByRole('textbox',{name:'Green-paper Work Order Number',exact:true}).waitFor();await page.getByText('Synthetic missing green-paper number',{exact:false}).first().waitFor();assert.equal(await page.getByRole('textbox',{name:'Customer job no. (optional)',exact:true}).inputValue(),'');console.log('PASS missing-number flag and cleared customer reference survive refresh');
+}
+async function mobileChecks(page){
+ await page.setViewportSize({width:390,height:844});
+ for(const section of ['reconciliation','arrange','sheet','trn']){
+  await page.goto('http://127.0.0.1:3003/finance-centre?section='+section+'&customer=v6-apl',{waitUntil:'domcontentloaded'});
+  await page.locator(section==='reconciliation'?'[data-testid="intake-workspace"]':section==='arrange'?'.fc6-arrange':section==='sheet'?'.fc6-billing':'[data-testid="document-viewer"]').waitFor();
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth),false);
+  await page.screenshot({path:path.join(out,section+'-mobile.png'),fullPage:true});console.log('PASS mobile '+section);
+ }
+ await page.evaluate(()=>localStorage.setItem('fuel-bank-language','th'));await page.reload({waitUntil:'domcontentloaded'});await page.getByRole('button',{name:/^รับใบงาน(?:\s|$)/}).waitFor();await page.getByTestId('invoice-group-chip').first().waitFor();await page.screenshot({path:path.join(out,'documents-thai-mobile.png'),fullPage:true});console.log('PASS Thai workflow navigation');
+}
+(async()=>{
+ const browser=await chromium.launch({headless:true,channel:'msedge'}); const page=await browser.newPage({viewport:{width:1920,height:1080}}); const errors=[];
+ page.setDefaultTimeout(180000); page.setDefaultNavigationTimeout(180000); page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.type()==='beforeunload'?d.accept():d.dismiss());
+ await page.route('**/*',r=>new URL(r.request().url()).hostname==='127.0.0.1'||r.request().url().startsWith('data:')?r.continue():r.abort());
+ try{
+ const response=await page.request.get('http://127.0.0.1:3003/api/finance-local-store',{timeout:180000});const data=await response.json();
+ assert.equal(data.kind,'ees_finance_local_test');assert.ok(data.envelope.workspaces.owner.bookings.every(j=>/^(v6-|fixture-diary-)/.test(j.id)));
+ if(process.env.EES_FINANCE_BROWSER_INTAKE_FOLLOWUP==='1'){await intakeFollowup(page);assert.deepEqual(errors,[]);return;}
+ if(process.env.EES_FINANCE_BROWSER_MOBILE_ONLY==='1'){await mobileChecks(page);assert.deepEqual(errors,[]);return;}
+ await page.goto('http://127.0.0.1:3003/finance-centre?section=reconciliation',{waitUntil:'domcontentloaded'});
+ await page.getByText('No bookings in this date range',{exact:true}).waitFor(); console.log('PASS empty state');
+ await page.getByRole('button',{name:'View earlier bookings',exact:true}).click();await page.locator('[data-intake-row]').first().waitFor();console.log('PASS historical register');
+ await page.getByRole('button',{name:/^All(?: \d+)?$/}).click();
+ await page.getByLabel('Rows per page',{exact:true}).selectOption('25');
+ await page.getByTestId('intake-pagination').getByText('Page 1 / 3',{exact:true}).waitFor();await page.waitForFunction(()=>document.querySelectorAll('[data-intake-row]').length===25);assert.equal(await page.locator('[data-intake-row]').count(),25);
+ await page.getByTestId('intake-pagination').getByRole('button',{name:'Next',exact:true}).click();await page.getByText('Page 2 / 3',{exact:true}).waitFor();await page.waitForFunction(()=>document.querySelectorAll('[data-intake-row]').length===25);console.log('PASS bounded pages');
+ const wo=page.getByRole('textbox',{name:'Green-paper Work Order Number',exact:true}); const number='V101-'+Date.now();await wo.fill(number);await wo.press('Enter');assert.equal(await wo.inputValue(),number);assert.equal(await page.getByText('Saved WO '+number+'.',{exact:true}).count(),0);console.log('PASS Enter does not submit');
+ const fail=r=>r.request().method()==='PUT'?r.abort():r.continue();await page.route('**/api/finance-local-store',fail);await page.getByRole('button',{name:/Save & Next/}).click();await page.getByRole('alert').filter({hasText:'Not saved.'}).waitFor();assert.equal(await wo.inputValue(),number);await page.unroute('**/api/finance-local-store',fail);console.log('PASS failed save preserves typing');
+ await page.getByRole('button',{name:'Save',exact:true}).click();await page.getByText('Saved WO '+number+'.',{exact:true}).waitFor();await page.screenshot({path:path.join(out,'intake-desktop.png'),fullPage:true});
+ await page.reload({waitUntil:'domcontentloaded'});await page.getByRole('textbox',{name:'Green-paper Work Order Number',exact:true}).waitFor();await page.waitForFunction(n=>Array.from(document.querySelectorAll('input')).some(i=>i.value===n),number);console.log('PASS save refresh reopen');
+ await page.getByRole('button',{name:/Arrange Work Orders/}).click();await page.getByTestId('customer-workspace').waitFor();await page.getByRole('button',{name:/APL isolated fixture.*Open workspace/}).click();await page.getByTestId('invoice-group-chip').filter({hasText:'24,160'}).click();await page.screenshot({path:path.join(out,'arrange-desktop.png'),fullPage:true});
+ await page.getByRole('button',{name:/Continue to Customer Billing/}).click();await page.getByTestId('customer-aggregate').waitFor();assert.match(await page.locator('body').innerText(),/24,160/);await page.screenshot({path:path.join(out,'billing-desktop.png'),fullPage:true});console.log('PASS APL billing');
+ await page.getByRole('button',{name:/Continue to Documents/}).click();await page.getByTestId('document-viewer').waitFor();await page.locator('[data-invoice-variant="reference"] img').first().waitFor({timeout:120000});await page.screenshot({path:path.join(out,'documents-desktop.png'),fullPage:true});console.log('PASS rendered Original invoice viewer');
+ const viewer=page.getByTestId('document-viewer');
+ await viewer.getByTestId('invoice-fit-page').click();await viewer.getByTestId('invoice-fit-width').click();await viewer.getByTestId('invoice-zoom-in').click();await viewer.getByTestId('invoice-zoom-out').click();
+ await viewer.getByTestId('invoice-fullscreen').click();await page.getByTestId('invoice-fullscreen-view').waitFor();await page.keyboard.press('Escape');await page.getByTestId('invoice-fullscreen-view').waitFor({state:'hidden'});
+ const download=page.waitForEvent('download');await page.getByTestId('download-invoice-pdf').click();const pdfPath=path.join(out,'APL-DRAFT-TEST.pdf');await (await download).saveAs(pdfPath);assert.equal(fs.readFileSync(pdfPath).subarray(0,4).toString(),'%PDF');console.log('PASS Original PDF download and viewer controls');
+ await viewer.getByTestId('invoice-variant-modern').click();await page.locator('[data-invoice-variant="modern"] img').first().waitFor();await page.screenshot({path:path.join(out,'documents-modern-desktop.png'),fullPage:true});console.log('PASS Modern invoice rendering');
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth),false);assert.deepEqual(errors,[]);console.log('PASS no desktop overflow or page errors');
+ await page.setViewportSize({width:390,height:844});await page.screenshot({path:path.join(out,'documents-mobile.png'),fullPage:true});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth),false);console.log('PASS mobile document overflow');
+ await mobileChecks(page);assert.deepEqual(errors,[]);
+ }catch(error){await page.screenshot({path:path.join(out,"failure.png"),fullPage:true}).catch(()=>{});throw error;}finally{await browser.close();}
+})().catch(e=>{console.error(e);process.exitCode=1});

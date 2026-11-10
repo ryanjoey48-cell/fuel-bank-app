@@ -2,12 +2,14 @@
 
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
+import "maplibre-gl/dist/maplibre-gl.css";
 import styles from "./fleet-map.module.css";
+import { FLEET_TRACKING_V2_MAP_ENGINE } from "@/lib/fleet-tracking-v2/map-engine";
 import {
-  FLEET_TRACKING_V2_MAP_ENGINE,
-  FLEET_TRACKING_V2_TILE_ATTRIBUTION,
-  FLEET_TRACKING_V2_TILE_URL
-} from "@/lib/fleet-tracking-v2/map-engine";
+  attachEesLeafletBasemap,
+  eesLeafletAttributionHtml,
+  eesLeafletMapInitOptions
+} from "@/lib/ees-map-tiles-leaflet";
 import {
   type FleetV2Vehicle,
   FLEET_V2_COLLISION_RADIUS_PX,
@@ -140,14 +142,13 @@ export const FleetTrackingV2Map = memo(function FleetTrackingV2Map({
         const Leaflet = (leafletModule as unknown as { default?: LeafletModule }).default ?? leafletModule;
         if (disposed || !nodeRef.current) return;
         map = Leaflet.map(nodeRef.current, {
+          ...eesLeafletMapInitOptions(),
           zoomControl: true,
-          attributionControl: true,
           maxZoom: 18
         }).setView(FLEET_V2_OPERATING_CENTER, FLEET_V2_DEFAULT_ZOOM);
-        Leaflet.tileLayer(FLEET_TRACKING_V2_TILE_URL, {
-          attribution: FLEET_TRACKING_V2_TILE_ATTRIBUTION,
-          maxZoom: 18
-        }).addTo(map);
+        map.attributionControl?.setPrefix(false);
+        map.attributionControl?.addAttribution(eesLeafletAttributionHtml());
+        await attachEesLeafletBasemap(Leaflet, map);
         mapRef.current = map;
         leafletRef.current = Leaflet;
 

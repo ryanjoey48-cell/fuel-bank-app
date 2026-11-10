@@ -1,5 +1,6 @@
 "use client";
 
+import { EES_COMPANY } from "@/lib/ees-company";
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
@@ -435,7 +436,7 @@ export default function InventoryPage() {
         <div className="flex flex-wrap items-center justify-between gap-5">
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.17em] text-violet-600">
-              EXPERT EXPRESS SENDER CO., LTD.
+              {EES_COMPANY.nameEn}
             </p>
             <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950">
               {language === "th" ? "สินค้าคงคลังและสต็อก" : "Inventory & Stock"}

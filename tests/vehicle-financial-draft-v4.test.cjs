@@ -281,7 +281,7 @@ test('V4 readiness is visible before legacy records load while migration-depende
   assert.match(page, /id="vehicle-performance-v4"/);
   assert.match(page, /Financial Reports/);
   assert.match(page, /showLegacyWorkspace/);
-  assert.ok(page.indexOf('performanceView === "financial"') < page.indexOf('showLegacyWorkspace ? (loading'));
+  assert.ok(page.indexOf('performanceView === "financial"') < page.indexOf('showLegacyWorkspace && !showReconciledFinancials ? (loading'));
   assert.match(draftUi, /!metadata\?\.migrationReady \|\| !preview/);
   assert.match(draftUi, /metadata && !metadata\.migrationReady/);
   assert.doesNotMatch(draftUi, /onClick=\{\(\) => void approveAccountingPolicy\(\)\}/);

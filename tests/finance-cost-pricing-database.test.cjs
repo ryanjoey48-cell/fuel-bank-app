@@ -1,0 +1,92 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const { randomUUID } = require("node:crypto");
+const { PGlite } = require("@electric-sql/pglite");
+
+test("expense and pricing migration enforces roles, append-only history and finance readiness", async () => {
+  const db = new PGlite();
+  const office = randomUUID(), finance = randomUUID(), approver = randomUUID(), admin = randomUUID(), booking = randomUUID(), customer = randomUUID(), document = randomUUID();
+  const as = (id) => db.exec(`set role authenticated; set request.jwt.claim.sub='${id}'`);
+  const root = () => db.exec("reset role; reset request.jwt.claim.sub");
+  try {
+    await db.exec(`
+      create schema auth; create schema storage; create role authenticated; create role anon;
+      create table auth.users(id uuid primary key);
+      create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+      create table public.account_access(user_id uuid primary key,role text,status text,display_name text);
+      create table public.driver_accounts(auth_user_id uuid,active boolean);
+      create function public.is_office_account() returns boolean language sql stable security definer as $$select exists(select 1 from public.account_access where user_id=auth.uid() and status='active') and not exists(select 1 from public.driver_accounts where auth_user_id=auth.uid() and active)$$;
+      create function public.current_account_role() returns text language sql stable security definer as $$select role from public.account_access where user_id=auth.uid() and status='active'$$;
+      create table public.clients(id uuid primary key,name text);
+      create table public.booking_diary(id uuid primary key,booking_date date,client_id uuid,pickup text,dropoff text,pickup_location_id uuid,dropoff_location_id uuid,driver text,driver_id bigint,vehicle text,vehicle_id uuid,vehicle_registration text,trailer_registration text,job_order_number text,status text);
+      create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
+      create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text,metadata jsonb,unique(bucket_id,name));
+      alter table storage.objects enable row level security;
+      grant usage on schema public,auth,storage to authenticated;
+      grant execute on function auth.uid(),public.is_office_account(),public.current_account_role() to authenticated;
+      grant select on public.booking_diary,public.clients to authenticated;
+    `);
+    for (const [id, role] of [[office,"office_staff"],[finance,"office_staff"],[approver,"admin"],[admin,"admin"]]) {
+      await db.query("insert into auth.users(id) values($1)",[id]);
+      await db.query("insert into account_access values($1,$2,'active',$3)",[id,role,role]);
+    }
+    await db.query("insert into clients values($1,'Demo Customer')",[customer]);
+    await db.query("insert into booking_diary(id,booking_date,client_id,pickup,dropoff,driver,vehicle_registration,job_order_number,status) values($1,'2026-09-15',$2,'Depot','Port','Driver','DEMO-1','WO-DEMO','completed')",[booking,customer]);
+    for (const file of ["20261030100000_finance_verification_foundation.sql","20261031100000_finance_paperwork_intake.sql","20261102100000_finance_expenses_pricing.sql"])
+      await db.exec(fs.readFileSync(`supabase/migrations/${file}`,"utf8"));
+    await db.query("insert into finance_paperwork_documents(id,booking_id,kind,object_key,original_filename,mime_type,size_bytes,status,physical_location,uploaded_by,reviewed_by,reviewed_at) values($1,$2,'green_job_order','demo/doc','order.pdf','application/pdf',10,'reviewed','Cabinet A',$3,$3,now())",[document,booking,office]);
+    const observed = {booking_date:"2026-09-15",client_id:customer,pickup:"Depot",dropoff:"Port",driver:"Driver",vehicle_registration:"DEMO-1",job_order_number:"WO-DEMO"};
+    const documents = {green_job_order:{required:true,received:true,reference:document,not_applicable_reason:""},parking_receipt:{required:false,received:false,reference:"",not_applicable_reason:"No parking used"},toll_receipt:{required:false,received:false,reference:"",not_applicable_reason:"No toll used"}};
+    await as(office);
+    await db.query("select status from finance_submit_verification($1,$2::jsonb,$3::jsonb,'Paper compared')",[booking,JSON.stringify(observed),JSON.stringify(documents)]);
+    await assert.rejects(db.query("select id from finance_record_expense($1,'toll',100,'2026-09-15',null,'R-1',null,'Toll')",[booking]),/FINANCE_REVIEWER_REQUIRED/);
+    await as(admin);
+    await assert.rejects(db.query("select id from finance_add_price_list_version($1,'Depot → Port','2026-09-01',5000,'{}','Agreed')",[customer]),/PRICING_APPROVER_REQUIRED/);
+    await root();
+    await db.query("insert into finance_role_grants(user_id,capability) values($1,'finance_reviewer'),($2,'pricing_approver'),($2,'expense_approver')",[finance,approver]);
+    await as(finance);
+    await assert.rejects(db.query("select id from finance_record_expense($1,'toll',100.001,'2026-09-15',null,'R-1',null,'Toll')",[booking]),/INVALID_EXPENSE/);
+    await assert.rejects(db.query("select id from finance_record_expense($1,'toll',100,'2026-09-15',null,null,null,'Toll')",[booking]),/MISSING_RECEIPT_REASON_REQUIRED/);
+    await assert.rejects(db.query("select id from finance_record_expense($1,'toll',100,'2026-09-15',$2,null,null,'Toll')",[booking,document]),/REVIEWED_RECEIPT_REQUIRED/);
+    const expense = (await db.query("select id from finance_record_expense($1,'toll',100,'2026-09-15',null,null,'Receipt lost at depot','Toll')",[booking])).rows[0].id;
+    assert.equal((await db.query("select finance_job_pricing_ready($1) ready",[booking])).rows[0].ready,false);
+    await as(office);
+    assert.equal((await db.query("select id from finance_expense_events where id=$1",[expense])).rows.length,0);
+    await as(finance);
+    await assert.rejects(db.query("update finance_expense_events set amount_delta=999 where id=$1",[expense]),/permission denied/);
+    await assert.rejects(db.query("insert into finance_expense_events(booking_id) values($1)",[booking]),/permission denied/);
+    await assert.rejects(db.query("select event_id from finance_decide_expense($1,true,'Approved receipt exception')",[expense]),/EXPENSE_APPROVER_REQUIRED/);
+    await root();await db.query("insert into finance_role_grants(user_id,capability) values($1,'expense_approver')",[finance]);
+    await as(finance);await assert.rejects(db.query("select event_id from finance_decide_expense($1,true,'Approved receipt exception')",[expense]),/SELF_APPROVAL_FORBIDDEN/);
+    await root();await db.query("delete from finance_role_grants where user_id=$1 and capability='expense_approver'",[finance]);
+    await as(approver);
+    await assert.rejects(db.query("select id from finance_propose_job_price($1,null,5000,'Manual agreed rate')",[booking]),/FINANCE_REVIEWER_REQUIRED/);
+    const list = (await db.query("select id from finance_add_price_list_version($1,'Depot → Port','2026-09-01',5000,'{}','Agreed weekly rate')",[customer])).rows[0].id;
+    await assert.rejects(db.query("select id from finance_add_price_list_version($1,'Depot → Port','2026-09-01',6000,'{}','Duplicate')",[customer]),/duplicate key/);
+    await db.query("select event_id from finance_decide_expense($1,true,'Approved receipt exception')",[expense]);
+    await as(finance);
+    const price = (await db.query("select id from finance_propose_job_price($1,$2,null,'')",[booking,list])).rows[0].id;
+    assert.equal((await db.query("select finance_job_pricing_ready($1) ready",[booking])).rows[0].ready,false);
+    await as(approver);
+    await db.query("select revision_id from finance_decide_job_price($1,true,'Matches agreed customer rate')",[price]);
+    await as(finance);
+    assert.equal((await db.query("select finance_job_pricing_ready($1) ready",[booking])).rows[0].ready,true);
+    const correction = (await db.query("select id from finance_record_expense($1,'toll',-20,'2026-09-15',null,'R-1',null,'Corrected toll',$2,false)",[booking,expense])).rows[0].id;
+    assert.equal((await db.query("select finance_job_pricing_ready($1) ready",[booking])).rows[0].ready,false);
+    await as(approver);await db.query("select event_id from finance_decide_expense($1,true,'Corrected amount checked')",[correction]);
+    await as(finance);assert.equal((await db.query("select finance_job_pricing_ready($1) ready",[booking])).rows[0].ready,true);
+    const manual = (await db.query("select id from finance_propose_job_price($1,null,5200,'Customer-specific agreed exception')",[booking])).rows[0].id;
+    assert.equal((await db.query("select finance_job_pricing_ready($1) ready",[booking])).rows[0].ready,false);
+    assert.equal(Number((await db.query("select count(*) n from finance_job_price_revisions where booking_id=$1",[booking])).rows[0].n),2);
+    await as(approver);await db.query("select revision_id from finance_decide_job_price($1,true,'Customer exception reviewed')",[manual]);
+    await as(finance);assert.equal((await db.query("select finance_job_pricing_ready($1) ready",[booking])).rows[0].ready,true);
+    await root();
+    assert.equal(Number((await db.query("select sum(amount_delta) total from finance_expense_events where booking_id=$1",[booking])).rows[0].total),80);
+    assert.equal(Number((await db.query("select count(*) n from finance_cost_price_audit where booking_id=$1",[booking])).rows[0].n),8);
+    await assert.rejects(db.query("delete from finance_cost_price_audit where booking_id=$1",[booking]),/FINANCE_APPEND_ONLY/);
+    await db.query("update booking_diary set pickup='Changed Depot' where id=$1",[booking]);
+    await db.query("update finance_job_verifications set status='verified',handover_status='ready' where booking_id=$1",[booking]);
+    await as(finance);assert.equal((await db.query("select finance_job_pricing_ready($1) ready",[booking])).rows[0].ready,false);
+  } finally { await db.close(); }
+});

@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { AuthForm } from "@/components/auth-form";
 import { EESLogo } from "@/components/ees-logo";
+import { EES_COMPANY } from "@/lib/ees-company";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { SetupNotice } from "@/components/setup-notice";
 import { useLanguage } from "@/lib/language-provider";
@@ -82,6 +83,11 @@ export default function LoginPage() {
 
             {/* FOOTER / SETUP NOTICE */}
             <div className="shrink-0">
+              {/* Registered company name — same shared constant as Finance documents. */}
+              <p className="mb-3 text-xs font-semibold leading-5 text-white/80" lang="th">
+                {EES_COMPANY.nameTh}
+                <span className="block font-bold uppercase tracking-[0.12em] text-white/70" lang="en">{EES_COMPANY.nameEn}</span>
+              </p>
               <SetupNotice />
             </div>
           </div>

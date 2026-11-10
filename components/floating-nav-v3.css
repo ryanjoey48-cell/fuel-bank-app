@@ -1,0 +1,111 @@
+/* EES Navigation V3: floating trigger + left drawer (all office pages except Home) */
+.ees-v3 {
+  --v3-purple: #5b238e;
+  --v3-purple-deep: #481873;
+  --v3-orange: #f08a1c;
+  --v3-ink: #2b2540;
+  --v3-muted: #5a516c;
+}
+
+.ees-v3__trigger {
+  position: fixed;
+  top: max(16px, env(safe-area-inset-top, 0px));
+  left: max(16px, env(safe-area-inset-left, 0px));
+  z-index: 45;
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 14px;
+  color: #fff;
+  background: linear-gradient(145deg, #6a2aa3, var(--v3-purple-deep));
+  box-shadow: 0 8px 20px rgba(72, 24, 115, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+.ees-v3__trigger:hover { transform: translateY(-1px); box-shadow: 0 12px 26px rgba(72, 24, 115, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.22); }
+.ees-v3__trigger:focus-visible { outline: 3px solid var(--v3-orange); outline-offset: 2px; }
+.ees-v3__trigger-icon { width: 22px; height: 22px; }
+
+.ees-v3__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1190;
+  background: rgba(33, 19, 54, 0.4);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 200ms ease, visibility 0s linear 200ms;
+}
+.ees-v3__backdrop.is-open { opacity: 1; visibility: visible; pointer-events: auto; transition-delay: 0s; }
+
+.ees-v3__drawer {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1200;
+  display: flex;
+  width: min(312px, calc(100vw - 48px));
+  flex-direction: column;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  border-radius: 0 22px 22px 0;
+  background: rgba(255, 252, 247, 0.97);
+  backdrop-filter: blur(14px);
+  box-shadow: 18px 0 48px rgba(33, 19, 54, 0.24);
+  transform: translate3d(-105%, 0, 0);
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1), visibility 0s linear 240ms;
+}
+.ees-v3__drawer.is-open { transform: none; visibility: visible; pointer-events: auto; transition-delay: 0s; }
+
+.ees-v3__head { display: flex; align-items: center; gap: 8px; padding: 16px 14px 10px 16px; border-bottom: 3px solid transparent; border-image: linear-gradient(90deg, var(--v3-purple), var(--v3-orange)) 1; }
+.ees-v3__brand { display: flex; min-width: 0; flex: 1; align-items: center; gap: 10px; text-decoration: none; }
+.ees-v3__brand-copy { display: flex; min-width: 0; flex-direction: column; }
+.ees-v3__brand-title { font-size: 1rem; font-weight: 800; color: var(--v3-purple-deep); line-height: 1.15; }
+.ees-v3__brand-sub { font-size: 0.64rem; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--v3-orange); }
+.ees-v3__close { display: inline-flex; width: 40px; height: 40px; flex: none; align-items: center; justify-content: center; border-radius: 12px; border: 1px solid rgba(91, 35, 142, 0.16); background: #fff; color: var(--v3-purple); cursor: pointer; }
+.ees-v3__close:hover { background: #f4ecfa; }
+.ees-v3__close:focus-visible, .ees-v3__link:focus-visible, .ees-v3__group-btn:focus-visible, .ees-v3__item:focus-visible { outline: 3px solid var(--v3-orange); outline-offset: -2px; }
+
+.ees-v3__tools { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 14px; border-bottom: 1px solid rgba(91, 35, 142, 0.1); }
+
+.ees-v3__nav { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 8px 10px 18px; }
+.ees-v3__link, .ees-v3__group-btn { display: flex; width: 100%; min-height: 44px; align-items: center; justify-content: space-between; padding: 0 12px; border: 0; border-radius: 12px; background: transparent; color: var(--v3-ink); font-size: 0.9375rem; font-weight: 700; text-align: left; text-decoration: none; cursor: pointer; }
+.ees-v3__link:hover, .ees-v3__group-btn:hover { background: rgba(91, 35, 142, 0.07); }
+.ees-v3__link.is-active { background: var(--v3-purple); color: #fff; }
+.ees-v3__group-btn.is-active { color: var(--v3-purple); }
+.ees-v3__chev { width: 16px; height: 16px; transition: transform 200ms ease; }
+.ees-v3__group-btn[aria-expanded="true"] .ees-v3__chev { transform: rotate(180deg); }
+
+.ees-v3__items { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 200ms ease; }
+.ees-v3__items.is-open { grid-template-rows: 1fr; }
+.ees-v3__items-inner { min-height: 0; overflow: hidden; }
+.ees-v3__item { display: flex; min-height: 42px; align-items: center; gap: 10px; margin: 2px 0 2px 8px; padding: 0 12px; border-radius: 10px; color: var(--v3-muted); font-size: 0.875rem; font-weight: 600; text-decoration: none; }
+.ees-v3__item:hover { background: rgba(91, 35, 142, 0.07); color: var(--v3-purple-deep); }
+.ees-v3__item.is-active { background: var(--v3-purple); color: #fff; box-shadow: 0 6px 14px rgba(91, 35, 142, 0.22); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ees-v3__trigger, .ees-v3__backdrop, .ees-v3__drawer, .ees-v3__items, .ees-v3__chev { transition: none !important; }
+}
+@media (max-width: 639px) {
+  .ees-v3__trigger { top: max(12px, env(safe-area-inset-top, 0px)); left: max(12px, env(safe-area-inset-left, 0px)); }
+}
+@media print { .ees-v3 { display: none !important; } }
+
+/* Layout: no global navbar clearance on V3 pages. A slim strip keeps the
+   floating button clear of page headers; Fleet Tracking gets the full viewport. */
+.dashboard-content-frame.has-v3-nav { padding-top: 3.5rem; }
+.ees-office-shell > .dashboard-content-frame.has-v3-nav { padding-top: 3.5rem; }
+.ees-fleet-viewport > .dashboard-content-frame.has-v3-nav,
+.dashboard-dispatch-shell.is-fleet-route > .dashboard-content-frame.has-v3-nav.ees-fleet-under-nav { padding-top: 0; }
+
+/* Fleet Tracking: keep the floating button clear of the command strip. */
+.ees-fleet-viewport .forth-float-toolbar.forth-command-strip { padding-left: calc(max(16px, env(safe-area-inset-left, 0px)) + 52px) !important; }
+@media (max-width: 639px) {
+  .ees-fleet-viewport .forth-float-toolbar.forth-command-strip { padding-left: calc(max(12px, env(safe-area-inset-left, 0px)) + 52px) !important; }
+}

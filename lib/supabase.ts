@@ -113,17 +113,43 @@ async function safeAuthLock<R>(_name: string, _acquireTimeout: number, fn: () =>
   return fn();
 }
 
+function isLegacyJwtApiKey(value: string) {
+  return value.startsWith("eyJ");
+}
+
+function defaultApiHeaders() {
+  // Publishable/secret keys are not JWTs. Put them on `apikey` only.
+  // Legacy anon JWTs may still be mirrored on Authorization for compatibility.
+  const headers: Record<string, string> = { apikey: supabaseAnonKey! };
+  if (isLegacyJwtApiKey(supabaseAnonKey!)) {
+    headers.Authorization = `Bearer ${supabaseAnonKey}`;
+  }
+  return headers;
+}
+
 function createAuthorizedFetch(auth: AuthClientInstance) {
   return async (input: RequestInfo | URL, init?: RequestInit) => withRequestDeadline(async (signal) => {
     const headers = new Headers(init?.headers);
     headers.set("apikey", supabaseAnonKey!);
 
-    // PostgREST/Storage supply the default anon header before calling fetch.
-    // Replace that default with the current session on every request.
-    if (!headers.has("Authorization") || headers.get("Authorization") === `Bearer ${supabaseAnonKey}`) {
+    // PostgREST/Storage may supply Authorization: Bearer <api-key> before calling fetch.
+    // Replace that default with the current user JWT, or drop it for non-JWT API keys.
+    const authorization = headers.get("Authorization");
+    const isDefaultApiKeyBearer =
+      !authorization ||
+      authorization === `Bearer ${supabaseAnonKey}`;
+
+    if (isDefaultApiKeyBearer) {
       const { data, error } = await auth.getSession();
       if (error) throw error;
-      headers.set("Authorization", `Bearer ${data.session?.access_token ?? supabaseAnonKey}`);
+      const accessToken = data.session?.access_token;
+      if (accessToken) {
+        headers.set("Authorization", `Bearer ${accessToken}`);
+      } else if (isLegacyJwtApiKey(supabaseAnonKey!)) {
+        headers.set("Authorization", `Bearer ${supabaseAnonKey}`);
+      } else {
+        headers.delete("Authorization");
+      }
     }
 
     const response = await fetch(input, { ...init, headers, signal });
@@ -199,10 +225,7 @@ function createRecoverySupabaseClient(): RecoverySupabaseClient {
   const authUrl = new URL("auth/v1", parsedSupabaseUrl).href;
   const restUrl = new URL("rest/v1", parsedSupabaseUrl).href;
   const storageUrl = new URL("storage/v1", parsedSupabaseUrl).href;
-  const authHeaders = {
-    apikey: supabaseAnonKey,
-    Authorization: `Bearer ${supabaseAnonKey}`
-  };
+  const authHeaders = defaultApiHeaders();
   const auth = new AuthClient({
     url: authUrl,
     headers: authHeaders,

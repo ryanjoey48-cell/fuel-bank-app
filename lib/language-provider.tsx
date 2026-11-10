@@ -3,7 +3,9 @@
 import {
   createContext,
   useContext,
+  useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useState,
   type ReactNode
@@ -21,28 +23,39 @@ const LanguageContext = createContext<LanguageContextValue | undefined>(undefine
 
 const STORAGE_KEY = "fuel-bank-language";
 
+// useLayoutEffect on the client so the saved language (and the document's lang attribute) are applied BEFORE the first paint; the server
+// render and first client render are still English, so hydration is unchanged.
+const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [language, setLanguage] = useState<Language>("en");
-
-  useEffect(() => {
+  // V7.8.4: a returning Thai user used to load with <html lang="en"> and Thai content (the saved language was applied in a later effect), which
+  // made the browser's translation feature treat the page as English, and the same mount wrote "en" over the saved "th" before it was applied.
+  useIsomorphicLayoutEffect(() => {
     const saved = safeLocalStorage.getItem(STORAGE_KEY) as Language | null;
     if (saved === "en" || saved === "th") {
+      document.documentElement.lang = saved;
       setLanguage(saved);
     }
   }, []);
 
   useEffect(() => {
-    safeLocalStorage.setItem(STORAGE_KEY, language);
     document.documentElement.lang = language;
   }, [language]);
+
+  // The choice is saved when the user makes it, never as a side effect of the initial default.
+  const chooseLanguage = useCallback((next: Language) => {
+    setLanguage(next);
+    safeLocalStorage.setItem(STORAGE_KEY, next);
+  }, []);
 
   const value = useMemo(
     () => ({
       language,
-      setLanguage,
+      setLanguage: chooseLanguage,
       t: translations[language]
     }),
-    [language]
+    [language, chooseLanguage]
   );
 
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;

@@ -1,5 +1,6 @@
 "use client";
 
+import { EES_COMPANY } from "@/lib/ees-company";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
@@ -1255,7 +1256,7 @@ export default function InsurancePage() {
       <section className="rounded-[28px] border border-slate-200/80 bg-white px-5 py-5 shadow-[0_16px_44px_rgba(31,27,61,0.055)] sm:px-7 sm:py-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-[.18em] text-violet-600">EXPERT EXPRESS SENDER CO., LTD.</p>
+            <p className="text-[11px] font-bold uppercase tracking-[.18em] text-violet-600">{EES_COMPANY.nameEn}</p>
             <h1 className="mt-1.5 text-[28px] font-semibold tracking-[-0.03em] text-slate-950 sm:text-[30px]">{c.title}</h1>
             <p className="mt-1 text-sm text-slate-500">{c.description}</p>
           </div>

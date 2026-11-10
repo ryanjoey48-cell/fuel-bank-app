@@ -1,0 +1,17 @@
+{
+  "_comment": "Honest record of what has actually been applied to production project hafoaurzfgkkwpvzedvd. Update ONLY in the same change that records execution evidence. Tests assert the other stages stay 'pending' until then.",
+  "production_project_ref": "hafoaurzfgkkwpvzedvd",
+  "reviewed_on": "2026-11-06",
+  "stage0_anon_revoke": "applied",
+  "stage0_applied_on": "2026-11-06",
+  "stage0_evidence": "reports/2026-11-06-stage0-execution.md",
+  "stage1_office_rls": "partial",
+  "stage1_groups_applied": ["A"],
+  "stage1_groups_pending": ["B", "C1", "C2", "D"],
+  "stage1_evidence": "reports/2026-11-06-stage1-group-a-execution.md",
+  "stage1b_tightening": "pending",
+  "stage1c_identity_table_hardening": "pending",
+  "stage2_defaults_and_rpc": "pending",
+  "development_rehearsal": "skipped-by-owner-dev-schema-not-equivalent",
+  "production_secured": false
+}

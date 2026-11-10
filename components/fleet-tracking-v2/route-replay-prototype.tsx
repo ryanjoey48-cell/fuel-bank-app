@@ -2,8 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import "leaflet/dist/leaflet.css";
+import "maplibre-gl/dist/maplibre-gl.css";
 import { normalizeHistoricalLog } from "@/lib/forth-history-log";
-import { FLEET_TRACKING_V2_TILE_ATTRIBUTION, FLEET_TRACKING_V2_TILE_URL } from "@/lib/fleet-tracking-v2/map-engine";
+import {
+  attachEesLeafletBasemap,
+  eesLeafletAttributionHtml,
+  eesLeafletMapInitOptions
+} from "@/lib/ees-map-tiles-leaflet";
 
 const fixtureDevice = "synthetic-device";
 const fixture = [
@@ -45,8 +50,10 @@ export function RouteReplayPrototype() {
       const loaded = await import("leaflet");
       const L = (loaded as unknown as { default?: typeof import("leaflet") }).default ?? loaded;
       if (cancelled || !mapNode.current) return;
-      const instance = L.map(mapNode.current, { zoomControl: true }).setView([13.742, 100.523], 12);
-      L.tileLayer(FLEET_TRACKING_V2_TILE_URL, { attribution: FLEET_TRACKING_V2_TILE_ATTRIBUTION, maxZoom: 18 }).addTo(instance);
+      const instance = L.map(mapNode.current, { ...eesLeafletMapInitOptions(), zoomControl: true, maxZoom: 18 }).setView([13.742, 100.523], 12);
+      instance.attributionControl?.setPrefix(false);
+      instance.attributionControl?.addAttribution(eesLeafletAttributionHtml());
+      await attachEesLeafletBasemap(L, instance);
       layer.current = L.layerGroup().addTo(instance);
       map.current = instance;
       leaflet.current = L;

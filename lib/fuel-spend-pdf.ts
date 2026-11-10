@@ -1,5 +1,6 @@
 "use client";
 
+import { EES_COMPANY } from "./ees-company";
 import type { FuelSpendManagementReport } from "@/lib/fuel-spend-report";
 import { formatNumber } from "@/lib/utils";
 
@@ -170,7 +171,7 @@ export async function buildFuelSpendPdf(report: FuelSpendManagementReport, optio
       const logoWidth = Math.min(96, (logo.naturalWidth / Math.max(logo.naturalHeight, 1)) * logoHeight);
       context.drawImage(logo, margin * scale, y * scale, logoWidth * scale, logoHeight * scale);
     }
-    text("Expert Express Sender Co., Ltd.", page.width - margin, y + 12, { align: "right", color: colors.slate, size: 11, weight: 800 });
+    text(EES_COMPANY.nameEnTitle, page.width - margin, y + 12, { align: "right", color: colors.slate, size: 11, weight: 800 });
     text(title, page.width - margin, y + 31, { align: "right", color: colors.purple, maxWidth: 360, size: 14, weight: 800 });
     text(subtitle ?? `${options.periodLabel} | ${report.totalFillUps} fuel logs analysed`, page.width - margin, y + 49, { align: "right", color: colors.muted, maxWidth: 380, size: 8, weight: 600 });
     y += 86;

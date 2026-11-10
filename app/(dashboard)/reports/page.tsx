@@ -1,5 +1,6 @@
 "use client";
 
+import { EES_COMPANY } from "@/lib/ees-company";
 import {
   BarChart3,
   BookOpenCheck,
@@ -518,7 +519,7 @@ class PremiumReportCanvas {
 
     const right = this.pageSize.width - this.margin;
     const generated = new Intl.DateTimeFormat(this.language === "th" ? "th-TH" : "en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(new Date());
-    this.text("EXPERT EXPRESS SENDER CO., LTD.", right, top + 8, { align: "right", size: 7, weight: 700, color: this.colors.muted });
+    this.text(EES_COMPANY.nameEn, right, top + 8, { align: "right", size: 7, weight: 700, color: this.colors.muted });
     this.text(this.title, right, top + 27, { align: "right", size: 16, weight: 800, color: this.colors.slate });
     this.text(this.period, right, top + 42, { align: "right", size: 8, color: this.colors.muted });
     this.text(`${this.language === "th" ? "สร้างเมื่อ" : "Generated"} ${generated}`, right, top + 54, { align: "right", size: 6.5, color: this.colors.muted });
@@ -1524,18 +1525,18 @@ export default function ReportsPage() {
 
   return (
     <div className="space-y-5 pb-10">
-      <section className="overflow-hidden rounded-[28px] border border-brand-100 bg-gradient-to-br from-white via-white to-brand-50/80 shadow-[0_18px_60px_rgba(70,45,120,0.08)]">
-        <div className="flex flex-col gap-6 px-5 py-6 sm:px-7 lg:flex-row lg:items-end lg:justify-between">
+      <section className="office-page-header overflow-hidden !p-0">
+        <div className="office-page-header__row px-5 py-5 sm:px-7 sm:py-6">
           <div className="max-w-3xl">
-            <div className="inline-flex items-center gap-2 rounded-full border border-brand-100 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-brand-700 shadow-sm">
+            <div className="office-page-header__eyebrow inline-flex items-center gap-2">
               <BarChart3 className="h-3.5 w-3.5" />
               {copy.eyebrow}
             </div>
-            <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-950">{copy.title}</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">{copy.intro}</p>
+            <h1 className="office-page-header__title">{copy.title}</h1>
+            <p className="office-page-header__description">{copy.intro}</p>
           </div>
 
-          <div className="min-w-[320px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="office-page-header__meta overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-100 px-4 py-2.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
               {copy.dataAvailable}
             </div>

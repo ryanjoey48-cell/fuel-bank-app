@@ -1,5 +1,6 @@
 "use client";
 
+import { EES_COMPANY } from "@/lib/ees-company";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -766,6 +767,7 @@ export default function WeeklyMileagePage() {
 
   useEffect(() => {
     const handleDataChanged = (event: Event) => {
+      if (document.visibilityState !== "visible") return;
       const detail = (event as CustomEvent<{ resource?: string; resources?: string[] }>).detail;
       const resources = detail?.resources ?? [detail?.resource];
       if (detail?.resource && !resources.some(resource => ["drivers", "vehicles", "weekly_mileage", "vehicle_service_logs", "oil_change_history", "oil_change_baselines"].includes(resource ?? ""))) return;
@@ -1205,7 +1207,6 @@ export default function WeeklyMileagePage() {
   };
 
   const openServiceModal = (mode: OilActionMode, row: (typeof oilChangeRows)[number]) => {
-    if(mode==='mark'&&row.vehicleId){window.location.assign('/maintenance?tab=vehicles&vehicle='+encodeURIComponent(row.vehicleId)+'&package=engine_oil');return;}
     const latestLog = getLatestServiceLog(row.registration);
     const defaultInterval =
       getEffectiveOilChangeIntervalForVehicleType(
@@ -2138,25 +2139,25 @@ export default function WeeklyMileagePage() {
 
   return (
     <>
-      <section className="surface-card mb-5 p-5 sm:p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <p className="text-[10px] font-black uppercase tracking-[0.14em] text-violet-600">
-              EXPERT EXPRESS SENDER CO., LTD.
-            </p>
-            <h1 className="mt-1 text-2xl font-black text-slate-950">{t.weeklyMileage.title}</h1>
-            <p className="mt-1 max-w-3xl text-sm text-slate-500">
-              {language === "th"
-                ? "บันทึกเลขไมล์รายสัปดาห์ ดูผลระยะทาง และจัดการรอบเปลี่ยนน้ำมันจากข้อมูลเดียวกัน"
-                : "Record weekly odometers, review distance results and manage oil-service status from the same mileage data."}
-            </p>
+      <section className="office-page-header mb-5">
+        <div className="office-page-header__row">
+          <div className="office-page-header__identity">
+            <div className="min-w-0">
+              <p className="office-page-header__eyebrow">{EES_COMPANY.nameEn}</p>
+              <h1 className="office-page-header__title">{t.weeklyMileage.title}</h1>
+              <p className="office-page-header__description">
+                {language === "th"
+                  ? "บันทึกเลขไมล์รายสัปดาห์ ดูผลระยะทาง และจัดการรอบเปลี่ยนน้ำมันจากข้อมูลเดียวกัน"
+                  : "Record weekly odometers, review distance results and manage oil-service status from the same mileage data."}
+              </p>
+            </div>
           </div>
 
-          <div className="inline-flex w-full rounded-xl border border-violet-100 bg-violet-50/60 p-1 sm:w-auto">
+          <div className="office-page-header__tabs">
             <button
               type="button"
               onClick={() => setPageMode("mileage")}
-              className={`flex-1 rounded-lg px-4 py-2 text-sm font-black transition sm:flex-none ${
+              className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
                 pageMode === "mileage" ? "bg-white text-violet-800 shadow-sm" : "text-slate-500 hover:text-violet-700"
               }`}
             >
@@ -2168,7 +2169,7 @@ export default function WeeklyMileagePage() {
                 setPageMode("results");
                 setWeeklyDistanceHistoryOpen(true);
               }}
-              className={`flex-1 rounded-lg px-4 py-2 text-sm font-black transition sm:flex-none ${
+              className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
                 pageMode === "results" ? "bg-white text-violet-800 shadow-sm" : "text-slate-500 hover:text-violet-700"
               }`}
             >
@@ -2177,7 +2178,7 @@ export default function WeeklyMileagePage() {
             <button
               type="button"
               onClick={() => setPageMode("oil")}
-              className={`flex-1 rounded-lg px-4 py-2 text-sm font-black transition sm:flex-none ${
+              className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
                 pageMode === "oil" ? "bg-white text-violet-800 shadow-sm" : "text-slate-500 hover:text-violet-700"
               }`}
             >

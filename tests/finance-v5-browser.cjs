@@ -1,0 +1,92 @@
+// Run explicitly against scripts/start-finance-preview.cjs with the separate V5 fixture store.
+const { chromium } = require('C:/Users/joery/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+const fs = require('node:fs');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+const out = path.resolve('output/finance-v5');
+fs.mkdirSync(out, { recursive: true });
+(async () => {
+  const browser = await chromium.launch({ headless: true, channel: 'msedge' });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  const errors = [];
+  page.setDefaultTimeout(20000);
+  page.on('dialog', dialog => { console.log('Dialog:', dialog.type(), dialog.message()); if (dialog.type() === 'beforeunload') void dialog.accept(); });
+  page.on('pageerror', error => errors.push(error.message));
+  await page.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1' || route.request().url().startsWith('data:') ? route.continue() : route.abort());
+  try {
+    await page.goto('http://127.0.0.1:3000/finance-centre?section=reconciliation', { waitUntil: 'domcontentloaded', timeout: 180000 });
+    await page.getByTestId('intake-filters').waitFor({ timeout: 120000 });
+    await page.getByText('No bookings in this date range', { exact: true }).waitFor();
+    console.log('Empty intake PASS');
+    await page.getByTestId('finance-progress-summary').waitFor();
+    await page.screenshot({ path: path.join(out, 'intake-empty-desktop.png'), fullPage: true });
+    await page.getByRole('button', { name: 'View earlier bookings', exact: true }).click();
+    await page.locator('[data-intake-row]').first().waitFor();
+    console.log('Earlier populated range PASS');
+    await page.screenshot({ path: path.join(out, 'intake-populated-desktop.png'), fullPage: true });
+    const dates = page.locator('[data-testid="intake-filters"] input[type=date]');
+    await dates.nth(0).fill('2026-01-01'); await dates.nth(1).fill('2026-01-31');
+    await page.locator('[data-intake-row]').first().waitFor();
+    await page.getByRole('button', { name: /^All \d/ }).click();
+    console.log('January filters PASS');
+    const wo = page.getByRole('textbox', { name: 'Green-paper Work Order Number', exact: true });
+    const testWo = `V5-${Date.now()}`;
+    await wo.fill(testWo);
+    await page.getByText('Unsaved changes', { exact: true }).waitFor();
+    page.once('dialog', dialog => dialog.dismiss());
+    await page.getByRole('button', { name: /Arrange Work Orders/ }).click();
+    console.log('Dirty navigation attempted');
+    assert.equal(await wo.inputValue(), testWo);
+    const failSave = route => route.request().method() === 'PUT' ? route.abort() : route.continue();
+    await page.route('**/api/finance-local-store', failSave);
+    await page.getByRole('button', { name: /Save & Next/ }).click();
+    await page.getByRole('alert').filter({ hasText: 'Not saved.' }).waitFor();
+    assert.equal(await wo.inputValue(), testWo, 'failed Save & Next preserves the selected job and input');
+    await page.unroute('**/api/finance-local-store', failSave);
+    console.log('Failed Save & Next preserves inputs PASS');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await page.getByText(`Saved WO ${testWo}.`, { exact: true }).waitFor();
+    console.log('Intake save PASS');
+    await page.getByRole('button', { name: /Arrange Work Orders/ }).click();
+    console.log('Arrange navigation:', page.url());
+    await page.getByTestId('customer-workspace').waitFor();
+    await page.screenshot({ path: path.join(out, 'arrange-customers-desktop.png'), fullPage: true });
+    await page.getByRole('button', { name: /APL isolated fixture.*Open workspace/ }).click();
+    await page.getByRole('button', { name: 'Continue to Customer Billing', exact: false }).click();
+    await page.getByTestId('customer-aggregate').waitFor();
+    assert.match(await page.locator('body').innerText(), /24,160/);
+    await page.screenshot({ path: path.join(out, 'billing-desktop.png'), fullPage: true });
+    await page.getByRole('button', { name: /Invoice & Documents/ }).click();
+    await page.locator('[data-testid="invoice-preview"] img').first().waitFor({ timeout: 60000 });
+    const viewer = page.getByTestId('doc-preview');
+    await viewer.getByTestId('invoice-fit-page').click();
+    const img = page.locator('[data-testid="invoice-preview"] img').first();
+    const box = await img.boundingBox();
+    assert.ok(Math.abs(box.width / box.height - 8.5 / 11) < 0.01, 'fit page preserves paper ratio');
+    await page.screenshot({ path: path.join(out, 'invoice-fit-page-desktop.png'), fullPage: true });
+    await viewer.getByTestId('invoice-fit-width').click();
+    await viewer.getByTestId('invoice-fullscreen').click();
+    await page.getByTestId('invoice-fullscreen-view').waitFor();
+    await page.keyboard.press('Escape');
+    await page.getByTestId('invoice-fullscreen-view').waitFor({ state: 'hidden' });
+    const download = page.waitForEvent('download');
+    await page.getByTestId('download-invoice-pdf').click();
+    await (await download).saveAs(path.join(out, 'APL-DRAFT-TEST.pdf'));
+    await viewer.getByTestId('invoice-variant-modern').click();
+    await page.locator('[data-invoice-variant="modern"] img').first().waitFor();
+    await page.screenshot({ path: path.join(out, 'invoice-modern-desktop.png'), fullPage: true });
+    for (const section of ['reconciliation', 'arrange', 'sheet', 'trn']) {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto(`http://127.0.0.1:3000/finance-centre?section=${section}&customer=v5-apl`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+      await page.getByTestId('finance-progress-summary').waitFor();
+      if (section === 'reconciliation') { await page.locator('[data-intake-row]').first().waitFor(); await page.getByText('No unsaved changes', { exact: true }).waitFor(); }
+      if (section === 'trn') await page.locator('[data-testid="invoice-preview"] img').first().waitFor();
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), `${section} does not overflow mobile viewport`);
+      await page.screenshot({ path: path.join(out, `${section}-mobile.png`), fullPage: true });
+    }
+    fs.writeFileSync(path.join(out, 'results.json'), JSON.stringify({ intake: 'empty, populated, date filter, dirty guard, save', arrange: 'customer cards and selected group', billing: '24,160 total', documents: 'original, modern, fit page, fit width, fullscreen Escape, PDF download', mobile: 'four stages at 390px', errors }, null, 2));
+    console.log('PASS: isolated four-stage browser flow, PDF download, desktop/mobile layouts');
+    assert.equal(errors.length, 0, errors.join('\n'));
+  } catch (error) { console.error('Browser failure:', error); await page.screenshot({path: path.join(out, 'failure.png'), fullPage: true}).catch(() => {}); throw error; }
+  finally { await browser.close(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });

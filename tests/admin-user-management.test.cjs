@@ -25,12 +25,26 @@ function loadTypeScriptModule(relativePath) {
 const authorization = loadTypeScriptModule("lib/authorization.ts");
 
 test("account roles and statuses normalize to explicit allow-listed values", () => {
+  assert.equal(authorization.normalizeAccountRole("super_admin"), "super_admin");
   assert.equal(authorization.normalizeAccountRole("admin"), "admin");
+  assert.equal(authorization.ACCOUNT_ASSIGNABLE_ROLES.includes("super_admin"), false);
   assert.equal(authorization.normalizeAccountRole("office-staff"), "office_staff");
   assert.equal(authorization.normalizeAccountRole("read only"), "read_only");
   assert.equal(authorization.normalizeAccountRole("owner"), "office_staff");
   assert.equal(authorization.normalizeAccountStatus("suspended"), "suspended");
   assert.equal(authorization.normalizeAccountStatus("disabled"), "active");
+});
+
+test("Super Admin receives full permissions only while active", () => {
+  const owner = { role: "super_admin", status: "active" };
+  const suspendedOwner = { role: "super_admin", status: "suspended" };
+
+  assert.equal(authorization.hasPermission(owner, "admin:user_management"), true);
+  assert.equal(authorization.hasPermission(owner, "business:delete"), true);
+  assert.equal(authorization.hasPermission(owner, "finance:review"), true);
+  assert.equal(authorization.hasPermission(owner, "finance:approve"), true);
+  assert.equal(authorization.hasPermission(suspendedOwner, "admin:user_management"), false);
+  assert.equal(authorization.isActiveAdmin(owner), true);
 });
 
 test("only active administrators receive admin permissions", () => {
@@ -84,7 +98,8 @@ test("account mutation routes reject unsafe account-management changes", () => {
   const patchRoute = read("app/api/admin/users/[id]/route.ts");
   const server = read("lib/admin-user-management-server.ts");
 
-  assert.match(patchRoute, /ACCOUNT_ROLES as readonly string\[\]/);
+  assert.match(patchRoute, /ACCOUNT_ASSIGNABLE_ROLES as readonly string\[\]/);
+  assert.match(patchRoute, /Invalid or protected account role/);
   assert.match(patchRoute, /ACCOUNT_STATUSES as readonly string\[\]/);
   assert.match(patchRoute, /Administrators cannot suspend their own signed-in account/);
   assert.match(patchRoute, /final active administrator cannot be demoted or suspended/i);
@@ -183,4 +198,23 @@ test("admin access migration creates reviewable access tables without touching b
   assert.match(recovery, /role = 'admin'/);
   assert.match(recovery, /status = 'active'/);
   assert.doesNotMatch(recovery, /raw_user_meta_data|encrypted_password|delete\s+from/i);
+});
+
+test("Super Admin promotion is bound to one confirmed Auth identity and uses account access", () => {
+  const migration = read("supabase/migrations/20261106100000_super_admin_access.sql");
+  const patchRoute = read("app/api/admin/users/[id]/route.ts");
+  const server = read("lib/admin-user-management-server.ts");
+
+  assert.match(migration, /lower\(users\.email\) = 'joeryan09@outlook\.com'/);
+  assert.match(migration, /users\.email_confirmed_at is not null/);
+  assert.match(migration, /verified_count <> 1/);
+  assert.match(migration, /role = 'super_admin'/);
+  assert.match(migration, /finance_reviewer/);
+  assert.match(migration, /invoice_approver/);
+  assert.match(migration, /public\.current_account_role\(\)/);
+  assert.match(migration, /do not apply to production without approval/i);
+  assert.match(patchRoute, /ACCOUNT_ASSIGNABLE_ROLES/);
+  assert.match(patchRoute, /Super Admin role and status are protected/);
+  assert.match(server, /\.in\("role", \["admin", "super_admin"\]\)/);
+  assert.doesNotMatch(server, /joeryan09@outlook\.com/);
 });

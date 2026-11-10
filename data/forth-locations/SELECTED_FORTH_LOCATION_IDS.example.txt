@@ -1,0 +1,9 @@
+# Owner selection file for Forth → Fleet map import.
+# Copy to SELECTED_FORTH_LOCATION_IDS.txt and list exactly one Forth location ID per line.
+# Lines starting with # are ignored.
+# Every ID must exist in "Locations Forth Pinned.csv".
+# Expected count for this import request: 403
+#
+# Example (do not use these example IDs as the real selection):
+# 1977073
+# 1708908

@@ -1,0 +1,353 @@
+/*
+ * EES Fleet Tracking V7 · Phase 1 structural layout.
+ * Layout only: header, vehicle sidebar, map workspace and vehicle drawer. No tracking logic lives here.
+ * Every rule is scoped to the `.fleet-v7` workspace class and loaded after the V21/V3 sheets, so it supersedes them
+ * without touching other pages. (Scope prefix repeated to out-rank the earlier V21/V3 rules.)
+ */
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace {
+  --v7-side: 316px;
+  --v7-drawer: 430px;
+  --v7-purple: #4e286f;
+  --v7-purple-deep: #2f1848;
+  --v7-purple-soft: #f1eaf8;
+  --v7-orange: #ea7a12;
+  --v7-orange-deep: #c25f05;
+  --v7-line: #e6dfee;
+  --v7-ink: #2a1b3d;
+  --v7-muted: #6b6280;
+  --v7-ok: #1f8a5f;
+  --v7-warn: #b57a10;
+  --v7-bad: #c0402d;
+}
+
+/* ---------- Three-part grid: [vehicles] [map] [vehicle details] ---------- */
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-tracking-grid {
+  display: grid;
+  grid-template-columns: var(--v7-side) minmax(0, 1fr) var(--v7-drawer);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0;
+  position: relative;
+}
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace.is-sidebar-collapsed .forth-tracking-grid { --v7-side: 0px; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace:not(.has-drawer) .forth-tracking-grid { --v7-drawer: 0px; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace.is-reports .forth-tracking-grid { --v7-side: min(560px, 46vw); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-tracking-grid .forth-map-panel { grid-column: 2; grid-row: 2; width: 100%; height: 100%; min-width: 0; min-height: 0; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-tracking-grid .forth-overlay-stage { grid-column: 2; grid-row: 2; min-width: 0; min-height: 0; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-mobile-map-collapse { display: none !important; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace :is(button, a, select, input, summary):focus-visible { outline: 2px solid var(--v7-orange); outline-offset: 2px; }
+
+/* ---------- A. Compact fleet header ---------- */
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-tracking-grid .forth-command-strip.fleet-v7-header {
+  grid-column: 1 / -1; grid-row: 1; position: relative; z-index: 60;
+  display: flex; flex-direction: column; gap: 0; padding: 0; margin: 0;
+  background: #fff; border-bottom: 1px solid var(--v7-line); box-shadow: 0 2px 10px rgba(42, 27, 61, .06); backdrop-filter: none;
+}
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-header-row {
+  display: flex; align-items: center; gap: .7rem; min-height: 50px; padding: .35rem .75rem;
+  background: linear-gradient(100deg, var(--v7-purple-deep) 0%, var(--v7-purple) 62%, #6a3a8e 100%); color: #fff;
+}
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-header-row .forth-float-title { display: block; flex: 0 0 auto; min-width: 0; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-header-row .forth-float-title h1 { margin: 0; color: #fff; font-size: 1.02rem; font-weight: 760; letter-spacing: .01em; white-space: nowrap; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-vehicles-toggle {
+  display: inline-flex; align-items: center; gap: .4rem; min-height: 38px; padding: 0 .75rem; border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, .28); background: rgba(255, 255, 255, .1); color: #fff; font-size: .8rem; font-weight: 700;
+}
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-vehicles-toggle:hover { background: rgba(255, 255, 255, .2); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-vehicles-toggle[aria-expanded="true"] { background: rgba(255, 255, 255, .2); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-header-row .forth-live-status {
+  display: inline-flex; align-items: center; gap: .4rem; flex: 0 1 auto; min-width: 0; padding: 0; border: 0; background: none; box-shadow: none;
+  color: #e9defa; font-size: .74rem; white-space: nowrap;
+}
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-header-row .forth-live-status strong { color: #fff; font-weight: 650; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-freshness { color: #cdbbe3; padding-left: .45rem; border-left: 1px solid rgba(255, 255, 255, .25); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-workspace-nav {
+  display: flex; gap: 2px; margin-inline: auto; padding: 3px; border-radius: 11px; background: rgba(255, 255, 255, .12);
+  overflow-x: auto; scrollbar-width: none; max-width: 100%;
+}
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-workspace-nav::-webkit-scrollbar { display: none; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-workspace-nav button {
+  flex: 0 0 auto; min-height: 34px; padding: 0 .85rem; border-radius: 8px; border: 0; background: transparent;
+  color: #eadff7; font-size: .8rem; font-weight: 660; white-space: nowrap;
+}
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-workspace-nav button:hover { background: rgba(255, 255, 255, .14); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-workspace-nav button[aria-pressed="true"] { background: #fff; color: var(--v7-purple-deep); box-shadow: inset 0 -3px var(--v7-orange); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-actions { display: flex; align-items: center; gap: .45rem; flex: 0 0 auto; margin: 0; padding: 0; border: 0; background: none; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-actions .forth-command-button {
+  display: inline-flex; align-items: center; gap: .4rem; min-height: 38px; padding: 0 .8rem; border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, .3); background: rgba(255, 255, 255, .1); color: #fff; font-size: .8rem; font-weight: 700; box-shadow: none;
+}
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-actions .forth-command-button:hover { background: rgba(255, 255, 255, .2); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-actions .forth-command-button.is-primary { background: var(--v7-orange); border-color: var(--v7-orange); color: #fff; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-actions .forth-command-button.is-primary:hover { background: var(--v7-orange-deep); border-color: var(--v7-orange-deep); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-actions .forth-command-button:disabled { opacity: .7; }
+
+/* Summary row: five priority counts, with verified GPS as a quiet secondary figure. */
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-kpi-row { display: flex; align-items: center; gap: .6rem; padding: .35rem .75rem; background: #faf7fd; overflow-x: auto; scrollbar-width: thin; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-kpi-row .forth-tracking-kpis { display: flex; flex: 0 0 auto; gap: .4rem; padding: 0; margin: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-kpi-row .forth-stat {
+  display: inline-flex; align-items: center; gap: .45rem; min-height: 34px; padding: 0 .75rem; border: 1px solid var(--v7-line); border-radius: 999px;
+  background: #fff; color: var(--v7-ink); box-shadow: none; white-space: nowrap;
+}
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-kpi-row .forth-stat::before { content: ""; display: block; width: 8px; height: 8px; border-radius: 50%; background: var(--v7-purple); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-kpi-row .forth-stat.is-moving::before { background: var(--v7-ok); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-kpi-row .forth-stat.is-stopped::before { background: #8b84a0; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-kpi-row .forth-stat.is-gps-off::before { background: var(--v7-warn); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-kpi-row .forth-stat.is-attention::before { background: var(--v7-bad); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-kpi-row .forth-stat strong { font-size: 1.02rem; font-weight: 780; line-height: 1; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-kpi-row .forth-stat span { font-size: .74rem; font-weight: 600; color: var(--v7-muted); white-space: nowrap; overflow-wrap: normal; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-kpi-row .forth-stat[aria-pressed="true"] { background: var(--v7-purple-soft); border-color: var(--v7-purple); box-shadow: inset 0 0 0 1px var(--v7-purple); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-kpi-row .forth-stat:hover:not(:disabled) { border-color: #bda5d6; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-verified-chip { margin-left: auto; flex: 0 0 auto; min-height: 34px; padding: 0 .65rem; border: 0; border-radius: 8px; background: none; color: var(--v7-muted); font-size: .74rem; white-space: nowrap; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-verified-chip strong { color: var(--v7-ok); font-size: .9rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-verified-chip[aria-pressed="true"] { background: var(--v7-purple-soft); color: var(--v7-purple); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-connection-note { margin: 0; border-radius: 0; padding: .35rem .75rem; font-size: .78rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-tracking-grid .forth-more-menu { top: 100%; right: .5rem; z-index: 80; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-more-primary .forth-speed-watch-launcher { display: flex; width: 100%; align-items: center; gap: .5rem; min-height: 40px; padding: 0 .75rem; border-radius: 8px; border: 1px solid var(--v7-line); background: #fff; color: var(--v7-ink); font-weight: 650; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-more-primary .forth-speed-watch-launcher-badge { margin-left: auto; }
+
+/* ---------- B. Vehicle sidebar ---------- */
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-operations-sidebar {
+  grid-column: 1; grid-row: 2; display: flex; flex-direction: column; width: 100%; min-width: 0; min-height: 0; overflow: hidden;
+  background: #fff; border-right: 1px solid var(--v7-line); z-index: 20;
+}
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-side-heading { display: flex; align-items: center; justify-content: space-between; padding: .55rem .6rem .15rem .85rem; background: #fff; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-side-heading > div { display: flex; align-items: baseline; gap: .5rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-side-heading h2 { margin: 0; color: var(--v7-ink); font-size: .98rem; font-weight: 780; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-side-count { margin: 0; font-size: .78rem; color: var(--v7-muted); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-side-count strong { color: var(--v7-purple); font-size: .9rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-side-heading button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border-radius: 9px; color: var(--v7-muted); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-side-heading button:hover { background: var(--v7-purple-soft); color: var(--v7-purple); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-intelligence-summary { margin: 0 .75rem .25rem; padding: .4rem .6rem; border-radius: 8px; background: var(--v7-purple-soft); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-intelligence-summary p { margin: 0; font-size: .74rem; line-height: 1.4; color: var(--v7-muted); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-operations-modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; margin: .2rem .75rem .35rem; padding: 3px; border: 0; border-radius: 10px; background: #f3eff7; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-operations-modes button { min-height: 32px; padding: 0 .3rem; border-radius: 8px; color: var(--v7-muted); font-size: .72rem; font-weight: 680; box-shadow: none; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-operations-modes button[aria-pressed="true"] { background: #fff; color: var(--v7-purple-deep); box-shadow: 0 1px 3px rgba(42, 27, 61, .15); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-operations-pane:not([hidden]) { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; overflow: hidden; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-operations-pane:has(.forth-locations-slot):not([hidden]),
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-operations-pane:has(.forth-playback-panel):not([hidden]) { overflow-y: auto; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-operations-sidebar .forth-roster { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border: 0; background: #fff; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-monitor-sticky { padding: 0 .75rem .25rem; background: #fff; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-vehicle-controls { display: grid; gap: .3rem; padding: 0; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-monitor-search-row { display: flex; align-items: center; gap: .4rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-monitor-search { flex: 1 1 auto; min-width: 0; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-monitor-search-input {
+  width: 100%; min-height: 42px; padding-left: 2.25rem; border: 1.5px solid #d8cce6; border-radius: 11px; background: #faf7fd; color: var(--v7-ink); font-size: .9rem;
+}
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-monitor-search-input:focus { background: #fff; border-color: var(--v7-purple); box-shadow: 0 0 0 3px rgba(78, 40, 111, .14); outline: none; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-filters-toggle { position: relative; flex: 0 0 auto; display: grid; place-items: center; width: 42px; height: 42px; border: 1.5px solid #d8cce6; border-radius: 11px; background: #fff; color: var(--v7-purple); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-filters-toggle[aria-expanded="true"],
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-filters-toggle.has-active { background: var(--v7-purple-soft); border-color: var(--v7-purple); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-filters-toggle strong { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--v7-orange); color: #fff; font-size: .68rem; line-height: 18px; text-align: center; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-filters { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; padding: .35rem 0 .15rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-filters label { display: grid; gap: .15rem; font-size: .68rem; font-weight: 650; color: var(--v7-muted); padding: 0; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-filters label:last-child { grid-column: 1 / -1; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-filters select { min-height: 36px; width: 100%; border: 1px solid #ddd2ea; border-radius: 8px; background: #fff; padding: 0 .4rem; color: var(--v7-ink); font-size: .8rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-monitor-toolbar { display: flex; flex-wrap: wrap; gap: .4rem; padding: .1rem 0; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-monitor-clear,
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-monitor-map-action { min-height: 30px; padding: 0 .6rem; border-radius: 8px; font-size: .74rem; font-weight: 650; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-vehicle-results { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: grid; align-content: start; gap: 2px; padding: .15rem .5rem .5rem; }
+
+/* Compact vehicle row: type icon · registration · movement · GPS quality · last update. Detail only when selected. */
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-vehicle-row { display: block; width: 100%; min-height: 42px; padding: .3rem .5rem; border: 1px solid transparent; border-radius: 9px; background: transparent; box-shadow: none; text-align: left; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-vehicle-row:hover { background: #faf7fd; border-color: #e6dcf0; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-vehicle-row.is-selected { background: var(--v7-purple-soft); border-color: #b99ad3; box-shadow: inset 3px 0 var(--v7-orange); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-vehicle-row[data-critical="true"]:not(.is-selected) { box-shadow: inset 3px 0 var(--v7-bad); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-row-main { display: flex; flex-wrap: nowrap; align-items: center; gap: .4rem; min-width: 0; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-row-vehicle-symbol { flex: 0 0 auto; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-row-vehicle-symbol svg { width: 15px; height: 15px; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-row-identity { flex: 1 1 auto; min-width: 0; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-vehicle-reg { display: block; font-size: .92rem; font-weight: 740; color: var(--v7-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-row-speed:not(.is-driving) { display: none; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-row-speed { flex: 0 0 auto; font-size: .74rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-row-speed strong { font-size: .8rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-row-confidence { flex: 0 0 auto; padding: .1rem .35rem; font-size: .66rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-row-age { flex: 0 0 auto; min-width: 2.2rem; text-align: right; font-size: .7rem; color: var(--v7-muted); white-space: nowrap; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-row-meta { display: none; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-vehicle-row.is-selected .forth-row-meta { display: block; padding: .15rem 0 .05rem 2rem; font-size: .72rem; color: var(--v7-muted); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-vehicle-row.is-selected .forth-vehicle-location { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-depot-disclosure { flex: 0 0 auto; margin: 0; border-top: 1px solid var(--v7-line); background: #fcfaff; max-height: 40%; overflow-y: auto; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-depot-disclosure > summary { min-height: 38px; padding: 0 .85rem; font-size: .78rem; font-weight: 700; color: var(--v7-purple); display: flex; align-items: center; cursor: pointer; }
+
+/* ---------- C. Map-first workspace: one compact toolbar ---------- */
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-map-status {
+  top: .6rem; left: .6rem; right: auto; bottom: auto; max-width: calc(100% - 4.5rem); display: flex; flex-wrap: wrap; align-items: center; gap: .35rem;
+  padding: .25rem; border: 1px solid var(--v7-line); border-radius: 12px; background: rgba(255, 255, 255, .96); box-shadow: 0 4px 16px rgba(42, 27, 61, .14); pointer-events: auto;
+}
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-map-primary-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 0; margin: 0; border: 0; background: none; box-shadow: none; position: static; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-map-primary-actions > button,
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-map-layers > summary {
+  display: inline-flex; align-items: center; gap: .3rem; min-height: 34px; padding: 0 .7rem; border: 0; border-radius: 8px; background: transparent;
+  color: var(--v7-ink); font-size: .78rem; font-weight: 680; cursor: pointer; list-style: none;
+}
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-map-layers > summary::-webkit-details-marker { display: none; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-map-primary-actions > button:hover:not(:disabled),
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-map-layers > summary:hover { background: var(--v7-purple-soft); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-map-primary-actions > button[aria-pressed="true"] { background: var(--v7-purple); color: #fff; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-map-primary-actions > button:disabled { opacity: .45; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-map-layers { position: relative; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-map-layers[open] > summary { background: var(--v7-purple-soft); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-map-layers .forth-map-mode {
+  position: absolute; top: calc(100% + 8px); left: 0; z-index: 70; display: grid; gap: .2rem; min-width: 240px; padding: .4rem;
+  border: 1px solid var(--v7-line); border-radius: 12px; background: #fff; box-shadow: 0 10px 28px rgba(42, 27, 61, .2);
+}
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-map-layers .forth-map-mode button { display: flex; justify-content: space-between; align-items: center; min-height: 36px; padding: 0 .65rem; border: 0; border-radius: 8px; background: transparent; font-size: .8rem; text-align: left; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-map-layers .forth-map-mode button[aria-pressed="true"] { background: var(--v7-purple-soft); color: var(--v7-purple-deep); font-weight: 700; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-outside-button { min-height: 34px; padding: 0 .65rem; border-radius: 999px; font-size: .74rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-map-hidden-note { font-size: .72rem; color: var(--v7-muted); padding: 0 .4rem; }
+
+/* ---------- D. Vehicle workspace (right drawer, one navigation system) ---------- */
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .fleet-details-drawer {
+  grid-column: 3; grid-row: 2; position: relative; inset: auto; z-index: 40; display: flex; flex-direction: column;
+  width: 100%; min-width: 0; max-width: none; max-height: 100%; margin: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain;
+  justify-self: stretch; align-self: stretch; border: 0; border-left: 1px solid var(--v7-line); border-radius: 0; background: #fff; box-shadow: -10px 0 28px rgba(42, 27, 61, .07); pointer-events: auto;
+}
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-vehicle-header { display: flex; align-items: flex-start; justify-content: space-between; gap: .5rem; padding: .7rem .6rem .3rem .95rem; border: 0; background: #fff; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-vehicle-reg { margin: 0; color: var(--v7-purple-deep); font-size: 1.4rem; font-weight: 800; letter-spacing: .01em; line-height: 1.15; overflow-wrap: anywhere; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-vehicle-header .forth-inspector-identity { margin: .1rem 0 0; color: var(--v7-muted); font-size: .8rem; white-space: normal; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-vehicle-header .forth-inspector-driver { margin: .1rem 0 0; font-size: .76rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-vehicle-header-actions { display: flex; flex: 0 0 auto; gap: 2px; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-icon-button { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border-radius: 10px; color: var(--v7-muted); background: transparent; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-icon-button:hover { background: var(--v7-purple-soft); color: var(--v7-purple); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-vehicle-status { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; padding: .15rem .95rem .65rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-chip { display: inline-flex; align-items: center; min-height: 26px; padding: 0 .6rem; border-radius: 999px; background: #f3eff7; color: #4b3a58; font-size: .74rem; font-weight: 660; white-space: nowrap; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-chip.is-verified { background: #e5f5ed; color: #14633d; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-chip.is-unverified { background: #fbf0d9; color: #85560a; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-detail-tabs { position: sticky; top: 0; z-index: 3; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: .45rem .75rem; background: #fff; border-top: 1px solid var(--v7-line); border-bottom: 1px solid var(--v7-line); }
+@container (min-width: 520px) { .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-detail-tabs { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-detail-tabs button { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 .3rem; border: 1px solid transparent; border-radius: 9px; background: #f6f2fa; color: #4b3a58; font-size: .8rem; font-weight: 680; white-space: nowrap; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-detail-tabs button:hover { background: var(--v7-purple-soft); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-detail-tabs button[aria-selected="true"] { background: var(--v7-purple); color: #fff; box-shadow: inset 0 -3px var(--v7-orange); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-vehicle-card-body { overflow: visible; padding: .55rem .95rem .8rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-inspector-gps-health { margin-top: 0; padding: .55rem .75rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-inspector-gps-health details summary { cursor: pointer; font-size: .74rem; font-weight: 650; color: var(--v7-purple); min-height: 28px; display: flex; align-items: center; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-inspector-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; margin-top: .5rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-inspector-more-actions { margin: 0 .95rem .8rem; }
+
+/* Evidence tabs (Today / Journeys / Jobs / Fuel / GPS Health): tighter rhythm, one primary action, one status line. */
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .fleet-evidence { padding: .6rem .95rem .9rem; gap: .55rem; line-height: 1.45; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .fleet-evidence h3 { margin: 0; font-size: .95rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .fleet-evidence h4 { margin: .15rem 0 0; padding-top: .45rem; font-size: .82rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .fleet-evidence p { margin: 0; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .fleet-vehicle-workspace,
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .fleet-vehicle-view { gap: .55rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-scope { gap: .45rem; padding: .1rem 0 .3rem; border-bottom: 1px solid var(--v7-line); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-scope-top { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-scope .fleet-evidence-presets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px; width: 100%; padding: 3px; border-radius: 10px; background: #f3eff7; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-scope .fleet-evidence-presets button { min-height: 40px; padding: 0 .4rem; border: 0; border-radius: 8px; background: transparent; color: var(--v7-purple-deep); font-size: .78rem; font-weight: 680; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-scope .fleet-evidence-presets button:hover { background: #fff; box-shadow: 0 1px 3px rgba(42, 27, 61, .15); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-scope form { gap: .45rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-scope .fleet-evidence-dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-scope .fleet-evidence-dates .fleet-evidence-day-select { grid-column: 1 / -1; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-scope input,
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-scope select { min-height: 42px; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-scope-primary { width: 100%; min-height: 44px; justify-content: center; border: 0; border-radius: 10px; background: var(--v7-purple); color: #fff; font-weight: 720; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-scope-primary:hover:not(:disabled) { background: var(--v7-purple-deep); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-scope-primary:disabled { opacity: .6; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-scope-status { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; font-size: .74rem; color: var(--v7-muted); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-scope-tag { padding: .05rem .45rem; border-radius: 6px; background: #f3eff7; color: var(--v7-purple); font-size: .66rem; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-scope-note { font-size: .76rem; color: var(--v7-warn); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .fleet-evidence-more > summary,
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .fleet-evidence details > summary { min-height: 36px; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .fleet-fuel-panel { padding: 0; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .fleet-fuel-panel .fleet-evidence-heading > span { display: none; }
+
+/* ---------- Tablet: lists and details become overlays over a full-width map ---------- */
+@media (max-width: 1100px) {
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-tracking-grid,
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace.is-sidebar-collapsed .forth-tracking-grid,
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace:not(.has-drawer) .forth-tracking-grid,
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace.is-reports .forth-tracking-grid { grid-template-columns: minmax(0, 1fr); }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-tracking-grid .forth-map-panel,
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-tracking-grid .forth-overlay-stage { grid-column: 1; grid-row: 2; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-operations-sidebar { grid-column: 1; grid-row: 2; justify-self: start; width: min(340px, 88vw); box-shadow: 8px 0 28px rgba(42, 27, 61, .18); z-index: 55; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace.is-reports .forth-operations-sidebar { width: min(560px, 92vw); }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .fleet-details-drawer { grid-column: 1; grid-row: 2; justify-self: end; width: min(420px, 94vw); z-index: 58; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace.has-drawer .forth-operations-sidebar { display: none; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-header-row { flex-wrap: wrap; row-gap: .35rem; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-workspace-nav { order: 5; width: 100%; margin: 0; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-actions { margin-left: auto; }
+}
+
+/* ---------- Phone: vehicle list and details open as bottom sheets over the map ---------- */
+@media (max-width: 767px) {
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-header-row { padding: .3rem .5rem; gap: .4rem; min-height: 46px; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-vehicles-toggle { min-width: 44px; min-height: 44px; padding: 0 .6rem; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-header-row .forth-float-title h1 { font-size: .92rem; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-header-row .forth-live-status strong,
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-freshness { display: none; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-actions { gap: .3rem; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-actions .forth-command-button { min-width: 44px; min-height: 44px; padding: 0 .6rem; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-actions .forth-command-button span { display: none; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-workspace-nav button { min-height: 44px; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-kpi-row { padding: .3rem .5rem; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-kpi-row .forth-stat { min-height: 44px; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-verified-chip { display: none; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-operations-sidebar {
+    grid-column: 1; grid-row: 2; align-self: end; justify-self: stretch; width: 100%; height: min(64%, 540px);
+    border: 0; border-top: 1px solid var(--v7-line); border-radius: 16px 16px 0 0; box-shadow: 0 -10px 30px rgba(42, 27, 61, .25);
+  }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace.is-reports .forth-operations-sidebar { width: 100%; height: 88%; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .fleet-details-drawer { grid-column: 1; grid-row: 2; align-self: end; justify-self: stretch; width: 100%; height: min(78%, 640px); border: 0; border-top: 1px solid var(--v7-line); border-radius: 16px 16px 0 0; box-shadow: 0 -10px 30px rgba(42, 27, 61, .28); }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-side-heading button,
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-filters-toggle { width: 44px; height: 44px; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-vehicle-row { min-height: 48px; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-map-status { max-width: calc(100% - 3.6rem); top: .4rem; left: .4rem; flex-wrap: nowrap; overflow-x: auto; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-map-primary-actions { flex-wrap: nowrap; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-map-primary-actions > button,
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-map-layers > summary { min-height: 44px; white-space: nowrap; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-map-layers .forth-map-mode { position: fixed; left: .5rem; right: .5rem; top: auto; bottom: .5rem; min-width: 0; }
+}
+
+/* Corrections after first browser pass */
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-kpi-row .forth-tracking-kpis { order: 0; margin: 0; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-kpi-row .v7-verified-chip { order: 1; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-operations-modes { display: flex; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-operations-modes button { flex: 1 1 0; white-space: nowrap; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-activity-label { white-space: nowrap; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-row-age { min-width: 0; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-header-row, .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-kpi-row, .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-connection-note { flex: 0 0 auto; }
+
+/* A selected vehicle no longer needs the sidebar's own back-to-fleet pane: the drawer close button does that. */
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-operations-pane:has(.forth-back-to-fleet):not(:has(.forth-operations-empty)) { display: none !important; }
+
+/* Phone refinements after the first 390px browser pass. */
+@media (max-width: 767px) {
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-header-row { flex-wrap: nowrap; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-header-row .forth-float-title { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-header-row .forth-float-title h1 { overflow: hidden; text-overflow: ellipsis; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-header-row .forth-live-status { flex: 0 0 auto; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-workspace-nav { order: 0; margin: 0; width: 100%; border-radius: 0; padding: 3px .5rem; background: rgba(0, 0, 0, .18); }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-header-row { flex-wrap: wrap; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-header-row > .v7-workspace-nav { flex: 1 0 100%; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-kpi-row .forth-tracking-kpis { display: flex !important; flex-wrap: nowrap !important; flex-direction: row !important; grid-template-columns: none !important; width: auto; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-kpi-row .forth-stat { flex: 0 0 auto; flex-direction: row !important; align-items: center; min-width: 0; padding: 0 .7rem; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-kpi-row .forth-stat strong { font-size: .95rem; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-map-status > *,
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-map-primary-actions > * { flex: 0 0 auto; white-space: nowrap; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-operations-modes button { min-height: 40px !important; }
+}
+@media (max-width: 1100px) {
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-header-row > .v7-actions { order: 2; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-header-row > .v7-workspace-nav { order: 3; }
+}
+@media (max-width: 767px) {
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-operations-sidebar { height: min(84%, 680px); }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .fleet-details-drawer { height: min(88%, 700px); }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-operations-modes { margin: 0 .75rem .25rem; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-operations-modes button { min-height: 44px !important; }
+}
+@media (max-width: 1100px) {
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-overlay-stage { z-index: 30; }
+}
+@media (max-width: 767px) {
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-inspector-gps-health details summary { min-height: 44px; }
+}
+@media (max-width: 767px) {
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-header-row .forth-float-title { flex: 1 1 0; }
+}
+
+/* Speed moves to the second line (driving rows only) so the single-line row never overflows. */
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-row-main .forth-row-speed { display: none !important; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-vehicle-row[data-activity="driving"] .forth-row-meta { display: block; padding: .1rem 0 .05rem 2rem; font-size: .72rem; color: var(--v7-muted); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-row-speed-inline { color: var(--v7-ok); font-weight: 750; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .forth-vehicle-row[data-activity="driving"] .forth-vehicle-location { display: inline; }

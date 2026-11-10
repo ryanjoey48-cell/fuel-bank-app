@@ -1,5 +1,6 @@
 "use client";
 
+import { EES_COMPANY } from "@/lib/ees-company";
 import { AlertCircle, CalendarDays, Gauge, Printer, Route, Truck, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { EESLogo } from "@/components/ees-logo";
@@ -223,7 +224,7 @@ function WeeklyBossPrint({ report, language, generatedAt }: { report: WeeklyBoss
   const c = copy[language === "th" ? "th" : "en"];
   return <div className="weekly-boss-print-report" aria-hidden="true">
     <section className="booking-insights-print-page weekly-boss-print-page">
-      <header className="booking-insights-print-header"><EESLogo alt="Expert Express Sender Co., Ltd." size={48} priority /><div><p>Expert Express Sender Co., Ltd.</p><h1>{c.title}</h1><span>{formatDate(report.period.startDate, language)} - {formatDate(report.period.endDate, language)} · {c.generated}: {generatedAt}</span></div></header>
+      <header className="booking-insights-print-header"><EESLogo alt={EES_COMPANY.nameEnTitle} size={48} priority /><div><p>{EES_COMPANY.nameEnTitle}</p><h1>{c.title}</h1><span>{formatDate(report.period.startDate, language)} - {formatDate(report.period.endDate, language)} · {c.generated}: {generatedAt}</span></div></header>
       <div className="booking-insights-print-kpis">
         <Kpi label={c.jobs} value={String(report.kpis.bookingJobs)} />
         <Kpi label={c.trips} value={String(report.kpis.tripJourneys)} />

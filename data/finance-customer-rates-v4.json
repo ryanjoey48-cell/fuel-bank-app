@@ -1,0 +1,3878 @@
+{
+  "schemaVersion": 1,
+  "schedules": [
+    {
+      "id": "goodyear",
+      "name": "Goodyear EES Pricing",
+      "version": "61b966e039e81a4d",
+      "sourceFilename": "Goodyear EES Pricing.pdf",
+      "sourceSha256": "61b966e039e81a4d120730bc1f1fcfc8c1c87e45829bec9da0e9dd0f517ee8f7",
+      "sourcePages": 2,
+      "importStatus": "unapproved",
+      "effectiveFrom": null,
+      "effectiveTo": null,
+      "rules": [
+        "Suvarnabhumi Airport: 4W parking below THB 150 covered; THB 150+ charged to client.",
+        "Suvarnabhumi Airport: 6W parking below THB 200 covered; THB 200+ charged to client.",
+        "3 hours free waiting; from hour 4: THB 200 per hour."
+      ],
+      "rows": [
+        {
+          "id": "goodyear-route-1",
+          "pickup": "GOODYEAR",
+          "delivery": "Suvarnabhumi Airport\nสนามบินสุวรรณภูมิ",
+          "vehicle": "4W",
+          "bands": [
+            {
+              "label": "Up to 37",
+              "minSatang": null,
+              "maxSatang": 3700,
+              "amountThb": 1500,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 38",
+              "minSatang": 3701,
+              "maxSatang": 3800,
+              "amountThb": 1515,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 39",
+              "minSatang": 3801,
+              "maxSatang": 3900,
+              "amountThb": 1530,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 40",
+              "minSatang": 3901,
+              "maxSatang": 4000,
+              "amountThb": 1545,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 41",
+              "minSatang": 4001,
+              "maxSatang": 4100,
+              "amountThb": 1560,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 42",
+              "minSatang": 4101,
+              "maxSatang": 4200,
+              "amountThb": 1575,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 43",
+              "minSatang": 4201,
+              "maxSatang": 4300,
+              "amountThb": 1590,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 44",
+              "minSatang": 4301,
+              "maxSatang": 4400,
+              "amountThb": 1605,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 45",
+              "minSatang": 4401,
+              "maxSatang": 4500,
+              "amountThb": 1620,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 46",
+              "minSatang": 4501,
+              "maxSatang": 4600,
+              "amountThb": 1635,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 47",
+              "minSatang": 4601,
+              "maxSatang": 4700,
+              "amountThb": 1650,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 48",
+              "minSatang": 4701,
+              "maxSatang": 4800,
+              "amountThb": 1665,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 49",
+              "minSatang": 4801,
+              "maxSatang": 4900,
+              "amountThb": 1680,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 50",
+              "minSatang": 4901,
+              "maxSatang": 5000,
+              "amountThb": 1695,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 51",
+              "minSatang": 5001,
+              "maxSatang": 5100,
+              "amountThb": 1710,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 52",
+              "minSatang": 5101,
+              "maxSatang": 5200,
+              "amountThb": 1725,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 53",
+              "minSatang": 5201,
+              "maxSatang": 5300,
+              "amountThb": 1740,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 54",
+              "minSatang": 5301,
+              "maxSatang": 5400,
+              "amountThb": 1755,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 55",
+              "minSatang": 5401,
+              "maxSatang": 5500,
+              "amountThb": 1770,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 56",
+              "minSatang": 5501,
+              "maxSatang": 5600,
+              "amountThb": 1785,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 57",
+              "minSatang": 5601,
+              "maxSatang": 5700,
+              "amountThb": 1800,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 58",
+              "minSatang": 5701,
+              "maxSatang": 5800,
+              "amountThb": 1815,
+              "sourcePage": 2
+            }
+          ],
+          "reviewFlags": []
+        },
+        {
+          "id": "goodyear-route-2",
+          "pickup": "GOODYEAR",
+          "delivery": "Suvarnabhumi Airport\nสนามบินสุวรรณภูมิ",
+          "vehicle": "6W",
+          "bands": [
+            {
+              "label": "Up to 37",
+              "minSatang": null,
+              "maxSatang": 3700,
+              "amountThb": 3000,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 38",
+              "minSatang": 3701,
+              "maxSatang": 3800,
+              "amountThb": 3050,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 39",
+              "minSatang": 3801,
+              "maxSatang": 3900,
+              "amountThb": 3100,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 40",
+              "minSatang": 3901,
+              "maxSatang": 4000,
+              "amountThb": 3150,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 41",
+              "minSatang": 4001,
+              "maxSatang": 4100,
+              "amountThb": 3200,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 42",
+              "minSatang": 4101,
+              "maxSatang": 4200,
+              "amountThb": 3250,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 43",
+              "minSatang": 4201,
+              "maxSatang": 4300,
+              "amountThb": 3300,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 44",
+              "minSatang": 4301,
+              "maxSatang": 4400,
+              "amountThb": 3350,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 45",
+              "minSatang": 4401,
+              "maxSatang": 4500,
+              "amountThb": 3400,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 46",
+              "minSatang": 4501,
+              "maxSatang": 4600,
+              "amountThb": 3450,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 47",
+              "minSatang": 4601,
+              "maxSatang": 4700,
+              "amountThb": 3500,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 48",
+              "minSatang": 4701,
+              "maxSatang": 4800,
+              "amountThb": 3550,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 49",
+              "minSatang": 4801,
+              "maxSatang": 4900,
+              "amountThb": 3600,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 50",
+              "minSatang": 4901,
+              "maxSatang": 5000,
+              "amountThb": 3650,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 51",
+              "minSatang": 5001,
+              "maxSatang": 5100,
+              "amountThb": 3700,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 52",
+              "minSatang": 5101,
+              "maxSatang": 5200,
+              "amountThb": 3750,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 53",
+              "minSatang": 5201,
+              "maxSatang": 5300,
+              "amountThb": 3800,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 54",
+              "minSatang": 5301,
+              "maxSatang": 5400,
+              "amountThb": 3850,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 55",
+              "minSatang": 5401,
+              "maxSatang": 5500,
+              "amountThb": 3900,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 56",
+              "minSatang": 5501,
+              "maxSatang": 5600,
+              "amountThb": 3950,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 57",
+              "minSatang": 5601,
+              "maxSatang": 5700,
+              "amountThb": 4000,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 58",
+              "minSatang": 5701,
+              "maxSatang": 5800,
+              "amountThb": 4050,
+              "sourcePage": 2
+            }
+          ],
+          "reviewFlags": []
+        },
+        {
+          "id": "goodyear-route-3",
+          "pickup": "Suvarnabhumi Airport\nสนามบินสุวรรณภูมิ",
+          "delivery": "GOODYEAR",
+          "vehicle": "4W",
+          "bands": [
+            {
+              "label": "Up to 37",
+              "minSatang": null,
+              "maxSatang": 3700,
+              "amountThb": 1500,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 38",
+              "minSatang": 3701,
+              "maxSatang": 3800,
+              "amountThb": 1515,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 39",
+              "minSatang": 3801,
+              "maxSatang": 3900,
+              "amountThb": 1530,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 40",
+              "minSatang": 3901,
+              "maxSatang": 4000,
+              "amountThb": 1545,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 41",
+              "minSatang": 4001,
+              "maxSatang": 4100,
+              "amountThb": 1560,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 42",
+              "minSatang": 4101,
+              "maxSatang": 4200,
+              "amountThb": 1575,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 43",
+              "minSatang": 4201,
+              "maxSatang": 4300,
+              "amountThb": 1590,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 44",
+              "minSatang": 4301,
+              "maxSatang": 4400,
+              "amountThb": 1605,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 45",
+              "minSatang": 4401,
+              "maxSatang": 4500,
+              "amountThb": 1620,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 46",
+              "minSatang": 4501,
+              "maxSatang": 4600,
+              "amountThb": 1635,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 47",
+              "minSatang": 4601,
+              "maxSatang": 4700,
+              "amountThb": 1650,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 48",
+              "minSatang": 4701,
+              "maxSatang": 4800,
+              "amountThb": 1665,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 49",
+              "minSatang": 4801,
+              "maxSatang": 4900,
+              "amountThb": 1680,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 50",
+              "minSatang": 4901,
+              "maxSatang": 5000,
+              "amountThb": 1695,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 51",
+              "minSatang": 5001,
+              "maxSatang": 5100,
+              "amountThb": 1710,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 52",
+              "minSatang": 5101,
+              "maxSatang": 5200,
+              "amountThb": 1725,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 53",
+              "minSatang": 5201,
+              "maxSatang": 5300,
+              "amountThb": 1740,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 54",
+              "minSatang": 5301,
+              "maxSatang": 5400,
+              "amountThb": 1755,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 55",
+              "minSatang": 5401,
+              "maxSatang": 5500,
+              "amountThb": 1770,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 56",
+              "minSatang": 5501,
+              "maxSatang": 5600,
+              "amountThb": 1785,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 57",
+              "minSatang": 5601,
+              "maxSatang": 5700,
+              "amountThb": 1800,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 58",
+              "minSatang": 5701,
+              "maxSatang": 5800,
+              "amountThb": 1815,
+              "sourcePage": 2
+            }
+          ],
+          "reviewFlags": []
+        },
+        {
+          "id": "goodyear-route-4",
+          "pickup": "Suvarnabhumi Airport\nสนามบินสุวรรณภูมิ",
+          "delivery": "GOODYEAR",
+          "vehicle": "6W",
+          "bands": [
+            {
+              "label": "Up to 37",
+              "minSatang": null,
+              "maxSatang": 3700,
+              "amountThb": 3000,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 38",
+              "minSatang": 3701,
+              "maxSatang": 3800,
+              "amountThb": 3050,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 39",
+              "minSatang": 3801,
+              "maxSatang": 3900,
+              "amountThb": 3100,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 40",
+              "minSatang": 3901,
+              "maxSatang": 4000,
+              "amountThb": 3150,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 41",
+              "minSatang": 4001,
+              "maxSatang": 4100,
+              "amountThb": 3200,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 42",
+              "minSatang": 4101,
+              "maxSatang": 4200,
+              "amountThb": 3250,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 43",
+              "minSatang": 4201,
+              "maxSatang": 4300,
+              "amountThb": 3300,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 44",
+              "minSatang": 4301,
+              "maxSatang": 4400,
+              "amountThb": 3350,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 45",
+              "minSatang": 4401,
+              "maxSatang": 4500,
+              "amountThb": 3400,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 46",
+              "minSatang": 4501,
+              "maxSatang": 4600,
+              "amountThb": 3450,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 47",
+              "minSatang": 4601,
+              "maxSatang": 4700,
+              "amountThb": 3500,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 48",
+              "minSatang": 4701,
+              "maxSatang": 4800,
+              "amountThb": 3550,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 49",
+              "minSatang": 4801,
+              "maxSatang": 4900,
+              "amountThb": 3600,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 50",
+              "minSatang": 4901,
+              "maxSatang": 5000,
+              "amountThb": 3650,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 51",
+              "minSatang": 5001,
+              "maxSatang": 5100,
+              "amountThb": 3700,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 52",
+              "minSatang": 5101,
+              "maxSatang": 5200,
+              "amountThb": 3750,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 53",
+              "minSatang": 5201,
+              "maxSatang": 5300,
+              "amountThb": 3800,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 54",
+              "minSatang": 5301,
+              "maxSatang": 5400,
+              "amountThb": 3850,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 55",
+              "minSatang": 5401,
+              "maxSatang": 5500,
+              "amountThb": 3900,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 56",
+              "minSatang": 5501,
+              "maxSatang": 5600,
+              "amountThb": 3950,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 57",
+              "minSatang": 5601,
+              "maxSatang": 5700,
+              "amountThb": 4000,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 58",
+              "minSatang": 5701,
+              "maxSatang": 5800,
+              "amountThb": 4050,
+              "sourcePage": 2
+            }
+          ],
+          "reviewFlags": []
+        },
+        {
+          "id": "goodyear-route-5",
+          "pickup": "Port\nท่าเรือ",
+          "delivery": "GOODYEAR",
+          "vehicle": "4W",
+          "bands": [
+            {
+              "label": "Up to 37",
+              "minSatang": null,
+              "maxSatang": 3700,
+              "amountThb": 1500,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 38",
+              "minSatang": 3701,
+              "maxSatang": 3800,
+              "amountThb": 1515,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 39",
+              "minSatang": 3801,
+              "maxSatang": 3900,
+              "amountThb": 1530,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 40",
+              "minSatang": 3901,
+              "maxSatang": 4000,
+              "amountThb": 1545,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 41",
+              "minSatang": 4001,
+              "maxSatang": 4100,
+              "amountThb": 1560,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 42",
+              "minSatang": 4101,
+              "maxSatang": 4200,
+              "amountThb": 1575,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 43",
+              "minSatang": 4201,
+              "maxSatang": 4300,
+              "amountThb": 1590,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 44",
+              "minSatang": 4301,
+              "maxSatang": 4400,
+              "amountThb": 1605,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 45",
+              "minSatang": 4401,
+              "maxSatang": 4500,
+              "amountThb": 1620,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 46",
+              "minSatang": 4501,
+              "maxSatang": 4600,
+              "amountThb": 1635,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 47",
+              "minSatang": 4601,
+              "maxSatang": 4700,
+              "amountThb": 1650,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 48",
+              "minSatang": 4701,
+              "maxSatang": 4800,
+              "amountThb": 1665,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 49",
+              "minSatang": 4801,
+              "maxSatang": 4900,
+              "amountThb": 1680,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 50",
+              "minSatang": 4901,
+              "maxSatang": 5000,
+              "amountThb": 1695,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 51",
+              "minSatang": 5001,
+              "maxSatang": 5100,
+              "amountThb": 1710,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 52",
+              "minSatang": 5101,
+              "maxSatang": 5200,
+              "amountThb": 1725,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 53",
+              "minSatang": 5201,
+              "maxSatang": 5300,
+              "amountThb": 1740,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 54",
+              "minSatang": 5301,
+              "maxSatang": 5400,
+              "amountThb": 1755,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 55",
+              "minSatang": 5401,
+              "maxSatang": 5500,
+              "amountThb": 1770,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 56",
+              "minSatang": 5501,
+              "maxSatang": 5600,
+              "amountThb": 1785,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 57",
+              "minSatang": 5601,
+              "maxSatang": 5700,
+              "amountThb": 1800,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 58",
+              "minSatang": 5701,
+              "maxSatang": 5800,
+              "amountThb": 1815,
+              "sourcePage": 2
+            }
+          ],
+          "reviewFlags": []
+        },
+        {
+          "id": "goodyear-route-6",
+          "pickup": "Port\nท่าเรือ",
+          "delivery": "GOODYEAR",
+          "vehicle": "6W",
+          "bands": [
+            {
+              "label": "Up to 37",
+              "minSatang": null,
+              "maxSatang": 3700,
+              "amountThb": 3000,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 38",
+              "minSatang": 3701,
+              "maxSatang": 3800,
+              "amountThb": 3050,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 39",
+              "minSatang": 3801,
+              "maxSatang": 3900,
+              "amountThb": 3100,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 40",
+              "minSatang": 3901,
+              "maxSatang": 4000,
+              "amountThb": 3150,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 41",
+              "minSatang": 4001,
+              "maxSatang": 4100,
+              "amountThb": 3200,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 42",
+              "minSatang": 4101,
+              "maxSatang": 4200,
+              "amountThb": 3250,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 43",
+              "minSatang": 4201,
+              "maxSatang": 4300,
+              "amountThb": 3300,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 44",
+              "minSatang": 4301,
+              "maxSatang": 4400,
+              "amountThb": 3350,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 45",
+              "minSatang": 4401,
+              "maxSatang": 4500,
+              "amountThb": 3400,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 46",
+              "minSatang": 4501,
+              "maxSatang": 4600,
+              "amountThb": 3450,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 47",
+              "minSatang": 4601,
+              "maxSatang": 4700,
+              "amountThb": 3500,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 48",
+              "minSatang": 4701,
+              "maxSatang": 4800,
+              "amountThb": 3550,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 49",
+              "minSatang": 4801,
+              "maxSatang": 4900,
+              "amountThb": 3600,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 50",
+              "minSatang": 4901,
+              "maxSatang": 5000,
+              "amountThb": 3650,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 51",
+              "minSatang": 5001,
+              "maxSatang": 5100,
+              "amountThb": 3700,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 52",
+              "minSatang": 5101,
+              "maxSatang": 5200,
+              "amountThb": 3750,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 53",
+              "minSatang": 5201,
+              "maxSatang": 5300,
+              "amountThb": 3800,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 54",
+              "minSatang": 5301,
+              "maxSatang": 5400,
+              "amountThb": 3850,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 55",
+              "minSatang": 5401,
+              "maxSatang": 5500,
+              "amountThb": 3900,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 56",
+              "minSatang": 5501,
+              "maxSatang": 5600,
+              "amountThb": 3950,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 57",
+              "minSatang": 5601,
+              "maxSatang": 5700,
+              "amountThb": 4000,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 58",
+              "minSatang": 5701,
+              "maxSatang": 5800,
+              "amountThb": 4050,
+              "sourcePage": 2
+            }
+          ],
+          "reviewFlags": []
+        },
+        {
+          "id": "goodyear-route-7",
+          "pickup": "Lak Si Post Office\nปณหลักสี่",
+          "delivery": "GOODYEAR",
+          "vehicle": "4W",
+          "bands": [
+            {
+              "label": "Up to 37",
+              "minSatang": null,
+              "maxSatang": 3700,
+              "amountThb": 1500,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 38",
+              "minSatang": 3701,
+              "maxSatang": 3800,
+              "amountThb": 1515,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 39",
+              "minSatang": 3801,
+              "maxSatang": 3900,
+              "amountThb": 1530,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 40",
+              "minSatang": 3901,
+              "maxSatang": 4000,
+              "amountThb": 1545,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 41",
+              "minSatang": 4001,
+              "maxSatang": 4100,
+              "amountThb": 1560,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 42",
+              "minSatang": 4101,
+              "maxSatang": 4200,
+              "amountThb": 1575,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 43",
+              "minSatang": 4201,
+              "maxSatang": 4300,
+              "amountThb": 1590,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 44",
+              "minSatang": 4301,
+              "maxSatang": 4400,
+              "amountThb": 1605,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 45",
+              "minSatang": 4401,
+              "maxSatang": 4500,
+              "amountThb": 1620,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 46",
+              "minSatang": 4501,
+              "maxSatang": 4600,
+              "amountThb": 1635,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 47",
+              "minSatang": 4601,
+              "maxSatang": 4700,
+              "amountThb": 1650,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 48",
+              "minSatang": 4701,
+              "maxSatang": 4800,
+              "amountThb": 1665,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 49",
+              "minSatang": 4801,
+              "maxSatang": 4900,
+              "amountThb": 1680,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 50",
+              "minSatang": 4901,
+              "maxSatang": 5000,
+              "amountThb": 1695,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 51",
+              "minSatang": 5001,
+              "maxSatang": 5100,
+              "amountThb": 1710,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 52",
+              "minSatang": 5101,
+              "maxSatang": 5200,
+              "amountThb": 1725,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 53",
+              "minSatang": 5201,
+              "maxSatang": 5300,
+              "amountThb": 1740,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 54",
+              "minSatang": 5301,
+              "maxSatang": 5400,
+              "amountThb": 1755,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 55",
+              "minSatang": 5401,
+              "maxSatang": 5500,
+              "amountThb": 1770,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 56",
+              "minSatang": 5501,
+              "maxSatang": 5600,
+              "amountThb": 1785,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 57",
+              "minSatang": 5601,
+              "maxSatang": 5700,
+              "amountThb": 1800,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 58",
+              "minSatang": 5701,
+              "maxSatang": 5800,
+              "amountThb": 1815,
+              "sourcePage": 2
+            }
+          ],
+          "reviewFlags": []
+        },
+        {
+          "id": "goodyear-route-8",
+          "pickup": "Lak Si Post Office\nปณหลักสี่",
+          "delivery": "GOODYEAR",
+          "vehicle": "6W",
+          "bands": [
+            {
+              "label": "Up to 37",
+              "minSatang": null,
+              "maxSatang": 3700,
+              "amountThb": 3000,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 38",
+              "minSatang": 3701,
+              "maxSatang": 3800,
+              "amountThb": 3050,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 39",
+              "minSatang": 3801,
+              "maxSatang": 3900,
+              "amountThb": 3100,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 40",
+              "minSatang": 3901,
+              "maxSatang": 4000,
+              "amountThb": 3150,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 41",
+              "minSatang": 4001,
+              "maxSatang": 4100,
+              "amountThb": 3200,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 42",
+              "minSatang": 4101,
+              "maxSatang": 4200,
+              "amountThb": 3250,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 43",
+              "minSatang": 4201,
+              "maxSatang": 4300,
+              "amountThb": 3300,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 44",
+              "minSatang": 4301,
+              "maxSatang": 4400,
+              "amountThb": 3350,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 45",
+              "minSatang": 4401,
+              "maxSatang": 4500,
+              "amountThb": 3400,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 46",
+              "minSatang": 4501,
+              "maxSatang": 4600,
+              "amountThb": 3450,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 47",
+              "minSatang": 4601,
+              "maxSatang": 4700,
+              "amountThb": 3500,
+              "sourcePage": 1
+            },
+            {
+              "label": "Fuel at 48",
+              "minSatang": 4701,
+              "maxSatang": 4800,
+              "amountThb": 3550,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 49",
+              "minSatang": 4801,
+              "maxSatang": 4900,
+              "amountThb": 3600,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 50",
+              "minSatang": 4901,
+              "maxSatang": 5000,
+              "amountThb": 3650,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 51",
+              "minSatang": 5001,
+              "maxSatang": 5100,
+              "amountThb": 3700,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 52",
+              "minSatang": 5101,
+              "maxSatang": 5200,
+              "amountThb": 3750,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 53",
+              "minSatang": 5201,
+              "maxSatang": 5300,
+              "amountThb": 3800,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 54",
+              "minSatang": 5301,
+              "maxSatang": 5400,
+              "amountThb": 3850,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 55",
+              "minSatang": 5401,
+              "maxSatang": 5500,
+              "amountThb": 3900,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 56",
+              "minSatang": 5501,
+              "maxSatang": 5600,
+              "amountThb": 3950,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 57",
+              "minSatang": 5601,
+              "maxSatang": 5700,
+              "amountThb": 4000,
+              "sourcePage": 2
+            },
+            {
+              "label": "Fuel at 58",
+              "minSatang": 5701,
+              "maxSatang": 5800,
+              "amountThb": 4050,
+              "sourcePage": 2
+            }
+          ],
+          "reviewFlags": []
+        }
+      ],
+      "reviewNotes": [
+        "Fuel columns are labelled \"Up to 37\" then \"Fuel at 38\" … \"Fuel at 58\". Imported as (n−1.00, n] THB/L brackets (e.g. 37.01–38.00 = \"Fuel at 38\"). Whether a label means \"up to\" or \"from\" that price is not stated in the source — confirm with the contract owner.",
+        "The PDF header quotes a reference fuel price of THB 36.69/L; it is shown for information and is not used for pricing.",
+        "6W steps are THB 50 per level while 4W steps are THB 15; both are exactly as printed."
+      ]
+    },
+    {
+      "id": "sirtech",
+      "name": "EES Sirtech Pricing",
+      "version": "2f761820ce62e426",
+      "sourceFilename": "EES Sirtech Pricing.pdf",
+      "sourceSha256": "2f761820ce62e4266128339a62e2c5fac7b1e7550d40f9360f749cfd7eb31d1e",
+      "sourcePages": 1,
+      "importStatus": "unapproved",
+      "effectiveFrom": null,
+      "effectiveTo": null,
+      "rules": [],
+      "rows": [
+        {
+          "id": "sirtech-calcomp-trailer-empty40",
+          "pickup": "SIRTECH",
+          "delivery": "CALCOMP",
+          "vehicle": "Trailer + empty 40' container",
+          "distanceKm": 214,
+          "bands": [
+            {
+              "label": "29.01-30.00",
+              "minSatang": 2901,
+              "maxSatang": 3000,
+              "amountThb": 11500,
+              "sourcePage": 1
+            },
+            {
+              "label": "30.01-31.00",
+              "minSatang": 3001,
+              "maxSatang": 3100,
+              "amountThb": 11615,
+              "sourcePage": 1
+            },
+            {
+              "label": "31.01-32.00",
+              "minSatang": 3101,
+              "maxSatang": 3200,
+              "amountThb": 11730,
+              "sourcePage": 1
+            },
+            {
+              "label": "32.01-33.00",
+              "minSatang": 3201,
+              "maxSatang": 3300,
+              "amountThb": 11845,
+              "sourcePage": 1
+            },
+            {
+              "label": "33.01-34.00",
+              "minSatang": 3301,
+              "maxSatang": 3400,
+              "amountThb": 11960,
+              "sourcePage": 1
+            },
+            {
+              "label": "34.01-35.00",
+              "minSatang": 3401,
+              "maxSatang": 3500,
+              "amountThb": 12075,
+              "sourcePage": 1
+            },
+            {
+              "label": "35.01-36.00",
+              "minSatang": 3501,
+              "maxSatang": 3600,
+              "amountThb": 12190,
+              "sourcePage": 1
+            },
+            {
+              "label": "36.01-37.00",
+              "minSatang": 3601,
+              "maxSatang": 3700,
+              "amountThb": 12305,
+              "sourcePage": 1
+            },
+            {
+              "label": "37.01-38.00",
+              "minSatang": 3701,
+              "maxSatang": 3800,
+              "amountThb": 12420,
+              "sourcePage": 1
+            },
+            {
+              "label": "38.01-39.00",
+              "minSatang": 3801,
+              "maxSatang": 3900,
+              "amountThb": 12535,
+              "sourcePage": 1
+            },
+            {
+              "label": "39.01-40.00",
+              "minSatang": 3901,
+              "maxSatang": 4000,
+              "amountThb": 12650,
+              "sourcePage": 1
+            },
+            {
+              "label": "40.01-41.00",
+              "minSatang": 4001,
+              "maxSatang": 4100,
+              "amountThb": 12765,
+              "sourcePage": 1
+            },
+            {
+              "label": "41.01-42.00",
+              "minSatang": 4101,
+              "maxSatang": 4200,
+              "amountThb": 12880,
+              "sourcePage": 1
+            },
+            {
+              "label": "42.01-43.00",
+              "minSatang": 4201,
+              "maxSatang": 4300,
+              "amountThb": 12995,
+              "sourcePage": 1
+            },
+            {
+              "label": "43.01-44.00",
+              "minSatang": 4301,
+              "maxSatang": 4400,
+              "amountThb": 13110,
+              "sourcePage": 1
+            },
+            {
+              "label": "44.01-45.00",
+              "minSatang": 4401,
+              "maxSatang": 4500,
+              "amountThb": 13225,
+              "sourcePage": 1
+            },
+            {
+              "label": "45.01-46.00",
+              "minSatang": 4501,
+              "maxSatang": 4600,
+              "amountThb": 13340,
+              "sourcePage": 1
+            },
+            {
+              "label": "46.01-47.00",
+              "minSatang": 4601,
+              "maxSatang": 4700,
+              "amountThb": 13455,
+              "sourcePage": 1
+            },
+            {
+              "label": "47.01-48.00",
+              "minSatang": 4701,
+              "maxSatang": 4800,
+              "amountThb": 13570,
+              "sourcePage": 1
+            },
+            {
+              "label": "48.01-49.00",
+              "minSatang": 4801,
+              "maxSatang": 4900,
+              "amountThb": 13685,
+              "sourcePage": 1
+            },
+            {
+              "label": "49.01-50.00",
+              "minSatang": 4901,
+              "maxSatang": 5000,
+              "amountThb": 13800,
+              "sourcePage": 1
+            },
+            {
+              "label": "50.01-51.00",
+              "minSatang": 5001,
+              "maxSatang": 5100,
+              "amountThb": 13915,
+              "sourcePage": 1
+            },
+            {
+              "label": "51.01-52.00",
+              "minSatang": 5101,
+              "maxSatang": 5200,
+              "amountThb": 14030,
+              "sourcePage": 1
+            },
+            {
+              "label": "52.01-53.00",
+              "minSatang": 5201,
+              "maxSatang": 5300,
+              "amountThb": 14145,
+              "sourcePage": 1
+            },
+            {
+              "label": "53.01-54.00",
+              "minSatang": 5301,
+              "maxSatang": 5400,
+              "amountThb": 14260,
+              "sourcePage": 1
+            },
+            {
+              "label": "54.01-55.00",
+              "minSatang": 5401,
+              "maxSatang": 5500,
+              "amountThb": 14375,
+              "sourcePage": 1
+            },
+            {
+              "label": "55.01-56.00",
+              "minSatang": 5501,
+              "maxSatang": 5600,
+              "amountThb": 14490,
+              "sourcePage": 1
+            },
+            {
+              "label": "56.01-57.00",
+              "minSatang": 5601,
+              "maxSatang": 5700,
+              "amountThb": 14605,
+              "sourcePage": 1
+            },
+            {
+              "label": "57.01-58.00",
+              "minSatang": 5701,
+              "maxSatang": 5800,
+              "amountThb": 14720,
+              "sourcePage": 1
+            },
+            {
+              "label": "58.01-59.00",
+              "minSatang": 5801,
+              "maxSatang": 5900,
+              "amountThb": 14835,
+              "sourcePage": 1
+            },
+            {
+              "label": "59.01-60.00",
+              "minSatang": 5901,
+              "maxSatang": 6000,
+              "amountThb": 14950,
+              "sourcePage": 1
+            }
+          ],
+          "reviewFlags": []
+        }
+      ],
+      "reviewNotes": [
+        "Source footer says \"PAGE 3 OF 3\" although only one page was supplied; page 1–2 of this set were not provided.",
+        "Vehicle is \"Trailer + empty 40' container\" over 214 km — not an ordinary 4W/6W vehicle class."
+      ]
+    },
+    {
+      "id": "apl",
+      "name": "APL Pricing",
+      "version": "b15d63ca71631017",
+      "sourceFilename": "APL Pricing.pdf",
+      "sourceSha256": "b15d63ca71631017f077c5d0de28474ead037854207d05e54dc4ff021b87a18f",
+      "sourcePages": 2,
+      "importStatus": "unapproved",
+      "effectiveFrom": null,
+      "effectiveTo": null,
+      "rules": [],
+      "rows": [
+        {
+          "id": "apl-route-1",
+          "pickup": "TRAX INTERTRADE CO.,LTD.",
+          "delivery": "ROI ET",
+          "vehicle": "4W",
+          "bands": [
+            {
+              "label": "29.01–30.00",
+              "minSatang": 2901,
+              "maxSatang": 3000,
+              "amountThb": 11000,
+              "sourcePage": 1
+            },
+            {
+              "label": "30.01–31.00",
+              "minSatang": 3001,
+              "maxSatang": 3100,
+              "amountThb": 11110,
+              "sourcePage": 1
+            },
+            {
+              "label": "31.01–32.00",
+              "minSatang": 3101,
+              "maxSatang": 3200,
+              "amountThb": 11220,
+              "sourcePage": 1
+            },
+            {
+              "label": "32.01–33.00",
+              "minSatang": 3201,
+              "maxSatang": 3300,
+              "amountThb": 11330,
+              "sourcePage": 1
+            },
+            {
+              "label": "33.01–34.00",
+              "minSatang": 3301,
+              "maxSatang": 3400,
+              "amountThb": 11440,
+              "sourcePage": 1
+            },
+            {
+              "label": "34.01–35.00",
+              "minSatang": 3401,
+              "maxSatang": 3500,
+              "amountThb": 11550,
+              "sourcePage": 1
+            },
+            {
+              "label": "35.01–36.00",
+              "minSatang": 3501,
+              "maxSatang": 3600,
+              "amountThb": 11660,
+              "sourcePage": 1
+            },
+            {
+              "label": "36.01–37.00",
+              "minSatang": 3601,
+              "maxSatang": 3700,
+              "amountThb": 11770,
+              "sourcePage": 1
+            },
+            {
+              "label": "37.01–38.00",
+              "minSatang": 3701,
+              "maxSatang": 3800,
+              "amountThb": 11880,
+              "sourcePage": 1
+            },
+            {
+              "label": "38.01–39.00",
+              "minSatang": 3801,
+              "maxSatang": 3900,
+              "amountThb": 11990,
+              "sourcePage": 1
+            },
+            {
+              "label": "39.01–40.00",
+              "minSatang": 3901,
+              "maxSatang": 4000,
+              "amountThb": 12100,
+              "sourcePage": 1
+            },
+            {
+              "label": "40.01–41.00",
+              "minSatang": 4001,
+              "maxSatang": 4100,
+              "amountThb": 12210,
+              "sourcePage": 2
+            },
+            {
+              "label": "41.01–42.00",
+              "minSatang": 4101,
+              "maxSatang": 4200,
+              "amountThb": 12320,
+              "sourcePage": 2
+            },
+            {
+              "label": "42.01–43.00",
+              "minSatang": 4201,
+              "maxSatang": 4300,
+              "amountThb": 12430,
+              "sourcePage": 2
+            },
+            {
+              "label": "43.01–44.00",
+              "minSatang": 4301,
+              "maxSatang": 4400,
+              "amountThb": 12540,
+              "sourcePage": 2
+            },
+            {
+              "label": "44.01–45.00",
+              "minSatang": 4401,
+              "maxSatang": 4500,
+              "amountThb": 12650,
+              "sourcePage": 2
+            },
+            {
+              "label": "45.01–46.00",
+              "minSatang": 4501,
+              "maxSatang": 4600,
+              "amountThb": 12760,
+              "sourcePage": 2
+            },
+            {
+              "label": "46.01–47.00",
+              "minSatang": 4601,
+              "maxSatang": 4700,
+              "amountThb": 12870,
+              "sourcePage": 2
+            },
+            {
+              "label": "47.01–48.00",
+              "minSatang": 4701,
+              "maxSatang": 4800,
+              "amountThb": 12980,
+              "sourcePage": 2
+            },
+            {
+              "label": "48.01–49.00",
+              "minSatang": 4801,
+              "maxSatang": 4900,
+              "amountThb": 13090,
+              "sourcePage": 2
+            },
+            {
+              "label": "49.01–50.00",
+              "minSatang": 4901,
+              "maxSatang": 5000,
+              "amountThb": 13200,
+              "sourcePage": 2
+            },
+            {
+              "label": "50.01–51.00",
+              "minSatang": 5001,
+              "maxSatang": 5100,
+              "amountThb": 13310,
+              "sourcePage": 2
+            }
+          ],
+          "reviewFlags": []
+        },
+        {
+          "id": "apl-route-2",
+          "pickup": "TRAX INTERTRADE CO.,LTD.",
+          "delivery": "ROI ET",
+          "vehicle": "6W",
+          "bands": [
+            {
+              "label": "29.01–30.00",
+              "minSatang": 2901,
+              "maxSatang": 3000,
+              "amountThb": 15000,
+              "sourcePage": 1
+            },
+            {
+              "label": "30.01–31.00",
+              "minSatang": 3001,
+              "maxSatang": 3100,
+              "amountThb": 15150,
+              "sourcePage": 1
+            },
+            {
+              "label": "31.01–32.00",
+              "minSatang": 3101,
+              "maxSatang": 3200,
+              "amountThb": 15300,
+              "sourcePage": 1
+            },
+            {
+              "label": "32.01–33.00",
+              "minSatang": 3201,
+              "maxSatang": 3300,
+              "amountThb": 15450,
+              "sourcePage": 1
+            },
+            {
+              "label": "33.01–34.00",
+              "minSatang": 3301,
+              "maxSatang": 3400,
+              "amountThb": 15600,
+              "sourcePage": 1
+            },
+            {
+              "label": "34.01–35.00",
+              "minSatang": 3401,
+              "maxSatang": 3500,
+              "amountThb": 15750,
+              "sourcePage": 1
+            },
+            {
+              "label": "35.01–36.00",
+              "minSatang": 3501,
+              "maxSatang": 3600,
+              "amountThb": 15900,
+              "sourcePage": 1
+            },
+            {
+              "label": "36.01–37.00",
+              "minSatang": 3601,
+              "maxSatang": 3700,
+              "amountThb": 16050,
+              "sourcePage": 1
+            },
+            {
+              "label": "37.01–38.00",
+              "minSatang": 3701,
+              "maxSatang": 3800,
+              "amountThb": 16200,
+              "sourcePage": 1
+            },
+            {
+              "label": "38.01–39.00",
+              "minSatang": 3801,
+              "maxSatang": 3900,
+              "amountThb": 16350,
+              "sourcePage": 1
+            },
+            {
+              "label": "39.01–40.00",
+              "minSatang": 3901,
+              "maxSatang": 4000,
+              "amountThb": 16500,
+              "sourcePage": 1
+            },
+            {
+              "label": "40.01–41.00",
+              "minSatang": 4001,
+              "maxSatang": 4100,
+              "amountThb": 16650,
+              "sourcePage": 2
+            },
+            {
+              "label": "41.01–42.00",
+              "minSatang": 4101,
+              "maxSatang": 4200,
+              "amountThb": 16800,
+              "sourcePage": 2
+            },
+            {
+              "label": "42.01–43.00",
+              "minSatang": 4201,
+              "maxSatang": 4300,
+              "amountThb": 16950,
+              "sourcePage": 2
+            },
+            {
+              "label": "43.01–44.00",
+              "minSatang": 4301,
+              "maxSatang": 4400,
+              "amountThb": 17100,
+              "sourcePage": 2
+            },
+            {
+              "label": "44.01–45.00",
+              "minSatang": 4401,
+              "maxSatang": 4500,
+              "amountThb": 17250,
+              "sourcePage": 2
+            },
+            {
+              "label": "45.01–46.00",
+              "minSatang": 4501,
+              "maxSatang": 4600,
+              "amountThb": 17400,
+              "sourcePage": 2
+            },
+            {
+              "label": "46.01–47.00",
+              "minSatang": 4601,
+              "maxSatang": 4700,
+              "amountThb": 17550,
+              "sourcePage": 2
+            },
+            {
+              "label": "47.01–48.00",
+              "minSatang": 4701,
+              "maxSatang": 4800,
+              "amountThb": 17700,
+              "sourcePage": 2
+            },
+            {
+              "label": "48.01–49.00",
+              "minSatang": 4801,
+              "maxSatang": 4900,
+              "amountThb": 17850,
+              "sourcePage": 2
+            },
+            {
+              "label": "49.01–50.00",
+              "minSatang": 4901,
+              "maxSatang": 5000,
+              "amountThb": 18000,
+              "sourcePage": 2
+            },
+            {
+              "label": "50.01–51.00",
+              "minSatang": 5001,
+              "maxSatang": 5100,
+              "amountThb": 18150,
+              "sourcePage": 2
+            }
+          ],
+          "reviewFlags": []
+        },
+        {
+          "id": "apl-route-3",
+          "pickup": "DONG TAI ENTERPRISE (THAILAND)",
+          "delivery": "MAE SOT",
+          "vehicle": "4W",
+          "bands": [
+            {
+              "label": "29.01–30.00",
+              "minSatang": 2901,
+              "maxSatang": 3000,
+              "amountThb": 11000,
+              "sourcePage": 1
+            },
+            {
+              "label": "30.01–31.00",
+              "minSatang": 3001,
+              "maxSatang": 3100,
+              "amountThb": 11110,
+              "sourcePage": 1
+            },
+            {
+              "label": "31.01–32.00",
+              "minSatang": 3101,
+              "maxSatang": 3200,
+              "amountThb": 11220,
+              "sourcePage": 1
+            },
+            {
+              "label": "32.01–33.00",
+              "minSatang": 3201,
+              "maxSatang": 3300,
+              "amountThb": 11330,
+              "sourcePage": 1
+            },
+            {
+              "label": "33.01–34.00",
+              "minSatang": 3301,
+              "maxSatang": 3400,
+              "amountThb": 11440,
+              "sourcePage": 1
+            },
+            {
+              "label": "34.01–35.00",
+              "minSatang": 3401,
+              "maxSatang": 3500,
+              "amountThb": 11550,
+              "sourcePage": 1
+            },
+            {
+              "label": "35.01–36.00",
+              "minSatang": 3501,
+              "maxSatang": 3600,
+              "amountThb": 11660,
+              "sourcePage": 1
+            },
+            {
+              "label": "36.01–37.00",
+              "minSatang": 3601,
+              "maxSatang": 3700,
+              "amountThb": 11770,
+              "sourcePage": 1
+            },
+            {
+              "label": "37.01–38.00",
+              "minSatang": 3701,
+              "maxSatang": 3800,
+              "amountThb": 11880,
+              "sourcePage": 1
+            },
+            {
+              "label": "38.01–39.00",
+              "minSatang": 3801,
+              "maxSatang": 3900,
+              "amountThb": 11990,
+              "sourcePage": 1
+            },
+            {
+              "label": "39.01–40.00",
+              "minSatang": 3901,
+              "maxSatang": 4000,
+              "amountThb": 12100,
+              "sourcePage": 1
+            },
+            {
+              "label": "40.01–41.00",
+              "minSatang": 4001,
+              "maxSatang": 4100,
+              "amountThb": 12210,
+              "sourcePage": 2
+            },
+            {
+              "label": "41.01–42.00",
+              "minSatang": 4101,
+              "maxSatang": 4200,
+              "amountThb": 12320,
+              "sourcePage": 2
+            },
+            {
+              "label": "42.01–43.00",
+              "minSatang": 4201,
+              "maxSatang": 4300,
+              "amountThb": 12430,
+              "sourcePage": 2
+            },
+            {
+              "label": "43.01–44.00",
+              "minSatang": 4301,
+              "maxSatang": 4400,
+              "amountThb": 12540,
+              "sourcePage": 2
+            },
+            {
+              "label": "44.01–45.00",
+              "minSatang": 4401,
+              "maxSatang": 4500,
+              "amountThb": 12650,
+              "sourcePage": 2
+            },
+            {
+              "label": "45.01–46.00",
+              "minSatang": 4501,
+              "maxSatang": 4600,
+              "amountThb": 12760,
+              "sourcePage": 2
+            },
+            {
+              "label": "46.01–47.00",
+              "minSatang": 4601,
+              "maxSatang": 4700,
+              "amountThb": 12870,
+              "sourcePage": 2
+            },
+            {
+              "label": "47.01–48.00",
+              "minSatang": 4701,
+              "maxSatang": 4800,
+              "amountThb": 12980,
+              "sourcePage": 2
+            },
+            {
+              "label": "48.01–49.00",
+              "minSatang": 4801,
+              "maxSatang": 4900,
+              "amountThb": 13090,
+              "sourcePage": 2
+            },
+            {
+              "label": "49.01–50.00",
+              "minSatang": 4901,
+              "maxSatang": 5000,
+              "amountThb": 13200,
+              "sourcePage": 2
+            },
+            {
+              "label": "50.01–51.00",
+              "minSatang": 5001,
+              "maxSatang": 5100,
+              "amountThb": 13310,
+              "sourcePage": 2
+            }
+          ],
+          "reviewFlags": []
+        },
+        {
+          "id": "apl-route-4",
+          "pickup": "DONG TAI ENTERPRISE (THAILAND)",
+          "delivery": "MAE SOT",
+          "vehicle": "6W",
+          "bands": [
+            {
+              "label": "29.01–30.00",
+              "minSatang": 2901,
+              "maxSatang": 3000,
+              "amountThb": 15000,
+              "sourcePage": 1
+            },
+            {
+              "label": "30.01–31.00",
+              "minSatang": 3001,
+              "maxSatang": 3100,
+              "amountThb": 15150,
+              "sourcePage": 1
+            },
+            {
+              "label": "31.01–32.00",
+              "minSatang": 3101,
+              "maxSatang": 3200,
+              "amountThb": 15303,
+              "sourcePage": 1
+            },
+            {
+              "label": "32.01–33.00",
+              "minSatang": 3201,
+              "maxSatang": 3300,
+              "amountThb": 15459,
+              "sourcePage": 1
+            },
+            {
+              "label": "33.01–34.00",
+              "minSatang": 3301,
+              "maxSatang": 3400,
+              "amountThb": 15618,
+              "sourcePage": 1
+            },
+            {
+              "label": "34.01–35.00",
+              "minSatang": 3401,
+              "maxSatang": 3500,
+              "amountThb": 15781,
+              "sourcePage": 1
+            },
+            {
+              "label": "35.01–36.00",
+              "minSatang": 3501,
+              "maxSatang": 3600,
+              "amountThb": 15947,
+              "sourcePage": 1
+            },
+            {
+              "label": "36.01–37.00",
+              "minSatang": 3601,
+              "maxSatang": 3700,
+              "amountThb": 16116,
+              "sourcePage": 1
+            },
+            {
+              "label": "37.01–38.00",
+              "minSatang": 3701,
+              "maxSatang": 3800,
+              "amountThb": 16289,
+              "sourcePage": 1
+            },
+            {
+              "label": "38.01–39.00",
+              "minSatang": 3801,
+              "maxSatang": 3900,
+              "amountThb": 16466,
+              "sourcePage": 1
+            },
+            {
+              "label": "39.01–40.00",
+              "minSatang": 3901,
+              "maxSatang": 4000,
+              "amountThb": 16647,
+              "sourcePage": 1
+            },
+            {
+              "label": "40.01–41.00",
+              "minSatang": 4001,
+              "maxSatang": 4100,
+              "amountThb": 16831,
+              "sourcePage": 2
+            },
+            {
+              "label": "41.01–42.00",
+              "minSatang": 4101,
+              "maxSatang": 4200,
+              "amountThb": 17020,
+              "sourcePage": 2
+            },
+            {
+              "label": "42.01–43.00",
+              "minSatang": 4201,
+              "maxSatang": 4300,
+              "amountThb": 17213,
+              "sourcePage": 2
+            },
+            {
+              "label": "43.01–44.00",
+              "minSatang": 4301,
+              "maxSatang": 4400,
+              "amountThb": 17410,
+              "sourcePage": 2
+            },
+            {
+              "label": "44.01–45.00",
+              "minSatang": 4401,
+              "maxSatang": 4500,
+              "amountThb": 17611,
+              "sourcePage": 2
+            },
+            {
+              "label": "45.01–46.00",
+              "minSatang": 4501,
+              "maxSatang": 4600,
+              "amountThb": 17818,
+              "sourcePage": 2
+            },
+            {
+              "label": "46.01–47.00",
+              "minSatang": 4601,
+              "maxSatang": 4700,
+              "amountThb": 18029,
+              "sourcePage": 2
+            },
+            {
+              "label": "47.01–48.00",
+              "minSatang": 4701,
+              "maxSatang": 4800,
+              "amountThb": 18245,
+              "sourcePage": 2
+            },
+            {
+              "label": "48.01–49.00",
+              "minSatang": 4801,
+              "maxSatang": 4900,
+              "amountThb": 18467,
+              "sourcePage": 2
+            },
+            {
+              "label": "49.01–50.00",
+              "minSatang": 4901,
+              "maxSatang": 5000,
+              "amountThb": 18693,
+              "sourcePage": 2
+            },
+            {
+              "label": "50.01–51.00",
+              "minSatang": 5001,
+              "maxSatang": 5100,
+              "amountThb": 18694,
+              "sourcePage": 2
+            }
+          ],
+          "reviewFlags": [
+            "Irregular progression in the 6W schedule: steps are +150, +153, +156, +159 … growing each band (compounding-like), then the last band (50.01–51.00) is only +1 (THB 18,693 → 18,694). All values kept exactly as printed. Manual approval required before use."
+          ]
+        },
+        {
+          "id": "apl-route-5",
+          "pickup": "THONG THAI TEXTILE CO.,LTD.",
+          "delivery": "NONGKHAEM",
+          "vehicle": "4W",
+          "bands": [
+            {
+              "label": "29.01–30.00",
+              "minSatang": 2901,
+              "maxSatang": 3000,
+              "amountThb": 1500,
+              "sourcePage": 1
+            },
+            {
+              "label": "30.01–31.00",
+              "minSatang": 3001,
+              "maxSatang": 3100,
+              "amountThb": 1515,
+              "sourcePage": 1
+            },
+            {
+              "label": "31.01–32.00",
+              "minSatang": 3101,
+              "maxSatang": 3200,
+              "amountThb": 1530,
+              "sourcePage": 1
+            },
+            {
+              "label": "32.01–33.00",
+              "minSatang": 3201,
+              "maxSatang": 3300,
+              "amountThb": 1545,
+              "sourcePage": 1
+            },
+            {
+              "label": "33.01–34.00",
+              "minSatang": 3301,
+              "maxSatang": 3400,
+              "amountThb": 1560,
+              "sourcePage": 1
+            },
+            {
+              "label": "34.01–35.00",
+              "minSatang": 3401,
+              "maxSatang": 3500,
+              "amountThb": 1575,
+              "sourcePage": 1
+            },
+            {
+              "label": "35.01–36.00",
+              "minSatang": 3501,
+              "maxSatang": 3600,
+              "amountThb": 1590,
+              "sourcePage": 1
+            },
+            {
+              "label": "36.01–37.00",
+              "minSatang": 3601,
+              "maxSatang": 3700,
+              "amountThb": 1605,
+              "sourcePage": 1
+            },
+            {
+              "label": "37.01–38.00",
+              "minSatang": 3701,
+              "maxSatang": 3800,
+              "amountThb": 1620,
+              "sourcePage": 1
+            },
+            {
+              "label": "38.01–39.00",
+              "minSatang": 3801,
+              "maxSatang": 3900,
+              "amountThb": 1635,
+              "sourcePage": 1
+            },
+            {
+              "label": "39.01–40.00",
+              "minSatang": 3901,
+              "maxSatang": 4000,
+              "amountThb": 1650,
+              "sourcePage": 1
+            },
+            {
+              "label": "40.01–41.00",
+              "minSatang": 4001,
+              "maxSatang": 4100,
+              "amountThb": 1665,
+              "sourcePage": 2
+            },
+            {
+              "label": "41.01–42.00",
+              "minSatang": 4101,
+              "maxSatang": 4200,
+              "amountThb": 1680,
+              "sourcePage": 2
+            },
+            {
+              "label": "42.01–43.00",
+              "minSatang": 4201,
+              "maxSatang": 4300,
+              "amountThb": 1695,
+              "sourcePage": 2
+            },
+            {
+              "label": "43.01–44.00",
+              "minSatang": 4301,
+              "maxSatang": 4400,
+              "amountThb": 1710,
+              "sourcePage": 2
+            },
+            {
+              "label": "44.01–45.00",
+              "minSatang": 4401,
+              "maxSatang": 4500,
+              "amountThb": 1725,
+              "sourcePage": 2
+            },
+            {
+              "label": "45.01–46.00",
+              "minSatang": 4501,
+              "maxSatang": 4600,
+              "amountThb": 1740,
+              "sourcePage": 2
+            },
+            {
+              "label": "46.01–47.00",
+              "minSatang": 4601,
+              "maxSatang": 4700,
+              "amountThb": 1755,
+              "sourcePage": 2
+            },
+            {
+              "label": "47.01–48.00",
+              "minSatang": 4701,
+              "maxSatang": 4800,
+              "amountThb": 1770,
+              "sourcePage": 2
+            },
+            {
+              "label": "48.01–49.00",
+              "minSatang": 4801,
+              "maxSatang": 4900,
+              "amountThb": 1785,
+              "sourcePage": 2
+            },
+            {
+              "label": "49.01–50.00",
+              "minSatang": 4901,
+              "maxSatang": 5000,
+              "amountThb": 1800,
+              "sourcePage": 2
+            },
+            {
+              "label": "50.01–51.00",
+              "minSatang": 5001,
+              "maxSatang": 5100,
+              "amountThb": 1815,
+              "sourcePage": 2
+            }
+          ],
+          "reviewFlags": []
+        },
+        {
+          "id": "apl-route-6",
+          "pickup": "THONG THAI TEXTILE CO.,LTD.",
+          "delivery": "NONGKHAEM",
+          "vehicle": "6W",
+          "bands": [
+            {
+              "label": "29.01–30.00",
+              "minSatang": 2901,
+              "maxSatang": 3000,
+              "amountThb": 2800,
+              "sourcePage": 1
+            },
+            {
+              "label": "30.01–31.00",
+              "minSatang": 3001,
+              "maxSatang": 3100,
+              "amountThb": 2828,
+              "sourcePage": 1
+            },
+            {
+              "label": "31.01–32.00",
+              "minSatang": 3101,
+              "maxSatang": 3200,
+              "amountThb": 2856,
+              "sourcePage": 1
+            },
+            {
+              "label": "32.01–33.00",
+              "minSatang": 3201,
+              "maxSatang": 3300,
+              "amountThb": 2884,
+              "sourcePage": 1
+            },
+            {
+              "label": "33.01–34.00",
+              "minSatang": 3301,
+              "maxSatang": 3400,
+              "amountThb": 2912,
+              "sourcePage": 1
+            },
+            {
+              "label": "34.01–35.00",
+              "minSatang": 3401,
+              "maxSatang": 3500,
+              "amountThb": 2940,
+              "sourcePage": 1
+            },
+            {
+              "label": "35.01–36.00",
+              "minSatang": 3501,
+              "maxSatang": 3600,
+              "amountThb": 2968,
+              "sourcePage": 1
+            },
+            {
+              "label": "36.01–37.00",
+              "minSatang": 3601,
+              "maxSatang": 3700,
+              "amountThb": 2996,
+              "sourcePage": 1
+            },
+            {
+              "label": "37.01–38.00",
+              "minSatang": 3701,
+              "maxSatang": 3800,
+              "amountThb": 3024,
+              "sourcePage": 1
+            },
+            {
+              "label": "38.01–39.00",
+              "minSatang": 3801,
+              "maxSatang": 3900,
+              "amountThb": 3052,
+              "sourcePage": 1
+            },
+            {
+              "label": "39.01–40.00",
+              "minSatang": 3901,
+              "maxSatang": 4000,
+              "amountThb": 3080,
+              "sourcePage": 1
+            },
+            {
+              "label": "40.01–41.00",
+              "minSatang": 4001,
+              "maxSatang": 4100,
+              "amountThb": 3108,
+              "sourcePage": 2
+            },
+            {
+              "label": "41.01–42.00",
+              "minSatang": 4101,
+              "maxSatang": 4200,
+              "amountThb": 3136,
+              "sourcePage": 2
+            },
+            {
+              "label": "42.01–43.00",
+              "minSatang": 4201,
+              "maxSatang": 4300,
+              "amountThb": 3164,
+              "sourcePage": 2
+            },
+            {
+              "label": "43.01–44.00",
+              "minSatang": 4301,
+              "maxSatang": 4400,
+              "amountThb": 3192,
+              "sourcePage": 2
+            },
+            {
+              "label": "44.01–45.00",
+              "minSatang": 4401,
+              "maxSatang": 4500,
+              "amountThb": 3220,
+              "sourcePage": 2
+            },
+            {
+              "label": "45.01–46.00",
+              "minSatang": 4501,
+              "maxSatang": 4600,
+              "amountThb": 3248,
+              "sourcePage": 2
+            },
+            {
+              "label": "46.01–47.00",
+              "minSatang": 4601,
+              "maxSatang": 4700,
+              "amountThb": 3276,
+              "sourcePage": 2
+            },
+            {
+              "label": "47.01–48.00",
+              "minSatang": 4701,
+              "maxSatang": 4800,
+              "amountThb": 3304,
+              "sourcePage": 2
+            },
+            {
+              "label": "48.01–49.00",
+              "minSatang": 4801,
+              "maxSatang": 4900,
+              "amountThb": 3332,
+              "sourcePage": 2
+            },
+            {
+              "label": "49.01–50.00",
+              "minSatang": 4901,
+              "maxSatang": 5000,
+              "amountThb": 3360,
+              "sourcePage": 2
+            },
+            {
+              "label": "50.01–51.00",
+              "minSatang": 5001,
+              "maxSatang": 5100,
+              "amountThb": 3388,
+              "sourcePage": 2
+            }
+          ],
+          "reviewFlags": []
+        },
+        {
+          "id": "apl-route-7",
+          "pickup": "TITAN SPORTSWEAR CO., LTD",
+          "delivery": "Khon Kaen",
+          "vehicle": "4W",
+          "bands": [
+            {
+              "label": "29.01–30.00",
+              "minSatang": 2901,
+              "maxSatang": 3000,
+              "amountThb": 8000,
+              "sourcePage": 1
+            },
+            {
+              "label": "30.01–31.00",
+              "minSatang": 3001,
+              "maxSatang": 3100,
+              "amountThb": 8080,
+              "sourcePage": 1
+            },
+            {
+              "label": "31.01–32.00",
+              "minSatang": 3101,
+              "maxSatang": 3200,
+              "amountThb": 8160,
+              "sourcePage": 1
+            },
+            {
+              "label": "32.01–33.00",
+              "minSatang": 3201,
+              "maxSatang": 3300,
+              "amountThb": 8240,
+              "sourcePage": 1
+            },
+            {
+              "label": "33.01–34.00",
+              "minSatang": 3301,
+              "maxSatang": 3400,
+              "amountThb": 8320,
+              "sourcePage": 1
+            },
+            {
+              "label": "34.01–35.00",
+              "minSatang": 3401,
+              "maxSatang": 3500,
+              "amountThb": 8400,
+              "sourcePage": 1
+            },
+            {
+              "label": "35.01–36.00",
+              "minSatang": 3501,
+              "maxSatang": 3600,
+              "amountThb": 8480,
+              "sourcePage": 1
+            },
+            {
+              "label": "36.01–37.00",
+              "minSatang": 3601,
+              "maxSatang": 3700,
+              "amountThb": 8560,
+              "sourcePage": 1
+            },
+            {
+              "label": "37.01–38.00",
+              "minSatang": 3701,
+              "maxSatang": 3800,
+              "amountThb": 8640,
+              "sourcePage": 1
+            },
+            {
+              "label": "38.01–39.00",
+              "minSatang": 3801,
+              "maxSatang": 3900,
+              "amountThb": 8720,
+              "sourcePage": 1
+            },
+            {
+              "label": "39.01–40.00",
+              "minSatang": 3901,
+              "maxSatang": 4000,
+              "amountThb": 8800,
+              "sourcePage": 1
+            },
+            {
+              "label": "40.01–41.00",
+              "minSatang": 4001,
+              "maxSatang": 4100,
+              "amountThb": 8880,
+              "sourcePage": 2
+            },
+            {
+              "label": "41.01–42.00",
+              "minSatang": 4101,
+              "maxSatang": 4200,
+              "amountThb": 8960,
+              "sourcePage": 2
+            },
+            {
+              "label": "42.01–43.00",
+              "minSatang": 4201,
+              "maxSatang": 4300,
+              "amountThb": 9040,
+              "sourcePage": 2
+            },
+            {
+              "label": "43.01–44.00",
+              "minSatang": 4301,
+              "maxSatang": 4400,
+              "amountThb": 9120,
+              "sourcePage": 2
+            },
+            {
+              "label": "44.01–45.00",
+              "minSatang": 4401,
+              "maxSatang": 4500,
+              "amountThb": 9200,
+              "sourcePage": 2
+            },
+            {
+              "label": "45.01–46.00",
+              "minSatang": 4501,
+              "maxSatang": 4600,
+              "amountThb": 9280,
+              "sourcePage": 2
+            },
+            {
+              "label": "46.01–47.00",
+              "minSatang": 4601,
+              "maxSatang": 4700,
+              "amountThb": 9360,
+              "sourcePage": 2
+            },
+            {
+              "label": "47.01–48.00",
+              "minSatang": 4701,
+              "maxSatang": 4800,
+              "amountThb": 9440,
+              "sourcePage": 2
+            },
+            {
+              "label": "48.01–49.00",
+              "minSatang": 4801,
+              "maxSatang": 4900,
+              "amountThb": 9520,
+              "sourcePage": 2
+            },
+            {
+              "label": "49.01–50.00",
+              "minSatang": 4901,
+              "maxSatang": 5000,
+              "amountThb": 9600,
+              "sourcePage": 2
+            },
+            {
+              "label": "50.01–51.00",
+              "minSatang": 5001,
+              "maxSatang": 5100,
+              "amountThb": 9680,
+              "sourcePage": 2
+            }
+          ],
+          "reviewFlags": []
+        },
+        {
+          "id": "apl-route-8",
+          "pickup": "TITAN SPORTSWEAR CO., LTD",
+          "delivery": "Khon Kaen",
+          "vehicle": "6W",
+          "bands": [
+            {
+              "label": "29.01–30.00",
+              "minSatang": 2901,
+              "maxSatang": 3000,
+              "amountThb": 13000,
+              "sourcePage": 1
+            },
+            {
+              "label": "30.01–31.00",
+              "minSatang": 3001,
+              "maxSatang": 3100,
+              "amountThb": 13130,
+              "sourcePage": 1
+            },
+            {
+              "label": "31.01–32.00",
+              "minSatang": 3101,
+              "maxSatang": 3200,
+              "amountThb": 13260,
+              "sourcePage": 1
+            },
+            {
+              "label": "32.01–33.00",
+              "minSatang": 3201,
+              "maxSatang": 3300,
+              "amountThb": 13390,
+              "sourcePage": 1
+            },
+            {
+              "label": "33.01–34.00",
+              "minSatang": 3301,
+              "maxSatang": 3400,
+              "amountThb": 13520,
+              "sourcePage": 1
+            },
+            {
+              "label": "34.01–35.00",
+              "minSatang": 3401,
+              "maxSatang": 3500,
+              "amountThb": 13650,
+              "sourcePage": 1
+            },
+            {
+              "label": "35.01–36.00",
+              "minSatang": 3501,
+              "maxSatang": 3600,
+              "amountThb": 13780,
+              "sourcePage": 1
+            },
+            {
+              "label": "36.01–37.00",
+              "minSatang": 3601,
+              "maxSatang": 3700,
+              "amountThb": 13910,
+              "sourcePage": 1
+            },
+            {
+              "label": "37.01–38.00",
+              "minSatang": 3701,
+              "maxSatang": 3800,
+              "amountThb": 14040,
+              "sourcePage": 1
+            },
+            {
+              "label": "38.01–39.00",
+              "minSatang": 3801,
+              "maxSatang": 3900,
+              "amountThb": 14170,
+              "sourcePage": 1
+            },
+            {
+              "label": "39.01–40.00",
+              "minSatang": 3901,
+              "maxSatang": 4000,
+              "amountThb": 14300,
+              "sourcePage": 1
+            },
+            {
+              "label": "40.01–41.00",
+              "minSatang": 4001,
+              "maxSatang": 4100,
+              "amountThb": 14430,
+              "sourcePage": 2
+            },
+            {
+              "label": "41.01–42.00",
+              "minSatang": 4101,
+              "maxSatang": 4200,
+              "amountThb": 14560,
+              "sourcePage": 2
+            },
+            {
+              "label": "42.01–43.00",
+              "minSatang": 4201,
+              "maxSatang": 4300,
+              "amountThb": 14690,
+              "sourcePage": 2
+            },
+            {
+              "label": "43.01–44.00",
+              "minSatang": 4301,
+              "maxSatang": 4400,
+              "amountThb": 14820,
+              "sourcePage": 2
+            },
+            {
+              "label": "44.01–45.00",
+              "minSatang": 4401,
+              "maxSatang": 4500,
+              "amountThb": 14950,
+              "sourcePage": 2
+            },
+            {
+              "label": "45.01–46.00",
+              "minSatang": 4501,
+              "maxSatang": 4600,
+              "amountThb": 15080,
+              "sourcePage": 2
+            },
+            {
+              "label": "46.01–47.00",
+              "minSatang": 4601,
+              "maxSatang": 4700,
+              "amountThb": 15210,
+              "sourcePage": 2
+            },
+            {
+              "label": "47.01–48.00",
+              "minSatang": 4701,
+              "maxSatang": 4800,
+              "amountThb": 15340,
+              "sourcePage": 2
+            },
+            {
+              "label": "48.01–49.00",
+              "minSatang": 4801,
+              "maxSatang": 4900,
+              "amountThb": 15470,
+              "sourcePage": 2
+            },
+            {
+              "label": "49.01–50.00",
+              "minSatang": 4901,
+              "maxSatang": 5000,
+              "amountThb": 15600,
+              "sourcePage": 2
+            },
+            {
+              "label": "50.01–51.00",
+              "minSatang": 5001,
+              "maxSatang": 5100,
+              "amountThb": 15730,
+              "sourcePage": 2
+            }
+          ],
+          "reviewFlags": []
+        },
+        {
+          "id": "apl-route-9",
+          "pickup": "EASTERN - APLL WH BANGNA KM.39",
+          "delivery": "Khon Kaen",
+          "vehicle": "40'H",
+          "bands": [
+            {
+              "label": "29.01–30.00",
+              "minSatang": 2901,
+              "maxSatang": 3000,
+              "amountThb": 4300,
+              "sourcePage": 1
+            },
+            {
+              "label": "30.01–31.00",
+              "minSatang": 3001,
+              "maxSatang": 3100,
+              "amountThb": 4343,
+              "sourcePage": 1
+            },
+            {
+              "label": "31.01–32.00",
+              "minSatang": 3101,
+              "maxSatang": 3200,
+              "amountThb": 4386,
+              "sourcePage": 1
+            },
+            {
+              "label": "32.01–33.00",
+              "minSatang": 3201,
+              "maxSatang": 3300,
+              "amountThb": 4429,
+              "sourcePage": 1
+            },
+            {
+              "label": "33.01–34.00",
+              "minSatang": 3301,
+              "maxSatang": 3400,
+              "amountThb": 4472,
+              "sourcePage": 1
+            },
+            {
+              "label": "34.01–35.00",
+              "minSatang": 3401,
+              "maxSatang": 3500,
+              "amountThb": 4515,
+              "sourcePage": 1
+            },
+            {
+              "label": "35.01–36.00",
+              "minSatang": 3501,
+              "maxSatang": 3600,
+              "amountThb": 4558,
+              "sourcePage": 1
+            },
+            {
+              "label": "36.01–37.00",
+              "minSatang": 3601,
+              "maxSatang": 3700,
+              "amountThb": 4601,
+              "sourcePage": 1
+            },
+            {
+              "label": "37.01–38.00",
+              "minSatang": 3701,
+              "maxSatang": 3800,
+              "amountThb": 4644,
+              "sourcePage": 1
+            },
+            {
+              "label": "38.01–39.00",
+              "minSatang": 3801,
+              "maxSatang": 3900,
+              "amountThb": 4687,
+              "sourcePage": 1
+            },
+            {
+              "label": "39.01–40.00",
+              "minSatang": 3901,
+              "maxSatang": 4000,
+              "amountThb": 4730,
+              "sourcePage": 1
+            },
+            {
+              "label": "40.01–41.00",
+              "minSatang": 4001,
+              "maxSatang": 4100,
+              "amountThb": 4773,
+              "sourcePage": 2
+            },
+            {
+              "label": "41.01–42.00",
+              "minSatang": 4101,
+              "maxSatang": 4200,
+              "amountThb": 4816,
+              "sourcePage": 2
+            },
+            {
+              "label": "42.01–43.00",
+              "minSatang": 4201,
+              "maxSatang": 4300,
+              "amountThb": 4859,
+              "sourcePage": 2
+            },
+            {
+              "label": "43.01–44.00",
+              "minSatang": 4301,
+              "maxSatang": 4400,
+              "amountThb": 4902,
+              "sourcePage": 2
+            },
+            {
+              "label": "44.01–45.00",
+              "minSatang": 4401,
+              "maxSatang": 4500,
+              "amountThb": 4945,
+              "sourcePage": 2
+            },
+            {
+              "label": "45.01–46.00",
+              "minSatang": 4501,
+              "maxSatang": 4600,
+              "amountThb": 4988,
+              "sourcePage": 2
+            },
+            {
+              "label": "46.01–47.00",
+              "minSatang": 4601,
+              "maxSatang": 4700,
+              "amountThb": 5031,
+              "sourcePage": 2
+            },
+            {
+              "label": "47.01–48.00",
+              "minSatang": 4701,
+              "maxSatang": 4800,
+              "amountThb": 5074,
+              "sourcePage": 2
+            },
+            {
+              "label": "48.01–49.00",
+              "minSatang": 4801,
+              "maxSatang": 4900,
+              "amountThb": 5117,
+              "sourcePage": 2
+            },
+            {
+              "label": "49.01–50.00",
+              "minSatang": 4901,
+              "maxSatang": 5000,
+              "amountThb": 5160,
+              "sourcePage": 2
+            },
+            {
+              "label": "50.01–51.00",
+              "minSatang": 5001,
+              "maxSatang": 5100,
+              "amountThb": 5203,
+              "sourcePage": 2
+            }
+          ],
+          "reviewFlags": []
+        },
+        {
+          "id": "apl-route-10",
+          "pickup": "SAFFRON - BANGNA",
+          "delivery": "Khon Kaen",
+          "vehicle": "40'H",
+          "bands": [
+            {
+              "label": "29.01–30.00",
+              "minSatang": 2901,
+              "maxSatang": 3000,
+              "amountThb": 7500,
+              "sourcePage": 1
+            },
+            {
+              "label": "30.01–31.00",
+              "minSatang": 3001,
+              "maxSatang": 3100,
+              "amountThb": 7575,
+              "sourcePage": 1
+            },
+            {
+              "label": "31.01–32.00",
+              "minSatang": 3101,
+              "maxSatang": 3200,
+              "amountThb": 7650,
+              "sourcePage": 1
+            },
+            {
+              "label": "32.01–33.00",
+              "minSatang": 3201,
+              "maxSatang": 3300,
+              "amountThb": 7725,
+              "sourcePage": 1
+            },
+            {
+              "label": "33.01–34.00",
+              "minSatang": 3301,
+              "maxSatang": 3400,
+              "amountThb": 7800,
+              "sourcePage": 1
+            },
+            {
+              "label": "34.01–35.00",
+              "minSatang": 3401,
+              "maxSatang": 3500,
+              "amountThb": 7875,
+              "sourcePage": 1
+            },
+            {
+              "label": "35.01–36.00",
+              "minSatang": 3501,
+              "maxSatang": 3600,
+              "amountThb": 7950,
+              "sourcePage": 1
+            },
+            {
+              "label": "36.01–37.00",
+              "minSatang": 3601,
+              "maxSatang": 3700,
+              "amountThb": 8025,
+              "sourcePage": 1
+            },
+            {
+              "label": "37.01–38.00",
+              "minSatang": 3701,
+              "maxSatang": 3800,
+              "amountThb": 8100,
+              "sourcePage": 1
+            },
+            {
+              "label": "38.01–39.00",
+              "minSatang": 3801,
+              "maxSatang": 3900,
+              "amountThb": 8175,
+              "sourcePage": 1
+            },
+            {
+              "label": "39.01–40.00",
+              "minSatang": 3901,
+              "maxSatang": 4000,
+              "amountThb": 8250,
+              "sourcePage": 1
+            },
+            {
+              "label": "40.01–41.00",
+              "minSatang": 4001,
+              "maxSatang": 4100,
+              "amountThb": 8325,
+              "sourcePage": 2
+            },
+            {
+              "label": "41.01–42.00",
+              "minSatang": 4101,
+              "maxSatang": 4200,
+              "amountThb": 8400,
+              "sourcePage": 2
+            },
+            {
+              "label": "42.01–43.00",
+              "minSatang": 4201,
+              "maxSatang": 4300,
+              "amountThb": 8475,
+              "sourcePage": 2
+            },
+            {
+              "label": "43.01–44.00",
+              "minSatang": 4301,
+              "maxSatang": 4400,
+              "amountThb": 8550,
+              "sourcePage": 2
+            },
+            {
+              "label": "44.01–45.00",
+              "minSatang": 4401,
+              "maxSatang": 4500,
+              "amountThb": 8625,
+              "sourcePage": 2
+            },
+            {
+              "label": "45.01–46.00",
+              "minSatang": 4501,
+              "maxSatang": 4600,
+              "amountThb": 8700,
+              "sourcePage": 2
+            },
+            {
+              "label": "46.01–47.00",
+              "minSatang": 4601,
+              "maxSatang": 4700,
+              "amountThb": 8775,
+              "sourcePage": 2
+            },
+            {
+              "label": "47.01–48.00",
+              "minSatang": 4701,
+              "maxSatang": 4800,
+              "amountThb": 8850,
+              "sourcePage": 2
+            },
+            {
+              "label": "48.01–49.00",
+              "minSatang": 4801,
+              "maxSatang": 4900,
+              "amountThb": 8925,
+              "sourcePage": 2
+            },
+            {
+              "label": "49.01–50.00",
+              "minSatang": 4901,
+              "maxSatang": 5000,
+              "amountThb": 9000,
+              "sourcePage": 2
+            },
+            {
+              "label": "50.01–51.00",
+              "minSatang": 5001,
+              "maxSatang": 5100,
+              "amountThb": 9075,
+              "sourcePage": 2
+            }
+          ],
+          "reviewFlags": []
+        },
+        {
+          "id": "apl-route-11",
+          "pickup": "SAFFRON - BANGYAI",
+          "delivery": "Khon Kaen",
+          "vehicle": "40'H",
+          "bands": [
+            {
+              "label": "29.01–30.00",
+              "minSatang": 2901,
+              "maxSatang": 3000,
+              "amountThb": 8500,
+              "sourcePage": 1
+            },
+            {
+              "label": "30.01–31.00",
+              "minSatang": 3001,
+              "maxSatang": 3100,
+              "amountThb": 8585,
+              "sourcePage": 1
+            },
+            {
+              "label": "31.01–32.00",
+              "minSatang": 3101,
+              "maxSatang": 3200,
+              "amountThb": 8670,
+              "sourcePage": 1
+            },
+            {
+              "label": "32.01–33.00",
+              "minSatang": 3201,
+              "maxSatang": 3300,
+              "amountThb": 8755,
+              "sourcePage": 1
+            },
+            {
+              "label": "33.01–34.00",
+              "minSatang": 3301,
+              "maxSatang": 3400,
+              "amountThb": 8840,
+              "sourcePage": 1
+            },
+            {
+              "label": "34.01–35.00",
+              "minSatang": 3401,
+              "maxSatang": 3500,
+              "amountThb": 8925,
+              "sourcePage": 1
+            },
+            {
+              "label": "35.01–36.00",
+              "minSatang": 3501,
+              "maxSatang": 3600,
+              "amountThb": 9010,
+              "sourcePage": 1
+            },
+            {
+              "label": "36.01–37.00",
+              "minSatang": 3601,
+              "maxSatang": 3700,
+              "amountThb": 9095,
+              "sourcePage": 1
+            },
+            {
+              "label": "37.01–38.00",
+              "minSatang": 3701,
+              "maxSatang": 3800,
+              "amountThb": 9180,
+              "sourcePage": 1
+            },
+            {
+              "label": "38.01–39.00",
+              "minSatang": 3801,
+              "maxSatang": 3900,
+              "amountThb": 9265,
+              "sourcePage": 1
+            },
+            {
+              "label": "39.01–40.00",
+              "minSatang": 3901,
+              "maxSatang": 4000,
+              "amountThb": 9350,
+              "sourcePage": 1
+            },
+            {
+              "label": "40.01–41.00",
+              "minSatang": 4001,
+              "maxSatang": 4100,
+              "amountThb": 9435,
+              "sourcePage": 2
+            },
+            {
+              "label": "41.01–42.00",
+              "minSatang": 4101,
+              "maxSatang": 4200,
+              "amountThb": 9520,
+              "sourcePage": 2
+            },
+            {
+              "label": "42.01–43.00",
+              "minSatang": 4201,
+              "maxSatang": 4300,
+              "amountThb": 9605,
+              "sourcePage": 2
+            },
+            {
+              "label": "43.01–44.00",
+              "minSatang": 4301,
+              "maxSatang": 4400,
+              "amountThb": 9690,
+              "sourcePage": 2
+            },
+            {
+              "label": "44.01–45.00",
+              "minSatang": 4401,
+              "maxSatang": 4500,
+              "amountThb": 9775,
+              "sourcePage": 2
+            },
+            {
+              "label": "45.01–46.00",
+              "minSatang": 4501,
+              "maxSatang": 4600,
+              "amountThb": 9860,
+              "sourcePage": 2
+            },
+            {
+              "label": "46.01–47.00",
+              "minSatang": 4601,
+              "maxSatang": 4700,
+              "amountThb": 9945,
+              "sourcePage": 2
+            },
+            {
+              "label": "47.01–48.00",
+              "minSatang": 4701,
+              "maxSatang": 4800,
+              "amountThb": 10030,
+              "sourcePage": 2
+            },
+            {
+              "label": "48.01–49.00",
+              "minSatang": 4801,
+              "maxSatang": 4900,
+              "amountThb": 10115,
+              "sourcePage": 2
+            },
+            {
+              "label": "49.01–50.00",
+              "minSatang": 4901,
+              "maxSatang": 5000,
+              "amountThb": 10200,
+              "sourcePage": 2
+            },
+            {
+              "label": "50.01–51.00",
+              "minSatang": 5001,
+              "maxSatang": 5100,
+              "amountThb": 10285,
+              "sourcePage": 2
+            }
+          ],
+          "reviewFlags": []
+        },
+        {
+          "id": "apl-route-12",
+          "pickup": "SAFFRON - BANGNA & BANGYAI",
+          "delivery": "Khon Kaen",
+          "vehicle": "40'H",
+          "bands": [
+            {
+              "label": "29.01–30.00",
+              "minSatang": 2901,
+              "maxSatang": 3000,
+              "amountThb": 9000,
+              "sourcePage": 1
+            },
+            {
+              "label": "30.01–31.00",
+              "minSatang": 3001,
+              "maxSatang": 3100,
+              "amountThb": 9090,
+              "sourcePage": 1
+            },
+            {
+              "label": "31.01–32.00",
+              "minSatang": 3101,
+              "maxSatang": 3200,
+              "amountThb": 9180,
+              "sourcePage": 1
+            },
+            {
+              "label": "32.01–33.00",
+              "minSatang": 3201,
+              "maxSatang": 3300,
+              "amountThb": 9270,
+              "sourcePage": 1
+            },
+            {
+              "label": "33.01–34.00",
+              "minSatang": 3301,
+              "maxSatang": 3400,
+              "amountThb": 9360,
+              "sourcePage": 1
+            },
+            {
+              "label": "34.01–35.00",
+              "minSatang": 3401,
+              "maxSatang": 3500,
+              "amountThb": 9450,
+              "sourcePage": 1
+            },
+            {
+              "label": "35.01–36.00",
+              "minSatang": 3501,
+              "maxSatang": 3600,
+              "amountThb": 9540,
+              "sourcePage": 1
+            },
+            {
+              "label": "36.01–37.00",
+              "minSatang": 3601,
+              "maxSatang": 3700,
+              "amountThb": 9630,
+              "sourcePage": 1
+            },
+            {
+              "label": "37.01–38.00",
+              "minSatang": 3701,
+              "maxSatang": 3800,
+              "amountThb": 9720,
+              "sourcePage": 1
+            },
+            {
+              "label": "38.01–39.00",
+              "minSatang": 3801,
+              "maxSatang": 3900,
+              "amountThb": 9810,
+              "sourcePage": 1
+            },
+            {
+              "label": "39.01–40.00",
+              "minSatang": 3901,
+              "maxSatang": 4000,
+              "amountThb": 9900,
+              "sourcePage": 1
+            },
+            {
+              "label": "40.01–41.00",
+              "minSatang": 4001,
+              "maxSatang": 4100,
+              "amountThb": 9990,
+              "sourcePage": 2
+            },
+            {
+              "label": "41.01–42.00",
+              "minSatang": 4101,
+              "maxSatang": 4200,
+              "amountThb": 10080,
+              "sourcePage": 2
+            },
+            {
+              "label": "42.01–43.00",
+              "minSatang": 4201,
+              "maxSatang": 4300,
+              "amountThb": 10170,
+              "sourcePage": 2
+            },
+            {
+              "label": "43.01–44.00",
+              "minSatang": 4301,
+              "maxSatang": 4400,
+              "amountThb": 10260,
+              "sourcePage": 2
+            },
+            {
+              "label": "44.01–45.00",
+              "minSatang": 4401,
+              "maxSatang": 4500,
+              "amountThb": 10350,
+              "sourcePage": 2
+            },
+            {
+              "label": "45.01–46.00",
+              "minSatang": 4501,
+              "maxSatang": 4600,
+              "amountThb": 10440,
+              "sourcePage": 2
+            },
+            {
+              "label": "46.01–47.00",
+              "minSatang": 4601,
+              "maxSatang": 4700,
+              "amountThb": 10530,
+              "sourcePage": 2
+            },
+            {
+              "label": "47.01–48.00",
+              "minSatang": 4701,
+              "maxSatang": 4800,
+              "amountThb": 10620,
+              "sourcePage": 2
+            },
+            {
+              "label": "48.01–49.00",
+              "minSatang": 4801,
+              "maxSatang": 4900,
+              "amountThb": 10710,
+              "sourcePage": 2
+            },
+            {
+              "label": "49.01–50.00",
+              "minSatang": 4901,
+              "maxSatang": 5000,
+              "amountThb": 10800,
+              "sourcePage": 2
+            },
+            {
+              "label": "50.01–51.00",
+              "minSatang": 5001,
+              "maxSatang": 5100,
+              "amountThb": 10890,
+              "sourcePage": 2
+            }
+          ],
+          "reviewFlags": []
+        },
+        {
+          "id": "apl-route-13",
+          "pickup": "WORLD - APLL WH BANGNA KM.39",
+          "delivery": "Khon Kaen",
+          "vehicle": "40'H",
+          "bands": [
+            {
+              "label": "29.01–30.00",
+              "minSatang": 2901,
+              "maxSatang": 3000,
+              "amountThb": 7000,
+              "sourcePage": 1
+            },
+            {
+              "label": "30.01–31.00",
+              "minSatang": 3001,
+              "maxSatang": 3100,
+              "amountThb": 7070,
+              "sourcePage": 1
+            },
+            {
+              "label": "31.01–32.00",
+              "minSatang": 3101,
+              "maxSatang": 3200,
+              "amountThb": 7140,
+              "sourcePage": 1
+            },
+            {
+              "label": "32.01–33.00",
+              "minSatang": 3201,
+              "maxSatang": 3300,
+              "amountThb": 7210,
+              "sourcePage": 1
+            },
+            {
+              "label": "33.01–34.00",
+              "minSatang": 3301,
+              "maxSatang": 3400,
+              "amountThb": 7280,
+              "sourcePage": 1
+            },
+            {
+              "label": "34.01–35.00",
+              "minSatang": 3401,
+              "maxSatang": 3500,
+              "amountThb": 7350,
+              "sourcePage": 1
+            },
+            {
+              "label": "35.01–36.00",
+              "minSatang": 3501,
+              "maxSatang": 3600,
+              "amountThb": 7420,
+              "sourcePage": 1
+            },
+            {
+              "label": "36.01–37.00",
+              "minSatang": 3601,
+              "maxSatang": 3700,
+              "amountThb": 7490,
+              "sourcePage": 1
+            },
+            {
+              "label": "37.01–38.00",
+              "minSatang": 3701,
+              "maxSatang": 3800,
+              "amountThb": 7560,
+              "sourcePage": 1
+            },
+            {
+              "label": "38.01–39.00",
+              "minSatang": 3801,
+              "maxSatang": 3900,
+              "amountThb": 7630,
+              "sourcePage": 1
+            },
+            {
+              "label": "39.01–40.00",
+              "minSatang": 3901,
+              "maxSatang": 4000,
+              "amountThb": 7700,
+              "sourcePage": 1
+            },
+            {
+              "label": "40.01–41.00",
+              "minSatang": 4001,
+              "maxSatang": 4100,
+              "amountThb": 7770,
+              "sourcePage": 2
+            },
+            {
+              "label": "41.01–42.00",
+              "minSatang": 4101,
+              "maxSatang": 4200,
+              "amountThb": 7840,
+              "sourcePage": 2
+            },
+            {
+              "label": "42.01–43.00",
+              "minSatang": 4201,
+              "maxSatang": 4300,
+              "amountThb": 7910,
+              "sourcePage": 2
+            },
+            {
+              "label": "43.01–44.00",
+              "minSatang": 4301,
+              "maxSatang": 4400,
+              "amountThb": 7980,
+              "sourcePage": 2
+            },
+            {
+              "label": "44.01–45.00",
+              "minSatang": 4401,
+              "maxSatang": 4500,
+              "amountThb": 8050,
+              "sourcePage": 2
+            },
+            {
+              "label": "45.01–46.00",
+              "minSatang": 4501,
+              "maxSatang": 4600,
+              "amountThb": 8120,
+              "sourcePage": 2
+            },
+            {
+              "label": "46.01–47.00",
+              "minSatang": 4601,
+              "maxSatang": 4700,
+              "amountThb": 8190,
+              "sourcePage": 2
+            },
+            {
+              "label": "47.01–48.00",
+              "minSatang": 4701,
+              "maxSatang": 4800,
+              "amountThb": 8260,
+              "sourcePage": 2
+            },
+            {
+              "label": "48.01–49.00",
+              "minSatang": 4801,
+              "maxSatang": 4900,
+              "amountThb": 8330,
+              "sourcePage": 2
+            },
+            {
+              "label": "49.01–50.00",
+              "minSatang": 4901,
+              "maxSatang": 5000,
+              "amountThb": 8400,
+              "sourcePage": 2
+            },
+            {
+              "label": "50.01–51.00",
+              "minSatang": 5001,
+              "maxSatang": 5100,
+              "amountThb": 8470,
+              "sourcePage": 2
+            }
+          ],
+          "reviewFlags": []
+        },
+        {
+          "id": "apl-route-14",
+          "pickup": "THANTAWAN - APLL WH BANGNA KM.39",
+          "delivery": "Khon Kaen",
+          "vehicle": "40'H",
+          "bands": [
+            {
+              "label": "29.01–30.00",
+              "minSatang": 2901,
+              "maxSatang": 3000,
+              "amountThb": 6500,
+              "sourcePage": 1
+            },
+            {
+              "label": "30.01–31.00",
+              "minSatang": 3001,
+              "maxSatang": 3100,
+              "amountThb": 6565,
+              "sourcePage": 1
+            },
+            {
+              "label": "31.01–32.00",
+              "minSatang": 3101,
+              "maxSatang": 3200,
+              "amountThb": 6630,
+              "sourcePage": 1
+            },
+            {
+              "label": "32.01–33.00",
+              "minSatang": 3201,
+              "maxSatang": 3300,
+              "amountThb": 6695,
+              "sourcePage": 1
+            },
+            {
+              "label": "33.01–34.00",
+              "minSatang": 3301,
+              "maxSatang": 3400,
+              "amountThb": 6760,
+              "sourcePage": 1
+            },
+            {
+              "label": "34.01–35.00",
+              "minSatang": 3401,
+              "maxSatang": 3500,
+              "amountThb": 6825,
+              "sourcePage": 1
+            },
+            {
+              "label": "35.01–36.00",
+              "minSatang": 3501,
+              "maxSatang": 3600,
+              "amountThb": 6890,
+              "sourcePage": 1
+            },
+            {
+              "label": "36.01–37.00",
+              "minSatang": 3601,
+              "maxSatang": 3700,
+              "amountThb": 6955,
+              "sourcePage": 1
+            },
+            {
+              "label": "37.01–38.00",
+              "minSatang": 3701,
+              "maxSatang": 3800,
+              "amountThb": 7020,
+              "sourcePage": 1
+            },
+            {
+              "label": "38.01–39.00",
+              "minSatang": 3801,
+              "maxSatang": 3900,
+              "amountThb": 7085,
+              "sourcePage": 1
+            },
+            {
+              "label": "39.01–40.00",
+              "minSatang": 3901,
+              "maxSatang": 4000,
+              "amountThb": 7150,
+              "sourcePage": 1
+            },
+            {
+              "label": "40.01–41.00",
+              "minSatang": 4001,
+              "maxSatang": 4100,
+              "amountThb": 7215,
+              "sourcePage": 2
+            },
+            {
+              "label": "41.01–42.00",
+              "minSatang": 4101,
+              "maxSatang": 4200,
+              "amountThb": 7280,
+              "sourcePage": 2
+            },
+            {
+              "label": "42.01–43.00",
+              "minSatang": 4201,
+              "maxSatang": 4300,
+              "amountThb": 7345,
+              "sourcePage": 2
+            },
+            {
+              "label": "43.01–44.00",
+              "minSatang": 4301,
+              "maxSatang": 4400,
+              "amountThb": 7410,
+              "sourcePage": 2
+            },
+            {
+              "label": "44.01–45.00",
+              "minSatang": 4401,
+              "maxSatang": 4500,
+              "amountThb": 7475,
+              "sourcePage": 2
+            },
+            {
+              "label": "45.01–46.00",
+              "minSatang": 4501,
+              "maxSatang": 4600,
+              "amountThb": 7540,
+              "sourcePage": 2
+            },
+            {
+              "label": "46.01–47.00",
+              "minSatang": 4601,
+              "maxSatang": 4700,
+              "amountThb": 7605,
+              "sourcePage": 2
+            },
+            {
+              "label": "47.01–48.00",
+              "minSatang": 4701,
+              "maxSatang": 4800,
+              "amountThb": 7670,
+              "sourcePage": 2
+            },
+            {
+              "label": "48.01–49.00",
+              "minSatang": 4801,
+              "maxSatang": 4900,
+              "amountThb": 7735,
+              "sourcePage": 2
+            },
+            {
+              "label": "49.01–50.00",
+              "minSatang": 4901,
+              "maxSatang": 5000,
+              "amountThb": 7800,
+              "sourcePage": 2
+            },
+            {
+              "label": "50.01–51.00",
+              "minSatang": 5001,
+              "maxSatang": 5100,
+              "amountThb": 7865,
+              "sourcePage": 2
+            }
+          ],
+          "reviewFlags": []
+        }
+      ],
+      "reviewNotes": [
+        "Source columns are labelled 0%…21% with fuel bands THB 29.01–30.00 … 50.01–51.00; the percentage is not applied — the printed amount is the rate."
+      ]
+    }
+  ]
+}

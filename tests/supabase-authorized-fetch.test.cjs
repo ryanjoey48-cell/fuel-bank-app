@@ -3,15 +3,16 @@ const fs = require('node:fs');
 const test = require('node:test');
 const ts = require('typescript');
 const vm = require('node:vm');
-function harness({ sessionProvider, timeoutMs = 12000 } = {}) {
+function harness({ sessionProvider, timeoutMs = 12000, supabaseAnonKey = 'anon-key' } = {}) {
   const source = fs.readFileSync('lib/supabase.ts', 'utf8');
-  const body = source.slice(source.indexOf('function createAuthorizedFetch('), source.indexOf('function fetchInputUrl('));
+  const start = source.indexOf('function isLegacyJwtApiKey(');
+  const body = source.slice(start > -1 ? start : source.indexOf('function createAuthorizedFetch('), source.indexOf('function fetchInputUrl('));
   let session = { access_token: 'signed-in-token' }, error = null;
   const calls = [];
   const deadlineSource = fs.readFileSync("lib/request-deadline.ts", "utf8");
   const deadlineModule = { exports: {} };
   vm.runInNewContext(ts.transpileModule(deadlineSource, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports: deadlineModule.exports, AbortController, Response, setTimeout, clearTimeout });
-  const context = { withRequestDeadline: (operation, signal) => deadlineModule.exports.withRequestDeadline(operation, signal, timeoutMs), completeJsonResponse: deadlineModule.exports.completeJsonResponse, Headers, supabaseAnonKey: 'anon-key', fetch: async (input, init) => { calls.push(init.headers); return new Response("{}", {status:200,headers:{"content-type":"application/json"}}); } };
+  const context = { withRequestDeadline: (operation, signal) => deadlineModule.exports.withRequestDeadline(operation, signal, timeoutMs), completeJsonResponse: deadlineModule.exports.completeJsonResponse, Headers, supabaseAnonKey, fetch: async (input, init) => { calls.push(init.headers); return new Response("{}", {status:200,headers:{"content-type":"application/json"}}); } };
   vm.createContext(context);
   vm.runInContext(ts.transpileModule(body, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText, context);
   return { calls, request: context.createAuthorizedFetch({ getSession: sessionProvider ?? (async () => ({ data: { session }, error })) }), session: value => { session = value; }, error: value => { error = value; } };
@@ -26,8 +27,17 @@ test('requests follow sign-out, sign-in and refreshed sessions', async () => {
   const h = harness();
   h.session(null); await h.request('/rest/v1/test', {});
   h.session({ access_token: 'new-token' }); await h.request('/rest/v1/test', { headers: { Authorization: 'Bearer anon-key' } });
-  assert.equal(h.calls[0].get('Authorization'), 'Bearer anon-key');
+  // Non-JWT API keys must not be sent as Authorization Bearer when signed out.
+  assert.equal(h.calls[0].get('Authorization'), null);
   assert.equal(h.calls[1].get('Authorization'), 'Bearer new-token');
+});
+
+test('legacy JWT anon keys keep Authorization when signed out', async () => {
+  const jwtAnon = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.legacy.anon';
+  const h = harness({ supabaseAnonKey: jwtAnon });
+  h.session(null);
+  await h.request('/rest/v1/test', {});
+  assert.equal(h.calls[0].get('Authorization'), `Bearer ${jwtAnon}`);
 });
 test('session failures reject instead of silently reading as anonymous', async () => {
   const h = harness(); h.error(new Error('refresh failed'));

@@ -1,4 +1,5 @@
 // Existing EES PDF renderers shared by Weekly Mileage and Maintenance.
+import { EES_COMPANY } from "./ees-company";
 import type {OilChangeStatus} from './operations';
 export type OilServicePdfLanguage = "en" | "th";
 export type OilServicePdfLogo = {
@@ -136,7 +137,7 @@ export type LastOilChangesPdfCopy = {
 export const getOilServicePdfCopy = (language: OilServicePdfLanguage): OilServicePdfCopy =>
   language === "th"
     ? {
-        companyName: "Expert Express Sender Co., Ltd.",
+        companyName: EES_COMPANY.nameEnTitle,
         currentOdometer: "เลขไมล์ปัจจุบัน",
         driver: "คนขับ",
         dueSoon: "ใกล้ถึงกำหนด",
@@ -159,7 +160,7 @@ export const getOilServicePdfCopy = (language: OilServicePdfLanguage): OilServic
         weekEnding: "สัปดาห์สิ้นสุด"
       }
     : {
-        companyName: "Expert Express Sender Co., Ltd.",
+        companyName: EES_COMPANY.nameEnTitle,
         currentOdometer: "Current odometer",
         driver: "Driver",
         dueSoon: "Due Soon",
@@ -189,7 +190,7 @@ export const getLastOilChangesPdfCopy = (language: OilServicePdfLanguage): LastO
   language === "th"
     ? {
         asOf: (date) => `ณ ${date}`,
-        companyName: "Expert Express Sender Co., Ltd.",
+        companyName: EES_COMPANY.nameEnTitle,
         currentOdometer: "เลขไมล์ปัจจุบัน",
         currentStatus: "สถานะ",
         driverName: "คนขับ",
@@ -220,7 +221,7 @@ export const getLastOilChangesPdfCopy = (language: OilServicePdfLanguage): LastO
       }
     : {
         asOf: (date) => `As of ${date}`,
-        companyName: "Expert Express Sender Co., Ltd.",
+        companyName: EES_COMPANY.nameEnTitle,
         currentOdometer: "Current Odo.",
         currentStatus: "Status",
         driverName: "Driver",

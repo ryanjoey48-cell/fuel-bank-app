@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import { EES_COMPANY } from "@/lib/ees-company";
 import {
   AlertTriangle,
   ArrowUpDown,
@@ -523,7 +524,7 @@ function getBossPdfCopy(language: "en" | "th"): BossPdfCopy {
       actual: "เธเธณเธเธงเธ“เธเธฃเธดเธ",
       checked: "เธ•เธฃเธงเธเนเธฅเนเธง",
       checkedStatus: "เธชเธ–เธฒเธเธฐเธ•เธฃเธงเธเธชเธญเธ",
-      companyName: "Expert Express Sender Co., Ltd.",
+      companyName: EES_COMPANY.nameEnTitle,
       cost: "เธเนเธฒเนเธเนเธเนเธฒเธข",
       dataStatus: "เธชเธ–เธฒเธเธฐเธเนเธญเธกเธนเธฅ",
       date: "เธงเธฑเธเธ—เธตเน",
@@ -567,7 +568,7 @@ function getBossPdfCopy(language: "en" | "th"): BossPdfCopy {
     actual: "Actual",
     checked: "Checked",
     checkedStatus: "Checked status",
-    companyName: "Expert Express Sender Co., Ltd.",
+    companyName: EES_COMPANY.nameEnTitle,
     cost: "Cost",
     dataStatus: "Data status",
     date: "Date",
@@ -629,7 +630,7 @@ function getThaiBossPdfCopy(): BossPdfCopy {
     actual: "คำนวณจริง",
     checked: "ตรวจแล้ว",
     checkedStatus: "สถานะ",
-    companyName: "Expert Express Sender Co., Ltd.",
+    companyName: EES_COMPANY.nameEnTitle,
     cost: "ค่าใช้จ่าย",
     dataStatus: "สถานะข้อมูล",
     date: "วันที่",
@@ -2861,14 +2862,14 @@ export default function FuelLogsPage() {
 
   return (
     <>
-      <section className="surface-card mb-5 overflow-hidden px-5 py-5 sm:px-7 sm:py-6">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+      <section className="office-page-header mb-5">
+        <div className="office-page-header__row">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-600">EXPERT EXPRESS SENDER CO., LTD.</p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">Fuel Control</h1>
-            <p className="mt-1 text-sm text-slate-500">Monitor daily fuel activity, receipt checks and period efficiency in one place.</p>
+            <p className="office-page-header__eyebrow">{EES_COMPANY.nameEn}</p>
+            <h1 className="office-page-header__title">Fuel Control</h1>
+            <p className="office-page-header__description">Monitor daily fuel activity, receipt checks and period efficiency in one place.</p>
           </div>
-          <div className="inline-flex w-full rounded-2xl bg-brand-50/70 p-1 lg:w-auto">
+          <div className="office-page-header__tabs">
             {([
               ["overview", language === "th" ? "ภาพรวม" : "Overview"],
               ["entries", language === "th" ? "รายการน้ำมัน" : "Fuel entries"],

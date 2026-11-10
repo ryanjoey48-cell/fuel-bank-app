@@ -1,3 +1,4 @@
+import { EES_COMPANY } from "./ees-company";
 import { compareWeeklyMileageRows, WEEKLY_MILEAGE_REVIEW_THRESHOLD_KM, weeklyMileageComparisonGroup } from "@/lib/weekly-mileage-report";
 import type { WeeklyMileageComparisonGroup, WeeklyMileageComparisonReport, WeeklyMileageComparisonRow } from "@/lib/weekly-mileage-report";
 
@@ -20,7 +21,7 @@ const LOGO_PRINTED_WIDTH_PT = 42;
 
 const copy = {
   en: {
-    company: "Expert Express Sender Co., Ltd.",
+    company: EES_COMPANY.nameEnTitle,
     title: "Weekly Fleet Mileage Overview",
     selectedDate: "Selected reporting date",
     generated: "Generated",
@@ -44,7 +45,7 @@ const copy = {
     page: "Page",
   },
   th: {
-    company: "Expert Express Sender Co., Ltd.",
+    company: EES_COMPANY.nameEnTitle,
     title: "รายงานเปรียบเทียบระยะทางประจำสัปดาห์",
     selectedDate: "วันที่รายงานที่เลือก",
     generated: "สร้างเมื่อ",

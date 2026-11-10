@@ -1,10 +1,11 @@
 {
-  "name": "Fuel & Bank App",
-  "short_name": "Fuel App",
+  "id": "/",
+  "name": "EES Operations",
+  "short_name": "EES",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#000000",
+  "background_color": "#fbf8f2",
+  "theme_color": "#48296a",
   "icons": [
     {
       "src": "/icon-192.png",

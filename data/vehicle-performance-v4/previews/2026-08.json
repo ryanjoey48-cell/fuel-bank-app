@@ -50,7 +50,7 @@
       "tripPayments": null,
       "expenses": null,
       "parkingFees": null,
-      "totalReceived": "0",
+      "totalReceived": null,
       "fuel": "13920",
       "lpg": "0",
       "maintenance": null,
@@ -68,7 +68,7 @@
         "tripPayments": "unresolved_source_dash",
         "expenses": "unresolved_source_dash",
         "parkingFees": "unresolved_source_dash",
-        "totalReceived": "zero_confirmed_by_source_note",
+        "totalReceived": "unresolved_source_dash",
         "lpg": "confirmed_zero_by_owner_rule",
         "maintenance": "unresolved_source_dash"
       }
@@ -560,6 +560,6 @@
   ],
   "lpgRule": "Only ฒอ-8453 uses LPG; LPG is separate from Fuel for Aug 2026 onward. Other vehicles are confirmed non-LPG and shown as zero LPG even where the source cell is a dash.",
   "sourceNotes": [
-    "August salary total excludes DUMMY and reconciles to THB 159,500. PDF notes identify 3ฒล-4565 as zero jobs and zero received revenue; dash in Total Received is therefore shown as zero."
+    "August salary total excludes DUMMY and reconciles to THB 159,500. 3ฒล-4565 has recorded zero jobs and a dash in Total Received. Revenue remains unconfirmed; the source note does not establish a verified zero-revenue amount."
   ]
 }

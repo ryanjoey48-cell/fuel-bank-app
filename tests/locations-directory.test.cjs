@@ -245,8 +245,9 @@ test("interactive map uses a Thailand default, clustered markers, OSM attributio
   assert.match(map, /THAILAND_BOUNDS:\s*\[\[number, number\], \[number, number\]\]/);
   assert.match(map, /fitBounds\(THAILAND_BOUNDS/);
   assert.match(map, /markerClusterGroup/);
-  assert.match(map, /tile\.openstreetmap\.org\/\{z\}\/\{x\}\/\{y\}\.png/);
-  assert.match(map, /openstreetmap\.org\/copyright/);
+  assert.match(map, /attachEesLeafletBasemap/);
+  assert.match(map, /eesLeafletAttributionHtml/);
+  assert.equal(map.includes("tile.openstreetmap.org"), false);
   assert.match(map, /onSavePin\(/);
   assert.match(map, /confirmAndSavePin/);
   assert.match(map, /onClick=\{\(\)\s*=>\s*void\s+confirmAndSave\(\)\}/);
@@ -262,10 +263,14 @@ test("interactive map uses a Thailand default, clustered markers, OSM attributio
   assert.match(map, /data-location-pin-select/);
 });
 
-test("Locations navigation is visible only to accounts with business read access and is translated", () => {
-  const nav = fs.readFileSync(path.resolve("components/top-navigation.tsx"), "utf8");
+test("Locations Directory navigation is visible only to accounts with business read access and is translated", () => {
+  // Menu definitions (links, groups, permission gates) now live in lib/office-nav.tsx; the shell components render them. Assertions below are unchanged.
+  const nav = fs.readFileSync(path.resolve("components/top-navigation.tsx"), "utf8") + " " + fs.readFileSync(path.resolve("lib/office-nav.tsx"), "utf8");
+  const translations = fs.readFileSync(path.resolve("lib/translations.ts"), "utf8");
   assert.match(nav, /can\("business:read"\)[\s\S]*?href: "\/locations"/);
-  assert.match(nav, /language === "th" \? "สถานที่" : "Locations"/);
+  assert.match(nav, /href: "\/locations",\s*label: copy\.locationsDirectory/);
+  assert.match(translations, /locationsDirectory: "Locations Directory"/);
+  assert.match(translations, /locationsDirectory: "ไดเรกทอรีสถานที่"/);
 });
 
 test("Locations Directory and Map controls retain English and Thai labels", () => {

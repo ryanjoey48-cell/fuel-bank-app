@@ -1,5 +1,6 @@
 "use client";
 
+import { EES_COMPANY } from "./ees-company";
 import { supabase } from "@/lib/supabase";
 
 export type SafetyReportIssue = {
@@ -451,7 +452,7 @@ export async function openSafetyReport(
           <div class="identity">
             ${logo}
             <div>
-              <div class="brand">EXPERT EXPRESS SENDER CO., LTD.</div>
+              <div class="brand">${EES_COMPANY.nameEn}</div>
               <h1>รายงานความปลอดภัยรถ<span>Vehicle Safety Report</span></h1>
               <div class="subtitle">จัดทำเมื่อ / Generated: ${esc(asAt)} (Bangkok)</div>
             </div>

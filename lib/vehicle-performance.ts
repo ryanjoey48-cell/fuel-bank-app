@@ -80,6 +80,26 @@ export const VEHICLE_PERFORMANCE_STATUS_RULES = {
   needsAttentionMaxFuelPercent: performanceThresholds.attention.maxFuelPercent
 } as const;
 
+/** Commercial registration that was not yet in the EES reporting fleet for Jan–Feb 2026. */
+export const VEHICLE_PERFORMANCE_LATE_JOINER_2026 = "701-5145";
+
+/**
+ * Month-aware fleet eligibility for coverage only.
+ * Does not invent financial values and does not delete historical rows.
+ */
+export function isVehicleEligibleForPerformanceMonth(registration: string, year: number, month: number): boolean {
+  const key = normalizeComparableText(normalizeVehicleRegistration(registration));
+  if (!key) return false;
+  if (year === 2026 && (month === 1 || month === 2)) {
+    return key !== normalizeComparableText(VEHICLE_PERFORMANCE_LATE_JOINER_2026);
+  }
+  return true;
+}
+
+export function filterEligibleRegistrationsForMonth(registrations: Iterable<string>, year: number, month: number): string[] {
+  return Array.from(registrations).filter((registration) => isVehicleEligibleForPerformanceMonth(registration, year, month));
+}
+
 export type VehiclePerformanceImportStatus =
   | "Ready"
   | "Approved"
@@ -392,12 +412,14 @@ export function buildVehicleMonthlyPerformanceRows({
   records,
   fuelRows,
   months,
-  expectedVehicleCount
+  expectedVehicleCount,
+  expectedVehicleCountByMonth
 }: {
   records: VehicleMonthlyPerformance[];
   fuelRows: VehicleFuelSpendRow[];
   months: number[];
   expectedVehicleCount: number;
+  expectedVehicleCountByMonth?: Partial<Record<number, number>>;
 }) {
   const fuelMap = getVehiclePerformanceFuelMap(records, fuelRows);
 
@@ -406,6 +428,7 @@ export function buildVehicleMonthlyPerformanceRows({
     const vehicles = new Set(
       monthRecords.map((record) => normalizeComparableText(normalizeVehicleRegistration(record.vehicle_registration)))
     );
+    const expectedCount = expectedVehicleCountByMonth?.[month] ?? expectedVehicleCount;
     const totals = calculateVehiclePerformanceMetrics(
       monthRecords.reduce(
         (bucket, record) => {
@@ -431,7 +454,7 @@ export function buildVehicleMonthlyPerformanceRows({
       status:
         monthRecords.length === 0
           ? "missing"
-          : expectedVehicleCount > 0 && vehicles.size < expectedVehicleCount
+          : expectedCount > 0 && vehicles.size < expectedCount
             ? "partial"
             : "complete"
     } satisfies VehiclePerformanceMonthlyPerformanceRow;

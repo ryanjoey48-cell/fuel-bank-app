@@ -1,0 +1,124 @@
+/*
+ * EES Fleet Tracking V7.1 · five dedicated workspaces.
+ * Live Fleet keeps the map grid (V7). Daily Activity, Journeys & Jobs, Fuel Intelligence and Reports are full-width
+ * workspaces inside `.v71-shell`, with no map and no narrow evidence drawer.
+ * (Scope prefix repeated to out-rank the V21/V3/V7 rules.)
+ */
+
+/* ---------- Shell for the four full-width workspaces ---------- */
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-shell { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; min-width: 0; background: #f6f3fa; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-shell .forth-command-strip.fleet-v7-header {
+  position: relative; z-index: 60; flex: 0 0 auto; display: flex; flex-direction: column; gap: 0; padding: 0; margin: 0;
+  background: #fff; border-bottom: 1px solid var(--v7-line); box-shadow: 0 2px 10px rgba(42, 27, 61, .06); backdrop-filter: none;
+}
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-shell .forth-more-menu { position: absolute; top: 100%; right: .5rem; z-index: 80; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-shell .v7-kpi-row,
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-shell .v7-vehicles-toggle { display: none; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-shell .v71-attention-dock { position: relative; inset: auto; width: auto; flex: 0 0 auto; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-shell .v71-attention-dock:empty { display: none; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-body { flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 1.1rem 1.4rem 2.5rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace { display: grid; gap: .9rem; width: 100%; max-width: min(100%, 1760px); margin-inline: auto; align-content: start; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace-head h2 { margin: 0; color: var(--v7-purple-deep); font-size: 1.4rem; font-weight: 780; letter-spacing: .005em; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace-head p { margin: .2rem 0 0; max-width: 78ch; color: var(--v7-muted); font-size: .86rem; line-height: 1.5; }
+
+/* Vehicle selector bar (Daily Activity, Journeys & Jobs, Fuel Intelligence) */
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-vehicle-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1rem; padding: .7rem .9rem; background: #fff; border: 1px solid var(--v7-line); border-radius: 12px; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-vehicle-select { display: flex; align-items: center; gap: .6rem; font-size: .8rem; font-weight: 700; color: var(--v7-ink); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-vehicle-select select { min-width: 230px; min-height: 44px; padding: 0 .7rem; border: 1.5px solid #d8cce6; border-radius: 10px; background: #faf7fd; color: var(--v7-ink); font-size: .95rem; font-weight: 700; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-vehicle-summary { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-vehicle-bar-actions { margin-left: auto; display: flex; gap: .5rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-link-button { display: inline-flex; align-items: center; gap: .4rem; min-height: 44px; padding: 0 .9rem; border: 1px solid #cdbbe0; border-radius: 10px; background: #fff; color: var(--v7-purple); font-size: .82rem; font-weight: 700; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-link-button:hover { background: var(--v7-purple-soft); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-empty { padding: 2rem 1.2rem; border: 1.5px dashed #cdbbe0; border-radius: 12px; background: #fff; text-align: center; color: var(--v7-muted); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-empty strong { display: block; color: var(--v7-purple-deep); font-size: 1.05rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-empty p { margin: .3rem 0 0; font-size: .86rem; }
+
+/* Evidence panel in a full-width workspace: horizontal scope bar, content in white sections */
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-evidence { padding: 0; gap: .9rem; font-size: .84rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-evidence .v7-scope { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .55rem 1rem; padding: .8rem .9rem; background: #fff; border: 1px solid var(--v7-line); border-radius: 12px; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-evidence .v7-scope-top { flex: 0 0 auto; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-evidence .v7-scope .fleet-evidence-presets { width: 330px; max-width: 100%; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-evidence .v7-scope form { flex: 1 1 420px; display: flex; flex-wrap: wrap; align-items: flex-end; gap: .55rem .8rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-evidence .v7-scope .fleet-evidence-dates { flex: 1 1 300px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-evidence .v7-scope-primary { width: auto; min-width: 210px; padding: 0 1.2rem; background: var(--v7-orange); color: #fff; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-evidence .v7-scope-primary:hover:not(:disabled) { background: var(--v7-orange-deep); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-evidence .v7-scope-status,
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-evidence .fleet-evidence-more,
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-evidence .v7-scope-note { flex: 1 0 100%; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-vehicle-view,
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-provider-day { padding: 1rem 1.1rem; background: #fff; border: 1px solid var(--v7-line); border-radius: 12px; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-vehicle-view[hidden] { display: none !important; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-provider-day { border-block-width: 1px; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-evidence-metrics { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-evidence-sources { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: .2rem 1.4rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-evidence-list { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-journey-rows { grid-template-columns: 1fr; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-journey-row > button { grid-template-columns: 4rem minmax(10rem, 1.4fr) 8rem 8rem 1fr; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-fuel-panel { background: #fff; border: 1px solid var(--v7-line); border-radius: 12px; padding: 1rem 1.1rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-evidence-odometer { background: #fff; border: 1px solid var(--v7-line); border-radius: 12px; padding: .4rem 1.1rem 1rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-evidence-odometer > summary { min-height: 44px; display: flex; align-items: center; font-weight: 720; color: var(--v7-purple-deep); cursor: pointer; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .v71-health-details { margin-top: .4rem; border-top: 1px solid var(--v7-line); padding-top: .4rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .v71-health-details > summary { min-height: 44px; display: flex; align-items: center; font-weight: 720; color: var(--v7-purple-deep); cursor: pointer; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .v71-jobs-lead { padding: .5rem .8rem; border-left: 3px solid #cdbbe0; background: #faf7fd; color: var(--v7-muted); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace [data-view="jobs"] { background: #fcfbfe; }
+
+/* Reports */
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-reports-workspace > section,
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-reports-workspace > details { background: #fff; border: 1px solid var(--v7-line); border-radius: 12px; padding: .9rem 1.1rem; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-reports-workspace .fleet-evidence { padding: 0; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-reports-workspace .fleet-legacy-reports > summary { min-height: 44px; display: flex; align-items: center; font-weight: 720; color: var(--v7-purple-deep); cursor: pointer; }
+
+/* Live Fleet: compact vehicle summary with workspace actions */
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-drawer-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: .4rem .95rem .6rem; border-top: 1px solid var(--v7-line); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-drawer-actions button { min-height: 44px; padding: 0 .6rem; border: 1.5px solid #cdbbe0; border-radius: 10px; background: #fff; color: var(--v7-purple); font-size: .82rem; font-weight: 720; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-drawer-actions button:hover { background: var(--v7-purple-soft); }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-drawer-actions button[aria-expanded="true"] { background: var(--v7-purple); border-color: var(--v7-purple); color: #fff; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-drawer-health { padding: 0 .95rem .8rem; font-size: .8rem; }
+
+/* Route map opened on demand from Journeys: sidebar carries the playback panel */
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace.ws-journeys .forth-tracking-grid { --v7-side: 400px; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace.ws-journeys .forth-operations-modes,
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace.ws-journeys .v7-kpi-row { display: none !important; }
+
+@media (max-width: 1100px) {
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace.ws-journeys .forth-tracking-grid { --v7-side: 0px; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace.ws-journeys .forth-operations-sidebar { width: min(420px, 94vw); }
+}
+@media (max-width: 767px) {
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-body { padding: .7rem .6rem 2rem; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace-head h2 { font-size: 1.15rem; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-vehicle-select { width: 100%; flex-wrap: wrap; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-vehicle-select select { flex: 1 1 100%; min-width: 0; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-vehicle-bar-actions { margin-left: 0; width: 100%; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-link-button { flex: 1; justify-content: center; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-evidence .v7-scope .fleet-evidence-presets { width: 100%; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-evidence .v7-scope-primary { width: 100%; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-vehicle-view,
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-provider-day,
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-fuel-panel { padding: .8rem; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-journey-row > button { grid-template-columns: 2.6rem 1fr auto; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-reports-workspace > section,
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-reports-workspace > details { padding: .7rem; }
+}
+
+/* Reports: review and recurring places side by side on wide screens */
+@media (min-width: 1200px) {
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-reports-workspace { grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); align-items: start; }
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-reports-workspace > .v71-workspace-head,
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-reports-workspace > details { grid-column: 1 / -1; }
+}
+
+/* The map's own button returns to Journeys & Jobs; the panel's "Back to Live Fleet" would mislead here. */
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace.ws-journeys .forth-playback-exit { display: none; }
+.fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v71-workspace .fleet-evidence .v7-scope .fleet-evidence-dates .fleet-evidence-day-select { grid-column: auto; }
+
+@media (max-width: 1100px) {
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-header-row > .v7-actions { width: auto !important; max-width: none !important; flex: 0 0 auto; margin-left: auto; }
+}
+
+@media (max-width: 767px) {
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-scope input,
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .v7-scope select,
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .fleet-evidence-more > summary,
+  .fleet-v7.fleet-v7.fleet-v7.forth-v21.forth-tracking-workspace .fleet-evidence details > summary { min-height: 44px; }
+}

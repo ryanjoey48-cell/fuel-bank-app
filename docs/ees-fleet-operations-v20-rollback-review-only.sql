@@ -1,0 +1,20 @@
+-- REVIEW ONLY. Destructive rollback: requires a separate owner decision and data export.
+begin;
+drop function if exists public.commit_ees_fleet_geofence_transition(text,bigint,jsonb,jsonb);
+drop function if exists public.release_ees_fleet_monitor_lease(uuid);
+drop function if exists public.acquire_ees_fleet_monitor_lease(uuid,integer);
+drop function if exists public.set_ees_fleet_geofence_zone(uuid,integer,integer,integer,integer,boolean,uuid,text);
+drop table if exists public.ees_fleet_push_test_attempts;
+drop table if exists public.ees_fleet_push_delivery_attempts;
+drop table if exists public.ees_fleet_notification_inbox;
+drop table if exists public.ees_fleet_push_subscriptions;
+drop table if exists public.ees_fleet_notification_preferences;
+drop table if exists public.ees_fleet_monitor_runs;
+drop table if exists public.ees_fleet_monitor_lease;
+drop table if exists public.ees_fleet_event_review_history;
+drop table if exists public.ees_fleet_visit_events;
+drop table if exists public.ees_fleet_vehicle_geofence_state;
+drop table if exists public.ees_fleet_geofence_zones;
+drop table if exists public.ees_fleet_geofence_zone_history;
+alter table public.ees_locations drop column if exists is_active;
+commit;

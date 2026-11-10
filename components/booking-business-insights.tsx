@@ -1,5 +1,6 @@
 "use client";
 
+import { EES_COMPANY } from "@/lib/ees-company";
 import clsx from "clsx";
 import {
   AlertCircle,
@@ -925,5 +926,5 @@ function PrintReport({ insights, language, period, actions, generatedAt, full }:
 
 function PrintHeader({ title, period, latest, generatedAt, language }: { title: string; period: string; latest: string; generatedAt: string; language: "en" | "th" }) {
   const copy = copyByLanguage[language];
-  return <header className="booking-insights-print-header"><EESLogo alt="Expert Express Sender Co., Ltd." size={48} priority /><div><p>Expert Express Sender Co., Ltd. · Booking Diary</p><h1>{title}</h1><span>{copy.selectedPeriod}: {period} · {copy.latestRecord}: {latest} · {copy.generated}: {generatedAt}</span></div></header>;
+  return <header className="booking-insights-print-header"><EESLogo alt={EES_COMPANY.nameEnTitle} size={48} priority /><div><p>Expert Express Sender Co., Ltd. · Booking Diary</p><h1>{title}</h1><span>{copy.selectedPeriod}: {period} · {copy.latestRecord}: {latest} · {copy.generated}: {generatedAt}</span></div></header>;
 }

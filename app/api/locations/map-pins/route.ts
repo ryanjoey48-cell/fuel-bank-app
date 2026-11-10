@@ -33,15 +33,22 @@ async function authorized(request: Request, write = false) {
 export async function GET(request: Request) {
   try {
     const { admin } = await authorized(request);
-    const { data, error } = await admin.from("ees_location_map_pins")
-      .select(pinFields)
-      .eq("pin_status", "manual_confirmed")
-      .order("updated_at", { ascending: false });
-    if (error) {
-      if (missingMapStorage(error)) return NextResponse.json({ pins: [], storageReady: false });
-      throw error;
+    const pins: unknown[] = [];
+    const pageSize = 500;
+    for (let offset = 0; offset <= 10_000; offset += pageSize) {
+      const { data, error } = await admin.from("ees_location_map_pins")
+        .select(pinFields)
+        .eq("pin_status", "manual_confirmed")
+        .order("updated_at", { ascending: false }).order("id")
+        .range(offset, offset + pageSize - 1);
+      if (error) {
+        if (missingMapStorage(error)) return NextResponse.json({ pins: [], storageReady: false });
+        throw error;
+      }
+      pins.push(...(data ?? []));
+      if ((data?.length ?? 0) < pageSize) return NextResponse.json({ pins, storageReady: true });
     }
-    return NextResponse.json({ pins: data ?? [], storageReady: true });
+    throw new Error("Confirmed pin count exceeds the safe request bound.");
   } catch (error) {
     return responseError(error);
   }

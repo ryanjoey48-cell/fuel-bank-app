@@ -1,4 +1,4 @@
-const CACHE_NAME = "fuel-bank-app-v3-private-data-network-only";
+const CACHE_NAME = "ees-operations-v4-private-data-network-only";
 const APP_SHELL = [
   "/manifest.json",
   "/icon-192.png",
@@ -70,4 +70,36 @@ self.addEventListener("fetch", (event) => {
       });
     })
   );
+});
+
+// Only server-created, same-origin event links are accepted from push payloads.
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try { payload = event.data ? event.data.json() : {}; } catch { payload = {}; }
+  const href = typeof payload.href === "string" && /^\/(?!\/)[a-zA-Z0-9/_?=&%-]*$/.test(payload.href)
+    ? payload.href : "/fleet-events";
+  const title = typeof payload.title === "string" ? payload.title.slice(0, 120) : "EES Fleet";
+  const body = typeof payload.body === "string" ? payload.body.slice(0, 240) : "Open EES to review an update.";
+  event.waitUntil(self.registration.showNotification(title, {
+    body, icon: "/icon-192.png", badge: "/favicon-32.png",
+    tag: typeof payload.tag === "string" ? payload.tag.slice(0, 160) : undefined,
+    data: { href }
+  }));
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const href = event.notification.data?.href || "/fleet-events";
+  event.waitUntil((async () => {
+    const url = new URL(href, self.location.origin);
+    if (url.origin !== self.location.origin) return;
+    const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const existing = windows.find((client) => new URL(client.url).origin === self.location.origin);
+    if (existing) {
+      await existing.navigate(url.href);
+      await existing.focus();
+    } else {
+      await self.clients.openWindow(url.href);
+    }
+  })());
 });

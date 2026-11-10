@@ -1,0 +1,1612 @@
+/* Scoped to the V21 workspace; older tracking surfaces retain their layout. */
+.forth-v21.forth-tracking-workspace .forth-tracking-grid,
+.forth-v21.forth-tracking-workspace .forth-tracking-grid:has(.forth-more-menu),
+.forth-v21.forth-tracking-workspace .forth-tracking-grid:not(:has(.forth-roster)) {
+  display: grid;
+  grid-template-columns: minmax(360px, 420px) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0;
+}
+.forth-v21.forth-tracking-workspace.is-sidebar-collapsed .forth-tracking-grid,
+.forth-v21.forth-tracking-workspace.is-sidebar-collapsed .forth-tracking-grid:has(.forth-more-menu) { grid-template-columns: 0 minmax(0, 1fr); }
+.forth-v21.forth-tracking-workspace .forth-tracking-grid .forth-command-strip { position: relative; inset: auto; grid-column: 1 / -1; grid-row: 1; width: auto; margin: 0; padding: .65rem .9rem; }
+.forth-v21.forth-tracking-workspace .forth-command-top { flex-wrap: wrap; gap: .6rem; }
+.forth-v21.forth-tracking-workspace .forth-monitor-trigger { display: inline-flex; }
+.forth-v21.forth-tracking-workspace .forth-tracking-grid .forth-map-panel { position: relative; inset: auto; grid-column: 2; grid-row: 2; width: 100%; height: 100%; min-width: 0; min-height: 0; }
+.forth-v21.forth-tracking-workspace .forth-overlay-stage { position: relative; inset: auto; display: block; grid-column: 2; grid-row: 2; min-width: 0; min-height: 0; pointer-events: none; }
+.forth-v21.forth-tracking-workspace .forth-map-status { top: .65rem; right: auto; bottom: auto; left: .65rem; max-width: calc(100% - 4rem); flex-wrap: wrap; padding: .3rem; }
+.forth-v21.forth-tracking-workspace .forth-map-mode button { min-height: 2rem; padding: .3rem .55rem; font-size: .75rem; }
+.forth-v21.forth-tracking-workspace .forth-map-view-label { display: none; }
+.forth-v21.forth-tracking-workspace .forth-tracking-grid .forth-more-menu { position: absolute; top: 100%; right: .5rem; left: auto; width: min(350px, calc(100vw - 1rem)); max-height: 70dvh; overflow-y: auto; }
+.forth-v21.forth-tracking-workspace .forth-operations-sidebar { display: flex; grid-column: 1; grid-row: 2; min-width: 0; min-height: 0; flex-direction: column; border-right: 1px solid #ddd6e4; background: #fff; overflow: hidden; z-index: 20; }
+.forth-v21.forth-tracking-workspace [hidden] { display: none !important; }
+.forth-operations-heading { display: flex; align-items: center; justify-content: space-between; padding: .9rem 1rem .65rem; }
+.forth-operations-heading span { font-size: .65rem; letter-spacing: .12em; font-weight: 700; color: #73528c; }
+.forth-operations-heading h2 { color: #30203e; font-size: 1.2rem; font-weight: 750; }
+.forth-operations-heading button { padding: .6rem; border-radius: .5rem; color: #64748b; }
+.forth-operations-heading button:hover { background: #f4f0f7; }
+.forth-operations-modes { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .25rem; padding: 0 .55rem .7rem; border-bottom: 1px solid #e8e2ee; }
+.forth-operations-modes button { min-height: 2.45rem; padding: .35rem .2rem; border-radius: .45rem; color: #62566e; font-size: .72rem; font-weight: 700; line-height: 1.2; }
+.forth-focus-vehicle-picker { display: block; margin: .85rem 0 .55rem; }
+.forth-focus-vehicle-picker input { width: 100%; min-height: 2.55rem; border: 1px solid #d8d0e0; border-radius: .55rem; padding: .45rem .7rem; font-size: .9rem; }
+.forth-focus-vehicle-list { list-style: none; margin: 0 0 .85rem; padding: 0; display: grid; gap: .35rem; max-height: 14rem; overflow: auto; }
+.forth-focus-vehicle-list button { width: 100%; display: flex; justify-content: space-between; gap: .5rem; border: 1px solid #e7e1ee; border-radius: .55rem; background: #fff; padding: .55rem .7rem; text-align: left; }
+.forth-focus-vehicle-list button:hover { border-color: #c4b0d8; background: #faf7fd; }
+.forth-focus-vehicle-list strong { color: #2f1f3d; font-size: .95rem; }
+.forth-focus-vehicle-list span { color: #6b6280; font-size: .75rem; }
+.forth-playback-panel { display: grid; gap: .75rem; padding: .85rem 1rem 1.25rem; }
+.forth-playback-header h3 { margin: 0; color: #3b2158; font-size: 1.05rem; font-weight: 750; }
+.forth-playback-header p { margin: .35rem 0 0; color: #6b6280; font-size: .8rem; line-height: 1.45; }
+.forth-playback-field { display: grid; gap: .28rem; font-size: .78rem; font-weight: 650; color: #524560; }
+.forth-playback-field input,
+.forth-playback-field select { min-height: 2.45rem; border: 1px solid #d8d0e0; border-radius: .5rem; padding: .4rem .55rem; font-size: .88rem; font-weight: 500; color: #2f243c; }
+.forth-playback-time-row { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: .45rem; }
+.forth-playback-load { min-height: 2.6rem; }
+.forth-playback-unavailable { border: 1px solid #f0d4a0; border-radius: .65rem; background: #fff8eb; padding: .75rem .8rem; color: #7a5314; }
+.forth-playback-unavailable strong { display: block; margin-bottom: .3rem; }
+.forth-playback-unavailable p { margin: 0; font-size: .8rem; line-height: 1.45; }
+.forth-playback-detail { margin-top: .45rem !important; color: #6b5a3a; font-size: .74rem !important; }
+.forth-playback-controls { display: grid; gap: .55rem; border: 1px solid #ddd2ea; border-radius: .7rem; background: #f8f4fc; padding: .75rem; }
+.forth-playback-summary { margin: 0; color: #5b4570; font-size: .78rem; font-weight: 650; }
+.forth-playback-buttons { display: flex; flex-wrap: wrap; gap: .35rem; }
+.forth-playback-buttons button { min-height: 2.1rem; border: 1px solid #c9b7dc; border-radius: .45rem; background: #fff; padding: .25rem .55rem; color: #4b2f68; font-size: .78rem; font-weight: 700; }
+.forth-playback-buttons button[aria-pressed="true"] { background: #5b21b6; border-color: #5b21b6; color: #fff; }
+.forth-playback-timeline { display: grid; gap: .3rem; font-size: .75rem; color: #5b4570; }
+.forth-playback-observation { display: grid; gap: .3rem; margin: 0; }
+.forth-playback-observation > div { display: flex; justify-content: space-between; gap: .5rem; font-size: .78rem; }
+.forth-playback-observation dt { color: #6b6280; }
+.forth-playback-observation dd { margin: 0; color: #2f1f3d; font-weight: 650; }
+.forth-playback-visits { border: 1px solid #e3dfe8; border-radius: .55rem; padding: .55rem .7rem; font-size: .78rem; color: #574564; }
+.forth-playback-visits ul { margin: .4rem 0 0; padding-left: 1rem; }
+.forth-playback-selected-hits { margin: 0; color: #0f766e; font-size: .78rem; font-weight: 650; }
+.forth-v21.forth-tracking-workspace[data-playback="true"] .forth-map-panel::after {
+  content: "HISTORICAL GPS · not live";
+  position: absolute;
+  z-index: 700;
+  top: .55rem;
+  left: .55rem;
+  border: 1px solid #5b21b6;
+  border-radius: .45rem;
+  background: rgba(76, 29, 149, 0.92);
+  padding: .28rem .55rem;
+  color: #fff;
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  pointer-events: none;
+}
+.forth-playback-map-exit {
+  pointer-events: auto;
+  position: absolute;
+  z-index: 860;
+  top: .55rem;
+  right: .55rem;
+  max-width: min(22rem, calc(100% - 1.2rem));
+  min-height: 2.55rem;
+  border: 1px solid #5b21b6;
+  border-radius: .55rem;
+  background: #fff;
+  padding: .45rem .8rem;
+  color: #4c1d95;
+  font-size: .8rem;
+  font-weight: 800;
+  box-shadow: 0 8px 24px rgba(47, 24, 72, 0.18);
+}
+.forth-playback-map-exit:hover { background: #f5f0ff; }
+.forth-playback-header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; }
+.forth-playback-exit {
+  flex: 0 0 auto;
+  min-height: 2.35rem;
+  border: 1px solid #5b21b6;
+  border-radius: .5rem;
+  background: #5b21b6;
+  padding: .35rem .7rem;
+  color: #fff;
+  font-size: .78rem;
+  font-weight: 800;
+}
+.forth-playback-exit.is-compact { background: #fff; color: #5b21b6; }
+.forth-playback-exit:hover { filter: brightness(1.05); }
+.forth-playback-live-bar,
+.forth-playback-loading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  border: 1px solid #ddd2ea;
+  border-radius: .55rem;
+  background: #f8f4fc;
+  padding: .55rem .7rem;
+  color: #4b2f68;
+  font-size: .8rem;
+}
+.forth-playback-hint { margin: 0; color: #6b6280; font-size: .76rem; line-height: 1.45; }
+.forth-journey-intelligence {
+  display: grid;
+  gap: .55rem;
+  margin: 0 .15rem;
+  border: 1px solid #ddd2ea;
+  border-radius: .7rem;
+  background: #faf8fc;
+  padding: .75rem .8rem;
+}
+.forth-journey-intelligence h4 { margin: 0; color: #3b2158; font-size: .92rem; font-weight: 750; }
+.forth-journey-intelligence h5 { margin: .35rem 0 0; color: #4b2f68; font-size: .8rem; font-weight: 700; }
+.forth-journey-intelligence-note,
+.forth-journey-stops > p { margin: 0; color: #6b6280; font-size: .74rem; line-height: 1.4; }
+.forth-journey-intelligence-grid { display: grid; gap: .4rem; margin: 0; }
+.forth-journey-intelligence-grid > div { display: grid; gap: .15rem; }
+.forth-journey-intelligence-grid dt { color: #6b6280; font-size: .7rem; font-weight: 650; }
+.forth-journey-intelligence-grid dd { margin: 0; color: #2f1f3d; font-size: .78rem; font-weight: 650; line-height: 1.35; }
+.forth-journey-seek {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: #5b21b6;
+  font: inherit;
+  font-weight: 750;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.forth-journey-stops ul { list-style: none; margin: .35rem 0 0; padding: 0; display: grid; gap: .35rem; }
+.forth-journey-stop-btn {
+  width: 100%;
+  display: grid;
+  gap: .15rem;
+  border: 1px solid #e3d8f0;
+  border-radius: .5rem;
+  background: #fff;
+  padding: .45rem .55rem;
+  text-align: left;
+  color: #3d2b4b;
+}
+.forth-journey-stop-btn:hover { border-color: #b79ad4; background: #f7f2fc; }
+.forth-journey-stop-btn span { color: #6b6280; font-size: .72rem; line-height: 1.35; }
+.forth-speed-sidebar { padding: .75rem .85rem 1.1rem; }
+.forth-speed-sidebar .forth-speed-watch { border: 0; box-shadow: none; }
+.forth-speed-sidebar-note { margin: .65rem 0 0; color: #6b5a3a; font-size: .74rem; line-height: 1.45; }
+.forth-v21.forth-tracking-workspace .forth-command-top { gap: .45rem .7rem; }
+.forth-v21.forth-tracking-workspace .forth-float-title h1 { font-size: 1.15rem; }
+.forth-v21.forth-tracking-workspace .forth-tracking-kpis .forth-stat { min-width: 4.4rem; padding: .35rem .45rem; }
+.forth-v21.forth-tracking-workspace .forth-tracking-kpis .forth-stat strong { font-size: 1.05rem; }
+.forth-v21.forth-tracking-workspace .forth-tracking-kpis .forth-stat span { font-size: .68rem; }
+.forth-operations-modes button:hover { background: #f8f5fa; }
+.forth-operations-modes button[aria-pressed="true"] { background: #ede5f5; color: #54277a; box-shadow: inset 0 -2px #714198; }
+.forth-operations-pane { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.forth-snapshot-warning { flex: 0 0 auto; padding: .65rem .9rem; border-bottom: 1px solid #f1d4a2; background: #fff5e3; color: #895512; font-size: .78rem; line-height: 1.5; }
+.forth-depot-disclosure, .forth-visits-context { flex: 0 0 auto; margin: .6rem .75rem; border: 1px solid #e3dfe8; border-radius: .6rem; font-size: .8rem; }
+.forth-depot-disclosure > summary, .forth-visits-context > summary { padding: .7rem; cursor: pointer; font-weight: 650; color: #4d3b5e; }
+.forth-depot-disclosure > section { margin: 0; border: 0; box-shadow: none; padding: .75rem; }
+.forth-depot-disclosure h2 { font-size: .95rem; }
+.forth-visits-context p, .forth-visits-context a { display: block; padding: 0 .7rem .7rem; line-height: 1.5; }
+.forth-visits-context a { color: #66378b; text-decoration: underline; }
+.forth-location-layer-controls { display: flex; flex-wrap: wrap; gap: .65rem 1rem; padding: .75rem 1rem 0; font-size: .82rem; color: #574564; }
+.forth-location-layer-controls label { display: flex; align-items: center; gap: .4rem; }
+.forth-location-layer-hint { flex: 1 1 100%; margin: 0; color: #6b7280; font-size: .74rem; line-height: 1.35; }
+.forth-office-location-card { margin: .4rem .75rem .7rem; border: 1px solid #bbdec8; border-radius: .65rem; background: #f2faf4; padding: .8rem; }
+.forth-office-location-card span { color: #25734e; font-size: .7rem; font-weight: 700; }
+.forth-office-location-card h3 { margin-top: .25rem; color: #1d4833; font-size: 1rem; font-weight: 700; }
+.forth-office-location-card p { margin-top: .3rem; color: #586c5e; font-size: .8rem; }
+.forth-office-location-card button { min-height: 2.2rem; margin-top: .65rem; border: 1px solid #8ebd9e; border-radius: .4rem; padding: .3rem .6rem; color: #236546; font-size: .8rem; font-weight: 650; }
+.forth-operations-empty { padding: 1.5rem 1rem; color: #64748b; font-size: .9rem; line-height: 1.7; }
+.forth-operations-empty h3 { font-weight: 700; color: #3d2b4b; }
+.forth-operations-empty button { margin-top: 1rem; }
+.forth-v21.forth-tracking-workspace .forth-operations-sidebar .forth-roster,
+.forth-v21.forth-tracking-workspace .forth-operations-sidebar .forth-vehicle-card,
+.forth-v21.forth-tracking-workspace .forth-operations-sidebar .forth-locations-slot {
+  position: static; inset: auto; display: flex; flex: 1 0 auto; flex-direction: column; width: 100%; height: auto; min-height: 0; max-height: none; margin: 0; border: 0; border-radius: 0; box-shadow: none; overflow: visible; transform: none;
+}
+.forth-v21.forth-tracking-workspace .forth-operations-sidebar .forth-roster-header { background: #fff; border: 0; padding: .5rem 1rem; min-height: 0; }
+.forth-v21.forth-tracking-workspace .forth-roster-header h2 { color: #3d304b; font-size: .9rem; }
+.forth-v21.forth-tracking-workspace .forth-roster-header .forth-monitor-header-meta,
+.forth-v21.forth-tracking-workspace .forth-roster-header .forth-monitor-sort-state { color: #71667a; font-size: .7rem; }
+.forth-v21.forth-tracking-workspace .forth-roster-header > button { display: none; }
+.forth-v21.forth-tracking-workspace .forth-monitor-sticky { position: static; padding: .4rem .7rem; background: #fff; }
+.forth-v21.forth-tracking-workspace .forth-monitor-quick-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.forth-v21.forth-tracking-workspace .forth-monitor-quick { min-height: 2rem; padding: .3rem .4rem; font-size: .72rem; box-shadow: none; }
+.forth-v21.forth-tracking-workspace .forth-monitor-search-input,
+.forth-v21.forth-tracking-workspace .forth-monitor-select { min-height: 2.45rem; font-size: .8rem; }
+.forth-v21.forth-tracking-workspace .forth-vehicle-results { flex: none; overflow: visible; padding: .2rem .7rem .8rem; }
+.forth-v21.forth-tracking-workspace .forth-vehicle-row { padding: .8rem; box-shadow: none; }
+.forth-v21.forth-tracking-workspace .forth-vehicle-reg { font-size: 1.05rem; }
+.forth-v21.forth-tracking-workspace .forth-vehicle-driver { font-size: .8rem; }
+.forth-v21.forth-tracking-workspace .forth-row-meta .forth-vehicle-location,
+.forth-v21.forth-tracking-workspace .forth-row-meta .forth-row-age,
+.forth-v21.forth-tracking-workspace .forth-row-confidence { font-size: .72rem; }
+.forth-v21.forth-tracking-workspace .forth-vehicle-card-header { padding: 1rem; }
+.forth-v21.forth-tracking-workspace .forth-vehicle-card-body { overflow: visible; padding: .25rem 1rem 1rem; }
+.forth-v21.forth-tracking-workspace .forth-locations-panel { width: 100%; max-height: none; padding: .8rem; border: 0; box-shadow: none; overflow: visible; }
+.forth-v21.forth-tracking-workspace .forth-locations-panel-header > button { display: none; }
+.forth-v21.forth-tracking-workspace .forth-locations-list { max-height: none; overflow: visible; }
+.forth-v21.forth-tracking-workspace .forth-locations-detail { margin: .5rem 0 1rem; padding: .85rem; border: 1px solid #d8c7e7; border-radius: .7rem; background: #faf7fd; }
+.forth-v21.forth-tracking-workspace .forth-locations-controls input,
+.forth-v21.forth-tracking-workspace .forth-locations-controls select { min-height: 2.5rem; font-size: .8rem; }
+.forth-v21.forth-tracking-workspace .forth-locations-row strong { font-size: .9rem; }
+.forth-v21.forth-tracking-workspace .forth-locations-retry { align-self: flex-start; min-height: 2.2rem; margin: .5rem .8rem; border: 1px solid #c7abd8; border-radius: .5rem; padding: .3rem .7rem; color: #5c3778; font-size: .8rem; font-weight: 650; }
+.forth-v21.forth-tracking-workspace .forth-locations-address,
+.forth-v21.forth-tracking-workspace .forth-locations-nearby-row span { font-size: .75rem; line-height: 1.5; }
+.forth-v21.forth-tracking-workspace .forth-attention-dock:empty { display: none; }
+/* V21.1 — keep a compact fleet pulse in the header; Speed Watch + Locations stay visible. */
+.forth-v21.forth-tracking-workspace .forth-show-driving-map { display: none; }
+.forth-v21.forth-tracking-workspace .forth-tracking-kpis {
+  display: inline-flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: .35rem;
+  min-width: 0;
+}
+.forth-v21.forth-tracking-workspace .forth-stat {
+  min-height: 2.35rem;
+  padding: .25rem .55rem;
+  border-radius: .45rem;
+}
+.forth-v21.forth-tracking-workspace .forth-stat strong,
+.forth-v21.forth-tracking-workspace .forth-stat .forth-stat-value { font-size: 1rem; }
+.forth-v21.forth-tracking-workspace .forth-stat span,
+.forth-v21.forth-tracking-workspace .forth-stat .forth-stat-label { font-size: .62rem; }
+.forth-v21.forth-tracking-workspace .forth-float-actions .forth-locations-trigger strong,
+.forth-v21.forth-tracking-workspace .forth-float-actions .forth-speed-watch-launcher-badge {
+  display: inline-flex;
+  min-width: 1.35rem;
+  justify-content: center;
+  border-radius: .35rem;
+  background: rgba(255, 255, 255, .18);
+  padding: 0 .28rem;
+  font-size: .68rem;
+}
+.forth-v21.forth-tracking-workspace .forth-map-speed-widget { display: inline-flex; pointer-events: auto; }
+.forth-v21.forth-tracking-workspace .forth-map-locations-btn strong { margin-left: .25rem; }
+.forth-v21.forth-tracking-workspace .forth-operations-modes { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.forth-v21.forth-tracking-workspace .forth-operations-modes button { font-size: .7rem; font-weight: 750; }
+.forth-v21.forth-tracking-workspace .forth-vehicle-row { gap: .35rem; padding: .7rem .75rem; }
+.forth-v21.forth-tracking-workspace .forth-vehicle-reg { letter-spacing: .01em; }
+.forth-v21.forth-tracking-workspace .forth-inspector-hero { margin-bottom: .55rem; }
+.forth-v21.forth-tracking-workspace .forth-inspector-grid { gap: .45rem .7rem; }
+.forth-v21.forth-tracking-workspace .forth-inspector-section-label { display: block; margin-bottom: .35rem; color: #6b5b7a; font-size: .68rem; font-weight: 700; line-height: 1.35; }
+.forth-proximity-summary { margin-top: .75rem; padding-top: .65rem; border-top: 1px solid #e4d8ef; }
+.forth-proximity-counts { display: flex; flex-wrap: wrap; gap: .45rem; margin: .45rem 0 .55rem; }
+.forth-proximity-counts span {
+  display: inline-flex; align-items: baseline; gap: .3rem;
+  border: 1px solid #dccfeb; border-radius: .45rem; background: #fff; padding: .28rem .55rem;
+  color: #564466; font-size: .72rem; font-weight: 600;
+}
+.forth-proximity-counts strong { color: #54277a; font-size: .95rem; }
+.forth-proximity-caution {
+  margin-top: .55rem; border: 1px solid #f0d7a4; border-radius: .55rem; background: #fff8ea; padding: .55rem .6rem;
+}
+.forth-nearest-toggle {
+  margin-top: .65rem; min-height: 2.2rem; width: 100%;
+  border: 1px dashed #c7abd8; border-radius: .45rem; background: #faf7fd; padding: .35rem .55rem;
+  color: #5c3778; font-size: .75rem; font-weight: 650; text-align: left;
+}
+.forth-nearest-toggle:hover { background: #f3ebf9; }
+.forth-nearest-planning { margin-top: .45rem; }
+.forth-locations-nearby-row.is-planning { border-style: dashed; background: #fcfcfd; }
+.forth-v21.forth-tracking-workspace .forth-map-status {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .35rem;
+  max-width: min(46rem, calc(100% - 1.2rem));
+  pointer-events: auto;
+}
+.forth-map-primary-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .3rem;
+  border: 1px solid #ddd2ea;
+  border-radius: .65rem;
+  background: rgba(255, 255, 255, 0.94);
+  padding: .28rem;
+  box-shadow: 0 8px 22px rgba(45, 28, 64, 0.12);
+}
+.forth-map-primary-actions > button {
+  min-height: 2rem;
+  border: 1px solid transparent;
+  border-radius: .45rem;
+  background: transparent;
+  padding: .3rem .55rem;
+  color: #4b3a5c;
+  font-size: .74rem;
+  font-weight: 700;
+}
+.forth-map-primary-actions > button:hover { background: #f6f1fa; }
+.forth-map-primary-actions > button[aria-pressed="true"] {
+  border-color: #c9b3dc;
+  background: #efe6f7;
+  color: #54277a;
+}
+.forth-map-primary-actions > button:disabled { opacity: .45; }
+.forth-map-layers { position: relative; }
+.forth-map-layers > summary {
+  list-style: none;
+  min-height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #d6c6e6;
+  border-radius: .45rem;
+  background: #fff;
+  padding: .3rem .55rem;
+  color: #54277a;
+  font-size: .74rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+.forth-map-layers > summary::-webkit-details-marker { display: none; }
+.forth-map-layers[open] > summary { background: #efe6f7; }
+.forth-map-layers .forth-map-mode {
+  position: absolute;
+  top: calc(100% + .35rem);
+  left: 0;
+  z-index: 30;
+  display: grid;
+  gap: .25rem;
+  min-width: 12.5rem;
+  border: 1px solid #ddd2ea;
+  border-radius: .65rem;
+  background: #fff;
+  padding: .4rem;
+  box-shadow: 0 12px 28px rgba(45, 28, 64, 0.16);
+}
+.forth-map-layers .forth-map-mode button {
+  justify-content: space-between;
+  min-height: 2.1rem;
+  border: 1px solid #ebe4f1;
+  border-radius: .45rem;
+  background: #faf8fc;
+  padding: .35rem .55rem;
+  color: #4b3a5c;
+  font-size: .74rem;
+  font-weight: 700;
+  text-align: left;
+}
+.forth-map-layers .forth-map-mode button[aria-pressed="true"],
+.forth-v21.forth-tracking-workspace .forth-map-mode .forth-map-locations-btn[aria-pressed="true"] {
+  background: #54277a;
+  color: #fff;
+}
+.forth-map-layers .forth-map-mode button strong { margin-left: .35rem; opacity: .9; }
+.forth-v21.forth-tracking-workspace .forth-stat.is-gps { background: #eef8f3; color: #0f6b4c; }
+.forth-v21.forth-tracking-workspace .forth-stat.is-gps-off { background: #fff7ed; color: #9a5b12; }
+.forth-v21.forth-tracking-workspace .forth-stat.is-sync {
+  cursor: default;
+  background: #f7f4fa;
+  color: #5b4a6d;
+  pointer-events: none;
+}
+.forth-more-sync-note {
+  margin: .55rem 0 0;
+  color: #6b6280;
+  font-size: .74rem;
+  line-height: 1.4;
+}
+.forth-v21.forth-tracking-workspace .forth-monitor-quick-filters { display: none; }
+.forth-v21.forth-tracking-workspace .forth-map-mode { display: inline-flex; flex-wrap: wrap; gap: .25rem; }
+.forth-v21.forth-tracking-workspace .forth-outside-button { font-size: .7rem; }
+.forth-v21.forth-tracking-workspace .forth-speed-watch-panel,
+.forth-v21.forth-tracking-workspace .forth-speed-watch-panel.is-beside-inspector {
+  top: 3.4rem; right: .55rem; bottom: auto; left: auto;
+  width: min(22rem, calc(100% - 1.1rem)); height: auto; max-height: min(70dvh, 34rem);
+  z-index: 40; pointer-events: auto;
+}
+.forth-v21.forth-tracking-workspace .forth-speed-watch-panel .forth-speed-watch {
+  height: auto; max-height: min(70dvh, 34rem); overflow: auto;
+  border: 1px solid #d8cfe2; border-radius: .7rem; box-shadow: 0 10px 28px rgba(35, 27, 47, .18);
+}
+.forth-v21 button:focus-visible, .forth-v21 summary:focus-visible, .forth-v21 a:focus-visible { outline: 2px solid #8952af; outline-offset: 2px; }
+@media (max-width: 1050px) {
+  .forth-v21.forth-tracking-workspace .forth-tracking-kpis .forth-stat span { display: none; }
+  .forth-v21.forth-tracking-workspace .forth-float-actions .forth-locations-trigger span,
+  .forth-v21.forth-tracking-workspace .forth-float-actions .forth-speed-watch-launcher-label { display: none; }
+}
+@media (max-width: 767px) {
+  .forth-v21.forth-tracking-workspace .forth-tracking-grid,
+  .forth-v21.forth-tracking-workspace .forth-tracking-grid:has(.forth-more-menu),
+  .forth-v21.forth-tracking-workspace .forth-tracking-grid:not(:has(.forth-roster)) { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(210px, 40%) minmax(0, 1fr); }
+  .forth-v21.forth-tracking-workspace .forth-tracking-grid .forth-map-panel,
+  .forth-v21.forth-tracking-workspace .forth-overlay-stage { grid-column: 1; grid-row: 2; }
+  .forth-v21.forth-tracking-workspace .forth-operations-sidebar { grid-column: 1; grid-row: 3; border-top: 1px solid #ddd6e4; border-right: 0; }
+  .forth-v21.forth-tracking-workspace.is-sidebar-collapsed .forth-tracking-grid,
+  .forth-v21.forth-tracking-workspace.is-sidebar-collapsed .forth-tracking-grid:has(.forth-more-menu) { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .forth-v21.forth-tracking-workspace .forth-command-strip { padding: .45rem .6rem; }
+  .forth-v21.forth-tracking-workspace .forth-float-title { display: none; }
+  .forth-v21.forth-tracking-workspace .forth-live-status { margin: 0; }
+  .forth-v21.forth-tracking-workspace .forth-float-actions { margin-left: auto; }
+  .forth-operations-heading { padding: .5rem .8rem; }
+  .forth-operations-heading span { display: none; }
+  .forth-operations-heading h2 { font-size: 1rem; }
+  .forth-operations-modes { padding-bottom: .45rem; }
+  .forth-operations-modes button { min-height: 2.4rem; }
+  .forth-v21.forth-tracking-workspace .forth-map-status { max-width: calc(100% - 3.5rem); top: .4rem; left: .4rem; }
+  .forth-v21.forth-tracking-workspace .forth-map-mode button { min-height: 1.8rem; font-size: .7rem; padding: .25rem .35rem; }
+}
+
+/* �� V23 Fleet Control sidebar: dense premium monitor �� */
+.forth-v21.forth-tracking-workspace .forth-operations-sidebar {
+  background:
+    linear-gradient(180deg, #f7f3fb 0%, #f4f0f8 28%, #f8f7fa 100%);
+  border-right: 1px solid #d9cee4;
+}
+.forth-v21.forth-tracking-workspace .forth-operations-heading {
+  gap: .5rem;
+  padding: .55rem .75rem .4rem;
+  border-bottom: 1px solid rgba(113, 65, 152, 0.12);
+  background: linear-gradient(105deg, #4a2068 0%, #5b2a7a 55%, #6a348c 100%);
+}
+.forth-v21.forth-tracking-workspace .forth-operations-heading span {
+  display: block;
+  color: #d7c2ea;
+  font-size: .58rem;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.forth-v21.forth-tracking-workspace .forth-operations-heading h2 {
+  margin: .05rem 0 0;
+  color: #fff;
+  font-size: 1.02rem;
+  font-weight: 800;
+  letter-spacing: -.02em;
+}
+.forth-v21.forth-tracking-workspace .forth-operations-heading button {
+  color: #ebdff5;
+  border-radius: .45rem;
+  padding: .35rem;
+}
+.forth-v21.forth-tracking-workspace .forth-operations-heading button:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+.forth-v21.forth-tracking-workspace .forth-operations-modes {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: .2rem;
+  margin: .45rem .55rem .35rem;
+  padding: .22rem;
+  border: 1px solid #e0d5eb;
+  border-radius: .7rem;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 1px 2px rgba(52, 28, 78, 0.05);
+}
+.forth-v21.forth-tracking-workspace .forth-operations-modes button {
+  min-height: 2.15rem;
+  border: 0;
+  border-radius: .5rem;
+  background: transparent;
+  color: #62506f;
+  font-size: .68rem;
+  font-weight: 750;
+  line-height: 1.15;
+}
+.forth-v21.forth-tracking-workspace .forth-operations-modes button:hover {
+  background: #f3ecf8;
+  color: #4d2a68;
+}
+.forth-v21.forth-tracking-workspace .forth-operations-modes button[aria-pressed="true"] {
+  background: #5b2a7a;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(74, 32, 104, 0.28);
+}
+.forth-v21.forth-tracking-workspace .forth-operations-pane {
+  gap: 0;
+}
+.forth-v21.forth-tracking-workspace .forth-operations-sidebar .forth-roster {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  background: transparent;
+}
+.forth-v21.forth-tracking-workspace .forth-roster-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  min-height: 0;
+  margin: 0 .55rem;
+  padding: .35rem .15rem .2rem;
+  border: 0;
+  background: transparent;
+}
+.forth-v21.forth-tracking-workspace .forth-roster-title-block {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .35rem .55rem;
+}
+.forth-v21.forth-tracking-workspace .forth-roster-header h2 {
+  margin: 0;
+  color: #2f1d40;
+  font-size: .84rem;
+  font-weight: 800;
+  letter-spacing: -.01em;
+}
+.forth-v21.forth-tracking-workspace .forth-monitor-header-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: .2rem;
+  margin: 0;
+  color: #71627f;
+  font-size: .68rem;
+  font-weight: 650;
+}
+.forth-v21.forth-tracking-workspace .forth-monitor-header-meta strong {
+  color: #5b2a7a;
+  font-size: .78rem;
+  font-weight: 850;
+}
+.forth-v21.forth-tracking-workspace .forth-monitor-header-meta em {
+  margin-left: .25rem;
+  color: #8a7a97;
+  font-style: normal;
+  font-weight: 600;
+}
+.forth-v21.forth-tracking-workspace .forth-roster-collapse {
+  display: none;
+}
+.forth-v21.forth-tracking-workspace .forth-monitor-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin: 0 .45rem;
+  padding: .4rem;
+  border: 1px solid #e4d9ef;
+  border-radius: .75rem;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 6px 18px rgba(52, 28, 78, 0.07);
+}
+.forth-v21.forth-tracking-workspace .forth-vehicle-controls {
+  display: grid;
+  gap: .4rem;
+}
+.forth-monitor-search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 7.4rem;
+  gap: .35rem;
+  align-items: center;
+}
+.forth-v21.forth-tracking-workspace .forth-monitor-search-input,
+.forth-v21.forth-tracking-workspace .forth-monitor-select {
+  min-height: 2.15rem;
+  border: 1px solid #ddd2ea;
+  border-radius: .5rem;
+  background: #fbfafc;
+  color: #2f243c;
+  font-size: .78rem;
+  font-weight: 600;
+}
+.forth-v21.forth-tracking-workspace .forth-monitor-search-input {
+  padding-left: 2rem;
+}
+.forth-v21.forth-tracking-workspace .forth-monitor-search-input:focus,
+.forth-v21.forth-tracking-workspace .forth-monitor-select:focus {
+  border-color: #9b74bc;
+  background: #fff;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(91, 42, 122, 0.14);
+}
+.forth-monitor-sort-wrap { min-width: 0; }
+.forth-live-filter-chips {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: .28rem;
+  margin: 0;
+}
+.forth-live-filter-chip {
+  display: grid;
+  gap: .05rem;
+  min-height: 2.35rem;
+  place-content: center;
+  border: 1px solid #e5dced;
+  border-radius: .55rem;
+  background: #faf8fc;
+  padding: .2rem .15rem;
+  color: #56435f;
+  font-size: .62rem;
+  font-weight: 750;
+  line-height: 1.05;
+  text-align: center;
+}
+.forth-live-filter-chip strong {
+  color: inherit;
+  font-size: .82rem;
+  font-weight: 850;
+  letter-spacing: -.02em;
+}
+.forth-live-filter-chip:hover { filter: brightness(0.98); }
+.forth-live-filter-chip.is-all.is-active,
+.forth-live-filter-chip.is-all[aria-pressed="true"] {
+  border-color: #5b2a7a;
+  background: #5b2a7a;
+  color: #fff;
+}
+.forth-live-filter-chip.is-driving {
+  border-color: #b7e4d2;
+  background: #eefaf4;
+  color: #0b6b4c;
+}
+.forth-live-filter-chip.is-driving.is-active,
+.forth-live-filter-chip.is-driving[aria-pressed="true"] {
+  border-color: #0b8a5e;
+  background: #0b8a5e;
+  color: #fff;
+}
+.forth-live-filter-chip.is-stopped {
+  border-color: #c9c4f0;
+  background: #f2f1fc;
+  color: #4338ca;
+}
+.forth-live-filter-chip.is-stopped.is-active,
+.forth-live-filter-chip.is-stopped[aria-pressed="true"] {
+  border-color: #4f46e5;
+  background: #4f46e5;
+  color: #fff;
+}
+.forth-live-filter-chip.is-gps {
+  border-color: #cfe8db;
+  background: #f2faf6;
+  color: #146b4a;
+}
+.forth-live-filter-chip.is-gps.is-active,
+.forth-live-filter-chip.is-gps[aria-pressed="true"] {
+  border-color: #147a52;
+  background: #147a52;
+  color: #fff;
+}
+.forth-live-filter-chip.is-attention {
+  border-color: #f3d2a8;
+  background: #fff7eb;
+  color: #9a5b12;
+}
+.forth-live-filter-chip.is-attention.is-active,
+.forth-live-filter-chip.is-attention[aria-pressed="true"] {
+  border-color: #c2410c;
+  background: #c2410c;
+  color: #fff;
+}
+.forth-monitor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .3rem;
+}
+.forth-monitor-more-filter {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+.forth-v21.forth-tracking-workspace .forth-monitor-map-action,
+.forth-monitor-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: .28rem;
+  min-height: 2rem;
+  border-radius: .45rem;
+  padding: .25rem .55rem;
+  font-size: .68rem;
+  font-weight: 750;
+}
+.forth-v21.forth-tracking-workspace .forth-monitor-map-action {
+  border: 1px solid #b7e4d2;
+  background: #e8f8f0;
+  color: #0b6b4c;
+}
+.forth-v21.forth-tracking-workspace .forth-monitor-map-action[aria-pressed="true"] {
+  border-color: #0b8a5e;
+  background: #0b8a5e;
+  color: #fff;
+}
+.forth-monitor-clear {
+  border: 1px solid #e2d5ef;
+  background: #fff;
+  color: #5b2a7a;
+}
+.forth-v21.forth-tracking-workspace .forth-vehicle-results {
+  display: grid;
+  gap: .35rem;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: .45rem .45rem .35rem;
+  padding: 0 0 .35rem;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.forth-roster-empty {
+  border: 1px dashed #ddd2ea;
+  border-radius: .7rem;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 1.25rem .85rem;
+  color: #71627f;
+  font-size: .8rem;
+  text-align: center;
+}
+.forth-v21.forth-tracking-workspace .forth-vehicle-row {
+  display: grid;
+  gap: .4rem;
+  margin: 0;
+  /* overflow:hidden + ultra-tight line-height was clipping registration glyphs */
+  overflow: visible;
+  border: 1px solid #e6dcf0;
+  border-radius: .75rem;
+  background: #fff;
+  padding: .7rem .75rem .65rem .85rem;
+  box-shadow: 0 1px 3px rgba(42, 24, 64, 0.04);
+}
+.forth-v21.forth-tracking-workspace .forth-vehicle-row::before {
+  width: 3px;
+  border-radius: .75rem 0 0 .75rem;
+}
+.forth-v21.forth-tracking-workspace .forth-vehicle-row:hover {
+  border-color: #c4a8dc;
+  box-shadow: 0 6px 16px rgba(74, 32, 104, 0.1);
+}
+.forth-v21.forth-tracking-workspace .forth-vehicle-row.is-selected {
+  border-color: #8b5cb8;
+  background: linear-gradient(100deg, #f4ecfb 0%, #faf7fd 70%);
+  box-shadow: inset 3px 0 0 #5b2a7a, 0 8px 18px rgba(74, 32, 104, 0.12);
+}
+.forth-v21.forth-tracking-workspace .forth-vehicle-row[data-activity="driving"] {
+  border-color: #b7e4d2;
+  background: linear-gradient(100deg, #f1fbf6 0%, #fff 55%);
+}
+.forth-v21.forth-tracking-workspace .forth-vehicle-row[data-activity="driving"] .forth-vehicle-reg {
+  color: #0b6b4c;
+}
+.forth-v21.forth-tracking-workspace .forth-vehicle-row[data-attention="true"] {
+  border-color: #f0c48a;
+  background: linear-gradient(100deg, #fff8ee 0%, #fff 60%);
+}
+.forth-v21.forth-tracking-workspace .forth-row-main {
+  align-items: flex-start;
+  gap: .6rem;
+  min-height: 0;
+}
+.forth-v21.forth-tracking-workspace .forth-row-identity {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: .22rem;
+  overflow: visible;
+  padding-top: .05rem;
+}
+.forth-v21.forth-tracking-workspace .forth-vehicle-reg {
+  display: block;
+  overflow: visible;
+  color: #2a1d3c;
+  font-size: 1.05rem;
+  font-weight: 800;
+  line-height: 1.35;
+  letter-spacing: -.015em;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+.forth-v21.forth-tracking-workspace .forth-vehicle-profile {
+  display: block;
+  overflow: hidden;
+  color: #6f627c;
+  font-size: .72rem;
+  font-weight: 650;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.forth-v21.forth-tracking-workspace .forth-row-vehicle-symbol {
+  flex: 0 0 auto;
+  margin-top: .12rem;
+  border-radius: .5rem;
+  background: #f3eef8;
+  padding: .4rem;
+  color: #5b2a7a;
+}
+.forth-v21.forth-tracking-workspace .forth-vehicle-row[data-activity="driving"] .forth-row-vehicle-symbol {
+  background: #e5f7ef;
+  color: #0b6b4c;
+}
+.forth-v21.forth-tracking-workspace .forth-row-speed {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin-top: .05rem;
+  border-radius: .5rem;
+  background: #f3f0f6;
+  padding: .28rem .45rem;
+}
+.forth-v21.forth-tracking-workspace .forth-row-speed.is-driving {
+  background: #d9f5e8;
+  color: #0b6b4c;
+}
+.forth-v21.forth-tracking-workspace .forth-row-meta {
+  display: flex;
+  gap: .45rem;
+  align-items: center;
+  min-width: 0;
+  color: #6f627c;
+  font-size: .72rem;
+  line-height: 1.35;
+}
+.forth-v21.forth-tracking-workspace .forth-vehicle-location {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: .25rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.forth-v21.forth-tracking-workspace .forth-row-age {
+  flex: 0 0 auto;
+  color: #857792;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.forth-v21.forth-tracking-workspace .forth-vehicle-status-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+  align-items: center;
+}
+.forth-v21.forth-tracking-workspace .forth-row-confidence,
+.forth-v21.forth-tracking-workspace .forth-vehicle-driver {
+  font-size: .7rem;
+  line-height: 1.3;
+}
+.forth-v21.forth-tracking-workspace .forth-activity-label {
+  font-size: .68rem !important;
+  line-height: 1.25 !important;
+}
+.forth-v21.forth-tracking-workspace .forth-vehicle-results {
+  gap: .45rem;
+}
+.forth-v21.forth-tracking-workspace .forth-depot-disclosure {
+  flex: 0 0 auto;
+  margin: .15rem .55rem .55rem;
+  border: 1px solid #e0d5eb;
+  border-radius: .6rem;
+  background: rgba(255, 255, 255, 0.84);
+}
+.forth-v21.forth-tracking-workspace .forth-depot-disclosure > summary {
+  padding: .55rem .7rem;
+  color: #5b4570;
+  font-size: .74rem;
+  font-weight: 750;
+}
+.forth-v21.forth-tracking-workspace .forth-depot-disclosure > section {
+  padding: .55rem .7rem .7rem;
+}
+
+/* �� Locations pane: premium layer controls �� */
+.forth-v21.forth-tracking-workspace .forth-locations-pane-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .55rem;
+  margin: .2rem .55rem .35rem;
+  padding: .15rem .1rem 0;
+}
+.forth-v21.forth-tracking-workspace .forth-locations-pane-header h3 {
+  margin: 0;
+  color: #2f1d40;
+  font-size: .88rem;
+  font-weight: 800;
+  letter-spacing: -.01em;
+}
+.forth-v21.forth-tracking-workspace .forth-locations-pane-header p {
+  margin: .18rem 0 0;
+  color: #71627f;
+  font-size: .7rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.forth-locations-layer-badge {
+  flex: 0 0 auto;
+  border: 1px solid #ddd2ea;
+  border-radius: 999px;
+  background: #f4f0f8;
+  padding: .28rem .55rem;
+  color: #6b5a7c;
+  font-size: .66rem;
+  font-weight: 800;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}
+.forth-locations-layer-badge.is-on {
+  border-color: #9ed4bc;
+  background: #e8f7ef;
+  color: #0b6b4c;
+}
+.forth-v21.forth-tracking-workspace .forth-location-layer-controls {
+  display: grid;
+  gap: .35rem;
+  margin: 0 .55rem .45rem;
+  padding: .4rem;
+  border: 1px solid #e4d9ef;
+  border-radius: .8rem;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 6px 16px rgba(52, 28, 78, 0.06);
+}
+.forth-v21.forth-tracking-workspace .forth-location-layer-controls > label.forth-layer-toggle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .65rem;
+  align-items: center;
+  min-height: 3.05rem;
+  margin: 0;
+  border: 1px solid #ebe4f2;
+  border-radius: .65rem;
+  background: #faf8fc;
+  padding: .55rem .65rem;
+  cursor: pointer;
+}
+.forth-v21.forth-tracking-workspace .forth-layer-toggle:hover {
+  border-color: #d0bce3;
+  background: #fff;
+}
+.forth-v21.forth-tracking-workspace .forth-layer-toggle.is-on {
+  border-color: #c4a8dc;
+  background: linear-gradient(105deg, #f6effb 0%, #fff 70%);
+  box-shadow: inset 3px 0 0 #5b2a7a;
+}
+.forth-v21.forth-tracking-workspace .forth-layer-toggle.is-disabled {
+  opacity: .62;
+  cursor: not-allowed;
+}
+.forth-layer-toggle-copy {
+  display: grid;
+  gap: .15rem;
+  min-width: 0;
+}
+.forth-layer-toggle-copy strong {
+  color: #2f1d40;
+  font-size: .8rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+.forth-layer-toggle-copy small {
+  color: #71627f;
+  font-size: .68rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.forth-v21.forth-tracking-workspace .forth-layer-toggle input[type="checkbox"] {
+  width: 1.05rem;
+  height: 1.05rem;
+  accent-color: #5b2a7a;
+  cursor: pointer;
+}
+.forth-v21.forth-tracking-workspace .forth-visits-context {
+  margin: 0 .55rem .45rem;
+  border: 1px solid #e4d9ef;
+  border-radius: .65rem;
+  background: rgba(255, 255, 255, 0.9);
+}
+.forth-v21.forth-tracking-workspace .forth-visits-context > summary {
+  padding: .55rem .7rem;
+  color: #5b4570;
+  font-size: .74rem;
+  font-weight: 750;
+}
+.forth-v21.forth-tracking-workspace .forth-locations-slot {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  margin: 0 .55rem .55rem;
+}
+.forth-v21.forth-tracking-workspace .forth-locations-state {
+  margin: 0;
+  border: 1px solid #e4d9ef;
+  border-bottom: 0;
+  border-radius: .7rem .7rem 0 0;
+  background: #f7f2fb;
+  padding: .5rem .7rem;
+  color: #5c397b;
+  font-size: .72rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+.forth-v21.forth-tracking-workspace .forth-locations-state[data-layer="visible"] {
+  border-color: #b7e4d2;
+  background: #eef8f3;
+  color: #0b6b4c;
+}
+.forth-v21.forth-tracking-workspace .forth-operations-sidebar .forth-locations-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  border: 1px solid #e4d9ef;
+  border-radius: 0 0 .75rem .75rem;
+  background: #fff;
+  box-shadow: none;
+  overflow: auto;
+}
+.forth-v21.forth-tracking-workspace .forth-locations-panel-header {
+  align-items: flex-start;
+  padding: .7rem .75rem .55rem;
+  background: linear-gradient(180deg, #faf7fd 0%, #fff 100%);
+}
+.forth-v21.forth-tracking-workspace .forth-locations-panel-header strong {
+  color: #2f1d40;
+  font-size: 1.05rem;
+  font-weight: 850;
+  line-height: 1.3;
+}
+.forth-v21.forth-tracking-workspace .forth-locations-eyebrow {
+  color: #7a6490;
+  font-size: .62rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.forth-v21.forth-tracking-workspace .forth-locations-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 7.5rem;
+  gap: .35rem;
+  padding: 0 .75rem .55rem;
+}
+.forth-v21.forth-tracking-workspace .forth-locations-controls input,
+.forth-v21.forth-tracking-workspace .forth-locations-controls select {
+  min-height: 2.2rem;
+  border: 1px solid #ddd2ea;
+  border-radius: .5rem;
+  background: #fbfafc;
+  font-size: .78rem;
+  font-weight: 600;
+}
+.forth-v21.forth-tracking-workspace .forth-locations-list {
+  display: grid;
+  gap: .35rem;
+  padding: 0 .75rem .85rem;
+}
+.forth-v21.forth-tracking-workspace .forth-locations-row {
+  gap: .2rem;
+  border: 1px solid #ebe4f2;
+  border-radius: .65rem;
+  background: #fff;
+  padding: .55rem .65rem;
+}
+.forth-v21.forth-tracking-workspace .forth-locations-row strong {
+  font-size: .86rem;
+  font-weight: 800;
+  line-height: 1.3;
+}
+.forth-v21.forth-tracking-workspace .forth-locations-row.is-selected {
+  border-color: #8b5cb8;
+  background: #f6effb;
+  box-shadow: inset 3px 0 0 #5b2a7a;
+}
+
+/* ?? V23 top rail + page chrome ?? */
+.forth-v21.forth-tracking-workspace {
+  --fleet-rail-ink: #2a1b3d;
+  --fleet-rail-muted: #6d5d7d;
+  --fleet-rail-line: #e5dced;
+  --fleet-rail-surface: rgba(255, 255, 255, 0.92);
+  background:
+    radial-gradient(1200px 420px at 12% -10%, rgba(124, 74, 168, 0.08), transparent 60%),
+    radial-gradient(900px 380px at 88% 0%, rgba(59, 130, 246, 0.05), transparent 55%),
+    linear-gradient(180deg, #f5f1f8 0%, #eef1f5 42%, #e9edf3 100%);
+}
+.forth-v21.forth-tracking-workspace .forth-tracking-grid .forth-command-strip {
+  z-index: 30;
+  border-bottom: 1px solid var(--fleet-rail-line);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(250, 247, 252, 0.96) 100%);
+  padding: .55rem .85rem .6rem;
+  box-shadow: 0 10px 28px rgba(42, 27, 61, 0.06);
+  backdrop-filter: blur(10px);
+}
+.forth-v21.forth-tracking-workspace .forth-command-top {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: .55rem .7rem;
+  min-width: 0;
+}
+.forth-v21.forth-tracking-workspace .forth-float-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 13.5rem;
+}
+.forth-v21.forth-tracking-workspace .forth-toolbar-eyebrow {
+  display: block;
+  color: #8a769a;
+  font-size: .58rem;
+  font-weight: 800;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.forth-v21.forth-tracking-workspace .forth-float-title h1 {
+  margin: .08rem 0 0;
+  color: var(--fleet-rail-ink);
+  font-size: 1.02rem;
+  font-weight: 850;
+  letter-spacing: -.02em;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.forth-v21.forth-tracking-workspace .forth-live-status {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: .4rem;
+  min-height: 2rem;
+  max-width: none;
+  border: 1px solid #d9efe4;
+  border-radius: 999px;
+  background: #f1fbf6;
+  padding: .28rem .7rem .28rem .55rem;
+  color: #0f6b4c;
+  box-shadow: none;
+}
+.forth-v21.forth-tracking-workspace .forth-live-status strong {
+  margin: 0;
+  color: #0f6b4c;
+  font-size: .72rem;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.forth-v21.forth-tracking-workspace .forth-live-status small { display: none; }
+.forth-v21.forth-tracking-workspace .forth-tracking-kpis {
+  display: grid;
+  flex: 1 1 auto;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 0;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--fleet-rail-line);
+  border-radius: .75rem;
+  background: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+.forth-v21.forth-tracking-workspace .forth-tracking-kpis .forth-stat,
+.forth-v21.forth-tracking-workspace .forth-stat {
+  display: flex;
+  min-width: 0;
+  min-height: 2.55rem;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: .08rem;
+  margin: 0;
+  border: 0;
+  border-right: 1px solid #efe8f5;
+  border-radius: 0;
+  background: transparent;
+  padding: .35rem .55rem;
+  box-shadow: none;
+  text-align: left;
+}
+.forth-v21.forth-tracking-workspace .forth-tracking-kpis .forth-stat:last-child { border-right: 0; }
+.forth-v21.forth-tracking-workspace .forth-tracking-kpis .forth-stat strong,
+.forth-v21.forth-tracking-workspace .forth-stat strong {
+  color: var(--fleet-rail-ink);
+  font-size: .95rem;
+  font-weight: 850;
+  letter-spacing: -.02em;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+.forth-v21.forth-tracking-workspace .forth-tracking-kpis .forth-stat span,
+.forth-v21.forth-tracking-workspace .forth-stat span {
+  display: block;
+  overflow: hidden;
+  color: var(--fleet-rail-muted);
+  font-size: .58rem;
+  font-weight: 700;
+  letter-spacing: .01em;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.forth-v21.forth-tracking-workspace .forth-stat.is-fleet { background: #f4eef9; }
+.forth-v21.forth-tracking-workspace .forth-stat.is-fleet strong { color: #54277a; }
+.forth-v21.forth-tracking-workspace .forth-stat.is-moving { background: #eaf7ef; }
+.forth-v21.forth-tracking-workspace .forth-stat.is-moving strong { color: #0b6b4c; }
+.forth-v21.forth-tracking-workspace .forth-stat.is-stopped { background: #eef2ff; }
+.forth-v21.forth-tracking-workspace .forth-stat.is-stopped strong { color: #3730a3; }
+.forth-v21.forth-tracking-workspace .forth-stat.is-gps { background: #eef8f3; }
+.forth-v21.forth-tracking-workspace .forth-stat.is-gps strong { color: #0f6b4c; }
+.forth-v21.forth-tracking-workspace .forth-stat.is-gps-off { background: #fff7ed; }
+.forth-v21.forth-tracking-workspace .forth-stat.is-gps-off strong { color: #9a5b12; }
+.forth-v21.forth-tracking-workspace .forth-stat.is-attention { background: #fff4e8; }
+.forth-v21.forth-tracking-workspace .forth-stat.is-attention strong { color: #b45309; }
+.forth-v21.forth-tracking-workspace .forth-stat.is-sync {
+  background: #faf8fc;
+  color: var(--fleet-rail-muted);
+  pointer-events: none;
+  cursor: default;
+}
+.forth-v21.forth-tracking-workspace .forth-stat.is-sync strong {
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--fleet-rail-ink);
+  font-size: .78rem;
+  text-overflow: ellipsis;
+}
+.forth-v21.forth-tracking-workspace .forth-stat:hover:not(:disabled):not(.is-sync) {
+  background: #f7f2fb;
+}
+.forth-v21.forth-tracking-workspace .forth-stat[aria-pressed="true"] {
+  background: #ebe2f4;
+  box-shadow: inset 0 -3px 0 #5b2a7a;
+}
+.forth-v21.forth-tracking-workspace .forth-stat.is-moving[aria-pressed="true"] {
+  background: #dcf5e7;
+  box-shadow: inset 0 -3px 0 #059669;
+}
+.forth-v21.forth-tracking-workspace .forth-stat.is-attention[aria-pressed="true"] {
+  background: #ffe8cc;
+  box-shadow: inset 0 -3px 0 #c2410c;
+}
+.forth-v21.forth-tracking-workspace .forth-float-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: .35rem;
+  margin-left: 0;
+}
+.forth-v21.forth-tracking-workspace .forth-float-actions .forth-command-button,
+.forth-v21.forth-tracking-workspace .forth-float-actions .forth-speed-watch-launcher {
+  display: inline-flex;
+  min-height: 2.2rem;
+  align-items: center;
+  gap: .35rem;
+  border: 1px solid #ddd2ea;
+  border-radius: .55rem;
+  background: #fff;
+  padding: .3rem .6rem;
+  color: #4a365c;
+  font-size: .72rem;
+  font-weight: 750;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(42, 27, 61, 0.04);
+}
+.forth-v21.forth-tracking-workspace .forth-float-actions .forth-command-button:hover:not(:disabled),
+.forth-v21.forth-tracking-workspace .forth-float-actions .forth-speed-watch-launcher:hover {
+  border-color: #c4a8dc;
+  background: #f7f1fb;
+}
+.forth-v21.forth-tracking-workspace .forth-float-actions .forth-command-button.is-primary {
+  border-color: #5b2a7a;
+  background: #5b2a7a;
+  color: #fff;
+}
+.forth-v21.forth-tracking-workspace .forth-float-actions .forth-command-button.is-primary:hover:not(:disabled) {
+  background: #6a348c;
+}
+.forth-v21.forth-tracking-workspace .forth-float-actions .forth-speed-watch-launcher[aria-pressed="true"] {
+  border-color: #5b2a7a;
+  background: #f1e8f8;
+  color: #54277a;
+}
+.forth-v21.forth-tracking-workspace .forth-float-actions .forth-speed-watch-launcher-badge {
+  min-width: 1.3rem;
+  height: 1.3rem;
+  border-radius: .4rem;
+  background: #eee5f6;
+  color: #55267d;
+  font-size: .66rem;
+  font-weight: 850;
+}
+.forth-v21.forth-tracking-workspace .forth-float-actions .forth-speed-watch-launcher.has-review .forth-speed-watch-launcher-badge {
+  background: #a74e2a;
+  color: #fff;
+}
+.forth-v21.forth-tracking-workspace .forth-map-panel {
+  background:
+    linear-gradient(180deg, rgba(236, 230, 244, 0.35), transparent 28%),
+    #e7edf4;
+}
+.forth-v21.forth-tracking-workspace .forth-map-primary-actions {
+  border-color: #d9cee4;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 10px 26px rgba(42, 27, 61, 0.12);
+}
+.forth-v21.forth-tracking-workspace .forth-map-speed-widget .forth-speed-watch-launcher {
+  min-height: 2rem;
+  border: 1px solid #ddd2ea;
+  border-radius: .45rem;
+  background: #faf7fd;
+  padding: .25rem .45rem;
+  color: #54277a;
+  font-size: .72rem;
+  font-weight: 750;
+}
+@media (max-width: 1280px) {
+  .forth-v21.forth-tracking-workspace .forth-float-title { max-width: 10.5rem; }
+  .forth-v21.forth-tracking-workspace .forth-float-title h1 { font-size: .95rem; }
+  .forth-v21.forth-tracking-workspace .forth-tracking-kpis .forth-stat { padding: .3rem .42rem; }
+  .forth-v21.forth-tracking-workspace .forth-float-actions .forth-speed-watch-launcher-label { display: none; }
+}
+@media (max-width: 1050px) {
+  .forth-v21.forth-tracking-workspace .forth-command-top { flex-wrap: wrap; }
+  .forth-v21.forth-tracking-workspace .forth-tracking-kpis { flex: 1 1 100%; order: 3; }
+  .forth-v21.forth-tracking-workspace .forth-float-actions { margin-left: auto; }
+  .forth-v21.forth-tracking-workspace .forth-tracking-kpis .forth-stat span { display: block; }
+}
+
+/* V23 cleanup: content-sized cards and one compact summary strip. */
+.forth-v21.forth-tracking-workspace .forth-operations-pane:has(.forth-roster) { overflow: hidden; }
+.forth-v21.forth-tracking-workspace .forth-operations-sidebar .forth-roster { flex: 1 1 0; overflow: hidden; }
+.forth-v21.forth-tracking-workspace .forth-roster-header,
+.forth-v21.forth-tracking-workspace .forth-monitor-sticky,
+.forth-v21.forth-tracking-workspace .forth-operations-heading,
+.forth-v21.forth-tracking-workspace .forth-operations-modes { flex-shrink: 0; }
+.forth-v21.forth-tracking-workspace .forth-vehicle-results {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+.forth-v21.forth-tracking-workspace .forth-vehicle-row {
+  flex: 0 0 auto;
+  height: auto;
+  min-height: min-content;
+  max-height: none;
+  grid-template-rows: none;
+  align-content: start;
+  gap: .45rem;
+}
+.forth-v21.forth-tracking-workspace .forth-row-meta { flex-wrap: wrap; align-items: flex-start; }
+.forth-v21.forth-tracking-workspace .forth-vehicle-location,
+.forth-v21.forth-tracking-workspace .forth-vehicle-driver,
+.forth-v21.forth-tracking-workspace .forth-vehicle-driver > span,
+.forth-v21.forth-tracking-workspace .forth-vehicle-reg,
+.forth-v21.forth-tracking-workspace .forth-row-confidence {
+  white-space: normal; overflow-wrap: anywhere; overflow: visible; max-height: none; line-height: 1.4;
+}
+.forth-v21.forth-tracking-workspace .forth-vehicle-location { flex: 1 1 100%; }
+.forth-v21.forth-tracking-workspace .forth-vehicle-location svg { flex-shrink: 0; }
+.forth-v21.forth-tracking-workspace .forth-depot-disclosure { max-height: 35%; overflow-y: auto; }
+.forth-v21.forth-tracking-workspace .forth-monitor-search-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: .45rem; }
+.forth-v21.forth-tracking-workspace .forth-monitor-sort-wrap { width: 100%; }
+.forth-v21.forth-tracking-workspace .forth-monitor-select { width: 100%; }
+.forth-v21.forth-tracking-workspace .forth-command-top { flex-wrap: wrap; }
+.forth-v21.forth-tracking-workspace .forth-tracking-kpis {
+  display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-template-rows: auto;
+  grid-auto-flow: row; flex: 1 0 100%; order: 3; overflow: visible; border-radius: .4rem;
+}
+.forth-v21.forth-tracking-workspace .forth-command-strip .forth-tracking-kpis .forth-stat {
+  grid-row: auto; min-width: 0; min-height: 2.5rem; background: transparent;
+  box-shadow: none; padding: .35rem .6rem; border: 0; border-right: 1px solid #e5dced;
+}
+.forth-v21.forth-tracking-workspace .forth-command-strip .forth-tracking-kpis .forth-stat[aria-pressed="true"] {
+  background: #f4eef9; box-shadow: inset 0 -2px 0 #5b2a7a;
+}
+.forth-v21.forth-tracking-workspace .forth-command-strip .forth-tracking-kpis .forth-stat span {
+  display: block; white-space: normal; overflow: visible; font-size: .7rem; line-height: 1.3; color: #62566e;
+}
+.forth-v21.forth-tracking-workspace .forth-float-actions { margin-left: auto; flex-wrap: wrap; }
+.forth-v21.forth-tracking-workspace .forth-live-status { background: transparent; border: 0; padding: .25rem; }
+@media (min-width: 1600px) {
+  .forth-v21.forth-tracking-workspace .forth-tracking-kpis { order: 0; flex: 1 1 700px; }
+}
+@media (max-width: 767px) {
+  .forth-v21.forth-tracking-workspace .forth-tracking-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .forth-v21.forth-tracking-workspace .forth-command-strip .forth-tracking-kpis .forth-stat { padding: .25rem .35rem; }
+  .forth-v21.forth-tracking-workspace .forth-operations-pane:has(.forth-roster) { overflow-y: auto; }
+  .forth-v21.forth-tracking-workspace .forth-operations-sidebar .forth-roster { flex: 0 0 auto; overflow: visible; }
+  .forth-v21.forth-tracking-workspace .forth-vehicle-results { flex: 0 0 auto; overflow: visible; }
+  .forth-v21.forth-tracking-workspace .forth-depot-disclosure { max-height: none; overflow: visible; }
+}
+/* Compact Fleet Control: contain map layers below the global navigation. */
+.dashboard-dispatch-shell.is-fleet-route > .dashboard-content-frame { position: relative; z-index: 0; isolation: isolate; }
+.top-navigation [role="menu"] { max-height: calc(100dvh - 90px); overflow-y: auto; overscroll-behavior: contain; }
+.forth-v21.forth-tracking-workspace .forth-operations-heading { padding: .35rem .75rem; min-height: 40px; }
+.forth-v21.forth-tracking-workspace .forth-operations-heading span { display: none; }
+.forth-v21.forth-tracking-workspace .forth-operations-heading h2 { font-size: .95rem; }
+.forth-v21.forth-tracking-workspace .forth-operations-modes { grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 0 .5rem .35rem; gap: .25rem; }
+.forth-v21.forth-tracking-workspace .forth-operations-modes button { min-height: 34px; }
+.forth-v21.forth-tracking-workspace .forth-roster-header { padding: .3rem .75rem; }
+.forth-v21.forth-tracking-workspace .forth-roster-header h2 { font-size: .72rem; font-weight: 600; color: #71667a; }
+.forth-v21.forth-tracking-workspace .forth-monitor-sticky { padding: 0 .55rem .35rem; }
+.forth-v21.forth-tracking-workspace .forth-vehicle-controls { padding: 0; gap: .3rem; }
+.forth-v21.forth-tracking-workspace .forth-monitor-search-row { grid-template-columns: minmax(0, 1fr) 8.5rem; gap: .35rem; }
+.forth-v21.forth-tracking-workspace .forth-monitor-search-input,
+.forth-v21.forth-tracking-workspace .forth-monitor-select { min-height: 32px; height: 32px; padding-top: .2rem; padding-bottom: .2rem; }
+.forth-v21.forth-tracking-workspace .forth-vehicle-results { display: flex; gap: 3px; margin: 0 .45rem; padding: 0 0 .3rem; flex: 1 1 0; overflow-y: auto; }
+.forth-v21.forth-tracking-workspace .forth-vehicle-row {
+  display: flex; flex-direction: column; flex: 0 0 auto; gap: 5px; min-height: 60px; height: auto;
+  margin: 0; padding: 9px 10px; border-radius: 5px; box-shadow: none; overflow: visible;
+}
+.forth-v21.forth-tracking-workspace .forth-row-main { display: flex; align-items: center; gap: 7px; min-width: 0; width: 100%; }
+.forth-v21.forth-tracking-workspace .forth-row-vehicle-symbol { flex: 0 0 24px; width: 24px; height: 24px; border: 0; background: transparent; padding: 0; }
+.forth-v21.forth-tracking-workspace .forth-row-vehicle-symbol svg { width: 22px; height: 22px; }
+.forth-v21.forth-tracking-workspace .forth-row-identity { flex: 1 1 auto; min-width: 65px; }
+.forth-v21.forth-tracking-workspace .forth-vehicle-reg { display: block; font-size: .88rem; line-height: 1.2; white-space: nowrap; overflow-wrap: normal; }
+.forth-v21.forth-tracking-workspace .forth-row-speed { display: inline-flex; flex: 0 0 auto; align-items: baseline; gap: 2px; min-width: 0; min-height: 0; height: auto; padding: 0; background: transparent; border: 0; box-shadow: none; }
+.forth-v21.forth-tracking-workspace .forth-row-speed strong { font-size: .92rem; line-height: 1.2; }
+.forth-v21.forth-tracking-workspace .forth-row-speed small { font-size: .58rem; }
+.forth-v21.forth-tracking-workspace .forth-row-main .forth-activity-label { flex: 0 1 auto; font-size: .62rem; line-height: 1.2; padding: 2px 0; background: transparent; border: 0; white-space: normal; }
+.forth-v21.forth-tracking-workspace .forth-row-confidence { flex: 0 0 auto; font-size: .59rem; line-height: 1.2; padding: 3px; border-radius: 3px; white-space: nowrap; }
+.forth-v21.forth-tracking-workspace .forth-row-meta { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; width: 100%; min-width: 0; margin: 0; }
+.forth-v21.forth-tracking-workspace .forth-vehicle-location { display: block; flex: 1 1 auto; min-width: 0; font-size: .7rem; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.forth-v21.forth-tracking-workspace .forth-row-age { flex: 0 0 auto; font-size: .65rem; line-height: 1.3; }
+.forth-v21.forth-tracking-workspace .forth-depot-disclosure { flex-shrink: 0; margin: .25rem .55rem; }
+.forth-back-to-fleet { align-self: flex-start; margin: .5rem .75rem; padding: .4rem .65rem; border: 1px solid #d8cfe2; border-radius: .4rem; font-size: .8rem; font-weight: 700; color: #54277a; background: #fff; }
+.forth-v21.forth-tracking-workspace .forth-vehicle-card-body { overflow: visible; }
+.forth-v21.forth-tracking-workspace .forth-speed-watch-panel { position: absolute; top: 3.3rem; right: .6rem; width: min(390px, calc(100% - 1.2rem)); max-height: calc(100% - 4rem); z-index: 900; }
+.forth-v21.forth-tracking-workspace .forth-speed-watch-panel .forth-speed-watch { max-height: min(580px, calc(100dvh - 230px)); overflow-y: auto; overscroll-behavior: contain; }
+.forth-speed-watch-panel .forth-speed-watch-heading { position: sticky; top: 0; z-index: 1; background: #fff; }
+.forth-speed-watch-panel .forth-speed-watch-body { max-height: none; overflow: visible; }
+.forth-v21.forth-tracking-workspace .forth-layers-disclosure { margin: .45rem .55rem; border-bottom: 1px solid #e5dced; }
+.forth-layers-disclosure > summary { display: flex; justify-content: space-between; gap: .5rem; padding: .5rem; cursor: pointer; font-size: .8rem; font-weight: 700; }
+.forth-layers-disclosure > summary::before { content: '+'; }
+.forth-layers-disclosure[open] > summary::before { content: '−'; }
+.forth-layers-disclosure > summary span { margin-left: auto; font-size: .68rem; color: #71667a; font-weight: 500; }
+.forth-v21.forth-tracking-workspace .forth-location-layer-controls { margin: 0 0 .4rem; padding: 0; border: 0; box-shadow: none; }
+.forth-v21.forth-tracking-workspace .forth-location-layer-controls > label.forth-layer-toggle { min-height: 36px; padding: .4rem .55rem; border: 0; border-radius: .3rem; }
+.forth-v21.forth-tracking-workspace .forth-layer-toggle-copy small { display: none; }
+.forth-v21.forth-tracking-workspace .forth-operations-sidebar .forth-locations-panel { flex: 0 0 auto; overflow: visible; padding: 0; }
+.forth-v21.forth-tracking-workspace .forth-locations-slot { flex: 0 0 auto; }
+.forth-v21.forth-tracking-workspace .forth-locations-state { padding: .35rem .6rem; font-size: .66rem; background: #faf8fc; }
+.forth-v21.forth-tracking-workspace .forth-locations-panel-header { padding: .45rem .6rem; }
+.forth-v21.forth-tracking-workspace .forth-locations-panel-header strong { font-size: .88rem; }
+.forth-v21.forth-tracking-workspace .forth-locations-controls { padding: 0 .6rem .4rem; }
+.forth-v21.forth-tracking-workspace .forth-locations-list { gap: 3px; padding: 0 .6rem .5rem; }
+.forth-v21.forth-tracking-workspace .forth-locations-row { padding: .5rem .6rem; gap: .2rem; border-radius: .35rem; }
+.forth-v21.forth-tracking-workspace .forth-locations-row strong { font-size: .8rem; }
+.forth-location-result-meta { display: flex; justify-content: space-between; align-items: center; gap: .5rem; color: #71667a; font-size: .68rem; }
+.forth-location-result-meta svg { width: 14px; height: 14px; flex-shrink: 0; }
+.forth-v21.forth-tracking-workspace .forth-command-strip { box-shadow: none; }
+.forth-v21.forth-tracking-workspace .forth-tracking-kpis { overflow-x: auto; grid-template-columns: repeat(7, minmax(105px, 1fr)); }
+.forth-v21.forth-tracking-workspace .forth-command-strip .forth-tracking-kpis .forth-stat { min-height: 39px; padding: .25rem .6rem; }
+.forth-v21.forth-tracking-workspace .forth-command-strip .forth-tracking-kpis .forth-stat span { white-space: nowrap; font-size: .66rem; }
+.forth-v21.forth-tracking-workspace .forth-float-actions .forth-speed-watch-launcher-label { display: inline; }
+.forth-playback-header-row { flex-wrap: wrap; }
+.forth-playback-header-row > div { width: 100%; }
+.forth-playback-panel { gap: .6rem; padding: .65rem .8rem 1rem; }
+.forth-playback-field:has(select) select { border-color: #a88bbd; font-weight: 700; background: #faf7fd; }
+.forth-playback-time-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.forth-playback-time-row > label:first-child { grid-column: 1 / -1; }
+.forth-playback-field input, .forth-playback-field select { min-width: 0; width: 100%; }
+.forth-playback-time-labels { display: flex; justify-content: space-between; color: #71667a; font-size: .65rem; }
+@media (max-width: 767px) {
+  .forth-v21.forth-tracking-workspace .forth-operations-pane:has(.forth-roster) { overflow: hidden; }
+  .forth-v21.forth-tracking-workspace .forth-operations-sidebar .forth-roster { flex: 1 1 0; overflow: hidden; }
+  .forth-v21.forth-tracking-workspace .forth-vehicle-results { flex: 1 1 0; overflow-y: auto; }
+  .forth-v21.forth-tracking-workspace .forth-speed-watch-panel { position: fixed; top: auto; bottom: .5rem; left: .5rem; right: .5rem; width: auto; max-height: 65dvh; }
+  .forth-v21.forth-tracking-workspace .forth-speed-watch-panel .forth-speed-watch { max-height: 65dvh; }
+  .forth-v21.forth-tracking-workspace .forth-row-main { gap: 5px; }
+  .forth-v21.forth-tracking-workspace .forth-float-title { max-width: 9rem; }
+  .forth-v21.forth-tracking-workspace .forth-live-status { display: none; }
+}
+/* One scroll region per pane; the floating widget owns its own scroll. */
+.forth-v21.forth-tracking-workspace .forth-speed-watch-panel .forth-speed-watch.is-panel .forth-speed-watch-body { overflow: visible; max-height: none; flex: 0 0 auto; }
+.forth-v21.forth-tracking-workspace .forth-locations-list { max-height: none; overflow: visible; }
+.forth-v21.forth-tracking-workspace .forth-locations-detail { overflow: visible; }
+.forth-v21.forth-tracking-workspace .forth-vehicle-row.is-selected { box-shadow: inset 3px 0 0 #5b2a7a; }
+.forth-v21.forth-tracking-workspace .forth-vehicle-card-header .truncate { white-space: normal; overflow: visible; overflow-wrap: anywhere; }
+.forth-v21.forth-tracking-workspace .forth-inspector-timing { overflow-wrap: anywhere; }
+/* Fleet Intelligence: branded, accessible, map-first refinements. */
+.forth-intelligence-nav { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; padding:8px 10px; background:#faf8fc; border-block:1px solid #e8e0ef; }
+.forth-intelligence-nav button { min-height:42px; padding:8px; border-radius:8px; text-align:left; color:#51425f; font-size:12px; font-weight:650; }
+.forth-intelligence-nav button:first-child { grid-column:1/-1; }
+.forth-intelligence-nav button[aria-pressed="true"] { background:#512778; color:white; box-shadow:inset 3px 0 #f39132; }
+.forth-intelligence-nav button:hover { outline:1px solid #ab91bf; }
+.forth-v21 button:focus-visible,.forth-v21 a:focus-visible,.forth-v21 input:focus-visible,.forth-v21 select:focus-visible { outline:3px solid #e78328; outline-offset:2px; }
+.forth-intelligence-summary { padding:16px; border-bottom:1px solid #e6deec; background:#faf8fc; }
+.forth-intelligence-summary h3 { color:#452363; font-weight:750; }
+.forth-intelligence-summary p { color:#62576c; font-size:13px; line-height:1.6; margin:8px 0; }
+.forth-intelligence-summary > div { display:grid; gap:6px; }
+.forth-intelligence-summary a { padding:10px; border:1px solid #ded2e7; border-radius:8px; background:white; color:#512778; font-size:13px; font-weight:650; }
+.forth-v21.forth-tracking-workspace .forth-tracking-kpis { overflow:visible; grid-template-columns:repeat(7,minmax(0,1fr)); }
+.forth-v21.forth-tracking-workspace .forth-command-strip .forth-tracking-kpis .forth-stat span { white-space:normal; overflow-wrap:anywhere; font-size:11px; }
+.forth-v21.forth-tracking-workspace .forth-vehicle-row { border:1px solid #e6dfec; border-radius:9px; padding:11px; gap:8px; }
+.forth-v21.forth-tracking-workspace .forth-vehicle-reg { font-size:15px; }
+.forth-v21.forth-tracking-workspace .forth-row-confidence { font-size:10px; padding:4px; }
+.forth-v21.forth-tracking-workspace .forth-vehicle-location { font-size:12px; }
+.forth-v21.forth-tracking-workspace .forth-row-age { font-size:11px; }
+.forth-v21.forth-tracking-workspace .forth-operations-sidebar .forth-speed-watch-panel { position:relative; inset:auto; width:auto; max-height:45dvh; overflow:auto; margin:8px; flex-shrink:0; border:1px solid #e6d8ee; border-radius:10px; }
+.forth-v21.forth-tracking-workspace .forth-speed-watch-panel .forth-speed-watch { max-height:none; }
+.forth-v21.forth-tracking-workspace .forth-operations-pane { overscroll-behavior:contain; }
+@media(max-width:767px) {
+ .forth-v21.forth-tracking-workspace .forth-tracking-kpis { grid-template-columns:repeat(3,minmax(0,1fr)); }
+ .forth-intelligence-nav { grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .forth-v21.forth-tracking-workspace .forth-operations-sidebar { max-width:100%; }
+ .forth-v21.forth-tracking-workspace .forth-row-main { flex-wrap:wrap; }
+ .forth-v21.forth-tracking-workspace .forth-monitor-search-row { grid-template-columns:minmax(0,1fr); }
+}
+.forth-detail-navigation { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; padding:10px; border-bottom:1px solid #e6deec; }
+.forth-detail-navigation button { min-height:40px; font-size:12px; color:#574364; border-radius:7px; }
+.forth-detail-navigation button[aria-pressed="true"] { background:#eee5f5; color:#512778; font-weight:750; }
+.forth-mobile-map-collapse { display:none; }
+@media(max-width:767px) {
+ .forth-mobile-map-collapse { display:block; grid-column:1/-1; padding:10px; background:#512778; color:white; font-weight:650; }
+ .forth-v21.forth-tracking-workspace .forth-tracking-grid .forth-map-panel.is-map-collapsed { height:0; min-height:0; overflow:hidden; }
+ .forth-v21.forth-tracking-workspace .forth-tracking-grid:has(.is-map-collapsed) .forth-overlay-stage { display:none; }
+}
+.forth-v21.forth-tracking-workspace .forth-tracking-kpis .forth-stat span { display:block; }
+.forth-v21.forth-tracking-workspace .forth-operations-sidebar:has(.forth-intelligence-summary) .forth-operations-pane:has(.forth-roster) { display:none; }
+@media(max-width:767px) {
+ .forth-mobile-map-collapse { grid-row:2; grid-column:1; z-index:30; align-self:start; justify-self:end; margin:6px; border-radius:8px; }
+ .forth-v21.forth-tracking-workspace .forth-tracking-grid:has(.is-map-collapsed) { grid-template-rows:auto 48px minmax(0,1fr); }
+}
+.forth-v21.forth-tracking-workspace .forth-operations-modes { grid-template-columns:minmax(0,1fr); }
+.forth-v21.forth-tracking-workspace .forth-operations-modes button:first-child,
+.forth-v21.forth-tracking-workspace .forth-operations-modes button:last-child { display:none; }
+
+/* V4.4: Journey Playback touch targets at least 44px at every width (phones already had this). Height only; same look. */
+.forth-playback-panel .forth-playback-buttons button,
+.forth-playback-panel .forth-playback-exit,
+.forth-playback-panel .forth-playback-load,
+.forth-playback-panel .forth-playback-field input,
+.forth-playback-panel .forth-playback-field select,
+.forth-playback-panel .forth-journey-stop-btn { min-height: 44px; }
+.forth-playback-panel .forth-playback-buttons button { min-width: 44px; }
+.forth-playback-panel .forth-playback-timeline input[type="range"] { min-height: 44px; }
+.forth-playback-map-exit { min-height: 44px; }
+
+/* V6.3 mobile map overlays: every control gets its own space; nothing is hidden.
+   Cause of the 390 px obstruction: the status card (Fit ops / Layers / outside buttons) ran under the "Collapse map" button,
+   and the full-width "Map status" bar ran under the zoom buttons. Reserve the corners instead. */
+@media(max-width:767px) {
+ .forth-v21.forth-tracking-workspace .forth-map-status { max-width: calc(100% - 7.2rem); }
+ .forth-mobile-map-collapse { padding: .4rem .6rem; font-size: .72rem; line-height: 1.15; min-height: 44px; max-width: 6.2rem; text-align: center; }
+ /* The 44 px touch-target rule above is deliberate and is kept; the overlay footprint is reduced by reserving corners, not by shrinking targets. */
+ /* The card may take at most about half of the map and scrolls inside itself, so every control stays reachable and the map stays usable. */
+ .forth-v21.forth-tracking-workspace .forth-map-status { gap: .25rem; max-height: 52%; overflow-y: auto; overscroll-behavior: contain; }
+ .forth-v21.forth-tracking-workspace .forth-map-coverage-control { right: auto; max-width: calc(100% - 5.4rem); }
+}
+
+/* V6.3 shared live-status statements in the Overview tab. */
+.forth-live-statements { margin: .5rem 0; padding: 0; list-style: none; display: grid; gap: .3rem; }
+.forth-live-statements li { border-left: 3px solid #c7abd8; background: #faf7fd; border-radius: .35rem; padding: .35rem .55rem; font-size: .76rem; line-height: 1.35; color: #3f2c52; }
+.forth-live-statements li[data-tone="warn"] { border-left-color: #d97706; background: #fff8ee; color: #6b3a05; }
+.forth-live-statements li[data-tone="ok"] { border-left-color: #15803d; background: #f1faf3; color: #14532d; }
+
+/* V6.4 recurring places: compact list, details collapsed by default. */
+.fleet-recurring-list > li { padding: .45rem 0; border-bottom: 1px solid #ece5f3; }
+.fleet-recurring-list details { margin-top: .3rem; }
+.fleet-recurring-list summary { cursor: pointer; font-size: .74rem; font-weight: 650; color: #512778; min-height: 32px; display: flex; align-items: center; }
+
+/* ===== V6.7 visual cleanup: one calm status language, compact drawer, fewer repeated blocks ===== */
+/* Drawer tabs: all six always visible. A narrow drawer keeps the 3 x 2 grid; a drawer at least 26 rem wide shows one row. The active tab has an orange rule. */
+.fleet-details-drawer { container-type: inline-size; }
+.forth-v21 .forth-detail-navigation { padding: 6px 8px; gap: 4px; }
+.forth-v21 .forth-detail-navigation button[aria-pressed="true"] { box-shadow: inset 0 -3px 0 #f97316; }
+@container (min-width: 26rem) {
+  .forth-v21 .forth-detail-navigation { display: flex; }
+  .forth-v21 .forth-detail-navigation button { flex: 1 1 0; min-width: 0; padding: 0 .4rem; white-space: nowrap; }
+}
+/* Visible keyboard focus everywhere in the tracking workspace. */
+.forth-v21.forth-tracking-workspace :is(button, a, select, input, summary, [tabindex]):focus-visible { outline: 2px solid #6d28d9; outline-offset: 2px; }
+/* The vehicle-category label is spoken, not drawn: the select already says "All categories". */
+.forth-v21 .fleet-category-filter > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* Evidence scope bar: the long how-it-works text lives in a closed disclosure. */
+.fleet-evidence-more { margin: 0; }
+.fleet-evidence-more > summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; font-size: 11px; font-weight: 650; color: #6b5580; }
+.fleet-evidence-more > p { margin: .25rem 0 0; }
+/* Older distance, mileage and fuel comparison reports sit in one closed section under the new review, so the Reports tab is not three screens long. */
+.fleet-legacy-reports { border-top: 1px solid #ece5f3; padding-top: .35rem; margin-top: .35rem; }
+.fleet-legacy-reports > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 700; font-size: .85rem; color: #512778; }
+/* One status chip: icon + text, restrained colour. Colour is never the only signal (the symbol and the words carry the meaning). */
+.fleet-review-row { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .55rem; }
+.fleet-review-badge { display: inline-flex; align-items: center; gap: .25rem; border-radius: .4rem; padding: .1rem .45rem; font-size: .7rem; font-weight: 650; line-height: 1.3; background: #f6f2fa; color: #4a3560; border: 1px solid #e6dcef; }
+.fleet-review-badge::before { content: "○"; font-weight: 700; }
+.fleet-review-badge.is-available::before { content: "✓"; } .fleet-review-badge.is-available { background: #f1faf3; color: #14532d; border-color: #cfe9d6; }
+.fleet-review-badge.is-partial::before, .fleet-review-badge.is-no_provider_data::before { content: "◐"; } .fleet-review-badge.is-partial, .fleet-review-badge.is-no_provider_data { background: #fff8ee; color: #6b3a05; border-color: #f2dcbc; }
+.fleet-review-badge.is-failed::before, .fleet-review-badge.is-rate_limited::before, .fleet-review-badge.is-no_device::before { content: "✕"; } .fleet-review-badge.is-failed, .fleet-review-badge.is-rate_limited, .fleet-review-badge.is-no_device { background: #fdf2f2; color: #7f1d1d; border-color: #f3cccc; }
+.fleet-review-badge.is-loading::before, .fleet-review-badge.is-queued::before { content: "…"; }
+.fleet-review-badge.is-priority-high::before { content: "▲"; } .fleet-review-badge.is-priority-high { background: #fdf2f2; color: #7f1d1d; border-color: #f3cccc; }
+.fleet-review-badge.is-priority-medium::before { content: "●"; } .fleet-review-badge.is-priority-medium { background: #fff8ee; color: #6b3a05; border-color: #f2dcbc; }
+.fleet-review-badge.is-priority-info::before { content: "i"; font-style: italic; }
+/* Day coverage line (Today tab) takes the same tone language. */
+.fleet-day-insights > p[role="status"] { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
+.fleet-day-insights[data-coverage="verified_complete"] > p[role="status"] strong::before { content: "✓ "; color: #15803d; }
+.fleet-day-insights[data-coverage="verified_incomplete"] > p[role="status"] strong::before, .fleet-day-insights[data-coverage="partly_verified"] > p[role="status"] strong::before, .fleet-day-insights[data-coverage="unverified"] > p[role="status"] strong::before { content: "◐ "; color: #b45309; }
+.fleet-day-insights[data-coverage="not_read"] > p[role="status"] strong::before, .fleet-day-insights[data-coverage="restricted"] > p[role="status"] strong::before { content: "○ "; color: #6b5580; }
+.fleet-day-insights[data-coverage="no_positions"] > p[role="status"] strong::before, .fleet-day-insights[data-coverage="provider_distance_only"] > p[role="status"] strong::before { content: "◐ "; color: #b45309; }
+.fleet-day-insights [data-insight] { padding: .35rem 0; border-top: 1px solid #f0eaf5; }
+.fleet-day-insights [data-insight]:first-child { border-top: 0; }
+/* Plain-language GPS summary at the top of GPS Health. */
+.fleet-gps-summary { margin: 0 0 .6rem; padding: .55rem .7rem; border-left: 3px solid #c7abd8; background: #faf7fd; border-radius: .4rem; font-size: .8rem; line-height: 1.4; color: #3f2c52; }
+.fleet-gps-summary strong { display: block; font-size: .9rem; }
+.fleet-gps-summary[data-tone="ok"] { border-left-color: #15803d; background: #f1faf3; color: #14532d; }
+.fleet-gps-summary[data-tone="warn"] { border-left-color: #d97706; background: #fff8ee; color: #6b3a05; }
+.fleet-gps-summary[data-tone="bad"] { border-left-color: #b91c1c; background: #fdf2f2; color: #7f1d1d; }

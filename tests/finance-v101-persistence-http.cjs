@@ -1,0 +1,10 @@
+const assert=require('node:assert/strict');
+const url='http://127.0.0.1:3003/api/finance-local-store';
+const read=async()=>{const r=await fetch(url,{signal:AbortSignal.timeout(120000)});assert.equal(r.status,200);const d=await r.json();assert.equal(d.kind,'ees_finance_local_test');assert.ok(d.envelope.workspaces.owner.bookings.every(j=>/^(v6-|fixture-diary-)/.test(j.id)));return d.envelope;};
+const put=e=>fetch(url,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({workspaces:e.workspaces,role:e.role,activeWorkspace:e.activeWorkspace,baseSavedAt:e.savedAt}),signal:AbortSignal.timeout(120000)});
+(async()=>{let e=await read();for(let i=0;i<5;i++){const r=await put(e);assert.equal(r.status,200,await r.clone().text());e=(await r.json()).envelope;}console.log('PASS five sequential confirmed fixture saves');
+ const wrong=structuredClone(e);wrong.workspaces.owner.billingSheets.find(s=>s.approvedAt).officialTrn='OFFICIAL-BLOCKED-TEST';assert.equal((await put(wrong)).status,422);console.log('PASS official-number mutation rejected on HTTP boundary');
+ const duplicate=structuredClone(e);duplicate.workspaces.owner.billingSheets[1].jobIds.push(duplicate.workspaces.owner.billingSheets[0].jobIds[0]);assert.equal((await put(duplicate)).status,422);console.log('PASS duplicate billing rejected on HTTP boundary');
+ const results=await Promise.all([put(e),put(e)]);assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);console.log('PASS concurrent saves: one confirmed and one conflict');
+ const latest=await read();assert.deepEqual(latest.workspaces,e.workspaces);console.log('PASS financial data unchanged by rejected and concurrent saves');
+})().catch(e=>{console.error(e);process.exitCode=1});

@@ -42,5 +42,5 @@ test('ordinary office and driver sessions cannot read compliance metadata or cas
 test('document expiry and unrecorded filters use ready records and latest applicable licence only',()=>{
  const {complianceRows}=require('../lib/ees-hr-compliance.ts');const person={id:'1',kind:'driver',driverId:'1',employeeId:'e',name:'Synthetic',vehicle:null,documentStatus:'expired'};
  const rows=complianceRows([person],[{employee_id:'e',state:'retired',expiry_date:'2020-01-01'},{employee_id:'e',state:'ready',expiry_date:'2026-10-20'}],[{employee_id:'e',issue_date:'2020-01-01',expiry_date:'2025-01-01',recorded_at:'2020-01-01'},{employee_id:'e',issue_date:'2026-01-01',expiry_date:'2027-01-01',recorded_at:'2026-01-01'},{employee_id:'e',issue_date:'2027-01-01',expiry_date:'2028-01-01',recorded_at:'2026-10-01'}],'2026-10-14');
- assert.equal(rows[0].documentCount,1);assert.equal(rows[0].expired,false);assert.equal(rows[0].expiring,true);assert.equal(rows[0].missing,false);assert.equal(rows[0].licenceExpiry,'2027-01-01');
+ assert.equal(rows[0].documentCount,1);assert.equal(rows[0].expired,false);assert.equal(rows[0].expiring,true);assert.equal(rows[0].expiring90,true);assert.equal(rows[0].missing,false);assert.equal(rows[0].licenceExpiry,'2027-01-01');assert.equal(rows[0].roleRequiresLicence,true);
 });

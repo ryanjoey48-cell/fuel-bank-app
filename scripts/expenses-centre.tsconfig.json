@@ -1,0 +1,17 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "incremental": false
+  },
+  "include": [
+    "../app/(dashboard)/expenses-centre/page.tsx",
+    "../app/expenses-fixture/page.demo.tsx",
+    "../app/api/expenses-centre/**/*.ts",
+    "../lib/expenses*.ts",
+    "../next-env.d.ts",
+    "../components/expenses-*.tsx"
+  ],
+  "exclude": [
+    "../node_modules"
+  ]
+}

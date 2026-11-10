@@ -14,4 +14,8 @@ supabase
 _vehicle_performance_release
 weekly_mileage_deploy_source
 .next-maintenance-qa
+.next-*
+.recovery
+reports
+tmp
 data/vehicle-performance-v4/source-reports/

@@ -1,3 +1,4 @@
+import { EES_COMPANY } from "./ees-company";
 import { shipmentTranslations } from "./shipment-translations";
 import { greaseTranslations } from "./grease-translations";
 import { maintenanceTranslations } from "./maintenance-translations";
@@ -9,14 +10,19 @@ const homeTranslations = {
       home: "Home",
       operations: "Operations",
       fleet: "Fleet",
+      finance: "Finance",
+      peopleSafety: "People & Safety",
       fuel: "Fuel",
       reports: "Reports",
       admin: "Admin",
+      locations: "Locations",
+      locationsDirectory: "Locations Directory",
+      uniformsEquipment: "Uniforms & Equipment",
       openMenu: "Open navigation menu",
       closeMenu: "Close navigation menu"
     },
     welcome: "Welcome to EES Operations",
-    company: "Expert Express Sender Co., Ltd",
+    company: EES_COMPANY.nameEnTitle,
     title: "Operations Home",
     titlePrimary: "Operations",
     titleAccent: "Home",
@@ -91,20 +97,25 @@ const homeTranslations = {
       home: "หน้าหลัก",
       operations: "งานปฏิบัติการ",
       fleet: "กองรถ",
+      finance: "การเงิน",
+      peopleSafety: "บุคลากรและความปลอดภัย",
       fuel: "น้ำมัน",
       reports: "รายงาน",
       admin: "ผู้ดูแลระบบ",
+      locations: "สถานที่",
+      locationsDirectory: "ไดเรกทอรีสถานที่",
+      uniformsEquipment: "เครื่องแบบและอุปกรณ์",
       openMenu: "เปิดเมนูนำทาง",
       closeMenu: "ปิดเมนูนำทาง"
     },
     welcome: "ยินดีต้อนรับสู่ระบบปฏิบัติการ EES",
-    company: "บริษัท เอ็กซ์เปอร์ต เอ็กซ์เพรส เซ็นเดอร์ จำกัด",
+    company: EES_COMPANY.nameTh,
     title: "หน้าหลักการปฏิบัติงาน",
     titlePrimary: "การปฏิบัติงาน",
     titleAccent: "หน้าหลัก",
     subtitle: "รวมงานจอง กองรถ น้ำมัน การเดินทาง และรายงานไว้ในที่เดียว",
     brandLine: "จัดการงานขนส่งอย่างมั่นใจและชัดเจน",
-    truckAlt: "รถบรรทุกของบริษัท เอ็กซ์เปอร์ต เอ็กซ์เพรส เซ็นเดอร์",
+    truckAlt: `รถบรรทุกของ${EES_COMPANY.nameTh}`,
     loadError: "ไม่สามารถโหลดข้อมูลสรุปล่าสุดของหน้าหลักได้ กรุณาลองอีกครั้ง",
     quickActions: "ทางลัด",
     actions: {
@@ -1250,6 +1261,7 @@ export const translations = {
       next: "Next",
       roles: {
         administrator: "Administrator",
+        superAdmin: "Super Admin",
         officeStaff: "Office Staff",
         readOnly: "Read Only"
       },
@@ -2751,6 +2763,7 @@ export const translations = {
       next: "ถัดไป",
       roles: {
         administrator: "ผู้ดูแลระบบ",
+        superAdmin: "ผู้ดูแลระบบสูงสุด",
         officeStaff: "พนักงานสำนักงาน",
         readOnly: "ดูอย่างเดียว"
       },

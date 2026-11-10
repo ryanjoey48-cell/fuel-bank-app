@@ -1,4 +1,4 @@
-.next
+﻿.next
 .next-maintenance-qa
 .vercel
 node_modules
@@ -14,4 +14,41 @@ _weekly_mileage_deploy_source/
 /data/vehicle-performance-v4/source-reports/
 
 tmp/owner-pdf-reference/
+.next-fleet-qa
+.next-*-qa
+.next-fleet-live-v16/
+.next-fleet-live-v18*/
+.env.staging.local
+.env.vercel-production.check
+.env.vercel-*.check
+# Local Finance Centre test persistence (never commit)
+.ees-local/
+# Production/logical backups must never enter git
+**/production-backups/
+*.sql.gpg
+*.dump
+*.dump.gpg
+ees-prod-backup-*/
+.recovery/
+.next-*/
+supabase/.temp/
+tsconfig.tsbuildinfo
 
+/output/fleet-real-validation/
+
+# Expenses: keep owner-approved test credentials private; retain the blank example.
+.env.expenses-test.local
+!.env.expenses-test.example
+
+# Expenses V1.3 activation secrets
+tmp/expenses-v13-synthetic-auth.local.json
+.env.expenses-test.local
+
+# Local artefacts — never commit
+tmp/
+/output/
+/reports/
+/Claude outputs/
+RC_*.txt
+.omc/
+.claude/

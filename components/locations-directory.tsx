@@ -5,6 +5,8 @@ import { AlertTriangle, ArrowUpRight, Check, ChevronDown, Heart, Info, List, Loa
 import { EESLogo } from "@/components/ees-logo";
 import { LocationsMap, type SaveLocationPinInput } from "@/components/locations-map";
 import { LocationSmartPinDialog } from "@/components/location-smart-pin-dialog";
+import { LocationEvidencePanel, type EvidenceMarker } from "@/components/location-evidence-panel";
+import { FLEET_SUGGESTION_MARKER_ID, LocationFleetCandidate, type FleetMarker } from "@/components/location-fleet-candidate";
 import { useAccountAccess } from "@/lib/use-account-access";
 import { useLanguage } from "@/lib/language-provider";
 import { supabase } from "@/lib/supabase";
@@ -172,6 +174,12 @@ export function LocationsDirectory() {
   const [mapEditorLocationId, setMapEditorLocationId] = useState("");
   const [mapEditorPinType, setMapEditorPinType] = useState<LocationPinType>("destination");
   const [smartPinLocation, setSmartPinLocation] = useState<Location | null>(null);
+  const [evidenceMarkers, setEvidenceMarkers] = useState<EvidenceMarker[]>([]);
+  // V6.5: an UNSAVED suggestion handed over from Fleet Tracking. Held only in this page's state; never saved or verified here.
+  const [fleetMarkers, setFleetMarkers] = useState<FleetMarker[]>([]);
+  const [fleetFocusTick, setFleetFocusTick] = useState(0);
+  const [focusedEvidenceId, setFocusedEvidenceId] = useState<string | null>(null);
+  const [suggestedCandidate, setSuggestedCandidate] = useState<{ latitude: number; longitude: number; nonce: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<ApiErrorKey | "">("");
   const [success, setSuccess] = useState<SuccessKey | "">("");
@@ -620,6 +628,8 @@ export function LocationsDirectory() {
       </button>}
     </div>
 
+    <LocationFleetCandidate language={language === "th" ? "th" : "en"} canEdit={canEdit && canViewInternal} locations={locations as never} mapPins={mapPins}
+      focusTick={fleetFocusTick} onReady={() => { if (canViewInternal) setView("map"); }} onSuggestedCandidate={(point) => setSuggestedCandidate({ ...point, nonce: Date.now() })} onDismissed={() => setSuggestedCandidate(null)} onMarkers={setFleetMarkers} />
     {loading ? <div className="grid gap-3 lg:grid-cols-2 lg:items-start" aria-label={copy.loading} aria-busy="true">
       {[1, 2, 3, 4].map((item) => <div key={item} className="h-56 animate-pulse rounded-2xl border border-slate-200 bg-white p-5"><div className="h-5 w-2/3 rounded bg-slate-100" /><div className="mt-4 h-4 w-full rounded bg-slate-100" /><div className="mt-2 h-4 w-4/5 rounded bg-slate-100" /><div className="mt-8 h-11 rounded-xl bg-slate-100" /></div>)}
     </div> : view === "map" && canViewInternal ? <div className="space-y-4">
@@ -640,7 +650,18 @@ export function LocationsDirectory() {
         onPinTypeChange={setMapEditorPinType}
         onMarkUsed={markUsed}
         onSavePin={saveMapPin}
+        evidenceMarkers={[...evidenceMarkers, ...fleetMarkers]}
+        onEvidenceMarkerClick={(id) => { if (id === FLEET_SUGGESTION_MARKER_ID) setFleetFocusTick((tick) => tick + 1); else setFocusedEvidenceId(id); }}
+        suggestedCandidate={suggestedCandidate}
       />
+      {canEdit && <LocationEvidencePanel
+        language={language}
+        locationName={(() => { const selected = locations.find((item) => item.id === mapEditorLocationId); return selected ? getLocationDisplayName(selected, language) : ""; })()}
+        anchor={(() => { const pin = mapPins.find((item) => item.location_id === mapEditorLocationId && item.pin_type === mapEditorPinType) ?? mapPins.find((item) => item.location_id === mapEditorLocationId); return pin ? { latitude: pin.latitude, longitude: pin.longitude } : null; })()}
+        focusId={focusedEvidenceId}
+        onMarkers={setEvidenceMarkers}
+        onUseAsCandidate={(point) => setSuggestedCandidate({ ...point, nonce: Date.now() })}
+      />}
       <section aria-labelledby="locations-map-title" className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-wrap items-end justify-between gap-2 border-b border-slate-100 px-4 py-4 sm:px-5">
           <div>

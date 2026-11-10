@@ -1,0 +1,6 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {"incremental": false, "plugins": []},
+  "include": ["../lib/fleet-intelligence.ts", "../lib/fleet-intelligence-sync.ts", "../lib/fleet-intelligence-operations.ts", "../lib/fleet-intelligence-forth-source.ts", "../lib/fleet-intelligence-report.ts", "../lib/fleet-intelligence-ees-source.ts", "../lib/fleet-intelligence-sources.ts", "../lib/fleet-intelligence-mileage.ts"],
+  "exclude": ["../node_modules"]
+}

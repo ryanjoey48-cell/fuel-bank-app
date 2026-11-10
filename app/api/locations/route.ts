@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { hasPermission } from "@/lib/authorization";
 import { AdminApiError, createServerSupabaseAdmin, requireVerifiedUser, resolveAccountAccess } from "@/lib/admin-user-management-server";
-import { projectLocationForDirectory, safeGoogleMapsUrl } from "@/lib/locations-directory";
+import { projectLocationForDirectory, safeGoogleMapsUrl, type SearchableLocation } from "@/lib/locations-directory";
 
 const fields = "id,company_name,thai_name,alternative_names,address,province,destination_type,google_maps_url,truck_entrance_url,verification_status,verified_at,notes,source_info,created_at,updated_at";
 const types = ["Factory", "Warehouse", "Airport", "Port", "Customer", "Depot", "Other"];
@@ -30,12 +30,22 @@ function errorResponse(error: unknown) {
 export async function GET(request: Request) {
   try {
     const { user, admin, access } = await authorized(request);
-    const [{ data: locations, error }, { data: activity, error: activityError }] = await Promise.all([
-      admin.from("ees_locations").select(fields).order("company_name"),
-      admin.from("ees_location_user_activity").select("location_id,is_favourite,last_used_at").eq("user_id", user.id)
-    ]);
-    if (error) throw error;
-    if (activityError) throw activityError;
+    const locations: Array<SearchableLocation & { id: string }> = [];
+    const activity: Array<{ location_id: string; is_favourite: boolean; last_used_at: string | null }> = [];
+    const pageSize = 500;
+    for (let offset = 0; offset <= 10_000; offset += pageSize) {
+      const [locationPage, activityPage] = await Promise.all([
+        admin.from("ees_locations").select(fields).order("company_name").order("id").range(offset, offset + pageSize - 1),
+        admin.from("ees_location_user_activity").select("location_id,is_favourite,last_used_at")
+          .eq("user_id", user.id).order("location_id").range(offset, offset + pageSize - 1)
+      ]);
+      if (locationPage.error) throw locationPage.error;
+      if (activityPage.error) throw activityPage.error;
+      locations.push(...(locationPage.data ?? []));
+      activity.push(...(activityPage.data ?? []));
+      if ((locationPage.data?.length ?? 0) < pageSize && (activityPage.data?.length ?? 0) < pageSize) break;
+      if (offset === 10_000) throw new Error("Location Directory exceeds the safe request bound.");
+    }
     const includeInternal = hasPermission(access, "admin:user_management");
     return NextResponse.json({
       locations: (locations ?? []).map((location) => projectLocationForDirectory(location, includeInternal)),

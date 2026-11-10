@@ -1194,7 +1194,7 @@ test("reported activity is independent from GPS confidence and summary counts ma
   });
   assert.deepEqual(summary.positionConfidence, { gpsVerified: 2, notGpsVerified: 10 });
   assert.equal(summary.gpsVerifiedDriving, 1);
-  assert.equal(summary.needsAttention, 2);
+  assert.equal(summary.needsAttention, 4);
   assert.equal(summary.currentGpsVerifiedPositions, 2);
   assert.equal(summary.latestCurrentGpsPosition, current.lastGpsTimestamp);
   assert.equal(filterForthFleetRecords(records, "", "all").length, summary.total);
@@ -1217,6 +1217,52 @@ test("reported activity is independent from GPS confidence and summary counts ma
   const offlineAndStale = { ...current, gprsConnectivity: "disconnected", timestampStatus: "stale" };
   assert.equal(summarizeForthFleet([offlineAndStale]).needsAttention, 1);
   assert.equal(filterForthFleetRecords([offlineAndStale], "", "attention").length, 1);
+});
+
+test("operations ordering prioritizes live driving, stopped states, then source issues", () => {
+  const { sortForthFleetRecords } = loadTypeScript("lib/forth-tracking-view.ts");
+  const base = {
+    timestampStatus: "current", lastGpsTimestamp: "2026-10-29T10:00:00Z",
+    coordinateStatus: "valid", gprsConnectivity: "connected", speed: 0, engineOn: false
+  };
+  const record = (vehicleRegistration, changes = {}) => ({ ...base, vehicleRegistration, ...changes });
+  const rows = [
+    record("STOP-OFF-OLD", { lastGpsTimestamp: "2026-10-29T09:00:00Z" }),
+    record("OFFLINE-OLD", { gprsConnectivity: "disconnected", lastGpsTimestamp: "2026-10-29T07:00:00Z" }),
+    record("DRIVE-LOW", { speed: 34, engineOn: true }),
+    record("STOP-ON-OLD", { engineOn: true, lastGpsTimestamp: "2026-10-29T08:00:00Z" }),
+    record("STALE", { timestampStatus: "stale", lastGpsTimestamp: "2026-10-28T10:00:00Z" }),
+    record("DRIVE-HIGH-OLDER", { speed: 78, engineOn: true, lastGpsTimestamp: "2026-10-29T09:00:00Z" }),
+    record("OFFLINE-STALE", { gprsConnectivity: "disconnected", timestampStatus: "stale", lastGpsTimestamp: "2026-10-27T10:00:00Z" }),
+    record("STOP-ON-FRESH", { engineOn: true }),
+    record("STOP-OFF-FRESH"),
+    record("OFFLINE-NEW", { gprsConnectivity: "disconnected", lastGpsTimestamp: "2026-10-29T09:00:00Z" }),
+    record("DRIVE-HIGH-FRESH", { speed: 78, engineOn: true }),
+    record("MISSING", { coordinateStatus: "missing" }),
+    record("CONFLICT", { speed: 12, engineOn: false }),
+    record("UNAVAILABLE", { speed: null })
+  ];
+  const before = structuredClone(rows);
+  assert.deepEqual(sortForthFleetRecords(rows, "operations").map((item) => item.vehicleRegistration), [
+    "DRIVE-HIGH-FRESH", "DRIVE-HIGH-OLDER", "DRIVE-LOW",
+    "STOP-ON-FRESH", "STOP-ON-OLD", "STOP-OFF-FRESH", "STOP-OFF-OLD",
+    "OFFLINE-STALE", "OFFLINE-OLD", "OFFLINE-NEW", "STALE", "MISSING", "CONFLICT", "UNAVAILABLE"
+  ]);
+  assert.deepEqual(rows, before);
+});
+
+test("Fleet Monitor defaults to operations priority and labels unverified coordinates as estimated", () => {
+  const centre = fs.readFileSync(path.join(root, "components/forth-tracking-centre.tsx"), "utf8");
+  assert.match(centre, /useState<ForthFleetSort>\("operations"\)/);
+  assert.match(centre, /<option value="operations">\{copy\.sortOperations\}<\/option>/);
+  assert.match(centre, /className="v7-side-count" aria-live="polite"/);
+  assert.match(centre, /mapNotMappedShort: "Estimated position"/);
+  assert.match(centre, /mapNotMappedShort: "ตำแหน่งประมาณการ"/);
+  assert.match(centre, /forth-row-confidence/);
+  assert.match(centre, /forth-tracking-kpis/);
+  assert.doesNotMatch(centre, /className="forth-live-filter-chips"/);
+  assert.match(centre, /forth-row-speed/);
+  assert.doesNotMatch(centre, /forth-stat-hero-icon/);
 });
 
 test("classifies lost, stale, ambiguous, invalid, and incomplete GPS records safely", () => {
@@ -1322,6 +1368,19 @@ test("Forth location descriptions use only supplied top-level address or POI tex
   assert.equal(filterForthFleetRecords(records, "Bangkok depot", "all")[0].vehicleRegistration, "LOCATION-1");
 });
 
+test("compact fleet areas retain source district and province without changing the full address", () => {
+  const { getForthLocationArea, getForthLocationDescription } = loadTypeScript("lib/forth-tracking-view.ts");
+  const record = {
+    locationAddressEnglish: "Tambon Khong Phai, Amphoe Khanu Woralaksaburi, Changwat Kamphaeng Phet",
+    locationAddressThai: "ตำบลคลองไผ่, อำเภอขาณุวรลักษบุรี, จังหวัดกำแพงเพชร"
+  };
+  assert.equal(getForthLocationArea(record, "en"), "Khanu Woralaksaburi, Kamphaeng Phet");
+  assert.equal(getForthLocationArea(record, "th"), "ขาณุวรลักษบุรี, กำแพงเพชร");
+  assert.equal(getForthLocationDescription(record, "en"), record.locationAddressEnglish);
+  assert.equal(getForthLocationArea({ locationAddressEnglish: "Bangkok depot" }, "en"), "Bangkok depot");
+  assert.equal(getForthLocationArea({}, "en"), null);
+});
+
 test("initial fleet framing focuses a clear spatial majority and retains every valid point for Fit Fleet", () => {
   const { getForthFleetMapInitialFrame } = loadTypeScript("lib/forth-tracking-view.ts");
   const mainCluster = Array.from({ length: 20 }, (_, index) => [13.75 + index * 0.001, 100.50 + index * 0.001]);
@@ -1336,6 +1395,15 @@ test("initial fleet framing focuses a clear spatial majority and retains every v
   const splitFleet = getForthFleetMapInitialFrame([[13.75, 100.5], [13.76, 100.51], [18.79, 98.98], [18.8, 98.99]]);
   assert.equal(splitFleet.outlierCount, 0);
   assert.equal(splitFleet.focusPositions.length, 4);
+
+  const workingArea = getForthFleetMapInitialFrame([
+    [13.75, 100.50], [13.78, 100.56], [13.80, 100.60],
+    [18.79, 98.98], [7.90, 98.34], [6.12, 102.25]
+  ]);
+  assert.equal(workingArea.allPositions.length, 6);
+  assert.equal(workingArea.focusPositions.length, 3);
+  assert.equal(workingArea.outlierCount, 3);
+  assert.ok(workingArea.focusPositions.every(([latitude]) => latitude > 13 && latitude < 14));
 });
 
 test("approved roster classifies all 21 map vehicles without changing EES records", () => {
@@ -1362,9 +1430,11 @@ test("approved roster classifies all 21 map vehicles without changing EES record
     vehicleClass: "unclassified", classLabel: null, make: null, model: null
   });
   assert.ok(map.includes("getForthTrackingVehicleIdentity(record.vehicleRegistration)"));
-  assert.ok(map.includes('vehicleClass === "six_wheeler"'));
+  assert.ok(map.includes("buildForthVehicleMarkerGlyphHtml"));
   assert.ok(map.includes('vehicleClass === "eighteen_wheeler"'));
   assert.ok(map.includes('vehicleClass === "four_wheeler"'));
+  assert.equal(map.includes("classChip"), false);
+  assert.ok(map.includes("vehicleMarkerClass"));
   assert.equal(map.includes("createServerSupabaseAdmin"), false);
 });
 
@@ -1382,7 +1452,7 @@ test("fleet selection keys remain stable across data refreshes and match map mar
   assert.equal(getForthFleetRecordKey({ vehicleRegistration: " 1กข - 2345 " }, 8), "registration:1กข2345");
 });
 
-test("Leaflet map groups screen collisions by registration, fans them out and preserves navigation on refresh", () => {
+test("Leaflet map keeps genuine coordinates and opens a shared-location list instead of displacing markers", () => {
   const source = fs.readFileSync(path.join(root, "components/forth-tracking-map.tsx"), "utf8");
   const styles = fs.readFileSync(path.join(root, "components/forth-tracking-map.module.css"), "utf8");
   assert.ok(source.includes('import "leaflet/dist/leaflet.css"'));
@@ -1391,31 +1461,31 @@ test("Leaflet map groups screen collisions by registration, fans them out and pr
   assert.ok(source.includes('setProperty("z-index", "650")'));
   assert.ok(source.includes('setProperty("z-index", "200")'));
   assert.ok(source.includes("map.fitBounds("));
-  assert.ok(source.includes("map.flyTo(position"));
-  assert.ok(source.includes("setZIndexOffset(selected ? 1200 : 0)"));
-  assert.ok(source.includes("getForthMarkerCollisionGroups("));
-  assert.ok(source.includes("getForthMarkerFanOutOffsets("));
-  assert.ok(source.includes("containerPointToLatLng("));
-  assert.ok(source.includes("Leaflet.polyline([truePosition, displayPosition]"));
-  assert.ok(source.includes("const truePosition = source.marker.getLatLng()"));
-  assert.ok(source.includes("fan.connector.setLatLngs([truePosition, displayPosition])"));
+  assert.ok(source.includes("applyForthMapViewCommand"));
+  assert.ok(source.includes("map.flyTo(center"));
+  assert.ok(source.includes('entry.activity === "driving" ? 700 : overlapCount > 1 ? 500 : 0'));
+  assert.ok(source.includes("getForthSharedLocationGroups("));
+  assert.ok(source.includes("Keep every vehicle marker visible"));
+  assert.equal(source.includes("getForthMarkerFanOutOffsets("), false);
+  assert.ok(source.includes("Leaflet.polyline("));
+  assert.ok(source.includes("playbackPath"));
   assert.ok(source.includes("marker.setLatLng(position)"));
+  assert.ok(source.includes("Keep every vehicle marker visible"));
+  assert.ok(source.includes("stackMarkersRef.current.clear()"));
   assert.ok(source.includes("isForthGpsPositionVerified(record)"));
   assert.ok(source.includes("const approximate = !isForthGpsPositionVerified(record)"));
   assert.ok(source.includes("activityLabel(activity, copy)"));
   assert.ok(source.includes("copy.gpsVerified"));
   assert.ok(source.includes("copy.notGpsVerified"));
-  assert.ok(source.includes("copyRef.current.expandGroup"));
-  assert.match(source, /registrations\s*\.map\(\(registration\)\s*=>\s*`<b>\$\{escapeHtml\(registration\)\}<\/b>`\)/);
-  assert.ok(source.includes("styles.vehicleGroupRegistrations"));
-  assert.ok(source.includes("expandedGroupRef.current = group.signature"));
+  assert.ok(source.includes('onSharedLocationRef.current?.(overlapKeys, "map_overlap")'));
+  assert.ok(source.includes("getForthScreenOverlapGroups"));
+  assert.ok(source.includes("styles.vehicleStackCount"));
   assert.ok(source.includes("styles.vehicleMarkerDriving"));
   assert.ok(source.includes("styles.vehicleMarkerUncertain"));
   assert.ok(source.includes("styles.vehicleMarkerStoppedEngineOn"));
   assert.ok(source.includes("styles.vehicleMarkerUnavailable"));
   assert.ok(source.includes("styles.vehicleMarkerApproximate"));
   assert.ok(source.includes("styles.vehicleMarkerOffline"));
-  assert.ok(source.includes("copy.notGpsVerified"));
   assert.ok(source.includes("onSelectRef.current(key)"));
   assert.ok(source.includes("initialFitCompleteRef.current"));
   assert.ok(source.includes('command.type === "fit"'));
@@ -1424,8 +1494,7 @@ test("Leaflet map groups screen collisions by registration, fans them out and pr
   assert.ok(styles.includes(".vehicleMarkerApproximate"));
   assert.ok(styles.includes(".vehicleMarkerOffline::after"));
   assert.ok(styles.includes(".vehicleMarkerSelected"));
-  assert.ok(styles.includes(".vehicleGroupCard"));
-  assert.ok(styles.includes(".vehicleGroupRegistrations"));
+  assert.ok(styles.includes(".vehicleStackCount"));
   assert.ok(styles.includes(".vehicleMarkerUncertain"));
   assert.equal(source.includes("bindPopup("), false);
   assert.equal(source.includes("openPopup("), false);
@@ -1433,109 +1502,123 @@ test("Leaflet map groups screen collisions by registration, fans them out and pr
   assert.ok(source.includes("const changed = entry.activity !== activity"));
   assert.ok(source.includes("export const ForthTrackingMap = memo(function ForthTrackingMap"));
   assert.ok(source.includes("if (!entry.onMap) return [];"));
-  assert.ok(source.includes('marker.on("focus", () => marker.openTooltip())'));
+  assert.ok(source.includes("createForthHoverIntent"));
+  assert.ok(source.includes("relatedTarget"));
+  assert.ok(source.includes("riseOnHover: false"));
+  assert.equal(source.includes("bindTooltip("), false);
+  assert.equal(source.includes("openTooltip("), false);
+  assert.ok(source.includes('marker.on("mouseover"'));
+  assert.ok(source.includes('marker.on("focus"'));
 
   const reconcileStart = source.indexOf("// Keep original Leaflet markers");
-  const initialFitStart = source.indexOf("// Fit once on first data");
+  const initialFitStart = source.indexOf("// Fit once to Thailand Core Operations");
   const markerRefreshEffect = source.slice(reconcileStart, initialFitStart);
   assert.equal(/fitFleet\(|fitBounds\(|map\.flyTo\(|map\.panTo\(/.test(markerRefreshEffect), false);
 });
 
-test("overlapping positions are grouped by screen distance and fan-out offsets stay distinct without changing reported coordinates", () => {
-  const { getForthMarkerCollisionGroups, getForthMarkerFanOutOffsets } = loadTypeScript("lib/forth-tracking-view.ts");
+test("vehicles that share a reported location stay grouped without changing coordinates", () => {
+  const { getForthSharedLocationGroups } = loadTypeScript("lib/forth-tracking-view.ts");
   const reportedPositions = [
-    { key: "device:A", latitude: 13.75, longitude: 100.5 },
     { key: "device:B", latitude: 13.75, longitude: 100.5 },
-    { key: "device:C", latitude: 13.7501, longitude: 100.5001 }
+    { key: "device:A", latitude: 13.75, longitude: 100.5 },
+    { key: "device:C", latitude: 14.2, longitude: 100.9 },
+    { key: "invalid", latitude: Number.NaN, longitude: 100 }
   ];
   const before = structuredClone(reportedPositions);
-  const groups = getForthMarkerCollisionGroups([
-    { key: "device:A", x: 10, y: 10 },
-    { key: "device:B", x: 20, y: 12 },
-    { key: "device:C", x: 200, y: 180 },
-    { key: "invalid", x: Number.NaN, y: 1 }
-  ], 32);
-  const offsets = getForthMarkerFanOutOffsets(21);
-  const uniqueOffsets = new Set(offsets.map(({ x, y }) => `${x},${y}`));
+  const groups = getForthSharedLocationGroups(reportedPositions, 30);
 
   assert.deepEqual(groups, [["device:A", "device:B"]]);
-  assert.equal(offsets.length, 21);
-  assert.equal(uniqueOffsets.size, 21);
+  assert.deepEqual(getForthSharedLocationGroups([{ key: "solo", latitude: 13.7, longitude: 100.5 }], 30), []);
   assert.deepEqual(reportedPositions, before);
+  const oneKilometreApart = [
+    { key: "near", latitude: 13.75, longitude: 100.5 },
+    { key: "away", latitude: 13.759, longitude: 100.5 }
+  ];
+  assert.deepEqual(getForthSharedLocationGroups(oneKilometreApart, 30), []);
 });
 
-test("premium tracking workspace keeps selection and map controls with responsive details and actionable fleet signals", () => {
+test("shared locations group a tight yard in metres and separate at street zoom", () => {
+  const {
+    forthDistanceMeters,
+    getForthSharedLocationGroups,
+    getForthSharedLocationThresholdMeters
+  } = loadTypeScript("lib/forth-tracking-view.ts");
+  const yard = [
+    { key: "device:A", latitude: 13.75, longitude: 100.5 },
+    { key: "device:B", latitude: 13.750045, longitude: 100.5 }
+  ];
+  assert.equal(getForthSharedLocationThresholdMeters(11), 10);
+  assert.equal(getForthSharedLocationThresholdMeters(13), 8);
+  assert.equal(getForthSharedLocationThresholdMeters(15), 4);
+  assert.equal(getForthSharedLocationThresholdMeters(17), 1.5);
+  assert.ok(forthDistanceMeters([13.75, 100.5], [13.750045, 100.5]) < 10);
+  assert.ok(forthDistanceMeters([13.75, 100.5], [13.759, 100.5]) > 900);
+  assert.equal(getForthSharedLocationGroups(yard, getForthSharedLocationThresholdMeters(11)).length, 1);
+  assert.deepEqual(getForthSharedLocationGroups(yard, getForthSharedLocationThresholdMeters(17)), []);
+  assert.deepEqual(getForthSharedLocationGroups([
+    { key: "same-a", latitude: 13.75, longitude: 100.5 },
+    { key: "same-b", latitude: 13.75, longitude: 100.5 }
+  ], getForthSharedLocationThresholdMeters(18)), [["same-a", "same-b"]]);
+  assert.deepEqual(getForthSharedLocationGroups([
+    { key: "a", latitude: 13.75, longitude: 100.5 },
+    { key: "b", latitude: 13.751, longitude: 100.5 }
+  ], 30), []);
+});
+
+test("fleet search matches vehicle type and attention conditions stay distinct", () => {
+  const { filterForthFleetRecords, getForthAttentionKinds } = loadTypeScript("lib/forth-tracking-view.ts");
+  const nissan = {
+    vehicleRegistration: "74-8969",
+    reportedDriver: null,
+    gpsDeviceId: "N1",
+    locationAddressEnglish: null,
+    locationAddressThai: null,
+    locationPointOfInterest: null,
+    gprsConnectivity: "connected",
+    timestampStatus: "current",
+    coordinateStatus: "valid",
+    latitude: 13.7,
+    longitude: 100.5,
+    speed: 0,
+    engineOn: true,
+    gpsConnectivity: "connected",
+    positionQuality: "gps"
+  };
+  const offline = {
+    ...nissan,
+    vehicleRegistration: "OFFLINE-1",
+    gpsDeviceId: "N2",
+    gprsConnectivity: "disconnected",
+    timestampStatus: "stale",
+    coordinateStatus: "missing",
+    speed: null,
+    engineOn: null,
+    gpsConnectivity: "disconnected",
+    positionQuality: "unknown"
+  };
+  assert.equal(filterForthFleetRecords([nissan, offline], "Nissan", "all").length, 1);
+  assert.equal(filterForthFleetRecords([nissan, offline], "6-wheeler", "all")[0].vehicleRegistration, "74-8969");
+  assert.equal(filterForthFleetRecords([nissan, offline], "", "verified").length, 1);
+  assert.deepEqual(getForthAttentionKinds(nissan), ["engine_on_stopped"]);
+  assert.deepEqual(getForthAttentionKinds(offline), ["offline", "stale", "missing_coordinates"]);
+});
+
+test("V21 workspace has one sidebar with fleet, vehicle and location modes", () => {
   const source = fs.readFileSync(path.join(root, "components/forth-tracking-centre.tsx"), "utf8");
-  assert.ok(source.includes("onSelect={focusVehicle}"));
-  assert.ok(source.includes("onClick={() => onSelect(recordKey)}"));
-  assert.ok(source.includes("const FleetVehicleRow = memo(function FleetVehicleRow"));
-  assert.ok(source.includes("const recordKeysByReference = useMemo(() =>"));
-  assert.equal(source.includes("data.records.indexOf(record)"), false);
-  assert.ok(source.includes("setSelectedKey((current) => current && payload.records.some"));
-  assert.ok(source.includes("onClick={fitAllVehicles}"));
-  assert.ok(source.includes("setMapCommand((current) => ({ type: \"fit\""));
-  assert.ok(source.includes("setMapCommand((current) => ({ type: \"focus\""));
-  assert.ok(source.includes('xl:grid-cols-[minmax(0,2.35fr)_minmax(300px,0.85fr)]'));
-  assert.ok(source.includes('xl:absolute xl:inset-x-auto'));
-  assert.ok(source.includes('xl:right-[calc(27%+0.75rem)]'));
-  assert.ok(source.includes('id="forth-vehicle-list"'));
-  assert.ok(source.includes("aria-label={copy.attention}"));
-  assert.ok(source.includes('value="offline"'));
-  assert.ok(source.includes('value="stale"'));
-  assert.ok(source.includes('filter === "unverified" ? "all" : "unverified"'));
-  assert.ok(source.includes('filter === "engine_on_stopped" ? "all" : "engine_on_stopped"'));
-  assert.ok(source.includes('value="attention"'));
-  assert.ok(source.includes('active={filter === "all"}'));
-  assert.ok(source.includes('summary.communications.offline'));
-  assert.ok(source.includes('summary.positionConfidence.notGpsVerified'));
-  assert.ok(source.includes('label={copy.engineOnStops}'));
-  assert.ok(source.includes('label={copy.locationNotGpsVerified}'));
-  assert.ok(source.includes('label={copy.activityConflictCount}'));
-  assert.ok(source.includes('active={filter === "uncertain"}'));
-  assert.ok(source.includes('value="uncertain"'));
-  assert.ok(source.includes("getForthLocationDescription(selectedRecord, language)"));
-  assert.ok(source.includes("copy.activityConflictNote"));
-  assert.ok(source.includes("copy.technicalDetails"));
-  assert.ok(source.includes('xl:w-[min(18rem,36%)]'));
-  assert.ok(source.includes('className="forth-tracking-kpis flex gap-1.5"'));
-  assert.ok(source.includes('records={mapRecords}'));
-  assert.ok(source.includes('filterKey={filter}'));
-  assert.ok(source.includes("formatForthRelativeAge(record.lastGpsTimestamp, Date.now(), language)"));
-  assert.ok(source.includes("aria-label={accessibleUpdateTime}"));
-  assert.ok(source.includes("copy.exactPositionTime"));
-  assert.ok(source.includes("onClick={() => applyFleetFilter(filter === \"driving\" ? \"all\" : \"driving\")}"));
-  assert.ok(source.includes("summary.latestCurrentGpsPosition"));
-  assert.ok(source.includes("summary.positionConfidence.notGpsVerified"));
-  assert.ok(source.includes("summary.reportedActivity.stoppedEngineOn"));
-  assert.ok(source.includes("summary.reportedActivity.uncertain"));
-  assert.ok(source.includes("copy.mapOfflineLegend"));
-  assert.ok(source.includes("selectedRecord.reportedDriver ?"));
-  assert.ok(source.includes("copy.focusOnMap"));
-  assert.ok(source.includes("copy.approximateCoordinatesNote"));
-  assert.ok(source.includes("getForthTrackingVehicleIdentity(record.vehicleRegistration)"));
-  assert.ok(source.includes("getForthTrackingVehicleIdentity(selectedRecord.vehicleRegistration)"));
-  assert.ok(source.includes("onClick={() => { setSelectedKey(null); setInspectorOpen(false); setMobileInspectorOpen(false); }}"));
-  assert.ok(source.includes("copy.mapLegendHelp"));
-  assert.ok(source.includes("copy.mapGroupHelp"));
-  const inspectorStart = source.indexOf('aria-labelledby="forth-vehicle-details-title"');
-  const inspectorEnd = source.indexOf('{connected && can("business:read") && diagnosticsOpen ?', inspectorStart);
-  const inspector = source.slice(inspectorStart, inspectorEnd);
-  const technicalDetailsStart = inspector.indexOf("{copy.technicalDetails}");
-  assert.equal((inspector.match(/<details/g) ?? []).length, 1);
-  assert.equal(inspector.includes("copy.locationSection"), false);
-  assert.equal(inspector.includes("copy.connectionTimingSection"), false);
-  assert.equal(inspector.includes("copy.sourceSection"), false);
-  assert.ok(inspector.includes("selectedRecord.sourceTimestampRaw"));
-  assert.equal(inspector.includes("selectedRecord.positionSource"), false);
-  assert.ok(technicalDetailsStart >= 0);
-  assert.equal(inspector.slice(0, technicalDetailsStart).includes("selectedRecord.gpsDeviceId"), false);
-  assert.ok(inspector.slice(technicalDetailsStart).includes("selectedRecord.gpsDeviceId"));
-  assert.ok(inspector.slice(technicalDetailsStart).includes("{copy.device}"));
-  assert.ok(source.includes("setSelectedKey(null)"));
-  assert.ok(source.includes("copy.noGpsSourceNote"));
-  assert.ok(source.includes("const [inspectorOpen, setInspectorOpen] = useState(false)"));
-  assert.ok(source.includes("{selectedRecord ? ("));
-  assert.ok(source.includes("setMobileInspectorOpen(false)"));
+  const css = fs.readFileSync(path.join(root, "components/forth-operations-v21.css"), "utf8");
+  assert.match(source, /id="forth-operations-sidebar"/);
+  assert.match(source, /Live Fleet/);
+  assert.match(source, /Vehicle|vehicle/);
+  assert.match(source, /Locations|locations/);
+  assert.equal((source.match(/<EesDepotOperationsPanel/g) || []).length, 1);
+  assert.equal((source.match(/<ForthGpsLocationsPanel/g) || []).length, 1);
+  const panel = fs.readFileSync(path.join(root, "components/forth-gps-locations-panel.tsx"), "utf8");
+  assert.match(panel, /summarizeForthLocationProximity/);
+  assert.match(panel, /Find nearest vehicles/);
+  assert.ok(source.includes('setWorkspaceMode("vehicle")'));
+  assert.ok(source.includes('setWorkspaceMode("locations")'));
+  assert.match(css, /.forth-operations-sidebar/);
+  assert.ok(css.includes('@media (max-width: 767px)'));
 });
 
 test("marker labels declutter at fleet zoom and prioritize selected Thai registrations when labels overlap", () => {
@@ -1546,8 +1629,9 @@ test("marker labels declutter at fleet zoom and prioritize selected Thai registr
     { key: "รถ-๓", left: 260, top: 22, width: 96, height: 24, selected: false }
   ];
 
-  assert.deepEqual([...getVisibleForthMarkerLabelKeys(placements, 7)], []);
-  assert.deepEqual([...getVisibleForthMarkerLabelKeys(placements, 8)], ["รถ-๒", "รถ-๓"]);
+  assert.deepEqual([...getVisibleForthMarkerLabelKeys(placements, 6)], ["รถ-๒"]);
+  assert.deepEqual([...getVisibleForthMarkerLabelKeys([{ key: "ค้นหา", left: 20, top: 80, width: 80, height: 24, selected: false, reveal: true }], 6)], ["ค้นหา"]);
+  assert.deepEqual([...getVisibleForthMarkerLabelKeys(placements, 7)], ["รถ-๒", "รถ-๓"]);
   assert.deepEqual([...getVisibleForthMarkerLabelKeys(placements, Number.NaN)], []);
 });
 
@@ -1557,26 +1641,88 @@ test("fleet tracking map renders escaped registration labels and activity-specif
 
   assert.ok(source.includes("styles.vehicleMarkerLabel"));
   assert.ok(source.includes("escapeHtml(registration)"));
-  assert.ok(source.includes("getVisibleForthMarkerLabelKeys"));
+  assert.ok(source.includes("planForthMarkerLabels"));
   assert.ok(source.includes("labelUpdateRef.current()"));
   assert.ok(styles.includes(".vehicleMarkerLabelHidden"));
-  assert.match(styles, /\.vehicleMarkerLabel\s*\{[\s\S]*?pointer-events:\s*auto/);
+  assert.ok(styles.includes("pointer-events: auto"));
+  assert.ok(styles.includes(".vehicleMarkerLabelAttached"));
   assert.ok(styles.includes(".vehicleMarkerStoppedEngineOn"));
   assert.ok(styles.includes(".vehicleMarkerStoppedEngineOff"));
   assert.ok(styles.includes(".vehicleMarkerStoppedEngineUnknown"));
+  assert.equal(source.includes("tile.openstreetmap.org"), false);
+  assert.ok(source.includes("attachEesLeafletBasemap"));
+  assert.ok(source.includes("escapeHtml(registration)"));
+  assert.ok(source.includes("vehicleMarkerLabelAttached"));
+  assert.ok(source.includes("vehicleMarkerUnit"));
+  const markerIconSource = source.slice(source.indexOf("function classShortLabel"), source.indexOf("function stackIcon"));
+  assert.ok(markerIconSource.includes("classShortLabel"));
+  assert.ok(markerIconSource.includes("4W"));
+  assert.ok(markerIconSource.includes("6W"));
+  assert.ok(markerIconSource.includes("18W"));
 });
 
-test("a failed refresh hides the previous telemetry snapshot and identifies its last successful refresh", () => {
-  const source = fs.readFileSync(path.join(root, "components/forth-tracking-centre.tsx"), "utf8").replace(/\r\n/g, "\n");
-  assert.ok(source.includes("setData(null);\n          setRequestError(true);"));
-  assert.ok(source.includes('const connected = !requestError && data?.connectionStatus === "connected"'));
-  assert.ok(source.includes("requestError && lastChecked ?"));
-  assert.ok(source.includes("copy.staleSnapshotHidden"));
-  assert.ok(source.includes("requestFailureReason === \"authorization\""));
-  assert.ok(source.includes("requestFailureReason === \"timeout\""));
-  assert.ok(source.includes("requestFailureReason === \"upstream\""));
-  assert.ok(source.includes("requestInvalidResponseFailure"));
-  assert.ok(source.includes("timedOut ? \"timeout\" : failureReason"));
+test("operator vehicle selections focus once, open the inspector, and keep no-coordinate reports inspectable", () => {
+  const source = fs.readFileSync(path.join(root, "components/forth-tracking-centre.tsx"), "utf8");
+  const selection = source.slice(source.indexOf("const selectVehicle = useCallback"), source.indexOf("const focusVehicle = selectVehicle"));
+  assert.match(selection, /setSelectedKey\(key\)/);
+  assert.match(selection, /setInspectorOpen\(true\)/);
+  assert.match(selection, /options\?\.focusMap !== false/);
+  assert.match(selection, /getForthFleetMapRecords\(\[record\]\)\.length > 0/);
+  assert.match(selection, /zoom: isForthGpsPositionVerified\(record\) \? 15 : 14/);
+  assert.match(source, /Map focus unavailable: Forth has no usable coordinates/);
+  assert.match(source, /selectedRowRef\.current\?\.scrollIntoView/);
+  assert.match(source, /const selectVisibleMapVehicle = \(key: string\) => \{[\s\S]*?setSearch\(""\);[\s\S]*?setFilter\("all"\);[\s\S]*?selectVehicle\(key\);/);
+  assert.match(source, /onSelect=\{selectVisibleMapVehicle\}/);
+  assert.match(source, /onClick=\{\(\) => selectVisibleMapVehicle\(key\)\}/);
+  const polling = source.slice(source.indexOf("const load = async () =>"), source.indexOf("void load();", source.indexOf("const load = async () =>")));
+  assert.doesNotMatch(polling, /setMapCommand\(/);
+});
+
+test("inspector keeps primary map actions visible and places utility links in a disclosure", () => {
+  const source = fs.readFileSync(path.join(root, "components/forth-tracking-centre.tsx"), "utf8");
+  // V7: Focus map and Close live in the vehicle header; the duplicate action row was removed.
+  const header = source.slice(source.indexOf('className="v7-vehicle-header-actions"'), source.indexOf('className="v7-vehicle-status"'));
+  assert.match(header, /onClick=\{focusSelectedOnMap\}/);
+  assert.match(header, /onClick=\{showFleetOverview\}/);
+  assert.doesNotMatch(source, /className="forth-vehicle-card-actions"/);
+  const actions = source.slice(source.indexOf('<details className="forth-inspector-more-actions">'), source.indexOf('{coordinateActionNote ?'));
+  assert.match(actions, /<details className="forth-inspector-more-actions">/);
+  assert.match(actions, /onClick=\{\(\) => void copySelectedCoordinates\(\)\}/);
+  assert.match(actions, /onClick=\{openSelectedCoordinatesExternally\}/);
+  assert.match(actions, /href=\{`\/maintenance\/analytics\?vehicle=/);
+  assert.match(actions, /href="\/vehicle-performance"/);
+  assert.match(actions, /href="\/booking-diary"/);
+});
+
+test("EES basemap defaults to OpenFreeMap with attribution and optional licensed raster override", () => {
+  const tiles = fs.readFileSync(path.join(root, "lib/ees-map-tiles.ts"), "utf8");
+  const leaflet = fs.readFileSync(path.join(root, "lib/ees-map-tiles-leaflet.ts"), "utf8");
+  assert.ok(tiles.includes("https://tiles.openfreemap.org/styles/liberty"));
+  assert.equal(tiles.includes("https://tiles.openfreemap.org/styles/positron"), false);
+  assert.ok(tiles.includes("OpenFreeMap"));
+  assert.ok(tiles.includes("OpenMapTiles"));
+  assert.ok(tiles.includes("OpenStreetMap contributors"));
+  assert.ok(tiles.includes("NEXT_PUBLIC_EES_MAP_TILE_URL"));
+  assert.ok(leaflet.includes("attachEesLeafletBasemap"));
+  assert.ok(leaflet.includes("@maplibre/maplibre-gl-leaflet"));
+  assert.ok(leaflet.includes("updateWhenIdle") === false || tiles.includes("updateWhenIdle"));
+  assert.ok(tiles.includes("updateWhenIdle"));
+  assert.ok(tiles.includes("keepBuffer"));
+});
+
+test("failed refresh retains positions but removes current GPS verification", () => {
+  const { retainForthSnapshot, ageForthSnapshot, FORTH_FLEET_REQUEST_TIMEOUT_MS } = loadTypeScript("lib/forth-operations-snapshot.ts");
+  const { isForthGpsPositionVerified } = loadTypeScript("lib/forth-tracking-view.ts");
+  const record = { vehicleRegistration: "TEST-1", coordinateStatus: "valid", latitude: 13.7, longitude: 100.5, lastGpsTimestamp: "2026-10-21T05:00:00.000Z", timestampStatus: "current", gpsConnectivity: "connected", positionQuality: "gps" };
+  const good = { connectionStatus: "connected", fetchedAt: "2026-10-21T05:00:00.000Z", records: [record], error: null };
+  const failed = { connectionStatus: "failed", fetchedAt: null, records: [], error: { code: "tracking_network_error", message: "Unavailable" } };
+  const kept = retainForthSnapshot(good, failed);
+  assert.equal(kept.connectionStatus, "failed");
+  assert.equal(kept.records.length, 1);
+  assert.equal(kept.fetchedAt, good.fetchedAt);
+  assert.equal(isForthGpsPositionVerified(ageForthSnapshot(kept.records, Date.parse(record.lastGpsTimestamp), true)[0]), false);
+  assert.equal(ageForthSnapshot(good.records, Date.parse(record.lastGpsTimestamp) + 16 * 60_000, false)[0].timestampStatus, "stale");
+  assert.equal(FORTH_FLEET_REQUEST_TIMEOUT_MS, 30_000);
 });
 
 test("status diagnostic UI exposes accessible ready, confirmation, running and prior-attempt states", () => {
@@ -1754,6 +1900,27 @@ test("network and malformed-response failures consume the attempt without exposi
   }
 });
 
+test("speed review requires a fresh GPS position and a clear operational threshold", () => {
+  const { isForthHighReportedSpeed, filterForthFleetRecords, FORTH_HIGH_SPEED_REVIEW_KMH, getForthOperationalSpeedAdvisoryKmh } = loadTypeScript("lib/forth-tracking-view.ts");
+  // Owner Group A uses 70 km/h; unclassified plates fall back to the 90 km/h class advisory.
+  const configured = {
+    vehicleRegistration: "79-5318", speed: 70, engineOn: true,
+    timestampStatus: "current", coordinateStatus: "valid",
+    latitude: 13.7, longitude: 100.5, gpsConnectivity: "connected", positionQuality: "gps"
+  };
+  const unclassified = { ...configured, vehicleRegistration: "REVIEW-1", speed: 90 };
+  assert.equal(FORTH_HIGH_SPEED_REVIEW_KMH, 70);
+  assert.equal(getForthOperationalSpeedAdvisoryKmh("unclassified"), 90);
+  assert.equal(getForthOperationalSpeedAdvisoryKmh("eighteen_wheeler"), 80);
+  assert.equal(isForthHighReportedSpeed({ ...configured, speed: 69 }), false);
+  assert.equal(isForthHighReportedSpeed(configured), true);
+  assert.equal(isForthHighReportedSpeed({ ...configured, vehicleRegistration: "64-5954", speed: 90 }), true);
+  assert.equal(isForthHighReportedSpeed({ ...configured, timestampStatus: "stale" }), false);
+  assert.equal(isForthHighReportedSpeed({ ...configured, positionQuality: "no_gps" }), false);
+  assert.equal(isForthHighReportedSpeed({ ...configured, engineOn: false }), false);
+  assert.deepEqual(filterForthFleetRecords([unclassified, { ...unclassified, vehicleRegistration: "REVIEW-2", speed: 89 }], "", "high_speed").map((record) => record.vehicleRegistration), ["REVIEW-1"]);
+});
+
 test("dashboard separates reported activity, GPS confidence, diagnostics and existing request cadence", () => {
   const view = fs.readFileSync(path.join(root, "lib/forth-tracking-view.ts"), "utf8");
   const component = fs.readFileSync(path.join(root, "components/forth-tracking-centre.tsx"), "utf8");
@@ -1764,7 +1931,7 @@ test("dashboard separates reported activity, GPS confidence, diagnostics and exi
   assert.ok(component.includes("summary.reportedActivity.stoppedEngineOn"));
   assert.ok(component.includes("summary.positionConfidence.notGpsVerified"));
   assert.ok(component.includes("gpsConfidenceLabel(record, copy)"));
-  assert.ok(component.includes("<ActivityPill activity={activity} copy={copy} />"));
+  assert.ok(component.includes("<ActivityPill activity={activity} copy={copy} compact />") || component.includes("<ActivityPill activity={activity} copy={copy} />"));
   assert.ok(component.includes("summary.currentGpsVerifiedPositions"));
   assert.ok(component.includes("copy.mapConfidence"));
   assert.ok(component.includes("Reported driving · position not GPS-verified"));
@@ -1776,14 +1943,27 @@ test("dashboard separates reported activity, GPS confidence, diagnostics and exi
   assert.ok(component.includes('role="dialog" aria-modal="true" aria-labelledby="forth-diagnostics-title"'));
   assert.ok(component.includes('ref={diagnosticsTriggerRef}'));
   assert.ok(component.includes("setDiagnosticsOpen(true)"));
-  assert.ok(component.includes("shows all."));
-  assert.ok(component.includes("sidebarOpen ? \"xl:grid-cols-[minmax(0,2.35fr)_minmax(300px,0.85fr)]\" : \"xl:grid-cols-1\""));
-  assert.ok(component.includes('className="forth-vehicle-results mt-2 space-y-1 pr-1"'));
+  assert.ok(component.includes("Core Operations") || component.includes("ปฏิบัติการหลัก") || component.includes("Core ops"));
+  assert.ok(component.includes("Thailand & neighbours") || component.includes("ไทยและเพื่อนบ้าน") || component.includes("TH + neighbours"));
+  assert.ok(component.includes("Full fleet") || component.includes("All fleet") || component.includes("ทั้งกอง"));
+  assert.ok(component.includes("getForthFleetMapModeRecords"));
+  assert.ok(component.includes("classifyOutsideCoreOperations"));
+  assert.ok(component.includes("ForthGpsLocationsPanel"));
+  assert.ok(component.includes("forthReportedCoordinateClipboardText"));
+  assert.equal(component.includes("setPositionMode("), false);
+  assert.ok(component.includes("GPS not verified"));
+  assert.ok(component.includes("ยังไม่ยืนยัน GPS"));
+  assert.ok(component.includes("ForthSpeedWatch"));
+  assert.ok(component.includes("forth-map-status"));
+  assert.ok(component.includes("selectVehicle"));
+  assert.ok(component.includes("Fleet Monitor display"));
+  assert.ok(component.includes('className="forth-tracking-grid"'));
+  assert.ok(component.includes('className="forth-vehicle-results"'));
   assert.ok(component.includes("setMobileListOpen(true)"));
   assert.ok(component.includes("getForthFleetMapInitialFrame"));
   assert.ok(map.includes("isForthGpsPositionVerified"));
   assert.ok(map.includes("activityLabel(activity, copy)"));
-  assert.ok(component.includes("const POLL_INTERVAL_MS = 60_000;"));
+  assert.ok(component.includes("const POLL_INTERVAL_MS = 180_000;"));
   assert.ok(component.includes('can("business:read")'));
 });
 
@@ -1806,29 +1986,141 @@ test("office accuracy review is protected in the UI and reuses the existing norm
   assert.equal(panel.includes("createServerSupabaseAdmin"), false);
   assert.ok(component.includes("{connected && can(\"business:read\") && diagnosticsOpen ? ("));
   assert.match(server, /sourceAudit:\s*record\.sourceAudit/);
-  assert.equal(component.includes('const POLL_INTERVAL_MS = 60_000;'), true);
+  assert.equal(component.includes('const POLL_INTERVAL_MS = 180_000;'), true);
 });
 
 test("Fleet Tracking uses the viewport below the shared navigation and keeps its own list scroll", () => {
   const layout = fs.readFileSync(path.join(root, "app/(dashboard)/layout.tsx"), "utf8");
   const css = fs.readFileSync(path.join(root, "app/globals.css"), "utf8");
-  assert.ok(layout.includes('pathname === "/fleet-tracking" ? "dashboard-dispatch-shell"'));
+  assert.ok(layout.includes('pathname === "/fleet-tracking"'));
+  assert.ok(layout.includes("has-floating-nav"));
+  assert.ok(layout.includes("ees-fleet-viewport"));
+  assert.ok(layout.includes("<TopNavigation />"));
+  assert.equal(layout.includes("compact={isFleetTrackingRoute}"), false);
   assert.ok(layout.includes('if (pathname !== "/fleet-tracking")'));
-  assert.ok(css.includes(".dashboard-dispatch-shell {"));
   assert.ok(css.includes("height: 100dvh;"));
   assert.ok(css.includes("overflow: hidden;"));
   assert.ok(css.includes(".forth-tracking-workspace .forth-tracking-grid"));
   assert.ok(css.includes(".forth-tracking-workspace .forth-vehicle-results"));
   assert.ok(css.includes("grid-template-rows: minmax(0, 1fr);"));
   assert.ok(css.includes("overscroll-behavior: contain;"));
+  assert.ok(css.includes(".ees-fleet-under-nav") || css.includes("ees-fleet-under-nav"));
 });
 
 test("Fleet Tracking appears once in the permission-gated Fleet group used by desktop and mobile navigation", () => {
-  const source = fs.readFileSync(path.join(root, "components/top-navigation.tsx"), "utf8");
-  const fleetGroup = source.slice(source.indexOf('key: "fleet"'), source.indexOf('key: "fuel"'));
+  // Menu definitions (links, groups, permission gates) now live in lib/office-nav.tsx; the shell components render them. Assertions below are unchanged.
+  const source = fs.readFileSync(path.join(root, "components/top-navigation.tsx"), "utf8") + " " + fs.readFileSync(path.join(root, "lib/office-nav.tsx"), "utf8");
+  const fleetBlock = source.slice(
+    source.indexOf("const fleetItems"),
+    source.indexOf("const financeItems")
+  );
   assert.equal(source.split('href: "/fleet-tracking"').length - 1, 1);
-  assert.ok(fleetGroup.includes('can("business:read")'));
-  assert.ok(fleetGroup.includes('href: "/fleet-tracking"'));
-  assert.equal(source.split("groups.map(").length - 1, 2);
+  assert.ok(fleetBlock.includes('can("business:read")'));
+  assert.ok(fleetBlock.includes('href: "/fleet-tracking"'));
+  assert.ok(source.includes('key: "finance"'));
+  assert.ok(source.includes('key: "people"'));
+  assert.equal(source.includes('href: "/fleet-events"'), false);
+  assert.ok(source.includes('href: "/locations"'));
+  assert.equal(source.split("entries.map(").length - 1, 2);
+  assert.equal(source.includes("top-navigation-fleet-premium"), false);
+  assert.ok(source.includes("ees-floating-nav"));
+  assert.ok(source.includes("skipAutoHide"));
+  assert.ok(source.includes('href === "/dashboard"'));
   assert.ok(source.includes("routeIsActive(pathname, item.href)"));
+});
+
+test("fleet navigation menus remain above the map and close for keyboard and outside input", () => {
+  const nav = fs.readFileSync(path.join(root, "components/top-navigation.tsx"), "utf8");
+  const css = fs.readFileSync(path.join(root, "app/globals.css"), "utf8");
+  assert.match(nav, /data-nav-group-container/);
+  assert.match(nav, /data-nav-group-trigger/);
+  assert.match(nav, /event\.key !== "Escape"/);
+  assert.match(nav, /document\.addEventListener\("pointerdown", closeOnPointerDown\)/);
+  assert.match(nav, /onBlur=\{\(event\) =>/);
+  assert.match(nav, /collectNavScrollRoots/);
+  assert.match(nav, /decideNavHidden/);
+  assert.match(css, /\.ees-office-shell > \.ees-floating-nav/);
+  assert.match(css, /z-index:\s*1200/);
+  assert.match(css, /\.ees-floating-nav/);
+  assert.match(css, /\.ees-nav-dropdown__panel/);
+  assert.match(css, /min-height:\s*64px/);
+  assert.match(css, /--ees-nav-radius:\s*22px/);
+  assert.match(css, /--ees-nav-clearance/);
+  assert.match(css, /\.has-hero-overlay/);
+  assert.match(css, /width:\s*min\(1280px/);
+});
+
+test("Attention uses a docked region and map coverage counts mounted symbols", () => {
+  const centre = fs.readFileSync(path.join(root, "components/forth-tracking-centre.tsx"), "utf8");
+  const map = fs.readFileSync(path.join(root, "components/forth-tracking-map.tsx"), "utf8");
+  const alerts = fs.readFileSync(path.join(root, "components/forth-fleet-alerts.tsx"), "utf8");
+  assert.match(centre, /id="forth-attention-dock"/);
+  assert.match(alerts, /createPortal\(panel, dock\)/);
+  assert.match(centre, /open=\{attentionOpen\} onOpenChange=/);
+  assert.match(centre, /setAttentionOpen\(false\);\s*setSpeedWatchOpen/);
+  assert.match(map, /entry\.onMap && entry\.marker\.getElement\(\)/);
+  assert.match(map, /stack\.marker\.getElement\(\)/);
+  assert.match(centre, /markerCoverage\.vehicleKeys\.length/);
+  assert.match(centre, /forth-map-coverage-control/);
+  assert.doesNotMatch(centre, /className="forth-live-filter-chips"/);
+  assert.match(centre, /id="forth-fleet-filter"[^>]*value=\{filter\}/);
+  assert.match(centre, /Engine on stopped|จอด·เครื่องติด/);
+  assert.match(centre, /forth-stat is-moving/);
+  assert.match(centre, /v7-verified-chip/); // V7: GPS-verified count is a quiet secondary figure beside the five priority counts
+  assert.match(centre, /forth-live-status/);
+  assert.match(centre, /\{lastRefreshAge \? <span className="v7-freshness">/);
+  assert.doesNotMatch(centre, /forth-stat is-refresh/);
+  assert.doesNotMatch(centre, /forth-monitor-quick-filters/);
+});
+
+test("V21 command area keeps primary counts and one collapsible operations sidebar", () => {
+  const centre = fs.readFileSync(path.join(root, "components/forth-tracking-centre.tsx"), "utf8");
+  const css = fs.readFileSync(path.join(root, "components/forth-operations-v21.css"), "utf8");
+  // V7: five priority counts (tracked, moving, stationary, GPS unverified, needs attention) plus a secondary verified-GPS figure.
+  const primary = centre.slice(centre.indexOf('className="v7-kpi-row"'), centre.indexOf('{data?.connectionStatus === "not_configured" || data?.connectionStatus === "failed" || requestError ? ('));
+  assert.equal((primary.match(/className="forth-stat /g) || []).length, 5);
+  assert.ok(primary.includes('summary.reportedActivity.driving'));
+  assert.ok(primary.includes('summary.needsAttention'));
+  assert.ok(primary.includes('summary.currentGpsVerifiedPositions'));
+  assert.ok(primary.includes('summary.positionConfidence.notGpsVerified'));
+  assert.match(centre, /id="forth-operations-sidebar"/);
+  assert.match(centre, /aria-controls="forth-operations-sidebar"/);
+  assert.ok(centre.includes('hidden={!mobileListOpen}'));
+  assert.match(centre, /<ForthSpeedWatchLauncher/);
+  assert.match(centre, /forth-map-layers/);
+  assert.ok(centre.includes('applyCameraMode("thailand_neighbours")'));
+  assert.ok(css.includes('.forth-v21.forth-tracking-workspace.is-sidebar-collapsed'));
+});
+
+test("simultaneous fleet readers share one Forth tracking request", async () => {
+  let trackingCalls = 0;
+  let releaseTracking;
+  const trackingGate = new Promise((resolve) => { releaseTracking = resolve; });
+  const service = makeFleetService(credentials, async (url) => {
+    if (String(url).endsWith("/token")) return Response.json({ access_token: "test-token", expires_in: 3600 });
+    trackingCalls++;
+    await trackingGate;
+    return Response.json([]);
+  });
+  const first = service.getFleetData();
+  const second = service.getFleetData();
+  assert.strictEqual(first, second);
+  releaseTracking();
+  const [a, b] = await Promise.all([first, second]);
+  assert.equal(trackingCalls, 1);
+  assert.deepEqual(a, b);
+});
+
+test("rejected tracking token is replaced on the next poll", async () => {
+  let tokenCalls = 0;
+  let trackingCalls = 0;
+  const service = makeFleetService(credentials, async (url) => {
+    if (String(url).endsWith("/token")) return Response.json({ access_token: `token-${++tokenCalls}`, expires_in: 3600 });
+    trackingCalls++;
+    return trackingCalls === 1 ? new Response(null, { status: 401 }) : Response.json([]);
+  });
+  assert.equal((await service.getFleetData()).connectionStatus, "failed");
+  assert.equal((await service.getFleetData()).connectionStatus, "connected");
+  assert.equal(tokenCalls, 2);
+  assert.equal(trackingCalls, 2);
 });

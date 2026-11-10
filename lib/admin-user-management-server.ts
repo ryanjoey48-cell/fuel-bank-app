@@ -20,8 +20,8 @@ type AccessRow = {
 export type ActiveDriverAccount = {
   id: string;
   auth_user_id: string;
-  driver_id: string | number;
-  active: true;
+  driver_id: string | number | null;
+  active: boolean;
 };
 
 export type DriverAccessRequestStatus = "pending" | "approved" | "rejected";
@@ -237,26 +237,45 @@ export async function requireVerifiedUser(request: Request) {
 }
 
 async function readAccessRow(admin: SupabaseClient, user: User) {
-  const { data, error } = await admin
+  // Prefer the full office schema; fall back when a non-production database has a narrower account_access table.
+  const full = await admin
     .from(ACCOUNT_ACCESS_TABLE)
     .select("user_id,display_name,role,status,last_access_changed_at")
     .eq("user_id", user.id)
     .maybeSingle();
 
-  if (error) {
-    if (error.code === "42P01" || /account_access/i.test(error.message)) {
-      throw new AdminApiError(503, "User Management setup required. Apply the Admin User Management migration before using administrator features.");
-    }
-    throw error;
+  if (!full.error) return full.data as AccessRow | null;
+  if (full.error.code === "42P01" || full.error.code === "PGRST205") {
+    throw new AdminApiError(503, "User Management setup required. Apply the Admin User Management migration before using administrator features.");
   }
-
-  return data as AccessRow | null;
+  if (full.error.code === "42703" || /column .* does not exist/i.test(full.error.message)) {
+    const basic = await admin
+      .from(ACCOUNT_ACCESS_TABLE)
+      .select("user_id,role,status,display_name")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (basic.error) {
+      if (basic.error.code === "42703" || /column .* does not exist/i.test(basic.error.message)) {
+        const minimal = await admin
+          .from(ACCOUNT_ACCESS_TABLE)
+          .select("user_id,role,status")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (minimal.error) throw minimal.error;
+        return minimal.data ? { ...minimal.data, display_name: null, last_access_changed_at: null } as AccessRow : null;
+      }
+      throw basic.error;
+    }
+    return basic.data ? { ...basic.data, last_access_changed_at: null } as AccessRow : null;
+  }
+  throw full.error;
 }
 
 export async function findActiveDriverAccount(admin: SupabaseClient, authUserId: string) {
+  // Active-driver denial only needs auth linkage. Avoid requiring production-only driver_id on narrower schemas.
   const { data, error } = await admin
     .from("driver_accounts")
-    .select("id,auth_user_id,driver_id,active")
+    .select("id,auth_user_id,active")
     .eq("auth_user_id", authUserId)
     .eq("active", true)
     .maybeSingle();
@@ -266,7 +285,7 @@ export async function findActiveDriverAccount(admin: SupabaseClient, authUserId:
     throw error;
   }
 
-  return data as ActiveDriverAccount | null;
+  return data ? { ...data, driver_id: null } as ActiveDriverAccount : null;
 }
 
 export async function findDriverAccessRequest(admin: SupabaseClient, authUserId: string) {
@@ -406,7 +425,7 @@ export async function countOtherActiveAdmins(admin: SupabaseClient, targetUserId
   const { count, error } = await admin
     .from(ACCOUNT_ACCESS_TABLE)
     .select("user_id", { count: "exact", head: true })
-    .eq("role", "admin")
+    .in("role", ["admin", "super_admin"])
     .eq("status", "active")
     .neq("user_id", targetUserId);
 

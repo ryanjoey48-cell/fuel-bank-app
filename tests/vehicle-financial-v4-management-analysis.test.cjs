@@ -206,9 +206,10 @@ test('August and September footer illustrations preserve printed source totals a
   assert.equal(augustOnly.weakestBalance.some(item => strongSet.has(item.registration)), false);
   assert.equal(augustOnly.strongestBalance.some(item => item.registration === '701-1654') && augustOnly.weakestBalance.some(item => item.registration === '701-1654'), false);
 
-  const zeroRevenue = augustOnly.reviewIssues.find(item => item.registration === '3ฒล-4565' && item.code === 'zero_revenue_with_fuel');
-  assert.ok(zeroRevenue);
-  assert.match(zeroRevenue.evidence, /do not assume misconduct/i);
+  const unknownRevenue = augustOnly.vehicles.find(item => item.registration === '3ฒล-4565');
+  assert.equal(unknownRevenue.clientRevenue, null);
+  assert.ok(unknownRevenue.incompleteFields.includes('totalReceived'));
+  assert.equal(augustOnly.reviewIssues.some(item => item.registration === '3ฒล-4565' && item.code === 'zero_revenue_with_fuel'), false);
 });
 
 test('parseManagementSourceAmount never coerces blanks or dashes to zero', () => {

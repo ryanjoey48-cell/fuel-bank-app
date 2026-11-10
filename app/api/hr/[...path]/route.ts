@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import {readAttentionQueue} from "@/lib/ees-hr-attention-server";
 import {readCompliance} from "@/lib/ees-hr-compliance-server";
 import sharp from "sharp";
 import { createHash } from "node:crypto";
@@ -47,10 +48,14 @@ export async function GET(request:Request,route:RouteContext) {
     if(path[0]==="access")return json(ctx.access);
     if(path[0]==="compliance"&&path.length===1)return json(await readCompliance(ctx,url.searchParams));
     if(!ctx.access.ready)throw new HRV7Error("HR_SETUP_REQUIRED",503);
+    if(path[0]==="attention"&&path.length===1)return json(await readAttentionQueue(ctx,url.searchParams));
     if(path[0]==="profile" && path.length===3) {
-      const kind=path[1];const id=kind==="driver"?driverId(path[2]):uuid(path[2]);const section=url.searchParams.get("section")??"overview";
-      if(["absences","incidents"].includes(section)&&!ctx.access.peopleReady)throw new HRV7Error("HR_RELEASE_REQUIRED",503);
-      if(["absences","incidents","personnel","meetings","documents","followups"].includes(section))ctx.requireHR();
+      const kind=path[1];const id=kind==="driver"?driverId(path[2]):uuid(path[2]);
+      const requested=url.searchParams.get("section")??"overview";
+      if(["absences","incidents","personnel","meetings","documents","followups"].includes(requested))ctx.requireHR();
+      // Keep the employee shell available when People Centre release is incomplete.
+      // Absences/Incidents list data still uses /people/* and remains gated there.
+      const section=["absences","incidents"].includes(requested)&&!ctx.access.peopleReady?"overview":requested;
       const result=await ctx.client.rpc(ctx.access.peopleReady?"ees_people_profile":"ees_hr_v7_profile",{p_kind:kind,p_id:id,p_section:section});hrDatabaseError(result.error);return json({...result.data,access:{...result.data.access,...ctx.access}});
     }
     if(path[0]==="people" && path.length===2) {

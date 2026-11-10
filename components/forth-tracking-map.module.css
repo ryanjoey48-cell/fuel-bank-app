@@ -5,10 +5,10 @@
   min-height: 0;
   flex: 1 1 0%;
   overflow: hidden;
-  border: 1px solid #d8dee8;
-  border-radius: 1rem;
-  background: #f1f4f8;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  border: 0;
+  border-radius: 0;
+  background: #e7edf4;
+  box-shadow: none;
 }
 
 .mapCanvas {
@@ -28,7 +28,19 @@
   background: #eef2f7;
 }
 
+/* Leaflet's canvas renderer (preferCanvas) draws the journey trail and points on a <canvas> in a zero-width pane.
+   The global `canvas { max-width: 100% }` reset clamps it to 0px, which hides every path and circle marker. */
+.mapCanvas :global(.leaflet-overlay-pane canvas) {
+  max-width: none !important;
+  max-height: none !important;
+}
+
 .mapCanvas :global(.leaflet-pane.leaflet-tile-pane) {
+  z-index: 200;
+}
+
+.mapCanvas :global(.leaflet-pane.leaflet-maplibre-gl-pane),
+.mapCanvas :global(.leaflet-maplibre-gl-pane) {
   z-index: 200;
 }
 
@@ -36,54 +48,91 @@
   z-index: 650;
 }
 
+.mapCanvas :global(.maplibregl-map) {
+  font: inherit;
+}
+
 .vehicleMarker {
+  /* Geographic icon box is the disc only. Size comes from Leaflet iconSize (zoom-scaled).
+     Labels overflow and never change the anchor. Leave margin under Leaflet control
+     (iconAnchor uses negative margins). Forcing margin to zero shifts the disc by half
+     its size and looks like kilometre-scale drift when zoomed out. */
   position: relative;
-  width: 220px !important;
-  height: 36px !important;
+  width: 100% !important;
+  height: 100% !important;
   overflow: visible;
   border: 0;
   background: transparent;
   pointer-events: none;
 }
 
+.vehicleMarkerUnit {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
 .vehicleMarkerDot {
   position: absolute;
-  top: 3px;
-  left: 3px;
+  top: 0;
+  left: 0;
   box-sizing: border-box;
   display: grid;
-  width: 28px;
-  height: 28px;
+  width: 100%;
+  height: 100%;
   place-items: center;
   pointer-events: auto;
   cursor: pointer;
   border: 2px solid #fff;
-  border-radius: 9999px;
-  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.28), 0 2px 7px rgba(15, 23, 42, 0.26);
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.26), 0 2px 8px rgba(15, 23, 42, 0.24);
+  /* Scale from disc centre so selection emphasis never shifts the geographic anchor. */
+  transform-origin: 50% 50%;
   transition: transform 140ms ease, box-shadow 140ms ease;
 }
 
+.vehicleMarkerDot[data-class="four_wheeler"] {
+  border-radius: 9px;
+}
+
+.vehicleMarkerDot[data-class="eighteen_wheeler"] {
+  border-radius: 7px;
+}
+
 .vehicleMarkerDriving {
+  --marker-activity: #059669;
   background: #059669;
+  box-shadow: 0 0 0 1px rgba(5, 150, 105, 0.55), 0 2px 10px rgba(5, 150, 105, 0.35);
+}
+
+.vehicleMarkerDrivingBoost {
+  outline: 2px solid rgba(167, 243, 208, 0.95);
+  outline-offset: 1px;
 }
 
 .vehicleMarkerStoppedEngineOn {
+  --marker-activity: #d97706;
   background: #d97706;
 }
 
 .vehicleMarkerStoppedEngineOff {
+  --marker-activity: #4f46e5;
   background: #4f46e5;
 }
 
 .vehicleMarkerStoppedEngineUnknown {
+  --marker-activity: #64748b;
   background: #64748b;
 }
 
 .vehicleMarkerUnavailable {
+  --marker-activity: #475569;
   background: #475569;
 }
 
 .vehicleMarkerUncertain {
+  --marker-activity: #9a3412;
   background: #9a3412;
 }
 
@@ -93,57 +142,209 @@
   box-shadow: 0 0 0 1px #fff, 0 0 0 2px #b45309, 0 2px 7px rgba(15, 23, 42, 0.24);
 }
 
+.vehicleMarkerTrust {
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  z-index: 4;
+  display: grid;
+  width: 12px;
+  height: 12px;
+  place-items: center;
+  border: 1.5px solid #fff;
+  border-radius: 999px;
+  background: #64748b;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.35);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.vehicleMarkerTrust[data-trust="verified"] {
+  background: #047857;
+}
+
+.vehicleMarkerTrust[data-trust="verified"]::after {
+  color: #fff;
+  font-size: 7px;
+  font-weight: 900;
+  line-height: 1;
+  content: "v";
+}
+
+.vehicleMarkerTrust[data-trust="unverified"] {
+  background: #fff7ed;
+  border-style: dashed;
+  border-color: #b45309;
+}
+
+.vehicleMarkerTrust[data-trust="unverified"]::after {
+  color: #b45309;
+  font-size: 8px;
+  font-weight: 900;
+  line-height: 1;
+  content: "?";
+}
+
+.vehicleMarkerTrust[data-trust="stale"] {
+  background: #94a3b8;
+}
+
+.vehicleMarkerTrust[data-trust="stale"]::after {
+  color: #fff;
+  font-size: 7px;
+  font-weight: 900;
+  line-height: 1;
+  content: "·";
+}
+
+.vehicleMarkerOffline {
+  opacity: 0.62;
+  filter: grayscale(0.35);
+}
+
 .vehicleMarkerOffline::after {
   position: absolute;
   top: -3px;
   right: -3px;
-  width: 10px;
-  height: 10px;
-  border: 2px solid #fff;
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid #fff;
   border-radius: 9999px;
-  background: #e11d48;
+  background: #94a3b8;
   content: "";
 }
 
+.vehicleMarkerDot.vehicleMarkerApproximate {
+  opacity: 0.78;
+}
+
 .vehicleMarkerSelected {
-  transform: scale(1.14);
-  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #6d28d9, 0 3px 9px rgba(15, 23, 42, 0.34);
+  z-index: 2;
+  transform: scale(1.18);
+  box-shadow: 0 0 0 2px #fff, 0 0 0 5px #047857, 0 0 0 9px rgba(4, 120, 87, 0.28), 0 4px 14px rgba(15, 23, 42, 0.38);
+}
+
+.vehicleMarkerDriving.vehicleMarkerSelected,
+.vehicleMarkerDrivingBoost.vehicleMarkerSelected {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 5px #065f46, 0 0 0 10px rgba(5, 150, 105, 0.35), 0 4px 16px rgba(15, 23, 42, 0.4);
 }
 
 .vehicleMarkerTruck {
-  width: 17px;
-  height: 17px;
+  width: 22px;
+  height: 22px;
   fill: none;
   stroke: #fff;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 1.7;
+  stroke-width: 1.85;
+  filter: drop-shadow(0 1px 1px rgba(15, 23, 42, 0.35));
+}
+
+.vehicleMarkerTruckCompact {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2;
 }
 
 .vehicleMarkerTruck circle {
   fill: #fff;
 }
 
-.vehicleMarkerLabel {
+.vehicleMarkerLabel,
+.vehicleMarkerLabelAttached {
   position: absolute;
-  top: 5px;
-  left: 37px;
-  display: block;
-  max-width: 158px;
-  overflow: hidden;
-  border: 1px solid rgba(71, 85, 105, 0.3);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.96);
-  padding: 3px 6px;
+  top: calc(50% - 11px);
+  left: calc(100% - 1px);
+  z-index: 2;
+  box-sizing: border-box;
+  display: inline-flex;
+  max-width: none;
+  align-items: center;
+  gap: 0.28rem;
+  overflow: visible;
+  border: 1px solid rgba(15, 23, 42, 0.16);
+  border-left: 0;
+  border-radius: 0 0.45rem 0.45rem 0;
+  background: rgba(255, 255, 255, 0.97);
+  padding: 0.28rem 0.5rem 0.28rem 0.4rem;
   color: #0f172a;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
-  line-height: 13px;
-  text-overflow: ellipsis;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
   white-space: nowrap;
-  box-shadow: 0 1px 5px rgba(15, 23, 42, 0.24);
+  box-shadow: 0 1px 6px rgba(15, 23, 42, 0.2);
   pointer-events: auto;
   cursor: pointer;
+}
+
+.vehicleMarkerLabelAttached::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: var(--marker-activity, #57317d);
+  content: "";
+}
+
+.vehicleMarkerLabel.vehicleMarkerDriving {
+  border-left-color: #059669;
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.12), rgba(255, 255, 255, 0.97) 42%);
+}
+
+.vehicleMarkerLabel.vehicleMarkerStoppedEngineOn {
+  border-left-color: #d97706;
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.14), rgba(255, 255, 255, 0.97) 42%);
+}
+
+.vehicleMarkerLabel.vehicleMarkerStoppedEngineOff {
+  border-left-color: #4f46e5;
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.12), rgba(255, 255, 255, 0.97) 42%);
+}
+
+.vehicleMarkerLabel.vehicleMarkerStoppedEngineUnknown,
+.vehicleMarkerLabel.vehicleMarkerUnavailable {
+  border-left-color: #64748b;
+}
+
+.vehicleMarkerLabel.vehicleMarkerUncertain {
+  border-left-color: #9a3412;
+  background: linear-gradient(90deg, rgba(194, 65, 12, 0.12), rgba(255, 255, 255, 0.97) 42%);
+}
+
+.vehicleMarkerLabel.vehicleMarkerStack,
+.vehicleMarkerStackLabel {
+  border-left-color: #5b238e;
+  background: linear-gradient(90deg, rgba(91, 35, 142, 0.12), rgba(255, 255, 255, 0.97) 42%);
+}
+
+.vehicleMarkerLabel strong {
+  flex: 0 0 auto;
+  overflow: visible;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.vehicleMarkerClass {
+  flex: 0 0 auto;
+  border-radius: 0.28rem;
+  background: rgba(15, 23, 42, 0.08);
+  padding: 0.05rem 0.22rem;
+  color: #334155;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.vehicleMarkerLabelSelected {
+  z-index: 3;
+  border-color: #6d28d9;
+  background: #f5f0ff;
+  color: #3b0764;
+  box-shadow: 0 0 0 2px #6d28d9, 0 4px 12px rgba(91, 35, 142, 0.35);
+  font-weight: 800;
 }
 
 .vehicleMarkerLabelHidden {
@@ -151,68 +352,89 @@
   opacity: 0;
 }
 
-.vehicleMarkerLabelLeft {
-  right: 223px;
+.vehicleMarkerLabelLeft,
+.vehicleMarkerLabelAttached.vehicleMarkerLabelLeft {
+  right: calc(100% - 1px);
+  left: auto;
+  border-left: 1px solid rgba(15, 23, 42, 0.16);
+  border-right: 0;
+  border-radius: 0.45rem 0 0 0.45rem;
+  padding: 0.22rem 0.35rem 0.22rem 0.45rem;
+}
+
+.vehicleMarkerLabelAttached.vehicleMarkerLabelLeft::before {
+  right: 0;
   left: auto;
 }
 
-.vehicleGroupIcon {
-  border: 0;
-  background: transparent;
-  overflow: visible;
+.vehicleMarkerStack {
+  background: #4338ca;
 }
 
-.vehicleGroupCard {
+.vehicleStackAccentNeutral {
+  background: #4338ca;
+}
+
+.vehicleStackAccentDriving {
+  background: #047857;
+}
+
+.vehicleStackAccentAttention {
+  background: #b45309;
+}
+
+.vehicleStackAccentMixed {
+  background: linear-gradient(135deg, #047857 48%, #b45309 52%);
+}
+
+.vehicleStackCount {
+  position: absolute;
+  top: -8px;
+  right: -10px;
+  z-index: 2;
   display: grid;
-  width: 220px;
-  min-height: 54px;
-  gap: 3px;
-  border: 1px solid rgba(71, 85, 105, 0.42);
-  border-left: 4px solid #5b238e;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.98);
-  padding: 6px 8px;
-  color: #0f172a;
-  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.3);
-  cursor: pointer;
-  line-height: 1.2;
-  pointer-events: auto;
+  min-width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: #1e1b4b;
+  padding: 0 4px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.35);
 }
 
-.vehicleGroupCard strong {
-  font-size: 10px;
-  font-weight: 800;
+.vehicleStackAccentDriving .vehicleStackCount,
+.vehicleStackAccentMixed .vehicleStackCount {
+  background: #064e3b;
 }
 
-.vehicleGroupCard > span {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 2px 4px;
-  min-width: 0;
+.vehicleStackAccentAttention .vehicleStackCount {
+  background: #7c2d12;
 }
 
-.vehicleGroupRegistrations b {
-  min-width: 0;
-  overflow: hidden;
-  color: #334155;
-  font-size: 9px;
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-style: normal;
+.vehicleStackPulse {
+  position: absolute;
+  inset: -3px;
+  border: 2px solid rgba(167, 243, 208, 0.9);
+  border-radius: 9999px;
+  pointer-events: none;
 }
 
-.vehicleGroupCard i {
-  color: #6d28d9;
-  font-size: 9px;
-  font-style: normal;
-  font-weight: 700;
-}
-
-.vehicleGroupIcon:hover .vehicleGroupCard,
-.vehicleGroupIcon:focus-visible .vehicleGroupCard {
-  border-color: #7c3aed;
-  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.25), 0 4px 14px rgba(15, 23, 42, 0.28);
+.vehicleStackAttention {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #fff;
+  border-radius: 9999px;
+  background: #f59e0b;
+  pointer-events: none;
 }
 
 .mapCanvas :global(.leaflet-control-attribution) {
@@ -222,9 +444,52 @@
   color: #334155;
   font-size: 10px;
 }
+.vehicleMarkerAreaCount {
+  position: absolute;
+  top: -9px;
+  right: -10px;
+  z-index: 2;
+  display: grid;
+  min-width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 2px solid #fff;
+  border-radius: 7px;
+  background: #312e81;
+  padding: 0 4px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 850;
+  line-height: 1;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.35);
+}
+
+/* V15: a single restrained selection outline and labels kept close to anchors. */
+.vehicleMarkerDot:hover {
+  transform: scale(1.04);
+  box-shadow: 0 0 0 2px var(--marker-activity, #633491), 0 2px 6px rgba(31, 39, 54, .2);
+}
+.vehicleMarkerDot.vehicleMarkerSelected {
+  transform: scale(1.12);
+  box-shadow: 0 0 0 3px #047857, 0 2px 8px rgba(4, 120, 87, .28);
+}
+.vehicleMarkerLabel.vehicleMarkerLabelSelected {
+  border-color: #047857;
+  background: #ecfdf5;
+  color: #065f46;
+  box-shadow: 0 0 0 2px #059669, 0 2px 8px rgba(4, 120, 87, .25);
+}
+
+.mapCanvas :global(.leaflet-bottom.leaflet-right) {
+  margin-right: 0.45rem;
+  margin-bottom: 1.4rem;
+}
 
 .mapCanvas :global(.leaflet-bar a) {
+  width: 30px;
+  height: 30px;
   color: #5b238e;
+  line-height: 30px;
 }
 
 .mapNotice {
@@ -258,11 +523,694 @@
   box-shadow: 0 5px 16px rgba(15, 23, 42, 0.2);
 }
 
-@media (max-width: 639px) {
-  .mapFrame,
-  .mapCanvas,
-  .mapCanvas :global(.leaflet-container) {
-    min-height: 320px;
-    height: min(50svh, 520px);
+/* One compact hover preview — never compete with native title or Leaflet tooltips. */
+.vehicleHoverTooltip {
+  z-index: 780 !important;
+  box-sizing: border-box;
+  width: 220px;
+  min-width: 220px;
+  max-width: 220px;
+  margin: 0;
+  border: 1px solid #d8d2df !important;
+  border-radius: 8px !important;
+  background: #fffefa !important;
+  color: #273249 !important;
+  padding: 0 !important;
+  box-shadow: 0 6px 18px rgba(28, 24, 42, 0.16) !important;
+  white-space: normal;
+  pointer-events: none;
+}
+.vehicleHoverTooltip::before {
+  border-top-color: #fffefa !important;
+}
+.vehicleHoverTooltip :global(.leaflet-tooltip-top::before) {
+  border-top-color: #fffefa;
+}
+
+.vehicleQuickView { display: grid; gap: .22rem; padding: .55rem .64rem; color: #353144; font-size: .69rem; line-height: 1.3; }
+.vehicleQuickHeading { display: flex; align-items: baseline; justify-content: space-between; gap: .45rem; border-bottom: 1px solid #e9e4ec; padding-bottom: .3rem; }
+.vehicleQuickHeading strong { overflow: hidden; color: #39204f; font-size: 1rem; font-weight: 850; text-overflow: ellipsis; white-space: nowrap; }
+.vehicleQuickHeading span { flex: 0 0 auto; color: #0d7452; font-size: .8rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.vehicleQuickMotion { margin: 0; color: #117655; font-weight: 780; }
+.vehicleQuickDriver, .vehicleQuickLocation { overflow: hidden; margin: 0; color: #485166; text-overflow: ellipsis; white-space: nowrap; }
+.vehicleQuickDriver { font-weight: 670; }
+.vehicleQuickLocation { color: #6b7180; }
+.vehicleQuickReport { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .2rem .45rem; border-top: 1px solid #eee9ef; padding-top: .32rem; color: #737987; font-size: .62rem; }
+.vehicleQuickReport span:last-child { color: #946327; font-weight: 750; }
+
+
+/* Registration is the only text shown next to a map marker. */
+.vehicleMarkerLabel {
+  top: 3px;
+  max-width: 148px;
+  min-height: 26px;
+  padding: 0.32rem 0.55rem;
+  border-radius: 0.48rem;
+  font-size: 11px;
+  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.2);
+}
+
+.vehicleMarkerLabel { font-size: 12px; }
+.vehicleMarkerLabel strong { font-weight: 900; }
+
+/* Activity uses colour; position confidence uses the marker's fill and border. */
+.vehicleMarkerDriving { --marker-activity: #087f65; }
+.vehicleMarkerStoppedEngineOn { --marker-activity: #c47811; }
+.vehicleMarkerStoppedEngineOff { --marker-activity: #6554ca; }
+.vehicleMarkerStoppedEngineUnknown { --marker-activity: #64748b; }
+.vehicleMarkerUnavailable { --marker-activity: #475569; }
+.vehicleMarkerUncertain { --marker-activity: #a34b28; }
+.vehicleMarkerStack { --marker-activity: #633491; }
+.vehicleMarkerDot { background: var(--marker-activity, #633491); }
+.vehicleMarkerDot { border-radius: .42rem; }
+.vehicleMarkerDot:hover { transform: scale(1.04); box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--marker-activity, #633491), 0 2px 7px rgba(20, 25, 43, .22); }
+.vehicleMarkerDot.vehicleMarkerApproximate {
+  border: 2px dashed var(--marker-activity, #8b5b30);
+  background: rgba(255, 253, 249, .98);
+  box-shadow: 0 0 0 2px rgba(255,255,255,.92), 0 3px 10px rgba(28,31,50,.2);
+}
+.vehicleMarkerApproximate .vehicleMarkerTruck { stroke: var(--marker-activity, #8b5b30); }
+.vehicleMarkerApproximate .vehicleMarkerTruck circle { fill: var(--marker-activity, #8b5b30); }
+.vehicleMarkerApproximate .vehicleStackCount { color: var(--marker-activity, #8b5b30); }
+.vehicleMarkerDot.vehicleMarkerSelected {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 5px #633491, 0 5px 14px rgba(51,31,80,.34);
+}
+.vehicleMarkerLabel {
+  max-width: 166px;
+  min-height: 28px;
+  padding: .34rem .58rem;
+  font-size: 13px;
+  line-height: 1.15;
+  letter-spacing: -.015em;
+}
+.vehicleMarkerLabel.vehicleMarkerLabelApproximate { border-top-style: dashed; border-right-style: dashed; border-bottom-style: dashed; }
+.vehicleMarkerLabel.vehicleMarkerLabelSelected {
+  border-color: #633491;
+  background: #50267d;
+  color: #fff;
+  box-shadow: 0 0 0 2px #fff, 0 4px 14px rgba(51,31,80,.3);
+}
+
+.mapFrame { font-family: "Segoe UI", Arial, sans-serif; }
+
+.mapCanvas:global(.leaflet-container), .vehicleMarkerLabel, .mapNotice { font-family: "Segoe UI", Arial, sans-serif; }
+
+/* Stable tooltip width prevents long source status text from becoming a one-word column. */
+.mapCanvas :global(.leaflet-tooltip) {
+  box-sizing: border-box;
+  width: 228px;
+  min-width: 228px;
+  max-width: 228px;
+  padding: .55rem .7rem;
+  overflow-wrap: anywhere;
+  color: #273249;
+  font-size: 12px;
+  font-weight: 550;
+}
+.mapCanvas :global(.leaflet-tooltip > span) { display: block; width: 100%; }
+
+/* V14: minimum-size vehicle silhouettes and quiet registration plates. */
+.vehicleMarkerDot {
+  border: 1.5px solid #fff;
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px rgba(31, 39, 54, .42), 0 2px 5px rgba(31, 39, 54, .22);
+}
+.vehicleMarkerDot:hover {
+  /* Emphasise without a large scale jump that fights the geographic anchor. */
+  transform: scale(1.04);
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--marker-activity, #633491), 0 2px 7px rgba(31, 39, 54, .22);
+}
+.vehicleMarkerDot.vehicleMarkerSelected {
+  transform: scale(1.12);
+  box-shadow: 0 0 0 2px #fff, 0 0 0 5px #59318a, 0 3px 9px rgba(31, 39, 54, .25);
+}
+.vehicleMarkerTruck { width: 20px; height: 20px; stroke-width: 1.7; }
+.vehicleMarkerTruckCompact { width: 16px; height: 16px; stroke-width: 1.9; }
+.vehicleMarkerLabel,
+.vehicleMarkerLabel.vehicleMarkerDriving,
+.vehicleMarkerLabel.vehicleMarkerStoppedEngineOn,
+.vehicleMarkerLabel.vehicleMarkerStoppedEngineOff,
+.vehicleMarkerLabel.vehicleMarkerUncertain,
+.vehicleMarkerLabel.vehicleMarkerStack {
+  min-height: 26px;
+  max-width: 168px;
+  border: 1px solid #d9d4c8;
+  border-left: 3px solid var(--marker-activity, #633491);
+  border-radius: 5px;
+  background: #fffdf6;
+  padding: 4px 8px;
+  color: #221f2e;
+  font-size: 12.5px;
+  font-weight: 800;
+  line-height: 17px;
+  letter-spacing: -.01em;
+  box-shadow: 0 1px 4px rgba(31, 39, 54, .12);
+}
+.vehicleMarkerLabel.vehicleMarkerLabelSelected {
+  border-color: #59318a;
+  background: #59318a;
+  color: #fff;
+  box-shadow: 0 0 0 2px #fff, 0 2px 7px rgba(31, 39, 54, .24);
+}
+.vehicleMarkerLabel strong { font-weight: 800; }
+.vehicleStackCount {
+  top: -8px;
+  right: -9px;
+  min-width: 19px;
+  height: 19px;
+  border-radius: 5px;
+  font-size: 10px;
+}
+@media (max-width: 767px) {
+  .mapCanvas :global(.leaflet-tooltip) { width: 196px; min-width: 196px; max-width: 196px; }
+}
+
+/* EES Locations Directory pins — diamond markers, never confused with vehicle discs. */
+.locationMarker {
+  background: transparent !important;
+  border: 0 !important;
+}
+
+.locationMarkerPin {
+  position: relative;
+  display: grid;
+  width: 22px;
+  height: 28px;
+  place-items: start center;
+  filter: drop-shadow(0 2px 4px rgba(20, 28, 45, 0.35));
+}
+
+.locationMarkerPin em {
+  display: block;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  border: 2px solid #fff;
+  border-radius: 2px;
+  background: #0f766e;
+  transform: rotate(45deg);
+}
+
+.locationMarkerPin[data-category="Customer"] em { background: #1d4ed8; }
+.locationMarkerPin[data-category="Warehouse"] em { background: #b45309; }
+.locationMarkerPin[data-category="Depot"] em { background: #7c3aed; }
+.locationMarkerPin[data-category="Factory"] em { background: #0f766e; }
+.locationMarkerPin[data-category="Port"] em { background: #0369a1; }
+.locationMarkerPin[data-category="Airport"] em { background: #be185d; }
+.locationMarkerPin[data-category="Other"] em { background: #475569; }
+
+.locationMarkerSelected em {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #0f766e;
+}
+
+/* Forth GPS saved destinations — teardrop pins, distinct from vehicle discs and office diamonds. */
+.forthGpsMarker {
+  background: transparent !important;
+  border: 0 !important;
+}
+
+.forthGpsMarkerPin {
+  position: relative;
+  display: grid;
+  width: 14px;
+  height: 18px;
+  place-items: start center;
+  filter: drop-shadow(0 1px 2px rgba(15, 23, 42, 0.22));
+}
+
+.forthGpsMarkerPin em {
+  display: block;
+  width: 9px;
+  height: 9px;
+  margin-top: 1px;
+  border: 1.5px solid #fff;
+  border-radius: 50% 50% 50% 0;
+  background: #64748b;
+  transform: rotate(-45deg);
+  opacity: 0.88;
+}
+
+.forthGpsMarkerSelected em {
+  background: #0f766e;
+  opacity: 1;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3px #0f766e;
+}
+
+.forthGpsMarkerLinked em {
+  background: #475569;
+}
+
+/* If the configured tile service refuses requests, explain the plain map background. */
+.mapTileNotice {
+  position: absolute;
+  z-index: 710;
+  top: 50%;
+  left: 50%;
+  width: min(26rem, calc(100% - 2rem));
+  transform: translate(-50%, -50%);
+  border: 1px solid #d9d4e1;
+  border-radius: .65rem;
+  background: rgba(255, 255, 255, .96);
+  padding: .65rem .8rem;
+  color: #4f5261;
+  box-shadow: 0 8px 28px rgba(24, 29, 45, .15);
+  font-size: .77rem;
+  line-height: 1.4;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* V16 vehicle identity: precise anchored silhouette and restrained plate. */
+.vehicleMarkerDot {
+  border: 1.5px solid #fff;
+  border-radius: 7px;
+  box-shadow: 0 0 0 1px rgba(35, 43, 52, .36), 0 2px 6px rgba(24, 30, 40, .22);
+}
+.vehicleMarkerDot.vehicleMarkerDriving { background: #15825b; }
+.vehicleMarkerDot.vehicleMarkerStoppedEngineOn { background: #b57824; }
+.vehicleMarkerDot.vehicleMarkerStoppedEngineOff,
+.vehicleMarkerDot.vehicleMarkerStoppedEngineUnknown { background: #5d6878; }
+.vehicleMarkerDot.vehicleMarkerUncertain { background: #ad6c31; }
+.vehicleMarkerDot.vehicleMarkerUnavailable { background: #66717e; }
+.vehicleMarkerDot.vehicleMarkerApproximate {
+  border: 2px dashed var(--marker-activity, #a36b2b);
+  background: #fffaf0;
+  box-shadow: 0 0 0 1px #fff, 0 2px 6px rgba(24, 30, 40, .2);
+}
+.vehicleMarkerDot:hover { transform: scale(1.03); box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--marker-activity, #633491), 0 2px 8px rgba(24, 30, 40, .23); }
+.vehicleMarkerDot.vehicleMarkerSelected { transform: scale(1.08); box-shadow: 0 0 0 2px #fff, 0 0 0 5px #57317d, 0 3px 10px rgba(42, 27, 58, .3); }
+.vehicleMarkerTruck { width: 21px; height: 21px; stroke-width: 1.8; }
+.vehicleMarkerTruckCompact { width: 16px; height: 16px; stroke-width: 2; }
+.vehicleMarkerLabel,
+.vehicleMarkerLabel.vehicleMarkerDriving,
+.vehicleMarkerLabel.vehicleMarkerStoppedEngineOn,
+.vehicleMarkerLabel.vehicleMarkerStoppedEngineOff,
+.vehicleMarkerLabel.vehicleMarkerUncertain,
+.vehicleMarkerLabel.vehicleMarkerStack {
+  min-height: 27px;
+  max-width: none;
+  overflow: visible;
+  border: 1px solid #d5d5dc;
+  border-left: 3px solid var(--marker-activity, #633491);
+  border-radius: 5px;
+  background: #fffefa;
+  padding: 4px 9px;
+  color: #272635;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.35;
+  letter-spacing: .005em;
+  box-shadow: 0 2px 6px rgba(27, 31, 39, .15);
+}
+.vehicleMarkerLabel.vehicleMarkerStoppedEngineOff,
+.vehicleMarkerLabel.vehicleMarkerStoppedEngineUnknown { --marker-activity: #697380; }
+.vehicleMarkerLabel.vehicleMarkerLabelSelected { border-color:#57317d; border-left-color:#57317d; background:#57317d; color:#fff; box-shadow:0 0 0 2px #fff, 0 2px 8px rgba(42,27,58,.26); }
+.vehicleStackCount,
+.vehicleMarkerAreaCount { top:-8px; right:-8px; min-width:20px; height:20px; border:1.5px solid #fff; border-radius:10px; background:#4b2c67; padding:0 4px; color:#fff; font-size:10px; font-weight:800; box-shadow:0 1px 4px rgba(24,23,34,.22); }
+.vehicleHoverTooltip { width:218px; min-width:218px; max-width:218px; border-color:#d8d1df !important; border-radius:7px !important; box-shadow:0 5px 16px rgba(28,24,42,.16) !important; }
+@media (max-width:767px) { .vehicleHoverTooltip { width:200px; min-width:200px; max-width:200px; } }
+
+.playbackPath {
+  pointer-events: none;
+}
+
+.playbackPoint {
+  cursor: pointer;
+}
+
+.playbackCursor {
+  background: transparent !important;
+  border: 0 !important;
+}
+
+.playbackCursorDot {
+  display: block;
+  width: 18px;
+  height: 18px;
+  margin: 5px auto 0;
+  border: 2px solid #fff;
+  border-radius: 5px;
+  background: #5b21b6;
+  box-shadow: 0 0 0 3px rgba(91, 33, 182, 0.35), 0 2px 8px rgba(15, 23, 42, 0.35);
+}
+
+.playbackCursorLabel {
+  position: absolute;
+  top: -2px;
+  left: 26px;
+  display: grid;
+  gap: 1px;
+  min-width: 72px;
+  border: 1px solid #5b21b6;
+  border-radius: 6px;
+  background: #4c1d95;
+  padding: 3px 7px;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(49, 16, 99, 0.35);
+  line-height: 1.15;
+}
+
+.playbackCursorLabel strong {
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.playbackCursorLabel em {
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  opacity: 0.9;
+}
+
+/* V21.2: restrained slate location clusters — never compete with vehicle markers. */
+.mapCanvas :global(.forth-gps-cluster),
+.mapCanvas :global(.marker-cluster-small),
+.mapCanvas :global(.marker-cluster-medium),
+.mapCanvas :global(.marker-cluster-large) {
+  background: transparent !important;
+}
+
+.mapCanvas :global(.forth-gps-cluster) {
+  background-clip: padding-box;
+}
+
+.forthGpsClusterMarker {
+  background: transparent !important;
+  border: 0 !important;
+}
+
+.forthGpsClusterShell {
+  position: relative;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  pointer-events: auto;
+  filter: drop-shadow(0 1px 3px rgba(15, 23, 42, 0.22));
+  opacity: 0.82;
+}
+
+.forthGpsClusterBody {
+  display: grid;
+  min-width: 22px;
+  height: 20px;
+  place-items: center;
+  border: 1.5px solid rgba(255, 255, 255, 0.95);
+  border-radius: 999px;
+  background: #64748b;
+  padding: 0 5px;
+  color: #fff;
+}
+
+.forthGpsClusterCount {
+  font-size: 9px;
+  font-weight: 750;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.forthGpsClusterTag {
+  position: absolute;
+  bottom: -2px;
+  border: 1px solid rgba(71, 85, 105, 0.3);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 0 2px;
+  color: #64748b;
+  font-size: 5.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.mapCanvas :global(.marker-cluster-small div),
+.mapCanvas :global(.marker-cluster-medium div),
+.mapCanvas :global(.marker-cluster-large div) {
+  border: 1.5px solid #fff;
+  border-radius: 999px;
+  background: #64748b !important;
+  color: #fff;
+  font-weight: 750;
+  font-size: 10px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.22);
+}
+
+.vehicleMarkerDot {
+  border: 2px solid #fff;
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 1px rgba(30, 36, 48, 0.48),
+    0 0 0 3px rgba(87, 49, 125, 0.26),
+    0 3px 10px rgba(22, 28, 38, 0.28);
+}
+
+.vehicleMarkerDot.vehicleMarkerDriving {
+  background: linear-gradient(155deg, #1fa876 0%, #0d7452 55%, #065f46 100%);
+}
+
+.vehicleMarkerDot.vehicleMarkerStoppedEngineOn {
+  background: linear-gradient(155deg, #e8a53a 0%, #c47811 55%, #9a5f0a 100%);
+}
+
+.vehicleMarkerDot.vehicleMarkerStoppedEngineOff {
+  background: linear-gradient(155deg, #7c75e8 0%, #5b52d6 55%, #4338ca 100%);
+}
+
+.vehicleMarkerDot.vehicleMarkerStoppedEngineUnknown {
+  background: linear-gradient(155deg, #8b96a8 0%, #64748b 55%, #475569 100%);
+}
+
+.vehicleMarkerDot.vehicleMarkerUncertain {
+  background: linear-gradient(155deg, #d4844a 0%, #b45309 55%, #92400e 100%);
+}
+
+.vehicleMarkerDot.vehicleMarkerUnavailable {
+  background: linear-gradient(155deg, #7a8494 0%, #5d6878 55%, #475569 100%);
+}
+
+.vehicleMarkerDot.vehicleMarkerStack {
+  background: linear-gradient(155deg, #7a4aad 0%, #57317d 55%, #3b0764 100%);
+}
+
+.vehicleMarkerActivityBadge {
+  position: absolute;
+  bottom: -3px;
+  left: -3px;
+  z-index: 3;
+  display: grid;
+  width: 12px;
+  height: 12px;
+  place-items: center;
+  border: 1.5px solid #fff;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.35);
+  pointer-events: none;
+}
+
+.vehicleMarkerActivityBadge::after {
+  color: #fff;
+  font-size: 8px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  content: "";
+}
+
+.vehicleMarkerBadgeDriving {
+  background: #047857;
+}
+
+.vehicleMarkerBadgeDriving::after {
+  content: "»";
+  font-size: 9px;
+}
+
+.vehicleMarkerDrivingBoost .vehicleMarkerBadgeDriving {
+  animation: vehicleMarkerDrivingPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes vehicleMarkerDrivingPulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.45);
   }
+
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+  }
+}
+
+.vehicleMarkerBadgeStoppedEngineOn {
+  background: #b45309;
+}
+
+.vehicleMarkerBadgeStoppedEngineOn::after {
+  content: "●";
+  font-size: 7px;
+}
+
+.vehicleMarkerBadgeStoppedEngineOff {
+  background: #4338ca;
+}
+
+.vehicleMarkerBadgeStoppedEngineOff::after {
+  content: "P";
+  font-size: 7px;
+}
+
+.vehicleMarkerBadgeStoppedEngineUnknown {
+  background: #64748b;
+}
+
+.vehicleMarkerBadgeStoppedEngineUnknown::after {
+  content: "?";
+  font-size: 8px;
+}
+
+.vehicleMarkerBadgeUncertain {
+  background: #9a3412;
+}
+
+.vehicleMarkerBadgeUncertain::after {
+  content: "!";
+  font-size: 9px;
+  font-weight: 950;
+}
+
+.vehicleMarkerBadgeUnavailable {
+  background: #475569;
+}
+
+.vehicleMarkerBadgeUnavailable::after {
+  content: "—";
+  font-size: 7px;
+}
+
+.vehicleMarkerDot.vehicleMarkerApproximate {
+  border: 2px dashed #b45309;
+  background: #fffaf0 !important;
+  box-shadow:
+    0 0 0 1px #fff,
+    0 0 0 3px rgba(180, 83, 9, 0.35),
+    0 2px 8px rgba(24, 30, 40, 0.22);
+}
+
+.vehicleMarkerApproximate .vehicleMarkerTruck {
+  stroke: var(--marker-activity, #a36b2b);
+}
+
+.vehicleMarkerApproximate .vehicleMarkerTruck circle {
+  fill: var(--marker-activity, #a36b2b);
+}
+
+.vehicleMarkerApproximate .vehicleMarkerActivityBadge {
+  border-style: dashed;
+  border-color: #fde68a;
+  background: #fff7ed;
+}
+
+.vehicleMarkerApproximate .vehicleMarkerActivityBadge::after {
+  color: #b45309;
+}
+
+.vehicleMarkerDot.vehicleMarkerSelected {
+  transform: scale(1.1);
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 5px #57317d,
+    0 0 0 9px rgba(87, 49, 125, 0.28),
+    0 4px 14px rgba(42, 27, 58, 0.32);
+}
+
+.vehicleMarkerTruck {
+  width: 24px;
+  height: 24px;
+  stroke-width: 1.9;
+}
+
+.vehicleMarkerTruckCompact {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.05;
+}
+
+.vehicleMarkerLabel,
+.vehicleMarkerLabel.vehicleMarkerDriving,
+.vehicleMarkerLabel.vehicleMarkerStoppedEngineOn,
+.vehicleMarkerLabel.vehicleMarkerStoppedEngineOff,
+.vehicleMarkerLabel.vehicleMarkerStoppedEngineUnknown,
+.vehicleMarkerLabel.vehicleMarkerUncertain,
+.vehicleMarkerLabel.vehicleMarkerUnavailable,
+.vehicleMarkerLabel.vehicleMarkerStack {
+  min-height: 24px;
+  max-width: none;
+  overflow: visible;
+  border: 1px solid rgba(148, 163, 184, 0.55);
+  border-left: 0;
+  border-radius: 0 6px 6px 0;
+  background: rgba(255, 255, 255, 0.96);
+  padding: 4px 9px 4px 8px;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.35;
+  letter-spacing: 0;
+  box-shadow: 0 1px 5px rgba(31, 39, 54, 0.16);
+}
+
+.vehicleMarkerLabel.vehicleMarkerDriving { --marker-activity: #059669; }
+.vehicleMarkerLabel.vehicleMarkerStoppedEngineOn { --marker-activity: #d97706; }
+.vehicleMarkerLabel.vehicleMarkerStoppedEngineOff { --marker-activity: #4f46e5; }
+.vehicleMarkerLabel.vehicleMarkerStoppedEngineUnknown,
+.vehicleMarkerLabel.vehicleMarkerUnavailable { --marker-activity: #64748b; }
+.vehicleMarkerLabel.vehicleMarkerUncertain { --marker-activity: #9a3412; }
+.vehicleMarkerLabel.vehicleMarkerStack { --marker-activity: #57317d; }
+
+.vehicleMarkerLabel strong {
+  color: #1e293b;
+  font-weight: 750;
+}
+
+.vehicleMarkerLabel.vehicleMarkerLabelSelected {
+  z-index: 4;
+  border-color: #57317d;
+  border-left-color: #57317d;
+  background: #57317d;
+  color: #f8fafc;
+  font-weight: 750;
+  box-shadow: 0 0 0 2px #fff, 0 3px 10px rgba(42, 27, 58, 0.28);
+}
+
+.vehicleMarkerLabel.vehicleMarkerLabelSelected strong {
+  color: #fff;
+}
+
+.vehicleMarkerAreaCount,
+.vehicleStackCount {
+  top: -9px;
+  right: -9px;
+  min-width: 20px;
+  height: 20px;
+  border: 2px solid #fff;
+  border-radius: 6px;
+  background: #312e81;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.vehicleMarkerAreaCount {
+  min-width: 22px;
+  border-radius: 5px;
+  background: linear-gradient(180deg, #4338ca 0%, #312e81 100%);
+  font-size: 9px;
+  letter-spacing: -0.04em;
+}
+
+.vehicleStackCount {
+  background: #4b2c67;
 }

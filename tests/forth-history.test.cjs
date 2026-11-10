@@ -303,7 +303,15 @@ function routeMocks({ requireUser, access = true, fleet, trips, counters }) {
       createServerSupabaseAdmin: () => ({}),
       resolveAccountAccess: async () => access
     },
-    "@/lib/forth-history-live-gate": { FORTH_HISTORY_LIVE_REQUESTS_ENABLED: false },
+    "@/lib/forth-history-live-gate": {
+      FORTH_HISTORY_LIVE_REQUESTS_ENABLED: false,
+      isForthHistoryLiveRequestsEnabled: () => false,
+      forthHistoryGateDenialDetail: () => "history gated"
+    },
+    "@/lib/forth-history-rate-limit": {
+      beginForthHistoryRateLimit: () => ({ allowed: true, remaining: 10, retryAfterSeconds: null }),
+      releaseForthHistoryRateLimit: () => undefined
+    },
     "@/lib/forth-history-contract": contracts,
     "@/lib/forth-tracking-server": {
       getForthTrackingFleetData: async () => { counters.fleet += 1; return fleet; },

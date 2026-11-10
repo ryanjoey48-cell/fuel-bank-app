@@ -1,3 +1,5 @@
+import { EES_COMPANY } from "./ees-company";
+
 export const shipmentTranslations = {
   en: {
     title: "Shipments",
@@ -213,7 +215,7 @@ export const shipmentTranslations = {
     },
     pdf: {
       locale: "en-GB",
-      companyName: "EXPERT EXPRESS SENDER CO., LTD.",
+      companyName: EES_COMPANY.nameEn,
       companyTagline: "Professional Transport & Logistics Services",
       customerTitle: "Customer Quotation",
       customerSubtitle: "Professional transport quotation prepared for customer review",
@@ -513,7 +515,7 @@ export const shipmentTranslations = {
     },
     pdf: {
       locale: "th-TH",
-      companyName: "EXPERT EXPRESS SENDER CO., LTD.",
+      companyName: EES_COMPANY.nameEn,
       companyTagline: "Professional Transport & Logistics Services",
       customerTitle: "ใบเสนอราคาสำหรับลูกค้า",
       customerSubtitle: "ใบเสนอราคางานขนส่งสำหรับให้ลูกค้าพิจารณา",
@@ -598,3 +600,4 @@ export const shipmentTranslations = {
 
 export type ShipmentTranslations =
   (typeof shipmentTranslations)[keyof typeof shipmentTranslations];
+
