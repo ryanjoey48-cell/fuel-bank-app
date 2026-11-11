@@ -16,6 +16,8 @@ weekly_mileage_deploy_source
 .next-maintenance-qa
 .next-*
 .recovery
-reports
+# Root local artefacts only — do not ignore app/(dashboard)/reports
+/reports
+/reports/
 tmp
 data/vehicle-performance-v4/source-reports/
