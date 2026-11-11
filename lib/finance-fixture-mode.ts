@@ -11,25 +11,21 @@ export function isFinanceLocalPreview() {
 }
 
 /**
- * Finance Centre workspace inside the normal localhost EES app.
- * Keeps app-wide Supabase auth for Booking Diary / Fleet / etc.
- * Finance actions stay in-memory only and never write finance tables.
- * Opt into the legacy live Supabase overview with
- * NEXT_PUBLIC_EES_FINANCE_LIVE_LOCAL=1 after persistent finance migrations
- * are proven safe on a Development database.
+ * Four-section Finance Centre workspace UI (Admin Intake → Arrange → Billing → Documents).
+ * Shown on localhost and Vercel Production. Opt into the legacy Supabase overview only with
+ * NEXT_PUBLIC_EES_FINANCE_LIVE_LOCAL=1 after persistent finance migrations are approved.
  *
- * Local demos must keep NEXT_PUBLIC_EES_FINANCE_LOCAL_WORKSPACE=1 in .env.local
- * so an accidental `next start` (NODE_ENV=production) still serves the
- * four-section workspace. Never set that flag on Vercel Production.
+ * Persistence is separate: filesystem local store + simulated TRNs require
+ * NEXT_PUBLIC_EES_FINANCE_LOCAL_WORKSPACE=1 (localhost / next start only). Never set that
+ * flag on Vercel Production — serverless has no durable .ees-local disk, and production uses
+ * authenticated browser storage until shared Supabase Finance storage is approved.
  */
 export function isFinanceCentreLocalWorkspace() {
   if (process.env.NEXT_PUBLIC_EES_FINANCE_LIVE_LOCAL === "1") return false;
-  if (process.env.NEXT_PUBLIC_EES_FINANCE_LOCAL_WORKSPACE === "1") return true;
-  if (process.env.NODE_ENV === "production") return false;
   return true;
 }
 
-/** Use in-memory Finance screens (fixture-cleared OR normal localhost with live Booking Diary). */
+/** Use the four-section Finance screens (fixture-cleared OR normal app with Booking Diary auth). */
 export function usesFinanceLocalDemoScreens() {
   return isFinanceFixtureMode() || isFinanceCentreLocalWorkspace();
 }

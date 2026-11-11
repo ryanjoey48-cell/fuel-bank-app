@@ -231,6 +231,19 @@ export function FinanceFixtureProvider({ children }: { children: ReactNode }) {
           } else {
             setPersistStatus("idle");
           }
+        } else if (response.status === 404 && mirror) {
+          // Disk store disabled (Vercel Production) — authenticated browser mirror is the store.
+          if (!active) return;
+          const next = applyEnvelope(mirror, canUseAdminIntake, canUseSuperAdmin, isolatedFixtureMode);
+          setWorkspaces(next.workspaces);
+          setActiveWorkspaceState(next.activeWorkspace);
+          setRoleState(next.role);
+          setLastSavedAt(next.lastSavedAt);
+          baseSavedAt.current = mirror.savedAt;
+          setPersistStatus("saved");
+        } else if (response.status === 404) {
+          if (!active) return;
+          setPersistStatus("idle");
         } else if (mirror) {
           if (!active) return;
           const next = applyEnvelope(mirror, canUseAdminIntake, canUseSuperAdmin, isolatedFixtureMode);

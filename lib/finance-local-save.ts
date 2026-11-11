@@ -1,15 +1,27 @@
-import { normalizeFinanceLocalStore, type FinanceLocalWorkspaces, type FinanceWorkspaceId } from "./finance-local-persistence";
+import {
+  createFinanceLocalStoreEnvelope,
+  normalizeFinanceLocalStore,
+  type FinanceLocalWorkspaces,
+  type FinanceWorkspaceId
+} from "./finance-local-persistence";
 import type { Role } from "./finance-demo-centre";
 
 export class FinanceStaleSaveError extends Error { constructor() { super("FINANCE_STALE"); } }
 
-/** A save is successful only after the server returns the persisted complete workspace. `baseSavedAt` = the version this tab loaded/saved last; a newer file on disk (another tab) refuses the save. */
+/**
+ * Persist Finance workspace. Prefer the authenticated local disk API when enabled (localhost).
+ * On Vercel Production the API is disabled (404) — return a browser-mirror envelope only so the
+ * four-section UI can save per browser without claiming shared company storage.
+ */
 export async function saveFinanceLocalWorkspace(spaces: FinanceLocalWorkspaces, role: Role, activeWorkspace: FinanceWorkspaceId,
   headers: HeadersInit, fetcher: typeof fetch = fetch, baseSavedAt?: string | null) {
   const response = await fetcher("/api/finance-local-store", {
     method: "PUT", headers: { ...headers, "Content-Type": "application/json" },
     body: JSON.stringify({ workspaces: spaces, role, activeWorkspace, ...(baseSavedAt !== undefined ? { baseSavedAt } : {}) })
   });
+  if (response.status === 404) {
+    return createFinanceLocalStoreEnvelope(spaces, role, activeWorkspace);
+  }
   if (response.status === 409) throw new FinanceStaleSaveError();
   if (response.status === 422) {
     const payload = await response.json() as { error?: string };

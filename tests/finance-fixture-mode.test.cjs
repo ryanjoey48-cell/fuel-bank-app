@@ -71,6 +71,33 @@ test("upsertDiaryBooking links an original diary row into local finance memory",
   assert.equal(centre.ready(state, job.id), false);
 });
 
+test("production serves the four-section Finance Centre unless LIVE_LOCAL opts into the legacy overview", () => {
+  const prior = {
+    NODE_ENV: process.env.NODE_ENV,
+    LIVE: process.env.NEXT_PUBLIC_EES_FINANCE_LIVE_LOCAL,
+    LOCAL: process.env.NEXT_PUBLIC_EES_FINANCE_LOCAL_WORKSPACE
+  };
+  try {
+    process.env.NODE_ENV = "production";
+    delete process.env.NEXT_PUBLIC_EES_FINANCE_LIVE_LOCAL;
+    delete process.env.NEXT_PUBLIC_EES_FINANCE_LOCAL_WORKSPACE;
+    const mode = load("lib/finance-fixture-mode.ts");
+    assert.equal(mode.isFinanceCentreLocalWorkspace(), true);
+    assert.equal(mode.usesFinanceLocalDemoScreens(), true);
+    process.env.NEXT_PUBLIC_EES_FINANCE_LIVE_LOCAL = "1";
+    const live = load("lib/finance-fixture-mode.ts");
+    assert.equal(live.isFinanceCentreLocalWorkspace(), false);
+    assert.equal(live.usesFinanceLocalDemoScreens(), false);
+  } finally {
+    if (prior.NODE_ENV === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = prior.NODE_ENV;
+    if (prior.LIVE === undefined) delete process.env.NEXT_PUBLIC_EES_FINANCE_LIVE_LOCAL; else process.env.NEXT_PUBLIC_EES_FINANCE_LIVE_LOCAL = prior.LIVE;
+    if (prior.LOCAL === undefined) delete process.env.NEXT_PUBLIC_EES_FINANCE_LOCAL_WORKSPACE; else process.env.NEXT_PUBLIC_EES_FINANCE_LOCAL_WORKSPACE = prior.LOCAL;
+  }
+  const page = fs.readFileSync("app/(dashboard)/finance-centre/page.tsx", "utf8");
+  assert.match(page, /usesFinanceLocalDemoScreens\(\)\) return <FinanceCentreWorkspace/);
+  assert.match(page, /LiveFinanceCentrePage/);
+});
+
 test("isFinanceFixtureMode is false in production or when Supabase env is set", () => {
   assert.equal(loadFixtureMode({ NODE_ENV: "production", NEXT_PUBLIC_EES_FINANCE_FIXTURE: "1" }).isFinanceFixtureMode(), false);
   assert.equal(

@@ -23,8 +23,9 @@ export function financeLocalStoreRoot() {
 export function isFinanceLocalStoreEnabled() {
   // Never write finance local files against live finance tables mode.
   if (process.env.NEXT_PUBLIC_EES_FINANCE_LIVE_LOCAL === "1") return false;
-  // Explicit local workspace flag keeps persistence available under `next start`
-  // on localhost (NODE_ENV=production). Never set that flag on Vercel Production.
+  // Disk store is localhost-only. Explicit LOCAL_WORKSPACE keeps it available under
+  // `next start` (NODE_ENV=production). Never set that flag on Vercel Production —
+  // serverless disk is ephemeral; the browser mirror is used there instead.
   if (process.env.NEXT_PUBLIC_EES_FINANCE_LOCAL_WORKSPACE === "1") return true;
   if (process.env.NODE_ENV === "production") return false;
   return true;

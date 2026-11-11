@@ -505,7 +505,7 @@ export default function FinanceCentreWorkspace({
           <div className="flex flex-wrap items-center gap-3">
             {!isFlowSection && friendlySaveStatus ? <span role="status" className="ees-fc-save" data-state={intakeDirty ? "unsaved" : persistStatus === "error" || persistStatus === "conflict" ? "error" : persistStatus === "saving" || persistStatus === "loading" || !hydrateReady ? "saving" : "saved"}>{friendlySaveStatus}</span> : null}
             <Link className="ees-fc-btn-secondary !py-1.5" href="/finance-records" data-testid="open-finance-records">{financeRecordsCopy[language].nav} →</Link>
-            <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-800 ring-1 ring-orange-200">{t("Test mode — no invoices issued", "โหมดทดสอบ — ยังไม่ออกใบแจ้งหนี้")}</span>
+            <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-800 ring-1 ring-orange-200">{t("Test mode — browser workspace · no invoices issued", "โหมดทดสอบ — เก็บในเบราว์เซอร์ · ยังไม่ออกใบแจ้งหนี้")}</span>
           </div>
         </header>
 
